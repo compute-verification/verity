@@ -11,6 +11,8 @@ same statics with the Boolean ``DOT`` and ``INV`` read as their word views.
     SparseMlaHeadKeysWire_v2{NVIS,W,C}                     its input, each bit XORed with a constant 0: no AND
     SparseMlaHeadValues_v2{NVIS,FIRST,BN,DOT,G,C}          the block's P V steps on G columns of O, written as Calls
     SparseMlaHeadEnd_v2{DV,INV}
+    SparseMlaHeadBlockLive_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE}  `SparseMlaHeadBlock_v3`, then each output word selected by live[0]
+    SparseMlaHeadKeysWireLive_v2{NVIS,W,C}                 `SparseMlaHeadKeysWire_v2`, then each word selected by live[0]
     SparseMla_v2{T,NH,DR,DV,BN,DOT,INV,SCALE}
 
 The callees are `boolean_attention`'s: `DotBf16_v3{K = DR + DV, DOT}` and `DOT`, `F2fpBf16_v2`, the FTZ f32 operations,
@@ -315,6 +317,38 @@ def _mla(B, S, q_nope, q_rope, kv):
 SparseMlaV2 = flat("SparseMla", 2, ["T", "NH", "DR", "DV", "BN", "DOT", "INV", "SCALE"], lambda S: M._mla_type(S, BF16), _mla,
                    M.SparseMla, lifted=_LIFTED)
 
+
+def _head_block_live(B, S, q_nope, q_rope, kv, *rest):
+    """`SparseMlaHeadBlockLive_v1`'s body on bits: one Call of `SparseMlaHeadBlock_v3` at the same statics, then
+    `SelectF32_v2(live[0], word, +0)` on each output word, one AND a bit."""
+    from verity.circuits.ops.boolean.scalar import SelectF32
+
+    *state, live = rest
+    blk = bind(SparseMlaHeadBlockV3, DR=S.DR, DV=S.DV, NVIS=S.NVIS, FIRST=S.FIRST, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
+    r = B.call(blk, q_nope, q_rope, kv, *state)
+    zero = _Bits(B).zeros(F32)
+    return tuple_of(*(M.live_words(B, SelectF32, zero, live, r[i]) for i in range(3)))
+
+
+SparseMlaHeadBlockLiveV2 = EW.on_bits("SparseMlaHeadBlockLive", 2, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE"],
+                                      lambda S: M._head_block_live_type(S, BF16, F32), _head_block_live,
+                                      M.SparseMlaHeadBlockLive, lifted=_LIFTED)
+
+
+def _head_keys_live(B, S, kv, live):
+    """`SparseMlaHeadKeysWireLive_v1`'s body on bits: one Call of `SparseMlaHeadKeysWire_v2` at the same statics, then
+    `SelectBf16_v2(live[0], word, +0)` on each word, one AND a bit."""
+    from verity.circuits.ops.boolean.scalar import SelectBf16
+
+    r = B.call(bind(SparseMlaHeadKeysWireV2, NVIS=S.NVIS, W=S.W, C=S.C), kv)
+    return M.live_words(B, SelectBf16, _Bits(B).zeros(BF16), live, r)
+
+
+SparseMlaHeadKeysWireLiveV2 = EW.on_bits("SparseMlaHeadKeysWireLive", 2, ["NVIS", "W", "C"],
+                                         lambda S: M._head_keys_live_type(S, BF16), _head_keys_live,
+                                         M.SparseMlaHeadKeysWireLive)
+
 BOOLEAN_SPARSE_MLA = [SparseMlaBlockV2, SparseMlaHeadV2, SparseMlaHeadBlockV2, SparseMlaDotStepB, SparseMlaDotStep,
                       SparseMlaHeadBlockV3, SparseMlaHeadScoresV2, SparseMlaHeadScoresColsV2, SparseMlaHeadKeysWireV2,
-                      SparseMlaHeadValuesV2, SparseMlaHeadEndV2, SparseMlaV2]
+                      SparseMlaHeadValuesV2, SparseMlaHeadEndV2, SparseMlaHeadBlockLiveV2, SparseMlaHeadKeysWireLiveV2,
+                      SparseMlaV2]

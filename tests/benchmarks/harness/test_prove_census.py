@@ -137,23 +137,32 @@ def test_the_command_prints_the_census_and_refuses_the_ratio_by_name(tmp_path, m
     assert (f"{art} (`run_of_record=prove-llama32-1b-census`, run r20261117-000000-0000), 2 requests, summed: the row "
             "as served.") in out
     assert "| r0 | 5 | 3 | 40 |\n| r1 | 2 | 1 | 31 |\n| summed | 7 | 4 | 71 |\n" in out
-    assert (f"| `{GEMM}` | 23 | 273,417 | 32 | 12 | 44 | 1.203e+07 | `gemm-s8` at 1 prover(s), 24 cores ({rated}) |"
+    assert (f"| `{GEMM}` | 1 | 23 | 273,417 | 32 | 12 | 44 | 12,030,348 | `gemm-s8` at 1 prover(s), 24 cores ({rated}) |"
             in out)
-    assert f"| `{ATTN}` | 27 | 37,433,280 | 0 | 16 | 16 | 5.989e+08 | none |" in out
+    assert f"| `{ATTN}` | 1 | 27 | 37,433,280 | 0 | 16 | 16 | 598,932,480 | none |" in out
+    assert "a block may be at most 2^27." in out and "System `spot`: only the refusal's `spot-sampling` slot" in out
     assert "Rated: 1 of 3 block types, 44 of 71 proof blocks." in out
-    assert f"| `{EMBED}` | its rows alone need a 2^39 block | 4,202,739,712 | 8 | 3 | 11 |" in out
-    assert f"| `{SELECT}` | its rows alone need a 2^28 block | 22,603,069 | 4 | 2 | 6 |" in out
+    assert f"| `{EMBED}` | 1 | its rows alone need a 2^39 block | 4,202,739,712 | 8 | 3 | 11 |" in out
+    assert f"| `{SELECT}` | 1 | its rows alone need a 2^28 block | 22,603,069 | 4 | 2 | 6 |" in out
     refusal = out.split("## Prover GPUs per serving GPU: refused\n", 1)[1]
     assert refusal.startswith("\nNo total is given while any of these stands:\n\n- 2 block type(s) with blocks and no "
                               "steady-state rate at 1 prover(s) and 10 cores or more (label each run of its rate: "
-                              "`research data label TARGET run_of_record prove-llama32-1b-flock-steady --by LANE`):\n"
-                              f"  - `{ATTN}`, 1.455 blocks a served token\n  - `{NORM}`, 1 blocks a served token\n"
-                              "- 2 gap(s), served rows no block holds, each with its rows and why in the gaps above: "
-                              f"`{EMBED}`, `{SELECT}`\n")
-    for slot, what in (("cut", "cut"), ("flock-single", "single-session card"), ("spot-sampling", "sampling plan"),
-                       ("lean-verify", "Lean verifier run"), ("flock-warm", "warm-session run")):
+                              "`research data label TARGET run_of_record prove-llama32-1b-flock-steady --by LANE`), "
+                              "each with its proof blocks a served token, a served token being a prompt or a decoded "
+                              "token (as GLM-5.3's table counts it), and runs as above:\n"
+                              f"  - `{ATTN}`, 1.455 blocks a served token\n  - `{NORM}`, 1 block a served token\n"
+                              "- 2 gaps, Definitions with 17 served rows no block holds, by family and reason; each is "
+                              "named, with its served rows and why, in the gaps table above and in the census table kept "
+                              "as `out/prove-census.json` under a research run (`refusal.gaps`; `--json` prints it):\n"
+                              "  - `Embedding_v1`, its rows alone need a 2^39 block: 1 Definition, 11 served rows\n"
+                              "  - `TokenSelect_v4`, its rows alone need a 2^28 block: 1 Definition, 6 served rows\n")
+    for slot, what in (("cut", "cut"), ("flock-single", "single-session card"), ("spot-sampling", "sampling plan")):
         assert (f"- {slot} (`prove-llama32-1b-{slot}`): no {what} of record: nothing in the store carries "
                 f"`run_of_record=prove-llama32-1b-{slot}`") in refusal
+    for slot, what in (("lean-verify", "Lean verifier run"), ("flock-warm", "warm-session run")):
+        assert (f"- {slot} (`prove-llama32-1b-{slot}`): no {what} of record: no run labelled "
+                f"`run_of_record=prove-llama32-1b-{slot}` that is not superseded") in refusal
+    for slot in ("cut", "flock-single", "spot-sampling", "lean-verify", "flock-warm"):
         assert f"(label one: `research data label TARGET run_of_record prove-llama32-1b-{slot} --by LANE`)" in refusal
     assert "gpus_per_serving_gpu" not in out
 
@@ -173,6 +182,59 @@ def test_the_command_prints_the_census_and_refuses_the_ratio_by_name(tmp_path, m
     kept = json.loads((within / PC.CENSUS_TABLE).read_text())
     assert kept["census"]["blocks"] == {"r0": 40, "r1": 31} and kept["refusal"] == doc["refusal"]
     assert not (within / R.TABLE).exists()
+
+
+def attention(t: int, masked: int = 0, bn: int = 128) -> str:
+    return (f'Attention_v4{{T={t},NH=32,KVH=8,D=64,BN={bn},DOT={{"fn":"HopperBF16WgmmaDot16_v1"}},'
+            f'INV={{"fn":"Fa3InvSum_v1"}},MASKED_FROM={masked}}}')
+
+
+def test_the_text_groups_runs_exactly():
+    """A run of one family's Definitions differing in one static, with one reason (or one `k_log` and rate) and served
+    rows in the same requests, prints as one line; a hole, another reason, another pattern of requests or another
+    static parts runs, a Definition alone keeps its name, and the lines' Definitions and served rows, in each request
+    and in all, are the table's exactly."""
+
+    def gap(why: str, ands: int, rows: int) -> dict:
+        return {"family": "Attention_v4", "why": why, "ands": ands, "prefill": rows, "decode": 0}
+
+    def block(k_log: int, rows: int) -> dict:
+        return {"family": "Attention_v4", "k_log": k_log, "ands": 1000 * k_log, "macs": 0,
+                "of": {"Attention_v4": "row"}, "prefill": rows, "decode": 0}
+
+    both, first = {}, {}
+    for t in range(22, 49):
+        both[attention(t)] = gap(f"a 2^28 block at {1000 * t:,} ANDs", 1000 * t, 15)
+    for t in range(49, 52):
+        both[attention(t)] = gap(f"a 2^29 block at {1000 * t:,} ANDs", 1000 * t, 15)
+    for t in (60, 61, 63):
+        both[attention(t)] = gap("its rows alone need a 2^28 block", 1000 * t, 15)
+    for t in (52, 53):
+        first[attention(t)] = gap(f"a 2^29 block at {1000 * t:,} ANDs", 1000 * t, 15)
+    for t in (60, 61):
+        both[attention(t, masked=1)] = gap("its rows alone need a 2^28 block", 1000 * t, 15)
+    blocks = {attention(t): block(26 if t < 9 else 27, 15) for t in range(1, 12)}
+    blocks[attention(12, bn=192)] = block(27, 15)
+
+    def doc(gaps: dict) -> dict:
+        return {"tokens": {"prefill": 1, "decode": 0}, "definitions": blocks, "gaps": gaps}
+
+    found = PC.table([("r0", doc(both | first)), ("r1", doc(both))], {})
+    gaps, rows = PC.printed(found["gaps"], PC._gap_kind), PC.printed(found["rows"], PC._block_kind)
+    for lines, kept in ((gaps, found["gaps"]), (rows, found["rows"])):
+        assert sum(u["definitions"] for u in lines) == len(kept)
+        assert sum(u["total"] for u in lines) == sum(r["total"] for r in kept)
+        for n in ("r0", "r1"):
+            assert sum(u["requests"][n] for u in lines) == sum(r["requests"][n] for r in kept)
+        assert sorted(r["block"] for u in lines for r in u["of"]) == sorted(r["block"] for r in kept)
+    assert {(u["block"], u["definitions"]) for u in gaps} == {
+        (attention("22..48"), 27), (attention("49..51"), 3), (attention("52..53"), 2), (attention("60..61"), 2),
+        (attention(63), 1), (attention("60..61", masked=1), 2)}
+    assert {(u["block"], u["definitions"]) for u in rows} == {
+        (attention("1..8"), 8), (attention("9..11"), 3), (attention(12, bn=192), 1)}
+    assert next(u for u in gaps if u["definitions"] == 27)["total"] == 27 * 30
+    no_rate = [{"block": r["block"], "per_token": r["total"] / 2} for r in found["rows"]]
+    assert {u["block"] for _, u in PC.unrated(found["rows"], no_rate)} == {u["block"] for u in rows}
 
 
 def test_a_census_of_another_model_or_with_no_census_file_is_refused(tmp_path):

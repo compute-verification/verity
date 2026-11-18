@@ -2,8 +2,8 @@
 (`verity_flock.proof_server.ProofServer`'s ``provers``), its sessions back to back, each K in turn.
 
     python benchmarks/one_stage/server_rate.py --bin flock-circuit --staged Z --types frw13,frw2 --provers 1,2,4 --out DIR \\
-        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean verity-verify-proof [--lean-sessions 2] [--lean-program F]] \\
-        [--tmpl-unit-bin B] [--wide-leaf]
+        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean verity-verify-proof [--lean-sessions 2] [--lean-program F] \\
+        [--lean-partition F]] [--tmpl-unit-bin B] [--wide-leaf]
 
 * **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit sampled: a
   sampled replay block at the full statement. A templated one (``verity/flock-circuit/tmpl`` in its circuit's META, as
@@ -36,7 +36,10 @@
   --zk` on their record on the server's verdict pool, one at a time and after the steady window, each with its own CPU
   seconds and peak RSS (`os.wait4`), the circuit and the public file archived once a type. ``--lean-program`` is the
   row's Program's descriptor, archived with them and handed to `verify` (``--program``); without it every Lean verdict
-  is `verify`'s refusal of a session without its program, and says so. The row keeps what the verdict says of the
+  is `verify`'s refusal of a session without its program, and says so. ``--lean-partition`` is the verifier's copy of
+  the ``verity/partition/v1`` object a bound circuit's META binds (the stage's partition.json), handed the same way
+  (``--partition``); a bound statement judged without it is refused before any session, since `verify` would refuse
+  every one at its setup (`bound_partition`). The row keeps what the verdict says of the
   Program (`PROGRAM_FIELDS`): ``program_sha512`` only when it is held to the circuit, else ``program_handed_sha512`` and
   ``program_note``, which on a statement under the provisional unit cover says the Program was handed and not held to
   the circuit.
@@ -121,6 +124,14 @@ def cpu_s(pids) -> tuple[float, list[int]]:
             continue
         s += int(f[11]) + int(f[12])
     return s / os.sysconf("SC_CLK_TCK"), gone
+
+
+def bound_partition(d: Path) -> str | None:
+    """The ``verity/partition/v1`` digest the staged circuit's META binds, read off the file's head; None for a circuit
+    under the provisional unit cover."""
+    with open(d / "circuit.txt") as f:
+        p = FC.meta_of(f.readline() + f.readline()).get("partition") or {}
+    return p.get("digest") if p.get("rule") == FC.PARTITION_V1 else None
 
 
 def tmpl_unit(d: Path, binary: str | None) -> Path | None:
@@ -357,16 +368,18 @@ class Lean:
     """Lean `verity-verify-proof verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
     file and tables archived once, in scratch outside ``out`` (`close` removes it); ``statement``, the one `verify` sets
     up; ``program``, the Program's descriptor `verify` is handed (``--program``), archived with them: without it `verify`
-    refuses every session, for lack of its program. A verdict keeps what `verify` says of the Program (`PROGRAM_FIELDS`).
-    `verify` runs in `verifier_env`: under the verifier's allocator setting unless this process's environment sets
-    its own, which both the seconds and the peak read."""
+    refuses every session, for lack of its program. ``partition``, the verifier's own copy of the ``verity/partition/v1``
+    object a bound circuit's META binds (``--partition``), archived the same way. A verdict keeps what `verify` says of
+    the Program (`PROGRAM_FIELDS`). `verify` runs in `verifier_env`: under the verifier's allocator setting unless this
+    process's environment sets its own, which both the seconds and the peak read."""
 
-    def __init__(self, lean: str, d: Path, out: Path, statement: str = STATEMENT_ID, program: Path | None = None) -> None:
-        self.lean, self.out, self.statement, self.program = lean, out, statement, program
+    def __init__(self, lean: str, d: Path, out: Path, statement: str = STATEMENT_ID, program: Path | None = None,
+                 partition: Path | None = None) -> None:
+        self.lean, self.out, self.statement, self.program, self.partition = lean, out, statement, program, partition
         self.archive = Path(tempfile.mkdtemp(prefix="server-rate-archive-"))
         tables = sorted(str(f) for f in (d / "tables").glob("*") if f.is_file()) if (d / "tables").is_dir() else []
         p = subprocess.run([lean, "archive-put", str(self.archive), str(d / "circuit.txt"), str(d / "pub.bin"), *tables,
-                            *([str(program)] if program else [])], capture_output=True, text=True)
+                            *(str(f) for f in (program, partition) if f)], capture_output=True, text=True)
         (out / "archive-put.log").write_text(p.stdout + p.stderr)
         self.keys = {Path(x.split()[1]).name: x.split()[0] for x in p.stdout.splitlines() if len(x.split()) == 2}
         self._one = threading.Lock()
@@ -377,7 +390,8 @@ class Lean:
     def __call__(self, s) -> dict:
         cmd = [self.lean, "verify", "--statement", self.statement, "--archive", str(self.archive),
                "--circuit", self.keys.get("circuit.txt", ""), "--public", self.keys.get("pub.bin", ""),
-               *(["--program", self.keys.get(self.program.name, "")] if self.program else []), "--zk",
+               *(["--program", self.keys.get(self.program.name, "")] if self.program else []),
+               *(["--partition", self.keys.get(self.partition.name, "")] if self.partition else []), "--zk",
                "--session", str(s.dir)]
         log = self.out / f"lean-{s.label.replace('/', '-')}.log"
         with self._one, open(log, "w") as f:
@@ -402,7 +416,13 @@ def one(a, dev: str, t: str, K: int) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     statement = (STATEMENT_ID if st.tmpl_unit is None else FC.TMPL_STATEMENT) + (WIDE_LEAF if a.wide_leaf else "")
     program = Path(a.lean_program) if a.lean_program else None
-    lean = Lean(a.lean, d, out, statement, program) if a.lean and K == 1 and a.lean_sessions else None
+    partition = Path(a.lean_partition) if a.lean_partition else None
+    judging = bool(a.lean and K == 1 and a.lean_sessions)
+    if judging and partition is None and (digest := bound_partition(d)):
+        raise ValueError(f"{d / 'circuit.txt'} binds the {FC.PARTITION_V1} object {digest[:16]}… in its META, and Lean "
+                         f"`verify` refuses every session without the verifier's copy of it: give --lean-partition "
+                         f"{d / 'partition.json'} (served_units/stage.py writes it beside a bound statement)")
+    lean = Lean(a.lean, d, out, statement, program, partition) if judging else None
     draw = {"law": "subset", "population": n, "k": n, "units": list(range(n))}
     timed_n = max(a.sessions, 8 * K)
     total, window = K * a.warm + timed_n, K * (a.ahead + 2)
@@ -542,6 +562,8 @@ def main() -> int:
     ap.add_argument("--lean-sessions", type=int, default=2)
     ap.add_argument("--lean-program", default=None, help="the row's Program's descriptor, which Lean `verify` is handed "
                     "(--program); without it every Lean verdict is its refusal of a session without its program")
+    ap.add_argument("--lean-partition", default=None, help="the verifier's copy of the verity/partition/v1 object a bound "
+                    "circuit binds (--partition, the stage's partition.json); a bound statement judged without it is refused")
     ap.add_argument("--tmpl-unit-bin", default=None, help="flock-tmpl-unit: places a templated statement's unit")
     ap.add_argument("--wide-leaf", action="store_true",
                     help="the wide level-0 leaf's statement version: every prover and verifier runs with --wide-leaf")

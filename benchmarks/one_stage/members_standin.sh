@@ -11,7 +11,7 @@ log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 log "uv sync"
 uv sync --all-packages --extra torch-cpu > "$OUT/uv.log" 2>&1 || { log "uv sync failed"; exit 5; }
 log "lake build verity-verify-proof flock-zk-server"
-(cd verity/protocols/proofs/flock/verifier && mkdir -p .lake && flock .lake/verity-build.lock lake build verity-verify-proof flock-zk-server) \
+(mkdir -p verity/circuits/difftest/.lake && cd verity/protocols/proofs/flock/verifier && flock ../../../../circuits/difftest/.lake/harness-build.lock lake build verity-verify-proof flock-zk-server) \
   > "$OUT/lake-flock.log" 2>&1 || { log "lake build failed"; tail -20 "$OUT/lake-flock.log"; exit 6; }
 log "check_build.sh bin"
 bash verity/protocols/proofs/flock/prover/check_build.sh bin "$SCR/flock-circuit" > "$OUT/check-build.log" 2>&1 \

@@ -46,6 +46,55 @@ def test_count_reads_each_architectures_opcodes():
     assert "BRA" in a90["ops"] and a90["ops"]["BRA"][0] == 1
 
 
+def test_join_of_runs_of_elfs_in_order_is_the_whole_binarys_count():
+    head, *secs = FIX.read_text().split("Fatbin elf code:")
+    # three ELFs, the first architecture's again after the second's, so one architecture's count spans two parts
+    elf = [head + "Fatbin elf code:" + secs[0]] + ["Fatbin elf code:" + s for s in (secs[1], secs[0])]
+    whole = json.dumps(sass_count.count("".join(elf).splitlines(keepends=True), "lib@ab"))
+    for cuts in ([], [1], [2], [1, 2]):
+        bounds = [0, *cuts, len(elf)]
+        parts = [json.loads(json.dumps(sass_count.count("".join(elf[a:b]).splitlines(keepends=True), "lib@ab")))
+                 for a, b in zip(bounds, bounds[1:])]
+        assert json.dumps(sass_count.join(parts, "lib@ab")) == whole, cuts
+    one = sass_count.count(elf[0].splitlines(), "x")["archs"]["sm_90a"]["instrs"]
+    assert json.loads(whole)["archs"]["sm_90a"]["instrs"] == 2 * one
+
+
+def test_plan_cuts_each_binary_into_runs_of_its_elfs_in_order():
+    lelf = ["", "ELF file    1: lib.1.sm_90.cubin", "ELF file    2: lib.2.sm_100.cubin", "ELF file   10: lib.10.sm_90.cubin"]
+    assert sass_count.elfs(lelf) == ["lib.1.sm_90.cubin", "lib.2.sm_100.cubin", "lib.10.sm_90.cubin"]
+    assert sass_count.elfs(["Extracting ELF file    1: lib.1.sm_90.cubin"]) == ["lib.1.sm_90.cubin"]
+    es = [("x", 10**7), ("y", 1), ("z", 1), ("w", 1)]
+    for jobs in (1, 2, 64):
+        units = sass_count.plan([("a", 999, es), ("b", 50, None)], jobs)
+        runs = [u for u in units if u[1] == "a"]
+        assert [u[2] for u in runs] == list(range(len(runs)))
+        assert [n for u in runs for n in u[3]] == ["x", "y", "z", "w"]
+        assert [u for u in units if u[1] == "b"] == [(50, "b", 0, None)]  # no ELFs: dumped whole
+    # the large ELF is a unit of its own, the small ones share one
+    assert [u[3] for u in sass_count.plan([("a", 999, es)], 1)] == [["x"], ["y", "z", "w"]]
+
+
+def test_cache_key_reads_the_version_the_binary_and_its_source(tmp_path):
+    a, b = tmp_path / "a.py", tmp_path / "b.sh"
+    a.write_text("x")
+    b.write_text("y")
+    v = sass_count.version([a, b], "cuobjdump 13.0")
+    assert v != sass_count.version([a, b], "cuobjdump 13.1")
+    b.write_text("z")
+    assert v != sass_count.version([a, b], "cuobjdump 13.0")
+    sha = "ab" * 32
+    k = sass_count.key(v, sha, "libx.so@abababababababab")
+    assert k == f"{v}/{sha}/libx.so@abababababababab.json"
+    assert len({k, sass_count.key(v, "cd" * 32, "libx.so@abababababababab"), sass_count.key(v, sha, "liby.so@ab")}) == 3
+    try:
+        sass_count.key(v, sha[:16], "libx.so")
+    except ValueError as e:
+        assert "64 hex digits" in str(e)
+    else:
+        raise AssertionError("key took a truncated sha256")
+
+
 def test_merge_folds_to_families_and_bases():
     c = census()
     assert set(c) == {"sm_90", "sm_100"}
@@ -220,6 +269,12 @@ def test_record_counts_each_censused_familys_unpriced_opcodes_and_a_failed_binar
     assert doc["validation"]["status"] == "passed" and want["sm_90"] and want["sm_100"]
     assert {f: sum(c.values()) for f, c in m["by_family"].items()} == want and m["value"] == sum(want.values())
     assert (m["name"], m["unit"], m["mark"], m["host"]["card"]) == (diff_menu.METRIC, "opcodes", "measured", "none")
+    assert m["from_cache"] == []
+    (tmp_path / "result.json").unlink()
+    (tmp_path / "cached.tsv").write_text("abc\t/lib/libtest.so\n")
+    assert diff_menu.main(["record", str(tmp_path)]) == 0
+    [m] = json.loads((tmp_path / "result.json").read_text())["measurements"]
+    assert m["from_cache"] == ["libtest.so@abc"]
     (tmp_path / "result.json").unlink()
     (tmp_path / "failed.txt").write_text("abc\tlibtest.so\n")
     assert diff_menu.main(["record", str(tmp_path)]) == 1
