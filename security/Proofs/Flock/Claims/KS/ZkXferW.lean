@@ -77,7 +77,7 @@ variable [S : ZkSetup]
 
 /-- **Table `j`'s word has level 0's `2^logLen` columns** at Flock ZK's padded tables of a masked statement in
 scope. -/
-theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem wordLenJ_zkTabs {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -105,7 +105,7 @@ end Gen
 
 /-- **Table `j`'s word has level 0's `2^logLen` columns** at Flock ZK's padded tables of a masked statement in
 scope. -/
-theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem wordLenJ_zkTabs {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -123,7 +123,7 @@ live verdict `AccTxJ` (accepted at the sample at `wrS`, no column of table `j` o
 mixture's), the simulated strategies after `Commit` at the deployed decoders right at `OkOffWJ` there
 (`decodesTableW_deploy`), and level 0's fork event at each table (`Claims.Flock.IZW`) bounding their `Adv₀`, each
 fork bound with the slack of the fork at its round (`Claims.Flock.forkSlack`), as `ZkSessWJ` reads. -/
-def ZkXferWJ (x : Claims.Msg) : Prop :=
+def ZkXferWJ (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -214,7 +214,7 @@ live verdict `AccTxJ` (accepted at the sample at `wrS`, no column of table `j` o
 mixture's), the simulated strategies after `Commit` at the deployed decoders right at `OkOffWJ` there
 (`decodesTableW_deploy`), and level 0's fork event at each table (`Claims.Flock.IZW`) bounding their `Adv₀`, each
 fork bound with the slack of the fork at its round (`Claims.Flock.forkSlack`), as `ZkSessWJ` reads. -/
-def ZkXferWJ (x : Claims.Msg) : Prop :=
+def ZkXferWJ (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -299,7 +299,7 @@ def ZkXferWJ (x : Claims.Msg) : Prop :=
 carries a sample (`acc_sample_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
 (`decodesTableW_deploy`), and table `j`'s word has level 0's columns (`wordLenJ_zkTabs`), so that verdict at table `j`
 accepts with no opening off `C` on a witness lane unless it self-clashes. -/
-theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferWJ x) :
+theorem zkLiveAccWJ_of_xferWJ {x : Hash.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferWJ x) :
     ZkLiveAccWJ x := by
   intro ins spec sts hset h0 L hz hk hlay Ω _ _ P
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
@@ -325,7 +325,7 @@ end Gen
 carries a sample (`acc_sample_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
 (`decodesTableW_deploy`), and table `j`'s word has level 0's columns (`wordLenJ_zkTabs`), so that verdict at table `j`
 accepts with no opening off `C` on a witness lane unless it self-clashes. -/
-theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferWJ x) :
+theorem zkLiveAccWJ_of_xferWJ {x : Hash.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferWJ x) :
     ZkLiveAccWJ x :=
   Gen.zkLiveAccWJ_of_xferWJ (S := S₀) (x := x) (hno := hno) (hx := hx)
 
@@ -363,7 +363,7 @@ end Gen
 counted per round**, at full-width columns, from `ZkXferWJ` at the statements some run accepts
 (`zk_tableBoundθAccAtR`, `zkLiveAccWJ_of_xferWJ`). -/
 theorem zk_tableBoundθAccAtR_of_xferWJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkXferWJ x)
-    (x : Claims.Msg) :
+    (x : Hash.Msg) :
     Claims.Flock.TableBoundθAccAtR sha512 (deployZk Readable.relation) (wordLen true) (wide true) x :=
   zk_tableBoundθAccAtR (fun x hno => zkLiveAccWJ_of_xferWJ hno (hx x hno)) x
 

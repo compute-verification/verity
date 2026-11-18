@@ -58,28 +58,28 @@ open Flock FlockDeploy
 
 namespace FlockComplete
 
-variable (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg)
+variable (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg)
 
-theorem pv_sim_pre {α β : Type} {x : PV α} {f : α → PV β} {i : ℕ} {ms : List Claims.Msg}
+theorem pv_sim_pre {α β : Type} {x : PV α} {f : α → PV β} {i : ℕ} {ms : List Hash.Msg}
     (hx : ∃ bs, (x.run.sim H resp i).1 = ms ++ bs) : ∃ bs', ((x >>= f).run.sim H resp i).1 = ms ++ bs' := by
   obtain ⟨bs, hx⟩ := hx
   rw [pv_sim_bind, hx, List.append_assoc]
   exact ⟨_, rfl⟩
 
 theorem st_sim_pre {σ α β : Type} {x : StateT σ PV α} {f : α → StateT σ PV β} {s : σ} {i : ℕ}
-    {ms : List Claims.Msg} (hx : ∃ bs, ((x.run s).run.sim H resp i).1 = ms ++ bs) :
+    {ms : List Hash.Msg} (hx : ∃ bs, ((x.run s).run.sim H resp i).1 = ms ++ bs) :
     ∃ bs', (((x >>= f).run s).run.sim H resp i).1 = ms ++ bs' := by
   rw [StateT.run_bind]
   exact pv_sim_pre H resp hx
 
-theorem pv_sim_cons {α β : Type} {x : PV α} {f : α → PV β} {i : ℕ} {m : Claims.Msg} {a : α}
+theorem pv_sim_cons {α β : Type} {x : PV α} {f : α → PV β} {i : ℕ} {m : Hash.Msg} {a : α}
     (hx : x.run.sim H resp i = ([m], .ok a)) :
     ((x >>= f).run.sim H resp i).1 = m :: ((f a).run.sim H resp (i + 1)).1 := by
   rw [pv_sim_bind, hx]
   rfl
 
 theorem st_sim_cons {σ α β : Type} {x : StateT σ PV α} {f : α → StateT σ PV β} {s s' : σ} {i : ℕ}
-    {m : Claims.Msg} {a : α} (hx : (x.run s).run.sim H resp i = ([m], .ok (a, s'))) :
+    {m : Hash.Msg} {a : α} (hx : (x.run s).run.sim H resp i = ([m], .ok (a, s'))) :
     (((x >>= f).run s).run.sim H resp i).1 = m :: (((f a).run s').run.sim H resp (i + 1)).1 := by
   rw [StateT.run_bind]
   exact pv_sim_cons H resp hx
@@ -122,7 +122,7 @@ end FlockComplete
 
 namespace FlockComplete
 
-variable (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg)
+variable (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg)
 
 theorem repPZk_pv_head2 (st : Setup) (hm : 14 ≤ st.m) (sch : Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)

@@ -49,9 +49,9 @@ coins `srcCoinsAt MAX_COINS`. It holds wherever:
 * the device's log opens only the record's rounds at every accepted play whose log v2 read is the device's (`hO`,
   `OpenedRecorded`). -/
 theorem movesReachAt {V : Vocab d α} {T : PinnedTables} {k : Verity.Registration.Composite} {θ : ByteArray}
-    {F : Array ByteArray} {A : Live} (reg : Option Claims.Msg → A.Reg)
-    (record : ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
+    {F : Array ByteArray} {A : Live} (reg : Option Hash.Msg → A.Reg)
+    (record : ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : ByteArray → Hash.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →

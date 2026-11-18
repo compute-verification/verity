@@ -237,8 +237,8 @@ theorem verdictE_calls_sub {spec : SessionSpec} {tabs : Array Setup} {record rec
 /-! ## The element-level decision's calls -/
 
 /-- `decisionAt_log` at `decisionAtE`. -/
-theorem decisionAtE_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
-    (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
+theorem decisionAtE_log (H : Hash.Msg → Hash.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
+    (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin))
     (f : Final) :
     ((decisionAtE s spec sts x link c₁ mids f).run.eval H).2 =
       ((verifyWithME Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs).run.eval H).2 := by
@@ -247,9 +247,9 @@ theorem decisionAtE_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessio
   cases r <;> exact List.append_nil l
 
 /-- `next_decide_calls` at `nextE`. -/
-theorem nextE_decide_calls (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
+theorem nextE_decide_calls (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (h : act false x as cs = .decide s spec sts link c₁ mids f)
     (hs : ((setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec, sts)) :
     ((nextE x as cs).eval H).2 = ((setupM Claims.Hashes.oc s.read).run.eval H).2 ++
@@ -263,8 +263,8 @@ theorem nextE_decide_calls (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as 
   rw [decisionAtE_log]
 
 /-- `acc_verifyLogged` at `nextE`. -/
-theorem accE_verifyLogged {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+theorem accE_verifyLogged {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : Final} (h : act false x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((nextE x as cs).eval sha512).1 = .acc) :
     verifyLoggedE Sha512.hash spec (tabsOf sts) f.record f.proofs =
@@ -277,9 +277,9 @@ theorem accE_verifyLogged {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coi
   exact ⟨Prod.ext ((verifyLoggedE_fst _ _ _ _ _ _).trans hv) rfl, hc⟩
 
 /-- `next_calls_toFinset` at `nextE`. -/
-theorem nextE_calls_toFinset {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' : List Coin} {s : Ins}
+theorem nextE_calls_toFinset {x : Hash.Msg} {as as' : List Hash.Msg} {cs cs' : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
-    {mids mids' : List (Claims.Msg × Coin)} {f f' : Final}
+    {mids mids' : List (Hash.Msg × Coin)} {f f' : Final}
     (h : act false x as cs = .decide s spec sts link c₁ mids f)
     (h' : act false x as' cs' = .decide s spec sts link' c₁' mids' f')
     (hsub : ∀ b ∈ (verifyLoggedE Sha512.hash spec (tabsOf sts) f.record f.proofs).2.toList,
@@ -293,7 +293,7 @@ theorem nextE_calls_toFinset {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs'
   have hl := Claims.verifyOCE_log sha512 spec (tabsOf sts) f.record f.proofs
   have hl' := Claims.verifyOCE_log sha512 spec (tabsOf sts) f'.record f'.proofs
   rw [hOf_sha512] at hl hl'
-  have hq : ∀ {A B : List (Claims.Msg × Claims.Msg)} {LA LB : Array ByteArray},
+  have hq : ∀ {A B : List (Hash.Msg × Hash.Msg)} {LA LB : Array ByteArray},
       A.map (fun p => Claims.ofMsg p.1) = LA.toList → B.map (fun p => Claims.ofMsg p.1) = LB.toList →
       (∀ b ∈ LA.toList, b ∈ LB.toList) → ∀ p ∈ A, ∃ p' ∈ B, p'.1 = p.1 := by
     intro A B LA LB hA hB hAB p hp
@@ -307,7 +307,7 @@ theorem nextE_calls_toFinset {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs'
   exact toFinset_eq_of_queries (eval_log_ans _ _) (eval_log_ans _ _) (hq hl hl' hsub) (hq hl' hl hsub')
 
 /-- `plain_decide_shared` at `nextE`. -/
-theorem plainE_decide_shared {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
+theorem plainE_decide_shared {x : Hash.Msg} {ms : List Hash.Msg} {l l' : Hash.Msg} {cs : List Coin}
     {f f' : Final} (hc : cs.length = ms.length + 1)
     (hacc : ((nextE x (ms ++ [l]) cs).eval sha512).1 = .acc)
     (hacc' : ((nextE x (ms ++ [l']) cs).eval sha512).1 = .acc)
@@ -355,9 +355,9 @@ theorem plainE_decide_shared {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Cla
 /-- **Two accepted element-level decisions on one setup, link, coin and round messages, with the same proof files,
 call SHA-512 on one set**, where the sessions their records decode have the same rounds at each rep stream as replay
 reads them (`plain_calls_agree`'s, at `nextE`). -/
-theorem plainE_calls_agree {x : Claims.Msg} {as as' : List Claims.Msg} {cs cs' : List Coin} {s : Ins}
+theorem plainE_calls_agree {x : Hash.Msg} {as as' : List Hash.Msg} {cs cs' : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f f' : Final}
+    {mids : List (Hash.Msg × Coin)} {f f' : Final}
     (h : act false x as cs = .decide s spec sts link c₁ mids f)
     (h' : act false x as' cs' = .decide s spec sts link c₁ mids f')
     (hacc : ((nextE x as cs).eval sha512).1 = .acc) (hacc' : ((nextE x as' cs').eval sha512).1 = .acc)

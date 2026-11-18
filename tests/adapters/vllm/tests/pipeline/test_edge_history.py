@@ -11,7 +11,7 @@ from verity.circuits.partition_object import calls
 from verity.circuits.types import Array, Value, field_starts, field_types
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.commitments import registered_value as RV
 
 from tests.program.test_workload_program import _edge_wl, _groups
 from verity_vllm.pipeline import edge as E
@@ -101,7 +101,7 @@ def test_window_ws_verifier_refuses_an_edge_port_under_another_domain(two):
     derives: R3-domain."""
     t = two
     for window in (None, OPEN[1]):
-        other = E.roots({"edge.last": REG.Registered.commit(t["com"]["edge.last"].program, "edge.last", t["com"]["edge.last"].rows,
+        other = E.roots({"edge.last": RV.Registered.commit(t["com"]["edge.last"].program, "edge.last", t["com"]["edge.last"].rows,
                                                             word_bits=16, window=window)})
         roots = [r if r["port"] != "edge.last" else other[0] for r in t["rec0"]["roots"]]
         assert R.check({**t["rec0"], "roots": roots}, t["w0"].program, _query(t["w0"]), DESIGN, SCHEME, ports=t["ports0"]).codes == ("R3-domain",)
@@ -124,15 +124,15 @@ def test_tampered_history_is_refused_by_name(two):
     kv = t["com"]["edge.kv"]
     rows = [list(r) for r in kv.rows]
     rows[0][0] ^= 1
-    tampered = REG.Registered.commit(kv.program, "edge.kv", rows, word_bits=16, window=OPEN[0]).entry()
+    tampered = RV.Registered.commit(kv.program, "edge.kv", rows, word_bits=16, window=OPEN[0]).entry()
     assert tampered["domain"] == kv.entry()["domain"]
     assert _check1(t, _with(t, "edge.kv", tampered), [t["rec0"]]).codes == ("R7-held",)
 
-    fresh = REG.Registered.commit(kv.program, "edge.kv", kv.rows, word_bits=16, window=OPEN[0]).entry()
+    fresh = RV.Registered.commit(kv.program, "edge.kv", kv.rows, word_bits=16, window=OPEN[0]).entry()
     assert fresh["root"] != kv.entry()["root"]
     assert _check1(t, _with(t, "edge.kv", fresh), [t["rec0"]]).codes == ("R7-held",)
 
-    own = REG.Registered.commit(program_digest(t["w1"].program), "edge.kv", kv.rows, word_bits=16, window=OPEN[1]).entry()
+    own = RV.Registered.commit(program_digest(t["w1"].program), "edge.kv", kv.rows, word_bits=16, window=OPEN[1]).entry()
     assert _check1(t, _with(t, "edge.kv", own), [t["rec0"]]).codes == ("R7-domain", "R7-held")
 
     # with no previous port to take it from, the value's domain is no history domain either (R7-domain beside R7-output)

@@ -68,7 +68,7 @@ theorem deploy_flock_V (rel : Readable.Parsed → Readable.Relation) (c : Sampli
 /-- **An accepted run of `V true` is verity-verify-proof `--zk`'s acceptance**: against SHA-512, the run decided at the
 statement's inputs `s` on its last message's record and proof files `f`; the record's sample is the statement's, and
 `verify --zk` accepts `⟨f.record, f.proofs⟩` at `s.read.I`. -/
-theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,
       act true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
@@ -92,7 +92,7 @@ theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
 
 /-- **`zkAccepts_of_run` as the live event**: `LiveAcceptsZK` at the statement's inputs, at every outcome whose
 transcript is the last message's record and proof files. -/
-theorem liveAcceptsZK_of_run {n : ℕ} {Reg : Type} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem liveAcceptsZK_of_run {n : ℕ} {Reg : Type} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
     ∃ (s : FlockDeploy.Ins) (f : FlockDeploy.Final), insOf true x = some s ∧
       Exec.recordDraw f.record = s.read.draw ∧ ∀ (R : Reg) (S : Finset (Fin n)),

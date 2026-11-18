@@ -65,37 +65,37 @@ open Flock Transcript Replay
 
 /-- **Two runs in lockstep**: both threw the same error after the same bodies, or both returned at the same transcript
 after the same bodies `L`, with values related by `R` at `L`. -/
-abbrev GoAlike {α β : Type} (R : α → β → Array Claims.Msg → Prop)
-    (x : Except String (α × Transcript) × Array Claims.Msg) (y : Except String (β × Transcript) × Array Claims.Msg) :
+abbrev GoAlike {α β : Type} (R : α → β → Array Hash.Msg → Prop)
+    (x : Except String (α × Transcript) × Array Hash.Msg) (y : Except String (β × Transcript) × Array Hash.Msg) :
     Prop :=
   (∃ e L, x = (.error e, L) ∧ y = (.error e, L)) ∨ ∃ a b t L, x = (.ok (a, t), L) ∧ y = (.ok (b, t), L) ∧ R a b L
 
-theorem bind_go_err {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t : Transcript} {l l' : Array Claims.Msg}
+theorem bind_go_err {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t : Transcript} {l l' : Array Hash.Msg}
     {e : String} (h : (x.run t).go l = (.error e, l')) : ((x >>= f).run t).go l = (.error e, l') := by
   rw [StateT.run_bind, go_bind, h]
 
-theorem GoAlike.refl {α : Type} (x : Except String (α × Transcript) × Array Claims.Msg) :
+theorem GoAlike.refl {α : Type} (x : Except String (α × Transcript) × Array Hash.Msg) :
     GoAlike (fun a b _ => a = b) x x := by
   rcases x with ⟨r, L⟩
   rcases r with e | ⟨a, t⟩
   · exact .inl ⟨e, L, rfl, rfl⟩
   · exact .inr ⟨a, a, t, L, rfl, rfl, rfl⟩
 
-theorem GoAlike.eq {α : Type} {x y : Except String (α × Transcript) × Array Claims.Msg}
+theorem GoAlike.eq {α : Type} {x y : Except String (α × Transcript) × Array Hash.Msg}
     (h : GoAlike (fun a b _ => a = b) x y) : x = y := by
   rcases h with ⟨e, L, rfl, rfl⟩ | ⟨a, b, t, L, rfl, rfl, hab⟩
   · rfl
   · obtain rfl : a = b := hab
     rfl
 
-theorem alike_pure {α β : Type} {R : α → β → Array Claims.Msg → Prop} {a : α} {b : β} (t : Transcript)
-    (l : Array Claims.Msg) (h : R a b l) :
+theorem alike_pure {α β : Type} {R : α → β → Array Hash.Msg → Prop} {a : α} {b : β} (t : Transcript)
+    (l : Array Hash.Msg) (h : R a b l) :
     GoAlike R (((pure a : TMW PS α).run t).go l) (((pure b : TMW PS β).run t).go l) :=
   .inr ⟨a, b, t, l, rfl, rfl, h⟩
 
 /-- **A bind in lockstep**: related programs, and continuations related from every common return. -/
-theorem alike_bind {α β γ δ : Type} {R : α → β → Array Claims.Msg → Prop} {S : γ → δ → Array Claims.Msg → Prop}
-    {x : TMW PS α} {y : TMW PS β} {f : α → TMW PS γ} {g : β → TMW PS δ} {t : Transcript} {l : Array Claims.Msg}
+theorem alike_bind {α β γ δ : Type} {R : α → β → Array Hash.Msg → Prop} {S : γ → δ → Array Hash.Msg → Prop}
+    {x : TMW PS α} {y : TMW PS β} {f : α → TMW PS γ} {g : β → TMW PS δ} {t : Transcript} {l : Array Hash.Msg}
     (hxy : GoAlike R ((x.run t).go l) ((y.run t).go l))
     (hfg : ∀ a b t' l', (x.run t).go l = (.ok (a, t'), l') → (y.run t).go l = (.ok (b, t'), l') → R a b l' →
       GoAlike S (((f a).run t').go l') (((g b).run t').go l')) :
@@ -106,8 +106,8 @@ theorem alike_bind {α β γ δ : Type} {R : α → β → Array Claims.Msg → 
     exact hfg a b t' L hx hy hR
 
 /-- **A shared step**: the same program, then continuations related from each of its returns. -/
-theorem alike_bind_eq {α γ δ : Type} {S : γ → δ → Array Claims.Msg → Prop} {x y : TMW PS α}
-    {f : α → TMW PS γ} {g : α → TMW PS δ} {t : Transcript} {l : Array Claims.Msg} (hxy : x = y)
+theorem alike_bind_eq {α γ δ : Type} {S : γ → δ → Array Hash.Msg → Prop} {x y : TMW PS α}
+    {f : α → TMW PS γ} {g : α → TMW PS δ} {t : Transcript} {l : Array Hash.Msg} (hxy : x = y)
     (hfg : ∀ a t' l', (x.run t).go l = (.ok (a, t'), l') → GoAlike S (((f a).run t').go l') (((g a).run t').go l')) :
     GoAlike S (((x >>= f).run t).go l) (((y >>= g).run t).go l) := by
   subst hxy
@@ -117,15 +117,15 @@ theorem alike_bind_eq {α γ δ : Type} {S : γ → δ → Array Claims.Msg → 
 `I (i + 1)` after one more body, the loops over `[0:n]` end in states related by `I n` after `L + n` bodies. -/
 theorem forIn_alike {σ τ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (body' : ℕ → τ → TMW PS (ForInStep τ))
     (I : ℕ → σ → τ → Prop) (L n : ℕ)
-    (hb : ∀ i < n, ∀ (s : σ) (s' : τ) (t : Transcript) (l : Array Claims.Msg), l.size = L + i → I i s s' →
+    (hb : ∀ i < n, ∀ (s : σ) (s' : τ) (t : Transcript) (l : Array Hash.Msg), l.size = L + i → I i s s' →
       GoAlike (fun r r' l₁ => ∃ u u', r = .yield u ∧ r' = .yield u' ∧ I (i + 1) u u' ∧ l₁.size = L + i + 1)
         (((body i s).run t).go l) (((body' i s').run t).go l))
-    {s : σ} {s' : τ} (t : Transcript) (l : Array Claims.Msg) (hl : l.size = L) (h₀ : I 0 s s') :
+    {s : σ} {s' : τ} (t : Transcript) (l : Array Hash.Msg) (hl : l.size = L) (h₀ : I 0 s s') :
     GoAlike (fun u u' l₁ => I n u u' ∧ l₁.size = L + n)
       (((forIn [:n] s body).run t).go l) (((forIn [:n] s' body').run t).go l) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
-  suffices key : ∀ k a (s : σ) (s' : τ) (t : Transcript) (l : Array Claims.Msg), a + k = n → l.size = L + a →
+  suffices key : ∀ k a (s : σ) (s' : τ) (t : Transcript) (l : Array Hash.Msg), a + k = n → l.size = L + a →
       I a s s' → GoAlike (fun u u' l₁ => I n u u' ∧ l₁.size = L + n)
         (((forIn (List.range' a k) s body).run t).go l) (((forIn (List.range' a k) s' body').run t).go l) from
     key n 0 s s' t l (by omega) (by omega) h₀
@@ -144,13 +144,13 @@ theorem forIn_alike {σ τ : Type} (body : ℕ → σ → TMW PS (ForInStep σ))
 
 /-! ## `asksCut`'s squeezes -/
 
-theorem asksCut_round_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Claims.Msg) :
+theorem asksCut_round_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Hash.Msg) :
     ((asksCut coin n).round c).go l =
       ((if n ≤ l.size then throw "past the openings" else pure (coin l.size) : PS (ℕ → F128)).go
         (l.push (Claims.toMsg c))) := rfl
 
 theorem squeezeP_cut_ok (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript)
-    {l : Array Claims.Msg} (hl : l.size < n) :
+    {l : Array Hash.Msg} (hl : l.size < n) :
     ((squeezeP (asksCut coin n) kind k).run t).go l =
       (.ok ((Array.range k).map (coin l.size), afterSq t kind k (coin l.size)),
         l.push (Claims.toMsg (framed t kind k))) := by
@@ -159,7 +159,7 @@ theorem squeezeP_cut_ok (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) {
   rfl
 
 theorem squeezeP_cut_err (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript)
-    {l : Array Claims.Msg} (hl : n ≤ l.size) :
+    {l : Array Hash.Msg} (hl : n ≤ l.size) :
     ((squeezeP (asksCut coin n) kind k).run t).go l =
       (.error "past the openings", l.push (Claims.toMsg (framed t kind k))) := by
   simp only [squeezeP, StateT.run, hk, ite_false]
@@ -168,7 +168,7 @@ theorem squeezeP_cut_err (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) 
 
 /-- **A squeeze that returned** was before round `n`, returned the coins at `l.size` and sent the framed bytes. -/
 theorem squeezeP_cut_inv (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) {k : ℕ} (hk : k ≠ 0) {t t' : Transcript}
-    {l l' : Array Claims.Msg} {a : Array F128} (h : ((squeezeP (asksCut coin n) kind k).run t).go l = (.ok (a, t'), l')) :
+    {l l' : Array Hash.Msg} {a : Array F128} (h : ((squeezeP (asksCut coin n) kind k).run t).go l = (.ok (a, t'), l')) :
     l.size < n ∧ a = (Array.range k).map (coin l.size) ∧ t' = afterSq t kind k (coin l.size) ∧
       l' = l.push (Claims.toMsg (framed t kind k)) := by
   by_cases hn : n ≤ l.size
@@ -180,12 +180,12 @@ theorem squeezeP_cut_inv (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) 
     exact ⟨by omega, rfl, rfl, rfl⟩
 
 theorem sampleVecP_cut_inv (coin : ℕ → ℕ → F128) {n k : ℕ} (hk : k ≠ 0) {t t' : Transcript}
-    {l l' : Array Claims.Msg} {a : Array F128} (h : ((sampleVecP (asksCut coin n) k).run t).go l = (.ok (a, t'), l')) :
+    {l l' : Array Hash.Msg} {a : Array F128} (h : ((sampleVecP (asksCut coin n) k).run t).go l = (.ok (a, t'), l')) :
     l.size < n ∧ a = (Array.range k).map (coin l.size) ∧ t' = afterSq t 2 k (coin l.size) ∧
       l' = l.push (Claims.toMsg (framed t 2 k)) :=
   squeezeP_cut_inv coin 2 hk h
 
-theorem sampleP_cut_ok (coin : ℕ → ℕ → F128) {n : ℕ} (t : Transcript) {l : Array Claims.Msg} (hl : l.size < n) :
+theorem sampleP_cut_ok (coin : ℕ → ℕ → F128) {n : ℕ} (t : Transcript) {l : Array Hash.Msg} (hl : l.size < n) :
     ((sampleP (asksCut coin n)).run t).go l =
       (.ok (coin l.size 0, afterSq t 1 1 (coin l.size)), l.push (Claims.toMsg (framed t 1 1))) := by
   unfold sampleP
@@ -193,12 +193,12 @@ theorem sampleP_cut_ok (coin : ℕ → ℕ → F128) {n : ℕ} (t : Transcript) 
   show (Except.ok (_, _), _) = _
   simp
 
-theorem sampleP_cut_err (coin : ℕ → ℕ → F128) {n : ℕ} (t : Transcript) {l : Array Claims.Msg} (hl : n ≤ l.size) :
+theorem sampleP_cut_err (coin : ℕ → ℕ → F128) {n : ℕ} (t : Transcript) {l : Array Hash.Msg} (hl : n ≤ l.size) :
     ((sampleP (asksCut coin n)).run t).go l = (.error "past the openings", l.push (Claims.toMsg (framed t 1 1))) := by
   unfold sampleP
   exact bind_go_err (squeezeP_cut_err coin 1 one_ne_zero t hl)
 
-theorem sampleP_cut_inv (coin : ℕ → ℕ → F128) {n : ℕ} {t t' : Transcript} {l l' : Array Claims.Msg} {a : F128}
+theorem sampleP_cut_inv (coin : ℕ → ℕ → F128) {n : ℕ} {t t' : Transcript} {l l' : Array Hash.Msg} {a : F128}
     (h : ((sampleP (asksCut coin n)).run t).go l = (.ok (a, t'), l')) :
     l.size < n ∧ a = coin l.size 0 ∧ t' = afterSq t 1 1 (coin l.size) ∧ l' = l.push (Claims.toMsg (framed t 1 1)) := by
   by_cases hn : n ≤ l.size
@@ -210,7 +210,7 @@ theorem sampleP_cut_inv (coin : ℕ → ℕ → F128) {n : ℕ} {t t' : Transcri
     exact ⟨by omega, rfl, rfl, rfl⟩
 
 /-- A transcript action sends nothing. -/
-theorem liftTM_inv {α : Type} {x : TM α} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
+theorem liftTM_inv {α : Type} {x : TM α} {t t' : Transcript} {l l' : Array Hash.Msg} {a : α}
     (h : ((liftTM x : TMW PS α).run t).go l = (.ok (a, t'), l')) : l = l' :=
   congrArg Prod.snd ((liftTM_go x t l).symm.trans h)
 
@@ -230,7 +230,7 @@ at `round1_ab`'s, `round1_c`'s, each residual round's and the finals' pad indice
 coins from `l.size` on (`zcCoins`) plus their pads `h`, the two send the same `3 + (m − 6)` bodies, throw together, and
 return the same proof, both with the `z`, `ρ` and `r` of those coins. -/
 theorem zerocheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray)
-    (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (mk : ℕ → F128) (t : Transcript) (l : Array Claims.Msg)
+    (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (mk : ℕ → F128) (t : Transcript) (l : Array Hash.Msg)
     (hab : ∀ i < 64, mk (lay.r1ab i) = (Zc.r1ab tr (m - 6) ((zcCoins coin l.size).r m))[i]! + h[lay.r1ab i]!)
     (hc : ∀ i < 64, mk (lay.r1c i) = (Zc.r1c tr (m - 6) ((zcCoins coin l.size).r m))[i]! + h[lay.r1c i]!)
     (hm0 : ∀ i < m - 6, mk (lay.ml i 0) =

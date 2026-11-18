@@ -59,9 +59,9 @@ open Flock Transcript
 
 /-- **A rep that returns has its circuit fold return** at the lincheck's `α`, the reply to its first send after
 zerocheck's. -/
-theorem repP_fold (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_fold (resp : ℕ → Hash.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg) {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
+    (hm : 14 ≤ st.m) (t : Transcript) (l : Array Hash.Msg) {p : Proof} {t' : Transcript} {l' : Array Hash.Msg}
     (h : ((repP (asksS resp) hsP st sch tr tbl cm0 extras salt nonce).run t).go l = (.ok (p, t'), l')) :
     ∃ full, st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0)
       (skipWeights (Zc.out st.m (Zc.coinsAt resp l.size) tr).z)
@@ -85,15 +85,15 @@ theorem repP_fold (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sc
 /-- **A rep that returns carries the model's Ligerito**: its transcript ends at `Lg.out`'s on its Ligerito proof, at
 the ring switch's `T`, from where the prover's ring switch stopped, at the replies' coins from the rep's first send on;
 it keeps one send per round, and its cap and its proof's first cap are the commitment's. -/
-theorem repP_ligerito (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_ligerito (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hL : 2 ≤ sch.levels.size)
     (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) (t : Transcript) (ht : t.k = 0)
-    (l : Array Claims.Msg) {full : Array F128}
+    (l : Array Hash.Msg) {full : Array F128}
     (hfold : st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0)
       (skipWeights (Zc.out st.m (Zc.coinsAt resp l.size) tr).z)
       ((Zc.out st.m (Zc.coinsAt resp l.size) tr).rho.extract 0 (st.fold.kLog - 6)) = .ok full)
-    {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
+    {p : Proof} {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr tbl cm0 extras salt nonce).run t).go l =
       (.ok (p, t'), l')) :
     p.cap = cm0.cap ∧ p.ligerito.initialCap = cm0.cap ∧
@@ -145,10 +145,10 @@ theorem repP_ligerito (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) 
 /-- **Table `i`'s rep `r`'s Ligerito from the rep's run**: once the honest rep, run from the rep's first send on and its
 own transcript's start, returns the decoded proof, the model's transcript at the rep is where the rep's ended, and the
 proof's first cap is its cap. -/
-theorem _root_.FlockComplete.Run.lgOut_eq {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.lgOut_eq {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) (r : ℕ) (h : ByteArray → ByteArray) (tbl : Array F128)
-    (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Claims.Msg}
-    (hl : l.size = repStart o.spec o.sts (2 * i + r)) {t' : Transcript} {l' : Array Claims.Msg}
+    (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Hash.Msg}
+    (hl : l.size = repStart o.spec o.sts (2 * i + r)) {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS o.resp) (Hashes.ofSha512 h) o.tabs[i]! (o.sch i) (o.trace i) tbl cm0 (o.extras i) salt
       nonce).run (Transcript.init #[] (o.spec.domain o.spec.tables[i]! r).toUTF8)).go l = (.ok (o.proof i r, t'), l')) :
     (o.lgOut i r).2.2 = t' ∧ (o.proof i r).ligerito.initialCap = (o.proof i r).cap := by
@@ -163,10 +163,10 @@ theorem _root_.FlockComplete.Run.lgOut_eq {H : Claims.Msg → Claims.Msg} {rel :
   rfl
 
 /-- **The walk's `LgAt` from the rep's run**: the recorded stream carries the rep's rounds. -/
-theorem _root_.FlockComplete.Run.lgAt_of {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.lgAt_of {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) (r : ℕ) (h : ByteArray → ByteArray) (tbl : Array F128)
-    (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Claims.Msg}
-    (hl : l.size = repStart o.spec o.sts (2 * i + r)) {t' : Transcript} {l' : Array Claims.Msg}
+    (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Hash.Msg}
+    (hl : l.size = repStart o.spec o.sts (2 * i + r)) {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS o.resp) (Hashes.ofSha512 h) o.tabs[i]! (o.sch i) (o.trace i) tbl cm0 (o.extras i) salt
       nonce).run (Transcript.init #[] (o.spec.domain o.spec.tables[i]! r).toUTF8)).go l = (.ok (o.proof i r, t'), l'))
     (hag : Agrees (o.stream i r).rounds t'.rounds 0) : LgAt o i r := by
@@ -174,10 +174,10 @@ theorem _root_.FlockComplete.Run.lgAt_of {H : Claims.Msg → Claims.Msg} {rel : 
   exact ⟨hcap, by rw [e]; exact hag⟩
 
 /-- **The walk's `LgCount` from the rep's run**: the recorded stream holds as many rounds as the rep's. -/
-theorem _root_.FlockComplete.Run.lgCount_of {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.lgCount_of {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) (r : ℕ) (h : ByteArray → ByteArray) (tbl : Array F128)
-    (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Claims.Msg}
-    (hl : l.size = repStart o.spec o.sts (2 * i + r)) {t' : Transcript} {l' : Array Claims.Msg}
+    (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Hash.Msg}
+    (hl : l.size = repStart o.spec o.sts (2 * i + r)) {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS o.resp) (Hashes.ofSha512 h) o.tabs[i]! (o.sch i) (o.trace i) tbl cm0 (o.extras i) salt
       nonce).run (Transcript.init #[] (o.spec.domain o.spec.tables[i]! r).toUTF8)).go l = (.ok (o.proof i r, t'), l'))
     (hsz : (o.stream i r).rounds.size = t'.rounds.size) : LgCount o i r := by
@@ -188,11 +188,11 @@ theorem _root_.FlockComplete.Run.lgCount_of {H : Claims.Msg → Claims.Msg} {rel
 
 /-- **Lincheck's circuit fold returns** at table `i`'s rep `r` (`LcAt`'s first part), once the honest rep, run from
 the rep's first send on, returns. -/
-theorem _root_.FlockComplete.Run.lcFold_of {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.lcFold_of {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) (r : ℕ) (hsP : Hashes PS) (tbl : Array F128) (cm0 : Commit)
-    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Claims.Msg}
+    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Hash.Msg}
     (hl : l.size = repStart o.spec o.sts (2 * i + r)) {t : Transcript} {p : Proof} {t' : Transcript}
-    {l' : Array Claims.Msg}
+    {l' : Array Hash.Msg}
     (hrun : ((repP (asksS o.resp) hsP o.tabs[i]! (o.sch i) (o.trace i) tbl cm0 (o.extras i) salt nonce).run t).go l =
       (.ok (p, t'), l')) :
     o.tabs[i]!.fold.fold ((o.lcCoins i r).ca 0) (skipWeights (o.zcOut i r).z)
