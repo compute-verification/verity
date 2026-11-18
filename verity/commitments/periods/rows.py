@@ -75,7 +75,7 @@ from typing import Any
 import numpy as np
 
 from verity.circuits import partition_object as PO, refs as RF
-from verity.commitments import domains as DM, hm96, registered_value as RV, row_table as RT
+from verity.commitments import docket_digest as DD, domains as DM, hm96, registered_value as RV, row_table as RT
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
 from verity.commitments.window import WINDOW_DOMAIN, window_binding, window_domain
@@ -1665,8 +1665,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
           kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any,
           index_salt: bytes | None = None, previous: str | None = None,
           entries: Sequence[Mapping[str, Any]] = (), outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """The period's files, its registration's period of ``kind`` (`registration`, by ``registrar``, which also names and digests
-    the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous``, registering
+    """The period's files, its registration's period of ``kind`` (`registration`, by ``registrar``; its digest is
+    ``docket_digest.digest``), chained after ``previous``, registering
     the values' ``entries`` and naming the roots of the values it ``outputs``; the period's provenance gets the index's hiding
     leaf (`index_leaf`), so the registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt
     are prover only: the salt is ``index_salt`` (192 fresh bytes from the OS the committer already holds, a recommit's
@@ -1758,7 +1758,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
            **({"registered_paths": paths} if paths else {}), **({"value_rows": values} if values else {}),
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
            "domain_tag": DOMAIN_TAG, "registration": DM.REGISTRATION if entries else DM.REGISTRATION_V1,
-           "registration_digest": registrar.digest(rec),
+           "registration_digest": DD.digest(rec),
            "leaf_layer": rec["leaf_layer"],
            "leaf_layer_rule": LEAF_LAYER, "index_leaf": leaf, "index_rule": INDEX_RULE,
            "salt_rule": "192 fresh bytes from the os generator a row", "seconds": c.seconds, **(extra or {})}
