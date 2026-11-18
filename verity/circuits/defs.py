@@ -359,6 +359,15 @@ class Body:
         return k
 
 
+def recut_unread(fn: Any, where: str) -> None:
+    """Refuse (ValueError, ``recut-unread``) a body, or a Definition's built body, that reads an input node recut
+    (`refs.recut`): ``where`` reads whole leaves only, and would misread one."""
+    body = fn if isinstance(fn, Body) else getattr(fn, "_body", None)
+    if body is not None and body.recut:
+        raise ValueError(f"recut-unread: {where} reads whole leaves, and input nodes {sorted(body.recut)} are read recut "
+                         "(`refs.recut`)")
+
+
 _UNBOUND = object()
 
 
@@ -925,4 +934,4 @@ def composite(name: str, version: int, statics: Sequence[str], signature, doc: s
 
 __all__ = ["DefinitionTable", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "BodyNode",
            "Body", "Builder", "TABLE_KINDS", "CONFORMANCE", "conformance_label", "primitive", "composite", "Explicit", "concat",
-           "CATALOG_PACKAGES", "catalog_package"]
+           "CATALOG_PACKAGES", "catalog_package", "recut_unread"]
