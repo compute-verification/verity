@@ -28,7 +28,8 @@ tokens, about 60% behind one of eight shared prefixes, max_tokens 64 or 256: `tr
 (``ignore_eos``) so that every arm serves the same tokens. A plan whose requests carry their own sampling (the replay
 ladder's serving plan: ShareGPT, multi-turn and 8k-32k-token prompts, each greedy or at temperature 0.7 with its seed
 by the public rule) is served with it, each request stopping at its end of text or its max_tokens (`serve_body`). Each load's DIR/<load>/rep-<r>/client.jsonl holds the client's
-record of each request (send, each streamed chunk's time and tokens, done), and meta.json the load's rate, start and count,
+record of each request (send, each streamed chunk's time and count of tokens, done), whose served ids it keeps whole in
+the arm's private directory (`kept_client`), and meta.json the load's rate, start and count,
 and its schedule: the engine's counters on ``/metrics`` before and after it (`SCHEDULE`).
 
 The arms, each one engine configuration; each adds its change to the arm it names as its parent:
@@ -51,7 +52,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
   the engine core, written by a thread of its own (`servetax_plugin`);
 - ``release-order``: requests added in the network attester's release order (`serve_admit.ReleaseOrder` in the engine
   core, `servetax_plugin.ReleaseGate`), the client standing in for the network attester, which numbers them in send order;
-- ``tick``: the certified tick (`serve_admit.TickGate` under vLLM's server, `verity_vllm.pipeline.tick_plugin`), τ_sat and
+- ``tick``: the certified tick (`serve_admit.TickGate` under vLLM's server, `verity_vllm.pipeline.scheme_plugin`), τ_sat and
   τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the network attester (`corpus.StandIn`);
 - ``tokens``: each window's tokens committed: every prompt id and every sampled id, 4 bytes a token, in ``rows-sha512``
   rows (`verity_vllm.commit.step_rows`), hashed off the engine loop at each window's close (`servetax_plugin.TokenCommit`).
@@ -229,8 +230,8 @@ PRODUCTION = tomllib.loads((ROOT / "benchmarks/production.toml").read_text(encod
 PROFILE = PRODUCTION["profiles"]
 SCHEMA = "verity-bench/serve-tax/v0"
 PLUGIN_ENV = "VERITY_SERVETAX"
-TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
-TICK_PLUGIN = ROOT / "adapters/vllm/verity_vllm/pipeline/tick_plugin.py"
+TICK_MIDDLEWARE = "verity_vllm.pipeline.scheme_plugin.Front"
+TICK_PLUGIN = ROOT / "adapters/vllm/verity_vllm/pipeline/scheme_plugin.py"
 #: two-sided 95% Student-t quantiles by degrees of freedom
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 10: 2.228, 20: 2.086,
        30: 2.042}
@@ -635,10 +636,11 @@ def serve_body(body: Callable[..., dict], served: str, r: dict, rid: str, sampli
 
 def entry_points(arm: Arm) -> list[str]:
     """The vLLM general plugins an arm's server loads, as entry points, in order: `servetax_plugin.register` for an arm
-    with a change of its, under the tick `tick_plugin.register` after it (the tick's scheduler wrapper is then outside
-    the step trace's, so the trace sees a request when the gate adds it), then the arm's others (`Arm.general`)."""
+    with a change of its, under the tick the network attester's scheme turned on by name (`scheme_plugin.register`) after
+    it (the tick's scheduler wrapper is then outside the step trace's, so the trace sees a request when the gate adds
+    it), then the arm's others (`Arm.general`)."""
     return [*(["verity_serve_tax = servetax_plugin:register"] if arm.plugin or arm.tick else []),
-            *(["verity_tick = verity_vllm.pipeline.tick_plugin:register"] if arm.tick else []),
+            *(["verity_schemes = verity_vllm.pipeline.scheme_plugin:register"] if arm.tick else []),
             *(entry for entry, _ in arm.general)]
 
 
@@ -683,13 +685,36 @@ def keeps_private(arm: Arm) -> bool:
 def private_of(d: Path) -> Path | None:
     """The directory on the node where the arm (meta.json, or the server side's server.json behind the network
     attester) or the replay (replay.json) at ``d`` keeps its files that hold request values: its step traces, served
-    ids and edges' outputs under server/, a replay's tokens and logprobs. None where it names none, as an arm that
-    records nothing."""
+    ids, edges' outputs, dumps and states under server/, the corpus client's whole records under client/, the plan, a
+    replay's tokens, step records and capture. None where it names none, as an arm of vLLM's client that records
+    nothing."""
     for name in ("meta.json", "server.json", "replay.json"):
         if (d / name).is_file():
             kept = json.loads((d / name).read_text()).get("private")
             return Path(kept) if kept else None
     raise SystemExit(f"{d} holds none of an arm's meta.json, its server side's server.json or a replay's replay.json")
+
+
+#: the corpus client's file of records, a line a request
+CLIENT_FILE = "client.jsonl"
+
+
+def kept_client(kept: Path, d: Path) -> list[dict]:
+    """The corpus client's records, which it wrote whole to ``kept`` on the node, written to d/client.jsonl each less
+    its served ids (``output_ids``), which hold request values. The records, whole."""
+    recs = [json.loads(x) for x in kept.read_text().splitlines() if x.strip()]
+    (d / CLIENT_FILE).write_text("".join(json.dumps({k: v for k, v in r.items() if k != "output_ids"}, separators=(",", ":"))
+                                    + "\n" for r in recs))
+    return recs
+
+
+def client_kept(arm_dir: Path, rep_dir: Path) -> Path:
+    """Where the corpus client's whole records of ``rep_dir``, a directory under the arm at ``arm_dir``, are kept: the
+    arm's private directory's client/, at the rep's path under the arm (`drive_load`)."""
+    kept = private_of(arm_dir)
+    if kept is None:
+        raise SystemExit(f"{arm_dir} names no private directory, where its client's records are kept whole")
+    return kept / "client" / rep_dir.relative_to(arm_dir) / CLIENT_FILE
 
 
 def _private(x: object, private: Path | None) -> object:
@@ -818,9 +843,17 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
-        env["VERITY_TICK"] = json.dumps({k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | tick.get("rule", {}) | {
-            "hold_ms": 5000, "feed": str(d / "tick-feed.jsonl"), "log": str(d)})
+        from verity.protocols.resource_accounting.network.prover.admission import scheme_name
+        env["VERITY_PROTOCOLS"] = scheme_name()
+        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps({"feed": str(d), scheme_name(): {
+            k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | tick.get("rule", {}) | {"hold_ms": 5000, "log": str(d)}})
     return env
+
+
+def tick_feed(d: Path) -> Path:
+    """The feed file a tick arm's server writes in its directory ``d`` (`network.prover.admission.feed_file`)."""
+    from verity.protocols.resource_accounting.network.prover.admission import feed_file
+    return Path(feed_file(str(d)))
 
 
 def value_settings(env: dict[str, str] | None = None) -> dict:
@@ -1041,23 +1074,25 @@ class GpuBusy:
 
 
 def drive_load(port: int, served: str, plan: list[dict], rate: float, span_s: float, tag: str, d: Path, drain_s: float,
-               tick: dict | None, requests: int | None = None, sampling: str = "greedy", lib: object | None = None) -> dict:
+               tick: dict | None, requests: int | None = None, sampling: str = "greedy", lib: object | None = None, *,
+               kept: Path) -> dict:
     """One load: the plan's first requests under Poisson arrivals at ``rate`` for ``span_s`` (or ``requests`` of them),
-    sent by `corpus.drive`; its client records in d/client.jsonl, and with NVML's bindings ``lib`` the GPUs' busy time
-    over it (`GpuBusy`)."""
+    sent by `corpus.drive`; its client records whole in ``kept``/client.jsonl on the node and less their served ids in
+    d/client.jsonl (`kept_client`), and with NVML's bindings ``lib`` the GPUs' busy time over it (`GpuBusy`)."""
     C = corpus()
     d.mkdir(parents=True, exist_ok=True)
+    kept.mkdir(mode=0o700, parents=True, exist_ok=True)
     arr = C.traffic.arrivals(plan, rate)
     k = requests or max(1, sum(1 for a in arr if a <= span_s))
     reqs, arr = plan[:k], arr[:k]
     ids = [f"{tag}-{r['i']:05d}" for r in reqs]
     t = time.monotonic()
     with GpuBusy(lib, SHARED.CUDA_VISIBLE_DEVICES) as busy:
-        got = asyncio.run(C.drive(port, served, reqs, arr, ids, d / "client.jsonl", drain_s, sampling,
+        got = asyncio.run(C.drive(port, served, reqs, arr, ids, kept / CLIENT_FILE, drain_s, sampling,
                                   *([tick["bucket_us"] / 1e6] if tick else [])))
     meta = {"tag": tag, "rate": rate, "span_s": span_s, "requests": k, "arrivals_span_s": round(arr[-1], 3),
             "wall_s": round(time.monotonic() - t, 3), **got, "gpu": busy.result()}
-    recs = [json.loads(x) for x in (d / "client.jsonl").read_text().splitlines() if x.strip()]
+    recs = kept_client(kept / CLIENT_FILE, d)
     meta["unserved"] = len(recs) - len(served_records(recs))
     (d / "meta.json").write_text(json.dumps(meta, indent=1))
     return meta
@@ -1798,37 +1833,62 @@ def edge_config(arm: Arm, model: Model, a: argparse.Namespace, rates: dict[str, 
 
 
 def run(a: argparse.Namespace) -> int:
-    """Serve one arm (`serve`), what it keeps on the node in ``--private``. Where none is given and the arm keeps
-    something (`keeps_private`): under vLLM's client, a cost's run, which nothing reads those files of afterwards, a
-    fresh directory outside the run's, removed when the arm stops; under the corpus client, a serve whose later stages
-    read them, refused before anything starts. Under ``--profile`` the profile's checks come first (`profile_run`)."""
+    """Serve one arm (`serve`), what it keeps on the node in ``--private``. Where none is given: under the corpus
+    client, whose records and plan hold request values, refused before anything starts; under vLLM's client, where the
+    arm keeps something (`keeps_private`), a cost's run, which nothing reads those files of afterwards, a fresh
+    directory outside the run's, removed when the arm stops, unless the arm records (`records`), which is refused. Under ``--profile`` the profile's checks come first (`profile_run`)."""
+    if getattr(a, "kv_dir", None):
+        outside(Path(a.kv_dir), Path(a.out), "--kv-dir")
     if getattr(a, "profile", None):
         profile_run(a)
     if ARMS[a.arm].attester:
         return certified(a)
     if a.private:
         return serve(a, private_dir(a))
+    if a.client != BENCH:
+        raise SystemExit(f"arm {a.arm} is sent by the corpus client, whose records hold each request's served ids and "
+                         "whose plan holds the prompts, kept on the node: --private DIR, outside every run's directory "
+                         "(run.sh: PRIVATE)")
     if not keeps_private(ARMS[a.arm]):
         return serve(a, None)
     if records(ARMS[a.arm]):
         raise SystemExit(f"arm {a.arm} records its step trace, served ids or edges' outputs, which hold request values "
                          "and later stages read: --private DIR, outside every run's directory (run.sh: PRIVATE)")
-    if a.client != BENCH:
-        raise SystemExit(f"arm {a.arm} keeps on the node what holds values (a boundary commitment's classes hold its "
-                         "requests' tokens and its salts), and a serve's later stages read it: --private DIR, outside "
-                         "every run's directory (run.sh: PRIVATE)")
     with tempfile.TemporaryDirectory(prefix="serve-tax-private.") as d:
         return serve(a, outside(Path(d).resolve(), Path(a.out)))
 
 
-def outside(private: Path, out: Path) -> Path:
-    """``private``, refused where it is inside ``out`` or the run's directory, which leave the node."""
+def outside(private: Path, out: Path, flag: str = "--private") -> Path:
+    """``private``, the directory ``flag`` names, refused where it is inside ``out`` or the run's directory, which leave
+    the node; else stated in the run's directory (`stated`)."""
     held = SHARED.RESEARCH_RUN_DIR
+    private = private.resolve()
     for public in (out.resolve(), *([Path(held).resolve()] if held else [])):
         if private.is_relative_to(public):
-            raise SystemExit(f"the private directory {private} is inside {public}, which leaves the node: --private "
-                             "DIR, outside every run's directory")
+            raise SystemExit(f"{flag} {private} is inside {public}, which leaves the node: {flag} DIR, outside every "
+                             "run's directory")
+    stated(private)
     return private
+
+
+#: the run's statement of what its launchers keep on the node, at its directory's root (`stated`)
+PRIVATE_PATHS = "private-paths.json"
+#: the names of what the launchers keep only in a private directory: no file or directory of a run's own has one
+PRIVATE_NAMES = ("plan.jsonl", "plan.base.jsonl", "capture/", "edges/", "step_trace.*.jsonl*", "ids.*.jsonl*",
+                 "outputs.jsonl", "outputs.*.jsonl*", "replay_steps.jsonl*", "replay_tokens.jsonl*",
+                 "replay_logprobs.jsonl*", "*.state.pkl", "*.fp.npy", "*.kv")
+
+
+def stated(private: Path) -> None:
+    """``private`` added to the run's `PRIVATE_PATHS`, under research run where its directory is made:
+    ``{"schema": "private-paths/v1", "private": [each private directory, absolute], "names": PRIVATE_NAMES}``."""
+    held = SHARED.RESEARCH_RUN_DIR
+    if not held or not Path(held).is_dir():
+        return
+    f = Path(held) / PRIVATE_PATHS
+    was = json.loads(f.read_text())["private"] if f.is_file() else []
+    doc = {"schema": "private-paths/v1", "private": sorted({*was, str(private)}), "names": list(PRIVATE_NAMES)}
+    f.write_text(json.dumps(doc, indent=1) + "\n")
 
 
 def private_dir(a: argparse.Namespace) -> Path:
@@ -1905,7 +1965,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
                              "its arm's")
         rates = parse_rates(a.rates)
         t = time.monotonic()
-        plan = plan_of(Path(a.plan) if a.plan else out / "plan.jsonl", Path(a.c4), checkpoint,
+        plan = plan_of(Path(a.plan) if a.plan else private / "plan.jsonl", Path(a.c4), checkpoint,
                        plan_need(rates, a.span_s, a.requests), a.docs, a.seed)
         print(f"[serve-tax] plan: {len(plan)} requests in {time.monotonic() - t:.1f} s", flush=True)
     tick = tick_args(a.tick_from, a.tick_ms) if arm.tick else None
@@ -1936,7 +1996,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             "model": model.ref, "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "front_end": front,
             "plugin": list(arm.plugin), "env": arm.env, "settings": value_settings(env), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
-            "lifetime": a.lifetime, "left_out": a.leave_out, "private": str(private) if records(arm) else None,
+            "lifetime": a.lifetime, "left_out": a.leave_out, "private": str(private) if records(arm) or not bench else None,
             "general": entry_points(arm),
             "boundary_rows": ({"window_s": a.window_s, "check": model.check, **(a.boundary_rows or arm.rows)}
                               if "boundary_rows" in arm.plugin else None),
@@ -1981,7 +2041,8 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             if not bench:
                 return drive_load(port, model.served, plan, min(rates.values()) if warm else rates[name],
                                   a.warm_s if warm else a.span_s, tag, d, a.drain_s, tick,
-                                  None if warm else a.requests, arm.sampling, busy)
+                                  None if warm else a.requests, arm.sampling, busy,
+                                  kept=private / "client" / d.relative_to(out))
             n, c = passes[name]
             if front is not None:
                 time.sleep(IDLE_S)
@@ -2221,7 +2282,7 @@ def announced(proc: subprocess.Popen, what: str, log: Path) -> dict:
 
 
 def runs_ended(feed: Path) -> int:
-    """The network attester's runs whose watermark the tick's feed (`tick_plugin.TickFeed`) has seen end."""
+    """The network attester's runs whose watermark the tick's feed (`scheme_plugin.Front`) has seen end."""
     if not feed.exists():
         return 0
     return sum(1 for x in feed.read_text().splitlines() if '"end"' in x and json.loads(x).get("end"))
@@ -2345,7 +2406,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
         print(f"[serve-tax] {a.arm}: the engine is up in {rec['startup_s']} s and the id front listens on loopback "
               f"port {a.front}: held for the network certifier's run", flush=True)
         while True:
-            why = hold_ends(server.poll(), fronted.poll(), runs_ended(srv / "tick-feed.jsonl"),
+            why = hold_ends(server.poll(), fronted.poll(), runs_ended(tick_feed(srv)),
                             None if stop_at is None else stop_at - now())
             if why is not None:
                 break
@@ -2610,28 +2671,45 @@ def trace_records(trace: Path) -> list[dict]:
 STEPS = "steps.{}.jsonl.gz"
 
 
-def public_steps(arm_dir: Path) -> list[Path]:
-    """Each of the arm's step traces (`step_traces`) written to its server/ as its public steps: the speculative
-    tokens a decode row runs, and each step's index, tokens, time and rows, each row only its start and its tokens,
-    with no request id, emitted count or stop reason. A price reads these off the node."""
+def steps_of_trace(trace: Path, server: Path) -> Path:
+    """The step trace's public steps, written to ``server``/`STEPS` under its engine core's pid: the speculative tokens
+    a decode row runs, and each step's index, tokens, time and rows, each row only its start and its tokens, with no
+    request id, emitted count or stop reason. A price reads these off the node."""
     import gzip
 
-    got = []
-    for trace in step_traces(arm_dir):
-        lines = []
-        for r in trace_records(trace):
-            if r["kind"] == "header":
-                spec = ((r.get("config") or {}).get("speculative") or {}).get("num_speculative_tokens", 0)
-                lines.append({"kind": "header", "num_speculative_tokens": spec})
-            elif r["kind"] == "step":
-                lines.append({"kind": "step", "step": r.get("step"), "T": r.get("T"), "t": r["t"],
-                              "rows": [[start, m] for _, start, m in r["rows"]]})
-        f = arm_dir / "server" / STEPS.format(trace.name.split(".")[1])
-        f.parent.mkdir(parents=True, exist_ok=True)
-        with gzip.open(f, "wt", encoding="utf-8") as g:
-            g.write("".join(json.dumps(x, separators=(",", ":")) + "\n" for x in lines))
-        got.append(f)
-    return got
+    lines = []
+    for r in trace_records(trace):
+        if r["kind"] == "header":
+            spec = ((r.get("config") or {}).get("speculative") or {}).get("num_speculative_tokens", 0)
+            lines.append({"kind": "header", "num_speculative_tokens": spec})
+        elif r["kind"] == "step":
+            lines.append({"kind": "step", "step": r.get("step"), "T": r.get("T"), "t": r["t"],
+                          "rows": [[start, m] for _, start, m in r["rows"]]})
+    f = server / STEPS.format(trace.name.split(".")[1])
+    f.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(f, "wt", encoding="utf-8") as g:
+        g.write("".join(json.dumps(x, separators=(",", ":")) + "\n" for x in lines))
+    return f
+
+
+def public_steps(arm_dir: Path) -> list[Path]:
+    """Each of the arm's step traces (`step_traces`) as its public steps in its server/ (`steps_of_trace`)."""
+    return [steps_of_trace(trace, arm_dir / "server") for trace in step_traces(arm_dir)]
+
+
+def stored_steps(out: Path, to: Path) -> list[Path]:
+    """The public steps of a run whose output holds its step traces, as a run stored before they were kept private
+    does: each arm's server/step_trace.PID.jsonl(.gz) under ``out`` as that arm's server/ under ``to``, the gzipped
+    one where both are there."""
+    traces: dict[tuple[Path, str], Path] = {}
+    for t in sorted(out.rglob("step_trace.*.jsonl*")):
+        if t.parent.name == "server" and t.suffix in (".jsonl", ".gz"):
+            key = (t.parent.relative_to(out), t.name.split(".")[1])
+            if key not in traces or t.suffix == ".gz":
+                traces[key] = t
+    if not traces:
+        raise SystemExit(f"{out}: no server/step_trace.*.jsonl under it, so no public steps to write")
+    return [steps_of_trace(t, to / rel) for (rel, _), t in sorted(traces.items())]
 
 
 def window_trace(trace: Path, t0: float, t1: float) -> list[dict]:
@@ -2655,6 +2733,11 @@ def pct(xs: list[float], q: float) -> float | None:
     return s[lo] + (s[hi] - s[lo]) * (k - lo)
 
 
+def served_tokens(r: dict) -> int:
+    """A client record's output tokens, counted from its chunks: the record out of the run's directory holds no ids."""
+    return sum(n for _, n in r["chunks"])
+
+
 def served_records(recs: list[dict]) -> list[dict]:
     """The client records of requests served to their end."""
     return [r for r in recs if r.get("status") == 200 and not r.get("error") and r.get("done_s") is not None]
@@ -2666,13 +2749,13 @@ def load_metrics(recs: list[dict], slo: tuple[float, float]) -> dict:
     if not ok:
         return {"sent": len(recs), "ok": 0}
     span = max(r["send_unix"] + r["done_s"] for r in ok) - min(r["send_unix"] for r in recs)
-    tokens = sum(len(r["output_ids"]) for r in ok)
+    tokens = sum(served_tokens(r) for r in ok)
     ttft = [r["first_token_s"] for r in ok if r.get("first_token_s") is not None]
     itl = [b[0] - a[0] for r in ok for a, b in zip(r["chunks"], r["chunks"][1:])]
     good = 0
     tpots = []
     for r in ok:
-        n, ft = len(r["output_ids"]), r.get("first_token_s")
+        n, ft = served_tokens(r), r.get("first_token_s")
         tpot = (r["done_s"] - ft) / (n - 1) if ft is not None and n > 1 else 0.0
         tpots.append(tpot)
         good += ft is not None and ft <= slo[0] and tpot <= slo[1]
@@ -4316,7 +4399,7 @@ def refusals(name: str, rows: dict | None = None) -> list[dict]:
     """What of a profile the arm ``name`` refuses, in the words of the code that refuses it: the piece (``sampling``,
     ``the cache`` or ``vLLM's client``), the words, and the change on our side alone that lets the same prompts through
     (`OURS_CHANGES`), None where none does. A profile's client sends no sampling flag, so under the certified tick a
-    request without a seed is refused (`verity_vllm.pipeline.tick_plugin.unseeded`) unless the arm's client sends
+    request without a seed is refused (`verity_vllm.pipeline.scheme_plugin.unseeded`) unless the arm's client sends
     each user's seed (`sends_seed`); history tables with prefix caching on are refused by the boundary commitment
     (``rows``, the job's ``--boundary-rows`` or the arm's); an arm behind the network attester is served greedy
     (`SERVED_GREEDY`); an arm whose passes only the corpus client sends cannot take vLLM's (`corpus_only`). No arm
@@ -4330,7 +4413,7 @@ def refusals(name: str, rows: dict | None = None) -> list[dict]:
         out.append({"piece": "vLLM's client", "words": f"arm {name} needs the corpus client, not vLLM's: {why} "
                                                        f"(--client {CORPUS})", "change": None})
     elif arm.tick and not sends_seed(arm):
-        from verity_vllm.pipeline.tick_plugin import unseeded
+        from verity_vllm.pipeline.scheme_plugin import unseeded
 
         out.append({"piece": "sampling", "words": unseeded(json.dumps({"stream": True}).encode()), "change": "seeded"})
     rows = rows or arm.rows
@@ -4780,13 +4863,14 @@ def main(argv: list[str] | None = None) -> int:
                         "rows and salts, the top-k's counters, its step traces, served ids and edges' outputs), outside "
                         "every run's directory (needed by an arm that records and by the corpus client; otherwise under "
                         "vLLM's client by default a fresh directory, removed when the arm stops)")
-    r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: OUT/plan.jsonl)")
+    r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: PRIVATE/plan.jsonl, on the node: it "
+                                  "holds the prompts)")
     r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan samples from")
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
     r.add_argument("--tick-rule", metavar="JSON", help="the tick arms: a rule other than the registered one, "
-                   "verity_vllm.pipeline.tick_plugin's token_ns and catch_up")
+                   "the network attester's token_ns and catch_up")
     r.add_argument("--side", choices=(SERVER, CLIENT),
                    help="an arm behind the network certifier: the side this command serves, the engine and the id "
                         "front on the node, or the network attester, its shim and vLLM's client on the network attester's host "
@@ -4858,6 +4942,10 @@ def main(argv: list[str] | None = None) -> int:
     co.add_argument("--result", action="store_true",
                     help="with --out, under research run: write the run's result.json too, the number as a measurement "
                          "under the model's metric id")
+    st = sub.add_parser("steps-of-trace", help="a stored run's public steps (`stored_steps`) from the step traces its "
+                                               "output holds, for priced: each arm's server/steps.PID.jsonl.gz")
+    st.add_argument("out", type=Path, metavar="RUN_OUT")
+    st.add_argument("--to", type=Path, help="write them under this directory, in RUN_OUT's layout (default RUN_OUT)")
     k = sub.add_parser("tick")
     k.add_argument("source", metavar="STEP_TRACE|RECORD_DIR")
     k.add_argument("--load", default="saturated")
@@ -4922,6 +5010,10 @@ def main(argv: list[str] | None = None) -> int:
         ck = Path(a.checkpoint) if a.checkpoint else MODELS[a.model_id].checkpoint()
         n = plan_need(parse_rates(a.rates), a.span_s, a.requests)
         print(f"[serve-tax] plan: {len(plan_of(Path(a.out), Path(a.c4), ck, n, a.docs, a.seed))} requests in {a.out}")
+        return 0
+    if a.cmd == "steps-of-trace":
+        for f in stored_steps(a.out, a.to or a.out):
+            print(f)
         return 0
     if a.cmd == "tick":
         print(json.dumps(tick_args(a.source, None, a.load)))

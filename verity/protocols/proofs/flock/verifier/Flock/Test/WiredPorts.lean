@@ -1,7 +1,9 @@
 module
 
+public import Circuits.Wire
 public import Flock.Registered
 public import Flock.Test.RegProgram
+meta import Circuits.Wire
 meta import Flock.Registered
 meta import Flock.Test.RegProgram
 meta import Lean.Data.Json
@@ -12,7 +14,10 @@ unit's leaf in its template's trees (`HmLinks.treeLeaf`) is its rank among the t
 from the nodes, and a unit's writer (`HmLinks.writerOf`) is the unit whose output it reads. A tree port states no reads,
 a statement's reads come from the program (`withTrees`), the honest reader's positions pass `badInstance` and a reader
 that refers to another writer's row (the shared-tree toy's `ra`) does not; a link row passes `checkLinked` only as a tree
-port.
+port. On a registered tree of two real leaves, a reader's table rows open it only as committed: a row with one bit
+flipped (the toy's `rb`), the writer's value under a fresh salt (`mc`) and the rows' paths swapped (`rd`) are refused by
+`badRow`. A wire strided on the reader's side too (`Circuits.Wire.leafAt` with reader steps) gives each reader unit the leaf
+of the one index reading it, and refuses a unit read twice, a cut, a row past 0 and steps that are not one a digit.
 -/
 
 @[expose] public section
@@ -85,5 +90,38 @@ def ok? (r : V Unit) : Bool := r.toOption.isSome
 #guard !ok? (checkLinked linked #[{ x with tree := none }])
 #guard !ok? (checkLinked linked #[{ x with name := "y" }])
 #guard ok? (checkLinked { linked with metaJ := Json.null } #[])
+
+def dom : ByteArray := ByteArray.mk (Array.replicate 64 7)
+def val (k : UInt8) : ByteArray := ByteArray.mk (Array.replicate 32 k)
+def salt (k : UInt8) : ByteArray := ByteArray.mk (Array.replicate 32 (k + 100))
+def bc (k : UInt8) : ByteArray := Hm96.Default512.commitString (val k) (salt k)
+def lf (pos : Nat) (row : ByteArray) : ByteArray := leafAs HmRow.ROW_SCHEMA dom pos (Hm96.Default512.treeLeaf row)
+def reg2 : Registered.Port := { x with root := node dom 0 0 (lf 0 (bc 0)) (lf 1 (bc 1)), leaves := 2, domain := dom }
+def tab2 : Tables := { counts := #[2], starts := #[0], refs := #[0, 1] }
+def paths2 : Array ByteArray := #[lf 1 (bc 1), lf 0 (bc 0)]
+def rows2 (rows : Array ByteArray) (paths : Array ByteArray := paths2) : Option Nat :=
+  badRow reg2 { (default : Public) with n := 2, digests := rows } tab2 0 2 #[0, 1] paths
+def flip (b : ByteArray) : ByteArray := b.set! 0 (b.get! 0 ^^^ 1)
+
+#guard rows2 #[bc 0, bc 1] == none
+-- rb: one bit of a row flipped
+#guard rows2 #[bc 0, flip (bc 1)] == some 1
+-- mc: the writer's value committed again under a fresh salt
+#guard rows2 #[Hm96.Default512.commitString (val 0) (salt 9), bc 1] == some 0
+-- rd: the first two paths swapped
+#guard rows2 #[bc 0, bc 1] #[paths2[1]!, paths2[0]!] == some 0
+
+-- index i (digits d0 d1) is reader unit d0 + 2 d1 reading leaf 3 + 4 d0 - 3 d1: units 0 1 2 3 read leaves 3 7 0 4
+def sw : Circuits.Wire :=
+  { reader := "r", port := "x", writer := "w", out := "o", start := 0, radix := [2, 2],
+    base := 3, step := [4, -3], cut0 := 0, cuts := 1, rstep := [1, 2] }
+#guard (List.range 4).map (sw.leafAt · 0) == [some 3, some 7, some 0, some 4]
+#guard (List.range 4).map (fun u => { sw with start := 5 }.leafAt (u + 5) 0) == [some 3, some 7, some 0, some 4]
+#guard sw.leafAt 4 0 == none && sw.leafAt 0 1 == none
+#guard (List.range 4).map ({ sw with rstep := [] }.leafAt · 0) == [some 3, some 0, some 7, some 4]
+#guard { sw with rstep := [0, 1] }.leafAt 0 0 == none
+#guard { sw with rstep := [1] }.leafAt 0 0 == none
+#guard { sw with cuts := 2 }.leafAt 0 0 == none
+#guard { sw with base := -1 }.leafAt 2 0 == none
 
 end Flock.Test.WiredPorts

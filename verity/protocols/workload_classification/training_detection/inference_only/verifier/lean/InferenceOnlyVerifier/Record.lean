@@ -10,13 +10,13 @@ public import Flock.TemplateQuery
 # The inference-only policy's check of an execution phase's circuit record
 
 `Theta` decides the rate rule on a Program that holds every weight it reads and every wire between its
-units. An execution phase's Program holds neither: its root is calls and batches of templates, each unit reading
-committed rows: which unit feeds which is the root's own references (`Spot.Edges.edgesOf`), and which unit reads
-which registered parameter is declared by the phase's circuit record (its registered reads, table reads, openings
-and ingress), which SPOT checks unit by unit. This module does for such a record what `Theta.evaluate` does for a Program: it reads the record
-(`read`), takes one summary of it (`summarize`), decides the rate rule on the summary (`rate`), and counts as θ only
-what the registration log registers at the start of the deployment (`isTheta`). It has a difftest (`RecordDifftest`),
-and the rows protocol (`RowsProtocol`) reads it.
+units. An execution phase's Program holds its wires but not its weights: its root is calls and batches of
+templates, which unit feeds which is the root's own references (`Spot.Edges.edgesOf`), and which unit reads which
+registered parameter is declared by the phase's circuit record (its registered reads, table reads, openings and
+ingress), which SPOT checks unit by unit. This module does for such a record what `Theta.evaluate` does for a
+Program: it reads the record (`read`), takes one summary of it (`summarize`), decides the rate rule on the summary
+(`rate`), and counts as θ only what the registration log registers at the start of the deployment (`isTheta`). It
+has a difftest (`RecordDifftest`); `RecordCount`, `RecordChosen` and the `inference-only-record-check` exe read it.
 
 What the record's text declares is the module `RecordText`'s, functions of the Program and the text alone: the
 record's wiring, the templates, each unit's block and what each row is declared to hold. This module builds on them

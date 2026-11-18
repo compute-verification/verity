@@ -221,6 +221,13 @@ word becomes limbs only through a registered `LimbSplit` Definition that compute
 reads the leaves of the parameters and of the nodes before the reading node (for `ret`, every node): a node that names itself
 or a later node is the order violation above, which decodes whatever the widths, so that its checkers name it.
 
+An input node (§5.2) of N leaves of width W is the one exception: a position of width w, where w divides W, reads it
+*recut*, with q = W / w. Its references index the node's N·q leaves of width w, and leaf j of them is bits
+[(j mod q)·w, (j mod q + 1)·w) of the node's leaf j div q, the low part first. Every lane of a part that reads it (§3)
+starts and steps on whole leaves of the node: when q > 1, its offsets step by 1, and its base, run, count and level steps
+are multiples of q. An input node is read at one width. The registration commits the node's value at width W
+(`refs.recut`, which `defs.Builder.finish` and a period's check of the registered port that reads the value call).
+
 ### 4.5 Flat concatenation and the alias
 
 Readers: a concat part that is itself a concat is spliced in, so a decoded sequence is flat. `{"alias": [k, a]}`, alone or as
@@ -279,6 +286,8 @@ have):
 - a type that is malformed, or whose width or length is a boolean;
 - a body whose `ret` does not have its `ret_type`;
 - a node argument or a `ret` that names a leaf of another width than its type gives that position (`E_REINTERPRET`, §4.4);
+  of an input node, a width that doesn't divide its own (`recut-width`), or one that two positions read at two widths; a part
+  whose lanes aren't whole leaves of it (`recut-boundary`); or leaves past its N·q (`recut-overrun`);
 - `ports` that are malformed or not canonical, a primitive's that differ from the registry's, or a Program the port rules
   refuse (§12, `ports.PortError`, a `ValueError`).
 
@@ -406,7 +415,8 @@ Gates are numbered by laying bodies out in node order, recursively.
   nodes). A primitive callee is the gate; otherwise descend into child (k, m).
 - **A gate's operands** are its primitive's arguments resolved (§7) in the gate's activation: for a primitive node, every
   reference of every argument in order; for member m of a batch of a primitive, per argument in order, member m's references
-  (§3). Order and repeats are kept. Input gates of either binding time and constants have none.
+  (§3). Order and repeats are kept. Input gates of either binding time and constants have none. An operand is a whole gate,
+  so a root that reads an input node recut (§4.4) has no gate layout yet (`Program.circuit` refuses it, `recut-gates`).
 - **Topological order.** When every node names only earlier nodes (§4.4), every gate's operands are gates before it: a callee's
   gates precede the node reading its outputs, a scan iteration reads the iteration before it, and a parameter resolves into the
   parent before the activation. Every partition query checks the node-level rule before it evaluates (§8).
