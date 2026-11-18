@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from conftest import BUILD
+from conftest import BUILD, salts_of
 
 from verity.commitments.cuda.commit_slots import slots as S
 from verity.commitments.cuda.commit_slots import slots_gpu as G
@@ -21,7 +21,6 @@ from verity.commitments.cuda.commit_slots import slots_gpu as G
 pytestmark = pytest.mark.skipif(not any(shutil.which(c) for c in ("g++", "c++", "clang++")), reason="needs a C++ compiler")
 
 CTX = bytes(range(64))
-KEY = bytes(range(100, 132))
 
 
 def unit_roots(plan: G.Plan, grp: Any, leaves: np.ndarray) -> np.ndarray:
@@ -41,14 +40,15 @@ def unit_roots(plan: G.Plan, grp: Any, leaves: np.ndarray) -> np.ndarray:
     return roots
 
 
-def matrix_commit(plan: G.Plan, step: int, salt_key: bytes, outputs: list[list[Any]], slots: int) -> S.StepCommit:
+def matrix_commit(plan: G.Plan, step: int, salts: np.ndarray, outputs: list[list[Any]], slots: int) -> S.StepCommit:
     """The leaf-matrix path this replaced, kept as the yardstick: every row's leaf from the leaf kernel alone, unit roots and
     their slot-tree leaves (``frame_leaves``, from the IV) as separate calls, and every slot's unit leaves in one (slots,
     units) matrix, padded and rooted at the end."""
     eng = plan.engine
     leaves = plan.empty(slots, plan.layout.unit_count)
-    for grp, tensors in zip(plan.groups, outputs, strict=True):
-        x = eng.leaves(grp.leaf_table, eng.row_digests(plan.rows(grp.shape, tensors)), G.E.SaltKey(salt_key))
+    for grp, tensors, g0 in zip(plan.groups, outputs, plan.layout.group_row_base, strict=True):
+        y = np.ascontiguousarray(salts[:, g0:g0 + grp.shape.rows].transpose(1, 0, 2))
+        x = eng.leaves(grp.leaf_table, eng.row_digests(plan.rows(grp.shape, tensors)), y)
         u0 = grp.first_unit
         leaves[:, u0:u0 + grp.shape.units] = eng.frame_leaves(plan.per_slot(unit_roots(plan, grp, x)), [plan.slot_did], u0)
     slot_roots = eng.root(leaves, [plan.slot_did])
@@ -87,13 +87,14 @@ def test_streamed_roots_are_the_leaf_matrix_s_and_the_reference_s(n: int) -> Non
     assert layout.unit_count == n
     slots = 1 + n % 5
     out = S.random_outputs(layout, slots, np.random.default_rng(n))
-    want = S.commit(CTX, layout, 2, KEY, out, slots)
+    y = salts_of(layout, slots)
+    want = S.commit(CTX, layout, 2, y, out, slots)
     plan = G.Plan(CTX, layout, "host", build=BUILD)
-    assert matrix_commit(plan, 2, KEY, out, slots) == want
-    assert G.commit(plan, 2, KEY, out, slots) == want
+    assert matrix_commit(plan, 2, y, out, slots) == want
+    assert G.commit(plan, 2, y, out, slots) == want
     one = G.Plan(CTX, layout, "host", temp_bytes=1, build=BUILD)
     assert all(one.per_pass(g.shape, slots) == 1 for g in one.groups)
-    assert G.commit(one, 2, KEY, out, slots) == want
+    assert G.commit(one, 2, y, out, slots) == want
 
 
 @pytest.mark.parametrize("n", [1023, 1024, 1025, 4097])
@@ -106,7 +107,8 @@ def test_larger_trees_match_the_leaf_matrix_in_passes(n: int, passes: int) -> No
     rows = max(g.shape.rows for g in G.Plan(CTX, layout, "host", build=BUILD).groups)
     plan = G.Plan(CTX, layout, "host", temp_bytes=G.TEMP_BUFFERS * 64 * rows * (1 if passes == 3 else 2), build=BUILD)
     assert plan.per_pass(max((g.shape for g in plan.groups), key=lambda s: s.rows), 3) == (1 if passes == 3 else 2)
-    assert G.commit(plan, 5, KEY, out, 3) == matrix_commit(plan, 5, KEY, out, 3)
+    y = salts_of(layout, 3)
+    assert G.commit(plan, 5, y, out, 3) == matrix_commit(plan, 5, y, out, 3)
 
 
 def test_the_fixture_streams_to_its_roots_in_one_slot_passes() -> None:
@@ -114,10 +116,11 @@ def test_the_fixture_streams_to_its_roots_in_one_slot_passes() -> None:
     layout = S.edge_layout()
     out = [[np.frombuffer(bytes.fromhex(h), np.uint8).reshape(d["slots"], n) for h, n in zip(t, g.sources, strict=True)]
            for t, g in zip(d["outputs"], layout.groups, strict=True)]
+    y = np.stack([np.frombuffer(bytes.fromhex(h), np.uint8).reshape(-1, 192) for h in d["salts"]])
     for temp in (G.TEMP_BYTES, 1):
         plan = G.Plan(bytes.fromhex(d["context"]), layout, "host", temp_bytes=temp, build=BUILD)
-        got = G.commit(plan, d["step"], bytes.fromhex(d["salt_key"]), out, d["slots"])
-        assert got == matrix_commit(plan, d["step"], bytes.fromhex(d["salt_key"]), out, d["slots"])
+        got = G.commit(plan, d["step"], y, out, d["slots"])
+        assert got == matrix_commit(plan, d["step"], y, out, d["slots"])
         assert got.root.hex() == d["root"]
 
 
@@ -132,7 +135,8 @@ def test_the_pads_alone_are_the_reference_s_above_a_chunk(monkeypatch: pytest.Mo
     assert [None if p is None else p.tolist() for p in want.pads_right] == [None if p is None else p.tolist() for p in got.pads_right]
     assert [k for k, p in enumerate(got.pads_right) if p is not None] == [1, 3, 4]   # 37 = 100101b: 8 and 16 pads in chunks of 4
     out = S.random_outputs(layout, 2, np.random.default_rng(37))
-    assert G.commit(got, 1, KEY, out, 2) == S.commit(CTX, layout, 1, KEY, out, 2)
+    y = salts_of(layout, 2)
+    assert G.commit(got, 1, y, out, 2) == S.commit(CTX, layout, 1, y, out, 2)
 
 
 def _traced(fn: Callable[[], Any]) -> tuple[Any, int]:
@@ -154,10 +158,11 @@ def _first_add(layout: S.CommitShape, slots: int) -> tuple[G.StepCommitter, int]
     bytes it held at most."""
     plan = G.Plan(CTX, layout, "host", build=BUILD)
     out = S.random_outputs(layout, slots, np.random.default_rng(1), groups=[0])
+    y = np.random.default_rng(2).integers(0, 256, (slots, layout.group_rows[0], 192), dtype=np.uint8)
 
     def run() -> G.StepCommitter:
-        sc = G.StepCommitter(plan, 0, slots, KEY)
-        sc.add(out[0])
+        sc = G.StepCommitter(plan, 0, slots)
+        sc.add(out[0], y)
         return sc
     return _traced(run)
 
