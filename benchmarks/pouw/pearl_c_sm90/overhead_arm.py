@@ -337,7 +337,8 @@ class _Held:
         self.xb = torch.empty((wt.n, wt.k), dtype=torch.float32, device=self.run.device)
         self.seg = PPDR._zeros(size["segdig_b"], self.run.device)
         self.wpipe = PPDR._pipeline(kernel, R.BM, wt.n, wt.k,
-                                   {**{x: t.data_ptr() for x, t in wt.b.items()}, "line_a": 0, "segdig_b": self.seg.data_ptr()},
+                                   {**{x: t.data_ptr() for x, t in wt.b.items()}, "line_a": 0, "segdig_b": self.seg.data_ptr(),
+                                    "salts_b": (wt.b["salts_b"].data_ptr(), size["salts_b"])},
                                    self.xb.data_ptr(), {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64,
                                                         **self.run.const_keys}, variant=self.run.variant)
         self.wsteps = PPDR._steps(self.wpipe, PPD.EPOCH_STEPS + PPD.JOB_STEPS)
