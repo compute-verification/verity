@@ -437,6 +437,102 @@ No statement or table claims that a Program's values are always hidden until the
 The format does not refuse a program that holds data: a descriptor's bytes and digests mean what they meant, and programs move
 to registered inputs under new ids.
 
+### 5.4 Supplied inputs and held outputs
+
+A *supplied* input is a parameter of the program function whose value the verifier computes, by a public function C names,
+from public things only: live coins (the proof service's, or a trusted device's signed coin) with their openings against a
+commitment released before them, the sample drawn on live coins, commitments registered before the coin, and the
+registration's constants. The prover supplies none of it. It is the third binding time beside run and registration (§5.1):
+`Program(fn, supplied={name: mark})` names the supplied parameters, and each lowers to `SuppliedInput<w>_v1` nodes as a
+registered one lowers to `RegisteredInput<w>_v1` nodes. A node is a supplied-input node exactly when its callee's id matches
+`^SuppliedInput([1-9][0-9]*)_v1$` (`supplied.SUPPLIED_ID`), under §5.2's rules, and an input node is any of the three. The
+function, its arguments and the input's width are C's, under both digests, so a coin fills the input and never chooses the
+function, the block or which C; a scheme passes no function and no row at run time.
+
+**The mark.** A supplied parameter's `inputs` entry is `[name, n, <mark>]`, every other one `[name, n]`:
+
+~~~text
+<mark> = {"supplied": <function>, "args": {<arg>: <natural or string>, ...}, "layout": "le" | "halves" | "digest", "bits": b}
+~~~
+
+- `supplied` names a function of the registry (`supplied.FUNCTIONS`). A name is versioned (`_vN` of a Definition is
+  `/vN` here): a function whose value changes takes a new name.
+- `args` are exactly the function's static arguments, each a natural or a nonempty string. A slot's index (round j of a
+  session, draw k of a sample, a unit's position) is one, so which slot a block is is fixed at registration and only the
+  slot's value is bound by the coin.
+- `layout` reads the function's value, a byte string, as the parameter's leaves of width w: `le`, the bytes as one
+  little-endian bit string (bit t is bit t mod 8 of byte ⌊t/8⌋) and leaf i its bits `[i·w, (i+1)·w)` least significant
+  first, a row's own order (u16 words as little-endian byte pairs, a byte string's bits in byte order); `halves`, each
+  big-endian 32-bit half's 32/w leaves least significant first; `digest`, each big-endian 64-bit word's 64 bits least
+  significant first, w = 1.
+- `bits` is the value's length in bits at `args`.
+
+**The registry.** Each function states what it reads, the origin its leaves take, its arguments and its value's length at
+them. Its body is the verifier's: one Lean definition per function, in one registry, which is where the value comes from and
+the only place.
+
+| function | reads | origin | args | bits |
+|---|---|---|---|---|
+| `pous.session.round_coin/v1` (u32be(j) ‖ u64be(i_j)) | coin, commitment | supplied | `round` | 96 |
+| `pous.session.header/v1` | commitment | supplied | | 6,048 |
+| `pous.session.context/v1` | commitment | supplied | | 848 |
+| `pous.setup.base/v1` | coin, sample, constant | supplied | `draw`, `L` | 8 L |
+| `pous.setup.slot/v1` | sample, constant | supplied | `draw`, `n` | 16 |
+| `poub.read.pub/v1` | coin, commitment, constant | supplied | `draw`, `K`, `masked`, `N` | 4,320 + (2 + K + masked) N |
+| `poub.read.signs/v1` | coin, constant | supplied | `draw`, `rows`, `bytes` | 8 · rows · bytes |
+| `window.salt/v1` | coin | coin | | 512 |
+| `commitment.root/v1` | commitment | supplied | `commitment` | 512 |
+| `unit.position/v1` | commitment | supplied | `unit` | 64 |
+| `const.u16/v1` | constant | supplied | `value` | 16 |
+
+So a storage round's index, its session's header and context, the setup's base and slot, the bandwidth audit's public row
+and signs, and a PoUW block's salt, position and operands' roots, which its seed Definition hashes inside the block, are
+one kind of input, with no case per scheme. A value that reads only constants (a slot fixed at registration, a constant word)
+is a supplied input too, not a constant of C: a Program holds no data (§5.3).
+
+**What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (`supplied.check_entry`, `check_held`):
+
+- `E_SUPPLIED_MARK`: an entry's third element is not a mark of exactly these four keys of these forms;
+- `E_INPUTS_MIXED`: a marked parameter's nodes are not all supplied-input nodes, or an unmarked one's include one. So a
+  value the verifier makes is never read as the prover's registration, and no position a registered read opens is ever a
+  supplied value;
+- `E_SUPPLIED_FN`: the function is not in the registry;
+- `E_SUPPLIED_ARGS`: the args are not the function's, or the function has no value at them;
+- `E_SUPPLIED_WIDTH`: the parameter's leaves are not of one width w, `bits` is not the function's length at `args`, or the
+  leaves' `n · w` bits are not `bits` read whole by `layout`;
+- `E_HELD`: a held output (below) names no run of leaves of a supplied input of its width whose length divides the row's.
+
+A supplied leaf's origin (§12) is `coin` when its function's is (the value is the coin itself: `window.salt/v1`), and
+`supplied` otherwise. §12's rules read `coin` as they do for a coin input, so a salt reaches only noise primitives, receipt
+folds and seeds, and a value computed from a coin (a round's index) reaches any port but a coin port. A supplied node's port
+is never `"kind": "static"` or `"kind": "position"`, and it is `"kind": "coin"` exactly when its origin is (`E_PORT_KIND`).
+
+**Held outputs.** A root `ret` port row may carry `"equals": [name, at, n]`: leaf `lo + i` of the row is held to leaf
+`at + (i mod n)` of the supplied input `name`, of the same width. With `const.u16/v1` at 1 and `n` = 1 it holds every
+unit's verdict word to 1, which is what an opening's verdict and a check's `ok` are; a block whose held output differs is
+refused inside the proof, since its row opens no root the verifier holds.
+
+**A block** (`restrict`). A maximal run of in(S) of one width whose gates are supplied-input gates of one parameter of C is
+a parameter of the block bound `supplied`; a run ends where the parameter does. Its entry carries C's mark with
+`"of": [name, lo, hi]`, the leaves of C's parameter it covers, and `bits` the part's (`supplied.part`). The leaves a block's
+held outputs are held to join in(S) as such a part. The listing's binding of such an input bit is `supplied`. A block that
+reads one leaf of an input reads that leaf alone: the key of an opening reads i_j's low half, leaf 2 of
+`pous.session.round_coin/v1` under `halves`, and no other function gives i_j.
+
+**What the statement carries.** Each supplied part is a value the verifier registers at known content: its rows the part's
+leaves as the units read them, at the positions C gives (`OneCircuit.pos`, as for a registered input), row i salted by the
+public salt `registered_value.supplied_salts(<program digest>, <name>, i)` and committed under the value's registered
+domain. The verifier computes the root from the rows it computed (`Flock.Registered.checkKnown`), and the statement's rows
+open it as any registered read's do; a held output is a registered read of an output row against such a value. The base
+verifier is handed no other kind of public input. A supplied value is public, so each part's tree is listed in what the
+statement reveals (`Flock.Registered.knownList`). A value the verifier cannot compute (a coin's opening fails, a commitment
+it reads is missing) makes no statement, refused in the clear.
+
+**The order rule.** Every commitment a function reads is registered before the coin it reads, and the statement names it;
+the verifier refuses an evaluation that reads one registered after (`E_SUPPLIED_ORDER`, naming the commitment). Values
+that read a supplied value (an opening's row, salt and path, a block's outputs) are committed after its coin, in a window
+whose domain binds that coin, and the block's own check holds them to the commitments registered before it.
+
 ## 6. The canonical layout
 
 Gates are numbered by laying bodies out in node order, recursively.
@@ -707,7 +803,8 @@ a word type (or none). The origins are:
 - `gate`, for a computed value;
 - `static`, for the output of a primitive without parameters (a constant);
 - `input` and `registered`, for an input node's leaf by its binding time;
-- `coin`, for an input leaf whose port is `"kind": "coin"`;
+- `coin`, for an input leaf whose port is `"kind": "coin"`, and a supplied leaf whose function's origin is `coin` (§5.4);
+- `supplied`, for any other supplied input node's leaf (§5.4);
 - `theta`, in place of `input` or `registered`, for a leaf of an input node the Program marks as the model's weights.
 - `position`, for an input leaf whose port is `"kind": "position"` (a proof block's position).
 
