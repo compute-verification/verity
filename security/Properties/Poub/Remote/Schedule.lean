@@ -136,7 +136,10 @@ def CodeLayoutTiles : Prop :=
 `o` (under the registration's digest and the receipter of pass `i`'s seed, as `Session` checks it), the block opened is
 store index `j`, the block at position `p` of pass `i`'s plan, and `position` puts it at `(t, j)`: `t = 0` and its
 decoding under the registration's key at index `j` is a payload at leaf `j` of the registration's payload tree, or
-`t ≥ 1` and its decoding under append `t − 1`'s coin is a payload at leaf `j` of that append's tree. -/
+`t ≥ 1` and its decoding under append `t − 1`'s coin is a payload at leaf `j` of that append's tree if the append is
+fresh, or, if it is a re-key, wherever it has an origin leaf (`originLeaf`), at the origin's leaf `q` under the origin's
+root, which the opening names; as `OpeningPasses` (`Properties.Poub.Remote`), nothing for a re-key whose origin slot
+holds no append, and the origin is the schedule's only by `OriginsOnRota`, not proved. -/
 def OpensAtPosition : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (i p : ℕ) (o : Opening),
     checkOpening reg reg.digest appends w (receipterOf reg w i) i p o = none →
@@ -147,7 +150,13 @@ def OpensAtPosition : Prop :=
           o.payloadPath = true) ∨
       (0 < t ∧ ∃ a, appends[t - 1]? = some a ∧
         Codec.decode o.block j reg.key (some (o.digest, some a.coin)) = .ok (some payload) ∧
-        (appendDomain reg.digest a.first a.count).verifyOpening a.root (appendDomain reg.digest a.first a.count).count
-          j (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)
+        match a.origin with
+        | .fresh =>
+          (appendDomain reg.digest a.first a.count).verifyOpening a.root (appendDomain reg.digest a.first a.count).count
+            j (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true
+        | .registered _ | .rekey _ =>
+          ∀ q oroot odom, originLeaf reg reg.digest appends a j = some (q, oroot, odom) →
+            o.originPosition = some q ∧
+              odom.verifyOpening oroot odom.count q (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)
 
 end Properties.Poub

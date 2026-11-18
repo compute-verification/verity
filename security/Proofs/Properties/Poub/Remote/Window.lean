@@ -110,8 +110,14 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
             split at h
             · simp at h
             rename_i h5
-            exact ⟨⟨payload, Or.inr ⟨Nat.le_of_not_lt hb, a, rfl, hdec, by rw [ho]; simpa using h4⟩⟩,
-              by simpa using h5⟩
+            refine ⟨⟨payload, Or.inr ⟨Nat.le_of_not_lt hb, a, rfl, hdec, ?_⟩⟩, by simpa using h5⟩
+            cases hor : a.origin with
+            | fresh => simpa using h4
+            | registered x => simp [originLeaf, hor] at ho
+            | rekey k =>
+              intro q' oroot' odom' hq'
+              rw [ho] at hq'
+              cases hq'
           · simp at h
         · simp at h
       | some v =>
@@ -134,8 +140,20 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
             split at h
             · simp at h
             rename_i h5
-            exact ⟨⟨payload, Or.inr ⟨Nat.le_of_not_lt hb, a, rfl, hdec,
-              by rw [ho]; exact ⟨by simpa using hq, by simpa using h4⟩⟩⟩, by simpa using h5⟩
+            refine ⟨⟨payload, Or.inr ⟨Nat.le_of_not_lt hb, a, rfl, hdec, ?_⟩⟩, by simpa using h5⟩
+            have hro : ∀ q' oroot' odom', originLeaf reg reg.digest appends a j = some (q', oroot', odom') →
+                o.originPosition = some q' ∧
+                  odom'.verifyOpening oroot' odom'.count q' (hidden payload o.payloadSalt) SCHEMA o.payloadPath =
+                    true := by
+              intro q' oroot' odom' hq'
+              rw [ho] at hq'
+              simp only [Option.some.injEq, Prod.mk.injEq] at hq'
+              obtain ⟨rfl, rfl, rfl⟩ := hq'
+              exact ⟨by simpa using hq, by simpa using h4⟩
+            cases hor : a.origin with
+            | fresh => simp [originLeaf, hor] at ho
+            | registered x => exact hro
+            | rekey k => exact hro
           · simp at h
         · simp at h
 
