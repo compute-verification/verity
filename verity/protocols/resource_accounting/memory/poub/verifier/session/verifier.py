@@ -94,7 +94,7 @@ the LMS verify a served or gate session's signatures are checked with, and the c
 serve` starts.
 
     python verifier_process.py --port 7781 --out OUT --figures FIGURES.json [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
-                               [--registry REGISTRY.json] [--lean-exe PATH]
+                               [--figures-sha512 HEX] [--registry REGISTRY.json] [--lean-exe PATH]
                                [--paced K:T_MS:SAMPLES:WINDOWS[:F] ...] [--transcript DIR]
                                [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
                                [--groups-per-coin G]
@@ -969,6 +969,11 @@ class Pair:
                      str(failure["failure"]))
 
 
+def figures_record(figures: timing.Figures) -> dict:
+    """What `verifier.json` names the session's figures by: the figures whole and their `timing.Figures.sha512`."""
+    return {"figures": figures.to_json(), "figures_sha512": figures.sha512()}
+
+
 def node_refused(node: ledger.Node) -> str | None:
     """Why the session's ledger can't take `node` handed in, or None: its tiers must be the two the ledger reads."""
     if sorted(node.tiers) != ["dram", "hbm"]:
@@ -1605,6 +1610,9 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
     ap.add_argument("--figures", type=Path, metavar="FILE",
                     help="the node's figures, as `timing.Figures.to_json` writes them (`benchmarks/poub_session/"
                          "sheets.py NODE`); required unless --close")
+    ap.add_argument("--figures-sha512", metavar="HEX",
+                    help="the figures' `timing.Figures.sha512` as the verifier's configuration pins it: a --figures "
+                         "file with another is refused")
     ap.add_argument("--windows", type=int, default=7)
     ap.add_argument("--window-ms", type=float, default=1000.0)
     ap.add_argument("--samples", type=int, default=2773)
@@ -1703,6 +1711,9 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
             figures = timing.Figures.of_json(json.loads(a.figures.read_text()))
         except (OSError, ValueError) as e:
             ap.error(f"--figures {a.figures}: {e}")
+        if a.figures_sha512 is not None and figures.sha512() != a.figures_sha512.lower():
+            ap.error(f"--figures {a.figures}: its SHA-512 is {figures.sha512()}, not {a.figures_sha512}, the one "
+                     "--figures-sha512 pins: the figures are the verifier's configuration's, never the prover's")
         a.hbm_bytes = figures.hbm_bytes if a.hbm_bytes is None else a.hbm_bytes
     capacities = None
     if a.node is not None:
@@ -1786,7 +1797,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
         save_registry(a.registry, kept)
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "verdict": "lean",
-             "refused": str(e), "registry": kept}, indent=1))
+             "refused": str(e), "registry": kept, **figures_record(figures)}, indent=1))
         if checks:
             checks.close(wait=True)
         v.stop()
@@ -1804,7 +1815,8 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
              "verdict": "lean", "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
-             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept}, indent=1))
+             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept,
+             **figures_record(figures)}, indent=1))
         save_registry(a.registry, kept)
 
     record()

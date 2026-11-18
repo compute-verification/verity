@@ -11,7 +11,8 @@ document is fetched from the evidence store (`research data show`, `research dat
 **What is read.** Everything is the scan's own (`benchmarks/network_traces/scan_zk.sh`), under RUN_DIR/out:
 `sczk/summary.json` (the class, the execution phases, T and the tick, and for each session of each honest round its
 prover's seconds, its staging and the Lean verifier's wall), each of those sessions' `prove.log`
-and `lean-verify.log` (the stages), `sczk/answers.json` (the guard), `host.txt` (the cores the job had) and
+and `lean-verify.log` (the stages), the summary's `answers` (the guard: each execution phase's verdict, reason and
+public part, which scan_zk takes from its private `answers.json` inside the job), `host.txt` (the cores the job had) and
 `lean.jsonl` (each Lean verifier process's core and CPU seconds, `SC_LEAN_ONE`).
 
 **The numbers.** The round is the group's honest rounds, one an execution phase, each a registration of its own:
@@ -205,16 +206,18 @@ def pinned(cls: str, pins: dict | None = None) -> dict:
     return pins[cls]
 
 
-def _phases(out: Path) -> list[dict]:
-    """The answers the scan kept, one an execution phase of the group (`answers.json`)."""
-    return _json(out / "sczk" / "answers.json").get("windows") or []
+def _phases(summary: dict) -> list[dict]:
+    """The scan's answers, one an execution phase of the group in its order (the summary's `answers`)."""
+    if not isinstance(summary.get("answers"), dict):
+        raise Refused("the scan's summary holds no answers: the scan answered no execution phase")
+    return [a for _, a in sorted(summary["answers"].items(), key=lambda x: int(x[0]))]
 
 
 def sample(summary: dict, phases: list[dict]) -> str | None:
     """How much of the round its answers say was proved: every unit, or how many of the round's; None with no
     answer to read it from."""
     units = sum(m["n"] for m in summary["members"][honest(summary)[0]])
-    proved = {len(((w.get("answer") or {}).get("public") or {}).get("proved") or []) for w in phases}
+    proved = {len((w.get("public") or {}).get("proved") or []) for w in phases}
     if not proved:
         return None
     return "every unit" if proved == {units} else f"{min(proved)} of {units} units"
@@ -226,13 +229,12 @@ def guard(out: Path, summary: dict, scan_exit: int, pins: dict | None = None) ->
     group = summary["group"]
     try:
         want = pinned(summary["setup"], pins)
-        phases = _phases(out)
+        phases = _phases(summary)
     except Refused as e:
         return {"holds": False, "scan_exit": scan_exit, "why": [*why, str(e)]}
     if len(phases) != group:
-        why.append(f"answers.json holds {len(phases)} execution phases' answers, and the group is {group}")
-    for i, w in enumerate(phases):
-        answer = w.get("answer") or {}
+        why.append(f"the summary holds {len(phases)} execution phases' answers, and the group is {group}")
+    for i, answer in enumerate(phases):
         if answer.get("verdict") != "accept":
             why.append(f"execution phase {i}'s answer is {answer.get('verdict')!r}: {answer.get('reason')}")
         elif answer.get("public") != want:
@@ -275,7 +277,7 @@ def _document(out: Path, summary: dict, scan_exit: int, run: str | None, commit:
     phase_s = group * ticks * tick_ms / 1000
     verifier, verified = _verifier(out)
     rows = sessions(out, summary, verified)
-    answers = _phases(out) if (out / "sczk" / "answers.json").is_file() else []
+    answers = _phases(summary) if isinstance(summary.get("answers"), dict) else []
     rnd = {"sessions_s": _sum(rows, "session_s"), "staging_s": _sum(rows, "stage_s"),
            **{k: _sum(rows, "prover", k) for k in STAGES}, "lean_cpu_s": _sum(rows, "lean_cpu_s"),
            "lean_s": _sum(rows, "lean_verify_s"), **{f"lean_{k}": _sum(rows, "lean", k) for k in LEAN_STAGES}}
@@ -347,7 +349,7 @@ def write(run_dir: Path, scan_exit: int) -> tuple[dict | None, bool, str]:
         holds = doc["guard"]["holds"] and doc["numbers"]["proving"] is not None
         detail = "the guard holds" if holds else "the guard does not hold: " + "; ".join(doc["guard"]["why"]) \
             if not doc["guard"]["holds"] else "the guard holds, and the summary lacks a session's seconds or staging: no number"
-    kept = [f"out/{DOC}", "out/sczk/answers.json"] if doc is not None else []
+    kept = [f"out/{DOC}", "out/sczk/summary.json"] if doc is not None else []
     _put(run_dir / kit.RESULT, {
         "schema": kit.RESULT_SCHEMA, "run_id": run,
         "workload_fingerprint": {"benchmark": "scan_cost", **({**doc["identity"], "group": doc["group"]} if doc else {})},

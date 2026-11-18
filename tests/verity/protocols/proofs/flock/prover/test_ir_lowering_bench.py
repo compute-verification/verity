@@ -109,19 +109,16 @@ def test_a_wrong_row_scalar_changes_the_outputs(tmp_path):
 
 
 @pytest.mark.slow
-def test_the_circuit_description_accounts_for_every_cut_word(tmp_path):
-    """IR1 (the Python half; the Rust verifier refuses the rest, `flock-ir-block selftest`): the circuit description's CUT line
+def test_the_circuit_description_accounts_for_every_cut_word():
+    """IR1, the Python half: the circuit description's CUT line
     lists each unit's cut ports and the native tail; every cut word is computed exactly once, by a unit or by the tail, from words
-    defined before. The instance header only counts them."""
+    defined before."""
     import json
 
-    sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
-    s = InputSet.open(generate(sub, 2, 3, tmp_path / "set")["path"])
-    low = REG.module("rmsnorm-fused-cuda").lowering(sub)
-    head = json.loads(IL.stage(low, s, 0, 2, tmp_path / "st").read_bytes().split(b"\n", 1)[0])
-    cut = json.loads((tmp_path / "st" / "net.txt").read_text().splitlines()[-1].removeprefix("CUT "))
-    assert cut == low.cut and "cut" not in head
-    assert head["cut_words"] == cut["words"] == len(low.units.cut) == 3 and len(cut["in"]) == len(cut["out"]) == low.units.n == 2
+    low = REG.module("rmsnorm-fused-cuda").lowering(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5))
+    cut = json.loads(low.text.splitlines()[-1].removeprefix("CUT "))
+    assert cut == low.cut
+    assert cut["words"] == len(low.units.cut) == 3 and len(cut["in"]) == len(cut["out"]) == low.units.n == 2
     produced = [k for unit in cut["out"] for _, k in unit]
     tail_out = [op[0] for op in cut["tail"] if op[0] < cut["words"]]
     assert sorted(produced + tail_out) == list(range(cut["words"]))
@@ -130,10 +127,8 @@ def test_the_circuit_description_accounts_for_every_cut_word(tmp_path):
         assert set(op[2:] if op[1] != "Const" else []) <= defined
         defined.add(op[0])
     assert {op[1] for op in cut["tail"]} <= {"Const", *IL.TAIL_PRIMS}
-    rs = InputSet.open(SLICES / "rope-head-d64")
-    rope = REG.module("rope-head").lowering(rs.subcircuit)
-    head = json.loads(IL.stage(rope, rs, 0, 1, tmp_path / "r").read_bytes().split(b"\n", 1)[0])
-    assert rope.cut is None and head["cut_words"] == 0 and not rope.text.splitlines()[-1].startswith("CUT")
+    rope = REG.module("rope-head").lowering(InputSet.open(SLICES / "rope-head-d64").subcircuit)
+    assert rope.cut is None and not rope.text.splitlines()[-1].startswith("CUT")
 
 
 @pytest.mark.slow

@@ -8661,6 +8661,32 @@ def test_a_run_whose_lake_a_build_is_still_writing_fails_loudly(tmp_path, monkey
     assert len(fails) == 1 and fails[0].startswith("runs: a build is still writing") and ran == []
 
 
+def test_a_run_beside_the_samples_read_hold_on_its_lake_runs(tmp_path, monkeypatch):
+    pkg, ran, tests = _runs(tmp_path, monkeypatch, {"args": []})
+    monkeypatch.setattr(A, "writable", lambda p: [p.resolve() / ".lake"])
+    with A.writing(pkg, reads=True):
+        assert tests() == ([], {"T": {"args": []}}) and len(ran) == 1
+    with A.writing(pkg):
+        fails, _ = tests()
+    assert len(fails) == 1 and fails[0].startswith("runs: a build is still writing") and len(ran) == 1
+    assert not A._WRITING and not A._READING
+
+
+def test_an_update_keeps_the_run_records_it_could_not_rederive(tmp_path, monkeypatch):
+    entry = {"args": ["{v.txt}"], "data": {"v.txt": sha("12\n"), "w.txt": sha("13\n")}}
+    pkg, ran, tests = _runs(tmp_path, monkeypatch, entry)
+    with A._WROTE:
+        A._WRITING.add(pkg.resolve() / ".lake")
+    try:
+        fails, now = tests(update=True)
+    finally:
+        with A._WROTE:
+            A._WRITING.discard(pkg.resolve() / ".lake")
+    assert fails[0].startswith("runs: a build is still writing") and now == {"T": entry} and ran == []
+    assert tests(update=True) == ([f"runs: T's data v.txt is missing from {pkg}", f"runs: T's data w.txt is missing from {pkg}"],
+                                  {"T": {"args": ["{v.txt}"], "data": {"v.txt": sha("12\n")}}}) and ran == []
+
+
 def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):
     pkg = tmp_path / "a" / "lean"
     pkg.mkdir(parents=True)
