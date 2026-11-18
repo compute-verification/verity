@@ -75,7 +75,9 @@ record first, and the digest of the run's own record. `params` is not read.
     that is not the layout's.
 
 An `own-rows`, a `shared-unheld` or a `leaf-widths` refusal comes with a message that says what to fix
-(`messageOf`), and a `leaf-widths` one names the wire and its two rows' bits, or its two widths.
+(`messageOf`); a `shared-unheld` one says whether some row is not held (`SHARED_UNHELD`) or the check ran past
+its bound before it could tell (`SHARED_UNDECIDED`), and a `leaf-widths` one names the wire and its two rows' bits, or
+its two widths.
 
 ## Rows of its own
 
@@ -435,6 +437,15 @@ def SHARED_UNHELD : String :=
   "reads it as a registered read of one parameter at those leaves. Declare each such row a registered read of " ++
   "the parameter whose leaves the run is, or give each row input leaves of its own."
 
+/-- What a `shared-unheld` refusal says where the check ran past its bound (`FUEL` stretches of one declaration's
+source) before it could tell whether every row is held. -/
+def SHARED_UNDECIDED : String :=
+  "not decided within the bound: the root hands one run of input leaves to more than one row, and the check of " ++
+  "whether the record holds every row that reads it as a registered read of one parameter at those leaves ran " ++
+  "past its bound (4096 stretches of one declaration's source) before it could tell; it found no row unheld. " ++
+  "Declare each such row's read with fewer stretches, a digit for each of the run's stretches, or give each row " ++
+  "input leaves of its own."
+
 /-- A port's leaf width as a refusal names it. -/
 def widthName : Option Nat → String
   | some w => s!"{w} bits"
@@ -671,16 +682,20 @@ def stretch : List (Nat × Int) → Nat → Int × Option Nat
   | [], _ => (0, none)
   | (r, s) :: _, i => (s, some (r - i % r))
 
-/-- `fb + accum f (fi + v) = gb + accum g (gi + v)` for every `v < n`, one stretch where both are affine at a time,
-with `fuel` stretches left: false where the fuel runs out. -/
-def agree : Nat → List (Nat × Int) → Int → Nat → List (Nat × Int) → Int → Nat → Nat → Bool
-  | 0, _, _, _, _, _, _, _ => false
-  | fuel + 1, f, fb, fi, g, gb, gi, n =>
-    n == 0 || (fb + Spot.Wires.accum f fi == gb + Spot.Wires.accum g gi &&
-      let (sf, lf) := stretch f fi
-      let (sg, lg) := stretch g gi
-      let m := min n (min (lf.getD n) (lg.getD n))
-      0 < m && (m == 1 || sf == sg) && agree fuel f fb (fi + m) g gb (gi + m) (n - m))
+/-- Whether `fb + accum f (fi + v) = gb + accum g (gi + v)` for every `v < n`, one stretch where both are affine at a
+time, with `fuel` stretches left: none where the fuel runs out first. -/
+def agree (fuel : Nat) (f : List (Nat × Int)) (fb : Int) (fi : Nat) (g : List (Nat × Int)) (gb : Int) (gi n : Nat) :
+    Option Bool :=
+  if n == 0 then some true
+  else match fuel with
+    | 0 => none
+    | fuel + 1 =>
+      if fb + Spot.Wires.accum f fi != gb + Spot.Wires.accum g gi then some false
+      else
+        let (sf, lf) := stretch f fi
+        let (sg, lg) := stretch g gi
+        let m := min n (min (lf.getD n) (lg.getD n))
+        if 0 < m && (m == 1 || sf == sg) then agree fuel f fb (fi + m) g gb (gi + m) (n - m) else some false
 
 /-- The digits (fastest first) and base of `v ↦ b + accum ps (k · v + c)`, for `c < k`, where they are digits. -/
 def restrict : List (Nat × Int) → Int → Nat → Nat → Option (List (Nat × Int) × Int)
@@ -691,25 +706,27 @@ def restrict : List (Nat × Int) → Int → Nat → Nat → Option (List (Nat �
     else if k % r == 0 then restrict ps (b + ((c % r : Nat) : Int) * s) (k / r) (c / r)
     else none
 
-/-- From reader unit `u` to `e` of template `tid`'s port `port`, row `c`, with `fuel` declarations left to visit: the
-declaration that fills each unit (`fillAt`'s) is a registered read of `p`, θ, whose source at unit `v` is
-`gb + accum g (v - u0)`, held in closed form (`agree`). -/
+/-- Whether, from reader unit `u` to `e` of template `tid`'s port `port`, row `c`, with `fuel` declarations left to
+visit, the declaration that fills each unit (`fillAt`'s) is a registered read of `p`, θ, whose source at unit `v` is
+`gb + accum g (v - u0)`, held in closed form (`agree`): none where a bound runs out first. -/
 def heldFrom (ds : List Decl) (theta : String → Bool) (tid port : String) (c u0 e : Nat) (p : String)
-    (g : List (Nat × Int)) (gb : Int) : Nat → Nat → Bool
-  | 0, _ => false
-  | fuel + 1, u =>
-    decide (e ≤ u) ||
+    (g : List (Nat × Int)) (gb : Int) (fuel u : Nat) : Option Bool :=
+  if e ≤ u then some true
+  else match fuel with
+    | 0 => none
+    | fuel + 1 =>
       match ds.find? (fun d => (d.w.indexOf tid u port c).isSome) with
       | some d => match d.fill with
         | .read q =>
           let e' := min e (d.w.start + d.w.readerUnits)
-          q == p && theta p && decide (u < e') &&
-            (match restrict d.w.pairs d.w.base d.w.cuts (c - d.w.cut0) with
-              | some (f, fb) => agree FUEL (merged f) fb (u - d.w.start) (merged g) gb (u - u0) (e' - u)
-              | none => false) &&
-            heldFrom ds theta tid port c u0 e p g gb fuel e'
-        | _ => false
-      | none => false
+          if !(q == p && theta p && decide (u < e')) then some false
+          else match restrict d.w.pairs d.w.base d.w.cuts (c - d.w.cut0) with
+            | none => some false
+            | some (f, fb) => match agree FUEL (merged f) fb (u - d.w.start) (merged g) gb (u - u0) (e' - u) with
+              | some true => heldFrom ds theta tid port c u0 e p g gb fuel e'
+              | r => r
+        | _ => some false
+      | none => some false
 
 /-- An argument of the root that reads a shared run (`sharedRuns`): argument `arg` of node `node` is one part, of
 `count` leaves, over the run of `inner` leaves of input node `input` from leaf `base`, its members `count / members`
@@ -742,13 +759,12 @@ def sharedOf (P : Prog) : Option (List Shared) :=
       | none => some out
     | _ => if ps.any reads then none else some out) (some [])
 
-/-- The registered read of row `c` of the shared run `s`, as `(input node, parameter, offset)`: the run's members are
-a range of `rs`, units `[u0, u0 + n)` of template `tid`, and each row `c` of their port is filled, unit by unit, by a
-registered read of one parameter `p`, θ, from the source `o + b + (v mod P)·words + c·(words / k)` at member `v`, where
-`b` is the run's base and `P` its stretches, in `p`'s 16-bit leaves, and `o` is the read's source at the first member
-less those. -/
-def sharedRow (P : Prog) (rs : Array Flock.TemplateQuery.TRange) (ts : List Tmpl) (W : Spot.Wires.Wiring)
-    (ds : List Decl) (theta : String → Bool) (s : Shared) (c : Nat) : Option (Nat × String × Int) := do
+/-- What `sharedRow` checks of row `c` of the shared run `s`: the template and port of its members, their first unit
+and count, the parameter `p` the declaration at the first member reads, the source `g`, `gb` of every member, and
+the offset `o`; none where the row is no registered read of that shape. -/
+def sharedPlan (P : Prog) (rs : Array Flock.TemplateQuery.TRange) (ts : List Tmpl) (W : Spot.Wires.Wiring)
+    (ds : List Decl) (s : Shared) (c : Nat) :
+    Option (String × String × Nat × Nat × String × List (Nat × Int) × Int × Int) := do
   let r ← rs.find? (·.node == s.node)
   let tid := r.template
   let u0 := (rangesAt rs tid).foldl (fun a q => if q.first < r.first then a + q.count else a) 0
@@ -768,30 +784,49 @@ def sharedRow (P : Prog) (rs : Array Flock.TemplateQuery.TRange) (ts : List Tmpl
   let .read p := d.fill | none
   let i ← d.w.indexOf tid u0 port c
   let o := d.w.writerAt i - b - (c * (words / k) : Nat)
-  if heldFrom ds theta tid port c u0 (u0 + n) p g (o + b + (c * (words / k) : Nat)) (ds.length + 1) u0 then
-    some (s.input, p, o)
-  else none
+  some (tid, port, u0, n, p, g, o + b + (c * (words / k) : Nat), o)
+
+/-- The registered read of row `c` of the shared run `s`, as `(input node, parameter, offset)`: the run's members are
+a range of `rs`, units `[u0, u0 + n)` of template `tid`, and each row `c` of their port is filled, unit by unit, by a
+registered read of one parameter `p`, θ, from the source `o + b + (v mod P)·words + c·(words / k)` at member `v`, where
+`b` is the run's base and `P` its stretches, in `p`'s 16-bit leaves, and `o` is the read's source at the first member
+less those: none where the check runs past its bound, `some none` where the row is not so held. -/
+def sharedRow (P : Prog) (rs : Array Flock.TemplateQuery.TRange) (ts : List Tmpl) (W : Spot.Wires.Wiring)
+    (ds : List Decl) (theta : String → Bool) (s : Shared) (c : Nat) : Option (Option (Nat × String × Int)) :=
+  match sharedPlan P rs ts W ds s c with
+  | none => some none
+  | some (tid, port, u0, n, p, g, gb, o) =>
+    (heldFrom ds theta tid port c u0 (u0 + n) p g gb (ds.length + 1) u0).map fun held =>
+      if held then some (s.input, p, o) else none
 
 /-- **Every shared run is held** (the module docstring's `shared-unheld`): each row of each argument that reads a
 shared run (`sharedOf`) is a registered read, θ, of one parameter and offset per input node, from the source its member's stretch of the run
 names (`sharedRow`). The check ties every reader of a shared run to one declared parameter and offset, and does not
 tie the input node to that parameter, as for every registered read today. It costs the shared runs, each row's
-declarations and their stretches (`agree`, at most `FUEL` a declaration); where the fuel runs out the run is
-refused, undecided. -/
-def sharedHeld (P : Prog) (ts : List Tmpl) (W : Spot.Wires.Wiring) (ds : List Decl) (theta : String → Bool) :
-    Bool :=
-  (sharedRuns P).isEmpty ||
+declarations and their stretches (`agree`, at most `FUEL` a declaration). Some row not held is `some false`;
+else where the check of some row runs past its bound, none (`SHARED_UNDECIDED`). -/
+def sharedDecide (P : Prog) (ts : List Tmpl) (W : Spot.Wires.Wiring) (ds : List Decl) (theta : String → Bool) :
+    Option Bool :=
+  if (sharedRuns P).isEmpty then some true else
   match sharedOf P, Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
       (W.templates.map (·.1)).toArray with
-  | none, _ | _, .error _ => false
+  | none, _ | _, .error _ => some false
   | some sh, .ok rs =>
   let rows := sh.flatMap fun s =>
     let k := ((rs.find? (·.node == s.node)).bind fun r => (ts.find? (·.tid == r.template)).bind fun t =>
       ((P.defs[t.defn]!).params[s.arg]?).map fun (port, _) => W.cutsOf r.template port).getD 1
     (List.range k).map (s, ·)
-  match rows.mapM fun (s, c) => sharedRow P rs ts W ds theta s c with
-  | some marks => marks.all fun m => marks.all fun m' => m.1 != m'.1 || m == m'
-  | none => false
+  let got := rows.map fun (s, c) => sharedRow P rs ts W ds theta s c
+  if got.any (· == some none) then some false
+  else if got.any (·.isNone) then none
+  else
+    let marks := got.filterMap (·.join)
+    some (marks.all fun m => marks.all fun m' => m.1 != m'.1 || m == m')
+
+/-- **Every shared run is held** (`sharedDecide`, decided and held). -/
+def sharedHeld (P : Prog) (ts : List Tmpl) (W : Spot.Wires.Wiring) (ds : List Decl) (theta : String → Bool) :
+    Bool :=
+  sharedDecide P ts W ds theta == some true
 
 /-- The pin of template `tid`'s Definition, where the policy pins it: its closure digest in the Program whose
 descriptor is `desc` (`DefinitionDigest.closureDigest`), where that is among `pins`. -/
@@ -1058,11 +1093,22 @@ def evaluate (j tr : Json) : Except String Json := do
   return Json.mkObj (s.fields ++ [("complies", Json.bool failure.isNone), ("failure", failureJson failure)])
 
 /-- The message of a refusal whose fix is the lowering's to make: for `own-rows` the rule (`OWN_ROWS`); for
+`shared-unheld` whether a row is not held (`SHARED_UNHELD`) or the check ran past its bound (`SHARED_UNDECIDED`); for
 `leaf-widths` the first wire that does not land whole, its two rows' bits or its two leaf widths, and the fix
 (`unwhole`). None for any other code. -/
 def messageOf (j tr : Json) (code : String) : Option String :=
   if code == "own-rows" then some OWN_ROWS
-  else if code == "shared-unheld" then some SHARED_UNHELD
+  else if code == "shared-unheld" then
+    match front j tr with
+    | .ok f => match wiring f.P f.doc with
+      | .ok W => match inputsOf f.ts W f.doc with
+        | .ok x =>
+          if (sharedDecide f.P f.ts W x.decls fun p => ((thetaOf f.T f.doc x).lookup p).getD false).isNone then
+            some SHARED_UNDECIDED
+          else some SHARED_UNHELD
+        | .error _ => some SHARED_UNHELD
+      | .error _ => some SHARED_UNHELD
+    | .error _ => some SHARED_UNHELD
   else if code == "leaf-widths" then
     match front j tr with
     | .ok f => match wiring f.P f.doc with

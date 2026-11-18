@@ -257,6 +257,14 @@ OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Eve
 SHARED_UNHELD = ("the root hands one run of input leaves to more than one row, and the record does not hold every row "
                  "that reads it as a registered read of one parameter at those leaves. Declare each such row a "
                  "registered read of the parameter whose leaves the run is, or give each row input leaves of its own.")
+#: `Record.SHARED_UNDECIDED`
+SHARED_UNDECIDED = ("not decided within the bound: the root hands one run of input leaves to more than one row, and "
+                    "the check of whether the record holds every row that reads it as a registered read of one "
+                    "parameter at those leaves ran past its bound (4096 stretches of one declaration's source) before "
+                    "it could tell; it found no row unheld. Declare each such row's read with fewer stretches, a digit "
+                    "for each of the run's stretches, or give each row input leaves of its own.")
+#: `Record.FUEL`
+FUEL = 4096
 
 
 def input_at(nodes, i) -> bool:
@@ -337,21 +345,108 @@ def shared_of(program, shared: list) -> list[tuple[int, int, int, int, int, int]
     return out
 
 
+def _pairs(w: dict) -> list[tuple[int, int]]:
+    """`Spot.Wires.Wire.pairs`: a wire's digits, the fastest first."""
+    return list(zip(w["radix"], w["step"]))[::-1]
+
+
+def _accum(ps, i: int) -> int:
+    """`Spot.Wires.accum`."""
+    out = 0
+    for r, st in ps:
+        out += (i % r) * st
+        i //= r
+    return out
+
+
+def _merged(ps) -> list:
+    """`Record.merged`: each digit whose step continues the one below it folded into that one."""
+    out = list(ps)
+    k = 0
+    while k + 1 < len(out):
+        (r, st), (r2, st2) = out[k], out[k + 1]
+        if st2 == r * st:
+            out[k:k + 2] = [(r * r2, st)]
+        else:
+            k += 1
+    return out
+
+
+def _stretch(ps, i: int):
+    """`Record.stretch`."""
+    return (0, None) if not ps else (ps[0][1], ps[0][0] - i % ps[0][0])
+
+
+def _agree(fuel: int, f, fb: int, fi: int, g, gb: int, gi: int, n: int) -> bool | None:
+    """`Record.agree`: None where `fuel` stretches run out first."""
+    while True:
+        if n == 0:
+            return True
+        if fuel == 0:
+            return None
+        fuel -= 1
+        if fb + _accum(f, fi) != gb + _accum(g, gi):
+            return False
+        (sf, lf), (sg, lg) = _stretch(f, fi), _stretch(g, gi)
+        m = min(n, n if lf is None else lf, n if lg is None else lg)
+        if not (0 < m and (m == 1 or sf == sg)):
+            return False
+        fi, gi, n = fi + m, gi + m, n - m
+
+
+def _restrict(ps, b: int, k: int, c: int):
+    """`Record.restrict`."""
+    ps = list(ps)
+    while True:
+        if k == 1:
+            return ps, b
+        if not ps:
+            return [], b
+        (r, st), rest = ps[0], ps[1:]
+        if r % k == 0:
+            return [(r // k, k * st)] + rest, b + c * st
+        if k % r == 0:
+            ps, b, k, c = rest, b + (c % r) * st, k // r, c // r
+            continue
+        return None
+
+
+def _held_from(x, is_theta, tid: str, port: str, c: int, u0: int, e: int, p: str, g, gb: int) -> bool | None:
+    """`Record.heldFrom`: from the first member to the last, the read that fills each unit's row `c` is of `p`, θ,
+    from the source `gb + accum g (v - u0)`, in closed form (`_agree`); None where a bound runs out first."""
+    fill, u = x.fill.get((tid, port), {}), u0
+    while u < e:
+        if fill.get((u, c)) != ("read", p) or not is_theta(p):
+            return False
+        r = next(r for r in x.reads if r["reader"] == tid and r["port"] == port and r["at"] <= u
+                 < r["at"] + math.prod(r["radix"]) // r["C"] and r["c0"] <= c < r["c0"] + r["C"])
+        e2 = min(e, r["at"] + math.prod(r["radix"]) // r["C"])
+        rs = _restrict(_pairs(r), r["base"], r["C"], c - r["c0"])
+        if rs is None:
+            return False
+        held = _agree(FUEL, _merged(rs[0]), rs[1], u - r["at"], _merged(g), gb, u - u0, e2 - u)
+        if held is not True:
+            return held
+        u = e2
+    return True
+
+
 def shared_held(program, templates: list, cuts: dict, x, is_theta) -> None:
-    """`Record.sharedHeld` (`shared-unheld`), row by row: each row `c` of each shared run's members `v` (units
-    `u0 + v` of its template) is filled by a registered read of one parameter `p`, θ, from the source
+    """`Record.sharedHeld` (`shared-unheld`): each row `c` of each shared run's members `v` (units `u0 + v` of its
+    template) is filled by a registered read of one parameter `p`, θ, from the source
     `o + b + (v mod P)·words + c·(words / k)`, `b` the run's base and `P` its stretches in `p`'s 16-bit leaves, and
-    every row of every shared run of one input node has one `p` and one offset `o`."""
+    every row of every shared run of one input node has one `p` and one offset `o`. A row not so held is refused with
+    `SHARED_UNHELD`; else a row whose check runs past its bound, with `SHARED_UNDECIDED`."""
     nodes = program.root.body.nodes
     by = {t.tid: t for t in templates}
     src = {(r["reader"], r["port"], u, c): s for r in x.reads for u, c, s in entries(r)}
-    marks: dict[int, tuple[str, int]] = {}
     runs = row_runs(program)
     if not runs[1]:
         return
     readers = shared_of(program, runs[1])
     if readers is None:
         raise refused("shared-unheld", SHARED_UNHELD)
+    marks, undecided = [], False
     for k, j, i, base, inner, count in readers:
         tid = codec.descriptor_id(nodes[k].fn)
         u0 = sum(nd.n if nd.form == "batch" else 1 for nd in nodes[:k] if codec.descriptor_id(nd.fn) == tid)
@@ -367,20 +462,23 @@ def shared_held(program, templates: list, cuts: dict, x, is_theta) -> None:
                 and base >= 0 and base * wn % 16 == 0 and words % kc == 0):
             raise refused("shared-unheld", SHARED_UNHELD)
         b, per, rw = base * wn // 16, inner // L, words // kc
+        g = [] if per <= 1 else [(per, words)]
         for c in range(kc):
-            fill = x.fill.get((tid, port), {})
-            first = fill.get((u0, c))
+            first = x.fill.get((tid, port), {}).get((u0, c))
             if first is None or first[0] != "read":
                 raise refused("shared-unheld", SHARED_UNHELD)
             p = first[1]
             o = src[(tid, port, u0, c)] - b - c * rw
-            for v in range(n):
-                what = fill.get((u0 + v, c))
-                if what != ("read", p) or not is_theta(p) \
-                        or src[(tid, port, u0 + v, c)] != o + b + (v % per) * words + c * rw:
-                    raise refused("shared-unheld", SHARED_UNHELD)
-            if marks.setdefault(i, (p, o)) != (p, o):
+            held = _held_from(x, is_theta, tid, port, c, u0, u0 + n, p, g, o + b + c * rw)
+            if held is False:
                 raise refused("shared-unheld", SHARED_UNHELD)
+            undecided = undecided or held is None
+            if held:
+                marks.append((i, p, o))
+    if undecided:
+        raise refused("shared-unheld", SHARED_UNDECIDED)
+    if any(m[0] == q[0] and m != q for m in marks for q in marks):
+        raise refused("shared-unheld", SHARED_UNHELD)
 
 
 def own_rows(program, form_only: bool = False) -> None:
