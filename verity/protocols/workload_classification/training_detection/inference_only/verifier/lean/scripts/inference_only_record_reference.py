@@ -611,7 +611,7 @@ def slots_of(templates: list[Template], rec: dict) -> tuple[int, dict[str, list[
     out: dict[str, list] = {t.tid: [None] * t.units for t in templates}
     for e in es:
         radix, axes = (e.get("radix"), e.get("axes")) if isinstance(e, dict) else (None, None)
-        if not (isinstance(radix, list) and isinstance(axes, list) and isinstance(e.get("template"), str)
+        if not (isinstance(radix, list) and isinstance(axes, list) and "slot" not in e and isinstance(e.get("template"), str)
                 and e["template"] in out and _nat(e.get("at")) and radix and len(radix) == len(axes)
                 and all(_nat(r) and r >= 1 for r in radix)):
             raise Malformed("blocks")

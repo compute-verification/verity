@@ -35,16 +35,13 @@ against C's leaf).
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
   first (`--keygen-workers`; about 1.1G SHA-512 hashes).  `--signer test` signs with the PoUS tests' test signer (`pous_test_signer.py`: LMS at a small height under a
   `test/` id), its leaf state in that temporary directory.
-- **The verdict** is `memory_attester.verdict` under `memory_attester.SCHEMES`, which accepts S1's scheme alone, so a
-  test-signed session is rejected: it fails closed.  `judge` computes it twice on every session, with the Lean port's
-  (`lean_verdict`, built with `lake` on first use) and with the Python, which stays the reference, and keeps both in the
-  witness (`verdicts`).  `RECORD_VERDICT` names the one that is the record's (the Lean's); where the two disagree, on the
-  accept bit or the reasons, the session is rejected for it (`DISAGREE`, listing both).
-  `tests/verity/protocols/resource_accounting/memory/pous/attester/lean/test_verdict.py` holds the Lean to the Python on generated records.
+- **The verdict** is the Lean port's (`lean_verdict`, `memory-attester-verdict`, built with `lake` before the first
+  session signs) under `memory_attester.SCHEMES`, which accepts S1's scheme alone, so a test-signed session is rejected:
+  it fails closed.  Where `lake` can't build it, the audit stops with that `BuildError` and no session signs.
   `accepted_under_signer` is the same verdict under the signer's own mapping (`memory_attester.SCHEMES` for `lms`, the
   test signer's for `test`): for `test`, every check but the scheme's acceptance, and never the verdict.
 - **The record** separates what is published (`public`: the commitment, the verdict, the coin openings) from the witness
-  (`witness`: the signed session, the record's reasons, both verdicts, C's digests at the blocks the rounds revealed,
+  (`witness`: the signed session, the verdict's reasons, C's digests at the blocks the rounds revealed,
   per-round on-time and digest bits), and keeps the responder's reports beside: with the signer's public key, every input
   of the verdict, so a record replays.
 - **The signed sessions** go to `--sessions` (`sessions-<--out's name>` beside it) as the session loop ends, however it
@@ -90,10 +87,6 @@ from verity.protocols.resource_accounting.memory.pous.attester.timed_audit impor
 ROOT = Path(__file__).resolve().parents[3]
 TEST_SIGNER = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
 LEAN_VERDICT = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean" / "verdict.py"
-RECORD_VERDICT = "lean"
-"""Which verdict is the record's: `"lean"` (`lean_verdict`) or `"python"` (`memory_attester.verdict`, the reference).
-`judge` computes both on every session and records both either way."""
-DISAGREE = "the Lean and Python verdicts disagree"
 WARMUP_PINGS = 8
 """Pings before each session's first round, after the previous session's signature: a session's round 0 otherwise follows
 the challenger's own Python work (one measured round 0 took 655.8 µs, 26 µs of it at the responder)."""
@@ -218,35 +211,25 @@ def setup_root(params: Any, salt: bytes, digests: bytes) -> bytes:
     return VerifierKey.from_row_digests(params, salt, [digests[64 * i:64 * (i + 1)] for i in range(params.blocks)]).root
 
 
-def verdicts(s: dict[str, Any], expected: Callable[[int], bytes], trusted: set[bytes],
-             schemes: Mapping[str, Any] | None = None) -> tuple[Any, dict[str, dict[str, Any]]]:
-    """Session `s` judged by the Lean verdict and by the Python's: the record's verdict, which is `RECORD_VERDICT`'s unless
-    the two disagree (accept bit or reasons), and then a rejection for it naming both; and both as recorded.  A record the
-    Lean refuses to read (`ValueError`) is its rejection."""
+def verdict(s: dict[str, Any], expected: Callable[[int], bytes], trusted: set[bytes],
+            schemes: Mapping[str, Any] | None = None) -> Any:
+    """Session `s` judged by the Lean verdict; a record it refuses to read (`ValueError`) is its rejection."""
     from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
-    args = (s["signed"], s["commitment"], s["openings"], expected)
     kw = {"trusted": trusted, **({} if schemes is None else {"schemes": schemes})}
-    got = {"python": mc.verdict(*args, **kw)}
     try:
-        got["lean"] = lean_verdict().verdict(*args, **kw)
+        return lean_verdict().verdict(s["signed"], s["commitment"], s["openings"], expected, **kw)
     except ValueError as e:
-        got["lean"] = mc.Verdict(False, (str(e),))
-    both = {name: {"accepted": v.accepted, "reasons": list(v.reasons)} for name, v in sorted(got.items())}
-    v = got[RECORD_VERDICT]
-    if both["lean"] != both["python"]:
-        v = mc.Verdict(False, (f"{DISAGREE}: lean {json.dumps(both['lean'])}, python {json.dumps(both['python'])}",),
-                       v.late, v.wrong)
-    return v, both
+        return mc.Verdict(False, (str(e),))
 
 
 def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trusted: set[bytes],
           signer_schemes: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Each session's verdict under `memory_attester.SCHEMES` and under the signer's own mapping (`verdicts`)."""
+    """Each session's verdict under `memory_attester.SCHEMES` and under the signer's own mapping (`verdict`)."""
     out = []
     for s in sessions:
-        v, both = verdicts(s, expected, trusted)
-        t, both_t = verdicts(s, expected, trusted, signer_schemes)
+        v = verdict(s, expected, trusted)
+        t = verdict(s, expected, trusted, signer_schemes)
         rounds = s["signed"].rounds
         answers = [{"index": r.index, "elapsed_ns": r.elapsed_ns, "device_ns": d, "server_ns": sv,
                     "correct": r.digest == expected(r.index), "on_time": r.elapsed_ns <= s["commitment"].limit_ns}
@@ -255,7 +238,6 @@ def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trus
                     "public": {"commitment": s["commitment"].to_json(), "verdict": v.public(),
                                "openings": [o.to_json() for o in s["openings"]]},
                     "witness": {"signed": s["signed"].to_json(), "reasons": list(v.reasons),
-                                "record_verdict": RECORD_VERDICT, "verdicts": both, "verdicts_under_signer": both_t,
                                 "expected": {str(r.index): expected(r.index).hex() for r in rounds
                                              if 0 <= r.index < s["commitment"].blocks},
                                 "reasons_under_signer": list(t.reasons)},
@@ -279,7 +261,8 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
         trusted = {signed.public_key}
 
         def reasons(s: mc.SignedSession) -> tuple[str, ...]:
-            return mc.verdict(s, commitment, openings, expected, trusted=trusted, schemes=schemes).reasons
+            return verdict({"signed": s, "commitment": commitment, "openings": openings}, expected, trusted,
+                           schemes).reasons
 
         sig = bytearray(signed.signature)
         sig[len(sig) // 2] ^= 1
