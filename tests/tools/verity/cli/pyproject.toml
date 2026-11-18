@@ -35,6 +35,7 @@ inputs = ["verity", "tools/difftest/python/verity_difftest", "tools/verity/lean/
           "security/Properties/lean-audit.json", "security/Proofs/lean-audit.json",
           "benchmarks/one_stage/served_verdicts.sh", "benchmarks/one_stage/served_verdicts.py",
           "benchmarks/one_stage/served_pearlplus.sh", "benchmarks/network_traces/attester_piece.py",
+          "benchmarks/network_traces/attester_front.py",
           "benchmarks/one_stage/pearlplus_local_e2e.py", "benchmarks/pous/streamed_wipe/served_wipe.sh",
           "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh",
           "benchmarks/pous/served_piece.py", "benchmarks/pous/run_attester.sh",

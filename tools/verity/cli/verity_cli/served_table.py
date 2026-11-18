@@ -81,6 +81,7 @@ NOT_YET = "memory-accounting/onsite-memory-verdicts"
 RUNNER = "benchmarks/one_stage/served_verdicts.sh"
 VERDICTS_SCRIPT = "benchmarks/one_stage/served_verdicts.py"
 ATTESTER_PIECE = "benchmarks/network_traces/attester_piece.py"
+ATTESTER_FRONT = "benchmarks/network_traces/attester_front.py"
 PEARLPLUS_SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
 PEARLPLUS_GATE = "benchmarks/one_stage/pearlplus_local_e2e.py"
 ONSITE = "verity/onsite/v1"
@@ -669,7 +670,7 @@ def _attester_piece(cfg, params, bound, pinned):
     window's steps, so each is in one window."""
     py = ".venv/bin/python"
     gate = f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}'
-    front = f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate}'
+    front = f'{py} {ATTESTER_FRONT} front "$1" "$2" "$3" {gate}'
     if "pearl-plus" in cfg["protocols"]:
         tokens = min(FRONT_TOKENS, cfg["workload"]["params"]["window-steps"])
         return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f"{front} --tokens {tokens}",
@@ -713,7 +714,7 @@ ENTRIES: dict[tuple[str, str], Launcher] = {
     ("pearl-plus", WORKERS): Launcher(_pearlplus, (PEARLPLUS_SCRIPT,)),
     ("pous", PROVER): Launcher(_pous_piece, (POUS_SCRIPT, ONSITE_PIECES, ATTESTER_SCRIPT)),
     ("bandwidth", PROVER): Launcher(_bandwidth_piece, (BANDWIDTH_SCRIPT,)),
-    ("network-attester", WORKERS): Launcher(_attester_piece, (ATTESTER_PIECE,)),
+    ("network-attester", WORKERS): Launcher(_attester_piece, (ATTESTER_PIECE, ATTESTER_FRONT)),
     ("wipe", PROVER): Launcher(_wipe, (WIPE_SCRIPT,)),
 }
 
