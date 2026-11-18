@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import numpy as np
 import pytest
@@ -173,10 +174,17 @@ def test_a_request_served_cached_prompt_rows_appends_its_own_rows_and_its_reads_
     assert plan.keys() == [("r0", 3), ("r0", 5)] and [len(us) for us in plan.written.values()] == [5, 5]
 
 
-def light(ms) -> SimpleNamespace:
-    """A window of members ``ms`` as `serving_rows.window_values` reads it, with no population program to build (a real
-    `rows.Binding` lowers the Boolean latent row and the V = 2^17 read, minutes on a CPU)."""
-    return SimpleNamespace(members=tuple(ms), row_tables=(), partition_digest="ef" * 64)
+@dataclass(frozen=True)
+class Light:
+    """A window as `serving_rows.window_values` reads it, with no population program to build (a real `rows.Binding`
+    lowers the Boolean latent row and the V = 2^17 read, minutes on a CPU)."""
+    members: tuple[Any, ...]
+    row_tables: tuple[Any, ...] = ()
+    partition_digest: str = "ef" * 64
+
+
+def light(ms) -> Light:
+    return Light(tuple(ms))
 
 
 def recomputed(h: IF.History, ms, strings_of, held) -> list[bytes]:
