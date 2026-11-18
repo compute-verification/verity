@@ -54,8 +54,8 @@ theorem auditBound_of_misses (L : Levels G) {U Run : Type} (D : SamplingDesign U
 theorem auditBound_one (L : Levels G) {l : Level G} (hL : L.levels = [l]) {U Run : Type} (D : SamplingDesign U)
     (blk : U → Finset G) (hD : ∀ S, (l.design Finset.univ).missProb (S.image blk) = D.missProb S)
     {pr : (Run → Prop) → ℝ≥0∞} {accepts : Run → Prop} {incorrect : Run → Finset U} {ε : ℝ≥0∞}
-    (h : AuditBound D pr accepts incorrect ε) :
-    AuditBound L.design pr accepts (fun r => (incorrect r).image blk) ε :=
+    (h : AuditBound (fun _ => D) pr accepts incorrect ε) :
+    AuditBound (fun _ => L.design) pr accepts (fun r => (incorrect r).image blk) ε :=
   L.auditBound_of_misses D blk (fun S => (L.missProb_one hL _).trans (hD S)) h
 
 /-- **One level that is a design read through an injective `blk`** misses each set's blocks with the design's miss. -/
