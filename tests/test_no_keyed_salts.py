@@ -52,7 +52,6 @@ ALLOWED: dict[str, str] = {
     # the step rows' processor twin is ruled (RULED's native_rows.cu); the registered weights' `tensor_key` expansion here is not
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
-    "verity/commitments/crypto/chacha20.py": "@proofs",
     "verity/commitments/hm96/batch.py": "@proofs",
     "verity/protocols/experimental/dither/prover/dither.py": "@compute-accounting",
     "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
