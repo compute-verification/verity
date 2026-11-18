@@ -1449,16 +1449,3 @@ def flat_ports(input_set, ports, lo: int, hi: int) -> np.ndarray:
     return np.concatenate([np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint64).reshape(hi - lo, -1) for p in ports], axis=1)
 
 
-def _pack_words(ports: Sequence[np.ndarray], widths: Sequence[int], words: int, cols: Sequence[int] | None = None) -> bytes:
-    """Per lane, the ports' bits packed LSB first into ``words`` 128-bit little-endian words: port j from bit ``cols[j]``
-    (default: consecutive)."""
-    T = len(ports[0])
-    buf = np.zeros((T, words * WORD), dtype=np.uint8)
-    at = 0
-    for j, (p, w) in enumerate(zip(ports, widths)):
-        at = at if cols is None else cols[j]
-        p = np.asarray(p, dtype=np.uint64)
-        for b in range(w):
-            buf[:, at + b] = ((p >> np.uint64(b)) & np.uint64(1)).astype(np.uint8)
-        at += w
-    return np.packbits(buf, axis=1, bitorder="little").tobytes()

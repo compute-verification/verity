@@ -13,7 +13,6 @@ big-endian. :func:`word_bit` maps a byte-string bit (bit ``t & 7`` of byte ``t >
 """
 from __future__ import annotations
 
-import hashlib
 
 from verity.commitments.gates.sha512 import IV, compress_gadget, compress_ref, midstate, pad_tail, words_be  # noqa: F401
 
@@ -88,5 +87,3 @@ def sha512_row_prefix(n_words: int) -> bytes:
     return core(ROLE_X, 16, n_words)
 
 
-def row_digest_ref(prefix: bytes, row: bytes) -> bytes:
-    return hashlib.sha512(prefix + row).digest()

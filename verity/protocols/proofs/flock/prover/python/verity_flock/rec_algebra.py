@@ -51,7 +51,7 @@ from verity.circuits.ops.boolean import gf2k as G
 from verity.circuits.ops.boolean.gf2k import XINV, inv, kmul, mul, phi8
 
 __all__ = ["ACC_NAMES", "Claim", "RoundCoins", "claim_names", "H_ROUND", "Lin", "Proof", "Schedule", "Shape", "consistency", "decode", "fast100", "fast100_wide", "fold_points", "GfPorts",
-           "free_names", "h_round", "messages", "query_rows", "rep_rounds", "residuals", "rounds", "run", "structure", "symbolic", "T_NAME",
+           "h_round", "messages", "query_rows", "rep_rounds", "residuals", "rounds", "run", "structure", "symbolic", "T_NAME",
            "verifier_rows", "witness"]
 
 
@@ -879,11 +879,6 @@ def rounds(sh: Shape) -> list[list[tuple]]:
         else:
             out += [msg() for _ in range(3)] + [msg() + [("yr", j) for j in range(2 << s.ext)]]
     return out
-
-
-def free_names(sh: Shape) -> list[tuple]:
-    """The rep's free message elements (every absorbed element but T), in protocol order."""
-    return [x for r in rounds(sh) for x in r if x != T_NAME]
 
 
 @dataclass
