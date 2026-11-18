@@ -565,7 +565,7 @@ theorem sstep_of {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {
   | close t now => exact Or.inl ⟨t, now, rfl, he⟩
   | start now => exact Or.inr ⟨fun _ _ h => (by cases h), he⟩
   | boundary now => exact Or.inr ⟨fun _ _ h => (by cases h), he⟩
-  | append root count => exact Or.inr ⟨fun _ _ h => (by cases h), he⟩
+  | append root count origin slot => exact Or.inr ⟨fun _ _ h => (by cases h), he⟩
   | release runs withdrawn => exact Or.inr ⟨fun _ _ h => (by cases h), he⟩
   | receive t i root runs change st now => exact Or.inr ⟨fun _ _ h => (by cases h), he⟩
   | verify t openings => exact Or.inr ⟨fun _ _ h => (by cases h), he⟩
@@ -575,7 +575,7 @@ theorem keep_nonclose {s : State} {e : Event} {r : Result} {s' : State} (hn : �
   cases e with
   | start now => injection he with he; exact keep_start he
   | boundary now => injection he with he; exact keep_boundary he
-  | append root count => exact keep_append he
+  | append root count origin slot => exact keep_append he
   | release runs withdrawn => injection he with he; exact keep_release he
   | receive t i root runs change st now => injection he with he; exact keep_receive he
   | close t now => exact (hn t now rfl).elim
@@ -612,9 +612,9 @@ theorem sstep_coins {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result
   cases e with
   | start now => injection he with he; show pure _ = _; rw [start_coins s c now h0, he]; rfl
   | boundary now => injection he with he; show pure _ = _; rw [boundary_coins s c now hW, he]; rfl
-  | append root count =>
-    show append (C c s) root count = _
-    rw [append_coins, show append s root count = _ from he]; rfl
+  | append root count origin slot =>
+    show append (C c s) root count origin slot = _
+    rw [append_coins, show append s root count origin slot = _ from he]; rfl
   | release runs withdrawn => injection he with he; show pure _ = _; rw [release_coins, he]; rfl
   | receive t i root runs change st now =>
     injection he with he

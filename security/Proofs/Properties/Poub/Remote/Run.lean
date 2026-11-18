@@ -232,8 +232,8 @@ theorem extract_push_le (as : Array Append) (a : Append) (m : Nat) (hm : m ≤ a
 /-- An append: the store's next `n` indices, the next coin, the chain extended. -/
 theorem invOn_append {P R AC ws filling stp extent appends sampledN head}
     (h : InvOn P R AC ws filling stp extent appends sampledN head) (n : Nat) (root coin : ByteArray)
-    (hc : AC[sampledN]? = some coin) :
-    InvOn P R AC ws filling stp (extent + n) (appends.push ⟨extent, n, root, coin⟩) (sampledN + 1)
+    (origin : _root_.Poub.Origin) (slot : Nat) (hc : AC[sampledN]? = some coin) :
+    InvOn P R AC ws filling stp (extent + n) (appends.push ⟨extent, n, root, coin, origin, slot⟩) (sampledN + 1)
       (some (appendHead head extent n root)) := by
   have hlt : sampledN < AC.size := by
     rcases Nat.lt_or_ge sampledN AC.size with hl | hl
@@ -298,8 +298,8 @@ theorem inv_boundary {s : State} {now : Nat} {r : Result} {s' : State} (h : Inv 
     | exact ⟨inv_releaseCoin (inv_boundaryNs h _ _) _ _, rfl, rfl, rfl⟩
     | exact ⟨inv_boundaryNs h _ _, rfl, rfl, rfl⟩
 
-theorem inv_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s' : State} (h : Inv s)
-    (he : append s root count = .ok (r, s')) : Inv s' ∧ Frame s s' := by
+theorem inv_append {s : State} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat} {r : Result} {s' : State} (h : Inv s)
+    (he : append s root count origin slot = .ok (r, s')) : Inv s' ∧ Frame s s' := by
   unfold append at he
   repeat' split at he
   all_goals (try dsimp only at he)
@@ -307,7 +307,7 @@ theorem inv_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s'
   all_goals first
     | exact ⟨h, rfl, rfl, rfl⟩
     | exact ⟨inv_fail h _ _ _, rfl, rfl, rfl⟩
-    | exact ⟨invOn_append h _ _ _ (by assumption), rfl, rfl, rfl⟩
+    | exact ⟨invOn_append h _ _ _ _ _ (by assumption), rfl, rfl, rfl⟩
 
 theorem inv_sample {s : State} (h : Inv s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat)
     (hm : ∀ hu : u < s.windows.size, s.params.minPasses ≤ s.windows[u].roots.size) :
@@ -335,28 +335,28 @@ theorem push_get! (xs : Array Plan) (x : Plan) (i : Nat) (hi : i < xs.size) : (x
 
 /-- A pass of window `f`: its root, plan, step, the session's head, its stale bound and its arrival pushed. -/
 def addPass (root : ByteArray) (plan : Plan) (post : Nat) (st : Int) (head : Option ByteArray) (below now : Nat)
-    (w : Win) : Win :=
+    (pr : Array Nat → Array Nat) (w : Win) : Win :=
   { w with roots := w.roots.push root, plans := w.plans.push plan, post := w.post.push post,
            steps := w.steps.push st.toNat, heads := w.heads.push head, stale := w.stale.push below,
-           arrived := w.arrived.push now }
+           arrived := w.arrived.push now, probation := pr w.probation }
 
 theorem receipts_addPass (root : ByteArray) (plan : Plan) (post : Nat) (st : Int) (head : Option ByteArray)
-    (below now : Nat) (w : Win) :
-    (addPass root plan post st head below now w).receipts = w.receipts + plan.length := by
+    (below now : Nat) (pr : Array Nat → Array Nat) (w : Win) :
+    (addPass root plan post st head below now pr w).receipts = w.receipts + plan.length := by
   simp [addPass, Win.receipts]
 
-theorem invOn_add {P R AC ws filling stp extent appends sampledN head} {below now : Nat}
+theorem invOn_add {P R AC ws filling stp extent appends sampledN head} {below now : Nat} {pr : Array Nat → Array Nat}
     (h : InvOn P R AC ws filling stp extent appends sampledN head) (root : ByteArray) (plan : Plan) (post : Nat)
     (st : Int) (hst : stp < st) (hlim : st < STEP_LIMIT) (hplan : ReadsDistinct plan extent)
     (hrec : ws[filling]!.receipts + plan.length < RECEIPT_LIMIT) :
-    InvOn P R AC (ws.modify filling (addPass root plan post st head below now)) filling st extent appends sampledN
+    InvOn P R AC (ws.modify filling (addPass root plan post st head below now pr)) filling st extent appends sampledN
       head := by
   have hst0 : ((st.toNat : Nat) : Int) = st := Int.toNat_of_nonneg (by have := h.nonneg; omega)
-  have get : ∀ t (ht : t < (ws.modify filling (addPass root plan post st head below now)).size),
-      (ws.modify filling (addPass root plan post st head below now))[t] =
-        if filling = t then addPass root plan post st head below now (ws[t]'(by simpa using ht)) else ws[t]'(by simpa using ht) :=
+  have get : ∀ t (ht : t < (ws.modify filling (addPass root plan post st head below now pr)).size),
+      (ws.modify filling (addPass root plan post st head below now pr))[t] =
+        if filling = t then addPass root plan post st head below now pr (ws[t]'(by simpa using ht)) else ws[t]'(by simpa using ht) :=
     fun t ht => Array.getElem_modify ht
-  have hsz : (ws.modify filling (addPass root plan post st head below now)).size = ws.size := Array.size_modify
+  have hsz : (ws.modify filling (addPass root plan post st head below now pr)).size = ws.size := Array.size_modify
   refine ⟨fun t ht => ?_, fun t ht hd => ?_, fun t ht hv => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, hlim,
     by have := h.nonneg; omega, fun t₁ t₂ h₁ h₂ i₁ i₂ hi₁ hi₂ hlt => ?_, fun t ht i hi => ?_, h.store, h.sampledN, h.coins, h.extentSum, h.firsts,
     h.chain, fun t ht i hi => ?_, fun t ht => ?_⟩
@@ -562,7 +562,7 @@ theorem step_inv {s : State} {e : Event} {r : Result} {s' : State} (h : Inv s) (
   cases e with
   | start now => injection he with he; exact inv_start h he
   | boundary now => injection he with he; exact inv_boundary h he
-  | append root count => exact inv_append h he
+  | append root count origin slot => exact inv_append h he
   | release runs withdrawn => injection he with he; exact inv_release h he
   | receive t i root runs change st now => injection he with he; exact inv_receive h he
   | close t now => exact inv_close h he

@@ -112,6 +112,16 @@ def test_a_refresh_session_the_lean_verifier_ran_without_reading_the_setting_is_
         assert not rs[1]["accepted"]
 
 
+def test_a_refresh_session_is_accepted_on_the_lean_verifiers_verdict_and_its_record_is_the_books(params_with_refresh):
+    """The setting reaches both verifiers whole: the Lean's record of the session, each window's probation in it,
+    is the books' field for field (`Pair.end`), or the session would end `disagreement`."""
+    (r,), _ = H.run("kv:2", refresh=(True,), kv_every=4, kv_pool=8, lifetime=2, windows=6, samples=16)
+    assert r["accepted"] and r["verdict"] == "lean" and r["refresh"] is True and r.get("disagreement") is None
+    assert r["lean_record"]["refresh"] is True
+    assert all(len(w["probation"]) == len(w["lengths"]) for w in r["lean_record"]["windows"])
+    assert r["ledger"]["spec"]["probation"] > 0
+
+
 # ------------------------------------------------------------------------------------------------ refresh_result.py
 
 BLOCK = 4096

@@ -124,7 +124,7 @@ from collections.abc import Sequence
 from fractions import Fraction
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, timing
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, rota, timing
 from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore
 from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers, wire
 from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
@@ -1198,7 +1198,7 @@ class Verifier:
         if refresh and "refresh" not in fields:
             raise ValueError(f"session {k} is set to refresh, and this tree's audit.Params has no `refresh`")
         # F, the fresh slots a window, goes wherever the setting goes and is no setting of its own
-        slots = {"fresh_slots": getattr(audit, "FRESH_SLOTS", 4)} if refresh else {}
+        slots = {"fresh_slots": rota.FRESH_SLOTS} if refresh else {}
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows, lifetime=life, deferred=self.deferred,
                               pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)),

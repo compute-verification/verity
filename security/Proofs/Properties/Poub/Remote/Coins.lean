@@ -60,6 +60,8 @@ theorem deadline_C (c : Array ByteArray) (s : State) (t : Nat) : (C c s).deadlin
 theorem isReleased_C (c : Array ByteArray) (s : State) (a b : Nat) : (C c s).isReleased a b = s.isReleased a b := rfl
 theorem withdrawable_C (c : Array ByteArray) (s : State) (pl : Plan) (w : Array (Int × Int)) :
     (C c s).withdrawable pl w = s.withdrawable pl w := rfl
+theorem slotOk_C (c : Array ByteArray) (s : State) (k n : Nat) (o : _root_.Poub.Origin) :
+    (C c s).slotOk k n o = s.slotOk k n o := rfl
 
 
 /-- `staleBelow` on the fields it reads, so a state's coins don't stand in the way of rewriting it. -/
@@ -89,10 +91,11 @@ theorem release_coins (s : State) (c : Array ByteArray) (runs withdrawn : Array 
   repeat' (split <;> try dsimp only)
   all_goals try rfl
 
-theorem append_coins (s : State) (c : Array ByteArray) (root : ByteArray) (count : Int) :
-    append (C c s) root count = (append s root count).map fun p => (p.1, C c p.2) := by
+theorem append_coins (s : State) (c : Array ByteArray) (root : ByteArray) (count : Int) (origin : _root_.Poub.Origin)
+    (slot : Option Nat) :
+    append (C c s) root count origin slot = (append s root count origin slot).map fun p => (p.1, C c p.2) := by
   unfold append State.fail
-  simp only [live_C]
+  simp only [live_C, slotOk_C]
   repeat' (split <;> try dsimp only)
   all_goals try rfl
 
@@ -125,7 +128,9 @@ theorem receive_coins {s : State} {c : Array ByteArray} {t i : Int} {root : Byte
     intro x hx hx'
     dsimp only [jp] at hx
     dsimp only [jp', C] at hx'
-    simp only [State.deadline, staleBelow_staleOf, State.isReleased] at hx hx'
+    simp only [State.deadline, staleBelow_staleOf, State.isReleased, State.joinsAnother, State.refreshRefusal,
+      State.probationPush, State.probation, State.born, State.slotWindow, State.probationHeld,
+      State.releasedIn] at hx hx'
     repeat' (split at hx <;> (try simp only [*] at hx'))
     all_goals (cases hx; cases hx'; exact ⟨rfl, rfl⟩)
   split at h₁ <;> split at h₂
@@ -248,8 +253,9 @@ theorem keep_boundary {s : State} {now : Nat} {r : Result} {s' : State} (he : bo
     | (refine keep_trans (keep_modify _ _ _ ?_) (keep_modify _ _ _ ?_) <;> (intros; rfl))
     | (refine keep_trans (keep_modify _ _ _ ?_) (keep_fail _ _ _ _); intro; rfl)
 
-theorem keep_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s' : State}
-    (he : append s root count = .ok (r, s')) : Keep s.windows s'.windows := by
+theorem keep_append {s : State} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat}
+    {r : Result} {s' : State}
+    (he : append s root count origin slot = .ok (r, s')) : Keep s.windows s'.windows := by
   unfold append at he
   repeat' split at he
   all_goals (try dsimp only at he)
@@ -396,7 +402,7 @@ theorem adv_step {s : State} {e : Event} {r : Result} {s' : State} (he : step s 
   cases e with
   | start now => injection he with he; exact adv_of_keep (keep_start he)
   | boundary now => injection he with he; exact adv_of_keep (keep_boundary he)
-  | append root count => exact adv_of_keep (keep_append he)
+  | append root count origin slot => exact adv_of_keep (keep_append he)
   | release runs withdrawn => injection he with he; exact adv_of_keep (keep_release he)
   | receive t i root runs change st now => injection he with he; exact adv_of_keep (keep_receive he)
   | close t now => exact adv_close he
@@ -412,9 +418,9 @@ theorem step_coins {s : State} {e : Event} {r : Result} {s₁ : State} {c : Arra
   cases e with
   | start now => injection he with he; show pure _ = _; rw [start_coins s c now h0, he]; rfl
   | boundary now => injection he with he; show pure _ = _; rw [boundary_coins s c now hW, he]; rfl
-  | append root count =>
-    show append (C c s) root count = _
-    rw [append_coins, show append s root count = _ from he]; rfl
+  | append root count origin slot =>
+    show append (C c s) root count origin slot = _
+    rw [append_coins, show append s root count origin slot = _ from he]; rfl
   | release runs withdrawn => injection he with he; show pure _ = _; rw [release_coins, he]; rfl
   | receive t i root runs change st now =>
     injection he with he
