@@ -2,7 +2,7 @@ module
 
 public import Definitions.Core.Interaction
 public import Proofs.Flock.Claims.Prob
-public import Proofs.Flock.Soundness.Audit.Work
+public import Proofs.Spot.Sampling.Work
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
@@ -45,7 +45,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 The sampling compiler's knowledge error carries the sample's term: if at least `t` regions are wrong, the verifier's sample
 misses all of them with probability at most its sampling design's bound. Each registered sampling design (`Flock.Draw.SamplingDesign`: `subset`,
 `bernoulli`, `stratified`, `work`) has that bound proved already, in `ℝ≥0∞` over the audit layer's `prCoin`
-(`FlockSoundness.Audit.SamplingDesign`). This file states each in `Claims.Pr`, the uniform average the claims use, through
+(`Spot.Sampling.SamplingDesign`). This file states each in `Claims.Pr`, the uniform average the claims use, through
 `Pr_eq_toReal_prCoin`:
 
 * `subset_miss_eq`, `subset_miss_le`: a uniform `k`-subset misses `B` with probability `C(n − |B|, k)/C(n, k)`, at most
@@ -67,7 +67,7 @@ misses all of them with probability at most its sampling design's bound. Each re
 
 namespace Claims.Sampling
 
-open FlockSoundness.Audit FlockSoundness.Game Finset
+open Spot.Sampling FlockSoundness.Game Finset
 open scoped ENNReal
 
 /-- `Claims.Pr` is the audit layer's `prCoin`, read in `ℝ`. -/

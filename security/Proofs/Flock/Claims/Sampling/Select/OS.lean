@@ -31,7 +31,7 @@ open Spot
 namespace Properties.Spot.SecurityProofs
 
 open Lean (Json)
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit
+open FlockSoundness FlockSoundness.Game Spot.Sampling
 
 /-- A code run's outcome as a model run's on stream `0`: stream `0` moved to where the code stopped, `none` where it
 erred. -/

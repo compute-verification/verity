@@ -14,7 +14,7 @@ session sampling a uniform `subset:k` of its n units, split over `tables` tables
 fewer than `K0 = ln(S/delta) n/k` <= share n units incorrect outside delta (the S sampling blocks of the block split delta), and by
 `IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The incorrect ANDs beside
 them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: the sampling-design-level bound is proved
-(`FlockSoundness.Audit.stratified_isHarmBound_exact`), but no guarantee in the lock composes it with acceptance.
+(`Spot.Sampling.stratified_isHarmBound_exact`), but no guarantee in the lock composes it with acceptance.
 
 **Cost** is Flock's fit (`transformer.costs`: zero-knowledge sessions on sm_120, in RTX PRO 6000 GPU-seconds, taken as
 H200 GPU-seconds; `--card h200`: GLM-5.3's proof blocks proved on one H200 by the deployed prover, in its own

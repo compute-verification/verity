@@ -49,7 +49,7 @@ check at `cs` is the check at `c`.
 
 namespace FlockSoundness.Discharge.ZkReg
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind ZkHidden HiddenExec
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind ZkHidden HiddenExec
   HiddenDec Composed Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Exec (Inputs recordDraw)
 open FlockSoundness.Discharge.Tables (LiveOutJ)

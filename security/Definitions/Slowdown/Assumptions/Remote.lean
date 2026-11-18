@@ -66,7 +66,7 @@ def SampledDetection {Ω β ι : Type} [Fintype Ω] (μ : PMF Ω) (bad detected 
 
 /-! Over a monitoring period of `T` windows, window `t` with its own uniform coins `Ω t` and a run of the period
 `ξ : (t : Fin T) → Ω t`, each protocol's leg is a bound per window at any value of the other windows' coins, over its own
-(`ξ[t ↦ a]`, `a` uniform on `Ω t`), as `Proofs.Flock.Soundness.Audit.Periods` states a period's bound. -/
+(`ξ[t ↦ a]`, `a` uniform on `Ω t`), as `Proofs.Spot.Sampling.Periods` states a period's bound. -/
 
 /-- **PoUW's per-window bound** (in place of `PouwSound`): window `t`'s certificate is wrong (`wrong t`) with
 probability at most `p` over its own coins, `CircuitCredit`'s conclusion at window `t`'s play. That the deployment's

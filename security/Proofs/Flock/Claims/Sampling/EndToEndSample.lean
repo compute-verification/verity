@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 
 /-!
 # `Flock.Guarantees.EndToEnd`'s sample against the claims' design
@@ -101,10 +101,10 @@ theorem execOS_escape_le_Pa (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype �
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
     {d : Design} (hd : SubsetDesign d kd) {P : Partition} {c : List (List (List ℕ))} (hP : P.classes = [c])
     (hn : P.blocks.length = n) (B : Finset (Fin n)) :
-    (FlockSoundness.Audit.SamplingDesign.execOS (n := n) src (.subset kd) n).missProb B ≤
+    (Spot.Sampling.SamplingDesign.execOS (n := n) src (.subset kd) n).missProb B ≤
       ENNReal.ofReal (d.Pa P (B.map Fin.valEmbedding)) := by
-  refine (FlockSoundness.Audit.SamplingDesign.execOS_subset_escape_le n kd hkd Lb src hA3 B).trans (le_of_eq ?_)
-  rw [FlockSoundness.Audit.SamplingDesign.subset_escape, Pa_subset hd hP, hn,
+  refine (Spot.Sampling.SamplingDesign.execOS_subset_escape_le n kd hkd Lb src hA3 B).trans (le_of_eq ?_)
+  rw [Spot.Sampling.SamplingDesign.subset_escape, Pa_subset hd hP, hn,
     window_zero (n := n) (B := B.map Fin.valEmbedding) fun v hv => by
       obtain ⟨a, -, rfl⟩ := Finset.mem_map.1 hv
       exact a.2,
@@ -130,13 +130,13 @@ theorem execOS_miss_le_miss (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype �
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
     {d : Design} (hd : SubsetDesign d kd) {P : Partition} {c : List (List (List ℕ))} (hP : P.classes = [c])
     (hn : P.blocks.length = n) (K₀ : ℕ) (hK₀ : K₀ ≤ n) :
-    (FlockSoundness.Audit.SamplingDesign.execOS (n := n) src (.subset kd) n).miss K₀ ≤ ENNReal.ofReal (d.miss P K₀) := by
-  refine le_trans ?_ ((FlockSoundness.Audit.SamplingDesign.subset_miss hkd hK₀).le.trans
+    (Spot.Sampling.SamplingDesign.execOS (n := n) src (.subset kd) n).miss K₀ ≤ ENNReal.ofReal (d.miss P K₀) := by
+  refine le_trans ?_ ((Spot.Sampling.SamplingDesign.subset_miss hkd hK₀).le.trans
     (choose_le_miss n kd hkd hd hP hn K₀ hK₀))
   unfold Verity.SamplingDesign.miss
   refine iSup₂_le fun B hB => ?_
-  exact (FlockSoundness.Audit.SamplingDesign.execOS_subset_escape_le n kd hkd Lb src hA3 B).trans
-    ((FlockSoundness.Audit.SamplingDesign.subset n kd hkd).escape_le_miss hB)
+  exact (Spot.Sampling.SamplingDesign.execOS_subset_escape_le n kd hkd Lb src hA3 B).trans
+    ((Spot.Sampling.SamplingDesign.subset n kd hkd).escape_le_miss hB)
 
 /-- **At the deployment**: at a statement `x` that parses to `s` with a `SubsetDesign` over `n` proof blocks of one
 class, `EndToEnd`'s sampling term is at most `missAt D K₀ x`, the δ of the claims' `KSCount`. -/

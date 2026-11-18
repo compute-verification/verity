@@ -18,8 +18,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.EndToEnd.Joint.Prod
 import Proofs.Flock.EndToEnd.Period.Union
-import Proofs.Flock.Soundness.Audit.HarmBound
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.HarmBound
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -41,7 +41,7 @@ The proofs of `JointStratified` and `JointStratifiedPooled` (`Joint/Bound.lean`)
 
 namespace Flock.Guarantees
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit
+open FlockSoundness FlockSoundness.Game Spot.Sampling
 open scoped ENNReal
 
 namespace BlockRecMT
@@ -97,7 +97,7 @@ end Flock.Guarantees
 
 namespace Flock.SecurityProofs
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden Flock.Guarantees
 open scoped ENNReal

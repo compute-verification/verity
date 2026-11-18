@@ -64,7 +64,7 @@ end Table
 /-- **`RunsZC` at the live hidden-output `--zk` tables, from the session alone** (`tablesAtZKH_liveU`). -/
 theorem runsZC_liveHU {n mPts : ℕ} {Reg : Type} (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.SamplingDesign n)
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Spot.Sampling.SamplingDesign n)
     (hT : HiddenDec.TagsOkH I) (hRec : ZkLink.RecordsLiveZK I dj wr) (hDraw : ∀ ω, SampleOkZKH I dj mPts (L.draw ω)) :
     RunsOnZC (K := 𝕂) execArith hs512 (tablesAtZKH (Reg := Reg) dj y₀) I wr
       (opnAtZH (tablesAtZKH dj y₀) I dj) (decAtZ (tablesAtZKH dj y₀)) (fun _ _ _ _ => [])
