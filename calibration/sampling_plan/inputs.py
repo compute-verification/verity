@@ -18,7 +18,7 @@ from verity.protocols.proofs.spot.prover.costfit import Observation
 from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS
 
 #: the measured inputs, kept with the measurements that made them
-MEASURED = Path(__file__).resolve().parents[6] / "calibration" / "sampling_plan" / "inputs.json"
+MEASURED = Path(__file__).resolve().parents[0] / "inputs.json"
 
 
 @dataclass(frozen=True)

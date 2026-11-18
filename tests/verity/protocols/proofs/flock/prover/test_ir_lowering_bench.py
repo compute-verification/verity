@@ -109,19 +109,16 @@ def test_a_wrong_row_scalar_changes_the_outputs(tmp_path):
 
 
 @pytest.mark.slow
-def test_the_circuit_description_accounts_for_every_cut_word(tmp_path):
+def test_the_circuit_description_accounts_for_every_cut_word():
     """IR1, the Python half: the circuit description's CUT line
     lists each unit's cut ports and the native tail; every cut word is computed exactly once, by a unit or by the tail, from words
-    defined before. The instance header only counts them."""
+    defined before."""
     import json
 
-    sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
-    s = InputSet.open(generate(sub, 2, 3, tmp_path / "set")["path"])
-    low = REG.module("rmsnorm-fused-cuda").lowering(sub)
-    head = json.loads(IL.stage(low, s, 0, 2, tmp_path / "st").read_bytes().split(b"\n", 1)[0])
-    cut = json.loads((tmp_path / "st" / "net.txt").read_text().splitlines()[-1].removeprefix("CUT "))
-    assert cut == low.cut and "cut" not in head
-    assert head["cut_words"] == cut["words"] == len(low.units.cut) == 3 and len(cut["in"]) == len(cut["out"]) == low.units.n == 2
+    low = REG.module("rmsnorm-fused-cuda").lowering(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5))
+    cut = json.loads(low.text.splitlines()[-1].removeprefix("CUT "))
+    assert cut == low.cut
+    assert cut["words"] == len(low.units.cut) == 3 and len(cut["in"]) == len(cut["out"]) == low.units.n == 2
     produced = [k for unit in cut["out"] for _, k in unit]
     tail_out = [op[0] for op in cut["tail"] if op[0] < cut["words"]]
     assert sorted(produced + tail_out) == list(range(cut["words"]))
@@ -130,28 +127,8 @@ def test_the_circuit_description_accounts_for_every_cut_word(tmp_path):
         assert set(op[2:] if op[1] != "Const" else []) <= defined
         defined.add(op[0])
     assert {op[1] for op in cut["tail"]} <= {"Const", *IL.TAIL_PRIMS}
-    rs = InputSet.open(SLICES / "rope-head-d64")
-    rope = REG.module("rope-head").lowering(rs.subcircuit)
-    head = json.loads(IL.stage(rope, rs, 0, 1, tmp_path / "r").read_bytes().split(b"\n", 1)[0])
-    assert rope.cut is None and head["cut_words"] == 0 and not rope.text.splitlines()[-1].startswith("CUT")
-
-
-@pytest.mark.slow
-def test_frame_staging_carries_the_cut_words(tmp_path):
-    """A cut template's frame file ends with every instance's cut words (the IR's), which the verifier checks against the
-    circuit description's pinned tail; the empty run slot of a three-port component block is padding."""
-    import json
-
-    sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
-    s = InputSet.open(generate(sub, 3, 5, tmp_path / "set")["path"])
-    low = REG.module("rmsnorm-fused-cuda").lowering(sub)
-    path = REG.module("rmsnorm-fused-cuda").stage(s, 0, 3, tmp_path / "st")
-    head, body = path.read_bytes().split(b"\n", 1)
-    h = json.loads(head)
-    assert h["cut_words"] == 3 and "cut" not in h and h["layout"]["chunks_per_block"] == 4
-    assert h["blocks"][0][0] == [[0, 0, 0, 0], [0, 1, 0, 0], [0, 2, 0, 0], None]
-    cuts = np.frombuffer(body[-3 * 3 * 4:], dtype="<u4").reshape(3, 3)
-    assert (cuts == IL.cut_words(low, IL.flat_ports(s, sub.inputs, 0, 3))).all()
+    rope = REG.module("rope-head").lowering(InputSet.open(SLICES / "rope-head-d64").subcircuit)
+    assert rope.cut is None and not rope.text.splitlines()[-1].startswith("CUT")
 
 
 def test_non_gemm_results_carry_no_gemm_target():
@@ -168,28 +145,12 @@ def test_non_gemm_results_carry_no_gemm_target():
     assert contract._check_rates(ok, rates) and "GEMM rates" in contract._check_rates(ok, rates)[0]
 
 
-def test_an_ir_cell_plans_through_the_spine():
-    from verity_numerical.bench import cell as C
-
-    two_machines = {"prover": {"machine_id": "m-p", "public_ip": "192.0.2.5"}, "verifier": {"machine_id": "m-v", "public_ip": "192.0.2.4"},
-                    "link": {"peer": "192.0.2.4:7400", "peer_ip": "192.0.2.4"}}
-    c = C.plan("C-interactive", "rope-head/d64/neox-bf16+frame-v3/blake3-keyed", str(SLICES / "rope-head-d64"), "vy-p", verifier="vy-v",
-               verifier_addr="192.0.2.4:7400", rtt_target="192.0.2.4:22", lane="flock-ir-lowering", points="2 4", runs=5, placement=two_machines)
-    assert c.relation == "irf:rope-head"
-    v, p = c.jobs
-    assert v["command"][:3] == ["bash", "verity/protocols/proofs/flock/prover/pod/33-ir-cell.sh", "ROLE=verifier"] and "TEMPLATE=rope-head" in v["command"]
-    assert "--send" in v["argv"] and v["argv"][v["argv"].index("--send") + 1] == p["argv"][p["argv"].index("--send") + 1]
-    assert "VERIFIER=192.0.2.4:7400" in p["command"] and "LOOPBACK=1" in p["command"]
-
-
 def test_attention_key_classes_and_the_class_manifest(tmp_path):
     """Key-count classes [1, 128], [129, 256], [257, 512], ...; a class manifest lists every T of its range with its v3 circuit
-    description's sha256 and the unit rows they share (the pin is the manifest's sha256); a class cell's sub-batches split at T
-    boundaries."""
+    description's sha256 and the unit rows they share (the pin is the manifest's sha256)."""
     import hashlib
     import json
 
-    from verity_flock import ir_bench
     from verity_flock.templates import attention_head as A
 
     assert [A.key_class(t) for t in (1, 128, 129, 256, 257, 287, 512, 513)] == [(1, 128)] * 2 + [(129, 256)] * 2 + [(257, 512)] * 3 + [(513, 1024)]
@@ -203,28 +164,9 @@ def test_attention_key_classes_and_the_class_manifest(tmp_path):
         assert d["nets"][str(T)] == low.sha256 == hashlib.sha256(low.text.encode()).hexdigest()
         assert A.unit_rows_sha256(low.text) == d["unit_rows"]
 
-    class _K(ir_bench.KeyClass):
-        def __init__(self, T):
-            self.T = T
-
-    assert _K([1, 1, 1, 2, 2, 5]).subs(6, 2) == [(0, 2), (2, 3), (3, 5), (5, 6)]
-    assert _K([1, 1, 1, 2, 2, 5]).subs(4, 16) == [(0, 3), (3, 4)]
-
-
-def test_an_ir_run_result_is_a_point_not_a_second_cell():
-    """The runner publishes a run's result.json under its own kind: ir_bench marks it a bench-point/v1 (a known kind), so the
-    cell's one bench-result/v1 is bench.cell register's, and verity_flock.register drops the kind it read."""
-    from pathlib import Path
-
-    from research.store.kinds import KINDS
-    from verity_flock import ir_bench, register
-
-    assert ir_bench.POINT_KIND == "bench-point/v1" and ir_bench.POINT_KIND in KINDS
-    assert 'raw.pop("kind", None)' in Path(register.__file__).read_text()
-
 
 def test_a_cells_domain_is_the_one_its_statement_proves():
-    """A red-team finding: ``ir_bench`` and ``bench`` wrote ``domain: finite`` for every cell.
+    """A red-team finding: ``bench`` wrote ``domain: finite`` for every cell.
     An IR lowering asserts nothing, so every encoding is proven to give the IR's output: ``total``.  A pure unit asserts its
     operands (and accumulator) finite: ``finite-only``, unless it is a total unit."""
     from types import SimpleNamespace

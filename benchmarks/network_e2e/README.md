@@ -4,7 +4,7 @@ The network chain's steps after N2 and the proofs, over varied traffic, held to 
 endpoint runs. Nothing here serves or proves: the network attester's runner is
 `benchmarks/network_traces/chain_record.py`, whose endpoint step reads `chain.served_advice`.
 
-- `chain.py`: the steps. The advice (I1 v0) read in each of its forms; its bits per execution phase, v0's beside the
+- `chain.py`: the steps. The advice's (I1 v0) bits per execution phase, v0's beside the
   derived rules' residual (`encodings/derived.py`); the endpoint's own advice (`served_advice`: `verity-vllm advice`
   over a `verity-vllm serve-openai` endpoint's records, `chain.ENDPOINT`, bound to a run's attested I/O); and a
   `prove_path.py audit` run's output (`benchmarks/prove_path/prove_path.py`) adopted and held by
