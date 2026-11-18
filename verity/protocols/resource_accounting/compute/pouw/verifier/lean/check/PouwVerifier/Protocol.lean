@@ -7,7 +7,7 @@ public import PouwVerifier.Check
 
 Its parameters are `Params`, its commitment the execution phase's execution phase commitment record (`ExecutionPhaseCommitmentRecord`)
 with one-stage's digest, its evidence the proof system's answer, its check `PouwCheck.check`, its public outputs
-`window.PUBLIC` and its profile the service's `Core.Integrity`. `pouw-check` runs it through `Core.Protocol.main`.
+`window.PUBLIC` and its profile the service's `Core.Integrity`. `pouw-verifier` runs it through `Core.Protocol.main`.
 -/
 
 @[expose] public section

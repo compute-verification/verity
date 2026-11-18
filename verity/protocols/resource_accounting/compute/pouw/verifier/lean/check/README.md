@@ -13,16 +13,16 @@ In this directory:
 
 ~~~sh
 lake build
-lake exe pouw-check id
+lake exe pouw-verifier id
 ~~~
 
-The build makes the library and its executables, `pouw-check` among them; the second line prints the execution phase
-check's id, `verity/pouw/v1`. `pouw-check check PARAMS COMMITMENT EVIDENCE` decides one case
-and `pouw-check serve` answers one case a line on standard input, the commands every core protocol has. The difftest is a suite of
+The build makes the library and its executables, `pouw-verifier` among them; the second line prints the execution phase
+check's id, `verity/pouw/v1`. `pouw-verifier check PARAMS COMMITMENT EVIDENCE` decides one case
+and `pouw-verifier serve` answers one case a line on standard input, the commands every core protocol has. The difftest is a suite of
 the check:
 
 ~~~sh
-uv run tools/check/suites.py verity-pouw-check-difftest
+uv run tools/check/suites.py verity-pouw-verifier-difftest
 ~~~
 
 Each Lean module's docstring names the Python it ports. The rest of this README is the reference: each protocol's
@@ -163,11 +163,11 @@ The properties are stated in `security/Properties/Pouw/Check.lean` and proved in
 
 ## The difftests
 
-`tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_difftest.py`, the suite `verity-pouw-check-difftest`, which `check` runs after the Lean builds, holds
-`core_check.case` to `pouw-check serve` on the shared harness (`tools/difftest/`) as a `ProtocolPort` with the Lean
+`tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_difftest.py`, the suite `verity-pouw-verifier-difftest`, which `check` runs after the Lean builds, holds
+`core_check.case` to `pouw-verifier serve` on the shared harness (`tools/difftest/`) as a `ProtocolPort` with the Lean
 of record, comparing whole answers, reasons included. Its cases are `tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pouw_check_cases.py`: honest
 execution phases and one mutation per refusal, the case's own framing among them. A run needs an accept, a reject and an
-undecided. The same suite puts `pouw-check-difftest`'s `opening` against `core_check.opening` as a `Port`, comparing
+undecided. The same suite puts `pouw-verifier-difftest`'s `opening` against `core_check.opening` as a `Port`, comparing
 reasons, over `tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pouw_opening_cases.py`: honest openings and one mutation per refusal (or per reading both sides
 share: hex as `bytes.fromhex` reads it, the header's keys sorted), every mutation also replayed over a few seeds, and
 every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch_twin` and `core_check.draw_twin` the same way, over
@@ -204,8 +204,8 @@ holds the served `credit._lean_live_verified` to `credit._live_verified`; and `c
 form.
 
 ~~~text
-lake build                                                         the library, pouw-check and pouw-check-difftest
-lake exe pouw-check id | check PARAMS COMMITMENT EVIDENCE | serve    the interface's command line
-uv run tools/check/suites.py verity-pouw-check-difftest     the difftest
+lake build                                                         the library, pouw-verifier and pouw-verifier-difftest
+lake exe pouw-verifier id | check PARAMS COMMITMENT EVIDENCE | serve    the interface's command line
+uv run tools/check/suites.py verity-pouw-verifier-difftest     the difftest
 python tools/verity/lean/check.py verity/protocols/resource_accounting/compute/pouw/verifier/lean/check   the Lean check
 ~~~

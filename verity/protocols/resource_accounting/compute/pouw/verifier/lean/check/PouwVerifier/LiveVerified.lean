@@ -6,7 +6,7 @@ public import PouwVerifier.Verified
 # A served window's live statements verified (`credit._live_verified`)
 
 The verifier of a window's live@<s> statements, which `credit.window` and `credit.period_credit` take each
-round's live proof outcome from (`credit._lean_live_verified`, through `pouw-check-difftest`'s `credit-live-verified`),
+round's live proof outcome from (`credit._lean_live_verified`, through `pouw-verifier-difftest`'s `credit-live-verified`),
 with `credit._live_verified` the Python reference the difftest (`tests/test_live_verified_difftest.py`) holds to it,
 string for string. `Credit.Internal.live` then holds those outcomes to the window, as `credit._live` does.
 

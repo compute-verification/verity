@@ -1885,14 +1885,14 @@ def case_twin(j: Any) -> dict:
 
 
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
-    """`Core.Protocol.answer`, the Lean's (`pouw-check serve`, through `verifier.serve_of_record`) on the case of these
+    """`Core.Protocol.answer`, the Lean's (`pouw-verifier serve`, through `verifier.serve_of_record`) on the case of these
     bytes, with `answer_twin` its twin: a disagreement is a rejection."""
     return V.serve_of_record(EXE, serve_case(params_b, commitment_b, evidence_b),
                              answer_twin(params_b, commitment_b, evidence_b))
 
 
 def case(j: Any) -> dict:
-    """`Core.Protocol.case` on one `serve` case, the Lean's (`pouw-check serve`, through `verifier.serve_of_record`),
+    """`Core.Protocol.case` on one `serve` case, the Lean's (`pouw-verifier serve`, through `verifier.serve_of_record`),
     with `case_twin` its twin: a disagreement is a rejection."""
     return V.serve_of_record(EXE, j, case_twin(j))
 

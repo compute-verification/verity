@@ -1,4 +1,4 @@
-"""The challenger's entropy, `pouw.verifier.coins`: bytes `pouw-check-difftest` reads from the operating system
+"""The challenger's entropy, `pouw.verifier.coins`: bytes `pouw-verifier-difftest` reads from the operating system
 (`IO.getRandomBytes`, A3), which a served `coins.Challenger` and `window.live_challenger` flip every coin and hm96 salt
 from, in order. A count the Lean can't answer is refused before it, and a Lean that refuses, answers other than the bytes
 asked or can't run gives no coins, so no commitment."""

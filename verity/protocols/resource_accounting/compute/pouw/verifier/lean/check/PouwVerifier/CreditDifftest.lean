@@ -8,7 +8,7 @@ public import PouwPearlPlus.Load
 /-!
 # The difftest's functions for a served execution phase's credit (`PouwCheck.Credit`)
 
-Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck.DifftestMain` reads both tables):
+Beside `PouwCheck.Difftest`'s, behind the same `pouw-verifier-difftest` (`PouwCheck.DifftestMain` reads both tables):
 
 * `credit` (`key`, `ledger`, `pins`, `main` as `rounds` reads them, `salt` the execution phase's Program salt as hex, `calls`
   the manifest's rows, `served` the served trees' digest or null, `commit` the execution phase's Commit record in hex, `rounds`
@@ -150,7 +150,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("window", executionPhaseOf), ("period", periodOf), ("period-roots", periodRootsOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf),
   ("passes-distinct", passesDistinctOf)]
 
-/-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
+/-- `pouw-verifier-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
 def all (name : String) : Option _root_.Difftest.Fn := PouwVerifier.Difftest.table name <|> table name
 
 end PouwVerifier.CreditDifftest

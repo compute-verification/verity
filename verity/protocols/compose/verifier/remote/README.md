@@ -88,7 +88,7 @@ rule and its difftest are the composition's ([README](../lean/README.md),
       inference-only policy's check.
    2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
    3. The developer proves each sampled proof block with Flock `--zk` behind the ZK server, and the Lean verifier
-      `verity-verify-proof` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment, proofs and
+      `verity-verify-proof` checks each proof. PoUW's check (`pouw-verifier`) reads each PoUW period's commitment, proofs and
       receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
       accounting adds the phase's share (Accounting, below).
@@ -528,8 +528,8 @@ run runs both halves on one served run, PoUW's as a development run:
   `verity/pouw/period/v1` case, so no run of record of the remote verdict has passed: its run is moved, at proof level none,
   and no remote guarantee exists for its verdicts to reach (the open gap, above).
 
-What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the
-suite `verity-pouw-check-difftest`; `verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/README.md`), and the composite's difftest
+What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-verifier`, the
+suite `verity-pouw-verifier-difftest`; `verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/README.md`), and the composite's difftest
 (`tests/verity/protocols/compose/verifier/lean`).
 
 ## Read next

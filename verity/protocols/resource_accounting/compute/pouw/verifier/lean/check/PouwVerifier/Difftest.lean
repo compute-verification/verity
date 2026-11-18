@@ -9,7 +9,7 @@ public import PouwVerifier.Rounds
 /-!
 # The difftest's functions: the check's Lean behind `Difftest.serve`
 
-`serve` cases go through `pouw-check serve` (`Core.Protocol.main`); what is not a `serve` case is here, for the shared
+`serve` cases go through `pouw-verifier serve` (`Core.Protocol.main`); what is not a `serve` case is here, for the shared
 harness (`verity/core/difftest`):
 
 * `opening` (`params` as JSON, `commitment` the registration's bytes as hex, `units` a list of integers or null, `unit`,

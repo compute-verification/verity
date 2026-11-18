@@ -1,4 +1,4 @@
-"""`verity.protocols.resource_accounting.compute.pouw.verifier.core_check` held to `pouw-check serve`, PoUW's verifier (`pouw.verifier`), on
+"""`verity.protocols.resource_accounting.compute.pouw.verifier.core_check` held to `pouw-verifier serve`, PoUW's verifier (`pouw.verifier`), on
 the shared harness (`verity_difftest`, `of_record="lean"`): one `ProtocolPort`, over the cases `pouw_check_cases`
 generates from a Hypothesis-controlled `random.Random` (honest windows, and one mutation each aimed at every refusal, the
 case's framing included), so a run is deterministic and shrinks. Every port here holds the Python to the Lean.
@@ -7,7 +7,7 @@ The harness compares an outcome's verdict, commitment, public outputs and profil
 reasons too, `Core.Protocol.case`'s framing included, so this port compares the whole outcome: the reason names the rule
 that refused, and agreeing on it holds which rule refused, not only that one did.
 
-`pouw-check-difftest`'s `opening` against `core_check.opening_twin`: one `Port`, over the openings `pouw_opening_cases`
+`pouw-verifier-difftest`'s `opening` against `core_check.opening_twin`: one `Port`, over the openings `pouw_opening_cases`
 generates (honest openings of a call's tile or the filler's, unsalted or a salted unit's in a certified window, and one
 mutation each aimed at every refusal or at a reading both sides share), compared output for output: null, or the same
 reason.
