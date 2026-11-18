@@ -105,19 +105,20 @@ def at(table: dict, rows: int, keys: int, end: int) -> float:
 
 
 def steps(trace: Path, draft_rows: int | None = None) -> tuple[list[dict], int]:
-    """The step trace's steps, each with its ``step``, ``T`` and ``t``, its decode rows past `K` keys (``rows``) and
-    their most keys (``keys``), and its prefill rows past `K` and their most keys (``prefill_rows``,
-    ``prefill_keys``); and the rows a decode request runs a step (1 and its drafts, from the trace's header)."""
+    """A lifetime's public steps (`serve_tax.public_steps`), each with its ``step``, ``T`` and ``t``, its decode rows
+    past `K` keys (``rows``) and their most keys (``keys``), and its prefill rows past `K` and their most keys
+    (``prefill_rows``, ``prefill_keys``); and the rows a decode request runs a step (1 and its drafts, from the
+    header)."""
     out, n = [], draft_rows
     with gzip.open(trace, "rt") as f:
         for line in f:
             r = json.loads(line)
             if r["kind"] == "header" and n is None:
-                n = 1 + ((r.get("config") or {}).get("speculative") or {}).get("num_speculative_tokens", 0)
+                n = 1 + r["num_speculative_tokens"]
             if r["kind"] != "step":
                 continue
             rows = keys = pre = pre_keys = 0
-            for _, start, m in r["rows"]:
+            for start, m in r["rows"]:
                 long_ = max(0, start + m - max(start, K))
                 if m <= (n or 1):
                     rows += long_
@@ -224,7 +225,7 @@ def kind_seconds(trace: Path, windows: list[dict], per_request: int) -> dict:
             if r["kind"] != "step":
                 continue
             if prev is not None and any(w["t0"] <= r["t"] <= w["t1"] for w in windows):
-                k = "prefill" if any(m > per_request for _, _, m in r["rows"]) else "decode"
+                k = "prefill" if any(m > per_request for _, m in r["rows"]) else "decode"
                 out[k] += r["t"] - prev
                 out[f"{k}_steps"] += 1
             prev = r["t"]
@@ -232,9 +233,9 @@ def kind_seconds(trace: Path, windows: list[dict], per_request: int) -> dict:
 
 
 def trace_of(d: Path) -> Path:
-    traces = [t for t in S.step_traces(d) if t.suffix == ".gz"]
+    traces = sorted((d / "server").glob(S.STEPS.format("*")))
     if not traces:
-        raise SystemExit(f"{d.name}: no step trace, so no schedule to price")
+        raise SystemExit(f"{d.name}: no public steps (`serve_tax.public_steps`), so no schedule to price")
     return traces[0]
 
 
@@ -306,7 +307,7 @@ def lifetime(d: Path, ref: Path, u: dict, counters: dict | None, pu: dict | None
     ref_s = sum(w["seconds"] for w in ref_windows)
     ours_k = kind_seconds(trace_of(d), windows, per_request)
     ref_k = (kind_seconds(trace_of(ref), ref_windows, per_request)
-             if any(t.suffix == ".gz" for t in S.step_traces(ref)) else None)
+             if any((ref / "server").glob(S.STEPS.format("*"))) else None)
     pre_measured = ours_k["prefill"] - ref_k["prefill"] if ref_k else None
     priced = added(base, failed) if priced_prefill is None else added(added(base, failed), priced_prefill)
     return {"dir": d.name, "reference": ref.name, "pass": p, "cards": cards, "decode_steps": len(decode),

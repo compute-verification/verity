@@ -9,11 +9,14 @@ from typing import Any
 from verity_vllm.commit import step_rows
 
 
-def key(tree: dict | None) -> bytes:
-    """The registration's salt key: the one a committer registered under before (a re-registration reproduces its root:
-    `c2_replay.live_weights_check`), else fresh from the OS generator."""
-    tree = tree or {}
-    return bytes.fromhex(tree["key"]) if tree.get("scheme") == step_rows.NAME else os.urandom(step_rows.KEY_BYTES)
+def key(of_record: dict | None = None) -> bytes:
+    """A registration's salt key: fresh from the OS generator for every new registration; a replay's re-registration takes the
+    recorded registration's (``of_record``, its weights tree), so it reproduces that root, and is refused without one."""
+    if of_record is None:
+        return os.urandom(step_rows.KEY_BYTES)
+    if of_record.get("scheme") != step_rows.NAME or "key" not in of_record:
+        raise ValueError(f"a replay re-registers under the recorded {step_rows.NAME} weights key, and this weights tree holds none")
+    return bytes.fromhex(of_record["key"])
 
 
 class WeightsRows:
