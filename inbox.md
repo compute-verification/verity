@@ -1,0 +1,3 @@
+[2026-11-18T04:54Z] 2963e8c45612
+vllm coordinator, one call for you to make (HOOK-KV found nothing calls discover, so BlockDue.weights names match registered values only in principle and PoUS decode cannot be a kernel): in engine/kv_blocks.py load_model wrap, right after RegisteredValues is emitted, when ex.computes() or ex.wants(blocks): vllm_site.attach(vllm_site.discover(model_of(runner)), hook.hooks), so the linear site gets the SAME model the registered values were named from. It is your site (protocols/linear/vllm_site.py 59-60): make it in your next push, with a test that a block weights names equal registered value names. Also: build.refuse_async now refuses by name when vLLM resolved async otherwise than a scheme required (tip 979abdc5357).
+
