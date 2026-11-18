@@ -47,6 +47,12 @@ open Circuits
 
 export Circuits (Wire)
 export Circuits.Wire (prodR accum lowOf highOf boxLow boxHigh)
+export Circuits.Json (int? nat? keysOf fields field natAt natOf intOf strOf arrOf sameKeys)
+export Circuits (WIRE_KEYS)
+
+namespace Wire
+export Circuits.Wire (ofJson)
+end Wire
 
 /-- A reader input port: its u16 words, and its outer length (the parameter's outermost array length, 1 when it is not
 an array), which its cut divides. -/
@@ -337,73 +343,6 @@ An instance is `{"templates", "cuts", "wires", "queries"}`, and optionally `"ord
 Anything else is refused as malformed. The output is `{"ok": false, "code", "wire"}` (`wire` null but for a wire's own
 refusal) or `{"ok": true, "wired_rows", "wired_bits", "spans", "lookups"}`: per wire its least and greatest writer, and per
 query its writer `[tid, unit, out]` or null. -/
-
-def int? : Json → Option Int
-  | .num n => if n.exponent == 0 then some n.mantissa else none
-  | _ => none
-
-def nat? (j : Json) : Option Nat := (int? j).bind fun i => if 0 ≤ i then some i.toNat else none
-
-def keysOf : Json → Option (List String)
-  | .obj kvs => some (kvs.toArray.map (·.1)).toList
-  | _ => none
-
-def fields : Json → Except String (List (String × Json))
-  | .obj kvs => .ok (kvs.toArray.map fun ⟨k, v⟩ => (k, v)).toList
-  | _ => .error "not an object"
-
-def field (j : Json) (k : String) : Except String Json :=
-  match j.getObjVal? k with
-  | .ok v => .ok v
-  | .error _ => .error s!"no {k}"
-
-def natAt (j : Json) (k : String) : Except String Nat := do
-  match nat? (← field j k) with
-  | some n => .ok n
-  | none => .error s!"{k} is not a natural"
-
-def natOf (what : String) (j : Json) : Except String Nat :=
-  match nat? j with
-  | some n => .ok n
-  | none => .error s!"{what} is not a natural"
-
-def intOf (what : String) (j : Json) : Except String Int :=
-  match int? j with
-  | some n => .ok n
-  | none => .error s!"{what} is not an integer"
-
-def strOf (what : String) : Json → Except String String
-  | .str s => .ok s
-  | _ => .error s!"{what} is not a string"
-
-def arrOf (what : String) : Json → Except String (List Json)
-  | .arr a => .ok a.toList
-  | _ => .error s!"{what} is not a list"
-
-def sameKeys (j : Json) (ks : List String) (what : String) : Except String Unit :=
-  match keysOf j with
-  | some got => if got.mergeSort (· ≤ ·) == ks.mergeSort (· ≤ ·) then .ok () else .error s!"{what}: keys {got}, not {ks}"
-  | none => .error s!"{what} is not an object"
-
-def WIRE_KEYS : List String := ["reader", "port", "writer", "out", "at", "radix", "base", "step"]
-
-def Wire.ofJson (j : Json) : Except String Wire := do
-  let ks := (keysOf j).getD []
-  if ks.contains "cut" then sameKeys j ("cut" :: WIRE_KEYS) "a wire" else sameKeys j WIRE_KEYS "a wire"
-  let s := fun k => do strOf k (← field j k)
-  let radix ← (← arrOf "radix" (← field j "radix")).mapM (natOf "a radix")
-  let step ← (← arrOf "step" (← field j "step")).mapM (intOf "a step")
-  if radix.isEmpty || radix.length != step.length || radix.any (· < 1) then
-    throw "a wire is at least one digit of radix 1 or more, and one step a digit"
-  let (cut0, cuts) ← match j.getObjVal? "cut" with
-    | .ok cj => do
-      let xs ← (← arrOf "cut" cj).mapM (natOf "a cut")
-      match xs with
-      | [a, b] => if 1 ≤ b then pure (a, b) else throw "a wire's cut is [c0, C], C at least 1"
-      | _ => throw "a wire's cut is [c0, C]"
-    | .error _ => pure (0, 1)
-  return { reader := ← s "reader", port := ← s "port", writer := ← s "writer", out := ← s "out",
-           start := ← natAt j "at", radix, base := ← intOf "base" (← field j "base"), step, cut0, cuts }
 
 def Template.ofJson (j : Json) : Except String Template := do
   sameKeys j ["units", "rows", "outs"] "a template"

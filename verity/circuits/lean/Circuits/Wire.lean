@@ -10,6 +10,8 @@ also the writer's leaf in its template's output tree of `out`.
 -/
 module
 
+public import Lean.Data.Json
+
 @[expose] public section
 
 namespace Circuits
@@ -26,7 +28,7 @@ structure Wire where
   step : List Int
   cut0 : Nat
   cuts : Nat
-  deriving Repr, BEq
+  deriving Repr, DecidableEq
 
 namespace Wire
 
@@ -112,5 +114,82 @@ def entries (w : Wire) : List ((String × Nat × String × Nat) × (String × In
     ((w.reader, (w.readerAt i).1, w.port, (w.readerAt i).2), (w.writer, w.writerAt i, w.out))
 
 end Wire
+
+namespace Json
+
+open Lean (Json)
+
+def int? : Json → Option Int
+  | .num n => if n.exponent == 0 then some n.mantissa else none
+  | _ => none
+
+def nat? (j : Json) : Option Nat := (int? j).bind fun i => if 0 ≤ i then some i.toNat else none
+
+def keysOf : Json → Option (List String)
+  | .obj kvs => some (kvs.toArray.map (·.1)).toList
+  | _ => none
+
+def fields : Json → Except String (List (String × Json))
+  | .obj kvs => .ok (kvs.toArray.map fun ⟨k, v⟩ => (k, v)).toList
+  | _ => .error "not an object"
+
+def field (j : Json) (k : String) : Except String Json :=
+  match j.getObjVal? k with
+  | .ok v => .ok v
+  | .error _ => .error s!"no {k}"
+
+def natAt (j : Json) (k : String) : Except String Nat := do
+  match nat? (← field j k) with
+  | some n => .ok n
+  | none => .error s!"{k} is not a natural"
+
+def natOf (what : String) (j : Json) : Except String Nat :=
+  match nat? j with
+  | some n => .ok n
+  | none => .error s!"{what} is not a natural"
+
+def intOf (what : String) (j : Json) : Except String Int :=
+  match int? j with
+  | some n => .ok n
+  | none => .error s!"{what} is not an integer"
+
+def strOf (what : String) : Json → Except String String
+  | .str s => .ok s
+  | _ => .error s!"{what} is not a string"
+
+def arrOf (what : String) : Json → Except String (List Json)
+  | .arr a => .ok a.toList
+  | _ => .error s!"{what} is not a list"
+
+def sameKeys (j : Json) (ks : List String) (what : String) : Except String Unit :=
+  match keysOf j with
+  | some got => if got.mergeSort (· ≤ ·) == ks.mergeSort (· ≤ ·) then .ok () else .error s!"{what}: keys {got}, not {ks}"
+  | none => .error s!"{what} is not an object"
+
+end Json
+
+open Json in
+/-- A wire's record: `{reader, port, writer, out, at, radix, base, step}` and optionally `cut: [c0, C]`. -/
+def WIRE_KEYS : List String := ["reader", "port", "writer", "out", "at", "radix", "base", "step"]
+
+open Json in
+/-- The one reader of a wire's record (`WIRE_KEYS`), which SPOT's wiring and Flock's registered reads both read. -/
+def Wire.ofJson (j : Lean.Json) : Except String Wire := do
+  let ks := (keysOf j).getD []
+  if ks.contains "cut" then sameKeys j ("cut" :: WIRE_KEYS) "a wire" else sameKeys j WIRE_KEYS "a wire"
+  let s := fun k => do strOf k (← field j k)
+  let radix ← (← arrOf "radix" (← field j "radix")).mapM (natOf "a radix")
+  let step ← (← arrOf "step" (← field j "step")).mapM (intOf "a step")
+  if radix.isEmpty || radix.length != step.length || radix.any (· < 1) then
+    throw "a wire is at least one digit of radix 1 or more, and one step a digit"
+  let (cut0, cuts) ← match j.getObjVal? "cut" with
+    | .ok cj => do
+      let xs ← (← arrOf "cut" cj).mapM (natOf "a cut")
+      match xs with
+      | [a, b] => if 1 ≤ b then pure (a, b) else throw "a wire's cut is [c0, C], C at least 1"
+      | _ => throw "a wire's cut is [c0, C]"
+    | .error _ => pure (0, 1)
+  return { reader := ← s "reader", port := ← s "port", writer := ← s "writer", out := ← s "out",
+           start := ← natAt j "at", radix, base := ← intOf "base" (← field j "base"), step, cut0, cuts }
 
 end Circuits

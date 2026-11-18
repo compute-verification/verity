@@ -26,6 +26,8 @@ writer's row and no comparison of two rows is left.
 
 namespace Verity
 
+open ResourceAccounting Core
+
 /-- **The record names the wiring `W`**: the record's `window.circuit` is the SHA-512 of a text, the circuit
 record's, that parses to a document whose cuts and wires SPOT's reader reads as `W` (`Spot.RecordText.wiring`). -/
 def RecordWiring (record : Lean.Json) (W : Spot.Wires.Wiring) : Prop :=
