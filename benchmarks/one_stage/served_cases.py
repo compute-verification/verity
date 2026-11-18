@@ -566,26 +566,29 @@ def wired(root: Any, circuit: Mapping[str, Any]) -> Any:
 def recorded(desc: Mapping[str, Any], root: Any, want: str, given: Any = None,
              circuit: Mapping[str, Any] | None = None) -> tuple[dict[str, Any], list[list[Any]]]:
     """The Program the record's ``program`` (``want``) names and its program function's ``[[name, type], ...]``, which
-    the descriptor doesn't carry: v1's descriptor ``desc`` when its digest is ``want``, the wired Program of the window's
-    circuit record (`wired`) when that is, else the population program (`parameters`); or, when ``want`` is the wired
-    Program's and ``desc`` is that Program with its wires cut (`population.cut_wires`), the wired Program's descriptor."""
-    from verity.circuits.population import cut_wires
-
-    mine = codec.program_digest(dict(desc))
-    w = wired(root, circuit) if circuit is not None else None
-    if w is not None and codec.program_digest(w) == want and (
-            mine == want or codec.program_digest(cut_wires(w, circuit)[0]) == mine):
-        got = [[n, t.to_json()] for n, t in w.fn.signature()[0]]
-        _need(given is None or given == got, "v1's params' parameters aren't its Program's program function's")
-        return (dict(desc) if mine == want else json.loads(codec.canonical_json(codec.encode_program(w)))), got
-    _need(mine == want, "the record names another Program than v1's params"
-          + (", and not the wired Program of the window's circuit record" if circuit is not None else
-             ", and no circuit record beside the audit gives the wired Program it might name"))
+    the descriptor doesn't carry, by which Program's digest ``want`` is: with ``circuit``, the window's circuit record,
+    its wired Program (`wired`) or that Program with no wires (the wired builder over the record less its wires),
+    else the population program (`parameters`). v1's descriptor ``desc`` is that Program, or the one with no wires
+    where ``want`` is the wired Program's, which the case then carries."""
+    mine, why = codec.program_digest(dict(desc)), "a circuit record (none is beside the audit)"
+    if circuit is not None:
+        try:
+            whole, bare = wired(root, circuit), wired(root, {**circuit, "wires": []})
+        except Refused as e:
+            whole = bare = None
+            why = f"the window's circuit record, which builds none: {e}"
+        else:
+            why = "the window's circuit record"
+            for p in (whole, bare):
+                if codec.program_digest(p) == want and mine in (want, codec.program_digest(bare)):
+                    got = [[n, t.to_json()] for n, t in p.fn.signature()[0]]
+                    _need(given is None or given == got, "v1's params' parameters aren't its Program's program function's")
+                    return (dict(desc) if mine == want else json.loads(codec.canonical_json(codec.encode_program(p)))), got
+    _need(mine == want, f"the record names another Program than v1's params, and no Program of {why}")
     try:
         return dict(desc), parameters(desc, root, given)
     except Refused as e:
-        raise Refused(f"{e}, nor the wired Program of " + ("the window's circuit record" if circuit is not None else
-                                                           "a circuit record (none is beside the audit)")) from None
+        raise Refused(f"{e}, nor the wired Program of {why}") from None
 
 
 def parameters(desc: Mapping[str, Any], root: Any, given: Any = None) -> list[list[Any]]:
