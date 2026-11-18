@@ -280,9 +280,9 @@ def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_ent
 
     pearl = NS(name="pearl", settings={"coins": "", "tie": False}, check_settings=lambda s: None, attach=attach, requests=lambda ctx: (eager, world))
     ex = M.Exchange()
-    assert ex.attach(pearl, {"coins": "live"}, submit=print) == "front"
+    assert ex.attach(pearl, {"coins": "live"}, source="--protocols-config") == "front"
     assert seen == [{"settings": {"coins": "live", "tie": False}, "build": ex.key, "gate": None, "private": None,
-                     "submit": print, "pins": None, "configuration": None}]
+                     "source": "--protocols-config", "pins": None, "configuration": None}]
     assert ex.requests == [("pearl", eager), ("pearl", world)] and ex.attached == {"pearl": {"coins": "live", "tie": False}}
     assert ex.reports == {"pearl": "front"}
     assert M.Exchange().key != ex.key
