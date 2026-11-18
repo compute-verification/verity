@@ -66,7 +66,9 @@ theorem get_mem_names (q : Part) (t : ℕ) (ht : t < q.count) : ((q.get t).p, (q
     have hrun : 0 < run := Nat.pos_of_ne_zero fun h => by simp [h] at hg
     have hj : t % (lanes.size * run) / run < lanes.size := by
       rw [Nat.div_lt_iff_lt_mul hrun]; exact Nat.mod_lt _ hg
-    simp only [Part.get, partNames, getElem!_pos lanes (t % (lanes.size * run) / run) hj]
+    show ((lanes[t % (lanes.size * run) / run]!).p, (lanes[t % (lanes.size * run) / run]!).i) ∈
+      partNames (.grid run lanes)
+    rw [getElem!_pos lanes (t % (lanes.size * run) / run) hj]
     exact Array.mem_map.2 ⟨_, Array.getElem_mem hj, rfl⟩
 
 /-- A name node `k` of `body` may read: a parameter, or an earlier node. -/

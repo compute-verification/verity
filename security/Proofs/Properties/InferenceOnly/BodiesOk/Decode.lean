@@ -65,9 +65,11 @@ def RefIn (b : Body) (r : Ref) : Prop :=
   (r.p = true → r.i < b.params.size ∧ r.j < (b.params[r.i]!).2.leaves) ∧
   (r.p = false → r.i < b.nodes.size ∧ r.j < (b.nodes[r.i]!).out.leaves)
 
-/-- A strided part repeats a pattern of positive length (`parsePartsIn` refuses a pattern of length 0). -/
+/-- A strided part repeats a pattern of positive length (`parsePartsIn` refuses a pattern of length 0), and a grid's lanes
+all have its first lane's periods (`parsePartsIn` refuses lanes of other period counts as `grid-shape`). -/
 def PartInner : Part → Prop
   | .strided _ _ _ inner _ _ _ => 0 < inner
+  | .grid _ lanes => ∀ l ∈ lanes, l.periods = lanes[0]!.periods
   | _ => True
 
 /-- Every part of body `b`'s references is `PartInner`: each argument's, and the return's. -/
@@ -184,11 +186,11 @@ theorem parsePartsIn_inner_step (leaves : Bool → Nat → Option Nat) (args : N
               subst hq
               trivial
             · split at h
-              · obtain ⟨run, lanes, rfl, hp, hf⟩ := Walk.parseGrid_ok h
+              · obtain ⟨run, lanes, rfl, hp, -⟩ := Walk.parseGrid_ok h
                 intro q hq
                 simp only [Array.mem_singleton] at hq
                 subst hq
-                trivial
+                exact hp
               · exact absurd h (by intro h; injection h)
 
 /-- **Every parsed strided part repeats a pattern of positive length**, given every part of an argument an alias may
