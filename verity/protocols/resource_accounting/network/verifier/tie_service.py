@@ -81,7 +81,7 @@ from verity.protocols.resource_accounting.network.verifier import service as SVC
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
@@ -464,7 +464,7 @@ class IngressTie:
             return None
         ports = {REGISTERED: WR.bucket_port(head, self.params, reads_from)}
         for p, v in known.items():
-            ports[p] = produced.port(v.value, v.entry(), v.root.hex(), list(range(self.T)), SCHEMA) \
+            ports[p] = RV.port(v.value, v.entry(), v.root.hex(), list(range(self.T)), SCHEMA) \
                 | ({RV.READS_FROM: int(reads_from)} if reads_from else {}) \
                 | {KNOWN_KEY: {"rows": [list(r) for r in v.rows], "salts": [s.hex() for s in v.salts]}}
         return WR.reads_file(ports)

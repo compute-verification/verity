@@ -71,7 +71,7 @@ def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot
         assert G.verify_read(reg.domain, reg.root, 1, reg.bcs[1], reg.path(1), schema)
         assert not G.verify_read(reg.domain, reg.root, 1, reg.bcs[1], reg.path(1), other)
     ports = LV.statement(run, 0)[1]["ports"]
-    assert ports["req_0"][G.SCHEMA_KEY] == G.SCHEMA_SEG and ports["slot_0"][G.SCHEMA_KEY] == G.SCHEMA_V2
+    assert ports["req_0"][RV.SCHEMA_KEY] == G.SCHEMA_SEG and ports["slot_0"][RV.SCHEMA_KEY] == G.SCHEMA_V2
     assert LV.verdicts(run) == [{"round": 0, "m": 3, "admitted": 3, "ok": True}]
     with pytest.raises(ValueError, match="live table"):
         run.open_request(0)
@@ -266,4 +266,4 @@ def test_the_provers_live_dump_opens_every_row_its_statement_reads(tmp_path):
         dom = RV.domain(pub["program"], e["value"], e["words"], e["leaves"], **bind)
         assert dom.domain_id.hex() == e["domain"]
         assert G.verify_read(dom, bytes.fromhex(e["root"]), op["index"], bytes.fromhex(op["bc"]), bytes.fromhex(op["path"]),
-                             e.get(G.SCHEMA_KEY, G.SCHEMA)), p
+                             e.get(RV.SCHEMA_KEY, RV.SCHEMA)), p

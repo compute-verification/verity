@@ -1,10 +1,11 @@
 """The difftest of the description-sized inference-only check (`InferenceOnlyCheck.Desc`) against the unrolled one: the Python half.
 
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/desc_difftest_vectors.py` writes 4,082 declarations divided into inference blocks of
+`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/desc_difftest_vectors.py` writes 4,092 declarations divided into inference blocks of
 root nodes (six on a composite keyed with an input id, which is no input node, two on a gate reading a nested scan's
 carry, one past `InferenceOnlyCheck.Desc.walkBound`'s limit, four on a scan of no iterations, twelve on whole members of a batch
 returning leaves of two arguments they share, 335 whose references name leaves of other widths than their types give
-them, `E_REINTERPRET`, or are their well-typed neighbours, then three pinned: θ with an input bound per run, refused,
+them, `E_REINTERPRET`, or are their well-typed neighbours, ten read through grid parts no older form spells, then
+three pinned: θ with an input bound per run, refused,
 θ the registered one, accepted, and a declaration with a constant gate, accepted), each expanded gate by gate where it
 is well-formed, and `scripts/inference_only_reference.py`'s
 `check_desc` on each.
@@ -19,7 +20,8 @@ gate reading a nested scan's carry, past `InferenceOnlyCheck.Desc.walkBound`'s l
 fifth that it holds the empty scans: a scan of no iterations carrying a value, which `Flock.Program.resolve` can't
 resolve, refused read or not, the sixth that it holds the shared members: one copy of pieces of two nodes' outputs,
 which `InferenceOnlyCheck.Desc` once read as all its first piece's node's, and the seventh that the mistyped ones the codec
-refuses are refused as `E_REINTERPRET`, which Flock's decoder once let through.
+refuses are refused as `E_REINTERPRET`, which Flock's decoder once let through, and the eighth that the grids get the verdicts their
+expansions get.
 """
 
 from __future__ import annotations
@@ -48,7 +50,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyV
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 4,082 instances, their expansions and the reference's results, byte for byte as the record pins them."""
+    """All 4,092 instances, their expansions and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}",
@@ -78,7 +80,7 @@ def test_the_generator_covers_what_it_says():
 def test_the_decoys_are_no_input_nodes():
     """The decoys come just before the walks, and the reference refuses each one the unrolled check refuses: the decoy
     node in θ (`theta-not-input`) or in no inference block (`gate-in-no-iu`), and gives a verdict with the decoy node in an inference block."""
-    first = (vectors.total() - len(vectors.vectors.pinned()) - len(vectors.mistyped()) - len(vectors.shared())
+    first = (vectors.total() - len(vectors.vectors.pinned()) - len(vectors.grids()) - len(vectors.mistyped()) - len(vectors.shared())
              - len(vectors.empties()) - len(vectors.walks()) - len(vectors.decoys()))
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.decoys()))]
     assert made == vectors.decoys()
@@ -92,7 +94,7 @@ def test_the_walk_past_the_bound_is_refused():
     """The walks come just before the empty scans: the reference gives the unrolled check's verdict on the small
     one, and refuses (`program`) the one of about 2^64 activations, whose gate `Prog.gate` can't locate in `Steps.FUEL`
     steps."""
-    first = (vectors.total() - len(vectors.vectors.pinned()) - len(vectors.mistyped()) - len(vectors.shared())
+    first = (vectors.total() - len(vectors.vectors.pinned()) - len(vectors.grids()) - len(vectors.mistyped()) - len(vectors.shared())
              - len(vectors.empties()) - len(vectors.walks()))
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.walks()))]
     assert made == vectors.walks()
@@ -111,7 +113,7 @@ def test_the_walk_past_the_bound_is_refused():
 def test_the_empty_scans_are_refused_where_they_carry_a_value():
     """The empty scans come just before the shared members: the reference refuses (`program`) the three whose scan
     carries a value, read or not, and gives the unrolled check's verdict on the one whose carry is empty."""
-    first = (vectors.total() - len(vectors.vectors.pinned()) - len(vectors.mistyped()) - len(vectors.shared())
+    first = (vectors.total() - len(vectors.vectors.pinned()) - len(vectors.grids()) - len(vectors.mistyped()) - len(vectors.shared())
              - len(vectors.empties()))
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.empties()))]
     assert made == vectors.empties()
@@ -125,7 +127,7 @@ def test_the_shared_members_read_both_nodes():
     """The shared members come just before the mistyped instances, and on each the reference gives the unrolled check's
     verdict: the other Call's 8 output bits are novel to the reading gate's inference block, however the members order the pieces,
     so it fails the policy at α 1 (`InferenceOnlyCheck.Desc` once counted none, and accepted)."""
-    first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.mistyped()) - len(vectors.shared())
+    first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.grids()) - len(vectors.mistyped()) - len(vectors.shared())
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.shared()))]
     assert made == vectors.shared() and len(made) == 12
     for m in made:
@@ -139,7 +141,7 @@ def test_the_mistyped_ones_are_reinterpretations():
     isn't well-typed, the codec refuses the Program as `E_REINTERPRET` and the reference refuses it (`program`); each
     well-typed neighbour gets a verdict; and the tampered declarations hold both."""
     mv = _load("mistyped_vectors")
-    first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.mistyped())
+    first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.grids()) - len(vectors.mistyped())
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.mistyped()))]
     assert made == vectors.mistyped()
 
@@ -163,6 +165,18 @@ def test_the_mistyped_ones_are_reinterpretations():
             assert "E_REINTERPRET" in why(inst) and reference.check_desc(inst) == {"error": "program"}
     tampered = made[len(shapes) + len(pairs):]
     assert any(why(i) and "E_REINTERPRET" in why(i) for i in tampered) and any(why(i) is None for i in tampered)
+
+
+def test_the_grids_read_what_they_unroll_to():
+    """The grids come just before the pinned instances, every one of them is well-formed, and the reference gives each
+    the verdict the unrolled check gives its expansion."""
+    first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.grids())
+    made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.grids()))]
+    assert made == vectors.grids() and len(made) == 2 * len(vectors.GRIDS)
+    assert all('"grid"' in m["program"] for m in made)
+    for m in made:
+        got = reference.check_desc(m)
+        assert "error" not in got and got == reference.check(reference.expand(m))
 
 
 def test_the_pinned_instances_get_their_results():
