@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, replace
+from functools import cache
 from typing import TYPE_CHECKING, Any
 
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
@@ -41,6 +42,24 @@ def _json_default(o):
 
 def sha256_hex(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
+
+
+@cache
+def card_facts(sku: str) -> tuple[tuple[int, int], int, str]:
+    from verity.device import load_architecture, load_card, number
+
+    from verity_vllm.config import CARD_FILES
+    record = load_card(sku, directory=CARD_FILES)
+    names = [d["value"] for d in record.get("driver", ())]
+    if record.get("kind") != "gpu" or len(names) != 1:
+        raise ValueError(f"card {sku!r} (calibration/hardware/cards/{sku}.toml) is no target: a target's card is a GPU's "
+                         f"(kind \"gpu\") with one `driver` name; it is kind {record.get('kind')!r} with {names}")
+    try:
+        arch = load_architecture(str(record.get("arch")), directory=CARD_FILES.parent / "architectures")
+    except KeyError as e:
+        raise ValueError(f"card {sku!r} (calibration/hardware/cards/{sku}.toml) is no target: its {e.args[0]}") from None
+    major, minor = arch["capability"].split(".")
+    return (int(major), int(minor)), int(number(record["sm"]["count"])), names[0]
 
 
 @dataclass(frozen=True)
@@ -155,17 +174,20 @@ class TargetProfile:
                            `RMSNormFusedCuda_v4`, `Attention_v10` / `Attention_v11`); a Definition that has no such version keeps
                            its constants.  Under `ir = "boolean"` each is its Boolean version, which reads the same field's bits.
                            Declaring false is refused (declare None).  Omitted from `to_json()` when None.
-    card                -> the SKU of the card file (calibration/hardware/cards) the Build is made for: its `arch` and `sm.count`
-                           must be `compute_capability` and `num_sms`, else refused by name.  None = no card named.  Omitted from
-                           `to_json()` when None.
+    card                -> the SKU of the card file (calibration/hardware/cards) the Build is made for, the one source of
+                           `compute_capability` (its `arch`'s architecture file), `num_sms` (its `sm.count`) and `device_name` (its
+                           one `driver` name): a profile that names a card reads them, and one that states them too is refused
+                           where they differ.  None = no card named: `compute_capability` and `num_sms` are then a device's own
+                           report (`from_device`, `from_gpu_document`, a recorded profile), both stated, and `device_name` is None.
+                           Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.frontend.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90, `blackwell_consumer` for sm_120) and `tuned_gemm_arch_family` (vLLM's tuned
     batch-invariant GEMM table for the capability: `ada` 8.9, `hopper` 9.x, None otherwise — mirrors
     `batch_invariant_configs._get_tuned_matmul_arch_family`, read back by the builder).
     """
-    compute_capability: tuple[int, int] = (8, 9)
-    num_sms: int = 128
+    compute_capability: tuple[int, int] | None = None
+    num_sms: int | None = None
     batch_invariant: bool = True
     attention_backend: str | None = None
     vllm_revision: str = VLLM
@@ -255,6 +277,18 @@ class TargetProfile:
                                                          "ROCm and enable_dbo and all2all_backend == 'deepep_high_throughput'")}
 
     def __post_init__(self) -> None:
+        if self.card is not None:
+            cc_card, sms_card, _ = card_facts(self.card)
+            stated = (None if self.compute_capability is None else tuple(int(x) for x in self.compute_capability),
+                      None if self.num_sms is None else int(self.num_sms))
+            if stated[0] not in (None, cc_card) or stated[1] not in (None, sms_card):
+                raise ValueError(f"card {self.card!r} is compute capability {list(cc_card)} with {sms_card} SMs "
+                                 f"(calibration/hardware/cards/{self.card}.toml); the profile declares {stated[0]} and {stated[1]}")
+            object.__setattr__(self, "compute_capability", cc_card)
+            object.__setattr__(self, "num_sms", sms_card)
+        elif self.compute_capability is None or self.num_sms is None:
+            raise ValueError(f"a TargetProfile names its card (card=, a file of calibration/hardware/cards), or states the "
+                             f"compute_capability and num_sms a device reported; got {self.compute_capability!r} and {self.num_sms!r}")
         cc = tuple(int(x) for x in self.compute_capability)
         if len(cc) != 2 or cc[0] < 1 or cc[1] < 0:
             raise ValueError(f"compute_capability must be (major, minor), got {self.compute_capability!r}")
@@ -262,15 +296,6 @@ class TargetProfile:
         if int(self.num_sms) < 1:
             raise ValueError(f"num_sms must be positive, got {self.num_sms!r}")
         object.__setattr__(self, "num_sms", int(self.num_sms))
-        if self.card is not None:
-            from verity.device import compute_capability, load_card
-
-            from verity_vllm.config import CARD_FILES
-            record = load_card(self.card, directory=CARD_FILES)
-            facts = (compute_capability(record), int(record["sm"]["count"]["value"]))
-            if facts != (cc, self.num_sms):
-                raise ValueError(f"card {self.card!r} is compute capability {list(facts[0])} with {facts[1]} SMs "
-                                 f"(calibration/hardware/cards/{self.card}.toml); the profile declares {list(cc)} and {self.num_sms}")
         object.__setattr__(self, "batch_invariant", bool(self.batch_invariant))
         if self.flash_attn_version is not None:
             v = int(self.flash_attn_version)
@@ -406,6 +431,10 @@ class TargetProfile:
         if self.compute_capability == (12, 0):
             return "blackwell_consumer"
         return f"unregistered:{self.capability_str}"
+
+    @property
+    def device_name(self) -> str | None:
+        return None if self.card is None else card_facts(self.card)[2]
 
     @property
     def int8_parts(self) -> tuple[str, ...]:
@@ -552,8 +581,9 @@ class TargetProfile:
 
     @classmethod
     def default(cls) -> TargetProfile:
-        """The admitted record's target (profile `vllm_d9105ea80_sm89_eager`: sm_89 / 128 SMs / batch-invariant / FA2 by selector)."""
-        return cls()
+        """The admitted record's target (profile `vllm_d9105ea80_sm89_eager`: sm_89 / 128 SMs / batch-invariant / FA2 by selector),
+        as that record's device reported it; it names no card, for no card file states that device."""
+        return cls(compute_capability=(8, 9), num_sms=128)
 
     @classmethod
     def from_device(cls, device: int = 0) -> TargetProfile:
@@ -563,30 +593,29 @@ class TargetProfile:
         identity carries it (`ArtifactIdentity.target_profile.num_sms`).  Torch is imported lazily: this module stays torch-free."""
         import torch  # lazy: the module is torch-free on CPU hosts
         p = torch.cuda.get_device_properties(device)
-        return cls.default().with_overrides(compute_capability=(int(p.major), int(p.minor)), num_sms=int(p.multi_processor_count))
+        return cls(compute_capability=(int(p.major), int(p.minor)), num_sms=int(p.multi_processor_count))
 
     @classmethod
     def from_gpu_document(cls, doc: Any) -> TargetProfile | None:
         """[X-01] The SAME device query as a capture recorded it (`RunHeader.profile["gpu"]` from `verity_vllm.engine.engine_profile.gpu_info`,
         or `versions.gpu` of a bench run): `multi_processor_count` (or `sms`) and `compute_capability` (`[8, 9]` or `"8.9"`, or `cc`).
         The eager Match resolver reads the target from here — the record's own host, not a literal.  None when the document carries no
-        SM count (synthetic / hand-built logs): callers then keep the default profile."""
+        SM count or no compute capability (synthetic / hand-built logs): callers then keep the default profile."""
         if not isinstance(doc, dict):
             return None
         sms = doc.get("multi_processor_count", doc.get("sms"))
         if sms is None:
             return None
         cc = doc.get("compute_capability", doc.get("cc"))
-        over: dict = {"num_sms": int(sms)}
         try:
             if isinstance(cc, str) and "." in cc:
                 maj, mi = cc.split(".")[:2]
-                over["compute_capability"] = (int(maj), int(mi))
-            elif isinstance(cc, (list, tuple)) and len(cc) == 2:
-                over["compute_capability"] = (int(cc[0]), int(cc[1]))
+                return cls(compute_capability=(int(maj), int(mi)), num_sms=int(sms))
+            if isinstance(cc, (list, tuple)) and len(cc) == 2:
+                return cls(compute_capability=(int(cc[0]), int(cc[1])), num_sms=int(sms))
         except (TypeError, ValueError):
             pass
-        return cls.default().with_overrides(**over)
+        return None
 
     @classmethod
     def from_run_profile(cls, profile_doc: Any) -> TargetProfile | None:
@@ -714,6 +743,8 @@ def parse_target_arg(s: str | None, *, base: TargetProfile | None = None) -> Tar
     unknown = set(d) - set(TargetProfile.__dataclass_fields__)   # the fields, not the serialised keys (`compilation` / `fp8_block_gemm` are omitted when None)
     if unknown:
         raise ValueError(f"unknown TargetProfile fields: {sorted(unknown)}")
+    if d.get("card") is not None:
+        doc = {k: v for k, v in doc.items() if k not in ("compute_capability", "num_sms")}
     doc.update(d)
     return TargetProfile.from_json(doc)
 

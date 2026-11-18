@@ -136,5 +136,5 @@ def spec(statics: dict):
     from verity_vllm.program.frontend.target_profile import TargetProfile
     st = {k: int(statics[k]) for k in ("E", "TOPK", "H", "I", "M")}
     cc = statics.get("cc")
-    dot = T.moe_expert_dot(TargetProfile(compute_capability=tuple(cc))) if cc else None
+    dot = T.moe_expert_dot(TargetProfile.default().with_overrides(compute_capability=tuple(cc))) if cc else None
     return bind(FusedMoEDifftest, **st) if dot is None else bind(FusedMoEDifftestDot, **st, DOT=dot)

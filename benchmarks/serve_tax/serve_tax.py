@@ -10,7 +10,7 @@ integration's pin, on the same node, workload and SLO.
     serve_tax.py run --arm tick-certifier --model-id ID --client vllm-bench --loads NAME=RUNG --tick-ms SAT,FREE
                      --side server [--front PORT] [--cells NAME=N,...] [--stop-at TIME] --out DIR
     serve_tax.py run --arm tick-certifier --model-id ID --client vllm-bench --loads NAME=RUNG [--pass-prompts ...]
-                     --side client --attester-windows N [--front PORT] [--cells NAME=N,...] [--reps 3] --out DIR
+                     --side client --attester-windows N --private DIR [--front PORT] [--cells NAME=N,...] [--reps 3] --out DIR
     serve_tax.py passes --loads NAME[=RUNG+RUNG...],... [--dataset NAME=FILE] [--fetch] [--arms "ARM ..." --model-id ID]
     serve_tax.py dataset LOAD [--fetch]
     serve_tax.py metrics DIR [--slo-ttft-s S --slo-tpot-s S]
@@ -2513,8 +2513,9 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
     the engine empties its prefix cache for it (`servetax_plugin.IdleReset`). The network attester runs the windows fixed
     when it starts and cuts every connection at their end, so no pass starts that can't be expected to end before
     (`stop_before`), and the side then waits for the network attester's end. Then network attestation's offline check reads the
-    run with the shim's record of each connection (DIR/certifier/client.json), and DIR/meta.json, an arm's, holds
-    what it found (`attester_record`). It exits 0 where every pass was sent, the run is accepted and no answer was
+    run with the shim's record of each connection (PRIVATE/certifier/client.json: the network attester's run and the
+    shim's records, each request's and answer's digest among them, are kept in ``--private``), and DIR/meta.json, an
+    arm's, holds what it found (`attester_record`). It exits 0 where every pass was sent, the run is accepted and no answer was
     short of its length."""
     import secrets
 
@@ -2534,9 +2535,13 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
     if model.served not in served:
         raise SystemExit(f"the server behind the id front on loopback port {a.front} serves {', '.join(served)}, not "
                          f"{model.served}")
-    out, run_dir = Path(a.out), SHARED.RESEARCH_RUN_DIR
-    cert = out / "certifier"
-    cert.mkdir(parents=True, exist_ok=True)
+    if not a.private:
+        raise SystemExit("--private DIR: where the client side keeps the network attester's run and the shim's records "
+                         "(each request's and answer's digest), outside every run's directory")
+    out, run_dir, private = Path(a.out), SHARED.RESEARCH_RUN_DIR, private_dir(a)
+    cert = private / "certifier"
+    for d in (out, cert):
+        d.mkdir(parents=True, exist_ok=True)
     env = tree_env()
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "side": CLIENT,
             "model_id": a.model_id, "model": model.ref, "checkpoint": str(checkpoint),
@@ -2569,7 +2574,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
             origin = json.loads((cert / "deployment.json").read_text())["origin_unix"]
             end = origin + a.attester_windows * cells["window"] * cells["bucket_ms"] / 1000
             with open(out / "shim.log", "wb") as log:
-                shim = popen(shim_argv(cert / "deployment.json", checkpoint, out / "shim.jsonl"),
+                shim = popen(shim_argv(cert / "deployment.json", checkpoint, private / "shim.jsonl"),
                              stdout=subprocess.PIPE, stderr=log, env=env, text=True)
             procs.append(shim)
             port = announced(shim, "the shim", out / "shim.log")["listening"][1]
@@ -2616,7 +2621,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
             except subprocess.TimeoutExpired:
                 raise RuntimeError(f"the network certifier had not ended {ATTESTER_END_S:.0f} s after its last "
                                    "window (attester.log)") from None
-            lines = [json.loads(x) for x in (out / "shim.jsonl").read_text().splitlines() if x.strip()]
+            lines = [json.loads(x) for x in (private / "shim.jsonl").read_text().splitlines() if x.strip()]
             (cert / "client.json").write_text(json.dumps(cell_shim.client_doc(lines)))
             with open(out / "check.log", "wb") as log:
                 meta["certifier"]["check_exit"] = run([sys.executable, str(ATTESTER), "check", "--run", str(cert)],
@@ -4433,16 +4438,6 @@ def profile_features(stock: str) -> list[str]:
     return [n for n in ARMS if n not in STOCK and stock_of(n) == stock and not same_engine(n, stock)]
 
 
-#: what a component lacks before an arm here can serve it inside vLLM's server, whose it is to add, in words
-UNSERVED = {
-    "pearl-plus": "compute-accounting: Pearl+'s scheme has an attach, but vLLM's scheme plugin "
-                  "(verity_vllm.pipeline.scheme_plugin) hands it its declared settings alone (scheme.settings: "
-                  "tie-uniform), and its attach (pouw.scheme.Attached) refuses a run without 'coins' or 'challenger' and "
-                  "'kernel' among them; then Attached.keyed raises until vllm keys each linear weight in RegisteredValues; "
-                  "and it requests an eager engine, world 1 and no async steps, more than stock's one change",
-}
-
-
 def components() -> dict:
     """The components an application names and how each checks its settings: `verity config check`'s
     (`verity_cli.served_table.MANIFESTS`, each a `verity.config.Component` whose ``params`` checks its
@@ -4483,8 +4478,8 @@ def feature_of(words: Sequence[str]) -> Feature:
 
 def feature(words: Sequence[str], stock: str) -> str:
     """The arm ``--feature NAME [KEY=VALUE ...]`` (`feature_of`) serves beside ``stock``: of `profile_features`, the
-    one whose `Arm.feature` is that component at those settings. `NotImplementedError` naming the goal, and what the
-    component lacks (`UNSERVED`), for one no arm over ``stock`` serves yet."""
+    one whose `Arm.feature` is that component at those settings. `NotImplementedError` naming the goal for one no arm
+    over ``stock`` serves yet."""
     want = feature_of(words)
     for n in profile_features(stock):
         if (f := ARMS[n].feature) is not None and f.name == want.name:
@@ -4493,8 +4488,7 @@ def feature(words: Sequence[str], stock: str) -> str:
                     return n
             except SystemExit:
                 continue
-    raise NotImplementedError(f"benchmarks/serving-profiles-first-number: no arm over {stock} serves {want}"
-                              + (f"; {UNSERVED[want.name]}" if want.name in UNSERVED else ""))
+    raise NotImplementedError(f"benchmarks/serving-profiles-first-number: no arm over {stock} serves {want}")
 
 
 def refusals(name: str, rows: dict | None = None) -> list[dict]:

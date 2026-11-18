@@ -104,6 +104,7 @@ from verity.circuits.population import mixed_population_program, wired_populatio
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
+from verity.commitments.periods.edges import INPUT_ID
 
 HERE = Path(__file__).resolve().parent
 
@@ -308,6 +309,7 @@ class Circuit:
         self.values: list[str] = []
         self.formats: dict[str, dict] = {}
         self.registered = True
+        self.root: list | None = None
 
     def add(self, fn, entries: list[tuple[list[int], list[str], int]]) -> str:
         """Template `fn` with its units laid out by `entries` (`(radix, axes, step)` each, in unit order)."""
@@ -322,22 +324,30 @@ class Circuit:
     def units(self) -> dict[str, int]:
         return {codec.descriptor_id(fn): n for fn, n in self.templates}
 
-    def program(self) -> tuple[str, str]:
+    def program(self, order: list | None = None) -> tuple[str, str]:
         """The circuit's Program, a population of its templates over its values whose root reads each wire's writer's
-        output (`wired_population_program`), so its edges are the circuit's wires: its descriptor's text and digest."""
+        output (`wired_population_program`), so its edges are the circuit's wires: its descriptor's text and digest.
+        The root lays its units out in `order`, else the circuit's."""
+        order = self.order if order is None else order
         rec = {"templates": [[t, n] for t, n in self.units.items()], "cuts": self.cuts,
-               "wires": [w.doc() for w in self.wires], **({"order": self.order} if self.order is not None else {}),
+               "wires": [w.doc() for w in self.wires], **({"order": order} if order is not None else {}),
                "registered": {"params": dict(self.params), "values": list(self.values)}}
         desc = codec.encode_program(wired_population_program(self.templates, rec)[0])
+        units: dict[str, int] = {}
+        for x in desc["definitions"][desc["root"]]["body"]["nodes"]:
+            t = desc["callees"][x["fn"]]
+            if not INPUT_ID.match(t):
+                units[t] = units.get(t, 0) + (x["n"] if x["form"] == "batch" else 1)
+        self.root = list(units.items())
         return codec.canonical_json(desc).decode(), codec.program_digest(desc)
 
-    def doc(self, digest: str) -> dict:
+    def doc(self, digest: str, order: list | None = None) -> dict:
         """The circuit's record (`verity/window-circuit/v1`), as far as a stated record's description goes."""
         reg = {"params": dict(self.params), "tables": self.tables, "reads": [r.doc() for r in self.reads],
                "roots": self.roots, "openings": self.openings, **({"values": self.values} if self.values else {}),
                **({"formats": self.formats} if self.formats else {})}
         return json.loads(json.dumps({
-            "format": IF.CIRCUIT, "name": self.name, "templates": self.listed(),
+            "format": IF.CIRCUIT, "name": self.name, "templates": self.listed(order),
             "program": digest, "wires": [w.doc() for w in self.wires],
             **({"cuts": self.cuts} if self.cuts else {}), **({"registered": reg} if self.registered else {}),
             **({"ingress": self.ingress} if self.ingress else {}),
@@ -345,10 +355,13 @@ class Circuit:
             "blocks": {"format": IF.BLOCKS, "proof": {"units": sum(self.units.values()), "partition": ""},
                        "inference": {"slots": self.slots, "steps": self.steps, "entries": self.entries}}}))
 
-    def listed(self) -> list[list]:
-        """The templates with their units, in the order of their first range in the order (the Program's root's)."""
+    def listed(self, order: list | None = None) -> list[list]:
+        """The templates with their units, in the order of their first range in `order`, else the circuit's (the
+        Program's root's)."""
+        if self.root is not None:
+            return [list(t) for t in self.root]
         units = self.units
-        first = list(dict.fromkeys([b[0] for b in self.order or []] + list(units)))
+        first = list(dict.fromkeys([b[0] for b in (self.order if order is None else order) or []] + list(units)))
         return [[t, units[t]] for t in first]
 
     def slot(self) -> dict[str, list[int]]:
@@ -1179,8 +1192,8 @@ def finish(rng, c: Circuit, held: dict[str, tuple], roots: dict[str, str], pins:
     later circuit computes that the policy's table lacks costs nothing. The reference takes the circuit as built;
     or `refused` names the stage that refuses it, and what the blocks hold is what the reference counts without that
     stage."""
-    text, digest = c.program()
-    record = IF.circuit_bytes(c.doc(digest)).decode()
+    text, digest = c.program(order)
+    record = IF.circuit_bytes(c.doc(digest, order)).decode()
     inside = [all(s == t for s, t in _slots(c, w)) for w in c.wires]
     g = grids(c)
     for w, want in zip(c.wires, inside, strict=True):
@@ -1295,8 +1308,8 @@ def _program_wires(text: str, tids, cuts) -> list[dict] | None:
 def spot_of(c: Circuit, text: str, doc: dict) -> dict | None:
     """The record's wiring as SPOT's `wires` piece reads it (`Spot.Wires.Wiring.ofJson`): each template's rows and
     outputs Python's own layout of it (`verity.commitments.periods.interface.layout`, what `check_wires` reads), the
-    record's cuts and the wires Python reads off the Program `text` (`reference.program_wires`), with no order, as
-    the form reads none. None
+    record's cuts and the wires Python reads off the Program `text` (`reference.program_wires`), with the root's
+    ranges as the order (`reference.root_order`), as the form reads it. None
     where that layout has no row for a port (its leaves of two widths, or an output of 16 bits or more that is not
     whole 16-bit words) or Python refuses the Program's wires."""
     if any(len(ty.width_set()) != 1 for fn, _ in c.templates
@@ -1310,7 +1323,8 @@ def spot_of(c: Circuit, text: str, doc: dict) -> dict | None:
         return None
     return {"templates": {t: {"units": n, "rows": {p: [w, o] for (p, w), o in zip(lay.rows, lay.outer, strict=True)},
                               "outs": dict(lay.outs)} for t, (lay, n) in lays.items()},
-            "cuts": doc.get("cuts", {}), "wires": wires}
+            "cuts": doc.get("cuts", {}), "wires": wires,
+            "order": [list(b) for b in ref.root_order(json.loads(text), lays)]}
 
 
 def _slots(c: Circuit, w):

@@ -106,7 +106,7 @@ WRITES = {
         ("certified_client", "out / 'shim.log'"): "public",
         ("certified_client", "out / 'warm' / 'meta.json'"): "public",
         ("certified_client", "d / 'meta.json'"): "public",
-        ("certified_client", "cert / 'client.json'"): "public",
+        ("certified_client", "cert / 'client.json'"): "private",
         ("certified_client", "out / 'check.log'"): "public",
         ("main", "Path(a.out)"): "private",
         ("main", "a.out / 'serving_cost.json'"): "public",
