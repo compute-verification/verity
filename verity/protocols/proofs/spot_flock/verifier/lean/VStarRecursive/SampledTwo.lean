@@ -212,9 +212,9 @@ def split (j : Json) (what : String) : V Json := do
   let .obj _ := j | throw s!"the {what} is not an object"
   let .str form := getD j "form" | throw s!"the {what} names no form"
   if form != TWO_STAGE then throw s!"the {what} name the form {form}, not \"{TWO_STAGE}\""
-  if let some v := field? j "levels" then
-    if v != Json.num 2 then
-      throw s!"levels-form-mismatch: the {what}' levels is {v.compress}, and their form is {TWO_STAGE}"
+  match field? j "levels" with
+  | none | some (.num ⟨2, 0⟩) => pure ()
+  | some v => throw s!"levels-form-mismatch: the {what}' levels is {v.compress}, and their form is {TWO_STAGE}"
   pure (Json.mkObj (without (Json.mkObj (without j "form")) "levels"))
 
 /-- The parameters' parse (module docstring, **params**), before the two stages' windows are held apart
