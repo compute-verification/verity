@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs, kit, settings
-from verity_bench.checked_by import NOT_RECORDED, PIECE
+from verity_bench.kit_report import NOT_RECORDED, PIECE
 from verity_bench import overhead as O
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, records
 

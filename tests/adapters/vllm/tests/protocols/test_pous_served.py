@@ -147,6 +147,12 @@ ENTRY = POUS.option
 WRONG_SOURCE = "salt_source is hex, a callable of the commitment or {'command': argv}, not "
 
 
+def same(got, want) -> bool:
+    """``got`` is ``want`` bit for bit: its bytes, dtype, shape and device, not `torch.equal`'s values."""
+    return (got.dtype == want.dtype and tuple(got.shape) == tuple(want.shape) and got.device == want.device
+            and got.contiguous().view(torch.uint8).numpy().tobytes() == want.contiguous().view(torch.uint8).numpy().tobytes())
+
+
 @pytest.fixture
 def toy(monkeypatch):
     monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
@@ -194,9 +200,9 @@ def test_a_tiny_int8_models_weights_are_held_as_p2_and_served_bit_exact(toy):
     released = {r.value: r for _, r in ex.requests if isinstance(r, H.ReleaseValue)}
     assert sorted(released) == ["k.weight", "q.weight"]                                 # the tied head: encoded once
     for name, r in released.items():
-        assert torch.equal(r.restore(), toy.plain[name.partition(".")[0]])
+        assert same(r.restore(), toy.plain[name.partition(".")[0]])
     due = H.BlockDue("k", 0, {"n": 40, "k": 16}, "s8", {"x": None, "weight": torch.empty(0)}, weights={"weight": "k.weight"})
-    assert torch.equal(ex.compute(due, lambda given: given["weight"]), toy.plain["k"])
+    assert same(ex.compute(due, lambda given: given["weight"]), toy.plain["k"])
 
     d = opt.details()
     assert d["salt_source"] == "settings" and d["tensors"] == 2 and d["used_blocks"] == 10 and d["blocks"] == 16
