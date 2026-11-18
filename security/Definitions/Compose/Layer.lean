@@ -15,8 +15,8 @@ argument system, or the recursion layer above it; each resource accounting proto
 
 **What it gives.** The probability that the composite's compiled verifier accepts committed files while one of its
 subprotocols' claims fails is at most the subprotocols' errors at that strategy summed. A scheme gets back
-`Verity.Scheme.GetsBack`: an accepted run's credit plus the sample's exposure at `δ` and `other` covers what it used,
-except with probability `δ + δscheme`.
+`Verity.Scheme.GetsBack`: in an accepted run whose log meets the scheme's conditions, the credit plus the missable cost
+at `δ` and the charges cover what it used, except with probability `δ + δscheme`.
 
 **Its error, in the layers below's.** `Σ_a (δ_a + c_a · Pr[SHA-512 collision])` over the subprotocols `a`. SPOT's `δ` is
 the sampling layer's: the sample's miss probability plus `ε_ks + ε_bind`, each the argument system's (or the recursion
