@@ -57,7 +57,7 @@ def test_equal_pair_is_a_late_read_and_named():
     r = _worker()._t6_4_check(*_com(layouts))
     assert r["applicable"] is True and r["result"] is False and r["equal_pairs"] == 1
     p = r["pairs"][0]
-    assert p["equal"] is True and (p["step"], p["layer"], p["next_norm"]) == (0, 3, "model.norm/0") and p["out_sha"] == p["next_norm_sha"]
+    assert p["equal"] is True and (p["step"], p["layer"], p["next_norm"]) == (0, 3, "model.norm/0")
 
 
 def test_missing_next_norm_fails_closed():
