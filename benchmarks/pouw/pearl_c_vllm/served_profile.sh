@@ -30,17 +30,18 @@ export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID SERVED_TREE=$PWD
 UUID=${GPU_LEASE_UUID:?run under gpu-lease}; UUID=${UUID%%,*}; export E2E_GPU_UUID=$UUID
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"
-# the card file naming the device, and the kernel directory its card takes (`bench_arm.kernel_directory`): pearl_c_sm120, or refused
+KERNEL=verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120; K=$(basename "$KERNEL")
+# the card file naming the device, and the kernel directory its card takes (`bench_arm.kernel_directory`): $K's, or refused
 TAKES=$(PYTHONPATH=${PYTHONPATH:-}:$PWD/benchmarks/pouw/pearl_c_vllm:$PWD/benchmarks/harness "$PY" -c 'import sys
 from bench_arm import kernel_directory; from e2e import SCHEME; from verity_bench.kit import card_short
 print(kernel_directory(sys.argv[1] or SCHEME, card_short(sys.argv[2].strip())).name)' "${SCHEME:-}" "$(cut -d, -f2 "$OUT/identity.csv")") || { echo "identity: no card file names it"; exit 3; }
-[ "$TAKES" = pearl_c_sm120 ] || { echo "identity: its card takes $TAKES, not pearl_c_sm120"; exit 3; }
+[ "$TAKES" = "$K" ] || { echo "identity: its card takes $TAKES, not $K"; exit 3; }
 UNPACK=$(mktemp -d); trap 'rm -rf "$UNPACK"' EXIT
 tar -xf "${SHIP_TAR:?}" -C "$UNPACK"
 SHIP=$(dirname "$(find "$UNPACK" -name MANIFEST.sha256 | head -1)")
-(cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) && cmp -s "$SHIP/run.py" verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py || { echo "ship"; exit 3; }
+(cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) && cmp -s "$SHIP/run.py" "$KERNEL/run.py" || { echo "ship"; exit 3; }
 PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=sm120 "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl"
-ARGS=(--model "$MODEL" --kernel verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/e2e.json"
+ARGS=(--model "$MODEL" --kernel "$KERNEL" --cubin "$SHIP/$K.cubin" --out "$OUT/e2e.json"
       --reps "${REPS:-2}" ${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs} ${FP8_GRAPHS:+--fp8-graphs} ${WHOLE_STEP:+--whole-step}
       ${WHOLE_DEFER:+--whole-defer} ${BATCH:+--batch "$BATCH"} ${PROMPT:+--prompt "$PROMPT"} ${PREFILL:+--prefill "$PREFILL"}
       ${MEM_BASE:+--mem-base "$MEM_BASE"} ${MEM_ARM:+--mem-arm "$MEM_ARM"})
