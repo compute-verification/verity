@@ -1,5 +1,6 @@
-"""``dither-v3.2``: Dither v3.2 (`verity/protocols/experimental/dither/PROTOCOL.md`) as a
-`verity.protocols.resource_accounting.compute.pouw.verifier.protocol.PoUWScheme`, on its CPU reference (`dither`).
+"""Dither v3.2 (`verity/protocols/experimental/dither/PROTOCOL.md`) as a
+`verity.protocols.resource_accounting.compute.pouw.verifier.protocol.PoUWScheme`, on its CPU reference (`dither`): the
+tile-level entry points of the resource scheme ``dither`` (`verity.protocols.experimental.dither.scheme`).
 
 A tile is one of the value root's 128 × 128 output tiles at full K (`dither.Shape.tile_of`, row-major). Its operands
 are each row's K int8 codes (`dither.operand_row`), and its noise is the call's seeds (`dither.seeds`, or `fill_seeds`
@@ -33,7 +34,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 
 from . import dither as D
 
-NAME = "dither-v3.2"
+NAME = "dither"
 #: name -> (L, L′) on the RTX PRO 6000: registration pins B, or the prover chooses the weights
 PARAMETERS: dict[str, tuple[int, int]] = {"rtx-pro-6000-pinned": (1024, 128), "rtx-pro-6000-chosen": (768, 256)}
 DEFAULT = "rtx-pro-6000-pinned"

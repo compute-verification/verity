@@ -1,8 +1,7 @@
 """The named PoUW schemes.  `get(name)` returns a configured `verity.protocols.resource_accounting.compute.pouw.verifier.protocol.PoUWScheme`; each name's module
 docstring states its steps, and its pinned vectors are under ``verifier/tests/vectors``.  A name in `EXPERIMENTAL` is
 named here and brought by an experimental package, which `register`s its factory when imported: PoUW imports nothing of
-``verity/protocols/experimental/``, so until then `get` raises `NotImplementedError` naming the seam, or `KeyError` for a
-name `SCHEMES` doesn't hold yet (Dither's, which the identifier's `SCHEMES` doesn't name)."""
+``verity/protocols/experimental/``, so until then `get` raises `NotImplementedError` naming the seam."""
 
 from __future__ import annotations
 
@@ -33,8 +32,7 @@ def _pearl_c(device: str) -> Callable[..., PoUWScheme]:
 
 
 #: name -> the seam of the experimental package that registers it (Pearl-C4: ``verity/protocols/experimental/pearl_c4/``)
-EXPERIMENTAL: dict[str, str] = {"pearl-c-nvfp4-v0": "compute-accounting/pearl-c4-experimental",
-                                "dither-v3.2": "verity/protocols/experimental/dither/"}
+EXPERIMENTAL: dict[str, str] = {"pearl-c-nvfp4-v0": "compute-accounting/pearl-c4-experimental"}
 
 
 def _experimental(name: str) -> Callable[..., PoUWScheme]:

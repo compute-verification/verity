@@ -1,6 +1,6 @@
-"""Dither as a named PoUW scheme (`dither.prover.scheme`): found by its name once the package is imported, its methods on
-an honest tile at each named (L, L′) pair against the reference and the proof blocks' checks in the clear, a tampered
-prefix sum refused, and the methods it has no code for refused with what is missing."""
+"""Dither behind `PoUWScheme` (`dither.prover.pouw_scheme`): its methods on an honest tile at each named (L, L′) pair
+against the reference and the proof blocks' checks in the clear, a tampered prefix sum refused, and the methods it has no
+code for refused with what is missing."""
 from __future__ import annotations
 
 import hashlib
@@ -9,10 +9,8 @@ from array import array
 import numpy as np
 import pytest
 
-import verity.protocols.experimental.dither  # noqa: F401  (registers dither-v3.2)
 from verity.protocols.experimental.dither.prover import dither as D
-from verity.protocols.experimental.dither.prover import scheme as DS
-from verity.protocols.resource_accounting.compute.pouw.prover import schemes
+from verity.protocols.experimental.dither.prover import pouw_scheme as DS
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
     Context, DomainError, Matmul, PoUWScheme, Shape, Tile)
 
@@ -37,16 +35,15 @@ def _tile(s: DS.Dither, k: int):
     return ctx, A, B, ops, s.checked(ctx, ops)
 
 
-def test_the_scheme_is_found_by_its_name_at_each_named_pair():
-    s = schemes.get(DS.NAME)
-    assert isinstance(s, PoUWScheme) and isinstance(s, DS.Dither) and s.name == "dither-v3.2"
+def test_it_is_a_pouw_scheme_at_each_named_pair():
+    s = DS.Dither()
+    assert isinstance(s, PoUWScheme) and s.name == "dither"
     assert (s.L, s.lp) == (1024, 128) and dict(s.certificate.parameters) == {"L": 1024, "lp": 128}
-    chosen = schemes.get(DS.NAME, parameters="rtx-pro-6000-chosen")
+    chosen = DS.Dither("rtx-pro-6000-chosen")
     assert (chosen.L, chosen.lp) == (768, 256)
-    assert DS.NAME in schemes.EXPERIMENTAL and schemes.SCHEMES[DS.NAME] is not None
     assert s.certificate.gap is None and s.certificate.eps is None
     with pytest.raises(ValueError, match="no parameters 'h200'"):
-        schemes.get(DS.NAME, parameters="h200")
+        DS.Dither("h200")
 
 
 @pytest.mark.parametrize("parameters", sorted(K))
@@ -54,7 +51,7 @@ def test_check_takes_the_references_domain(parameters):
     s = DS.Dither(parameters)
     s.check(Matmul(0, Shape(256, K[parameters], 384), 0))
     for bad in (Shape(100, K[parameters], 128), Shape(128, K[parameters] + 32, 128), Shape(128, 1 << 17, 128)):
-        with pytest.raises(DomainError, match="dither-v3.2 at L = "):
+        with pytest.raises(DomainError, match="dither at L = "):
             s.check(Matmul(0, bad, 0))
 
 
