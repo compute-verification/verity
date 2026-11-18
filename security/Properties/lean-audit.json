@@ -28777,7 +28777,7 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "d40f102326788faf4320a9e8875d2bff39d6e74644b7d430ddccffb5d556d7cb",
+   "digest": "5c7a7e65201f2cf056e17161b315ad66feac990c76e1e5b03f2f8afb39480b43",
    "definitions": {
     "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
     "Spot.OneStageZk.FORMS": "277fb91256a030d6dd998d03a7fb10f0cfdb3771d48d10ea9e599110280caa51",
@@ -28786,7 +28786,8 @@
     "Spot.OneStageZk.Member.sampled": "1bc5a059e781874f7a93e57a79f39431cb655deb772f6c195eeb9519dfe55a5b",
     "Spot.OneStageZk.Rows": "346303bcda7c2af8f18827f704196cdefce9655258cba0145120008fbec87b99",
     "Spot.OneStageZk.WIRES_SAMPLED": "a47085dcaae888fb8fc139e0addd902c996618980bbad8920589099e8c4ced5f",
-    "Spot.OneStageZk.WIRES_TEMPLATE": "d5a3ead6f4592bbc37465092ca0fcf3e24dc2159f1cde216439bb2d78333a3cb",
+    "Spot.OneStageZk.WIRES_TEMPLATE": "162bda20b87509e5a8f1912d55109b98e703b5a2b7bec982ce7c7706203f7958",
+    "Spot.OneStageZk.byFirst": "97957c106ae3350911c3320ffbd08c059564d788eb10ce41449ad3a4d928d655",
     "Spot.OneStageZk.checkBlobs": "ff544fbc735b16c2b1c1045c9d788bba61521521ba21d54995e6537e40588e90",
     "Spot.OneStageZk.checkBlobsAt": "0580739ebc357459d8da351ee6a63099cd8ed19aa8959ae777d81e8e13843850",
     "Spot.OneStageZk.checkMembersAt": "3cee0809ca8182bf6f9e0cae58aff8bdd6bc0c6a4dadb986aa293e34338378e2",
@@ -28796,6 +28797,8 @@
     "Spot.OneStageZk.classTwo": "cb9cce8f01cfbc699e1c82e8f47c64e05009271f397de991ce0e0290ac1a3268",
     "Spot.OneStageZk.evidenceBytes": "ee22e17150755c25c7db5daa18c38317350755b1577ac10bdf8eb52f89edca2a",
     "Spot.OneStageZk.laidHeld": "62fee0acf3a5a492387a44adf427ef87c0cf94e9ad0468c226f74cf3f8c22754",
+    "Spot.OneStageZk.lastAtMost": "9d6f8a57634fce078d6f52dfb7a5461a2a9b042b8ed73dfc3971e98c9be6bf6e",
+    "Spot.OneStageZk.lastAtMost.go": "e22c621b7a9183821b452f759e68948213eb042a5184db2e4db1fde5b3ebbb42",
     "Spot.OneStageZk.memberAt": "5ac8bf82e61d4342d8d5347d06ef18afa6d0fdd05e688ee71187c9c5496eaa2a",
     "Spot.OneStageZk.membersRootsOf": "270afa76bb28e4e9a01cccf277bf44790fa56c26617d8958a687a3ea65fd6c30",
     "Spot.OneStageZk.membersRun": "d11f7faa4ff724903a7ac1ed83a6241980fbc83b9a2416d2cf0c7f92c424010c",
@@ -28806,13 +28809,16 @@
     "Spot.OneStageZk.runMembers": "4a93c94704665fa61c5fb80388dacccb8e31912074d42b8b5c62e186f18e9c7c",
     "Spot.OneStageZk.sampledHeld": "7e4b11ec177cad651a62ee4032b11327eff4dde29bd08e143478b7d9bdeee0ea",
     "Spot.OneStageZk.sessionEvidence": "b7c784997338fbfe811fb30bbe5e4717a87f8bb9704cac295ccccb5c09ac110f",
+    "Spot.OneStageZk.spanUnit": "1e90f8ec63e86e70f6db5e4927924269014588dbc645ae254f15302db507063e",
+    "Spot.OneStageZk.spansOf": "6d734d46d0fb74473a406d3206385f3f56bbd04d243241a192c26a89627028cc",
     "Spot.OneStageZk.statementAt": "e569643c828f2a85cabb02918dfbc3c2cac9f1dd861f7872a40db6a2a20f6a45",
     "Spot.OneStageZk.stepMember": "608e8bfd59a145d82a09efdf39d95d03dc071160e50ca520bbb0721df6e0a32a",
+    "Spot.OneStageZk.templateUnit": "ae9a7f5b1cf7f70efdfd3f93a771d1212b72e2f49048e8dce7dee99b1a826a6f",
     "Spot.OneStageZk.unsampled": "cc0881394b3c73372586e80cdf08a76f305c0794ede0c65155eb9fcc002b76df",
-    "Spot.OneStageZk.wiredRoot": "08717354d184f52c771afc8c1a1465be9a95a95f24b864c3e4b61ae5d652307c",
-    "Spot.OneStageZk.wiredRoots": "c79fa245819a41a4646e6989b97c8033cb797148e4c9e832c49b16c8e560fa91",
+    "Spot.OneStageZk.wiredRoot": "970f4106c20e56cbd4817c969544b28ead26ee90a8d6528d381b7e29fdeaaa6c",
+    "Spot.OneStageZk.wiredRoots": "e1ecb3c3723f4b5c4308c6bf3feb539f3a774b3f48d3f81fa045a120ec1e2bd4",
     "Spot.OneStageZk.wiresHeld": "06fbb993cf59b20768b411cc1b4af9265f0f2e7eeba5db479e63714f7cd43598",
-    "Spot.OneStageZk.wiresOn": "cc9b2ba62ea74e2c2a3192d0c726d9bb018d03591033529815382c326b7d423b"
+    "Spot.OneStageZk.wiresOn": "22dbdce2aca9384c55bb3f7a12c5cb0a7e89e6a04354bfa0f179dc75fcc0114c"
    }
   },
   "Spot.OneStageZkStatement": {
