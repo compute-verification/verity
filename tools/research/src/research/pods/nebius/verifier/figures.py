@@ -2,7 +2,7 @@
 """vy-verifier-figures TREE: each peer's figures file of /etc/vy/verifier.json, made as root from TREE's data sheets, which
 vy-verifier-pin runs before `current` moves to TREE. A peer names its node kind (`node`, a node file of
 calibration/hardware/nodes) and `figures`, /etc/vy/figures/NODE.json; the file is what TREE's `benchmarks/poub_session/sheets.py
-NODE` writes, and nothing is written unless, for every peer, its `timing.Figures.sha512` (TREE's) is the peer's
+NODE` writes, and nothing is written unless, for every peer, the digest TREE's `sheets.py --sha512 NODE` gives is the peer's
 `figures_sha512`."""
 from __future__ import annotations
 
@@ -25,13 +25,14 @@ class Refused(Exception):
 
 
 def figures(tree: Path, node: str, python: str) -> tuple[str, str]:
-    """TREE's figures of a node of kind `node`, as `sheets.py` writes them, and their digest."""
-    r = subprocess.run([python, "-I", str(tree / SHEETS), node], capture_output=True, text=True)
-    if r.returncode:
-        raise Refused(f"{SHEETS} {node} in {tree} failed ({r.returncode}): {r.stderr.strip()}")
-    sys.path.insert(0, str(tree))
-    from verity.protocols.resource_accounting.memory.poub.verifier import timing
-    return r.stdout, timing.Figures.of_json(json.loads(r.stdout)).sha512()
+    """TREE's figures of a node of kind `node`, as `sheets.py` writes them, and their digest (`sheets.py --sha512`)."""
+    out = []
+    for args in ([node], ["--sha512", node]):
+        r = subprocess.run([python, "-I", str(tree / SHEETS), *args], capture_output=True, text=True)
+        if r.returncode:
+            raise Refused(f"{SHEETS} {' '.join(args)} in {tree} failed ({r.returncode}): {r.stderr.strip()}")
+        out.append(r.stdout)
+    return out[0], out[1].strip()
 
 
 def plan(tree: Path, settings: dict, *, out: Path = DIR, python: str = "/usr/bin/python3") -> dict[Path, str]:
