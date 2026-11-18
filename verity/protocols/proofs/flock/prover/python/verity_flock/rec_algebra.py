@@ -851,7 +851,7 @@ def h_round(sh: Shape) -> int:
 
 def rounds(sh: Shape) -> list[list[tuple]]:
     """The rep's message elements by the round that absorbs them (each round one ``c_k``, `verity_flock.rec_live`), in
-    protocol order: `free_names` and Ligerito's T, which the prover absorbs alone as Ligerito starts. Rounds that absorb no
+    protocol order: the free names and Ligerito's T, which the prover absorbs alone as Ligerito starts. Rounds that absorb no
     element (a cap alone, or nothing) are not listed."""
     s = sh.sched
     R = len(s.levels) - 1

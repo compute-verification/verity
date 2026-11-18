@@ -49,7 +49,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
     Every opening is in the unit's own slot and step: one request's replay opens a sampled proof block.
   - ``registered``: a registered read (the weights), committed under the registered row's salt, opening against the
     value's root: ``{value, position, path}``. It is in no step commitment.
-  - ``reads``: a row made of pieces of committed rows (`Read`; `WindowLocate` takes the H200 window writer's), each from
+  - ``reads``: a row made of pieces of committed rows (`Read`), each from
     its unit's own slot and block at its own step or an earlier one (an attention block at step s reads the K and V rows
     of steps 0 .. s): ``{kind: step, at, words, start, row, salt, string, slot}``, its committed row's bytes and salt in
     the payload, ``slot`` its opening as above (``producer`` optional) against its own step's root; a position word
@@ -59,8 +59,8 @@ in the payload and holds only public structure, hiding commitments and paths bes
   covers are zero, and a row of no pieces is all zero (a V row past n, which the Definition masks).
 
   With ``docket``, `check` holds every step root the bundle opens against to the one the docket's
-  ``window.commitment`` names (`steps_provenance`, every step's root registered before the coin) and fails closed on a
-  step it doesn't name.
+  ``window.commitment`` names (every step's root registered before the coin) and fails closed on a step it
+  doesn't name.
 
   An output row (``kind: out``) is the unit's committed output: a value, in the payload only.
 
@@ -770,7 +770,7 @@ def _check_commitment(doc: Mapping[str, Any], bad: dict[str, str],
                       docket: Mapping[str, Any] | None = None) -> tuple[Any, ...] | None:
     """The commitment section's layout, context and block trees recomputed: ``(context, layout, slots, step roots by (block,
     step))``, or None (with ``bad`` filled) when its layout or context can't be read. With ``docket``, every step's
-    root is held to the one its ``window.commitment`` names (`steps_provenance`), and a step it doesn't name is refused."""
+    root is held to the one its ``window.commitment`` names, and a step it doesn't name is refused."""
     com = doc["commitment"]
     if com.get("format") != COMMITMENT:
         bad["commitment"] = f"not {COMMITMENT}"
@@ -918,7 +918,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] |
           replay_units: bool = True) -> dict[str, str]:
     """The consumer's check of a bundle (module docstring): ``{key: why}``, empty when it holds. ``docket``: the
     window's ``registration.json``, whose roots and sampling design the bundle's must be, and whose ``window.commitment``
-    (`steps_provenance`) names every step root the bundle opens against: a step it doesn't name fails closed."""
+    names every step root the bundle opens against: a step it doesn't name fails closed."""
     bad: dict[str, str] = {}
     if doc.get("format") != FORMAT:
         return {"format": f"not {FORMAT}"}

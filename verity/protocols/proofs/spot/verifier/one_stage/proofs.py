@@ -33,14 +33,14 @@ peak), then O(proof) a session: so a protocol verifies one statement a stratum, 
 It runs in `verifier_env`: its caller's environment over `VERIFIER_ENV`, the verifier's allocator setting.
 
 The one-stage audit's v2 (`V2`, `Spot.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
-as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
-(`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
+as content-addressed blobs: v1's inputs with the verdicts replaced by the files' digests (`evidence_v2`) and the
+files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
 `verify`'s. `order_why` mirrors its refusal of a challenger release log out of the order the sample, then the link,
 then the other rounds (`OneStageZk.orderHeld`). The registered circuit names the lookup tables its session reads (its
 META's ``lookups``, `lookups_of`), and v2 refuses blobs whose pinned MUFU tables are other than those (`tables_why`,
 `OneStageZk.tablesHeld`); in the per-member form a member's statement holds the blobs' pinned tables its own circuit
-looks up and no other (`own_tables`, `tables_match_why`). `statements_v2` is the evidence's per-member form, one
-statement a sampled member (`OneStageZk.membersEvidenceOf`).
+looks up and no other (`own_tables`, `tables_match_why`).
+The evidence's per-member form is one statement a sampled member (`OneStageZk.membersEvidenceOf`).
 
 A window of several members has v2's per-member form of ``proofs`` (`members_v2`: every `Member` in the parameters, one
 statement for each member with a session in the evidence), which the audit's check reads beside the one statement's
@@ -512,7 +512,7 @@ def order_why(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Ma
     """`OneStageZk.orderHeld`'s refusal, with its reason: the challenger session's release log in v1's `evidence`
     (``coins``' ``session``'s ``log``), after its head, not the sample, then the link, then the other rounds
     (`challenger.sample_link_first`) at the parameters' challenger family (`params`' ``challenger``'s ``label``) and the
-    docket `record`'s digest; None when it is. `check_v2` answers it under ``proofs:`` before any session's record
+    docket `record`'s digest; None when it is. v2 answers it under ``proofs:`` before any session's record
     is read, once the log's coin trees parse (`challenger.coin_trees_of`), which it refuses first."""
     log = evidence["coins"]["session"]["log"]
     if sample_link_first(params["challenger"]["label"], bytes.fromhex(registration_digest(record)), log[1:]):
