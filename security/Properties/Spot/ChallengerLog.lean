@@ -10,16 +10,17 @@ public import Definitions.Core.Label
 `Spot.Challenger.releasedLogOf` reads a session's release log into entries in the log's one order, and
 `Spot.Challenger.cut` checks a cut on them. These state what that code checks in the core's terms (`Verity.Challenger.Log`):
 
-* `coreLog`: the code's log as the core's, a recorded entry the commitment `(label, index, root)`, a released one the
-  coin `(label, index)` (`Verity.Label.coin`), in the code's order;
+* `coreLog`: the code's log as the core's, a recorded or committed root the commitment `(label, index, root)`, a
+  released coin the coin `(label, index)` (`Verity.Label.coin`), in the code's order;
 * `CutMeans`: on a log `releasedLogOf` accepts, `cut log payloads keys` accepting gives `Log.Cut` at the recorded
   commitments of the families `payloads` and the coins of the families `keys`;
 * `KeyedBySlotMeans`: on a log `releasedLogOf` accepts, every family's coins are keyed by slot (`Log.KeyedBySlot`),
   member `s` released after the family's root `s` is recorded, once.
 
-Where the code's log and the core's differ: the code carries times and refuses a release before its root's receipt; it
-takes a root and its release as a pair, so a recorded root with no release after it is refused, where the core's log
-interleaves records and releases freely; it drops a coin tree's lines; families interleave in both.
+Where the code's log and the core's differ: the code carries times and refuses a release before its root's receipt; a
+slot's root is followed at once by its coin's release, where the core's log may hold other entries between; a commit's
+index counts the family's commits, apart from its slots; the code drops a coin tree's lines. Slots come in any order
+and each once in both, and families interleave in both.
 -/
 
 @[expose] public section
@@ -29,7 +30,7 @@ namespace Spot.Challenger
 /-- The code's log as the core's (the module docstring). -/
 def coreLog (log : Log) : Verity.Challenger.Log (String × Nat × ByteArray) (String × Nat) :=
   log.map fun e => match e.kind with
-    | .recorded => .recorded (e.label, e.index, e.root)
+    | .recorded | .committed => .recorded (e.label, e.index, e.root)
     | .released => .released (e.label, e.index)
 
 /-- The root the code's log records as member `s` of family `fam`, the empty root where it records none. -/

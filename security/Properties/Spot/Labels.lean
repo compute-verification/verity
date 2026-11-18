@@ -1,5 +1,6 @@
 module
 
+public import Circuits.Wire
 public import Spot.ChallengerSession
 public import Spot.Registered
 public import Definitions.Core.Label
