@@ -110,7 +110,7 @@ mkdir -p "$ROOT/cache"
   > "$PRIV/predict_row.json" 2> "$PRIV/predict_row.err"
 rc=$?
 [ "$rc" = 0 ] && [ -f "$PRED/predicted.json" ] || {
-  echo "PREDICT-ROW $ROW_ID refused (exit $rc): $(grep -v '^\[predict\]' "$PRIV/predict_row.err" | tail -2 | cut -c1-600)" \
+  echo "PREDICT-ROW $ROW_ID refused $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" failed "$rc" "$PRIV/predict_row.err")" \
     | tee -a "$OUT/stock.txt"; exit 3; }
 export OUT
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-bench-31-stock} gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" --mem-gb "${LEASE_MEM_GB:-64}" \
