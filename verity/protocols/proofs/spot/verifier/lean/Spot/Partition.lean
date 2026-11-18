@@ -1,5 +1,6 @@
 /-
-The partition as a named query over the verifier's own program (`one_stage/partition.py`): core's `verity/partition/v1`
+The partition as a named query over the verifier's own program (`one_stage/partition.py`, its query
+`verity/circuits/partition_query.py`): core's `verity/partition/v1`
 object and its digest (Flock's `HmRow.checkPartitionObject` and `HmRow.partitionDigest`), and the queries one-stage
 applies to the program: the template queries (Flock's `TemplateQuery`), `Q_word` v1 at `X = 16` (`Flock.Extract`) and
 `Q_call` v1 at `X ≤ 16` (`Flock.Qcall`), each on a topological program only, as core's `evaluate` refuses any other.
@@ -94,7 +95,7 @@ def wordCalls (P : Flock.Program.Prog) : V (Array (Nat × Nat × Flock.Qword.DCu
       throw s!"query-refused: unit {u} of {(P.defs[d]!).key} commits {ob[u]!} bits, more than the widest class, {SIZE_CLASS_MAX}"
   return calls
 
-/-- `partition._committed_bits`: per unit `[lo, hi)` of one activation of a Definition, laid out as `G`
+/-- `partition_query._committed_bits`: per unit `[lo, hi)` of one activation of a Definition, laid out as `G`
 (`Flock.Qcall.gates`), the bits it commits: the summed declared widths of its gates that are Input gates, or that a later
 gate of the activation reads or the activation returns (`Gates.readTo`), constants included. Nothing outside an activation
 reads its gates but through its returns, so in any program this bounds the claims' `Prog.Boundary` count, as `Q_call`'s
@@ -103,7 +104,7 @@ def committedBits (G : Flock.Qcall.Gates) (units : Array (Nat × Nat)) : Array N
   units.map fun (a, b) => (List.range (b - a)).foldl (fun bits i =>
     if Flock.Program.isInputId G.prim[a + i]! || G.readTo[a + i]! ≥ b then bits + G.width[a + i]! else bits) 0
 
-/-- `partition._template_bits`: the bits one instance of template `d` commits, the summed widths, as its return type gives
+/-- `partition_query._template_bits`: the bits one instance of template `d` commits, the summed widths, as its return type gives
 them, of the distinct gates of its activation that it returns. Decoding keeps Input gates to the root's body, and nothing
 outside an instance reads its gates but through its returns, so this is `committedBits` of the whole activation, read off
 the return's references alone rather than the activation's gates. -/
@@ -122,7 +123,7 @@ def templateBits (P : Flock.Program.Prog) (d : Nat) : V Nat := do
   return (List.range sorted.size).foldl (fun bits i =>
     if i > 0 && sorted[i - 1]!.1 == sorted[i]!.1 then bits else bits + sorted[i]!.2) 0
 
-/-- `partition._check_units` on a template query's ranges: refused for a template of no gate, or one whose instance commits
+/-- `partition_query._check_units` on a template query's ranges: refused for a template of no gate, or one whose instance commits
 bits no public class holds (`sizeClass`, `templateBits`), each template once. -/
 def checkTemplates (P : Flock.Program.Prog) (rs : Array TRange) : V Unit := do
   let root := (P.defs[P.root]!).body
@@ -136,7 +137,7 @@ def checkTemplates (P : Flock.Program.Prog) (rs : Array TRange) : V Unit := do
     if (sizeClass bits).isNone then
       throw s!"query-refused: an instance of {r.template} commits {bits} bits, more than the widest class, {SIZE_CLASS_MAX}"
 
-/-- `partition._check_units` on `Q_call`'s Calls: refused when a unit commits bits no public class holds (`sizeClass`,
+/-- `partition_query._check_units` on `Q_call`'s Calls: refused when a unit commits bits no public class holds (`sizeClass`,
 `committedBits`, constants counted, which `Q_call`'s width rule leaves out), each Definition once. -/
 def checkCalls (P : Flock.Program.Prog) (cs : Array Flock.Qcall.Call) : V Unit := do
   let mut seen : Array Nat := #[]
