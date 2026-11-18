@@ -20,6 +20,8 @@ failures and the warnings; a failure is named on its own line (`FAIL NAME`) and 
 
 `circuit-check --all` checks every registered Definition and template. It needs about 24 GB a process, so run it on a
 node through `research run --on auto`. `circuit-check --help` lists every other form a target takes.
+`circuit-check --reached BASE` lists the `--all` targets a change since BASE reaches, from the cache's own record of what
+each read, and `--check` checks them; `--update-pins` with `--check` re-pins those it checks and reuses the rest.
 
 `circuit-check --model PHI --class SLOTS,PROMPT,OUTPUTS` checks a model's served bindings, read from its configuration
 alone: the Definitions of the proof blocks of its class circuit at that window class. `PHI` is the φ file a served run

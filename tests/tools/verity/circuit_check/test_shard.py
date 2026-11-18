@@ -263,11 +263,45 @@ def test_the_shard_options_are_refused_where_they_mean_nothing(stub, tmp_path, c
                       (["--all", "--records-only", "--cache", "c", "SynPass_v1"], "--records-only stores"),
                       (["--all", "--records-only", "--cache", "c", "--no-cache"], "--records-only stores"),
                       (["--all", "--records-only", "--cache", "c", "--update-pins"], "--records-only stores"),
-                      (["--all", "--records-only", "--cache", "c", "--shard", "1/3", "--shard-dir", "d"], "--records-only stores")):
+                      (["--all", "--records-only", "--cache", "c", "--shard", "1/3", "--shard-dir", "d"], "--records-only stores"),
+                      (["--reached", "main", "--all"], "--reached names"),
+                      (["--reached", "main", "--shard", "1/3", "--shard-dir", "d"], "--reached names"),
+                      (["--reached", "main", "--update-pins"], "--update-pins but with --check"),
+                      (["--all", "--check"], "--check checks")):
         with pytest.raises(SystemExit) as e:
             cli.main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err, argv
     _refused(capsys, [tmp_path / "nothing"], "did not finish")
+
+
+def test_a_change_reaches_no_target_unless_it_touches_a_path_a_check_can_read(tmp_path, monkeypatch, capsys):
+    """`shard.reaching`: a file modified outside the checker and the places its suite declares it reads, or prose anywhere,
+    reaches no target, and ``--reached`` says so, building nothing; a path added or deleted anywhere may, as a module lookup
+    finds it by its name."""
+    checks = f"{SH.CHECKER}/src/circuit_check/checks.py"
+    paths = [("M", "verity/circuits/ops/argmax.py"), ("M", "verity/errors.py"), ("M", checks), ("M", "verity/circuits/PROTOCOL.md"),
+             ("M", "benchmarks/x.py"), ("M", "verity/circuitsx/y.py"), ("D", "adapters/vllm/x/README.md"), ("A", "tests/x/test_y.py")]
+    assert SH.reaching(paths, ["verity/circuits", "verity/errors.py"]) == [
+        "verity/circuits/ops/argmax.py", "verity/errors.py", checks, "adapters/vllm/x/README.md", "tests/x/test_y.py"]
+    root = _tree(tmp_path, {SH.SUITE: '[tool.verity.tests]\ninputs = ["syn"]\n', "syn/README.md": "syn\n", "bench/run.py": "x = 1\n"})
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@example.com", *args], check=True,
+                       capture_output=True)
+
+    git("add", "-A")
+    git("commit", "-qm", "base")
+    git("branch", "base")
+    _edit(root, "syn/README.md", "syn", "the synthetic registry")
+    git("commit", "-qam", "prose")
+    _edit(root, "bench/run.py", "1", "2")
+    assert SH.changed(root, "base") == [("M", "bench/run.py"), ("M", "syn/README.md")]
+    monkeypatch.setattr(cli, "REPO", root)
+    assert cli.main(["--reached", "base"]) == 0
+    assert "no target reached" in capsys.readouterr().out
+    (root / "syn" / "new.py").write_text("")
+    assert SH.changed(root, "base")[-1] == ("A", "syn/new.py")
+    assert SH.reaching(SH.changed(root, "base"), SH.declared(root)) == ["syn/new.py"]
 
 
 def test_the_modules_whose_source_inspect_looked_for_are_every_binding_s_loaded_probes(tmp_path, monkeypatch):

@@ -3,7 +3,7 @@ slot's coarsest fitting option, else a gap with its finest option's reason; a ``
 cost; no proof block
 for a row of no gate or no input; a ``CHAINS`` row's key blocks as scores and values units before whole), the slots of each
 kind of split the serving rows' tables name, and the census's counts per
-Definition, phase, token and request over the ranks. The sized units are stand-ins: nothing is bound or lowered."""
+Definition, phase, token and request over the ranks, one request at a time for a row of several request shapes. The sized units are stand-ins: nothing is bound or lowered."""
 
 from __future__ import annotations
 
@@ -315,3 +315,28 @@ def test_main_writes_the_census_the_table_and_the_card(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["block_census.py", "--sized", str(tmp_path / "s0.json"), "--out", str(tmp_path / "o")])
     assert B.main() == 0
     assert {p.name for p in (tmp_path / "o").iterdir()} == {"census.json", "table.md", "card.json"}
+
+
+def test_a_staged_definition_s_ands_stand_beside_its_estimate_and_replace_it_in_the_staged_total():
+    rows = {"Lin_v1{N=1}": family("Lin_v1{N=1}", steps={"0": 2, "1": 1}, ands=10),
+            "Big_v1{}": family("Big_v1{}", steps={"0": 1}, ands=100)}
+    c = B.staged(B.census([doc(0, rows)]), [{"census": "Lin_v1{N=1}", "ands": 7}, {"census": "Other_v1{}", "ands": 1}])
+    assert c["definitions"]["Lin_v1{N=1}"]["staged_ands"] == 7 and "staged_ands" not in c["definitions"]["Big_v1{}"]
+    assert c["totals"]["prefill"]["staged_ands"] == 2 * 7 + 100 and c["per_request"]["staged_ands"] == 3 * 7 + 100
+    md = B.table(c)
+    assert "| 10 (staged 7) |" in md and "| proof blocks' ANDs (staged where staged) | 28.5 | 3.5 | 121 |" in md
+    assert "staged" not in B.table(B.census([doc(0, rows)]))
+
+
+def test_a_row_of_several_request_shapes_is_censused_one_request_at_a_time():
+    """A single-card row of a batch: one rank whose requests are of two shapes; the census refuses them together, naming
+    --request, and takes each alone."""
+    two = {"rank": 0, "requests": {"r0": {"prompt_len": 4, "steps": 3, "families": {"Lin_v1{N=1}": family("Lin_v1{N=1}")}},
+                                   "r1": {"prompt_len": 8, "steps": 2, "families": {}}}}
+    with pytest.raises(ValueError, match=r"name one with --request \(of \['r0', 'r1'\]\)"):
+        B.census([two])
+    c = B.census([two], "r0")
+    assert c["ranks"] == [0] and c["tokens"] == {"prefill": 4, "decode": 2} and c["per_request"]["blocks"] == 1
+    assert B.census([two], "r1")["tokens"] == {"prefill": 8, "decode": 1}
+    with pytest.raises(ValueError, match="--request r2: not a request of every rank"):
+        B.census([two], "r2")
