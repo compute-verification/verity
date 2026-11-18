@@ -9,7 +9,6 @@ live verifier gives the same verdicts with its own links file. Linking binds a p
 topology."""
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import random
@@ -107,18 +106,17 @@ def _stage(topo, d: Path, wired: bool):
     assert min(g for u in range(tp.population) for g in tp.outputs(u)) >= len(inputs)
     (d / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))
     (d / "program.desc").write_bytes(canonical_json(encode_program(program)))
-    key = hashlib.sha256(b"test-wired-links").digest()
     wiring = CS.Wiring(program, query, list(range(tp.population)))
-    st = {"honest": CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "honest", key, packed=True, wiring=wiring)}
+    st = {"honest": CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "honest", packed=True, wiring=wiring)}
     if not wired:
-        st["plain"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "plain", key, packed=True)
+        st["plain"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "plain", packed=True)
     else:
         flip = {N + t: (lambda w: w[:-N_OUT] + [1 - b for b in w[-N_OUT:]]) for t in range(N)}
-        st["made_up"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs, flip), d / "made_up", key, packed=True,
+        st["made_up"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs, flip), d / "made_up", packed=True,
                                  wiring=replace(wiring, strict=False))
-        st["wrong_salt"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "wrong_salt", key, packed=True,
+        st["wrong_salt"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "wrong_salt", packed=True,
                                     wiring=replace(wiring, writer_salts=False))
-        st["own"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "own", key, packed=True, wiring=wiring,
+        st["own"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "own", packed=True, wiring=wiring,
                              share_rows=False)
         text = (d / "honest" / "circuit.txt").read_text()
         (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, wiring.indices)))
