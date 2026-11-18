@@ -1,6 +1,10 @@
 """Evidence-store declarations for the harness's points: one vLLM benchmark sweep point, one steady-state point."""
 
+import logging
+
 from research.store.tool import Tool
+
+log = logging.getLogger(__name__)
 
 POINT_FLAGS = ("--spec", "--point", "--identity")
 
@@ -18,7 +22,8 @@ def _launched(argv: list[str]) -> dict[str, str]:
         plan = (steady_plan.make_plan(args.spec, root=root, lookup=lambda *_: (None, None))
                 if steady_spec.is_steady(args.spec) else jobs.make_plan(args.spec, root=root, lookup=lambda *_: None))
         item = jobs.to_run(jobs.again(plan, args.again), args.point)
-    except (ValueError, SystemExit):
+    except (ValueError, SystemExit) as e:
+        log.info("verity-bench run %s names no one point, so its record keys none: %s", " ".join(argv[start:]), e)
         return {}
     return {"spec": args.spec, "point": item.point.id, "identity": item.identity}
 
