@@ -133,7 +133,8 @@ BROKEN = {
     "run-program": ["run-program"],
     "run-circuit": ["run-circuit", "no-window"],
     "templates": ["record-program", "units", "swap", "half-word"],
-    "own-rows": ["row-twice", "row-aliased", "row-broadcast", "row-computed", "row-explicit", "row-strided"],
+    "shared-unheld": ["row-twice"],
+    "own-rows": ["row-aliased", "row-broadcast", "row-computed", "row-explicit", "row-strided"],
     "wires": ["overlap", "bounds", "width", "wire-port", "wire-template", "wire-cut", "cycle", "order", "no-wires"],
     "leaf-widths": ["leaf-wider", "leaf-short"],
     "inputs": ["read-param", "read-leaves", "read-on-wire", "table-param", "root-port", "verdict", "ingress-units",
@@ -1802,7 +1803,7 @@ def _break(rng, made: dict, how: str) -> bool:
     elif how == "half-word":
         _alone(case, c, template(f"Half{c.name}", [("p", Value(rng.choice([8, 24])))], [Value(16)],
                                  [[("op", 16, [(0, 0)])]]))
-    elif how in BROKEN["own-rows"]:
+    elif how in BROKEN["own-rows"] + BROKEN["shared-unheld"]:
         desc = json.loads(inst["program"])
         nodes, types = desc["definitions"][desc["root"]]["body"]["nodes"], desc["types"]
         #: every argument of every unit's node, an input node's leaves: (node, argument, input node, leaves)
@@ -1818,7 +1819,7 @@ def _break(rng, made: dict, how: str) -> bool:
             found = [(r, k) for r in runs for k in range(r[0])
                      if nodes[k]["args"] and _leaves(types[nodes[k]["out"]])[:r[3]] == _leaves(types[nodes[r[2]]["out"]])]
         else:
-            found = [r for r in runs if how != "row-aliased" or r[3] >= 2]
+            found = [r for r in runs if r[3] >= {"row-aliased": 2, "row-strided": 3}.get(how, 0)]
         if not found:
             return False
         pick = rng.choice(found)
@@ -1840,7 +1841,7 @@ def _break(rng, made: dict, how: str) -> bool:
             elif how == "row-explicit":
                 arg["refs"] = {"explicit": [["n", at, leaf] for leaf in range(count)]}
             else:
-                arg["refs"] = {"strided": ["n", at, 0, count, 0, 1, count]}
+                arg["refs"] = {"strided": ["n", at, 0, count - 1, count - 1, 1, count]}
         _reroot(made, edit)
     elif how in ("leaf-wider", "leaf-short"):
         sigs = {codec.descriptor_id(fn): (fn.signature()[0], ref.fields_of(fn.signature()[1])) for fn, _ in c.templates}
