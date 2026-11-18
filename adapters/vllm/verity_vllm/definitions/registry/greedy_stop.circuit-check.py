@@ -15,4 +15,4 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     return [("GreedyStopCheck_v1:320:2:stop", lambda: bind(X.GreedyStopCheck, V=320, N=16, T=2, STOP=(3,), MAX_TOKENS=8,
                                                            PROMPT_LEN=8, MAX_MODEL_LEN=64, FINISH=1)),
             ("GreedyStopCheck_v1-served", lambda: bind(X.GreedyStopCheck, V=154880, N=7744, T=2, STOP=(154820, 154827, 154829),
-                                                       MAX_TOKENS=2, PROMPT_LEN=1024, MAX_MODEL_LEN=131072, FINISH=2))]
+                                                       MAX_TOKENS=2, PROMPT_LEN=1024, MAX_MODEL_LEN=262144, FINISH=2))]

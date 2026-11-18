@@ -1017,7 +1017,7 @@ def test_prefill_chunks_are_a_request_s_prompt_rows_at_a_launch_batch():
 
 
 def test_a_class_g_request_whose_launch_no_capture_covers_is_refused_alone(tmp_path):
-    """A class-G registration at the class's limits of 8,192 tokens a step and 131,072 positions, the custom all-reduce off: a
+    """A class-G registration of 8,192 tokens a step (the class's limit) and 131,072 positions, the custom all-reduce off: a
     request co-scheduled in a step of 3,000 tokens builds no Program, since no captured all-reduce covers that launch (that
     setting's capture stops at 2,048), and `partial` refuses it by name, request by request, before writing any launch. (A prompt
     past INDEX_TOPK keys compiles: `test_dsa_long_rows`.)"""
@@ -1119,9 +1119,9 @@ def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discar
 
 @pytest.mark.parametrize("engine,edit,fact", [
     ({"max_num_batched_tokens": 16384}, {}, "engine arg max_num_batched_tokens 16384, not a stated value of at most 8192"),
-    ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 131072"),
-    ({"max_model_len": -1}, {}, "engine arg max_model_len -1, not a stated value of at most 131072"),
-    ({"max_model_len": 262144}, {}, "engine arg max_model_len 262144, not a stated value of at most 131072"),
+    ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 262144"),
+    ({"max_model_len": -1}, {}, "engine arg max_model_len -1, not a stated value of at most 262144"),
+    ({"max_model_len": 262145}, {}, "engine arg max_model_len 262145, not a stated value of at most 262144"),
     ({"long_prefill_token_threshold": 512}, {}, "engine arg long_prefill_token_threshold 512, not a stated value of at most 256"),
     ({"max_num_seqs": 0}, {}, "engine arg max_num_seqs 0, not a stated value of at most 256"),
     ({"enable_prefix_caching": None}, {}, "engine arg enable_prefix_caching None, not stated True or False"),

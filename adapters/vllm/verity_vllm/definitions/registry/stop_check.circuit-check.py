@@ -21,4 +21,4 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
             ("StopCheck_v1:3:1:model-length", lambda: bind(X.StopCheck, T=3, STOP=(3,), MAX_TOKENS=8, PROMPT_LEN=61,
                                                            MAX_MODEL_LEN=64, FINISH=3)),
             ("StopCheck_v1:32:3:length", lambda: bind(X.StopCheck, T=32, STOP=(154820, 154827, 154829), MAX_TOKENS=32,
-                                                      PROMPT_LEN=1024, MAX_MODEL_LEN=131072, FINISH=2))]
+                                                      PROMPT_LEN=1024, MAX_MODEL_LEN=262144, FINISH=2))]

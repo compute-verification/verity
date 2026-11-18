@@ -127,7 +127,7 @@ def test_a_class_g_runs_registration_is_in_class_g():
 
 def test_a_launch_that_leaves_the_limit_to_vllm_registers_the_length_the_engine_fitted():
     """Under ``max_model_len=-1`` the registration states the length the built engine reads back, never the launch's -1, which
-    class G refuses; a record that reads none back is refused by name, and so is a length past the 131,072 positions a class-G
+    class G refuses; a record that reads none back is refused by name, and so is a length past the 262,144 positions a class-G
     registration may state, fitted or stated."""
     from verity_vllm.program.predict.common import Unexpressible
     from verity_vllm.program.predict.steps import launch_class
@@ -135,9 +135,9 @@ def test_a_launch_that_leaves_the_limit_to_vllm_registers_the_length_the_engine_
     phi = _class_g_phi(effective={"max_model_len": 4032}, max_model_len=-1)
     assert phi.engine["max_model_len"] == 4032
     launch_class(phi)
-    with pytest.raises(Unexpressible, match="engine arg max_model_len None, not a stated value of at most 131072"):
+    with pytest.raises(Unexpressible, match="engine arg max_model_len None, not a stated value of at most 262144"):
         launch_class(_class_g_phi(max_model_len=-1))
-    with pytest.raises(Unexpressible, match="engine arg max_model_len 383872, not a stated value of at most 131072"):
+    with pytest.raises(Unexpressible, match="engine arg max_model_len 383872, not a stated value of at most 262144"):
         launch_class(_class_g_phi(effective={"max_model_len": 383872}, max_model_len=-1))
-    with pytest.raises(Unexpressible, match="engine arg max_model_len 262144, not a stated value of at most 131072"):
-        launch_class(_class_g_phi(max_model_len=262144))
+    with pytest.raises(Unexpressible, match="engine arg max_model_len 262145, not a stated value of at most 262144"):
+        launch_class(_class_g_phi(max_model_len=262145))

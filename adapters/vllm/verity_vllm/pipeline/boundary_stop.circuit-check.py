@@ -10,4 +10,4 @@ def _stop_roots() -> list[Any]:
     stop ids and a model of 131,072 ids."""
     from verity_vllm.pipeline.boundary_stop import egress_stop
 
-    return [egress_stop(4, (3, 7), 64), egress_stop(4, (), 64), egress_stop(1024, (154820, 154827, 154829), 131072)]
+    return [egress_stop(4, (3, 7), 64), egress_stop(4, (), 64), egress_stop(1024, (154820, 154827, 154829), 262144)]
