@@ -5,10 +5,12 @@
 # Writes: the serve's directory, the private directory (keys, salts) and every log under SR, outside the run's directory; under $OUT only smoke.txt, the last line.
 #   research run --on vy-h100-1 --cwd source -- taskset -c 0-9 bash adapters/vllm/verity_vllm/ops/h100_smoke.sh   (DRY=1: off the card)
 # SCHEME=pearl-plus: the same window served under Pearl+ by its name (serve-openai --protocols pearl-plus), at Pearl+'s tie
-#   (scheme.py's tie, class 4,27,2: 4 slots of 27-token prompts, 2 window steps, fixed load), its kernel PEARLC_KERNEL and
-#   cubin PEARLC_CUBIN (benchmarks/harness/setup/pearl_c_sm90.sh, CUDA 13.0, built outside the lease); its salt in-process
-#   unless PEARLC_CHALLENGER_GATE, PEARLC_CHALLENGER_PEER and PEARLC_CHALLENGER_LANE name a live session; it keeps the
-#   serve dir's pearl/w0/ (passes, coins.json, served.json) and schemes/pearl-plus/ (its report) beside the sealed window.
+#   (scheme.py's tie, class 4,27,2: 4 slots of 27-token prompts, 2 window steps, fixed load), its --protocols-config the
+#   file `served_passes.py arm` writes from PEARLC_KERNEL and PEARLC_CUBIN (benchmarks/harness/setup/pearl_c_sm90.sh, CUDA
+#   13.0, built outside the lease; PEARLC_BF16_ROWS default 0); its salt in-process unless PEARLC_CHALLENGER_GATE,
+#   PEARLC_CHALLENGER_PEER and PEARLC_CHALLENGER_LANE name a live session; after the open, `served_passes.py verify` over
+#   the serve dir's pearl/w0/ with no card visible ($OUT/pearlplus-verify.json); it keeps pearl/w0/ (passes, coins.json,
+#   served.json) and schemes/pearl-plus/ (its report) beside the sealed window.
 set -euo pipefail
 TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); cd "$TREE"
 ROW=llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager
@@ -73,7 +75,12 @@ if [ "$SCHEME" = pearl-plus ]; then
   IFS=, read -r slots prompt STEPS < <("$PY" -c 'from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS as s; print(s.tie["class"])')
   [ -n "${STEPS:-}" ] || { echo "SMOKE REFUSED pearl-plus: its scheme states no tie class (scheme.py's PEARL_PLUS.tie, above)"; exit 3; }
   REQS=$slots
-  PP=(--protocols pearl-plus --protocols-config "$("$PY" -c 'import json, sys; print(json.dumps({"pearl-plus": {"device": "cuda", "kernel": sys.argv[1], "cubin": sys.argv[2]}}))' "$PEARLC_KERNEL" "$PEARLC_CUBIN")")
+  export PEARLC_KERNEL PEARLC_CUBIN PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
+  SP=benchmarks/pouw/pearl_c_vllm/served_passes.py SPP=$PYTHONPATH:$TREE/benchmarks/harness
+  PYTHONPATH=$SPP "$PY" "$SP" arm --out "$SR/pearlplus-config.json" > "$SR/pearlplus-arm.log" 2>&1 \
+    || { say "SMOKE FAILED pearl-plus arm: served_passes.py arm ($SR/pearlplus-arm.log)"; cat "$SR/pearlplus-arm.log"; exit 1; }
+  echo "PEARL+ CONFIG: $(tail -1 "$SR/pearlplus-arm.log")"
+  PP=(--protocols pearl-plus --protocols-config "$SR/pearlplus-config.json")
   [ -z "${PEARLC_CHALLENGER_GATE:-}" ] || PP+=(--challenger-gate "$PEARLC_CHALLENGER_GATE"
     --challenger-peer "$PEARLC_CHALLENGER_PEER" --challenger-lane "$PEARLC_CHALLENGER_LANE")
   LOAD=(adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODEL" --fixed "$slots" --window-steps "$STEPS"
@@ -122,6 +129,12 @@ else:
     assert a.varied == 1 and not a.fixed, a
     print("LOAD PARSED:", a.varied, "request(s), max_tokens", a.max_tokens)
 EOF
+  if [ "$SCHEME" = pearl-plus ]; then
+    mkdir -p "$SCRATCH/no-passes"
+    if PYTHONPATH=$SPP "$PY" "$SP" verify --passes "$SCRATCH/no-passes" --out "$SCRATCH/v.json" > "$SR/pearlplus-verify.log" 2>&1; then
+      echo "SMOKE FAILED: served_passes.py verify passed a directory of no passes"; exit 1; fi
+    echo "PEARL+ VERIFY REFUSES A DIRECTORY OF NO PASSES: $(grep -v '^ ' "$SR/pearlplus-verify.log" | tail -1 | cut -c1-160)"
+  fi
   echo "SMOKE DRY OK${NOKIT:+ (no toolkit here: the native collector not built)}; not exercised off the card: the model load, the committer's construction over the engine, the request, the seal and the open"
   exit 0
 fi
@@ -157,5 +170,8 @@ assert passes and os.path.exists(f"{d}/pearl/w0/coins.json"), f"{d}/pearl/w0 hol
 print(f"; PEARL+ epoch 0 kept {len(passes)} pass file(s) under pearl/w0, its commitment {json.dumps(c, default=str)[:120]}")
 EOF
 ) || { say "SMOKE FAILED pearl-plus: no report or no passes ($D/schemes/pearl-plus, $D/pearl/w0)"; exit 1; }
+  CUDA_VISIBLE_DEVICES= PYTHONPATH=$SPP "$PY" "$SP" verify --passes "$D/pearl/w0" --out "$OUT/pearlplus-verify.json" > "$SR/pearlplus-verify.log" 2>&1 \
+    || { say "SMOKE FAILED pearl-plus verify: served_passes.py verify over pearl/w0 ($SR/pearlplus-verify.log)"; exit 1; }
+  said+="; PEARL+ VERIFY: $(tail -1 "$SR/pearlplus-verify.log" | cut -c1-200)"
 fi
 say "$said"
