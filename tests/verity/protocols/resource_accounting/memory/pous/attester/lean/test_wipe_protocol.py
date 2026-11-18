@@ -7,12 +7,15 @@ segment at `k = 2152` (`r = 24`) and one at `k = 5231` (`r = 59`) with memory pa
 egress of 0 MiB, each accepted and not certified, its count named as the evidence writer's, one whose evidence gives no
 egress (accepted, not certified) and one whose egress is out of range (rejected), a
 prover keeping one label past the threshold of foreign content, a late read and a session never signed, each with the
-verdict it is aimed at; and a commitment of no reads, refused by both as they decode it."""
+verdict it is aimed at; a commitment of no reads, refused by both as they decode it; and `serve --server NAME`, the
+served road's, which refuses by name a case of another server than the served node NAME and answers the served node's
+as `serve` does."""
 
 from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 
 import mc_cases as M
 import pytest
@@ -171,3 +174,35 @@ def test_a_test_signed_wipe_is_never_the_deployed_protocols(deployed_server):
     lean = D.replay(port, c, deployed_server)
     assert port.key(lean) == port.key(port.python(c))
     assert json.loads(lean[1])["reason"].startswith("signature scheme 'test/lms-sha512/n64-w1-h1/v0' is not accepted")
+
+
+#: `MemoryAttester.WipeProtocol.otherServer`'s refusal
+OTHER_SERVER = "the case is a wipe of another server than {}"
+
+
+def _served(exe: str, served: str, cases: list[dict]) -> list[dict]:
+    lines = "".join(D.canonical({k: c[k] for k in ("commitment", "evidence", "params")}) + "\n" for c in cases)
+    p = subprocess.run([str(D.build(M.PACKAGE, exe)), "serve", "--server", served], input=lines, capture_output=True,
+                       text=True, check=True)
+    return [json.loads(x) for x in p.stdout.splitlines()]
+
+
+@pytest.mark.parametrize("exe", ["wipe-protocol", "wipe-protocol-test"])
+def test_the_served_road_refuses_a_wipe_of_another_server_by_name(exe):
+    """Held to the served node, a case whose params name another server is refused by name, before its signature or its
+    reads; the served node's own case gets `serve`'s answer, accepted or undecided. Under `wipe-protocol` the honest
+    wipe's case, under `wipe-protocol-test` a test signer's."""
+    if exe == "wipe-protocol":
+        honest, unsigned = C.build("honest"), C.build("unsigned")
+    else:
+        s = WC.run(sw.WipeParams(8, 2, 1, 100, (("gpu", 512),)), M.test_signer(M.SECRETS[0], 1, 0))
+        honest, unsigned = C.wipe_case(s.commitment, s.signed, s.trusted), C.wipe_case(s.commitment, None, s.trusted)
+    server = bytes.fromhex(honest["params"]["server"]).decode()
+    other = server + "x"
+    own = _served(exe, server, [honest, unsigned])
+    assert [a["verdict"] for a in own] == ["accept", "undecided"], own
+    assert own[1]["reason"] == WP.UNSIGNED
+    refused = _served(exe, other, [honest, unsigned])
+    for a in refused:
+        assert (a["verdict"], a["reason"]) == ("reject", OTHER_SERVER.format(other)), a
+        assert a["commitment"] == own[0]["commitment"] and a["public"] is None

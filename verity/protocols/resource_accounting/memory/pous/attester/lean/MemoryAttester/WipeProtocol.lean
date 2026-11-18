@@ -244,6 +244,44 @@ def protocol : Core.Protocol := mkProtocol ID SCHEMES
 /-- The same check under the test signers' schemes alone, its id `test/verity/wipe/v0`. -/
 def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 
+/-- The refusal of a case whose params name another server than the served node `served`. -/
+def otherServer (served : String) : String := s!"the case is a wipe of another server than {served}"
+
+/-- `check` on a served road, whose served node `served` (its name, the public input `serve --server` takes) the case
+must be a wipe of: a case whose params' `server` is not `served`'s bytes is refused by name (`otherServer`) before
+anything else is read. -/
+def checkServed (schemes : Schemes) (served : String) (p : Params) (c : StreamedWipe.Commitment) (e : Evidence) :
+    Core.Outcome Public (StreamedWipe.Params × Int) :=
+  if p.server != served.toUTF8 then .reject (otherServer served) else check schemes p c e
+
+/-- `mkProtocol id schemes` held to the served node `served` (`checkServed`). -/
+def servedProtocol (id : String) (schemes : Schemes) (served : String) : Core.Protocol where
+  id := id
+  Params := Params
+  Commitment := StreamedWipe.Commitment
+  Evidence := Evidence
+  Public := Public
+  Profile := StreamedWipe.Params × Int
+  params := decodeParams
+  commitment := decodeCommitment
+  evidence := decodeEvidence
+  digest := digest
+  check := checkServed schemes served
+  publicJson := Public.toJson
+  profileJson := profileJson
+
+/-- The wipe's command line (`Core.Protocol.main`) of `mkProtocol id schemes`, and `serve --server NAME`: `serve` held
+to the served node NAME (`servedProtocol`). -/
+def mainOf (id : String) (schemes : Schemes) : List String → IO UInt32
+  | ["serve", "--server", served] => (servedProtocol id schemes served).main ["serve"]
+  | args => (mkProtocol id schemes).main args
+
+/-- `wipe-protocol`'s command line: `protocol`'s, and `serve --server NAME` (`mainOf`). -/
+def main : List String → IO UInt32 := mainOf ID SCHEMES
+
+/-- `wipe-protocol-test`'s command line: `testProtocol`'s, and `serve --server NAME` (`mainOf`). -/
+def testMain : List String → IO UInt32 := mainOf (TEST_PREFIX ++ ID) TEST_SCHEMES
+
 /-- **What a wipe accounts for** (`Core.Account`): the foreign bits the server may still hold after an accepted wipe
 (`foreign_bits`), free from above, against the memory the wipe declared (`memory_bits`, its capacity), at the error its
 bound states (`eps`), at a moment. Until the network attester's count reaches the check, every accepted wipe publishes
@@ -296,5 +334,12 @@ private def unread : StreamedWipe.Commitment := ⟨"n0".toUTF8, ⟨#[0]⟩, { se
   | .error _ => false
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
 #guard account.Formed ∧ account.protocol = protocol.id
+
+#guard match checkServed SCHEMES "n0" ⟨"n0".toUTF8, ⟨#[0]⟩, #[]⟩ unread ⟨none, none⟩ with
+  | .undecided r => r.startsWith "the memory challenger has not signed"
+  | _ => false
+#guard match checkServed SCHEMES "n1" ⟨"n0".toUTF8, ⟨#[0]⟩, #[]⟩ unread ⟨none, none⟩ with
+  | .reject r => r == otherServer "n1" && r == "the case is a wipe of another server than n1"
+  | _ => false
 
 end MemoryAttester.WipeProtocol
