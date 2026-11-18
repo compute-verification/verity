@@ -159,7 +159,7 @@
   "art:78615011944ccec18b2a9e217d8ec29272e598f0066f9054fb1f944a2ac51609": "tests/adapters/vllm/tests/engine/collectives/fixtures/tp2/fold_gap.shard.rank0.json",
   "art:158db783ce5c5a88e19ccbc34a4a7923faecc92a592b3418d3848f3b9ba266c8": "tests/adapters/vllm/tests/engine/collectives/fixtures/tp2/fold_gap.shard.rank1.json",
   "art:939f5600f8dbd843d6f1525f5e1d6b40592176ce8894dfe6bb3876475f659401": "tests/adapters/vllm/tests/pipeline/fixtures/advice_run_a/step_trace.jsonl.gz",
-  "art:bd2f980123b7fff1e6a5d260f0ac34608c41daf0dd4341d635ee7ed88d0e15d5": "tests/adapters/vllm/tests/program/predict/fixtures/naming_traces.json",
+  "art:efaea1297125b78a9ef0e312dc0e4a4a194d58f5d0c4f1c855805a17bad918a1": "tests/adapters/vllm/tests/program/predict/fixtures/naming_traces.json",
   "art:30385407aad29494f71640c127a59912b9839722000d856fd095b2034174e259": "tests/adapters/vllm/tests/program/data/dsa_h200_logits.npz",
   "art:c1833dbbafe1d80f86f08e2b657b43607a506430d0b57827d8bc6d6ab4aa1bad": "tests/adapters/vllm/tests/program/data/dsa_glm53_kslots.npz",
   "art:d794e952dec34ad637dad0526ce839b942849d4ed283a05380b3434fa96d9301": "adapters/vllm/docs/data/ref-prims",
@@ -181,6 +181,12 @@
   "art:3b4e100e16ec5f11bccadf73cab4d002d370ffe50815ac9eb4f3d37cbd36ec57": "tests/adapters/vllm/verity_vllm/definitions/fixtures/fa2_train_bwd_sm120.npz",
   "art:ed3b2d968923fe39be309d15f9e2c41cae215ff4fcce40590131b9f0b02a2d52": "tests/verity/protocols/compose/verifier/lean/fixtures/sampled-two-case",
   "art:9606d9658bc4fa470a1041657128bcb6acd171c98866a253ae07e8b8ef534d9a": "tests/adapters/vllm/tests/observe/fixtures/glm53_tp8_fp8_ds_mla.rank0.jsonl.gz",
+  "toys": {
+    "tests/benchmarks/one_stage/fixtures/bundle-window": "the prover's store of a seeded two-linear MLP's window on two made-up tokens, with its tampered twin; no checkpoint and no request",
+    "tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate": "witness files of two recursion runs of a toy circuit at 2 instances, on generated values",
+    "tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner": "a recorded prover session and its private part for the recursion's inner shape at 16 instances, a toy circuit on generated values",
+    "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins": "a recorded recursive session's salts and private part at 64 instances, a toy circuit on generated values"
+  },
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"

@@ -1435,9 +1435,8 @@ private def goOf (desc : Desc) (rootId programFn : String) (recut : Bool) : D Na
   return r
 
 /-- The codec's refusal of a Program whose Definitions the plain walk refuses with `e`, from the walk `r` that reads an input
-node at a width dividing its own (§4.4): its refusal; else the root's and the input nodes' (`decode`'s, in its order); else,
-where the root reads an input node in leaves of part of its width, `recut-gates` (a gate is one leaf of its width, and no
-layout has an operand of part of a gate: PROTOCOL.md §6, `Program.circuit`'s `refuse_recut`); else `e`. -/
+node at a width dividing its own (§4.4) and reads none in its root: its refusal; else the root's and the input nodes'
+(`decode`'s, in its order); else `e`. -/
 private def recutRefusal (e rootId : String) (r : Except String (Nat × DecState)) : String :=
   match r with
   | .error e' => e'
@@ -1450,19 +1449,37 @@ private def recutRefusal (e rootId : String) (r : Except String (Nat × DecState
         if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
           some s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
         else none
-    match input with
-    | some m => m
-    | none =>
-      if rd.body.recut.isEmpty then e
-      else s!"recut-gates: input nodes {rd.body.recut.toList.map (·.1)} are read in leaves of part of their width, " ++
-        "which the gate layout doesn't lay out"
+    input.getD e
 
-/-- The decoded Definitions and the root's place: the plain walk's, every body read at its own widths, so a decoded Program
-has no recut; where the plain walk refuses, the codec's refusal (`recutRefusal`). -/
+/-- The decoded Definitions and the root's place: the plain walk's, every body read at its own widths, where it accepts; where
+it refuses, the walk that reads an input node at a width dividing its own (§4.4) where that one accepts with its root reading
+one (`Body.recut`), else the codec's refusal (`recutRefusal`). So a decoded Program is the plain walk's or has a recut root. -/
 private def decodeDefs (desc : Desc) (rootId programFn : String) : V (Nat × DecState) :=
   match (goOf desc rootId programFn false).run {} with
   | .ok r => .ok r
-  | .error e => .error (recutRefusal e rootId ((goOf desc rootId programFn true).run {}))
+  | .error e => match (goOf desc rootId programFn true).run {} with
+    | .ok (root, st) =>
+      if (st.defs[root]!).body.recut.isEmpty then .error (recutRefusal e rootId (.ok (root, st))) else .ok (root, st)
+    | r => .error (recutRefusal e rootId r)
+
+/-- Decoded Definitions whose root reads no input node at another width are the plain walk's. -/
+private theorem decodeDefs_plain {desc : Desc} {rootId programFn : String} {root : Nat} {st : DecState}
+    (h : decodeDefs desc rootId programFn = .ok (root, st)) (hr : (st.defs[root]!).body.recut = #[]) :
+    (goOf desc rootId programFn false).run {} = .ok (root, st) := by
+  unfold decodeDefs at h
+  split at h
+  next r hp => rw [hp]; exact h
+  next =>
+    split at h
+    next root' st' _ =>
+      split at h
+      · cases h
+      · rename_i hne
+        injection h with h
+        simp only [Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        simp [hr] at hne
+    next => cases h
 
 /-- `decode_program` on a descriptor's bytes: the refusals of PROTOCOL.md §4.6 (a primitive's signature is the descriptor's own,
 see the module docstring), then the program's SHA-512. -/
@@ -1661,8 +1678,32 @@ def resolveStep (P : Prog) : Scope × Ref → V (Nat ⊕ (Scope × Ref))
       pure (.inr (.child sc node.fn (o + m * callee.gates) k m, callee.body.ret.get jj))
 
 /-- `layout.resolve`: the gate a body-scoped reference denotes in an activation, up through parameters and down through node
-outputs until a primitive. -/
-def resolve (P : Prog) (sc : Scope) (r : Ref) : V Nat := Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
+outputs until a primitive. Refused (`recut-gates`, `Program.circuit`'s refusal) while the root reads an input node recut
+(`Body.recut`): a gate is one leaf of its width, and the layout has no operand of part of a gate. -/
+def resolve (P : Prog) (sc : Scope) (r : Ref) : V Nat :=
+  if (P.defs[P.root]!).body.recut.isEmpty then Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
+  else throw (s!"recut-gates: input nodes {((P.defs[P.root]!).body.recut.map (·.1)).toList} are read in leaves of part " ++
+    "of their width, which the gate layout doesn't lay out")
+
+theorem resolve_run {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P sc r = .ok a) :
+    Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r) = .ok a := by
+  unfold resolve at h
+  split at h
+  · exact h
+  · cases h
+
+theorem resolve_eq {P : Prog} (h : (P.defs[P.root]!).body.recut = #[]) (sc : Scope) (r : Ref) :
+    resolve P sc r = Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r) := by
+  unfold resolve
+  rw [h]
+  rfl
+
+theorem resolve_recut {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P sc r = .ok a) :
+    (P.defs[P.root]!).body.recut = #[] := by
+  unfold resolve at h
+  split at h
+  · exact Array.isEmpty_iff.mp (by assumption)
+  · cases h
 
 /-- `partition_object.order_violation`: the first reference naming neither a parameter of its body nor an earlier node of it
 (a body's `ret` may name any node), over every body the root reaches, root first and callees in node order, each

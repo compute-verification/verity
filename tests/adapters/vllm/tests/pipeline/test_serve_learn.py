@@ -17,7 +17,8 @@ from tests.pipeline.test_serve_openai import (
     Tokenizer,
     records,
 )
-from verity_vllm import settings
+from verity import hooks as H
+from verity_vllm import messages, settings
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_learn as sl
@@ -139,6 +140,26 @@ def test_without_the_warm_up_every_execution_blocks_first_step_is_refused(tmp_pa
     assert sl.warmed(com, llm, opts).learn_warmup is None and com.steps == []
     served(tmp_path, engine, com, opts, blocks=3)
     assert [(s, o) for _r, s, o in com.steps] == [(0, "refused"), (1, "learned"), (0, "refused"), (1, "hit"), (0, "refused"), (1, "hit")]
+
+
+def test_no_scheme_hears_the_warm_up_and_every_scheme_hears_the_served_steps_after_it():
+    """The warm-up's steps reach no subscriber, so Pearl+ opens no epoch for the server's life before phase 0 opens."""
+    opts = parse(*SHAPE)
+    engine, com, llm = stand_ins(opts)
+    heard: list[Any] = []
+    with messages.using(messages.Exchange()) as ex:
+        ex.subscribe("pearl-plus", "steps", heard.append)
+        step = engine.step
+
+        def emitting() -> Any:
+            messages.current().emit(H.StepBegan(ex.next_step, (), 32, 0))
+            return step()
+
+        vars(engine)["step"] = emitting
+        sl.warmed(com, llm, opts)
+        assert com.learn_warmup["engine_steps"] == 2 and heard == []
+        ex.emit(H.PhaseOpened(0, 2))
+        assert [type(e) for e in heard] == [H.PhaseOpened]
 
 
 def test_a_committer_without_bounded_staging_has_no_warm_up():

@@ -111,8 +111,7 @@ def check_format(a, out, bad):
 def check_widths(a, out, bad):
     """Each `--widths` line is `{"program", "codec"}`: a descriptor and the codec's refusal of it (`decode_program`; null
     where it decodes). The Lean decoder refuses every one the codec refuses as `E_REINTERPRET`, or as a read at another
-    width (`recut-width`, `recut-boundary`, `recut-overrun`, PROTOCOL.md §4.4) or a recut root (`recut-gates`), with the
-    codec's message, and none other so."""
+    width (`recut-width`, `recut-boundary`, `recut-overrun`, PROTOCOL.md §4.4), with the codec's message, and none other so."""
     both = neither = recut = 0
     for k, line in enumerate(Path(a.widths).read_text().splitlines()):
         case = json.loads(line)

@@ -4,7 +4,7 @@ each one ``SiluMulBf16_v2`` over (gate[i], up[i]).
 ``SiluMulBf16_v2`` differs from ``SiluMul_v1``'s primitive on NaN (0x7FFF, not 0x7FC0), on the up word (``+ 0.0f`` turns -0 into
 +0), on gate -inf (NaN, not -0), on the gates whose ``expf(-g)`` overflows (g <= -89: -0, not a tiny nonzero) and on gate -0
 (kept, not +0).  Flock has no piece of its own for it: the unit is the registered Boolean Definition whose word is
-``SiluMulBf16_v2``, ``boolean_silu.SiluMulBf16Expf`` (``SiluMulBf16_v4``), run as its builder (``ir_lower._boolean_build``).
+``SiluMulBf16_v2``, ``act.SiluMulBf16Expf`` (``SiluMulBf16_v4``), run as its builder (``ir_lower._boolean_build``).
 That circuit is exact arithmetic on g's fields off a band of exponents and a constant table on it, so it is half
 ``silu-mul``'s 16-bit lookup in ANDs (1,380 against 2,606).
 
