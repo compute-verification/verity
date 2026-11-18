@@ -274,6 +274,12 @@ theorem argIdx_lt (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode by
     rw [hf] at hop
     exact hop
 
+/-- Reference `d` of a run read with outer stride 0 and inner stride 1 is the run's leaf `d` mod `inner`. -/
+theorem strided_get (n base inner cnt d : ℕ) :
+    (Part.strided false n (base : Int) inner 0 1 cnt).get d = ⟨false, n, base + d % inner⟩ := by
+  simp only [Part.get, mul_zero, add_zero, mul_one]
+  rw [← Int.natCast_add, Int.toNat_natCast]
+
 section
 variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
   (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
@@ -338,16 +344,7 @@ theorem arg_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
         · have hlt : x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! < cnt := by omega
           rw [hc', Nat.min_eq_right hle, Nat.mod_eq_of_lt hlt, Nat.mod_eq_of_lt (Nat.lt_of_lt_of_le hlt hle)]
       rw [← hm]
-      show (⟨false, n, ((base : Int) +
-          (((x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) / inner : ℕ) : Int) * 0 +
-          (((x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) % inner : ℕ) : Int) * 1).toNat⟩
-          : Ref) = _
-      congr 1
-      first
-        | omega
-        | (simp only [mul_zero, add_zero, mul_one]; omega)
-        | (simp only [mul_zero, add_zero, mul_one]; rw [← Int.natCast_add, Int.toNat_natCast])
-        | simp
+      exact strided_get n base inner cnt _
   have hbody : BodyOk P P.root := hB P.rootScope ⟨rfl, rfl, rfl⟩
   obtain ⟨-, hargs, -, -, -⟩ := hbody.1 k hk
   have href := (hargs i x hx).2 (by rw [hget'])
