@@ -1,0 +1,28 @@
+# The advice format goes down into the compiler (`python3 tools/move/layout.py --map tools/move/advice_format_down_map.toml`).
+#
+# The compiler's advice check reads the format, and the pipeline imports the compiler, so the format sits in the
+# compiler package, beside its check (`compiler/advice_check.py`): the module both read is in the lower package.
+
+[roots]
+old = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+
+[paths]
+"adapters/vllm/verity_vllm/pipeline/advice_code/format.py" = "adapters/vllm/verity_vllm/compiler/advice_format.py"
+
+[retired]
+paths = [
+    "adapters/vllm/verity_vllm/pipeline/advice_code/format.py",
+]
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "tools/move/**", "tests/tools/move/**",
+           "tests/tools/check/test_move_check.py", "archive/**", "tools/research/src/research/store/moves.json",
+           "**/*.lean", "**/lean-audit.json", "**/lakefile.toml"]
+include = []
+
+[modules]
+"verity_vllm.pipeline.advice_code.format" = "verity_vllm.compiler.advice_format"
