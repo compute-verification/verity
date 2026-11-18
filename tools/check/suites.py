@@ -277,8 +277,9 @@ TOOLS = ("lake", "cargo")
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
 #: what a machine's runner gives a run's workload and check's steps never get (check.py's `ENV_PASS`): the run's `RESEARCH_*` and
 #: the machine's PYTHONPYCACHEPREFIX. Tests that start runs of their own would inherit them, so a suite run inside a `research
-#: run` would reach another verdict than inside check (test_remote_cwd's)
-RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
+#: run` would reach another verdict than inside check (test_remote_cwd's). Nor the kit's trial switch, which `research run` sets on
+#: a run of a tree that isn't `main`'s, a queue's candidate checks among them: a test that wants a trial sets it itself
+RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX", "VERITY_BENCH_TRIAL")
 #: check.py's: what its steps get inside a recorded run in place of the RESEARCH_* that named the machine's store (`store_custody`)
 CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED", "VERITY_REGRESSION"
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
@@ -887,8 +888,10 @@ def cargo_on_path() -> None:
 
 
 def keyed_variables(env) -> dict[str, str]:
-    """The variables a key holds: those of `ENV_PREFIXES`, which tests switch on, less the `where` ones (`settings.py`)."""
-    return {k: v for k, v in sorted(env.items()) if k.startswith(ENV_PREFIXES) and SETTINGS.role_of(k) != SETTINGS.WHERE}
+    """The variables a key holds: those of `ENV_PREFIXES`, which tests switch on, less the `where` ones (`settings.py`) and those
+    no test inherits (`RUNNER_ENV`)."""
+    return {k: v for k, v in sorted(env.items())
+            if k.startswith(ENV_PREFIXES) and k not in RUNNER_ENV and SETTINGS.role_of(k) != SETTINGS.WHERE}
 
 
 def environment() -> dict:
