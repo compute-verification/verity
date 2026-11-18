@@ -831,8 +831,8 @@ def _private_chain_out(out: Path) -> Path:
 
 def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path):
     """The chain's out/ holds the window's private values: the endpoint's report (its Commit window's request, step and
-    output counts and its advice's bits), the report made of it (the attestations step's counts, the advice's bits
-    as K's term, never the attested I/O's counts) and report.md, the attestations step's view of the attester's check and the tie's prompt lengths. `publish`
+    output counts and its advice's bits), the report made of it (the attestations step's counts, never the advice's
+    lengths or the attested I/O's counts), the attestations step's view of the attester's check and the tie's prompt lengths. `publish`
     puts none of them in the hold, only `PUBLIC`'s key paths, the endpoint's step its verdict and where it ran, and
     nothing of the scan's answers, the period check's evidence less its attestations. A file put past `publish`, in the
     hold (the endpoint's report and the scan's answers copied whole, as the piece once published them) or in DIR (the
@@ -841,8 +841,8 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     out = _private_chain_out(tmp_path / "out")
     held = {p.relative_to(out).as_posix(): _numbers(p) & PRIVATE for p in out.rglob("*") if p.is_file()}
     assert held["endpoint/report.json"] == PRIVATE - set(PROMPT_LENS) and held["tie/summary.json"] == set(PROMPT_LENS)
-    assert held["report/report.json"] >= {REQUESTS, V0, DERIVED} and OUTPUTS not in held["report/report.json"]
-    assert held["report/report.md"] == {DERIVED} and held["certs.json"] == {REQUESTS}
+    assert held["report/report.json"] == {REQUESTS} and held["report/report.md"] == set()
+    assert held["certs.json"] == {REQUESTS}
     assert json.loads((out / "report" / "report.json").read_text())["verdict"] == "accepted"
     hold, d, q = tmp_path / "hold", tmp_path / "pieces" / "certifier", tmp_path / "quarantine"
     CP.publish(out, hold)
