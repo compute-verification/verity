@@ -277,13 +277,13 @@ def placement(node: str, host: str, key_sha512: str | None = None, *, pins: Sequ
     names are the run's own, so they bound nothing, and the premise never holds here: for `key_sha512`, the SHA-512 of
     the key the session was signed under, when the configuration whose hash is `configuration`, one of `committed`,
     pins it for the challenger's PoUS sessions (`pins`, its `[[pin]]` entries), it reads `memory_attester.MATCHED`;
-    and `SETUP` under ``setup``."""
+    `SETUP` under ``setup``; and `memory_attester.UNCHECKED` under ``unchecked``."""
     kind = "own-host" if host != node else "prover-node"
     names = (f"the memory attester ran on {host}, not the prover's {node}" if kind == "own-host" else
              f"the memory attester ran on the prover's node {node}")
     return {"parties": {"memory_attester": host, "prover": node, "verifier": verifier or node}, "kind": kind,
             PREMISE: mc.trusted_device(pins, CHALLENGER, "pous", key_sha512, names, configuration=configuration,
-                                       committed=committed), "setup": SETUP}
+                                       committed=committed), "setup": SETUP, **mc.unchecked()}
 
 
 def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:

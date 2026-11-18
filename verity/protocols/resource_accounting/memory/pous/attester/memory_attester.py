@@ -388,6 +388,20 @@ REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 UNCOMMITTED = "rehearsal, no bound: the configuration is not a committed one"
 MATCHED = ("rehearsal, no bound: the key matched the pins this machine was handed, which no record vouches for until the "
            "auditor's compose gate gives its signal")
+#: a placement's key for `UNCHECKED`, which storage's, the wipe's and the bandwidth audit's placements carry
+UNCHECKED_KEY = "unchecked"
+ATTENDED = "attester-attended-each-block"
+KEY_PINNED = "attester-key-pinned-outside-the-case"
+#: what no auditor-side entry checks of the memory attester, by name, each with why; `holds` never reads it
+UNCHECKED = MappingProxyType({
+    ATTENDED: ("not checked by any auditor-side entry: the grader verifies one signature of the memory attester per "
+               "session (storage: the session's id, coin root, parameters and round times; the wipe: its header, fill "
+               "times and batch records; the bandwidth audit: one closing signature over its log), which names no "
+               "period or block; no served path writes a liveness record, and verify_liveness has no caller"),
+    KEY_PINNED: ("not checked by any auditor-side entry: the grader takes the attester's key from the trusted list the "
+                 "case itself carries, which the developer's node fills, and the pins are compared on the served node: "
+                 "the developer's check, built and not yet in force as the auditor's"),
+})
 COMMITTED = Path(__file__).resolve().parents[6] / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
 """The committed configurations' hashes, each application's configuration by its path: the only configurations under which
 `trusted_device` says `PREMISE` holds."""
@@ -425,8 +439,14 @@ def premise(where: Mapping[str, Any]) -> str:
     return where[PREMISE] if PREMISE in where else where[PREMISE_BEFORE]
 
 
+def unchecked() -> dict[str, dict[str, str]]:
+    """A placement's `UNCHECKED_KEY` entry: `UNCHECKED`, as the record writes it."""
+    return {UNCHECKED_KEY: dict(UNCHECKED)}
+
+
 def holds(where: Mapping[str, Any]) -> bool:
-    """Whether a placement's `PREMISE` holds (`trusted_device`)."""
+    """Whether a placement's `PREMISE` holds (`trusted_device`), which nothing else of the placement, `UNCHECKED`
+    among it, can make hold."""
     return premise(where).startswith("holds: ")
 
 

@@ -203,8 +203,9 @@ def _write(path: Path, doc: Any, mode: int | None = None) -> None:
 def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_per_s: int | None,
                   private: Path) -> dict[str, Any]:
     """The case's answer `judged` in public: its commitment a hiding one to the case's digest under `bind`, whose
-    opening goes to `private`, its profile without the registration's digest and with `scope`, and γ against R. A
-    refusal with no commitment, the Lean's of a case it decodes no commitment of, has none to hide."""
+    opening goes to `private`, its profile without the registration's digest and with `scope`, a placement holding
+    only `memory_attester.UNCHECKED`, and γ against R. A refusal with no commitment, the Lean's of a case it decodes no
+    commitment of, has none to hide."""
     if judged.get("commitment") is None and judged.get("verdict") != "accept":
         return dict(judged) | {"reason": f"{judged.get('reason')}; {scope}"}
     row = bytes.fromhex(judged["commitment"])
@@ -219,7 +220,7 @@ def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_pe
         return out
     public = dict(judged["public"])
     profile = {k: v for k, v in judged["profile"].items() if k != "registration"} | {
-        "scope": scope, "eps_terms": p2_case.EPS_TERMS, "named_terms": ledger.NAMED_TERMS,
+        "scope": scope, "eps_terms": p2_case.EPS_TERMS, "named_terms": ledger.NAMED_TERMS, "placement": mc.unchecked(),
         "commitment": {"scheme": "hm96-sha512/row/v2 in frame-v3-sha512 (verity.commitments.advice)", "rows": 1,
                        "n_bits": 8 * len(row), "binding": bind.hex(),
                        "of": "the session's case digest (p2_case.digest), its registration and plan"}}
