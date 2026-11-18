@@ -6,15 +6,19 @@
 #     (a job run from the source tree, 256 GB, up to 4 h)
 #   It fetches rank 0's replay bundle, the Commit's records, and A11's and A9's slices from the store into $A10_CACHE (kept on
 #   the node), reads the Build's rank 0 Program and the required manifest from the Build's row dir ($A10_ROW, on the
-#   machine that built it), runs `a10.py values`, and keeps $OUT/compare.json, the logs and $OUT/saved-a11.tar, $OUT/saved-a9.tar
-#   (a11.py --load-values' directories).
+#   machine that built it), runs `a10.py values`, and keeps $OUT/compare.json and the logs. The two staged value directories
+#   (a11.py --load-values') are witness: they go to $A10_SAVED_ROOT/<this run id>/saved-a11 and saved-a9 on this machine,
+#   mode 0700, outside the run's output, and no store holds them.
 #   audit builds the SPOT Lean in the tree, so it runs from a clone:
 #     A10_MODE=audit A10_MEM_GB=128 A10_VALUES=art:ID A10_SET=a11 A10_ARGS="--only K1,K2 --tamper none" bash benchmarks/one_stage/a10.sh
 #     (a job run from a clone of the tree, 128 GB, up to 4 h)
-#   It runs `a10.py audit` (a11.py with the committed window) on $A10_SET's saved directory from the values run's record
-#   (A10_VALUES), its records in $OUT/a11 as a11.sh keeps them.
+#   It runs `a10.py audit` (a11.py with the committed window) on $A10_SET's saved directory of the values run A10_VALUES (a run
+#   id) on this machine ($A10_SAVED_ROOT/$A10_VALUES/saved-$A10_SET, or A10_SAVED_DIR, a copy the operator made), its records in
+#   $OUT/a11 as a11.sh keeps them. It refuses by name where that directory is not here.
 # env: A10_MODE  A10_MEM_GB (the job's --mem-gb)  A10_ARGS (more a10.py arguments)  A10_ROW  A10_CACHE  A11_CACHE (the build cache)
+#      A10_SAVED_ROOT (default $HOME/.cache/verity-a10-saved)  A10_SAVED_DIR (audit: a saved-<set> directory to read instead)
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 export HZ_CONFIGS=a10 HZ_MEM_GB=${A10_MEM_GB:?}
 export HZ_CACHE=${A11_CACHE:-$HOME/.cache/verity-a11}
 mkdir -p "$HZ_CACHE"
@@ -23,6 +27,9 @@ export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/config:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 C=${A10_CACHE:-$HOME/.cache/verity-a10}
 mkdir -p "$C"
+SAVED_ROOT=${A10_SAVED_ROOT:-$HOME/.cache/verity-a10-saved}
+mkdir -p -m 0700 "$SAVED_ROOT"
+RUN_ID=$(basename "${RESEARCH_RUN_DIR:?}")
 # the store CLI from the tree (a node's job has none on its PATH), with the run's custody key in its environment only
 R() { PYTHONPATH=$SRC/benchmarks/proof_throughput python3 -c 'import os, sys
 from verity_proof_throughput.store import store_env
@@ -87,8 +94,14 @@ values)
   rc=${PIPESTATUS[0]}
   cp "$W/a10/compare.json" "$OUT/" 2>/dev/null
   for s in a11 a9; do
-    [ -d "$W/a10/saved-$s" ] && tar -cf "$OUT/saved-$s.tar" -C "$W/a10/saved-$s" .
-    [ -d "$W/a10/$s" ] && cp -r "$W/a10/$s" "$OUT/$s"
+    if [ -d "$W/a10/saved-$s" ]; then
+      mkdir -p -m 0700 "$SAVED_ROOT/$RUN_ID" && rm -rf "$SAVED_ROOT/$RUN_ID/saved-$s" \
+        && cp -r "$W/a10/saved-$s" "$SAVED_ROOT/$RUN_ID/saved-$s" && chmod -R go-rwx "$SAVED_ROOT/$RUN_ID" \
+        || { log "a10: can't keep saved-$s under $SAVED_ROOT"; rc=1; }
+    fi
+    if [ -d "$W/a10/$s" ]; then
+      mkdir -p "$OUT/$s" && (cd "$W/a10/$s" && find . -type f -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$OUT/$s/")
+    fi
   done
   log "a10: values done, rc $rc"
   exit "$rc"
@@ -97,9 +110,8 @@ audit)
   setup
   (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-  S=$W/saved && mkdir -p "$S"
-  R data fetch "${A10_VALUES:?}" --to "$W/fetch" --path "out/saved-${A10_SET:?}.tar" >> "$OUT/fetch.log" 2>&1 \
-    && tar -xf "$W/fetch/out/saved-$A10_SET.tar" -C "$S" || { log "a10: no saved-$A10_SET.tar in $A10_VALUES"; exit 2; }
+  S=${A10_SAVED_DIR:-$SAVED_ROOT/${A10_VALUES:?}/saved-${A10_SET:?}}
+  [ -f "$S/units.json" ] || { log "a10: audit needs saved-$A10_SET of the values run $A10_VALUES on this machine: $S has none (run A10_MODE=values here, or set A10_SAVED_DIR to a copy of that directory); the store holds no values"; exit 2; }
   if [ "$A10_SET" = a9 ]; then KARGS=(--kinds "$S/kinds.json"); else
     fetch "$KINDS" "$C/kinds" 'kinds.json'; KARGS=(--kinds "$C/kinds/kinds.json" --try RMSNormCudaVector8_v1); fi
   log "a10: audit of saved-$A10_SET ($(du -sh "$S" | cut -f1))"
@@ -108,7 +120,7 @@ audit)
     ${A10_ARGS:-} 2>&1 | tee -a "$OUT/a11.log" | cut -c1-4000
   rc=${PIPESTATUS[0]}
   mkdir -p "$OUT/a11"
-  (cd "$W/a11" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -I{} cp --parents {} "$OUT/a11/")
+  (cd "$W/a11" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | python3 "$PUBF" filter | xargs -0 -I{} cp --parents {} "$OUT/a11/")
   log "a10: audit done, rc $rc"
   exit "$rc"
   ;;

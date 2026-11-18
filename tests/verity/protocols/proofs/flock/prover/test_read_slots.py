@@ -321,7 +321,7 @@ def test_a_stager_puts_the_reads_in_slots_and_stages_the_reference(outputs, tmp_
     a = np.array(EDGES[:8] + [int(v) for v in rng.integers(0, 1 << 32, 8, dtype=np.uint64)], np.uint64)
     b = rng.integers(0, 1 << 32, len(a), dtype=np.uint64)
     w = rng.integers(0, 1 << 16, (len(a), 128), dtype=np.uint16)
-    got = st.stage({"ab": _flat(a, b).astype(np.uint16), "w": w}, tmp_path, b"k" * 32)
+    got = st.stage({"ab": _flat(a, b).astype(np.uint16), "w": w}, tmp_path)
     assert sorted(got["outs"]) == [f"o{j}" for j in range(outputs)]
     assert got["ands"] == st.low.counts["ands"]
     with pytest.raises(ValueError, match="inline"):
