@@ -227,7 +227,7 @@ def run(out: Path, lean: str | None = None) -> int:
 def _run(out: Path, root: Path, lean: str | None = None) -> int:
     from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
     from verity_vllm.pipeline.commit_coins import ChallengerGate
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     sys.path[:0] = [str(HERE), str(TREE / "tests" / "benchmarks" / "pouw")]
     import served_verdicts as S

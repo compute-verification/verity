@@ -13,7 +13,7 @@ from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.compute.pouw import scheme as PS
 from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as T
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as Wn
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as Wn
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PSALT
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_tile import PearlCTileRead
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile import PearlPlusTile
@@ -24,6 +24,14 @@ def test_found_by_name() -> None:
     assert S.SCHEMES["pearl-plus"] is PS.PEARL_PLUS
     assert {b.definition for b in PS.PEARL_PLUS.blocks} == {PearlPlusTile.id, PearlCTileRead.id}
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
+
+
+def test_its_record_row_is_verified_compute_in_the_macs_its_verifier_credits() -> None:
+    """The run verdict's ``credited`` (`Credit.lean`'s `creditAtAssumption`) is MACs, the unit its costs are in."""
+    assert (S.declared(PS.PEARL_PLUS, "record"), S.declared(PS.PEARL_PLUS, "symbol")) == ("work", "V")
+    assert S.declared(PS.PEARL_PLUS, "published") == (PS.PEARL_PLUS.unit, Fraction(1)) == ("MACs", Fraction(1))
+    with pytest.raises(LookupError, match="pearl-plus declares no channel_schemas: no Schema is declared for PearlSalt"):
+        S.declared(PS.PEARL_PLUS, "channel_schemas")
 
 
 def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:

@@ -33,8 +33,8 @@ import numpy as np
 import pytest
 from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import manifest as PPM
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd

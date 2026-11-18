@@ -110,8 +110,8 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
 )
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names as kernel_names
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sample import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.sample import (
     NO_DRAW_SESSION,
     draw_files,
     draw_reason,
