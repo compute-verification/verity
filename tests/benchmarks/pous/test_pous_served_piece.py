@@ -967,7 +967,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, of the int8 checkpoint or of
     the BF16 one, the bandwidth party's
     registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
-    PoUS's store (`p2_case.same_store` against the run's case), and answered as the session did (`p2_case.answer`, by
+    PoUS's store (its params' `store_root`, `p2_case.storing` of the run's case), and answered as the session did (`p2_case.answer`, by
     the stand-in `BW_JUDGE`), which with no Lean is undecided (`p2_case.unjudged`); `poub-p2-protocol` refuses
     it, a toy party's session, naming each value off the auditor's (`p2_parties.SESSION`). The public answer, which the composed run reads as the bandwidth
     piece's, names none of the store. It encodes ``C*`` at the registered point (about 25 s on the CPU), the only point
@@ -1002,7 +1002,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     for f in (p2_case.CASE, p2_case.ANSWER, "session.json", "opening.json"):
         assert stat.S_IMODE((private / f).stat().st_mode) == 0o600
     pous_case = json.loads((s.private / "case.json").read_text())
-    assert p2_case.same_store(case, pous_case) is None and p2_case.store_root(case).hex() == published["root"]
+    assert case == p2_case.storing(case, pous_case) and case["params"]["store_root"] == published["root"]
     toy = BW.p2_parties.request_of(NODE.encode(), windows=2, passes=2, samples=4, window_ns=10 ** 6,
                                     deadline_ns=10 ** 6)
     assert case["params"]["request"] == toy and own["verdict"] == "accept"

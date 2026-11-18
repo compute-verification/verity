@@ -738,8 +738,8 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
            deployment: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The answer to the session `held` left in `private`, with no store and no card: the case and its answer to
     `private` (`p2_case.write`), the public answer and a summary to `public` (``answer.json``, ``bandwidth.json``); the
-    public answer, also returned. With `pous_case` (PoUS's run case), a case whose store isn't PoUS's
-    (`p2_case.same_store`) is refused. With `case_exe` (``poub-p2-protocol``) the Lean answers the case and
+    public answer, also returned. With `pous_case` (PoUS's run case), the case is held to PoUS's store
+    (`p2_case.storing`), which the Lean refuses a session over another store by. With `case_exe` (``poub-p2-protocol``) the Lean answers the case and
     its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the session undecided and no
     case written; without it the session's reject or undecided stands and its accept is undecided
     (`p2_case.unjudged`). With no key `key_of` gives, the session is undecided (`NO_KEY`). The summary names the program whose verdict the answer is and the machine it ran on, the
@@ -769,12 +769,11 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
         verdict = "undecided" if answer.get("verdict") in ("prover-error", "refused", None) else "reject"
         out = _no(verdict, f"the session made no case: {answer.get('verdict')}: {answer.get('reason')}"[:1000]
                   + f"; {scope}")
-    elif pous_case is not None and (why := p2_case.same_store(kept, pous_case)) is not None:
-        out = _no("reject", f"the bandwidth session's store is not PoUS's: {why}; {scope}")
     else:
         summary["same_store"] = pous_case is not None
         try:
             kept = p2_case.trusting(kept, trusted_sha512)
+            kept = kept if pous_case is None else p2_case.storing(kept, pous_case)
         except (AttributeError, KeyError, TypeError, ValueError) as e:
             out = _no("reject", f"the session's close doesn't decode: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
         else:
@@ -1120,8 +1119,8 @@ def session(a: argparse.Namespace) -> int:
             judged = (p2_case.judged(prover.kept, answer, a.case_exe) if a.case_exe
                       else p2_case.unjudged(prover.kept, answer))
             p2_case.write(a.case_dir, prover.kept, judged)
-            case = {"dir": str(a.case_dir), "commitment": judged["commitment"], "store_root": prover.kept["store_root"],
-                    "verdict": judged["verdict"], "judge": "lean" if a.case_exe else "none"}
+            case = {"dir": str(a.case_dir), "commitment": judged["commitment"],
+                    "store_root": prover.kept["params"]["store_root"], "verdict": judged["verdict"], "judge": "lean" if a.case_exe else "none"}
             log(json.dumps({"case": case}))
     if pool is not None:
         pool.shutdown()

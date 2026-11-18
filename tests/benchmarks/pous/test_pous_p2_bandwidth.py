@@ -243,7 +243,7 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
         case, answer = (json.loads((private / f).read_text()) for f in (p2_case.CASE, p2_case.ANSWER))
         assert [(private / f).stat().st_mode & 0o777 for f in ("", p2_case.CASE, p2_case.ANSWER)] == [0o700, 0o600, 0o600]
         assert answer == p2_case.unjudged(case, doc["answer"]) and answer["verdict"] == WITHOUT_LEAN[expect]
-        assert p2_case.store_root(case) == reg.root
+        assert case["params"]["store_root"] == reg.root.hex()
         assert doc["case"] == {"commitment": p2_case.digest(case).hex(), "dir": str(private), "judge": "none",
                                "store_root": reg.root.hex(), "verdict": WITHOUT_LEAN[expect]}
         assert case["evidence"] not in (tmp_path / name / "session.json").read_text()

@@ -1,8 +1,8 @@
-"""Onsite's one store (`p2_case.store_root`, `p2_case.same_store`): PoUB-P2's case names its store, its registration's
-root, which is the root of `C*` PoUS's setup published, and onsite holds it to PoUS's run case. A P2 case on the `C*`
-PoUS audited meets PoUS's run; a P2 case and a PoUS run on different stores, a generic PoUB case (whose payload root is
-its own salted tree's, never PoUS's `C*`), a case that names no store and one whose `store_root` its commitment doesn't
-register are refused, each by name. The case's evidence is not read here: `lean/tests/test_p2_case.py` replays it."""
+"""Onsite's one store (`p2_case.storing`): the verifier puts the root of `C*` PoUS's run case is committed to (its
+setup's) into PoUB-P2's case as the params' `store_root`, whatever the case held, and refuses by name a PoUS case that
+names no setup. Whether the session's registration names that root is the Lean's to decide
+(`P2Protocol.NOT_POUS_STORE`): `lean/test_p2_case.py` replays a case held to its own store, accepted, and to another,
+refused."""
 
 from __future__ import annotations
 
@@ -16,9 +16,7 @@ import pytest
 
 from verity.commitments.identity import canonical_json_bytes
 from verity.protocols.resource_accounting.memory.poub.prover import p2_prover
-from verity.protocols.resource_accounting.memory.poub.prover import period_prover as PP
 from verity.protocols.resource_accounting.memory.poub.verifier import p2, p2_case, p2_parties
-from verity.protocols.resource_accounting.memory.poub.verifier import period as P
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period as pous
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
@@ -44,34 +42,6 @@ def _signer() -> ModuleType:
     return m
 
 
-class Clock:
-    """The generic verifier's clock: each reading a microsecond after the last, and waiting moves it on."""
-
-    def __init__(self) -> None:
-        self.now = 10 ** 9
-
-    def __call__(self) -> int:
-        self.now += 1_000
-        return self.now
-
-    def sleep_until(self, clock, t: int) -> None:
-        self.now = max(self.now, t)
-
-
-def _entropy(label: bytes):
-    """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
-    count = 0
-
-    def take(n: int) -> bytes:
-        nonlocal count
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(label + count.to_bytes(8, "big")).digest()
-            count += 1
-        return out[:n]
-    return take
-
-
 def _committed() -> p2_prover.Store:
     """The committed 9-block `C*` (`fixtures/p2-store.json`), registered for P2 on its PoUS setup."""
     doc = json.loads((FIXTURES / "p2-store.json").read_text())
@@ -90,15 +60,11 @@ def _root(pous_case: dict) -> bytes:
     return R.Setup.from_json(json.loads(bytes.fromhex(pous_case["commitment"]))).root
 
 
-def _refused(ours: bytes, theirs: bytes) -> str:
-    return f"bandwidth's store {ours.hex()[:16]}… is not PoUS's {theirs.hex()[:16]}…"
-
-
 @pytest.fixture(scope="module")
 def cases(tmp_path_factory) -> dict[str, dict]:
-    """PoUS's audit of the committed `C*` and its honest run on another store (a test signer's), PoUB-P2's case on the
-    committed `C*`, and the generic PoUB's honest session on its own store."""
-    tmp, S = tmp_path_factory.mktemp("same-store"), _signer()
+    """PoUS's audit of the committed `C*` and its honest run on another store (a test signer's), and PoUB-P2's case on
+    the committed `C*`."""
+    tmp, S = tmp_path_factory.mktemp("storing"), _signer()
     kw = {"signer": S.TestSigner(b"the memory challenger", directory=tmp), "log": S.session_log(tmp),
           "schemes": S.SCHEMES, "protocol": mc.TEST_PREFIX + pous.PROTOCOL, "clock": lambda: 10 ** 9}
     store = _committed()
@@ -116,68 +82,32 @@ def cases(tmp_path_factory) -> dict[str, dict]:
     head = p2_case.head(canonical_json_bytes(held), 10 ** 9)
     reads = p2_case.case_of(held, REQUEST | {"node": reg.node.hex()}, 10 ** 9, [], session=sid,
                             trusted=[kw["signer"].public_key], close=p2_case.close_of(kw["signer"], sid, head, []))
-    c = Clock()
-    generic = P.session("n0", PP.Local("n0", hashlib.shake_256(b"a tiny MLP's weights").digest(2 * 4032 - 17),
-                                      entropy=_entropy(b"salts")), COINS, windows=1, clock=c, sleep_until=c.sleep_until)
-    assert generic.answer["verdict"] == "accept"
-    return {"space": space.case, "other-space": other.case, "reads": reads, "generic": generic.case}
+    return {"space": space.case, "other-space": other.case, "reads": reads}
 
 
-def test_the_case_names_its_registrations_root(cases) -> None:
-    """The case's `store_root` is its registration's root, 128 lowercase hex characters, and `store_root` reads it
-    back."""
+def test_the_case_names_its_registrations_root_until_it_is_stored(cases) -> None:
+    """The prover's case names its registration's root in its params, 128 lowercase hex characters, and has no field
+    outside the served three."""
     case = cases["reads"]
     root = _committed().registration.root
-    assert case["store_root"] == root.hex() == json.loads(bytes.fromhex(case["commitment"]))["root"]
-    assert len(case["store_root"]) == 128 and p2_case.store_root(case) == root
+    assert sorted(case) == ["commitment", "evidence", "params"]
+    assert case["params"]["store_root"] == root.hex() == json.loads(bytes.fromhex(case["commitment"]))["root"]
 
 
-def test_a_p2_case_on_pous_store_meets_pous_run(cases) -> None:
-    """PoUB-P2's case registered on the `C*` PoUS audited names PoUS's store, so onsite takes the two as one store."""
-    assert p2_case.store_root(cases["reads"]) == _root(cases["space"])
-    assert p2_case.same_store(cases["reads"], cases["space"]) is None
-
-
-def test_two_cases_on_different_stores_are_refused(cases) -> None:
-    reads, space, other = cases["reads"], cases["space"], cases["other-space"]
-    assert _root(space) != _root(other)
-    assert p2_case.same_store(reads, other) == _refused(_root(space), _root(other))
-
-
-def test_a_generic_poub_case_is_refused_as_not_pous_store(cases) -> None:
-    """A generic PoUB case names no store; given its payload root as one, its commitment is still no P2
-    registration."""
-    generic = cases["generic"]
-    assert "store_root" not in generic
-    assert p2_case.same_store(generic, cases["space"]).startswith("the case names no store")
-    payload_root = json.loads(bytes.fromhex(generic["commitment"]))["payload_root"]
-    named = generic | {"store_root": payload_root}
-    assert p2_case.same_store(named, cases["space"]).startswith("the case's commitment is no PoUB-P2 registration: ")
-
-
-@pytest.mark.parametrize(("change", "why"), [
-    (lambda c, root: {k: v for k, v in c.items() if k != "store_root"}, "the case names no store"),
-    (lambda c, root: c | {"store_root": None}, "the case names no store"),
-    (lambda c, root: c | {"store_root": c["store_root"].upper()}, "the case names no store"),
-    (lambda c, root: c | {"store_root": c["store_root"][:-2]}, "the case names no store"),
-    (lambda c, root: c | {"store_root": bytes.fromhex(c["store_root"])}, "the case names no store"),
-    (lambda c, root: c | {"store_root": root.hex()}, "the case's store_root is not the root its commitment registers"),
-    (lambda c, root: c | {"commitment": "00"}, "the case's commitment is no PoUB-P2 registration"),
-    (lambda c, root: c | {"commitment": json.dumps({"node": "00"}).encode().hex()},
-     "the case's commitment is no PoUB-P2 registration"),
-    (lambda c, root: c | {"commitment": json.dumps(json.loads(bytes.fromhex(c["commitment"])) | {"digest": "00" * 64})
-                                         .encode().hex()}, "the case's commitment is no PoUB-P2 registration"),
-])
-def test_a_case_that_names_no_store_its_commitment_registers_is_refused(cases, change, why) -> None:
-    """The field is required: a case without it, or with anything but 128 lowercase hex characters, names no store; a
-    commitment that isn't a P2 registration (its stated digest not its fields') registers none; and since no digest
-    binds the field, a case that names another store than its registration's is refused."""
-    case = change(cases["reads"], _root(cases["other-space"]))
-    with pytest.raises(ValueError, match=f"^{why}"):
-        p2_case.store_root(case)
-    assert p2_case.same_store(case, cases["space"]).startswith(why)
+def test_storing_puts_pous_root_in_the_params(cases) -> None:
+    """The params name PoUS's root, whichever store that is, and nothing else of the case changes."""
+    reads = cases["reads"]
+    for pous_case in (cases["space"], cases["other-space"]):
+        stored = p2_case.storing(reads, pous_case)
+        assert stored["params"]["store_root"] == _root(pous_case).hex()
+        assert {k: v for k, v in stored.items() if k != "params"} == {k: v for k, v in reads.items() if k != "params"}
+        assert {k: v for k, v in stored["params"].items() if k != "store_root"} == \
+            {k: v for k, v in reads["params"].items() if k != "store_root"}
+    assert _root(cases["space"]) != _root(cases["other-space"])
+    assert reads["params"]["store_root"] == _root(cases["space"]).hex()
 
 
 def test_a_pous_case_that_names_no_setup_is_refused(cases) -> None:
     for case in ({}, cases["space"] | {"commitment": "00"}, cases["space"] | {"commitment": cases["reads"]["commitment"]}):
-        assert p2_case.same_store(cases["reads"], case).startswith("PoUS's case names no setup: ")
+        with pytest.raises(ValueError, match="^PoUS's case names no setup: "):
+            p2_case.storing(cases["reads"], case)

@@ -71,7 +71,7 @@ same sessions, which no second session replaces. With neither, one process does 
    ``published`` and ``params``), which the challenger kept on its host with the session's id; the bandwidth party there (``--bw-party``, the gate's
    ``bw_party --pous-session SID`` with ``--bw-minutes`` its cap) builds its registration from that record, never from
    the prover. The session's case and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``,
-   0700), held to PoUS's run case as one store (`p2_case.same_store`); its public answer, under a hiding commitment to the
+   0700), held to PoUS's run case's store (`p2_case.storing`), which the Lean refuses another store by; its public answer, under a hiding commitment to the
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
    piece's, ``served_piece.py collect-bandwidth``, `collect_bandwidth`). With ``--bw-case-exe`` (``poub-p2-protocol``) the Lean answers the
    case, and its answer is the one written; without it the session's accept is undecided (`p2_case.unjudged`).
