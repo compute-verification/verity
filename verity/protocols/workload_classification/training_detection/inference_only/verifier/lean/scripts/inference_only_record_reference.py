@@ -199,7 +199,7 @@ class Template:
             self.rows.append((name, bits // 16, ty.n if isinstance(ty, Array) else 1))
             self.widths[name] = tuple(ty.leaf_widths())
         #: each return field's first word in the unit's output row, a wire's `offset` (`Spot.Edges.fieldWord`: each
-        #: leaf its bits in whole words), to the field
+        #: field its bits in whole words, as the layout packs it), to the field
         self.firsts: dict[int, int] = {}
         at = 0
         for j, ty in enumerate(fields_of(ret)):
@@ -207,7 +207,7 @@ class Template:
             if bits == 0:
                 raise Malformed("templates")
             self.firsts[at] = j
-            at += sum(-(-w // 16) for w in ty.leaf_widths())
+            at += -(-bits // 16)
             self.outs.append((f"o{j}", -(-bits // 16)))
             self.widths.setdefault(f"o{j}", tuple(ty.leaf_widths()))
         if len({p for p, *_ in self.rows + self.outs}) != len(self.rows) + len(self.outs):
@@ -718,8 +718,8 @@ def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dic
     `verity.commitments.periods.interface.check_wires` refuses them."""
     import verity.commitments.periods.interface as IF
     cuts = rec.get("cuts", {})
-    lays = {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows), (("out", sum(n for _, n in t.outs)),), (),
-                                 tuple(n for *_, n in t.rows)), t.units) for t in templates}
+    lays = {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows), tuple(t.outs), (), tuple(n for *_, n in t.rows)),
+                    t.units) for t in templates}
     try:
         wires = tuple(IF.Wire.of(x) for x in program_wires(desc, (t.tid for t in templates), cuts))
         IF.check_wires(lays, wires, IF._cuts(cuts), root_order(desc, [t.tid for t in templates]))

@@ -5,18 +5,20 @@ public import InferenceOnlyVerifier.Record
 /-!
 # What the record proofs read off the root
 
-`OwnRuns` is the reading of the root the record proofs cover: `Record.ownRows` admits it and it has no edge and no
-strided part's rows (`EdgeFree`). `Record.ownRows` admits a root whose argument reads another unit's outputs (an edge,
-`edgeOf`) or a strided part whose rows lie apart, each member's own (`Record.gathered`), and `EdgeFreeReads` is the
-hypothesis that every record `read` accepts is of a root with neither, false of any root with one. On a root with
-neither, `Record.rowRuns` reads every part of every argument of a root node that is no input node
+`OwnRuns` is the reading of the root the record proofs cover: `Record.ownRows` admits it and it has no edge
+(`EdgeFree`). `Record.ownRows` admits a root whose argument reads another unit's outputs (an edge, `edgeOf`), and
+`EdgeFreeReads` is the hypothesis that every record `read` accepts is of a root with none, false of any root with one.
+On a root with none, `Record.rowRuns` reads every part of every argument of a root node that is no input node, through
+`runsOf` or, where a strided part's rows lie apart, each member's own (`Record.gathered`), through `gatherRows`
 (`rowRuns_own`). This module states what `OwnRuns` gives, by position: every such part is a run of leaves of one input
-node (`part_run`), an affine part or a strided part whose reference k is the run's leaf k mod the run (`runOf_some`); a
-batch node of those has `dims` on every argument (`batch_dims`); a strided part that reads its run more than once reads
-a shared run (`part_shared`); and two parts at two positions, each of some leaf, are runs that share none, or one
-shared run (`runs_shared`). The test sorts the runs and compares neighbours; sorted, neighbours the same or apart are
-all the same or apart (`same_or_apart_of_sorted`), two the same are neighbours the same with all between
-(`shared_of_sorted`), and the order they stood in does not matter (`List.Perm.pairwise_iff`).
+node, an affine part or a strided part whose reference k is the run's leaf k mod the run (`runOf_some`), or a strided
+part whose rows are leaves of one input node (`part_cover`, `gatherRuns_some`); a batch node of those has `dims` on
+every argument (`batch_dims`); a strided part that reads its run more than once reads a shared run (`part_shared`); two
+parts at two positions, each of some leaf, are runs that share none, or one shared run (`runs_shared`); and a row of one
+shares no leaf with a run or a row of the other (`pieces_apart`). The tests sort the runs and compare neighbours; sorted,
+neighbours the same or apart are all the same or apart (`same_or_apart_of_sorted`, `eq_or_apart_of_sorted`), two the
+same are neighbours the same with all between (`shared_of_sorted`), and the order they stood in does not matter
+(`List.Perm.pairwise_iff`, `pieces_perm`).
 -/
 
 @[expose] public section
@@ -158,14 +160,11 @@ def edgeOf (P : Prog) : Part → Bool
     lanes.all fun l => !l.p && ((P.defs[P.root]!).body.nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
   | _ => false
 
-/-- **The root has no edge and no strided part's rows**: no part of an argument of a root node that is no input node
-reads another such node, or is a strided part whose rows lie apart (`Record.gathered`). -/
-def EdgeFree (P : Prog) : Prop :=
-  ∀ n ∈ unitsOf P, ∀ q ∈ partsIn n, edgeOf P q = false ∧ gathered P q = false
+/-- **The root has no edge**: no part of an argument of a root node that is no input node reads another such node. -/
+def EdgeFree (P : Prog) : Prop := ∀ n ∈ unitsOf P, ∀ q ∈ partsIn n, edgeOf P q = false
 
-/-- **Every record `read` accepts is of a root with no edge and no strided part's rows.** False of any root with
-either; the record proofs that take it cover the roots with neither, and restating them over `OwnRowsEdges` and a
-member's own row of a strided part replaces it. -/
+/-- **Every record `read` accepts is of a root with no edge.** False of any root with an edge; the record proofs that
+take it cover the roots with none, and restating them over `OwnRowsEdges` replaces it. -/
 def EdgeFreeReads : Prop := ∀ (j tr : Lean.Json) (c : Case), read j tr = .ok c → EdgeFree c.f.P
 
 /-- **The reading of the root the record proofs cover**: `own-rows` admits the root, which has no edge. -/
@@ -182,16 +181,18 @@ private theorem flatMap_congr' {α β : Type} {l : List α} {f g : α → List �
     simp only [List.flatMap_cons, h x List.mem_cons_self, ih fun a ha => h a (List.mem_cons_of_mem _ ha)]
 
 /-- **On a root the record proofs cover, `rowRuns` reads every argument part of the root's nodes that are no input
-nodes**, and every batch of those maps every argument. -/
+nodes**, as runs (`runsOf`) or, where some are a strided part's rows, as rows and runs (`gatherRows`), and every batch
+of those maps every argument. -/
 theorem rowRuns_own {P : Prog} (h : OwnRuns P) :
     (unitsOf P).all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) = true ∧
-      ∃ runs, rowRuns P = some runs ∧ runsOf P ((unitsOf P).flatMap partsIn) = some runs := by
+      ∃ runs, rowRuns P = some runs ∧ (runsOf P ((unitsOf P).flatMap partsIn) = some runs ∨
+        gatherRows P ((unitsOf P).flatMap partsIn) = some runs) := by
   obtain ⟨ho, hE⟩ := h
   have hp : ((unitsOf P).flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edgeOf P ·)) =
       (unitsOf P).flatMap partsIn := by
     refine flatMap_congr' fun n hn => ?_
     rw [← List.filter_flatMap]
-    exact List.filter_eq_self.2 fun q hq => by simpa using (hE n hn q hq).1
+    exact List.filter_eq_self.2 fun q hq => by simpa using hE n hn q hq
   have e : rowRuns P = if (unitsOf P).all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) then
       (if ((unitsOf P).flatMap fun n => n.args.toList.flatMap fun a =>
           a.seq.parts.toList.filter (!edgeOf P ·)).any (gathered P) then
@@ -200,17 +201,19 @@ theorem rowRuns_own {P : Prog} (h : OwnRuns P) :
       else runsOf P ((unitsOf P).flatMap fun n => n.args.toList.flatMap fun a =>
           a.seq.parts.toList.filter (!edgeOf P ·)))
     else none := rfl
-  have hg : ((unitsOf P).flatMap partsIn).any (gathered P) = false := by
-    refine List.any_eq_false.2 fun q hq => ?_
-    obtain ⟨n, hn, hq'⟩ := List.mem_flatMap.1 hq
-    simp [(hE n hn q hq').2]
-  rw [hp, hg, if_neg Bool.false_ne_true] at e
+  rw [hp] at e
   unfold ownRows at ho
   rw [e] at ho ⊢
   by_cases hb : (unitsOf P).all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) = true
   · rw [if_pos hb] at ho ⊢
-    obtain ⟨runs, hr⟩ := Option.isSome_iff_exists.1 ho
-    exact ⟨hb, runs, hr, hr⟩
+    refine ⟨hb, ?_⟩
+    by_cases hg : ((unitsOf P).flatMap partsIn).any (gathered P) = true
+    · rw [if_pos hg] at ho ⊢
+      obtain ⟨runs, hr⟩ := Option.isSome_iff_exists.1 ho
+      exact ⟨runs, hr, Or.inr hr⟩
+    · rw [if_neg hg] at ho ⊢
+      obtain ⟨runs, hr⟩ := Option.isSome_iff_exists.1 ho
+      exact ⟨runs, hr, Or.inl hr⟩
   · rw [if_neg hb] at ho
     cases ho
 
@@ -376,6 +379,181 @@ theorem flatMap_in {α β : Type} {A : β → β → Prop} {l : List α} {f : α
     {a : α} (ha : a ∈ l) : (f a).Pairwise A :=
   (List.pairwise_flatMap.1 h).1 a ha
 
+/-- **A strided part's rows** (`gatherRuns`): a strided part over an input node of the root, from a leaf at or after
+0, inner stride 1, a count a multiple of its inner run and an outer stride at least the run or one row, and its rows
+`count / inner` runs of the run's leaves, row `t` from leaf `base + t · outer stride`. -/
+theorem gatherRuns_some {P : Prog} {q : Part} {rows : List (Nat × Nat × Nat)} (h : gatherRuns P q = some rows) :
+    ∃ i b inner os count, q = .strided false i b inner os 1 count ∧ inputAt P i = true ∧ 0 ≤ b ∧ 0 < inner ∧
+      count % inner = 0 ∧ (count = inner ∨ (inner : Int) ≤ os) ∧
+      rows = (List.range (count / inner)).map fun (t : Nat) => (i, (b + (t : Int) * os).toNat, inner) := by
+  cases q with
+  | strided p i base inner os is count =>
+    cases p with
+    | true => cases h
+    | false =>
+      simp only [gatherRuns] at h
+      split at h
+      · rename_i hc
+        simp only [Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq] at hc
+        obtain ⟨⟨⟨⟨⟨hin, his⟩, hb⟩, hpos⟩, hmod⟩, hos⟩ := hc
+        cases h
+        subst his
+        exact ⟨i, base, inner, os, count, rfl, hin, hb, hpos, hmod, hos, rfl⟩
+      · cases h
+  | affine _ _ _ _ => cases h
+  | explicit _ => cases h
+  | grid _ _ => cases h
+
+/-- **What `gatherRows` admits**: the parts that are no strided part's rows are runs (`runsOf`), and those runs and
+the rows share no leaf, but two runs that are one (`apart`). -/
+theorem gatherRows_some {P : Prog} {parts : List Part} {runs : Runs} (h : gatherRows P parts = some runs) :
+    runsOf P (parts.filter fun q => !gathered P q) = some runs ∧
+      apart (((parts.filterMap fun q => if gathered P q then gatherRuns P q else none).flatten).map (·, true) ++
+        ((parts.filter fun q => !gathered P q).filterMap (partRun P)).map (·.1, false)) = true := by
+  unfold gatherRows at h
+  dsimp only at h
+  cases hr : runsOf P (parts.filter fun q => !gathered P q) with
+  | none => rw [hr] at h; cases h
+  | some R =>
+    rw [hr] at h
+    dsimp only [Option.bind] at h
+    split at h
+    · rename_i ha
+      cases h
+      exact ⟨rfl, ha⟩
+    · cases h
+
+/-- Sorted by node and first leaf, runs whose neighbours share no leaf, or are one run neither of them a row, are all
+so. -/
+theorem eq_or_apart_of_sorted : ∀ (l : List ((Nat × Nat × Nat) × Bool)),
+    l.Pairwise (fun a b => runLe a.1 b.1 = true) →
+    ((l.zip l.tail).all fun (a, b) =>
+      a.1.1 != b.1.1 || a.1.2.1 + a.1.2.2 ≤ b.1.2.1 || (a.1 == b.1 && !a.2 && !b.2)) = true →
+    l.Pairwise fun a b => (a.1 = b.1 ∧ a.2 = false ∧ b.2 = false) ∨ Apart a.1 b.1
+  | [], _, _ => List.Pairwise.nil
+  | [_], _, _ => List.pairwise_singleton _ _
+  | x :: y :: rest, hs, ha => by
+    rw [List.pairwise_cons] at hs
+    obtain ⟨hx, hs'⟩ := hs
+    simp only [List.tail_cons, List.zip_cons_cons, List.all_cons, Bool.and_eq_true] at ha
+    obtain ⟨hxy, ha'⟩ := ha
+    have ih := eq_or_apart_of_sorted (y :: rest) hs' (by simpa using ha')
+    refine List.pairwise_cons.2 ⟨fun z hz => ?_, ih⟩
+    have hxy' : (x.1.1 ≠ y.1.1 ∨ x.1.2.1 + x.1.2.2 ≤ y.1.2.1) ∨ (x.1 = y.1 ∧ x.2 = false ∧ y.2 = false) := by
+      simpa [or_assoc, and_assoc] using hxy
+    have hlxy : x.1.1 < y.1.1 ∨ (x.1.1 = y.1.1 ∧ x.1.2.1 ≤ y.1.2.1) := by
+      simpa [runLe] using hx y List.mem_cons_self
+    rcases hxy' with hap | ⟨he, hx2, hy2⟩
+    · right
+      rcases List.mem_cons.1 hz with rfl | hz'
+      · unfold Apart
+        omega
+      · have hlyz : y.1.1 < z.1.1 ∨ (y.1.1 = z.1.1 ∧ y.1.2.1 ≤ z.1.2.1) := by
+          simpa [runLe] using (List.pairwise_cons.1 hs').1 z hz'
+        unfold Apart
+        omega
+    · rcases List.mem_cons.1 hz with rfl | hz'
+      · exact Or.inl ⟨he, hx2, hy2⟩
+      · rcases (List.pairwise_cons.1 ih).1 z hz' with ⟨he', -, hz2⟩ | hap
+        · exact Or.inl ⟨he.trans he', hx2, hz2⟩
+        · right
+          rw [he]
+          exact hap
+
+/-- **What `apart` admits**: every two runs of some leaf share none, or are one run neither of them a row. -/
+theorem apart_spec {l : List ((Nat × Nat × Nat) × Bool)} (h : apart l = true) :
+    l.Pairwise fun a b => 0 < a.1.2.2 → 0 < b.1.2.2 → (a.1 = b.1 ∧ a.2 = false ∧ b.2 = false) ∨ Apart a.1 b.1 := by
+  unfold apart at h
+  have hs := List.pairwise_mergeSort (le := fun (a b : (Nat × Nat × Nat) × Bool) => runLe a.1 b.1)
+    (fun a b c => runLe_trans a.1 b.1 c.1) (fun a b => runLe_total a.1 b.1) (l.filter fun r => r.1.2.2 > 0)
+  have h1 := eq_or_apart_of_sorted _ hs h
+  have h2 := (List.Perm.pairwise_iff (fun hab => hab.elim (fun ⟨e, e1, e2⟩ => Or.inl ⟨e.symm, e2, e1⟩)
+    (fun hap => Or.inr hap.symm)) (List.mergeSort_perm _ _)).1 h1
+  rw [List.pairwise_filter] at h2
+  exact h2.imp fun hab hp hp' => hab (by simpa using hp) (by simpa using hp')
+
+/-- The runs part `q` reads, each marked where it is a strided part's row: its run (`partRun`), or its rows
+(`gatherRuns`). -/
+def pieces (P : Prog) (q : Part) : List ((Nat × Nat × Nat) × Bool) :=
+  match partRun P q with
+  | some r => [(r.1, false)]
+  | none => ((gatherRuns P q).getD []).map (·, true)
+
+/-- The runs `apart` reads are the parts' pieces, in another order. -/
+theorem pieces_perm (P : Prog) : ∀ parts : List Part,
+    (parts.flatMap (pieces P)).Perm
+      (((parts.filterMap fun q => if gathered P q then gatherRuns P q else none).flatten).map (·, true) ++
+        ((parts.filter fun q => !gathered P q).filterMap (partRun P)).map (·.1, false))
+  | [] => List.Perm.refl _
+  | q :: parts => by
+    have ih := pieces_perm P parts
+    cases hp : partRun P q with
+    | some r =>
+      have hg : gathered P q = false := by simp [gathered, hp]
+      have hpc : pieces P q = [(r.1, false)] := by simp [pieces, hp]
+      simp only [List.flatMap_cons, hpc, List.filterMap_cons, hg, List.filter_cons, Bool.not_false,
+        if_true, hp, List.map_cons, List.singleton_append]
+      exact (ih.cons _).trans List.perm_middle.symm
+    | none =>
+      cases hgr : gatherRuns P q with
+      | some g =>
+        have hg : gathered P q = true := by simp [gathered, hp, hgr]
+        have hpc : pieces P q = g.map (·, true) := by simp [pieces, hp, hgr]
+        simp only [List.flatMap_cons, hpc, List.filterMap_cons, hg, List.filter_cons, Bool.not_true,
+          if_true, hgr, List.flatten_cons, List.map_append, List.append_assoc]
+        exact ih.append_left _
+      | none =>
+        have hg : gathered P q = false := by simp [gathered, hp, hgr]
+        have hpc : pieces P q = [] := by simp [pieces, hp, hgr]
+        simp only [List.flatMap_cons, hpc, List.nil_append, List.filterMap_cons, hg, List.filter_cons,
+          Bool.not_false, if_true, hp]
+        simpa using ih
+
+/-- **Two parts' pieces, either a row, share no leaf** where `gatherRows` admits the parts. -/
+theorem rows_pairwise {P : Prog} {parts : List Part} {runs : Runs} (h : gatherRows P parts = some runs) :
+    parts.Pairwise fun q q' => ∀ a ∈ pieces P q, ∀ b ∈ pieces P q', (a.2 = true ∨ b.2 = true) → 0 < a.1.2.2 →
+      0 < b.1.2.2 → Apart a.1 b.1 := by
+  have hap := apart_spec (gatherRows_some h).2
+  have hpw := ((pieces_perm P parts).pairwise_iff (fun {a b} hab hb ha => (hab ha hb).elim
+    (fun ⟨e, e1, e2⟩ => Or.inl ⟨e.symm, e2, e1⟩) (fun hap => Or.inr hap.symm))).2 hap
+  refine (List.pairwise_flatMap.1 hpw).2.imp fun hqq a ha b hb hm hp hp' => ?_
+  rcases hqq a ha b hb hp hp' with ⟨-, e1, e2⟩ | hap
+  · rw [e1, e2] at hm
+    simp at hm
+  · exact hap
+
+/-- **The runs `runsOf` admits, those of some leaf, are apart or one shared run**, as parts, in the order they stand
+in. -/
+theorem runs_pairwise {P : Prog} {parts : List Part} {runs : Runs} (hro : runsOf P parts = some runs) :
+    parts.Pairwise fun q q' => ∀ r, runOf P q = some r → ∀ r', runOf P q' = some r' → 0 < r.2.2 → 0 < r'.2.2 →
+      (r = r' ∧ r ∈ runs.shared) ∨ Apart r r' := by
+  obtain ⟨-, hall, hsh⟩ := runsOf_some hro
+  have hsa := same_or_apart_of_sorted _ (sortedOf_sorted P _) hall
+  have hadj := shared_of_sorted _ (sortedOf_sorted P _) hsa fun a ha => sortedOf_pos ha
+  have hboth := (hsa.and hadj).imp fun {a b} ⟨h1, h2⟩ => (show (a.1 = b.1 ∧ a.1 ∈ adjShared (sortedOf P
+    parts)) ∨ Apart a.1 b.1 from h1.imp (fun e => ⟨e, h2 e⟩) id)
+  have hback := pairwise_back (R := fun a b => (a.1 = b.1 ∧ a.1 ∈ adjShared (sortedOf P parts)) ∨ Apart a.1 b.1)
+    (fun a b hab => hab.elim (fun ⟨e, hm⟩ => Or.inl ⟨e.symm, e ▸ hm⟩) (fun hap => Or.inr hap.symm)) hboth
+  refine hback.imp fun {q q'} hqq r hr r' hr' hp hp' => ?_
+  obtain ⟨f, hf⟩ := partRun_of_runOf hr
+  obtain ⟨f', hf'⟩ := partRun_of_runOf hr'
+  rcases hqq (r, f) hf (r', f') hf' hp hp' with ⟨e, hm⟩ | hap
+  · exact Or.inl ⟨e, by rw [hsh]; exact List.mem_append_right _ hm⟩
+  · exact Or.inr hap
+
+/-- **A part `runsOf` admits that reads its run more than once reads a shared run.** -/
+theorem shared_of_flag {P : Prog} {parts : List Part} {runs : Runs} (hro : runsOf P parts = some runs) {q : Part}
+    (hq : q ∈ parts) {r : Nat × Nat × Nat} (hr : partRun P q = some (r, true)) (hp : 0 < r.2.2) :
+    r ∈ runs.shared := by
+  rw [(runsOf_some hro).2.2]
+  refine List.mem_append_left _ (List.mem_filterMap.2 ⟨(r, true), ?_, by simp⟩)
+  exact (sortedOf_perm P _).mem_iff.2 (List.mem_filter.2 ⟨List.mem_filterMap.2 ⟨q, hq, hr⟩, by simpa using hp⟩)
+
+/-- A part that is a run is no strided part's rows. -/
+theorem not_gathered {P : Prog} {q : Part} {r : Nat × Nat × Nat} (hr : runOf P q = some r) : gathered P q = false := by
+  obtain ⟨f, hf⟩ := partRun_of_runOf hr
+  simp [gathered, hf]
+
 section
 variable {P : Prog} (h : OwnRuns P)
 include h
@@ -389,21 +567,35 @@ theorem batch_dims {n : Node} (hn : n ∈ unitsOf P) (hb : n.form = .batch) {a :
   · cases (show false = true from hc)
   · exact Array.all_eq_true'.1 hc a ha
 
-/-- **Every part of an argument of a node that is no input node is a run of leaves of an input node.** -/
-theorem part_run {n : Node} (hn : n ∈ unitsOf P) {q : Part} (hq : q ∈ partsIn n) : ∃ r, runOf P q = some r := by
-  obtain ⟨-, runs, -, hr⟩ := rowRuns_own h
-  obtain ⟨y, hy⟩ := filterMap_all (partRun P) _ (runsOf_some hr).1 q (List.mem_flatMap.2 ⟨n, hn, hq⟩)
-  exact ⟨y.1, by simp [runOf, hy]⟩
+/-- **Every part of an argument of a node that is no input node is a run of leaves of an input node, or a strided
+part's rows.** -/
+theorem part_cover {n : Node} (hn : n ∈ unitsOf P) {q : Part} (hq : q ∈ partsIn n) :
+    (∃ r, runOf P q = some r) ∨ (partRun P q = none ∧ ∃ rows, gatherRuns P q = some rows) := by
+  obtain ⟨-, runs, -, hro⟩ := rowRuns_own h
+  have hmem : q ∈ (unitsOf P).flatMap partsIn := List.mem_flatMap.2 ⟨n, hn, hq⟩
+  rcases hro with hro | hro
+  · obtain ⟨y, hy⟩ := filterMap_all (partRun P) _ (runsOf_some hro).1 q hmem
+    exact Or.inl ⟨y.1, by simp [runOf, hy]⟩
+  · cases hg : gathered P q with
+    | true =>
+      right
+      simp only [gathered, Bool.and_eq_true, Option.isNone_iff_eq_none] at hg
+      exact ⟨hg.1, Option.isSome_iff_exists.1 hg.2⟩
+    | false =>
+      obtain ⟨y, hy⟩ := filterMap_all (partRun P) _ (runsOf_some (gatherRows_some hro).1).1 q
+        (List.mem_filter.2 ⟨hmem, by simp [hg]⟩)
+      exact Or.inl ⟨y.1, by simp [runOf, hy]⟩
 
 /-- **A part that reads its run more than once reads a shared run.** -/
 theorem part_shared {n : Node} (hn : n ∈ unitsOf P) {q : Part} (hq : q ∈ partsIn n) {r : Nat × Nat × Nat}
     (hr : partRun P q = some (r, true)) (hp : 0 < r.2.2) : ∃ runs, rowRuns P = some runs ∧ r ∈ runs.shared := by
   obtain ⟨-, runs, hrr, hro⟩ := rowRuns_own h
+  have hmem : q ∈ (unitsOf P).flatMap partsIn := List.mem_flatMap.2 ⟨n, hn, hq⟩
   refine ⟨runs, hrr, ?_⟩
-  rw [(runsOf_some hro).2.2]
-  refine List.mem_append_left _ (List.mem_filterMap.2 ⟨(r, true), ?_, by simp⟩)
-  refine (sortedOf_perm P _).mem_iff.2 (List.mem_filter.2 ⟨List.mem_filterMap.2 ⟨q, ?_, hr⟩, by simpa using hp⟩)
-  exact List.mem_flatMap.2 ⟨n, hn, hq⟩
+  rcases hro with hro | hro
+  · exact shared_of_flag hro hmem hr hp
+  · have hng : gathered P q = false := by simp [gathered, hr]
+    exact shared_of_flag (gatherRows_some hro).1 (List.mem_filter.2 ⟨hmem, by simp [hng]⟩) hr hp
 
 /-- The runs of the parts `ownRows` reads, those of some leaf, are apart or one shared run: as parts, in the order they
 stand in. -/
@@ -411,20 +603,31 @@ theorem parts_shared : ((unitsOf P).flatMap partsIn).Pairwise fun q q' =>
     ∀ r, runOf P q = some r → ∀ r', runOf P q' = some r' → 0 < r.2.2 → 0 < r'.2.2 →
       (r = r' ∧ ∃ runs, rowRuns P = some runs ∧ r ∈ runs.shared) ∨ Apart r r' := by
   obtain ⟨-, runs, hrr, hro⟩ := rowRuns_own h
-  obtain ⟨-, hall, hsh⟩ := runsOf_some hro
-  have hsa := same_or_apart_of_sorted _ (sortedOf_sorted P _) hall
-  have hadj := shared_of_sorted _ (sortedOf_sorted P _) hsa fun a ha => sortedOf_pos ha
-  have hboth := (hsa.and hadj).imp fun {a b} ⟨h1, h2⟩ => (show (a.1 = b.1 ∧ a.1 ∈ adjShared (sortedOf P
-    ((unitsOf P).flatMap partsIn))) ∨ Apart a.1 b.1 from h1.imp (fun e => ⟨e, h2 e⟩) id)
-  have hback := pairwise_back (R := fun a b => (a.1 = b.1 ∧ a.1 ∈ adjShared (sortedOf P
-      ((unitsOf P).flatMap partsIn))) ∨ Apart a.1 b.1)
-    (fun a b hab => hab.elim (fun ⟨e, hm⟩ => Or.inl ⟨e.symm, e ▸ hm⟩) (fun hap => Or.inr hap.symm)) hboth
-  refine hback.imp fun {q q'} hqq r hr r' hr' hp hp' => ?_
-  obtain ⟨f, hf⟩ := partRun_of_runOf hr
-  obtain ⟨f', hf'⟩ := partRun_of_runOf hr'
-  rcases hqq (r, f) hf (r', f') hf' hp hp' with ⟨e, hm⟩ | hap
-  · exact Or.inl ⟨e, runs, hrr, by rw [hsh]; exact List.mem_append_right _ hm⟩
-  · exact Or.inr hap
+  have wrap : ∀ {r r' : Nat × Nat × Nat}, (r = r' ∧ r ∈ runs.shared) ∨ Apart r r' →
+      (r = r' ∧ ∃ runs, rowRuns P = some runs ∧ r ∈ runs.shared) ∨ Apart r r' :=
+    fun hh => hh.imp (fun ⟨e, hm⟩ => ⟨e, runs, hrr, hm⟩) id
+  rcases hro with hro | hro
+  · exact (runs_pairwise hro).imp fun hqq r hr r' hr' hp hp' => wrap (hqq r hr r' hr' hp hp')
+  · have hpw := List.pairwise_filter.1 (runs_pairwise (gatherRows_some hro).1)
+    refine hpw.imp fun hqq r hr r' hr' hp hp' => wrap (hqq ?_ ?_ r hr r' hr' hp hp')
+    · simp [not_gathered hr]
+    · simp [not_gathered hr']
+
+/-- **The parts `ownRows` reads, where either piece is a strided part's row, share no leaf**: as parts, in the order
+they stand in. -/
+theorem parts_rows : ((unitsOf P).flatMap partsIn).Pairwise fun q q' => ∀ a ∈ pieces P q, ∀ b ∈ pieces P q',
+    (a.2 = true ∨ b.2 = true) → 0 < a.1.2.2 → 0 < b.1.2.2 → Apart a.1 b.1 := by
+  obtain ⟨-, runs, -, hro⟩ := rowRuns_own h
+  rcases hro with hro | hro
+  · have hun : ∀ q ∈ (unitsOf P).flatMap partsIn, ∀ a ∈ pieces P q, a.2 = false := by
+      intro q hq a ha
+      obtain ⟨y, hy⟩ := filterMap_all (partRun P) _ (runsOf_some hro).1 q hq
+      simp only [pieces, hy, List.mem_singleton] at ha
+      rw [ha]
+    refine List.Pairwise.imp_of_mem (fun {q q'} hq hq' _ a ha b hb hm => ?_) (List.pairwise_of_forall (R := fun _ _ => True) fun _ _ => trivial)
+    rw [hun q hq a ha, hun q' hq' b hb] at hm
+    simp at hm
+  · exact rows_pairwise hro
 
 end
 
@@ -517,5 +720,25 @@ theorem runs_shared {P : Prog} (h : OwnRuns P) {k i q k' i' q' : Nat}
     (fun _ _ hab r hr r' hr' hp hp' => (hab r' hr' r hr hp' hp).elim
       (fun ⟨e, hs⟩ => Or.inl ⟨e.symm, e ▸ hs⟩) (fun hap => Or.inr hap.symm))
     (parts_shared h) hk hu hi hq hk' hu' hi' hq' hne r hr r' hr' hp hp'
+
+/-- **Two parts at two positions share no leaf where either piece is a strided part's row.** Positions are a root
+node that is no input node, one of its arguments and one of that argument's parts. -/
+theorem pieces_apart {P : Prog} (h : OwnRuns P) {k i q k' i' q' : Nat}
+    (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
+    (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size)
+    (hq : q < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts).size)
+    (hk' : k' < (P.defs[P.root]!).body.nodes.size)
+    (hu' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k']!) = false)
+    (hi' : i' < ((P.defs[P.root]!).body.nodes[k']!).args.size)
+    (hq' : q' < ((((P.defs[P.root]!).body.nodes[k']!).args[i']!).seq.parts).size)
+    (hne : ¬ (k = k' ∧ i = i' ∧ q = q')) {a b : (Nat × Nat × Nat) × Bool}
+    (ha : a ∈ pieces P ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!))
+    (hb : b ∈ pieces P ((((P.defs[P.root]!).body.nodes[k']!).args[i']!).seq.parts[q']!))
+    (hm : a.2 = true ∨ b.2 = true) (hp : 0 < a.1.2.2) (hp' : 0 < b.1.2.2) : Apart a.1 b.1 :=
+  parts_at (R := fun q q' => ∀ a ∈ pieces P q, ∀ b ∈ pieces P q', (a.2 = true ∨ b.2 = true) → 0 < a.1.2.2 →
+      0 < b.1.2.2 → Apart a.1 b.1)
+    (fun _ _ hab a ha b hb hm hp hp' => (hab b hb a ha hm.symm hp' hp).symm)
+    (parts_rows h) hk hu hi hq hk' hu' hi' hq' hne a ha b hb hm hp hp'
 
 end InferenceOnlyVerifier.Record.SecurityProofs

@@ -519,6 +519,7 @@ PEARL_PLUS = register(Scheme(
     needs=frozenset({"windows"}),
     depends=(),
     pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"))},
+    answers=Lacks("has no piece that answers outside an exchange"),
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),

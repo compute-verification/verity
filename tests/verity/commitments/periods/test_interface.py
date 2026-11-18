@@ -890,6 +890,37 @@ def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
         I.ordered(units, wires, {GID: range(0, units[GID], REQUESTS)})
 
 
+def test_one_ranks_order_is_the_order_with_no_ranks():
+    """`chain` as one rank (its first unit 0) orders as with no ranks given, so its record's digest is the same."""
+    c = chain()
+    n, starts = c.units[GID], {GID: range(0, c.units[GID], REQUESTS)}
+    assert I.ordered(c.units, c.wires, starts, {GID: [0]}) == I.ordered(c.units, c.wires, starts) == c.order
+
+    def digest(order):
+        return hashlib.sha512(canonical_json(replace(c, order=order).description())).hexdigest()
+
+    assert digest(I.ordered({GID: n}, c.wires, starts, {GID: [0]})) == digest(c.order)
+
+
+def test_two_ranks_reading_each_other_step_by_step_order_inside_each_rank():
+    """Two ranks of two steps, rank r's units ``2r`` and ``2r + 1``: each rank's step 1 reads the other rank's step 0, so
+    a template's ranges can't rise across the ranks and with no ranks given there is no order. Given the ranks, the ranges
+    rise inside each rank and the order alternates by step, which `check_order` accepts. A rank's step 0 reading its own
+    step 1 is still refused: inside a rank its ranges rise."""
+    units = {GID: 4}
+    wires = (I.Wire(GID, "x", GID, "o0", at=1, radix=(1,), base=2, step=(0,)),
+             I.Wire(GID, "x", GID, "o0", at=3, radix=(1,), base=0, step=(0,)))
+    starts, ranks = {GID: range(4)}, {GID: [0, 2]}
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
+        I.ordered(units, wires, starts)
+    order = I.ordered(units, wires, starts, ranks)
+    assert order == ((GID, 0, 1), (GID, 2, 1), (GID, 1, 1), (GID, 3, 1))
+    I.check_order(units, wires, order)
+    back = (*wires, I.Wire(GID, "x", GID, "o0", at=0, radix=(1,), base=1, step=(0,)))
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
+        I.ordered(units, back, starts, ranks)
+
+
 EMB = I.resolve("EmbeddingRead_v2{V=4,H=16}")
 G8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
 EID, G8ID = descriptor_id(EMB), descriptor_id(G8)

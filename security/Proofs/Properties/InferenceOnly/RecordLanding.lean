@@ -121,7 +121,7 @@ theorem rowLeaf_fun (hN : PortsNamed P rs) {r : Row} {l g lo hi g' lo' hi' : ℕ
 /-- A leaf of the return at the first word of field `f`, a field of a word or more, is a leaf of the row `outRow`
 gives for field `f`. -/
 theorem outLeaf_data {sc : Scope} {f l g lo hi : ℕ} (hf : f < (fieldsOf (P.defs[sc.d]!).ret).length)
-    (hb : 0 < Spot.Edges.wordsOf (fieldsOf (P.defs[sc.d]!).ret)[f]!)
+    (hb : 0 < Spot.Bits.bitsOf (fieldsOf (P.defs[sc.d]!).ret)[f]!)
     (h : OutLeaf P sc (Spot.Edges.fieldWord (P.defs[sc.d]!).ret f) l g lo hi) :
     l < (outRow (P.defs[sc.d]!) f).2.size ∧
       Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get ((outRow (P.defs[sc.d]!) f).1 + l)) = .ok g ∧
@@ -136,7 +136,7 @@ theorem writerLeaf_data {r : Row} {l₀ g₀ lo₀ hi₀ : ℕ} (h₀ : WriterLe
     ∃ wt wu o sc' f, S.writerOf r.tid r.unit r.port r.row =
         some (wt, wu, o, Spot.Edges.fieldWord (P.defs[sc'.d]!).ret f) ∧ 0 ≤ wu ∧
       UnitAt P rs wt wu.toNat sc' ∧ f < (fieldsOf (P.defs[sc'.d]!).ret).length ∧
-      0 < Spot.Edges.wordsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]! ∧
+      0 < Spot.Bits.bitsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]! ∧
       ∀ l g lo hi, WriterLeaf P rs S r l g lo hi →
         OutLeaf P sc' (Spot.Edges.fieldWord (P.defs[sc'.d]!).ret f) l g lo hi := by
   obtain ⟨wt, wu, o, off, sc', hw, h0, hu, f, hoff, hf, hb, _⟩ := h₀
@@ -306,7 +306,7 @@ theorem width_of_gate (hL : LaysOut P rs W S D at_) {a : Fin D.N} {p : ℕ} {ops
 
 /-- A leaf of a row's writer lands on gates no wider than the leaf, where each of the writer's leaves does. -/
 theorem writerLand_le {r : Row} {sc' : Scope} {f : ℕ} (hf : f < (fieldsOf (P.defs[sc'.d]!).ret).length)
-    (hb : 0 < Spot.Edges.wordsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]!)
+    (hb : 0 < Spot.Bits.bitsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]!)
     (hall : ∀ l g lo hi, WriterLeaf P rs S r l g lo hi →
       OutLeaf P sc' (Spot.Edges.fieldWord (P.defs[sc'.d]!).ret f) l g lo hi)
     (hstep : ∀ l g lo hi, WriterLeaf P rs S r l g lo hi → D.width (landOf P rs W S at_ g) ≤ hi - lo) (l : ℕ) :
