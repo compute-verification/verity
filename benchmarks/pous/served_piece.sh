@@ -7,9 +7,12 @@
 # Before the card: libp2v1.so built for it (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh at ARCH, default the `arch` of this node's card record) into a
 # scratch directory removed on exit, unless P2_LIB names one, as a node that refuses `setarch -R` needs, since the build
 # doesn't run there; the library loaded once by the sessions' Python, with no card to see; and the two Lean verifiers
-# that decide, pous-run-protocol (PoUS's case) and poub-p2-protocol (PoUB-P2's), built in a scratch copy of
+# that decide, pous-run-protocol (PoUS's case) and poub-p2-protocol (PoUB-P2's), started building in a scratch copy of
 # verity/, never in this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile, unless POUS_EXE and
-# BW_CASE_EXE name ones built already.
+# BW_CASE_EXE name ones built already. The builds run one after another beside the run's key, the card and the
+# sessions, and each program is waited for only where it is needed (lean_ready.sh): poub-verifier by the bandwidth
+# party, the other two by the answers. A build that fails stops the piece at once, the sessions included, with its own
+# error and exit 7.
 #
 # On the card, the two sessions and nothing else (served_piece.py --sessions): under one lease (the node's gpu-lease,
 # else the tree's own gpu_lease.sh, for at most LEASE_MIN minutes, default 90, and MEM_GB GiB of host memory, default
@@ -24,10 +27,11 @@
 # After the card, the answers (served_piece.py --answers), with no lease and at most ANSWERS_MEM_GB GiB of host memory
 # (default 128, in a systemd scope where this user can make one, else under prlimit's address-space limit, else not
 # answered: PoUS's case is held by the Python and written as its
-# line, four times C*, to the Lean, which works in a few times that line): PoUB-P2's case answered by
-# poub-p2-protocol, its answer to DIR's sibling bandwidth, which BANDWIDTH_CMD collects (served_bandwidth.py
-# collect), and its case to SERVE_DIR/private/bandwidth; then PoUS's case answered by pous-run-protocol, which must
-# agree with the Python. This part starts only when the sessions' part exits 0. A run that ended in it, or whose Lean
+# line, four times C*, to the Lean, which works in a few times that line), all three at once: PoUB-P2's case
+# answered by poub-p2-protocol, its answer to DIR's sibling bandwidth, which BANDWIDTH_CMD collects
+# (served_bandwidth.py collect), and its case to SERVE_DIR/private/bandwidth; and PoUS's case answered by the Python
+# and by pous-run-protocol, which must agree with it. This part starts only when the sessions' part exits 0 and
+# those two programs are built. A run that ended in it, or whose Lean
 # didn't answer or agree (the window is then undecided), keeps what the sessions left and can be answered again by
 # hand (served_piece.py's arguments with --answers), with no new session; once each Lean has answered, C* is removed.
 #
@@ -43,9 +47,9 @@
 # Python the attesters run in (default .venv/bin/python), and BW_PARTY_EXE a built poub-verifier for the bandwidth party.
 #
 # Logs: DIR/build.log, DIR/lake-build.log, DIR/pous.log (both parts' stderr) and
-# DIR/stamps.txt, the piece's timeline, a line `UTC EVENT` each: its start, each build's end, the library's load, the
-# card asked for and leased, each part's exit, and between them served_piece.py's own (the weights loaded, setup, each
-# session, each answer). Exit: served_piece.py's (0 accept, 1 another answer, 2 no answer made), 3 when the library
+# DIR/stamps.txt, the piece's timeline, a line `UTC EVENT` each: its start, the builds' start and each build's end, the
+# library's load, the card asked for and leased, each part's exit, and served_piece.py's own (the weights loaded, setup,
+# each session, each answer's start and end); steps that overlap each keep their own lines. Exit: served_piece.py's (0 accept, 1 another answer, 2 no answer made), 3 when the library
 # doesn't build or PY doesn't load it, 7 when a Lean verifier doesn't build.
 set -uo pipefail
 SERVE_DIR=${1:?usage: served_piece.sh SERVE_DIR WINDOW DIR}; WINDOW=${2:?WINDOW}; DIR=${3:?DIR}
@@ -92,23 +96,55 @@ fi
 LOADS=$(CUDA_VISIBLE_DEVICES='' "$PY" -c 'import ctypes, sys; ctypes.CDLL(sys.argv[1])' "$LIB/libp2v1.so" 2>&1) \
   || { echo "POUS: no answer: $PY doesn't load $LIB/libp2v1.so: $(echo "$LOADS" | tail -n 1)"; exit 3; }
 stamp "loaded libp2v1.so"
-built() {  # the Lean executable $2 of the scratch copy's package $1, built there: its path in EXE
-  EXE=$S/$1/.lake/build/bin/$2
-  (cd "$S/$1" && lake build "$2") >> "$DIR/lake-build.log" 2>&1 && { stamp "built $2"; return; }
-  tail -20 "$DIR/lake-build.log"; echo "POUS: no answer: $2 doesn't build (lake-build.log)"; exit 7
-}
+CHECK=verity/protocols/resource_accounting/memory/pous/verifier/check
+POUB=verity/protocols/resource_accounting/memory/poub/verifier/lean
 POUS_EXE=${POUS_EXE:-} BW_CASE_EXE=${BW_CASE_EXE:-} BW_PARTY_EXE=${BW_PARTY_EXE:-}
-if [ -z "$POUS_EXE" ] || [ -z "$BW_CASE_EXE" ] || { [ -n "$RUN_KEYS" ] && [ -z "$BW_PARTY_EXE" ]; }; then
-  CHECK=verity/protocols/resource_accounting/memory/pous/verifier/check
-  POUB=verity/protocols/resource_accounting/memory/poub/verifier/lean
+B=$S/built BUILDS=() LOCKS=() BUILDING=
+READY=$ROOT/benchmarks/pous/lean_ready.sh
+[ -n "$POUS_EXE" ] || { BUILDS+=("$CHECK pous-run-protocol"); POUS_EXE=$S/$CHECK/.lake/build/bin/pous-run-protocol; }
+[ -z "$RUN_KEYS" ] || [ -n "$BW_PARTY_EXE" ] || { BUILDS+=("$POUB poub-verifier"); BW_PARTY_EXE=$S/$POUB/.lake/build/bin/poub-verifier; }
+[ -n "$BW_CASE_EXE" ] || { BUILDS+=("$POUB poub-p2-protocol"); BW_CASE_EXE=$S/$POUB/.lake/build/bin/poub-p2-protocol; }
+unlocked() {  # "$@" with none of the builds' locks, which only the builder holds
+  for fd in "${LOCKS[@]}"; do eval "exec $fd>&-"; done
+  exec "$@"
+}
+builds() {  # each of BUILDS in order, its lock released as it ends: B/EXE.ok, or B/failed with the build's error
+  local i b
+  command -v lake > /dev/null 2>&1 || (unlocked bash "$ROOT/tools/verity/lean/setup.sh" "$S/$CHECK") > "$DIR/lake-setup.log" 2>&1
+  for i in "${!BUILDS[@]}"; do
+    b=${BUILDS[$i]}
+    if (cd "$S/${b% *}" && unlocked lake build "${b#* }") >> "$DIR/lake-build.log" 2>&1; then
+      : > "$B/${b#* }.ok"
+      stamp "built ${b#* }"
+      eval "exec ${LOCKS[$i]}>&-"
+    else
+      { tail -20 "$DIR/lake-build.log"; echo "POUS: no answer: ${b#* } doesn't build (lake-build.log)"; } > "$B/failed.tmp"
+      mv "$B/failed.tmp" "$B/failed"
+      stamp "${b#* } didn't build"
+      [ ! -e "$B/sessions.pid" ] || kill -TERM "$(cat "$B/sessions.pid")" 2> /dev/null
+      exit 7
+    fi
+  done
+}
+if [ ${#BUILDS[@]} -gt 0 ]; then
   tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
   export PATH="$HOME/.elan/bin:$PATH"
-  command -v lake > /dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$CHECK" > "$DIR/lake-setup.log" 2>&1
   : > "$DIR/lake-build.log"
-  [ -n "$POUS_EXE" ] || { built "$CHECK" pous-run-protocol; POUS_EXE=$EXE; }
-  [ -n "$BW_CASE_EXE" ] || { built "$POUB" poub-p2-protocol; BW_CASE_EXE=$EXE; }
-  [ -z "$RUN_KEYS" ] || [ -n "$BW_PARTY_EXE" ] || { built "$POUB" poub-verifier; BW_PARTY_EXE=$EXE; }
+  mkdir -p "$B"
+  # each lock is taken here, before the builder starts, so a program asked for before its build begins is waited for
+  for b in "${BUILDS[@]}"; do exec {fd}>"$B/${b#* }.lock" && flock -x "$fd" && LOCKS+=("$fd"); done
+  stamp "the Lean builds start"
+  builds &
+  BUILDING=$!
+  for fd in "${LOCKS[@]}"; do eval "exec $fd>&-"; done
+  trap 'kill "$BUILDING" 2> /dev/null || :; rm -rf "$S" ${K:+"$K"}' EXIT
 fi
+ready() {  # the built program $1, waited for if it is being built; a failed build ends the piece with its own error
+  [ -e "$B/$1.lock" ] || return 0
+  bash "$READY" "$B" "$1" true 2>&1 && return
+  stamp "the piece stops: $1 didn't build"
+  exit 7
+}
 if [ -n "$RUN_KEYS" ]; then
   K=$SERVE_DIR/private/run-keys
   rm -rf "$K" && (umask 077 && mkdir -p "$K/pous")
@@ -121,6 +157,7 @@ print(hashlib.sha512(onsite.device_key(sys.argv[1], workers=int(sys.argv[2])).pu
   stamp "made the run's key"
   printf -v CC 'bash %q challenger_party %q %q' "$ROOT/benchmarks/pous/run_attester.sh" "$TPY" "$K"
   printf -v BP 'bash %q bw_party %q %q %q' "$ROOT/benchmarks/pous/run_attester.sh" "$TPY" "$K" "$BW_PARTY_EXE"
+  [ ! -e "$B/poub-verifier.lock" ] || printf -v BP 'bash %q %q poub-verifier %s' "$READY" "$B" "$BP"
   EXTRA+=(--challenger-host "$(hostname)" --challenger-address 127.0.0.1:47610 --challenger-command "$CC"
           --trusted-sha512 "$SHA" --bw-party "$BP" --bw-host 127.0.0.1 --bw-trusted-sha512 "$SHA")
 fi
@@ -129,19 +166,33 @@ ARGS=("$ROOT/benchmarks/pous/served_piece.py" "$SERVE_DIR" "$WINDOW" "$DIR" --hf
       --case-exe "$POUS_EXE" --bw-case-exe "$BW_CASE_EXE" ${EXTRA[@]+"${EXTRA[@]}"})
 LEASE=(gpu-lease)
 command -v gpu-lease > /dev/null 2>&1 || LEASE=(bash "$ROOT/tools/research/src/research/pods/sh/gpu_lease.sh")
+[ ! -e "$B/failed" ] || { cat "$B/failed"; stamp "the piece stops: a Lean verifier didn't build"; exit 7; }
 stamp "asked for the card"
 if [ -n "${GPU_LEASE_UUID:-}" ]; then
-  export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID
-  "$PY" "${ARGS[@]}" --sessions 2>> "$DIR/pous.log"
+  CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID "$PY" "${ARGS[@]}" --sessions 2>> "$DIR/pous.log" &
 else
   # shellcheck disable=SC2016
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting} "${LEASE[@]}" 1 --wait --max-min "${LEASE_MIN:-90}" --mem-gb "${MEM_GB:-72}" -- \
     bash -c 'echo "leased $GPU_LEASE_UUID" >&2; echo "$(date -u +%FT%TZ) leased the card" >> "$1"; shift; export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID; exec "$@"' \
-    _ "$DIR/stamps.txt" "$PY" "${ARGS[@]}" --sessions 2>> "$DIR/pous.log"
+    _ "$DIR/stamps.txt" "$PY" "${ARGS[@]}" --sessions 2>> "$DIR/pous.log" &
 fi
+SESSIONS=$!
+if [ -n "$BUILDING" ]; then
+  # the builder stops the sessions when a build fails after this line, and this line when one failed before it
+  echo "$SESSIONS" > "$B/sessions.tmp" && mv "$B/sessions.tmp" "$B/sessions.pid"
+  [ ! -e "$B/failed" ] || kill -TERM "$SESSIONS" 2> /dev/null
+fi
+wait "$SESSIONS"
 rc=$?
+if [ -e "$B/failed" ]; then
+  stamp "the sessions' part stopped: a Lean verifier didn't build"
+  cat "$B/failed"
+  exit 7
+fi
 stamp "the sessions' part exit $rc"
 [ "$rc" = 0 ] || exit "$rc"
+ready pous-run-protocol
+ready poub-p2-protocol
 if command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; then
   scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${ANSWERS_MEM_GB:-128}G" -p MemorySwapMax=0 --)
 elif command -v prlimit > /dev/null && prlimit "--as=$((1 << 30))" -- true > /dev/null 2>&1; then

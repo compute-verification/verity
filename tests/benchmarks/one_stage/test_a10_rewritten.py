@@ -30,15 +30,20 @@ def _a10(monkeypatch) -> types.ModuleType:
 
 
 def test_a_rewritten_tensor_opens_against_its_rows_sha512_tensor_root(monkeypatch, tmp_path):
+    from verity.commitments import salt_file as SF
+
     from verity_vllm.check import fp8_ue8m0
     from verity_vllm.commit import step_rows
+    from verity_vllm.pipeline import cpu_replay as CPU
 
     a10 = _a10(monkeypatch)
-    geo, wk = bytes(range(64)), bytes(range(64, 128))
+    geo = bytes(range(64))
     served = {"model.a.weight": np.arange(8, dtype=np.uint16), "model.b.weight": np.arange(8, 16, dtype=np.uint16)}
     names = [[n, "bfloat16", [8], 16] for n in served]
-    roots = [step_rows.tensor_root(geo, i, e, served[e[0]].view(np.uint8), wk) for i, e in enumerate(names)]
-    tree = step_rows.weights_tree(geo, names, roots, wk)
+    salts = {n: step_rows.fresh_tensor_salts(16) for n in served}
+    SF.write(CPU.salts_path(tmp_path / "bundle"), salts)
+    roots = [step_rows.tensor_root(geo, i, e, served[e[0]].view(np.uint8), salts[e[0]]) for i, e in enumerate(names)]
+    tree = step_rows.weights_tree(geo, names, roots)
 
     class Rewrites:
         def __init__(self, _names, _roles, _compose, _config):
@@ -53,6 +58,6 @@ def test_a_rewritten_tensor_opens_against_its_rows_sha512_tensor_root(monkeypatc
     monkeypatch.setattr(fp8_ue8m0, "build_roles", lambda _d: {n: {} for n in served})
     monkeypatch.setattr(fp8_ue8m0, "Rewrites", Rewrites)
     words: dict = {}
-    out = a10.Committed.rewritten(tree, SimpleNamespace(config={}), words, tmp_path, "", {"world": 1, "rank": 0})
+    out = a10.Committed.rewritten(tmp_path / "bundle", tree, SimpleNamespace(config={}), words, tmp_path, "", {"world": 1, "rank": 0})
     assert (out["covered"], out["opened"], out["mismatched"]) == (2, 1, ["model.b.weight"])
     assert list(words) == ["model.a.weight"] and np.array_equal(words["model.a.weight"], served["model.a.weight"])

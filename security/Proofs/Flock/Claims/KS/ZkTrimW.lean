@@ -137,7 +137,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **`trimCol` is one to one on table `j`'s full-width columns.** -/
-theorem wideJ_trimCol_inj (zk : Bool) (x : Claims.Msg) (j : ℕ) (u v : List 𝔽) (hu : wideJ zk x j u)
+theorem wideJ_trimCol_inj (zk : Bool) (x : Hash.Msg) (j : ℕ) (u v : List 𝔽) (hu : wideJ zk x j u)
     (hv : wideJ zk x j v) (h : trimCol u = trimCol v) : u = v := by
   unfold wideJ at hu hv
   rcases hq : (tables zk x)[j]? with _ | ⟨a, st⟩
@@ -148,7 +148,7 @@ theorem wideJ_trimCol_inj (zk : Bool) (x : Claims.Msg) (j : ℕ) (u v : List �
 end Gen
 
 /-- **`trimCol` is one to one on table `j`'s full-width columns.** -/
-theorem wideJ_trimCol_inj (zk : Bool) (x : Claims.Msg) (j : ℕ) (u v : List 𝔽) (hu : wideJ zk x j u)
+theorem wideJ_trimCol_inj (zk : Bool) (x : Hash.Msg) (j : ℕ) (u v : List 𝔽) (hu : wideJ zk x j u)
     (hv : wideJ zk x j v) (h : trimCol u = trimCol v) : u = v :=
   Gen.wideJ_trimCol_inj (S := S₀) (zk := zk) (x := x) (j := j) (u := u) (v := v) (hu := hu) (hv := hv) (h := h)
 
@@ -157,7 +157,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **`[]` is a trimmed full-width column of table `j`** where its word has a position: its zero column's trim. -/
-theorem okThroughJ_nil (zk : Bool) (x : Claims.Msg) (j : ℕ) (h : 0 < wordLenJ zk x j) :
+theorem okThroughJ_nil (zk : Bool) (x : Hash.Msg) (j : ℕ) (h : 0 < wordLenJ zk x j) :
     Claims.Flock.OkThroughJ trimCol (wideJ zk) x j [] := by
   unfold wordLenJ at h
   unfold Claims.Flock.OkThroughJ wideJ
@@ -170,7 +170,7 @@ theorem okThroughJ_nil (zk : Bool) (x : Claims.Msg) (j : ℕ) (h : 0 < wordLenJ 
 end Gen
 
 /-- **`[]` is a trimmed full-width column of table `j`** where its word has a position: its zero column's trim. -/
-theorem okThroughJ_nil (zk : Bool) (x : Claims.Msg) (j : ℕ) (h : 0 < wordLenJ zk x j) :
+theorem okThroughJ_nil (zk : Bool) (x : Hash.Msg) (j : ℕ) (h : 0 < wordLenJ zk x j) :
     Claims.Flock.OkThroughJ trimCol (wideJ zk) x j [] :=
   Gen.okThroughJ_nil (S := S₀) (zk := zk) (x := x) (j := j) (h := h)
 
@@ -211,7 +211,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The masked relation splits by table at the trimmed record wherever some run accepts.** -/
-theorem zk_splits_trim (x : Claims.Msg) :
+theorem zk_splits_trim (x : Hash.Msg) :
     Claims.Flock.Splits (deployZkTrim Readable.relation) x ∨
       Claims.Flock.NoAcc sha512 (deployZkTrim Readable.relation).V x := by
   by_cases hno : Claims.Flock.NoAcc sha512 (V true) x
@@ -222,7 +222,7 @@ theorem zk_splits_trim (x : Claims.Msg) :
 end Gen
 
 /-- **The masked relation splits by table at the trimmed record wherever some run accepts.** -/
-theorem zk_splits_trim (x : Claims.Msg) :
+theorem zk_splits_trim (x : Hash.Msg) :
     Claims.Flock.Splits (deployZkTrim Readable.relation) x ∨
       Claims.Flock.NoAcc sha512 (deployZkTrim Readable.relation).V x :=
   Gen.zk_splits_trim (S := S₀) (x := x)

@@ -113,7 +113,7 @@ open FlockComplete (PS)
 /-! ## Runs of `PS` step by step -/
 
 theorem run_bind_ok {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t t'' : Transcript}
-    {l l'' : Array Claims.Msg} {b : β} (h : ((x >>= f).run t).go l = (.ok (b, t''), l'')) :
+    {l l'' : Array Hash.Msg} {b : β} (h : ((x >>= f).run t).go l = (.ok (b, t''), l'')) :
     ∃ a t' l', (x.run t).go l = (.ok (a, t'), l') ∧ ((f a).run t').go l' = (.ok (b, t''), l'') := by
   rw [StateT.run_bind, FlockComplete.go_bind] at h
   rcases e : (x.run t).go l with ⟨r, l'⟩
@@ -124,17 +124,17 @@ theorem run_bind_ok {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t t''
     obtain ⟨a, t'⟩ := a
     exact ⟨a, t', l', rfl, h⟩
 
-theorem get_run_go (t : Transcript) (l : Array Claims.Msg) :
+theorem get_run_go (t : Transcript) (l : Array Hash.Msg) :
     ((get : TMW PS Transcript).run t).go l = (.ok (t, t), l) := rfl
 
-theorem throw_run_go {α : Type} (e : String) (t : Transcript) (l : Array Claims.Msg) :
+theorem throw_run_go {α : Type} (e : String) (t : Transcript) (l : Array Hash.Msg) :
     ((throw e : TMW PS α).run t).go l = (.error e, l) := rfl
 
 /-- **Where the inner proof returns at `asksCut`, its batched constraint held** on the pads, at the coins of the rounds
 it drew from: `innerP` stops on a batched constraint that fails. -/
 theorem innerP_batched {coin : ℕ → ℕ → F128} {n : ℕ} {hs : Hashes PS} {lay : Zk.PadLayout}
     {p : FlockComplete.PadsZk} {ic : FlockComplete.InnerCommit} {finalC : F128} {cons : Array (String × Zk.Lin)}
-    {t t' : Transcript} {l l' : Array Claims.Msg} {i : Zk.InnerProof}
+    {t t' : Transcript} {l l' : Array Hash.Msg} {i : Zk.InnerProof}
     (h : ((FlockComplete.innerP (FlockComplete.asksCut coin n) hs lay p ic finalC cons).run t).go l =
       (.ok (i, t'), l')) :
     ((FlockComplete.Replay.InZ.lin lay p cons (FlockComplete.SimInner.cutCoins coin l.size)).c +
@@ -166,10 +166,10 @@ theorem innerP_batched {coin : ℕ → ℕ → F128} {n : ℕ} {hs : Hashes PS} 
     | (rw [throw_run_go] at h; cases h)
     | (obtain ⟨_, _, _, h', _⟩ := run_bind_ok h; rw [throw_run_go] at h'; cases h')
 
-theorem go_liftV' {α : Type} (v : V α) (l : Array Claims.Msg) : (monadLift v : PS α).go l = (v, l) := by
+theorem go_liftV' {α : Type} (v : V α) (l : Array Hash.Msg) : (monadLift v : PS α).go l = (v, l) := by
   cases v <;> rfl
 
-theorem liftV_run_ok {α : Type} {v : V α} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
+theorem liftV_run_ok {α : Type} {v : V α} {t t' : Transcript} {l l' : Array Hash.Msg} {a : α}
     (h : ((StateT.lift (monadLift v : PS α) : TMW PS α).run t).go l = (.ok (a, t'), l')) :
     v = .ok a ∧ t' = t ∧ l' = l := by
   rw [StateT.run_lift, FlockComplete.go_bind, go_liftV'] at h
@@ -179,13 +179,13 @@ theorem liftV_run_ok {α : Type} {v : V α} {t t' : Transcript} {l l' : Array Cl
     cases h
     exact ⟨rfl, rfl, rfl⟩
 
-theorem liftV_run_go {α : Type} {v : V α} {a : α} (hv : v = .ok a) (t : Transcript) (l : Array Claims.Msg) :
+theorem liftV_run_go {α : Type} {v : V α} {a : α} (hv : v = .ok a) (t : Transcript) (l : Array Hash.Msg) :
     ((StateT.lift (monadLift v : PS α) : TMW PS α).run t).go l = (.ok (a, t), l) := by
   subst hv
   rfl
 
 theorem rankCheck_pass_go {m kLog : ℕ} {prior : Array (List F128)} {words : List ℕ} {t : Transcript}
-    (l : Array Claims.Msg)
+    (l : Array Hash.Msg)
     (h : FlockComplete.MaskRank.maskRankOk (prior ++ FlockComplete.MaskRank.roundPoints m kLog t.rounds) words = true) :
     ((FlockComplete.rankCheckP m kLog prior words : TMW PS Unit).run t).go l = (.ok ((), t), l) := by
   have e : ((FlockComplete.rankCheckP m kLog prior words : TMW PS Unit).run t).go l =
@@ -225,7 +225,7 @@ theorem piopCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Z
     (mk : ℕ → F128) (src : FlockComplete.RepSrc) (cap root : ByteArray) (extras : Array Claim)
     (prior : Array (List F128)) (words : List ℕ) (hm14 : 14 ≤ st.m) (hm : st.m - 6 ≤ lay.nMlv)
     (hk : st.fold.kLog - 6 ≤ lay.nLc) (hmk : ∀ i < lay.zp 64, src.masked i = mk i) {t₀ : Transcript}
-    {l : Array Claims.Msg} (hn : l.size ≤ n)
+    {l : Array Hash.Msg} (hn : l.size ≤ n)
     (hpiop : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut coin n) st.m st.digest cap root lay mk).run t₀).go l =
         (.ok ((zp, zc), t₁), l₁) →
@@ -236,7 +236,7 @@ theorem piopCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Z
         ∀ k < (abcClaims st.m st.kLog zc lc ++ extras).size,
           src.sv k = switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
     {r : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched} {t₃ : Transcript}
-    {l₃ : Array Claims.Msg}
+    {l₃ : Array Hash.Msg}
     (h : ((piopFw (FlockComplete.asksCut coin n) st lay g mk cap root extras).run t₀).go l = (.ok (r, t₃), l₃)) :
     ((FlockComplete.piopCut (FlockComplete.asksCut coin n) st lay src cap root extras prior words).run t₀).go l =
       (.ok (r, t₃), l₃) := by
@@ -284,7 +284,7 @@ theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
     (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array F128)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (src : FlockComplete.RepSrc)
-    (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript) (l : Array Claims.Msg)
+    (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript) (l : Array Hash.Msg)
     (hm14 : 14 ≤ st.m) (hn : l.size ≤ n) (hkL : st.fold.kLog = st.kLog)
     (hmk : ∀ i < (Zk.PadLayout.new st.m st.kLog sch.k0).zp 64, src.masked i = vals[i]! + pads.h[i]!)
     (hpiop : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
@@ -326,7 +326,7 @@ theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.
       FlockComplete.SimInner.InnerSrc coin n Sha512.hash (Zk.PadLayout.new st.m st.kLog sch.k0) pads
         (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]! ss[0]!)),
           ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc) src l₄.size)
-    {p : Zk.ZkProof} {t : Transcript} {l' : Array Claims.Msg}
+    {p : Zk.ZkProof} {t : Transcript} {l' : Array Hash.Msg}
     (h : ((repFwC (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch tPad rep dom g cm0 extras pads ic
       vals extra lanePad salt).run t₀).go l = (.ok (p, t), l')) :
     ∃ p', ((FlockComplete.repCut (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch rep dom

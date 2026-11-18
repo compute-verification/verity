@@ -79,7 +79,7 @@ def test_async_scheduling_serves_with_the_commit_on_or_off(tmp_path):
     learn-only warm-up learns the async steps' plans as it does the synchronous ones' (``serve_async_commit_gpu.py`` holds
     the two schedulers' roots equal on an H200)."""
     man = predicted.row(tmp_path)
-    base = ["--model", "m", "--revision", "r", "--required-manifest", str(man)]
+    base = ["--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path)]
     on, bare, off = (cli.parse("serve-openai", base + more, environ={})
                      for more in (["--async-scheduling"], ["--async-scheduling", "--no-commit"], []))
     assert (on.commit, on.async_scheduling, bare.commit) == (True, True, False)

@@ -74,10 +74,10 @@ session at one table simulates `P` (`PlainSim`), `V false`'s accepting runs with
 than the average over `u` of `plainVerdictAt` against `P'`'s strategies, at the root of `P`'s first message. An
 accepting run gives `plainVerdictAt` at its live outcome whatever sample its record carries (`plainVerdictAt_of_run`),
 so with no premise on the record's sample. -/
-theorem plain_first_of_simD {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {M : ℕ}
+theorem plain_first_of_simD {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) {M : ℕ}
     (C : Fin M → List 𝔽) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec} {sts₀ : Array Stmt} {d : Json}
     (hset : setupOf false x = some (s₀, spec₀, sts₀)) (hd : s₀.read.draw = some d)
-    {nMax : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts)
+    {nMax : ℕ} (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Hash.Msg → Wire nMax 1 mPts)
     {τ : Type} [Fintype τ] [Nonempty τ] (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin)
     (hsim : PlainSim P x ω mPts N dg w P' Φ) :
@@ -129,7 +129,7 @@ at each plain fork round `j` is no more than an accepting fork's with a collisio
 at chances `δ` (`Flock.forkSlack`), at `δ` fixed per prover whose slack weights total at most level 0's `2·2^{d₀}·Q₀`
 (`Flock.slackC`, `Flock.slackW`). Uniform functions of the live coins as the tape (`fnAt`, `Pr_fnAt`) are one such
 choice. -/
-def PlainSimWrPAtD {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+def PlainSimWrPAtD {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -150,7 +150,7 @@ def PlainSimWrPAtD {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables
           (fun r ℓ (i : Fin ((V false).k x)) =>
             Claims.Flock.slackW ((V false).k x) δ (plainJ (tables_head_one h) hsch r ℓ).val i.val) i ≤
         2 * ((2 : ℝ) ^ l₀.logLen * l₀.queries)),
-    ∀ ω : Ω, ∃ (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 spec.mPts) (τ : Type)
+    ∀ ω : Ω, ∃ (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Hash.Msg → Wire 65536 1 spec.mPts) (τ : Type)
       (_ : Fintype τ) (_ : Nonempty τ) (P' : Claims.Prover (Ω × τ))
       (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin)
       (_ : ∀ E : (Fin ((V false).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E)
@@ -180,7 +180,7 @@ open Classical in
 /-- **A simulator at the verdict at the sample gives the plain table bound at a statement**: the first bound is
 `plain_first_of_simD`'s, so with no premise on the record's sample, the third `liveMix_le_Pr`'s, and the fork bound with
 its slack fits the plain weight (`slackEsc_fitsFork_plain`). -/
-theorem plain_tableBoundθAt_of_simD {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+theorem plain_tableBoundθAt_of_simD {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
@@ -238,7 +238,7 @@ theorem plain_tableBoundθAt_of_simD {x : Claims.Msg} {ins : Ins} {spec : Sessio
 /-- **A simulator at a plain statement, at the verdict at the sample**: `PlainSimWrPAtD` at the statements in scope that
 set up at a sample, at their one table's `fast100` schedule, with the decoders `plain_hdecAt` where the outputs are
 public and `plain_hdecHAt` where they are hidden under hm96 leaves. -/
-def PlainSimWD (x : Claims.Msg) : Prop :=
+def PlainSimWD (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (h : tables false x = [(spec, st)]) (d : Json) (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -266,10 +266,10 @@ open Lean (Json)
 open Classical in
 /-- **The plain mixture's first bound at the statement's sample, from a simulation, at `VK keep`**
 (`plain_first_of_simD`'s proof, at `plainVerdictAtK keep` by `plainVerdictAtK_of_run`). -/
-theorem plain_first_of_simDK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+theorem plain_first_of_simDK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
     {M : ℕ} (C : Fin M → List 𝔽) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec} {sts₀ : Array Stmt} {d : Json}
     (hset : setupOf false x = some (s₀, spec₀, sts₀)) (hd : s₀.read.draw = some d)
-    {nMax : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts)
+    {nMax : ℕ} (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Hash.Msg → Wire nMax 1 mPts)
     {τ : Type} [Fintype τ] [Nonempty τ] (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin)
     (hsim : PlainSimK keep P x ω mPts N dg w P' Φ) :
@@ -309,7 +309,7 @@ open Classical in
 /-- **A simulator of each prover at the verdict at the sample, at `VK keep`**: `PlainSimWrPAtD` with `VK keep`'s runs,
 `plainVerdictAtK keep`, and the simulation, clash and fork events at `keep` (`PlainSimRunK`, `PlainClashRunK`,
 `plainForkEvK`). -/
-def PlainSimWrPAtDK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+def PlainSimWrPAtDK (keep : Bool → Bool) {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -331,7 +331,7 @@ def PlainSimWrPAtDK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec}
           (fun r ℓ (i : Fin ((V false).k x)) =>
             Claims.Flock.slackW ((V false).k x) δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val i.val) i ≤
         2 * ((2 : ℝ) ^ l₀.logLen * l₀.queries)),
-    ∀ ω : Ω, ∃ (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 spec.mPts) (τ : Type)
+    ∀ ω : Ω, ∃ (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Hash.Msg → Wire 65536 1 spec.mPts) (τ : Type)
       (_ : Fintype τ) (_ : Nonempty τ) (P' : Claims.Prover (Ω × τ))
       (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin)
       (_ : ∀ E : (Fin ((V false).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E)
@@ -359,7 +359,7 @@ def PlainSimWrPAtDK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec}
 
 /-- **A simulator at a plain statement, at the verdict at the sample, at `VK keep`**: `PlainSimWD` at
 `PlainSimWrPAtDK keep`, with the decoders `plain_hdecAtK keep` and `plain_hdecHAtK keep`. -/
-def PlainSimWDK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
+def PlainSimWDK (keep : Bool → Bool) (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (h : tables false x = [(spec, st)]) (d : Json) (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)

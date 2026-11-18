@@ -77,7 +77,7 @@ open Classical in
 reading anything but a table that reads their first `j`**, at read sets `rdD` that hold every decoded live opening,
 where the simulated strategy reaches the slot's node after `j` coins: `plainOffAtU_le_live` then `plainOffU_le_rd`,
 at `Lf`. -/
-theorem plainOffL_le_rd {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {st : Stmt}
+theorem plainOffL_le_rd {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -171,7 +171,7 @@ open Classical in
 /-- **The plain bound at one tape and table, from salted sessions after `Commit`, each slot's term raw, at any
 leaf**: `plain_le_sessionsEU`'s proof at `session_sound_of_table_accL_nodeOff`, so each plain fork slot keeps its
 per-position off mass at its node, averaged over the mixture. -/
-theorem plain_le_sessionsRawLK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem plain_le_sessionsRawLK (keep : Bool → Bool) {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -281,7 +281,7 @@ theorem plain_le_sessionsRawLK (keep : Bool → Bool) {x : Claims.Msg} {spec : S
   linarith [hsplit, hacc, hdiv]
 
 /-- `plain_le_sessionsRawLK` at the deployed plain verifier (`keep := id`). -/
-theorem plain_le_sessionsRawL {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem plain_le_sessionsRawL {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -327,7 +327,7 @@ at a table off which the model statement isn't committed: `plain_le_sessionsRawL
 (`mean_selfClash_le_live`, `liveMix_le_Pr`), and each slot's term by `plainOffL_le_rd` at the slot's fork round,
 where the simulated strategy meets the slot (`hslot`), at read sets holding every decoded opening (`hrel`) and
 tables that read only the coins before that round (`hwj`). -/
-theorem plain_accPr_le_rdL {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+theorem plain_accPr_le_rdL {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (hset : setupOf false x = some (ins, spec, sts))
     (h : tables false x = [(spec, st)]) {d : Json} (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)

@@ -73,7 +73,7 @@ open Flock Transcript Replay
 /-! ## Steps in the pure session -/
 
 /-- A bind whose first step both sides share: the continuations need only agree where that step returns. -/
-theorem go_bind_congr_r {α β : Type} {x : TMW PS α} {f g : α → TMW PS β} {t : Transcript} {l : Array Claims.Msg}
+theorem go_bind_congr_r {α β : Type} {x : TMW PS α} {f g : α → TMW PS β} {t : Transcript} {l : Array Hash.Msg}
     (h : ∀ a t' l', (x.run t).go l = (.ok (a, t'), l') → ((f a).run t').go l' = ((g a).run t').go l') :
     ((x >>= f).run t).go l = ((x >>= g).run t).go l := by
   rw [StateT.run_bind, StateT.run_bind, go_bind, go_bind]
@@ -89,14 +89,14 @@ theorem ite_ok {α τ σ : Type} {c : Prop} [Decidable c] {e : String} {v a : α
   · simp only [hc, ↓reduceIte, Prod.mk.injEq, Except.ok.injEq] at h
     exact ⟨hc, h.1.1, h.1.2, h.2⟩
 
-theorem liftTM_ok_log {α : Type} {x : TM α} {t t' : Transcript} {a : α} {l l' : Array Claims.Msg}
+theorem liftTM_ok_log {α : Type} {x : TM α} {t t' : Transcript} {a : α} {l l' : Array Hash.Msg}
     (h : ((liftTM x : TMW PS α).run t).go l = (.ok (a, t'), l')) : l = l' := by
   rw [liftTM_go] at h
   exact (Prod.mk.inj h).2
 
 /-- **A send answered by `asksCut`**: recorded, then refused at or past round `n`, else answered by round `l.size`'s
 coin. -/
-theorem cutRound_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Claims.Msg) :
+theorem cutRound_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Hash.Msg) :
     ((asksCut coin n).round c).go l =
       (if n ≤ l.size then .error "past the openings" else .ok (coin l.size), l.push (Claims.toMsg c)) := by
   have e : ((asksCut coin n).round c).go l =
@@ -106,7 +106,7 @@ theorem cutRound_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l :
   by_cases hn : n ≤ l.size <;> simp only [hn, ↓reduceIte] <;> rfl
 
 theorem squeezeCut_go (coin : ℕ → ℕ → F128) (n : ℕ) (kind : UInt8) {m : ℕ} (hm : m ≠ 0) (t : Transcript)
-    (l : Array Claims.Msg) :
+    (l : Array Hash.Msg) :
     ((squeezeP (asksCut coin n) kind m).run t).go l =
       (if n ≤ l.size then .error "past the openings"
         else .ok ((Array.range m).map (coin l.size), afterSq t kind m (coin l.size)),
@@ -119,14 +119,14 @@ theorem squeezeCut_go (coin : ℕ → ℕ → F128) (n : ℕ) (kind : UInt8) {m 
     rfl
 
 theorem sampleVecCut_go (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : m ≠ 0) (t : Transcript)
-    (l : Array Claims.Msg) :
+    (l : Array Hash.Msg) :
     ((sampleVecP (asksCut coin n) m).run t).go l =
       (if n ≤ l.size then .error "past the openings"
         else .ok ((Array.range m).map (coin l.size), afterSq t 2 m (coin l.size)),
         l.push (Claims.toMsg (framed t 2 m))) :=
   squeezeCut_go coin n 2 hm t l
 
-theorem sampleCut_go (coin : ℕ → ℕ → F128) (n : ℕ) (t : Transcript) (l : Array Claims.Msg) :
+theorem sampleCut_go (coin : ℕ → ℕ → F128) (n : ℕ) (t : Transcript) (l : Array Hash.Msg) :
     ((sampleP (asksCut coin n)).run t).go l =
       (if n ≤ l.size then .error "past the openings" else .ok (coin l.size 0, afterSq t 1 1 (coin l.size)),
         l.push (Claims.toMsg (framed t 1 1))) := by
@@ -166,7 +166,7 @@ proofs equal up to `eraseIP`, so any continuation that reads its inner proof thr
 theorem innerCut_alike {β : Type} {coin : ℕ → ℕ → F128} {n : ℕ} {h : ByteArray → ByteArray} {lay : Zk.PadLayout}
     {p : PadsZk} {ic : InnerCommit} {finalC : F128} {src : RepSrc} {cons : Array (String × Zk.Lin)}
     {f : Zk.InnerProof → TMW PS β} (hf : ∀ i i', eraseIP i = eraseIP i' → f i = f i') {t : Transcript}
-    {l : Array Claims.Msg} (hsrc : InnerSrc coin n h lay p cons src l.size) :
+    {l : Array Hash.Msg} (hsrc : InnerSrc coin n h lay p cons src l.size) :
     ((innerCut (asksCut coin n) lay ic finalC src cons >>= f).run t).go l =
       ((innerP (asksCut coin n) (Hashes.ofSha512 h) lay p ic finalC cons >>= f).run t).go l := by
   obtain ⟨hrs, hbat, htc, hy⟩ := hsrc
@@ -291,7 +291,7 @@ theorem liftT_ok {α : Type} {x y : TMW PS α} (h : (okS.st Transcript).R x y) :
     ((okS.st Transcript).st LigState).R (liftT x) (liftT y) :=
   Sim.lift_st _ h
 
-variable (coin : ℕ → ℕ → F128) (n : ℕ) (resp : ℕ → Claims.Msg) (hc : ∀ k, coinOf (resp k) = coin k)
+variable (coin : ℕ → ℕ → F128) (n : ℕ) (resp : ℕ → Hash.Msg) (hc : ∀ k, coinOf (resp k) = coin k)
 include hc
 
 /-- A round `asksCut` answers, `asksS` answers alike. -/
@@ -389,7 +389,7 @@ omit hc in
 /-- **The PIOP's exact send count at `asksS`**: `piopZk`. -/
 theorem piopPZk_exact (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (cap root : ByteArray)
     (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) {t t' : Transcript}
-    {l l' : Array Claims.Msg} {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched}
+    {l l' : Array Hash.Msg} {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched}
     (hrun : ((piopPZk (asksS resp) st lay h tr cap root extras prior words).run t).go l = (.ok (o, t'), l')) :
     l'.size = l.size + piopZk st extras := by
   obtain ⟨l₁, hl₁, hz⟩ := zerocheckPZk_go resp hm st.digest cap root lay h tr t l
@@ -424,7 +424,7 @@ theorem innerPre_exact (hsh : ByteArray → ByteArray) (st : Setup) (sch : Sched
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0)
     (hL : 2 ≤ sch.levels.size) (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {t t' : Transcript}
-    {l l' : Array Claims.Msg} {o : F128 × Proof × Zk.Level0Msgs × Array (String × Zk.Lin)}
+    {l l' : Array Hash.Msg} {o : F128 × Proof × Zk.Level0Msgs × Array (String × Zk.Lin)}
     (h : ((innerPre (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
       nonce prior words).run t).go l = (.ok (o, t'), l')) :
     l'.size = l.size + piopZk st extras + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) := by
@@ -450,7 +450,7 @@ theorem innerPre_exact (hsh : ByteArray → ByteArray) (st : Setup) (sch : Sched
 /-- **The PIOP's send count at `asksCut`**, where it returns: `piopZk`. -/
 theorem piopPZk_size (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (cap root : ByteArray)
     (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) {t t' : Transcript}
-    {l l' : Array Claims.Msg} {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched}
+    {l l' : Array Hash.Msg} {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched}
     (hrun : ((piopPZk (asksCut coin n) st lay h tr cap root extras prior words).run t).go l = (.ok (o, t'), l')) :
     l'.size = l.size + piopZk st extras :=
   piopPZk_exact resp st lay h tr cap root extras prior words hm
@@ -462,7 +462,7 @@ theorem innerPre_size (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedu
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0)
     (hL : 2 ≤ sch.levels.size) (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {t t' : Transcript}
-    {l l' : Array Claims.Msg} {o : F128 × Proof × Zk.Level0Msgs × Array (String × Zk.Lin)}
+    {l l' : Array Hash.Msg} {o : F128 × Proof × Zk.Level0Msgs × Array (String × Zk.Lin)}
     (h : ((innerPre (asksCut coin n) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad
       salt nonce prior words).run t).go l = (.ok (o, t'), l')) :
     l'.size = l.size + piopZk st extras + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) :=

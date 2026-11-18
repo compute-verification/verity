@@ -47,7 +47,7 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
 (`leaf_lanes.statements`, their rows `drawn_rows`'), each a statement of one instance on its committed file, so a K
 whose tile statement is past Flock's block (K 2048 on the 32 × 32 tile) is proved in pieces each within it. The leaf is
 v1's (`credit.lanes_shape` refuses any other, J10-R's among them). Its partials (`h1zy.lane_partial` of each lane's
-rows) are committed after the sample, ``<prefix>partials@<u>`` under the window's sample root (`produced.commit`), all of them one produced record
+rows) are committed after the sample, ``<prefix>partials@<u>`` under the window's sample root (SPOT prover's `produced.commit`), all of them one produced record
 (`produced.record`, the sampling coin's); its call's receipts ``receipt@<c>`` are rebuilt as the word reference computes them
 (`receipt_value`, `h1zy.reference` of each of the call's units) and held to the root the window registered; each
 statement's ``--registered`` file is credit's own (`credit.leaf_registered_file`), its known rows (``pub``, ``admit`` and
@@ -94,8 +94,10 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lane
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
+from verity.protocols.proofs.spot.prover import produced as PP
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity.errors import Refused
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
@@ -276,7 +278,7 @@ def _kept(prover: Path, row: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray |
         return x["a"].reshape(m, k), x["s_a"].reshape(-1).astype("<f4"), x["records"]
 
 
-def a_value(win: dict, prover: Path, key: bytes, call: int) -> G.Registered:
+def a_value(win: dict, prover: Path, key: bytes, call: int) -> RV.Registered:
     """Call `call`'s step's ``a/<K>@<s>`` as `Served.commit` registered it: its step's calls of K, each its served codes
     over M slots (`Served.a_words`), at the first one's ``a`` nonce, bound to the window's root."""
     # `served` loads the live circuit (`pouw.prover.circuit.live`), whose Definitions enter the Definition table as that module
@@ -300,7 +302,7 @@ def a_value(win: dict, prover: Path, key: bytes, call: int) -> G.Registered:
                      keep_rows=True, window=win["root"])
 
 
-def zy_value(win: dict, prover: Path, key: bytes, call: int) -> G.Registered:
+def zy_value(win: dict, prover: Path, key: bytes, call: int) -> RV.Registered:
     """Call `call`'s ``zy@<c>`` as `Served.commit` registered it (`zy_words` of its records over M slots, zeros for an
     empty call), at its ``zy`` nonce, bound to the window's root."""
     # imported here for `a_value`'s reason: `served` loads the live circuit
@@ -337,7 +339,7 @@ def linear_weights(linears: list[tuple[str, int, int]], k: int, checkpoint: Path
 
 
 def b_value(win: dict, k: int, key: bytes, checkpoint: Path | None, weights: Path | None,
-            read: CheckpointWeights | None = None) -> G.Registered:
+            read: CheckpointWeights | None = None) -> RV.Registered:
     """``b/<K>`` as `served.register_weights` registered it: K's linears' rows in turn (`chunk_words`), at ``B_NONCE``
     plus K's place among the window's K's, under `key`, bound to no window."""
     # imported here for `a_value`'s reason: `served` loads the live circuit
@@ -379,13 +381,13 @@ def weights_key(a: Any, win: dict) -> tuple[bytes, str]:
 
 # -- staging --------------------------------------------------------------------------------------------------------------
 
-def call_rows(win: dict, call: int, units: list[int], reg: dict, values: dict[str, G.Registered], pub: G.Registered,
-              ok: G.Registered) -> dict[str, np.ndarray]:
+def call_rows(win: dict, call: int, units: list[int], reg: dict, values: dict[str, RV.Registered], pub: RV.Registered,
+              ok: RV.Registered) -> dict[str, np.ndarray]:
     """The statement's rows of call `call`'s sampled `units` as `statement_tables` takes them (``w_``, ``s_``, and for a
     registered port ``r_``, ``v_``, ``p_``): each port of credit's file `reg` at the row it reads, from `values` (each
     value's rebuilt tree, the call's receipt table among them for o0), the public table `pub` and the ok rows `ok`."""
     ports = reg["ports"]
-    u0 = ports[CR.PUB_PORT][G.READS_FROM]
+    u0 = ports[CR.PUB_PORT][RV.READS_FROM]
     z: dict[str, Any] = {"units": np.array(units)}
     for port, e in ports.items():
         src = pub if port == CR.PUB_PORT else ok if port == CR.OK_PORT else values[e["value"]]
@@ -441,7 +443,7 @@ def call_receipts(z: dict, win: dict, k: int, roots: tuple[bytes, bytes],
     return outputs(z, win, k, roots)["o0"]
 
 
-def receipt_table(win: dict, key: bytes, k: int, call: int, reg: dict, values: dict[str, G.Registered]) -> G.Registered:
+def receipt_table(win: dict, key: bytes, k: int, call: int, reg: dict, values: dict[str, RV.Registered]) -> RV.Registered:
     """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
     receipt (`call_receipts` of the unit's A rows, B rows and record at the rows credit's file `reg` reads them, in
     `values`), at ``RECEIPT_NONCE`` + c under the prover's key `key`, bound to the window's root."""
@@ -449,7 +451,7 @@ def receipt_table(win: dict, key: bytes, k: int, call: int, reg: dict, values: d
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
     size = CR.call_work(win["layout"])[call][0]
-    u0 = reg["ports"][CR.PUB_PORT][G.READS_FROM]
+    u0 = reg["ports"][CR.PUB_PORT][RV.READS_FROM]
     units = list(range(u0, u0 + size))
     z: dict[str, Any] = {"units": np.array(units), "u0": np.array(u0), "call": np.array(call)}
     for port, e in reg["ports"].items():
@@ -506,8 +508,8 @@ def leaf_stagers(k: int, tile: Sequence[int], circuits: Path, manifest: dict, fi
     return out
 
 
-def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, G.Registered], rebuild: Callable,
-                 work: Path, circuits: Path, manifest: dict, plan: dict) -> list[G.Registered]:
+def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, RV.Registered], rebuild: Callable,
+                 work: Path, circuits: Path, manifest: dict, plan: dict) -> list[RV.Registered]:
     """K's sampled lanes-form leaves `units`, each staged as its lanes and the combine on K's committed files
     (`leaf_stagers`), into ``plan``'s ``leaves`` and ``leaf_programs``; their partials' trees, which the plan's produced
     record holds (`stage`). ``values``: the window's rebuilt values so far, which `rebuild` (value, call) adds to."""
@@ -534,7 +536,7 @@ def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, 
                 values[at[v][0]] = rebuild(v, call)
         x = operands(win, u, values)
         name = LL.served(win["shape"]["prefix"], LL.PARTIALS, u)
-        tree = PR.commit(win["program"], name, partials(x).tolist(), draw_root, schema=G.SCHEMA_V2)
+        tree = PP.commit(win["program"], name, partials(x).tolist(), draw_root, schema=G.SCHEMA_V2)
         trees.append(tree)
         for st in LL.statements(*lay["tile"]):
             kind, ln = st
@@ -581,12 +583,12 @@ def stage(a: Any) -> int:
     _rows, _salts, ok = CR.ok_table(win["program"], f"{win['shape']['prefix']}{CR.OK_VALUE}", win["root"], population)
     plan = {"window": a.window, "draw_k": k_draw, "program": win["program"], "calls": [], "leaves": [],
             "leaf_programs": {}}
-    produced: list[G.Registered] = []
+    produced: list[RV.Registered] = []
     for k, calls in sorted(by_k.items()):
         b = None
-        values: dict[str, G.Registered] = {}
+        values: dict[str, RV.Registered] = {}
         if CR.form_of(manifest.get("files", {}), k) == "lanes":
-            def rebuild(v: str, call: int, k: int = k, values: dict = values) -> G.Registered:
+            def rebuild(v: str, call: int, k: int = k, values: dict = values) -> RV.Registered:
                 if v == LL.A:
                     return a_value(win, prover, pkey, call)
                 if v == LL.B:
@@ -646,8 +648,8 @@ def stage(a: Any) -> int:
         for c in calls:
             reg, units = regs[c], drawn[c]
             pv = reg["ports"][CR.PUB_PORT]
-            pub = held(G.Registered.commit(win["program"], pv["value"], pv["known"]["rows"],
-                                           [bytes.fromhex(s) for s in pv["known"]["salts"]], G.WORD_BITS, G.SCHEMA_V2,
+            pub = held(RV.Registered.commit(win["program"], pv["value"], pv["known"]["rows"],
+                                           [bytes.fromhex(s) for s in pv["known"]["salts"]], RV.WORD_BITS, G.SCHEMA_V2,
                                            window=win["root"]), pv, "credit's public table")
             z = call_rows(win, c, units, reg, values, pub, ok)
             z["call"] = np.array(c)

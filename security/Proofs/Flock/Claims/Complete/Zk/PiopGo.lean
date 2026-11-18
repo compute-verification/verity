@@ -153,8 +153,8 @@ end LcZ
 open Zc
 
 /-- **The masked prover's zerocheck, in closed form**, at the coins of the replies to its sends. -/
-theorem zerocheckPZk_go (resp : ℕ → Claims.Msg) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray)
-    (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (t : Transcript) (l : Array Claims.Msg) :
+theorem zerocheckPZk_go (resp : ℕ → Hash.Msg) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray)
+    (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (t : Transcript) (l : Array Hash.Msg) :
     ∃ l', l'.size = l.size + 3 + (m - 6) ∧
       ((zerocheckPZk (asksS resp) m digest cap root lay h tr).run t).go l =
         (.ok ((ZcZ.proof lay h m (coinsAt resp l.size) tr, out m (coinsAt resp l.size) tr),
@@ -202,8 +202,8 @@ open Lc
 
 /-- **The masked prover's lincheck, in closed form**, at the coins of the replies to its sends, where the statement's
 circuit fold at `α` returns `full`. -/
-theorem lincheckPZk_go (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
-    (tr : Trace) (zc : ZcOut) (full : Array F128) (t : Transcript) (l : Array Claims.Msg)
+theorem lincheckPZk_go (resp : ℕ → Hash.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
+    (tr : Trace) (zc : ZcOut) (full : Array F128) (t : Transcript) (l : Array Hash.Msg)
     (hfold : c.fold (coinOf (resp l.size) 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok full) :
     ∃ l', l'.size = l.size + 3 + (c.kLog - 6) ∧
       ((lincheckPZk (asksS resp) c m lay h tr zc).run t).go l =
