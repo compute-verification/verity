@@ -27,10 +27,17 @@ from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
-
 from verity.circuits.ops import mufu
+
 from verity_vllm.definitions.numerics import fa2_model as FA
-from verity_vllm.definitions.numerics.gemm_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of, _words
+from verity_vllm.definitions.numerics.gemm_relation import (
+    GemmRelationError,
+    _arg_cols,
+    _const,
+    _extra,
+    _node_of,
+    _words,
+)
 
 MODEL_VERSION = "fa2-sm8x-hdim128-bf16.v1"
 TABLE_SHA256 = {  # what the MUFU Definitions evaluate through: another table is another Definition version, not a new pin
@@ -95,7 +102,7 @@ def operands(node_or_inst: Any, inputs: Mapping[str, Any]) -> tuple[np.ndarray, 
     node = _node_of(node_or_inst)
     consts = dict(_extra(node).get("consts") or {})
     for name in ("num_heads", "num_kv_heads", "head_size", "block_size", "fa_version", "num_splits", "sliding_window",
-                 "logits_soft_cap", "kv_cache_dtype", "scale", "arch", "gpu", "gpu_name"):
+                 "logits_soft_cap", "kv_cache_dtype", "scale", "arch"):
         v = _const(node, inputs, name)
         if v is not None and name not in consts:
             consts[name] = v

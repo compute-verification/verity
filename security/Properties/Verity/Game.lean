@@ -890,8 +890,8 @@ each have at most `Γ` gates and read at most `α` fresh input bits per gate, on
 v0's clause is proved of the case as sent, at the composites where v0 decides (`Vocab.inferenceOnlySound`), and of
 nothing more: what links that case to the committed files is two checks the verifier lacks, which no code enforces, so
 the clause says nothing of the committed files until both exist. Neither is a premise of the claim. What each would
-establish is a named `Prop` of `Properties.Verity.Committed`, stated and not proved, which remote's soundness takes as a
-hypothesis.
+establish is named in `Properties.Verity.Committed`: the first a `Prop` stated and not proved, which remote's soundness
+takes as a hypothesis, and the second's committed side a count proved of the code.
 
 1. **The case's wires are the committed record's wires.** The circuit the clause speaks of is the Program's own layout.
    SPOT's claim is on the committed files' units, and no check holds the rows a unit commits to the Program's gates or
@@ -899,7 +899,8 @@ hypothesis.
    protocol calls it. The statement on the wired rows is `Vocab.WiresSound`.
 2. **The case's unit is the committed `Γ`'s unit.** `Γ` counts the Program's gates; PoUW's claim counts gates of the
    committed files' circuit (`computed`). No check holds the one unit to the other, or gives how many of those a
-   Program gate is. The statement on the committed side, a row of the file is one gate of that circuit, is `GateARow`.
+   Program gate is. The statement on the committed side, a row of the file is one gate of that circuit, is
+   `Flock.Bridge.GateARow`, proved (`Flock.Bridge.gateARow`).
 
 What else it does not say:
 

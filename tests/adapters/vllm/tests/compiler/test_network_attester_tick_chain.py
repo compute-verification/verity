@@ -16,7 +16,7 @@ from tests.compiler import test_network_attester_replay_chain as CT
 from tests.compiler import test_network_attester_tick_step as TC
 from tests.pipeline import test_tick_step as TT
 from verity.protocols.proofs.spot.verifier.one_stage import produced
-from verity.protocols.resource_accounting.network.verifier.head_check import ands
+from verity.commitments.gates.bits import ands
 from verity_vllm.compiler import replay_chain as RC
 from verity_vllm.compiler import replay_step as RS
 from verity_vllm.compiler import tick_step as TK

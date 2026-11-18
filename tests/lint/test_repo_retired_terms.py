@@ -117,7 +117,7 @@ OTHER_NAMES = (r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|Moore|Littl
 #: network attester's registered response cap); SPOT's served cap S, in prose; a soft
 #: cap in prose (a logit's, or a resource limit's); a cap counted in bytes, MiB, GiB or words, as its name says (a memory
 #: or buffer cap); a CUDA compute capability as the tests name one (``cap80``, ``cap90_fa2``); the served-commit
-#: profile's cap on the CTAs one launch hashes; FA3's cap on its number of splits
+#: profile's cap on the CTAs one launch hashes; FA3's cap on its number of splits; a machine record's cap on a job's minutes
 CAP_SENSES = {
     "a request's length cap": r"(?<![^\W_])(?:max_tokens_cap|cap_exhausted|stopped_before_cap)(?![^\W_])",
     "a soft cap": r"(?i:(?<!\w)soft[ -]caps?(?!\w))",
@@ -128,6 +128,7 @@ CAP_SENSES = {
                            r"(?![^\W_])|(?<!\w)Rows(?:Ring8|4k|Layer)?CapArm(?!\w)",
     "FA3's split cap": r"(?<![^\W_])(?:split_cap|SPLIT_CAP)(?![^\W_])",
     "SPOT's served cap": r"(?<!\w)served cap(?!\w)",
+    "a job's time cap": r"(?<![^\W_])job_cap_minutes(?![^\W_])",
 }
 OTHER_SENSES = re.compile("|".join((OTHER_NAMES, *CAP_SENSES.values())))
 #: the live proof block's files, which name no Pearl term: each request's cap, its public ``max_tokens``, in the table

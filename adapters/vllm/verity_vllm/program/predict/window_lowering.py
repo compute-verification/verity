@@ -16,6 +16,7 @@ from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
+
 from verity_vllm.definitions.registry import int8_exact as IX
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.definitions.registry import rmsnorm_fused_split as NS
@@ -25,7 +26,6 @@ from verity_vllm.definitions.registry.dead_free import (
     TokenSelectGroupsV1,
 )
 from verity_vllm.definitions.registry.fa3_check_inf import AttentionV20
-
 from verity_vllm.pipeline.tp.grain import GROUP
 
 from . import scan_state as SS
@@ -361,7 +361,7 @@ class _Program:
         for s0, m, count in ((0, n, full), (full * n, rest, int(rest > 0))):
             if not count:
                 continue
-            tid, u = self.b.unit(bind(node.fn.defn, **{**b, "N": m}), count)
+            tid, u = self.b.unit(IX.scaled_mm_words(K, m), count)
             self.b.feed(tid, "x", u, count, xs)
             self.b.feed(tid, "sx", u, count, ss)
             self.b.read(tid, "w", u, (count,), lo + s0 * K // 2, (m * K // 2,))

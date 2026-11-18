@@ -58,15 +58,31 @@ from fractions import Fraction
 from functools import lru_cache
 
 import numpy as np
-
 from verity.circuits.codec import register_lazy_family
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
-from verity.circuits.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
+from verity.circuits.defs import (
+    CompositeDefinition,
+    PrimitiveDefinition,
+    bind,
+    composite,
+    primitive,
+)
+from verity.circuits.refs import Coll as _Coll
+from verity.circuits.refs import Explicit, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.prims import BF16, BIT, F32, I32, F32_NAN, bits_of, f32_is_nan, f32_of
+from verity_vllm.definitions.registry.prims import (
+    BF16,
+    BIT,
+    F32,
+    F32_NAN,
+    I32,
+    bits_of,
+    f32_is_nan,
+    f32_of,
+)
 
 REF_VOCAB_VERSION = "verity-ref-vocab/1"
 

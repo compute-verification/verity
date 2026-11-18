@@ -10,6 +10,7 @@ def _cut_served_roots() -> list[Any]:
     1, 35 and all 192 keys, and `AttnHeadEnd_v2`.  Each is over `targets.MAX_GATES`, so it holds a ``digests`` pin, which keeps
     it in ``--all``: the 192-key block is the largest a head has, and the only one here whose every k-step is whole."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_attention
 
     fa3 = boolean_attention.ATTENTION_FA3
@@ -21,6 +22,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_attention
 
     return [

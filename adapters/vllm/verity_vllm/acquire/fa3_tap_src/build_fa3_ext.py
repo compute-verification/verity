@@ -25,6 +25,7 @@ import time
 from dataclasses import dataclass
 
 from verity_vllm import settings
+from verity_vllm.engine.profiles.devices import cuda_arch
 from verity_vllm.config import option
 from verity_vllm.log import write
 
@@ -45,14 +46,15 @@ class Options:
     src_dir: str = option('--src-dir', default=os.path.dirname(os.path.abspath(__file__)))
     define: list[str] = option('--define', action='append', default=[])
     hdims: str = option('--hdims', default='64,128')
-    arch: str = option('--arch', default='9.0a')
+    card: str = option('--card', help='the SKU of the card file whose arch the tap compiles to (calibration/hardware/cards)')
     no_ptxas_v: bool = option('--no-ptxas-v', default=False, action='store_true')
     tree_commit: str = option('--tree-commit', default='')
 
 
 def main(args: Options):
-    cuda_home = settings.setdefault('CUDA_HOME', '/usr/local/cuda')
-    settings.put('TORCH_CUDA_ARCH_LIST', args.arch)
+    cuda_home = settings.cuda_home()
+    arch = cuda_arch(args.card)
+    settings.put('TORCH_CUDA_ARCH_LIST', arch)
     settings.setdefault('MAX_JOBS', '32')
     import torch
     from torch.utils.cpp_extension import load
@@ -93,7 +95,7 @@ def main(args: Options):
         'name': args.name, 'tree': tree, 'tree_commit': args.tree_commit,
         'sources': sources, 'source_sha256': {s: sha256(s) for s in sources},
         'header_sha256': {p: sha256(p) for p in sorted(glob.glob(os.path.join(hop, '*.h')) + glob.glob(os.path.join(hop, '*.hpp')))},
-        'defines': defines, 'cxx_flags': cxx_flags, 'nvcc_flags': nvcc_flags, 'arch': args.arch, 'hdims': hdims,
+        'defines': defines, 'cxx_flags': cxx_flags, 'nvcc_flags': nvcc_flags, 'card': args.card, 'arch': arch, 'hdims': hdims,
         'nvcc_version': nvcc_ver, 'torch': torch.__version__, 'torch_cuda': torch.version.cuda,
         'cuda_home': cuda_home, 'max_jobs': settings.raw('MAX_JOBS'),
     }

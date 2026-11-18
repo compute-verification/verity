@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from verity import hooks as H
 from verity.channel import Refused
 
 from verity_vllm import messages as M
@@ -148,3 +149,88 @@ def test_request_program_bytes_unchanged(tmp_path):
         (tmp_path / f"before-{name}").write_text(json.dumps(doc, indent=1) + "\n")
         M.write(tmp_path / f"after-{name}", "RequestProgram", (json.dumps(doc, indent=1) + "\n").encode())
         assert (tmp_path / f"after-{name}").read_bytes() == (tmp_path / f"before-{name}").read_bytes()
+
+
+def test_exchange_answers_requests_by_name_before_serving():
+    ex = M.Exchange()
+    seen = []
+    ex.subscribe("a", "declared", seen.append)
+    ex.request("a", H.RequireProperty("eager", True, "its taps read eager modules", fixes=True))
+    ex.request("b", H.RefuseProperty("world", 2, "one rank only"))
+    declared = H.Declared("card:h100", {"eager": True, "world": 2})
+    with pytest.raises(Refused, match="b: refuses world = 2: one rank only"):
+        ex.answer(declared)
+    ex.requests.pop()
+    assert ex.answer(declared) is True and seen == [declared]
+    with pytest.raises(Refused, match="after the requests were answered"):
+        ex.request("c", H.HoldRelease("in-0", 1))
+    off = ex.subscribe("c", "values", seen.append)
+    ex.emit(H.ValueProduced("layers.0", "producer_output", 0, "rows"))
+    off()
+    ex.emit(H.ValueProduced("layers.0", "producer_output", 1, "rows"))
+    assert seen[1:] == [H.ValueProduced("layers.0", "producer_output", 0, "rows")]
+    ex.emit(H.StepBegan(4))
+    assert ex.step == 4
+
+
+def test_exchange_refuses_an_unknown_hook():
+    with pytest.raises(Refused, match="not a hook"):
+        M.Exchange().subscribe("a", "tokens", print)
+
+
+def test_exchange_nests_kernels_and_hands_inputs_inward():
+    ex = M.Exchange()
+    seen = []
+    ex.subscribe("s", "blocks", seen.append)
+    ex.request("inner", H.ComputeBlockWith(lambda due, original: ("inner", due.inputs["weight"], original(None))))
+    ex.request("outer", H.ComputeBlockWith(lambda due, original: original({"weight": "decoded"})))
+    due = H.BlockDue("layers.0.mlp", 1, {"n": 2, "k": 2}, "bf16", {"x": "x", "weight": "stored"})
+    assert ex.compute(due, lambda given: ("stock", given)) == ("inner", "decoded", ("stock", {"weight": "decoded"}))
+    assert seen == [due] and ex.computes()
+    assert M.Exchange().compute(due, lambda given: ("stock", given)) == ("stock", None)
+
+
+def test_exchange_starts_through_every_gate_and_holds():
+    class Gate:
+        def __init__(self):
+            self.held = []
+
+        def add(self, input, start):
+            self.held.append(start)
+
+        def pending(self):
+            return bool(self.held)
+
+    ex, g1, g2, started = M.Exchange(), Gate(), Gate(), []
+    ex.request("a", H.StartOnBoundary(g1))
+    ex.request("b", H.StartOnBoundary(g2))
+    ex.request("a", H.HoldRelease("in-0", 5))
+    ex.request("b", H.HoldResident(7, 3))
+    ex.start("in-0", lambda: started.append("in-0"))
+    assert ex.pending() and not started
+    g1.held.pop()()
+    assert not started
+    g2.held.pop()()
+    assert started == ["in-0"] and not ex.pending()
+    assert ex.held("in-0", 4) and not ex.held("in-0", 5) and not ex.held("in-1", 0)
+    assert ex.resident(7, 2) and not ex.resident(7, 3)
+
+
+def test_one_exchange_a_process():
+    M.close()
+    ex = M.current()
+    try:
+        assert M.current() is ex and not ex.wants("values")
+    finally:
+        M.close()
+    assert M.current() is not ex
+
+
+def test_a_process_beside_is_refused_without_a_launcher():
+    ex = M.Exchange()
+    ex.request("network", H.StartBeside("id-front", ("python", "-m", "relay"), ("ingress",)))
+    with pytest.raises(Refused, match="network: starts id-front beside the workload, and no launcher"):
+        ex.answer(H.Declared("", {}))
+    ex.launches = True
+    ex.answer(H.Declared("", {}))
+    assert [r.process for _, r in ex.beside()] == ["id-front"]

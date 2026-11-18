@@ -1586,6 +1586,25 @@ def load_card(sku: str, *, directory: Path) -> dict:
     return card
 
 
+def gpu_card_reporting(name: str, *, directory: Path) -> dict:
+    """The one GPU card file in ``directory`` whose ``driver`` holds ``name``, the name the device reports (nvidia-smi's,
+    torch's ``get_device_name``); refused, naming what to add, unless exactly one does."""
+    found = [card for card in (load_card(sku, directory=directory) for sku in skus("gpu", directory=directory))
+             if name in {d["value"] for d in card.get("driver", ())}]
+    if len(found) != 1:
+        raise KeyError(f"{len(found)} GPU card files under {directory} have {name!r}, the name the device reports, in `driver`: "
+                       f"add {{ value = {name!r}, source = ... }} to its one card file's `driver`, adding its <sku>.toml if it has none")
+    return found[0]
+
+
+def compute_capability(card: dict) -> tuple[int, int]:
+    """A GPU card's compute capability, read from its ``arch`` (``sm_<major><minor>[a|f]``)."""
+    arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", str(card.get("arch", "")))
+    if card.get("kind") != "gpu" or not arch:
+        raise InvalidArtifact(f"card {card.get('sku')!r}: arch = {card.get('arch')!r}; a GPU card states sm_<major><minor>[a|f]")
+    return int(arch[1]), int(arch[2])
+
+
 def number(entry: dict) -> Fraction:
     """A card entry's value as an exact rational, read from its decimal text (``1.597568e12`` is that number exactly)."""
     return Fraction(str(entry["value"]))

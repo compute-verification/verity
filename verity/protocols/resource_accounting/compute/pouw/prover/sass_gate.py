@@ -1520,11 +1520,11 @@ def _run(cmd: list[str]) -> str:
 
 
 def find_tools() -> dict[str, dict[str, str]]:
-    """cuobjdump and nvdisasm: from POUW_CUDA_BIN, CUDA_HOME/bin, the PATH, then /usr/local/cuda/bin."""
+    """cuobjdump and nvdisasm: from POUW_CUDA_BIN, CUDA_HOME/bin, then the PATH."""
     dirs = [os.environ.get("POUW_CUDA_BIN"), os.environ.get("CUDA_HOME") and os.path.join(os.environ["CUDA_HOME"], "bin")]
     out = {}
     for t in ("cuobjdump", "nvdisasm"):
-        cands = [os.path.join(d, t) for d in dirs if d] + [shutil.which(t) or "", f"/usr/local/cuda/bin/{t}"]
+        cands = [os.path.join(d, t) for d in dirs if d] + [shutil.which(t) or ""]
         path = next((c for c in cands if c and os.access(c, os.X_OK)), None)
         if path is None:
             raise SassGateFailed(f"no {t} (set POUW_CUDA_BIN or CUDA_HOME): the gate can't read SASS")
