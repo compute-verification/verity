@@ -10,6 +10,7 @@
   "Proofs.Pouw.MonitoringPeriodJ10R.Binding",
   "Proofs.Certifier",
   "Proofs.Flock",
+  "Proofs.Flock.Soundness.Lower",
   "Proofs.Hash",
   "Proofs.ResourceAccounting",
   "Proofs.Slowdown",
