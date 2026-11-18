@@ -540,7 +540,6 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/protocols/compose/schemes.py",
     "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
@@ -556,9 +555,7 @@ paths = [
 ]
 loads = [
     "verity/protocols/resource_accounting/compute/pouw/prover",
-    "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
-    "verity/runtime",
 ]
 
 [[place]]
@@ -705,6 +702,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/poub/prover/window.py",
     "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.py",
     "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv_bench.py",
+    "verity/protocols/resource_accounting/memory/poub/scheme.py",
 ]
 
 [[place]]
@@ -805,6 +803,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_run.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_store.py",
+    "verity/protocols/resource_accounting/memory/pous/scheme.py",
 ]
 
 [[place]]
@@ -846,8 +845,20 @@ loads = [
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/verifier",
+    "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/resource_accounting/network/verifier",
     "verity/runtime",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/resource_accounting/network/scheme.py",
+]
+loads = [
+    "verity/circuits",
+    "verity/protocols/resource_accounting/network/prover",
+    "verity/protocols/resource_accounting/network/verifier",
+    "verity/protocols/resource_accounting/scheme.py",
 ]
 
 [[place]]
@@ -885,6 +896,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
     "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
+    "verity/protocols/resource_accounting/network/scheme.py",
 ]
 
 [[place]]
@@ -934,12 +946,16 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/proofs/spot/prover/workload.py",
+    "verity/protocols/proofs/spot/scheme.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/workload.py",
     "verity/protocols/resource_accounting/memory/poub/prover/p2_party_prover.py",
     "verity/protocols/resource_accounting/memory/poub/prover/session_prover.py",
+    "verity/protocols/resource_accounting/memory/poub/scheme.py",
     "verity/protocols/resource_accounting/memory/pous/prover/challenger_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/workload.py",
+    "verity/protocols/resource_accounting/memory/pous/scheme.py",
     "verity/protocols/resource_accounting/network/prover/block_attester.py",
     "verity/protocols/resource_accounting/network/prover/workload.py",
+    "verity/protocols/workload_classification/training_detection/inference_only/scheme.py",
 ]
