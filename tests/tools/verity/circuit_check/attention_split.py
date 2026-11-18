@@ -74,7 +74,7 @@ def served_bindings() -> dict[str, object]:
     from verity_vllm import TargetProfile
 
     TG.load_registries()
-    profiles = {"ada": TargetProfile(), "h100-fa3": TargetProfile(compute_capability=(9, 0), num_sms=132, flash_attn_version=3),
+    profiles = {"ada": TargetProfile.default(), "h100-fa3": TargetProfile(compute_capability=(9, 0), num_sms=132, flash_attn_version=3),
                 "h100-guard": TargetProfile(compute_capability=(9, 0), num_sms=132, flash_attn_version=3,
                                             fa3_construction="guard-every-block"),
                 "sm120-fa2": TargetProfile(compute_capability=(12, 0), num_sms=188)}

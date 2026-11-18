@@ -10,7 +10,7 @@ import all Init.Data.Array.QSort.Basic
 `Flock.Draw.subset k n src` is the verifier's executable sampler (`verity/commitments/lean/Commitments/Draw.lean`): a
 partial Fisher–Yates over a `Std.HashMap` of swaps, each index sampled by `Flock.Draw.uniform`, an exact rejection sampler
 on big-endian words, and the `k` values sorted by `Array.qsort`. `SamplingDesign.subset_exec_escape_le`: over a uniform stream of
-bytes, it returns a sample that misses `B` with probability at most `(SamplingDesign.subset n k hk).missProb B`, the model's uniform
+bytes, it returns a sample that misses `B` with probability at most `(Verity.SamplingDesign.subset n k hk).missProb B`, the model's uniform
 `k`-subset. A stream that runs out gives `none`, which only lowers the executable's missProb.
 
 * `mem_qsort`: `Array.qsort` keeps its elements, through core's private `qsort.sort` and `qpartition.loop`.
@@ -705,7 +705,7 @@ the challenger's coins are uniform is A3 (`Assumptions.UniformRandomBytes`, `uni
 theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     prCoin (fun f : Fin L → Fin 256 =>
         ∃ D, Flock.Draw.subset k n (SamplingDesign.streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
-      (subset n k hk).missProb B := by
+      (Verity.SamplingDesign.subset n k hk).missProb B := by
   classical
   set B' : Finset ℕ := B.image Fin.val with hB'
   have hB'n : ∀ u ∈ B', u < n := fun u hu => by obtain ⟨v, _, rfl⟩ := mem_image.1 hu; exact v.isLt
@@ -723,7 +723,7 @@ theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) 
     _ ≤ ((n - 0 - B'.card).choose k : ℝ≥0∞) / ((n - 0).choose k : ℝ≥0∞) :=
         SampleExec.loopL_le n k (L + 1) B' hB'n k 0 (Equiv.refl ℕ) (by omega) hk (fun t ht => ht)
           (fun t ht => absurd ht (Nat.not_lt_zero t)) L
-    _ = (subset n k hk).missProb B := by rw [subset_escape, hcard, Nat.sub_zero]
+    _ = (Verity.SamplingDesign.subset n k hk).missProb B := by rw [Verity.SamplingDesign.subset_escape, hcard, Nat.sub_zero]
 
 end Spot.Sampling.SamplingDesign
 

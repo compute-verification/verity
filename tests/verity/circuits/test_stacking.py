@@ -17,9 +17,10 @@ import pytest
 from verity.circuits import stacking as P
 from verity.circuits.census import census
 from verity.circuits.codec import canonical_json
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, _Widths
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, _Widths, bind
 from verity.circuits.ops import fp32, prims, scalar
 from verity.circuits.ops.s8 import S32LowByte
+from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.ports import In, Leaves, Out, Ports
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, Strided, array_of, concat, tuple_of
@@ -837,11 +838,21 @@ def test_count_reads_a_definition_with_given_ranges():
     assert P.count(EPILOGUE, (False,)).units == {} and P.count(EPILOGUE, (True,)).units == {"roundings": 2}
 
 
+def test_a_word_split_into_its_bits_and_packed_back_is_budgeted_on_run_inputs_only():
+    """`BitOf{W}x{I}` is a field extraction and `WordOf{W}` a packing, roundings both: a free bit of a free sum would be an
+    AND. Of a registered word, as a weight unpacked inside its reader, neither is budgeted."""
+    assert {P.class_of(f) for f in ("BitOf16x0_v1", "BitOf32x31_v1", "WordOf8_v1")} == {"roundings"}
+    assert P.class_of("BitOf16x01_v1") is None and P.class_of("WordOf0_v1") is None
+    split, pack = P.count(bind(WordBits, W=16), (True,)), P.count(bind(BitsWord, W=8), (True,))
+    assert (split.units, split.refused, pack.units) == ({"roundings": 16}, {}, {"roundings": 1})
+    assert P.count(bind(WordBits, W=16), (False,)).units == {} and P.count(bind(BitsWord, W=8), (False,)).units == {}
+
+
 def test_the_table_is_pinned():
-    """Changing the table is a new VERSION and digest: a verdict names the one it was judged under."""
+    """Changing the table changes its digest: a verdict names the one it was judged under (`classes`)."""
     assert json.loads(canonical_json(P.spec())) == P.spec()
     assert P.digest() == PINNED, P.digest()
 
 
-PINNED = ("072d21203cf170d46f352890c3312024cf6be890831d2fa1b36201038653ad8c"
-          "d132e30a9241c2846e16f0c0069c473774865492e12fd3ea45ac63452f55afe7")
+PINNED = ("6e06e5c6886a1a48ba75d530c0cec57c6dae5959f89a6457283d4c199cb5be90"
+          "d745cc53fce0c436a5c6e2d8e414b075b8549992ca93a963bd067e98a4de7886")

@@ -429,7 +429,7 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
             if (u := np.flatnonzero((want != np.concatenate(rows.outs[tid], axis=1)).any(axis=1))).size:
                 bad[tid] = u.tolist()
     assert bad == {}
-    assert win.close(salt_key=bytes(32)) is not None
+    assert win.close() is not None
 
 
 @pytest.fixture(scope="module")
