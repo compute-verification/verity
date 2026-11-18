@@ -2739,6 +2739,26 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     return rec
 
 
+#: the head of a run's stderr.log that `slot_lines` reads: slot.py and lean_slot.py write there before the job's own output
+SLOT_HEAD = 1 << 18
+
+
+def slot_lines(local_dir: Path, *, timeout: float = 30) -> list[str]:
+    """What slot.py (`slot:`) and lean_slot.py (`lean-slot:`) have said in the head of the run's stderr.log on its machine, in
+    order; none for a run not launched on one or a machine that doesn't answer."""
+    rec = _read_json(local_dir / "remote.json") or {}
+    if not rec.get("remote_run_dir"):
+        return []
+    ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
+    log = shlex.quote(f"{rec['remote_run_dir']}/stderr.log")
+    try:
+        r = ssh_run(ssh, ["sh", "-c", f"head -c {SLOT_HEAD} {log} 2>/dev/null | grep -E '^(lean-)?slot:'"], timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        print(f"research: its stderr.log was not read in {e.timeout:.0f} s, so what its slot says is not known", file=sys.stderr)
+        return []
+    return r.stdout.decode(errors="replace").splitlines() if r.returncode == 0 else []
+
+
 #: slot.py and lean_slot.py, beside this package in the caller's checkout, which NODE_PROGRAM loads on the machine (as `check.py
 #: --slots` does) for the check and Lean slots a run holds or waits on; without them the reading has no slots
 CHECK_DIR = Path(__file__).resolve().parents[3] / "check"

@@ -281,7 +281,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused), for at most "
                          f"{waitcap.WAIT_LIMIT_S} s with the launch (20 minutes: no tool call blocks longer): then it stops waiting, "
                          f"cancels nothing, names the check-back command (`research status RUN`) and exits {waitcap.STILL_GOING}. "
-                         "Without it, run returns once the machine has started the run, so a loop of launches doesn't serialize them")
+                         "Meanwhile it prints each line the run's slot (slot.py, lean_slot.py) says of its wait. Without it, run returns once the machine has started the run, so a loop of launches doesn't serialize them")
     ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
     ap.add_argument("--wait-max", type=float, default=None, metavar="S",
                     help=f"with --wait: stop waiting after S seconds instead of {waitcap.WAIT_LIMIT_S}; never more than {waitcap.WAIT_LIMIT_S}")
@@ -1783,9 +1783,10 @@ def _moved_to(run_dir: Path) -> Path | None:
 
 
 def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = waitcap.WAIT_LIMIT_S, fetch=None, sleep=None,
-                clock=None, moved=_moved_to) -> int:
+                clock=None, moved=_moved_to, said=None) -> int:
     """`research run --on ... --wait`: fetch the run's records every `every_s` seconds until it has ended, and return its rc (1 when
-    it ended without one, 3 when the machine refused it). A run that left its line without starting while its late twin may
+    it ended without one, 3 when the machine refused it). While it goes, each line slot.py or lean_slot.py adds to its stderr.log
+    (``said``: `remote.slot_lines`), where it waits for a place and behind whom, is printed as it appears. A run that left its line without starting while its late twin may
     run (``moved``) is followed there: the twin's end is the run's. An unreachable machine is waited out, as `research fetch`
     would be, but no wait outlasts `max_s` of `clock` time: then the run goes on, the check-back command is printed, and it
     returns STILL_GOING (research.waitcap)."""
@@ -1796,6 +1797,8 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = wa
     sleep, clock = sleep or time.sleep, clock or time.monotonic
     start = clock()
     fetch = fetch or (lambda d: remote.fetch(d, timeout=max_s - (clock() - start)))
+    said = said or (lambda d: remote.slot_lines(d, timeout=max(1.0, min(30.0, max_s - (clock() - start)))))
+    told = 0
     while True:
         rec = fetch(run_dir)
         s = R.summarize(run_dir)
@@ -1803,7 +1806,7 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = wa
             on = (remote._read_json(twin / "remote.json") or {}).get("machine")
             print(f"research: run {run_id} left its line without starting ({s['state']}); its late twin {twin.name}"
                   f"{f' on {on}' if on else ''} is the run now, and this waits for it", file=sys.stderr)
-            run_id, run_dir = twin.name, twin
+            run_id, run_dir, told = twin.name, twin, 0
             continue
         if s["state"] in R.ENDED:
             if s["state"] == "refused":
@@ -1817,6 +1820,11 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = wa
             return rc
         if (rec or {}).get("last_fetch_error"):
             print(f"research: run {run_id}: machine unreachable (rc {rec['last_fetch_error'].get('rc')}); still waiting", file=sys.stderr)
+        else:
+            lines = said(run_dir)
+            for line in lines[told:]:
+                print(f"research: run {run_id}: {line}", file=sys.stderr, flush=True)
+            told = max(told, len(lines))
         if (left := max_s - (clock() - start)) <= 0:
             print(waitcap.still_going(f"run {run_id} ({s['state']})", f"research status {run_id}", clock() - start), file=sys.stderr)
             return waitcap.STILL_GOING

@@ -69,6 +69,24 @@ def test_wait_returns_the_runs_own_exit_once_it_ends(tmp_path, capsys, end, rc):
     assert "machine unreachable (rc 255); still waiting" in err and "research: run r1 " in err
 
 
+def test_wait_prints_each_line_the_slot_adds_while_the_run_waits_for_a_place(tmp_path, capsys):
+    """Five tries waiting together on one machine for a Lean place printed nothing for minutes and looked hung."""
+    rd = tmp_path / "r1"
+    rd.mkdir()
+    _status(rd, "running", None)
+    head = ["lean-slot: all 2 Lean audit slot(s) of pool build are taken; waiting, with no time limit, and retrying every 5 s (S)",
+            "lean-slot:   build-0 held by lean 3 min"]
+    heard = iter([[], head, head, [*head, "lean-slot: 1 Lean audit(s) ahead in line; waiting, with no time limit, and retrying "
+                                          "every 5 s (S)"]])
+    clock = Clock()
+    steps = [None, None, None, None, lambda d: _status(d, "done", 0)]
+    assert wait_remote("r1", rd, every_s=5, fetch=_waiter(rd, steps), sleep=clock.sleep, clock=clock,
+                       said=lambda d: next(heard)) == 0
+    err = [ln for ln in capsys.readouterr().err.splitlines() if ln.startswith("research: run r1: ")]
+    assert err == [f"research: run r1: {ln}" for ln in (*head, "lean-slot: 1 Lean audit(s) ahead in line; waiting, with no time "
+                                                                 "limit, and retrying every 5 s (S)")], "each line once, as it appears"
+
+
 @pytest.mark.parametrize("max_s, fetch_s", [(waitcap.WAIT_LIMIT_S, 0.0), (waitcap.WAIT_LIMIT_S, 45.0), (300.0, 0.0)],
                          ids=["limit", "slow-fetches", "wait-max"])
 def test_wait_stops_at_its_limit_with_the_run_still_going_and_says_how_to_check_back(tmp_path, capsys, max_s, fetch_s):
