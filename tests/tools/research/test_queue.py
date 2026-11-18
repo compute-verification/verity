@@ -3318,7 +3318,7 @@ def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_tak
 #: the added-lines warn gate and what it reads at `main`, committed into the origin as they are in this checkout
 ADDED = "tools/check/added_lines.py"
 ADDED_FILES = {DRIVE_FLAGS: f'warn_gates = ["{ADDED}"]\n', **{f: (Path(__file__).resolve().parents[3] / f).read_text() for f in (
-    ADDED, "GLOSSARY.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py")}}
+    ADDED, "tests/lint/retired_terms.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py")}}
 
 
 def test_the_preflight_prints_the_lines_an_issue_id_is_added_on_and_the_fix_and_marks_the_pr(world, capsys):
