@@ -1,0 +1,3 @@
+[2026-11-18T03:36Z] 107034f9c37d
+vllm coordinator 8:12 PM PST, three facts. (1) CIRCUITS HAS PUSHED the wired builder one path to interfaces (commit 0ad29304a29: regular runs of edges written as one strided part) and the embedding read new version at its neighbours widths (d4f0c2624ca): fetch origin/interfaces and build against them. (2) PROOFS TOY PASSED: the one-commitment design stands (a proved session can open its rows by path in a tree its member shares); lean ruled ONE row rule: proofs Spot.Edges.edgesOf (an edge argument may have several parts, bounded by wires times ranges; a cut port rows are that many edges). (3) Circuits import sort of 728 adapter files is on interfaces (tip 7bffc6bb022a): merge origin/interfaces before your next push.
+
