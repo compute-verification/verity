@@ -1062,6 +1062,9 @@ def test_a_one_stage_accept_that_is_not_complete_rows_not_complete_and_never_com
         in line["reason"]
     bare = {**a, "public": {k: v for k, v in a["public"].items() if k != "complete"}}
     assert S.row_of(S.INTEGRITY_OWNER, bare, tmp_path / "none")["verdict"] == NOT_COMPLETE
+    (tmp_path / "window" / "audit.json").write_text("{not json")
+    row = S.row_of(S.INTEGRITY_OWNER, bare, tmp_path)
+    assert row["verdict"] == NOT_COMPLETE and "its audit record does not parse: " in row["reason"]
 
 
 WIPE_ACCEPT = {"protocol": W.PROTOCOL, "verdict": "accept", "reason": None, "commitment": "cd" * 64,
@@ -1230,8 +1233,9 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         beside = {"the bandwidth audit": f"; its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')}"}
         late = {n: f" (its quantity is not established at δ = 1/100 or 1/1000000: {why}{beside.get(n, '')})"
                 for n, why in refused.items()} | {"sampled proofs": SPOT_ACCEPT.removeprefix("sampled proofs: accept")}
+        said = {n: f", {u}" for n, c in comp.items() if (u := S.declared_unchecked(ACCEPTS.get(c, {}).get("protocol")))}
         assert line["reason"] == "; ".join(
-            f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
+            f"{n}: accept{late.get(n, '')}{said.get(n, '')}" for n in S.NAMES.values())
         return
     assert line["composed"] == "pending" and line["record_missing"] == [subprotocol]
     if case == "missing":
@@ -2786,7 +2790,7 @@ def test_a_rows_declared_unchecked_ends_its_stated_source_and_its_accept_in_the_
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
-    monkeypatch.setattr(S, "declared_unchecked", lambda p: unchecked if p == S.PEARLPLUS_PROTOCOL else "")
+    monkeypatch.setattr(S, "declared_unchecked", lambda p, said="": unchecked if p == S.PEARLPLUS_PROTOCOL else "")
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     (tmp_path / "serve").mkdir()
     S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs", str(audit),
@@ -2803,6 +2807,24 @@ def test_a_rows_declared_unchecked_ends_its_stated_source_and_its_accept_in_the_
 def test_a_protocol_no_declaration_names_has_nothing_unchecked():
     """`declared_unchecked` reads the declarations by protocol id: an id none declares says nothing."""
     assert S.declared_unchecked("verity/no-such-protocol/v0") == "" and S.declared_unchecked(None) == ""
+
+
+def test_a_declared_mapping_says_its_sentences_alone_nothing_when_empty_and_refuses_an_entry_not_a_sentence(monkeypatch):
+    """`declared_unchecked` prints each sentence alone, never its name; an empty mapping says nothing; an entry that is
+    not a sentence is refused by the scheme's and its name, never printed raw."""
+    import dataclasses
+
+    from verity.protocols.compose import schemes
+
+    pearl, get = schemes.get("pearl-plus"), schemes.get
+    assert S.declared_unchecked(pearl.protocol) == "coins' signatures checked on the served node only; not checked by the auditor"
+    stand_in = dataclasses.replace(pearl, unchecked={})
+    monkeypatch.setattr(schemes, "get", lambda n: stand_in if n == "pearl-plus" else get(n))
+    assert S.declared_unchecked(pearl.protocol) == ""
+    object.__setattr__(stand_in, "unchecked", {"coins-signatures-checked-by-the-auditor": {"not": "a sentence"}})
+    with pytest.raises(ValueError, match="pearl-plus: unchecked entry 'coins-signatures-checked-by-the-auditor' is not a "
+                                         "sentence"):
+        S.declared_unchecked(pearl.protocol)
 
 
 @pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", "work-rate:1/977"])
@@ -8462,3 +8484,30 @@ def test_every_piece_the_launcher_names_to_pieces_is_one_the_parser_takes(tmp_pa
             S.main(["pieces", "--serve-run", str(tmp_path), "--window", "0", "--out", str(tmp_path / "out"),
                     f"--{flag}", word])
         assert got.value.args[0 if flag == "only" else 1] == [word], (flag, word)
+
+
+@pytest.mark.parametrize("value", [None, "", "0", "1", "yes", " 1", "1 "])
+def test_the_shells_hold_and_the_one_python_reader_agree_on_every_value(value):
+    """placement.sh's `hold_placement`, which served_verdicts.sh and served_composite.sh source, run as the shell runs it,
+    holds exactly where `verity_cli.settings.hold_placement` does, the hold's one Python reader."""
+    spec = importlib.util.spec_from_file_location(
+        "verity_cli_settings", HERE.parents[2] / "tools" / "verity" / "cli" / "verity_cli" / "settings.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    env = {"PATH": os.defpath, **({} if value is None else {"VERITY_HOLD_PLACEMENT": value})}
+    shell = subprocess.run(["bash", "-c", '. "$1" && hold_placement', "_",
+                            str(HERE.parents[2] / "benchmarks" / "one_stage" / "placement.sh")], env=env, check=False)
+    assert shell.returncode in (0, 1)
+    assert (shell.returncode == 0) is cli.hold_placement(env) is (value == "1")
+
+
+def test_the_launcher_and_the_composite_read_the_hold_only_through_placement_sh():
+    """Neither script defines a hold of its own or reads VERITY_HOLD_PLACEMENT inline: each sources placement.sh, and the
+    launcher's preflight only checks the value's form."""
+    for name in ("served_verdicts.sh", "served_composite.sh"):
+        script = (HERE.parents[2] / "benchmarks" / "one_stage" / name).read_text()
+        code = [x for x in script.splitlines() if not x.lstrip().startswith("#")]
+        assert any("/placement.sh\"" in x for x in code), name
+        assert not [x for x in code if "hold_placement()" in x], name
+        reads = [x for x in code if "${VERITY_HOLD_PLACEMENT" in x and not x.startswith("case ${VERITY_HOLD_PLACEMENT:-} in")]
+        assert not reads, (name, reads)

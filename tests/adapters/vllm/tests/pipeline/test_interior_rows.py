@@ -193,7 +193,7 @@ def _boundary(world, block=BLOCK) -> tuple[dict, dict, str]:
 def _spec(member: CS.Member, unit=UNIT, block=BLOCK, n_rho: int = N_RHO) -> S.Spec:
     names: dict[str, tuple[str, str]] = {}
     for phase, w in (("serve", _boundary_window(len(PROMPTS), block)), ("interior", IR.interior_window(member, n_rho, "00", [0]))):
-        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
+        names |= {t: (schema, phase) for t, (schema, _n) in w.trees.items()}
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: served, on test prompts"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
@@ -263,7 +263,7 @@ def test_the_interior_is_one_shared_row_member_of_its_word_rows_roots(spans):
     assert np.array_equal(it.committed.refs[0], np.tile(np.arange(Q * N_RHO)[:, None], (1, len(m.all_rows))))
     padded = [spans[r].padded(N_RHO) for r in ("r0", "r2")]
     data = {k: {p: np.concatenate([d[k][p] for d in padded]) for p in padded[0][k]} for k in ("rows", "outs")}
-    plain = CS.commit(replace(w, members=(replace(m, tables=()),)), [data])
+    plain = CS.commit(replace(w, members=(replace(m, tables=()),)), [data], salts_of=dict(it.committed.salts))
     assert plain.roots == it.committed.roots and plain.bc == it.committed.bc
     assert plain.public_body(0) != it.committed.public_body(0)
 
@@ -552,7 +552,7 @@ def test_a_token_selects_interior_is_template_major_one_shared_row_member_a_piec
         IR.interior(per, 12, "aa" * 64, [0, 2], row=ROW)
 
 
-def test_a_token_selects_pieces_pad_by_whole_tokens_as_its_inlined_replay_blocks_instances(tmp_path):
+def test_a_token_selects_pieces_pad_by_whole_tokens_as_its_inlined_replay_blocks_instances(tmp_path, monkeypatch):
     """A replay block inlining `TokenSelect_v4` holds one instance a served token, each its V / C chunks then its combine,
     so the pieces are the templates its body calls in the order of their first call and a span of fewer tokens than its
     class pads by its last token: the chunk cell repeats that token's V / C chunks, not its last chunk, and the interior is
@@ -569,6 +569,7 @@ def test_a_token_selects_pieces_pad_by_whole_tokens_as_its_inlined_replay_blocks
     fn = SRW.template(t).fn
     SC.write(tmp_path / "whole", t, {"b": {"logits": whole, "tokens": [int(evaluate(fn, r.tolist())[0]) for r in whole],
                                           "steps": list(range(len(whole))), "program": "p" * 64}})
+    monkeypatch.setattr(IR.os, "urandom", bytes)  # one salt draw for both interiors, so their records compare
     got, want = (IR.interior([IR.pieces(x)], (14, 7), "aa" * 64, [0], row=ROW)
                  for x in (s, IR.captured(tmp_path / "whole", "b")))
     assert (got.record, got.leaf_layer) == (want.record, want.leaf_layer)

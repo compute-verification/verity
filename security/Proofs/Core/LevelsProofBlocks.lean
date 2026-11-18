@@ -3,7 +3,7 @@ module
 public import Proofs.Core.LevelsCount
 public import Proofs.Core.LevelsTwo
 public import Proofs.Core.Game.Prob
-public import Definitions.Core.LevelsProofBlocks
+public import Definitions.Claims.LevelsProofBlocks
 
 /-!
 # A claims partition's proof blocks as the last level's blocks: what carries across
