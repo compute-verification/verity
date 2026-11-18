@@ -54,8 +54,9 @@ WIPE_TERM = Lacks("Pous.Guarantees.StreamedWipe's compression term k·C(N,g+1)·
                   "of its own, and Adv_PRF (StreamedWipe.prfAdvantage) has no value; neither is a Verity.Scheme "
                   "instance yet (its incorrect labels depend on the revealed history)")
 #: what a wipe's accept certifies when its public says ``certified``, and when it doesn't: the served wipe is
-#: `WipeProtocol.uncounted`, whose ``foreign_bits`` is ``memory_bits`` with ε 0, so its row holds at every δ by the run
-WIPE_CERTIFIES = "at most foreign_bits bits of the prior content survive the wipe, except with eps"
+#: `WipeProtocol.uncounted`, whose ``foreign_bits`` is ``memory_bits`` with ε 0
+WIPE_CERTIFIES = ("the wipe's judge computed at most foreign_bits surviving bits except with eps, from the memory sizes "
+                  "the prover declared, which nothing checks against the node")
 WIPE_UNCERTIFIED = ("not certified: survivors bounded by nothing (foreign_bits is M, all of the node's memory; the wipe "
                     "counted no egress, so its eps of 0 is that bound's)")
 
