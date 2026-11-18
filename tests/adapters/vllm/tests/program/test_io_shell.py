@@ -251,7 +251,7 @@ def test_a_slots_entry_is_the_scans_entry_bit_for_bit(KO, NP, STOP):
     KO 64), so the scan reads an honest slot as its Program wrote it: an empty slot's entry is `NONE`, an occupied
     slot's read 1 with its n and ids, and a request the class can't hold read 1 and n = KO + 1, which the scan refuses.
     At KO 4 a row without the read bit is as long, so only the bits tell them apart."""
-    cls, e, ids = SS.scan_class(4, KO, 16), bind(X.SlotEntry, KO=KO, IDB=17, NP=NP, STOP=STOP), [100 + i for i in range(KO)]
+    cls, e, ids = IS.Class(**SS.scan_class(4, KO, 16).shape), bind(X.SlotEntry, KO=KO, IDB=17, NP=NP, STOP=STOP), [100 + i for i in range(KO)]
     assert 16 * X.entry_words(KO, 17) == IS.entry_bits(cls)
     for occ, lp, m, want in ((0, 1, KO, IS.NONE), (2, 1, KO, IS.NONE), (1, 1, 1, IS.entry(1, ids[:1])),
                              (3, NP, KO, IS.entry(KO, ids)), (1, NP + 1, 1, (1, KO + 1, ())),

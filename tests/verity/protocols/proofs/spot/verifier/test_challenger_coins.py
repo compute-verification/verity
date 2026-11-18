@@ -34,6 +34,13 @@ SUBSET = {"law": "subset", "k": 4}
 NEED = 2 * 4 * 10 + 64
 
 
+
+def _log(record: C.LiveRecord) -> tuple[C.Entry, ...]:
+    """`record`'s release log read as the challenger's entries, its head at line 0."""
+    kinds = {"root": "recorded", "release": "released", "commit": "committed"}
+    return tuple(C.Entry(kinds[e["event"]], e["label"], e["index"], bytes.fromhex(e.get("root") or e["after"]), 0, pos)
+                 for pos, e in enumerate(record.log, 1))
+
 def _coins(challenger: C.LiveChallenger | None = None) -> tuple[C.LiveChallenger, T.ChallengerCoins]:
     ch = challenger or C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
     return ch, T.ChallengerCoins(C.LiveRecord(ch, "draw", itertools.count().__next__))
@@ -62,8 +69,8 @@ def test_the_sample_reads_the_coins_opened_after_the_commitment_in_order():
     assert bytes(read) == stream[:NEED]
     assert draw == T.draw_first(T.OwnRandomness(T._on(stream)), SUBSET, 678)
     doc = segment.to_json()
-    assert T.challenger_stream(ch.commitment, doc, ROOT, coins.record.roots) == stream
-    assert T.read_reason(ch.commitment, doc, ROOT, bytes(read), coins.record.roots) is None
+    assert T.challenger_stream(ch.commitment, doc, ROOT, _log(coins.record)) == stream
+    assert T.read_reason(ch.commitment, doc, ROOT, bytes(read), _log(coins.record)) is None
 
 
 def test_a_rerun_extends_with_the_familys_next_coins_only():
@@ -74,9 +81,8 @@ def test_a_rerun_extends_with_the_familys_next_coins_only():
     assert [o.index for o in segment.openings] == [0, 1, 2, 3, 4]
     stream = b"".join(o.coin for o in segment.openings)
     assert first + second == stream[:2 * NEED]
-    assert T.read_reason(ch.commitment, segment.to_json(), ROOT, first + second, coins.record.roots) is None
-    assert "a coin opened and not read" in T.read_reason(ch.commitment, segment.to_json(), ROOT, first,
-                                                         coins.record.roots)
+    assert T.read_reason(ch.commitment, segment.to_json(), ROOT, first + second, _log(coins.record)) is None
+    assert "a coin opened and not read" in T.read_reason(ch.commitment, segment.to_json(), ROOT, first, _log(coins.record))
 
 
 def test_more_coins_than_a_batch_open_in_batches():
@@ -116,7 +122,7 @@ def test_the_verifier_refuses_coins_other_than_those_released_after_the_commitme
     ch, coins = _coins()
     segment = coins.commit(ROOT)
     read = coins(NEED)
-    reason = T.read_reason(ch.commitment, change(segment.to_json()), ROOT, read, coins.record.roots)
+    reason = T.read_reason(ch.commitment, change(segment.to_json()), ROOT, read, _log(coins.record))
     assert reason is not None and why in reason, reason
 
 
@@ -160,9 +166,9 @@ def test_a_family_whose_log_shows_another_root_is_refused():
         if not before:
             coins.record.record(bytes([0xcd]) * 64)
         assert coins.record.reason() is None and len(set(coins.record.roots)) == 2
-        assert T.read_reason(ch.commitment, segment.to_json(), ROOT, read, coins.record.roots) == T.FAMILY_ROOT
+        assert T.read_reason(ch.commitment, segment.to_json(), ROOT, read, _log(coins.record)) == T.FAMILY_ROOT
         with pytest.raises(C.CoinError, match=re.escape(T.FAMILY_ROOT)):
-            T.challenger_stream(ch.commitment, segment.to_json(), ROOT, coins.record.roots)
+            T.challenger_stream(ch.commitment, segment.to_json(), ROOT, _log(coins.record))
         assert T.read_reason(ch.commitment, segment.to_json(), ROOT, read) is None
 
 
@@ -174,8 +180,7 @@ def test_coins_skipped_after_the_commitment_are_caught_by_the_log():
     record.record(ROOT)
     skipped = T.Segment("draw", 1, ROOT, [record.record(ROOT)])
     read = skipped.openings[0].coin
-    assert "not the ones the challenger's log shows" in T.read_reason(ch.commitment, skipped.to_json(), ROOT, read,
-                                                                      record.roots)
+    assert "not the ones the challenger's log shows" in T.read_reason(ch.commitment, skipped.to_json(), ROOT, read, _log(record))
     assert T.read_reason(ch.commitment, skipped.to_json(), ROOT, read) is None
 
 
@@ -195,7 +200,7 @@ def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, sign
     commitment, roots = host.trusted()
     assert roots["positions"] == (ROOT, ROOT) and len(read) == 2 * 9 + 64
     doc = segment.to_json()
-    assert T.read_reason(commitment, doc, ROOT, bytes(read), roots["positions"]) is None
+    assert T.read_reason(commitment, doc, ROOT, bytes(read), _log(coins.record)) is None
     assert draw == T.draw_first(T.OwnRandomness(T._on(T.challenger_stream(commitment, doc, ROOT))), sampling_design, 6)
 
 
@@ -216,7 +221,7 @@ def test_the_proof_system_samples_from_the_challengers_coins_after_the_receipt()
     draw = stream.select(reg)
     read = stream._entries[reg.order].read
     assert len(draw.units) == 2 and read
-    assert T.read_reason(ch.commitment, segment.to_json(), bytes.fromhex(reg.digest), read, coins.record.roots) is None
+    assert T.read_reason(ch.commitment, segment.to_json(), bytes.fromhex(reg.digest), read, _log(coins.record)) is None
 
 
 #: The samples `coin_outcomes` runs: the honest one, then each the Lean run refuses at its select (`coins`, or the code
@@ -494,7 +499,7 @@ def test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_sampl
     assert salt == segment.openings[0].coin and len(salt) == C.COIN_BYTES
     assert (segment.label, segment.start, segment.after.hex(), len(segment.openings)) == (T.SEED_SALT_FAMILY, 0, window, 1)
     assert coins.record.roots == [bytes.fromhex(window)] and coins.record.reason() is None
-    assert T.challenger_stream(ch.commitment, segment.to_json(), bytes.fromhex(window), coins.record.roots) == salt
+    assert T.challenger_stream(ch.commitment, segment.to_json(), bytes.fromhex(window), _log(coins.record)) == salt
     with pytest.raises(C.CoinError, match="drawn once"):
         T.draw_seed_salt(coins, window)
     with pytest.raises(C.CoinError, match="drawn once"):

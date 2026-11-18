@@ -23,7 +23,7 @@ from verity.circuits.codec import descriptor_id
 
 import verity_vllm
 from verity_vllm.config import DTYPES, RowEngine, RowId
-from verity_vllm.engine.profiles.devices import device_name_of_row
+from verity_vllm.engine.profiles.devices import card_sku, device_name_of_row
 from verity_vllm.program import workload as W
 from verity_vllm.target_family import declared_profile
 
@@ -59,7 +59,7 @@ def phi_of(rec: dict, *, hf_home: str | None = None, config: str | None = None) 
             for i, q in enumerate(declared)] if declared else []
     target = declared_profile(rec["row"], w)
     if (device := device_name_of_row(rec["row"])) is not None:
-        target["device_name"] = device
+        target["card"] = card_sku(device)
     eng = RowEngine.of(w)
     phi = Phi(model={"repo": repo, "revision": rev, "hf_config": hf, "dtype": DTYPES.get(rid.dtype, rid.dtype)}, target=target,
               tp={"world": rid.world, "rank": 0}, engine={**eng.args, **({"env": dict(eng.env)} if eng.env else {})},
