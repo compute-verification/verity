@@ -6,7 +6,10 @@ Each row is one number with its unit, over three windows: now, the last hour, an
                             candidate's build, its verdict as the loop judged it, its drop and why, each move of `main`, each
                             head it left out of a build for a conflict, and each marked head it left out of every candidate
                             and why (`leave`); and the loop's own log for the time each tick ended
-  the labels                `ready` and `reviewed` on `pr:N@HEAD` in the evidence store: a PR's mark and its land verdict
+  the labels                `ready` and `reviewed` on `pr:N@HEAD` in the evidence store: a PR's mark and its land verdict, at
+                            each of its heads with labels
+  git                       each such head's own change (`queue.own_change`), from its merge base with the base of the candidate
+                            that landed it or, for an open PR, with `main`; a commit not in this checkout is fetched by its sha
   the run directories       on every node, each run's `job.json` (its command and commit), `slot.json` (when it took a check
                             slot, and for a check's shard what its scope used at its most, `used`), `status.json` (when it
                             ended), and for a check's shard `check-live.json`, `steps.jsonl`, `spans.jsonl`'s `memory.peak`,
@@ -17,10 +20,11 @@ Each row is one number with its unit, over three windows: now, the last hour, an
                             the table adds up by whose runs take its slots (`slot_groups`): the check slots, the executor's,
                             the shared pool `research run --on auto` places a run in, and each lane's own pool
 
-A mark is the first `ready = true` label after the last `ready = false` among the labels the head that landed stands on: its
-own, and those of each head a restack across a move made it from (`carried`), since the queue carries a mark and a land verdict
-across a restack and the owner's wait began at the first. A head with the same change made another way (a merge of `main`) is
-not followed. A landing is the loop's `advance` of `main` to a candidate holding the PR. A candidate's verdict is the loop's
+A mark is the first `ready = true` label after the last `ready = false` among the labels of each head of the PR whose own
+change the head that landed still carries (`kept`): its own, those of each head a restack across a move made it from
+(`carried`), and those of each other head with the same own change as one of those (`queue.own_change`), since the queue carries
+a mark and a land verdict by that rule and the owner's wait began at the first. The table also shows the former definition, the
+labels `carried` reads alone, beside it. A landing is the loop's `advance` of `main` to a candidate holding the PR. A candidate's verdict is the loop's
 first `judged pass` or `judged fail` of the run beside its check. A red's first failure is the earliest failed suite's result
 file, or failed step's end, among the candidate's shards.
 
@@ -72,6 +76,8 @@ SHARD_LAYOUT_H = 3
 WINDOW_H = 24
 #: where the last reading of each node's CPU counters is kept, so the next run gives the average over the time between
 STATE = Path.home() / ".research" / "queue-table.json"
+#: the own changes `own_changes` worked out, by merge base and head, as `queue.Queue.own_change` keeps them
+OWN = Path.home() / ".research" / "queue-table-own.json"
 #: this checkout, whose policy.toml and drive.toml say what is off the gate and what the low-risk rule admits
 CHECKOUT = Path(__file__).resolve().parents[4]
 #: the subject of a restack's last commit (`tools/move/restack.py`), naming the head it restacked, in full or abbreviated
@@ -423,18 +429,85 @@ def check_nodes(args: str) -> list[str]:
     return found[-1].split(",") if found else []
 
 
-def _labels(store_root, targets: list[str]) -> dict[str, list[dict]]:
-    """Each target's `ready` and `reviewed` labels, pulled from the store's remote first."""
+def _labels(store_root, targets: list[str], pulled: tuple[str, ...] = ()) -> dict[str, list[dict]]:
+    """Each target's `ready` and `reviewed` labels, pulled from the store's remote first unless it starts with one of ``pulled``."""
     from .store import labels_sync
     from .store.local import LocalStore
 
     store = LocalStore(store_root)
     try:
-        labels_sync.pull_targets(store, targets, jobs=16)
+        labels_sync.pull_targets(store, [t for t in targets if not t.startswith(pulled)], jobs=16)
     except Exception as e:  # noqa: BLE001  a VM without the store's secrets still reads what it pulled before
         print(f"research queue stats: labels not pulled ({e}); reading the local copies", file=sys.stderr)
     return {t: [{"key": lab.key, "value": lab.value, "by": lab.by, "ts": lab.ts} for lab in store.labels(t)
                 if lab.key in ("ready", "reviewed")] for t in targets}
+
+
+def pr_heads(store_root, prs: list[str]) -> dict[str, list[str]]:
+    """{PR: each of its heads with labels}, those of every head of ``prs`` pulled from the store's remote first."""
+    from .queue import label_target
+    from .store import ids, labels_sync
+    from .store.local import LocalStore
+
+    store = LocalStore(store_root)
+    try:
+        labels_sync.pull_prefixes(store, [label_target(int(pr), "") for pr in prs], jobs=16)
+    except Exception as e:  # noqa: BLE001  a VM without the store's secrets still reads what it pulled before
+        print(f"research queue stats: the PRs' other heads not pulled ({e}); reading the local copies", file=sys.stderr)
+    want, out = {ids.target_dirname(label_target(int(pr), "")): pr for pr in prs}, {}
+    root = Path(store.root) / "labels"
+    for name in sorted(os.listdir(root)) if root.is_dir() else ():
+        at, sep, head = name.rpartition("@")
+        if sep and (pr := want.get(at + sep)):
+            out.setdefault(pr, []).append(head)
+    return out
+
+
+def own_changes(bases: dict[str, tuple[str, list[str]]], repo: Path = CHECKOUT, kept: Path | None = None) -> tuple[dict[str, str | None], list[str]]:
+    """({PR@head: its own change from its merge base with the PR's base (`queue.own_change`)}, what was not read), for each PR's
+    (base, heads), each commit not in ``repo`` fetched from origin by its sha first, and each kept in ``kept`` (`OWN`) by merge
+    base and head, the newest `queue.OWN_KEEP`."""
+    from .queue import OWN_KEEP, own_change
+
+    kept = kept or OWN
+    try:
+        known = json.loads(kept.read_text()) if kept.is_file() else {}
+    except (OSError, ValueError) as e:
+        print(f"research queue stats: {kept} not read ({e}); every own change is worked out afresh", file=sys.stderr)
+        known = {}
+
+    shas = sorted({s for base, heads in bases.values() for s in (base, *heads)})
+    have = subprocess.run(["git", "cat-file", "--batch-check=%(objectname) %(objecttype)"], cwd=repo, capture_output=True, text=True,
+                          input="".join(f"{s}\n" for s in shas)).stdout.split("\n")
+    missing = [s for s, line in zip(shas, have) if not line.endswith(" commit")]
+
+    def fetch(part: list[str]) -> bool:
+        return subprocess.run(["git", "fetch", "-q", "--no-tags", "origin", *part], cwd=repo, capture_output=True, timeout=900).returncode == 0
+
+    unread = []
+    if missing and not fetch(missing):
+        with ThreadPoolExecutor(8) as ex:
+            lost = [s for s, ok in zip(missing, ex.map(lambda s: fetch([s]), missing)) if not ok]
+        if lost:
+            unread.append(f"git: {len(lost)} commits origin gave none for, whose heads' marks follow restacks alone (first {lost[0][:12]})")
+
+    def one(item: tuple[str, str, str]) -> tuple[str, str, str | None]:
+        pr, base, head = item
+        mb = subprocess.run(["git", "merge-base", base, head], cwd=repo, capture_output=True, text=True).stdout.strip()
+        at = f"{mb} {head}"
+        return f"{pr}@{head}", at, (known[at] if at in known else own_change(repo, mb, head)) if mb else None
+
+    with ThreadPoolExecutor(8) as ex:
+        got = list(ex.map(one, [(pr, base, h) for pr, (base, heads) in bases.items() for h in heads]))
+    known.update({at: own for _, at, own in got if not at.startswith(" ")})
+    try:
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        tmp = kept.with_name(f"{kept.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(dict(list(known.items())[-OWN_KEEP:])))
+        tmp.replace(kept)
+    except OSError as e:
+        print(f"research queue stats: the own changes not kept in {kept} ({e})", file=sys.stderr)
+    return {key: own for key, _, own in got}, unread
 
 
 def lean_files(base: str, sha: str) -> list[int] | None:
@@ -586,8 +659,21 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
                                           for pr, head in zip(r.get("members") or [], r.get("heads") or [])}
     doc["restacks"], unread = restacks(sorted({head for _, head in counted}))
     doc["errors"] += unread
-    pairs = sorted(built | counted | {(pr, old) for pr, head in counted for old in chain(doc["restacks"], head)[1:]})
-    labels = _labels(store_root, [label_target(int(pr), head) for pr, head in pairs])
+    others = pr_heads(store_root, sorted({pr for pr, _ in counted}))
+    main_ = subprocess.run(["git", "ls-remote", "origin", "refs/heads/main"], cwd=CHECKOUT, capture_output=True, text=True).stdout.split()
+    bases = {str(pr): r["base"] for r in doc["control"].get("decisions", []) if r["action"] == "advance" and not r.get("shadow")
+             and r["at"] >= day and r.get("base") for pr in r.get("members") or []}
+    bases.update({pr: main_[0] for pr in doc["open"] if main_})
+    heads = defaultdict(set, {pr: set(hs) for pr, hs in others.items()})
+    for pr, head in counted:
+        heads[pr].update(chain(doc["restacks"], head))
+    pairs = sorted(built | counted | {(pr, old) for pr, head in counted for old in chain(doc["restacks"], head)[1:]}
+                   | {(pr, h) for pr, hs in others.items() for h in hs})
+    with ThreadPoolExecutor(1) as ex:
+        own = ex.submit(own_changes, {pr: (bases[pr], sorted(hs)) for pr, hs in heads.items() if pr in bases})
+        labels = _labels(store_root, [label_target(int(pr), head) for pr, head in pairs], tuple(label_target(int(pr), "") for pr in others))
+        doc["own"], unread = own.result()
+    doc["errors"] += unread
     doc["labels"] = {f"{pr}@{head}": labels[label_target(int(pr), head)] for pr, head in pairs}
     if until is not None:
         cut(doc, until)
@@ -660,6 +746,16 @@ def chain(restacks: dict[str, str], head: str) -> list[str]:
 def carried(labels: dict[str, list[dict]], restacks: dict[str, str], pr: str, head: str) -> list[dict]:
     """The labels a PR's head stands on: its own, and those of each head a restack made it from."""
     return [lab for h in chain(restacks, head) for lab in labels.get(f"{pr}@{h}") or []]
+
+
+def kept(labels: dict[str, list[dict]], restacks: dict[str, str], own: dict[str, str | None], pr: str, head: str) -> list[dict]:
+    """The labels of each head of a PR whose own change ``head`` still carries: those `carried` reads, and those of each other
+    head whose own change (``own``, by `PR@head`: `queue.own_change`'s patch-id) is one of theirs, so a merge of `main` keeps
+    the clock where a change of the diff restarts it."""
+    heads = chain(restacks, head)
+    same = {own[f"{pr}@{h}"] for h in heads if own.get(f"{pr}@{h}")}
+    more = [k.partition("@")[2] for k in labels if k.partition("@")[0] == pr and own.get(k) in same and k.partition("@")[2] not in heads]
+    return [lab for h in [*heads, *more] for lab in labels.get(f"{pr}@{h}") or []]
 
 
 def left_out(decisions: list[dict], open_prs: dict[str, str]) -> dict[str, dict]:
@@ -1043,8 +1139,10 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     landings = [(ts(r["at"]), str(pr), head) for r in decisions if r["action"] == "advance" and r.get("done") and not r.get("shadow")
                 for pr, head in zip(r.get("members") or [], r.get("heads") or [])]
     moves = [ts(r["at"]) for r in decisions if r["action"] == "advance" and r.get("done") and not r.get("shadow")]
-    m2m = [(at, _m(at - mark) if (mark := mark_at(carried(labels, restacked, pr, head), at)) else None) for at, pr, head in landings]
-    waiting = {pr: mark for pr, head in open_prs.items() if (mark := mark_at(carried(labels, restacked, pr, head), now))}
+    own = doc.get("own") or {}
+    m2m = [(at, _m(at - mark) if (mark := mark_at(kept(labels, restacked, own, pr, head), at)) else None) for at, pr, head in landings]
+    m2m_landed = [(at, _m(at - mark) if (mark := mark_at(carried(labels, restacked, pr, head), at)) else None) for at, pr, head in landings]
+    waiting = {pr: mark for pr, head in open_prs.items() if (mark := mark_at(kept(labels, restacked, own, pr, head), now))}
     waits = sorted(_m(now - m) for m in waiting.values())
     marks = [*waiting.values(), *(at - v * 60 for at, v in m2m if v is not None)]
     cands = candidates(decisions, runs, day, off_gate)
@@ -1070,17 +1168,29 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
 
     def share(since: float) -> str:
         got = [v for v in win(m2m, since) if v is not None]
-        late = sum(1 for m in waiting.values() if m >= since and now - m > TARGET_MIN * 60)
-        if not got:
-            return "none landed" + (f"; {late} marked in the window have waited over 2 h" if late else "")
-        inside = sum(v <= TARGET_MIN for v in got)
-        return f"{inside} of {len(got)} landed ({inside / len(got):.0%})" + (
-            f"; counting the {late} marked in the window and waiting over 2 h as misses, {inside / (len(got) + late):.0%}" if late else "")
+        waits = [now - m for m in waiting.values() if m >= since]
+        inside, late = sum(v <= TARGET_MIN for v in got), sum(w > TARGET_MIN * 60 for w in waits)
+        landed = f"{inside} of {len(got)} landed ({inside / len(got):.0%})" if got else "none landed"
+        if not waits:
+            return landed
+        n, hits = len(got) + len(waits), inside + len(waits) - late
+        return landed + f"; with the {len(waits)} marked in the window and waiting, {late} past 2 h: {hits} of {n} ({hits / n:.0%})"
 
-    how = ("mark: the `ready` label at the head that landed, or at the head a restack across a move made it from (the commit's "
-           "subject and parents, GitHub); landing: the loop's `advance` of `main`; by landing time")
+    how = ("mark: the first `ready` label after the last `ready = false` among those of each head of the PR whose own change the "
+           "head that landed still carries: the head itself, each head a restack across a move made it from (the commit's subject "
+           "and parents, GitHub), and each other head with the same own change as one of those, the whitespace-kept patch-id of its "
+           "diff from its merge base with the landing's base (`queue.own_change`, the rule by which the queue carries a mark and a "
+           "land verdict), so a merge of `main` or a restack keeps the clock and a change of the diff restarts it; landing: the "
+           "loop's `advance` of `main`; by landing time")
     add("1", "Mark to `main`", "", _dist(win(m2m, hour)) + moved(hour), _dist(win(m2m, day)) + moved(day), "", how)
-    add("1", "Share on `main` within 2 h of the mark", "", share(hour), share(day), f"{TARGET_SHARE:.0%}", "of PRs landed in the window")
+    add("1", "Mark to `main`, from the mark at the head that landed (the former definition)", "", _dist(win(m2m_landed, hour)),
+        _dist(win(m2m_landed, day)), "", "mark: the first `ready` label after the last `ready = false` at the head that landed, or "
+        "at the head a restack across a move made it from, so a merge of `main` and its new mark restart the clock; landing: the "
+        "loop's `advance` of `main`; by landing time")
+    add("1", "Share on `main` within 2 h of the mark", "", share(hour), share(day), f"{TARGET_SHARE:.0%}",
+        "first, of the PRs landed in the window, those within 2 h of the mark (`Mark to `main``); then, over those PRs and the PRs "
+        "marked in the window and waiting now, the landed within 2 h and the waiting that have waited 2 h or less, a wait past "
+        "2 h a miss")
     add("1", "Marks an hour", "", f"{sum(m >= hour for m in marks)}", f"{sum(m >= day for m in marks) / hours:.1f}",
         "", "marks in force on open PRs and on PRs landed; a mark withdrawn since is not counted")
     add("1", "Landings an hour (PRs; moves of `main`)", "", f"{len(win(m2m, hour))} PRs; {sum(m >= hour for m in moves)} moves",

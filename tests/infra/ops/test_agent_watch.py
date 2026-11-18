@@ -3768,7 +3768,7 @@ def test_issue_keys_further_in_a_name_name_its_lane_when_they_are_all_one_teams(
     coordinators(tmp_path, [], {})
     reg = linear_teams(tmp_path)
     for name, key in (("TRIM: VLLM-522 step 2", "VLLM-522"), ("KFORK: the forked committer (VLLM-61)", "VLLM-61"),
-                      ("graph2 CIR-489 fixes", "CIR-489"), ("[VLLM-97] KFLAGS", "VLLM-97"), (" VLLM-97 KFLAGS", "VLLM-97"),
+                      ("rows CIR-489 fixes", "CIR-489"), ("[VLLM-97] KFLAGS", "VLLM-97"), (" VLLM-97 KFLAGS", "VLLM-97"),
                       ("ROWS: VLLM-3, then VLLM-9", "VLLM-3"), ("FOLD: SHA-512 rows for VLLM-8", "VLLM-8"),
                       ("seat of NOPE-12: VLLM-8", "VLLM-8"), ("KFORK/VLLM-61-retry", "VLLM-61")):
         assert W.name_lane(name, reg) == by_key({"VLLM": "vllm", "CIR": "circuits"}[key.split("-")[0]], key), name

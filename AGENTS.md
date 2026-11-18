@@ -64,7 +64,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   end to end, GPU probes, and `calibration/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command (`cli/`), `circuit_check/`, `graph/` (the check as a graph of tasks) and `lean/`
   (the Lean check); `tools/check/`: the one check.
-- `artifacts.json`: every replicated fixture by `art:` id (no root `fixtures/`: each file sits beside
+- `artifacts.json`: the fixture registry, every replicated fixture by `art:` id (no root `fixtures/`: each file sits beside
   its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
   deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
   deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
@@ -149,10 +149,13 @@ The rules in force, each stated as itself; the friction skill has the standing r
   party's sessions only, its key always XORed with a SHA-512 one (never below hash-only) and never on pair links
   (`ind-cca/ml-kem-1024`).
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
-  inside an execution phase, from its live challenge and the previous pass's root; and PoUW's
-  per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the execution
-  phase's live salt (`pouw.salt`) and the operands' committed roots, which a sampled proof block's proof derives. Grinding is a term
-  of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
+  inside an execution phase, from its live challenge and the previous pass's root; and PoUW's noise seeds, which hash
+  the execution phase's live salt (`pouw.salt`) and commitments fixed before the noise is used. Under Pearl+, a fixed
+  operand's seed is s512("seed-B", salt ‖ root_B), once per fixed operand and execution phase, and an activation row's is
+  s512("seed-A", salt ‖ its row digest ‖ root_B ‖ call index, row). Grinding is priced where the developer picks after
+  the salt: Pearl+'s guarantee charges it as oracle queries in TT_OUT's game, with no μ^m term. H1's
+  seed is one per matmul, seed_j = SHA-512(tag ‖ salt ‖ position ‖ root(A_j) ‖ root(B_j)), which a sampled proof block's
+  proof derives, and its guarantee prices grinding at μ^m a try for a steer that needs m noised coordinates. No
   retries: a failed proof is a visible failure, and nothing resamples. In the core protocols, outer proofs go through the ZK server as independent
   sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
   coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and

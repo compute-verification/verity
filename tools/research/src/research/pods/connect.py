@@ -7,7 +7,7 @@
 TARGET is a `machines.toml` name, a RunPod pod id, or a pod name (`vy-ligerito-sumcheck-2`; a project suffix such as the
 `-veritor-campaign` that `pods create` appends is optional, `pods.POD_SUFFIXES`).  The address is `remote.pod_target`'s: the one last read
 from RunPod while the host there proves the host key recorded for it (ssh to it is then strict about that key), read again when
-it does not or the read is over an hour old (the REST API's flaky empty mappings are retried), so nothing hard-codes an ip/port
+it does not or the read is over an hour old (RunPod's flaky empty mappings are retried), so nothing hard-codes an ip/port
 that changes when a pod restarts.  A machine name asks RunPod for nothing else; a pod id or pod name also costs one listing of
 the account's pods.
 

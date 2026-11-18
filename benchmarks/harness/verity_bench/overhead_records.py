@@ -41,7 +41,7 @@ POINTS_RECORD, RUN_RECORD = "overhead-points", "overhead"
 POINTS_KIND = "verity-bench-overhead-points/v1"
 BY = "benchmarks"
 #: each card's GPU node, where `--on` names none
-NODES = {"h200": "vy-spot-glm53"}
+NODES = {"h200": "vy-spot-glm53", "h100": "vy-h100-1"}
 NODE_JOB = "benchmarks/harness/overhead_node.sh"
 #: the options the door gives each node job (`launch_points`, `launch_run`); the node job sets the rest itself
 DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
@@ -62,8 +62,8 @@ GATES = Path("benchmarks/slowdown/data/hardware.toml")
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
 GAMMA_UNIT = "busy SM-seconds over stock's, less one: a fraction, not a percent"
-#: each model but the kernel model as the words that open its member, `MODEL-CARD` (`measurements`)
-MEMBER_MODEL = {"llama3.2-1b": "llama-3.2-1b"}
+#: each model as the words that open its member, `MODEL-CARD` (`measurements`)
+MEMBER_MODEL = {"llama3.1-70b": "llama-3.1-70b", "llama3.2-1b": "llama-3.2-1b"}
 
 Executor = Callable[[Sequence[str], Path], int]
 
@@ -179,12 +179,10 @@ def trial_why(store: Any, attempt: Mapping, files: str, run: str) -> str | None:
     result can't tell."""
 
     try:
-        said = _json(store, files, kit.RESULT).get("trial") is True
+        result = _json(store, files, kit.RESULT)
     except Exception as ex:  # noqa: BLE001 - the store's NotFound, named in the why
         return f"{run}'s {kit.RESULT} can't be read ({type(ex).__name__}: {ex}), so not whether it is a trial"
-    if said or kit.trial_attempt(attempt):
-        return f"{run} is a trial run ({kit.TRIAL}): its measurements are its own, and a trial is never of record"
-    return None
+    return kit.trial_why(run, attempt, result)
 
 
 def _superseded(store: Any, target: str) -> list[str]:
@@ -210,7 +208,7 @@ def of_record(store: Any, run: str) -> tuple[dict | None, list[str]]:
         doc = _json(store, files, "out/overhead.json")
     except (OSError, ValueError, KeyError) as ex:
         return None, [f"{run} has no readable out/overhead.json ({type(ex).__name__}: {ex})"]
-    whys = []
+    whys = [why] if (why := trial_why(store, attempt, files, run)) else []
     if doc.get("schema") != O.RUN_SCHEMA:
         whys.append(f"{run}'s overhead.json is {doc.get('schema')!r}, not {O.RUN_SCHEMA}")
     if RUN_RECORD not in [lab.value for lab in store.labels(run, key=RUN_OF_RECORD)]:
@@ -266,7 +264,7 @@ def gamma_rows(store: Any) -> list[dict]:
                    "gamma_weight_side_bound": p.get("gamma_weight_side_bound"), "aa": p.get("aa"),
                    "epsilon": p.get("epsilon"), "perplexity": p.get("perplexity"), "gate": p.get("gate"),
                    "linears": p.get("linears"), "commits_y": None if arm is None else bool(arm.get("commits_y")),
-                   "note": O.y_note(arm)}
+                   "note": O.row_note(arm, doc.get("card"))}
             why = whys + list(p.get("whys") or [])
             row |= {"of_record": not why, "why": "; ".join(why) or None}
             best[(row["scheme"], row["card"], row["model"], name)] = row
@@ -311,9 +309,6 @@ def record_run(store: Any, run: str, by: str = BY) -> list[str]:
 
     doc, whys = of_record(store, run)
     whys = [w for w in whys if not w.endswith(f"isn't labelled {RUN_OF_RECORD}={RUN_RECORD}")]
-    attempt, files = run_files(store, run, "run")
-    if attempt is not None and (why := trial_why(store, attempt, files, run)):
-        whys.append(why)
     if doc is None or whys:
         raise ValueError(f"{run} can't be of record: {'; '.join(whys)}")
     store.add_label(run, RUN_OF_RECORD, RUN_RECORD, by=by)
@@ -359,8 +354,8 @@ def build(store: Any = None, *, root: Path | None = None, local_only: bool = Fal
 
 def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
-    for each model that row's γ of record with its interval (the kernel model's as the metric's own reading, every other
-    model's as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
+    for each model that row's γ of record with its interval (the kernel model's on the kernel card as the metric's own
+    reading, every other as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
     as its target, from its run and its points' art, with its note, whether its run timed y's commitment (`commits_y`,
     where the row says) and what the γ is over; where the table has no γ of record there, no value and why."""
 
@@ -369,11 +364,11 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     for name, row in metrics.items():
         scheme, card, point = row.split("/")
         for model in O.MODELS:
-            own = model == O.KERNEL_MODEL
+            own = model == O.KERNEL_MODEL and card == O.KERNEL_CARD
             r = rows.get((scheme, card, model, point))
             g = (r or {}).get("gamma") or {}
             m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
-                                 "extra": {"covers": table["covers"] if own else O.covers(model)}}
+                                 "extra": {"covers": table["covers"] if model == O.KERNEL_MODEL else O.covers(model)}}
             if not own:
                 m["member"] = f"{MEMBER_MODEL[model]}-{card}"
             if r is None or not r["of_record"] or g.get("gamma") is None:

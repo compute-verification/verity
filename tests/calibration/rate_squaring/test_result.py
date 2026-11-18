@@ -48,10 +48,42 @@ def test_a_failed_gate_or_no_timing_writes_no_number_and_exits_5(tmp_path, monke
 def test_the_metric_is_the_registered_one():
     metric, = tomllib.loads((HERE / "metrics.toml").read_text())["metric"]
     assert metric["id"] == result.METRIC and metric["unit"] == "squarings a second"
-    assert "ifma.sh" in metric["command"] and "result.py" in (HERE / "ifma.sh").read_text()
+    assert metric["command"].endswith("-- bash calibration/rate_squaring/run.sh ifma")
+    assert 'result.py ifma "$O"' in (HERE / "run.sh").read_text()
 
 
 def test_no_timing_on_one_thread_a_core_writes_no_number_and_exits_5(tmp_path, monkeypatch):
     code, doc = written(tmp_path, monkeypatch, [r for r in ROWS if r["set"] != "cores"])
     assert code == 5 and doc["validation"]["status"] == "failed" and not doc["measurements"]
     assert "no timing on one thread a core" in doc["validation"]["detail"]
+
+
+def sq_written(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, timed: bool, errors: str) -> tuple[int, dict]:
+    """`sq`'s records as `run.sh sq` leaves them under a research run's out/, and the result `result.py sq` writes."""
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "gate-f5-i1-k1.json").write_text('{"words": 512, "bad": 0, "ok": true}\n')
+    (out / "sass-mix.json").write_text("{}\n")
+    if timed:
+        (out / "time.jsonl").write_text('{"fold": 5, "ilp": 1, "sq_per_s": 1.0e11}\n')
+    if errors:
+        (out / "errors.txt").write_text(errors)
+    return result.record_sq(out), json.loads((tmp_path / "result.json").read_text())
+
+
+def test_sq_writes_its_gates_validation_and_its_records_and_no_number(tmp_path, monkeypatch):
+    code, doc = sq_written(tmp_path, monkeypatch, True, "ncu 5 1 rc 1\n")
+    assert code == 0 and doc["measurements"] == []
+    assert doc["validation"] == {"status": "passed", "checker": "sq_gate.py", "evidence": ["out/gate-f5-i1-k1.json"],
+                                 "detail": "1 gates, 1 timings; ncu 5 1 rc 1"}
+    assert doc["measurement_files"] == ["out/time.jsonl", "out/sass-mix.json", "out/errors.txt"]
+
+
+@pytest.mark.parametrize("timed, errors, why", [(True, "fold 5 ilp 1 failed its gate: not timed\n", "failed its gate"),
+                                                (True, "gate 5 1 777 rc 3\n", "gate 5 1 777 rc 3"),
+                                                (False, "", "no timing")])
+def test_sq_with_a_failed_gate_or_no_timing_fails_its_validation_and_exits_5(tmp_path, monkeypatch, timed, errors, why):
+    code, doc = sq_written(tmp_path, monkeypatch, timed, errors)
+    assert code == 5 and doc["validation"]["status"] == "failed" and why in doc["validation"]["detail"]
+    assert doc["measurements"] == []

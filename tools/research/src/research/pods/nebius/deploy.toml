@@ -1832,7 +1832,7 @@ optional = ["/workspace/research/locks/prebuild", "/workspace/research/locks/nig
 
 [step.lockout.held]
 vy-nebius-cpu-13 = "its vqueue loop's install needs root and goes in before the lock-out"
-vy-nebius-cpu-7 = "graph2 and its relays run as root through research's sudo here; the lock-out waits until they don't"
+vy-nebius-cpu-7 = "root's runs root and its collector run here through research's sudo; the lock-out waits until they don't"
 
 [[file]]
 path = "/usr/local/sbin/vy-admin-setup"

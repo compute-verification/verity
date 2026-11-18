@@ -43,6 +43,7 @@ from verity_bench.exfiltration_text import _n, _names, _on, _part, _pct, _plan
 from verity_bench.exfiltration_verdicts import (
     _by,
     _what,
+    handed_runs,
     stop_charge,
     stop_class,
     stop_verdicts,
@@ -228,7 +229,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     answer holds alone, which the document's `attester`'s `stop` counts (`held_phases`; every one where `below`).
 
     The answer is `stop_charge`'s on the runs that carry the stop class's record (`verdict_runs`), the ones this
-    reads or leaves out, and it is handed to the calculator (`attester`). With no run carrying the record the
+    reads or leaves out, but a trial (`handed_runs`), and it is handed to the calculator (`attester`). With no run carrying the record the
     reader is not asked and the calculator is handed none, so its rows are as with no record read. The document's
     `attester`'s `stop` is the term document's own account of it (its `rows`, `held_phases`, `below`, `why` and
     `verdicts`), with the runs handed (`runs`) and those of them handed as superseded (`superseded`).
@@ -265,11 +266,12 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
         store = completion.store
     scopes, plans, runs, refused = rows_of_record(store, row=row, step=step, variant=variant, record=record)
     labelled = {} if record is not None else verdict_runs(store)
+    handed = handed_runs(store, labelled)
     stop, answer = None, None
     if record is None and (verdicts := stop_verdicts(store, labelled)) is not None:
         stop = stop_class(*verdicts[:2])
         refused = [*refused, *verdicts[2]]
-        answer = stop_charge(root, store, labelled)
+        answer = stop_charge(root, store, handed)
     points = {scope: at_share(scope, run, its, share, plans.get(scope)) for scope, (run, its) in scopes.items()}
     if "world year" not in points:
         held = sorted({run for run, _ in scopes.values()})
@@ -290,7 +292,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
 
     term = attester(root, response_ids, scan_delta, answer)
     charged = {k: term["stop"][k] for k in ("rows", "held_phases", "below", "why", "verdicts")} | {
-        "runs": list(labelled), "superseded": [run for run, by in labelled.items() if by]}
+        "runs": list(handed), "superseded": [run for run, by in handed.items() if by]}
     if unnamed := [name for name in charged["rows"] if name in TOGETHER and name not in WHOLE]:
         raise ValueError(f"the network attester's rows {_names(unnamed)} are read from verdict records, and this "
                          "command has no name for their sums where the stop class is charged its whole schedule: name "

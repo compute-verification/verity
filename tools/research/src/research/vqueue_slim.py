@@ -587,6 +587,19 @@ def abandon(rec: dict) -> None:
         _unplan(rec)
 
 
+def shards_registered(driver: Landing, rec: dict) -> list[str]:
+    """The run ids each shard of ``rec`` still launching registered since it was last read, its launch dropped from it once it
+    ended (`Landing._resolve`, which reads a launch once): a dropped candidate's, whose runs are cancelled as they register,
+    whatever its other shards' launches did (`Loop._launched`)."""
+    new: list[str] = []
+    for k, shard in enumerate(rec.get("shards") or (), 1):
+        if "launch" in shard:
+            shard.setdefault("at", rec["at"])
+            driver._resolve(shard, f"shard {k} of dropped candidate {rec['tip'][:12]}'s run")
+            new += [] if "launch" in shard else shard.get("ids") or []
+    return new
+
+
 def _planned(driver: Landing, rec: dict, what: str) -> Verdict:
     """The auto plan ``rec``'s shards launch by (`start` with `auto:N`), followed: pending while `check.py --shard-plan` makes
     it, up to `PLAN_WAIT_S` after the start, then stopped; once made, every shard launched `--shard auto:K/N` with its file

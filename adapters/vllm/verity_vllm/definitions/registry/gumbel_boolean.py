@@ -55,18 +55,42 @@ group).
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
-from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.refs import Coll, Explicit, concat
-from verity.circuits.types import Array, Tuple
-from verity.circuits.silicon import fp
-from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
-from verity.circuits.ops.boolean.scalar import gt_u, select
-from verity.circuits.ops.boolean.softmax import f32_add_ftz, f32_fma_ftz, f32_mul_ftz, ftz
+from verity.circuits.boolean.forms import (
+    NOT,
+    ONE,
+    OR,
+    ZERO,
+    add,
+    and_reduce,
+    const_bits,
+    multiply,
+    mux,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops.boolean.scalar import gt_u, select
+from verity.circuits.ops.boolean.softmax import (
+    f32_add_ftz,
+    f32_fma_ftz,
+    f32_mul_ftz,
+    ftz,
+)
+from verity.circuits.refs import Coll, Explicit, concat
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import sampling as SM
 from verity_vllm.definitions.registry import topp_word_gates as TG
-from verity_vllm.definitions.registry.sampling_boolean import F32ArgmaxStage, G, GB, argmax_calls, traced_family
+from verity_vllm.definitions.registry.sampling_boolean import (
+    GB,
+    F32ArgmaxStage,
+    G,
+    argmax_calls,
+    traced_family,
+)
 
 __all__ = ["LANE_ROUNDS", "GumbelLane", "GumbelLaneHead", "GumbelLaneRounds", "GumbelLaneTail", "GumbelNoise", "GumbelNoiseGroup",
            "GumbelNoiseLane", "GumbelSelectF32", "GumbelSetup", "GumbelStreamKey", "GumbelStreamKeyHead", "GumbelStreamKeyTail",

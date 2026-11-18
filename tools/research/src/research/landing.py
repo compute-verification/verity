@@ -1231,8 +1231,6 @@ class Landing:
             return old, f"{v[3].by.lstrip('@')}'s hold at {v[2][:12]} ({v[3].ref or 'no reason'}) is newer", False
         if held := unreviewed(labels[old], (*owners, self.ready_by(m.pr, old))):
             return old, f"{held} at {old[:12]}", False
-        if _who(CI) in {_who(o) for o in owners if o}:
-            return old, f"{CI} is among its owners, so its verdict wouldn't count", False
         d = self.delta(old, m.head, landed, trusted)
         return old, d.why if d.carries else f"{d.kind}: {d.why}", d.carries
 
