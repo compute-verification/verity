@@ -326,7 +326,7 @@ def dump_files(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, dig
                touched: Touched | None = None, keys_to: Path | None = None) -> dict[str, Any]:
     """`dump`'s step files under `d`, and its `store.json` document without the steps' metas (`write_doc` adds them and writes it).
     With no ``touched``, a released window dumps slim to its sampled leaves (`kept`).  ``keys_to``: where a full dump's
-    ``keys.bin`` goes instead of `d`, its digest in no ``digests``."""
+    ``keys.bin`` goes instead of `d`; its digest is ``digests``' ``keys.bin`` still."""
     why = _refusal(com)
     if not why and touched is None:
         touched = kept(com)
@@ -347,7 +347,7 @@ def dump_files(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, dig
         kp = d / "keys.bin" if keys_to is None else Path(keys_to)
         kp.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         kd = write_file(kp, (memoryview(keys[int(sc.step)]) for sc in rc.steps))
-        done.append(({}, {"keys.bin": kd} if keys_to is None else {}))
+        done.append(({}, {"keys.bin": kd}))
     if digests is not None:
         for _, dg in done:
             digests.update(dg)

@@ -765,6 +765,10 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
                          "ninja is) on PATH, or pass --no-commit")
     if why := SG.out_refusal(opts.out, environ):
         raise UsageError(why)
+    from verity_vllm.pipeline.replay_bundle import private_refusal
+
+    if opts.seal and (why := private_refusal(environ)):
+        raise UsageError(f"--seal: {why}")
     if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
         raise UsageError(f"--seal: {why}")
 
