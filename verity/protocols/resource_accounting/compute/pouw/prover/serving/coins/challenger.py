@@ -72,7 +72,7 @@ verifier's check that a served window's coins are that challenger's.
   its round root commits, each K's ``h1/b/<K>`` folding to the weights' root its period's open signed, the proof blocks the
   sampling coin samples at its period's K each with an accepted session that opened its step's ``a/<K>@<s>`` and its K's
   ``h1/b/<K>``, and the registration theirs. It reports the ε the sample established at δ = 2^-40
-  (`credit.established`). A period earns only as a whole (`period_credit`, `credit.period_credit`): the windows
+  (`credit.established`). A period earns only as a whole (`credit.period_credit`): the windows
   presented are exactly its close's, in order, the close complete, each window proving the period's circuit and
   credited. Both verdicts are the Lean's (`PouwVerifier.Credit.executionPhase`, `Credit.periodCredit`), core's Python their twin
   and a disagreement a refusal (`verifier.of_record`). The serving process's gate-passed count
@@ -528,7 +528,7 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str], presente
     coins, which a prover keeps only when it liked them. With `presented`, the window roots the verifier is shown, in
     order, also core's rules of record: `credit.period` (exactly the close's windows, in its order, the close complete)
     and `credit.committed_k` (the open committed ``draw_k``), each refusal as ``code: why``; a period's credit itself is
-    `period_credit`'s."""
+    `credit.period_credit`'s."""
     p = ledger.periods.get(period)
     if p is None:
         return [f"the auditor's ledger has no period {period}"]
@@ -687,7 +687,7 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
     step's served rows, ``live``); ``k``; ``drawn``, the proof blocks core
     samples (`drawn_of`); ``calls``, the credited calls (a call whose step served no rows is none); ``eps``, what the
     sample established at δ over their served rows' work (`credit.established`); and ``credit``, the calls only when every refusal is None. A period's credit is
-    `period_credit`'s."""
+    `credit.period_credit`'s."""
     out: dict[str, Any] = {"manifest": manifest_reason(record), "window": None, "calls": None, "k": k, "drawn": None,
                            "eps": None}
     try:
@@ -752,21 +752,8 @@ def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Ma
             "window": dict(window)}
 
 
-def period_credit(ledger: Ledger, period: str, windows: Sequence[Mapping[str, Any]], verify: Any = lms_verify,
-                  run: Any = None) -> tuple[dict | None, Any]:
-    """Period `period`'s credit and None, or None and the refusal: core's `credit.period_credit` over the auditor's
-    `ledger` and each window's evidence (`window_evidence`), which must be exactly the windows the period's close lists,
-    in its order, the close complete, its open's ``draw_k``, circuit files and weights' root committed, and every window
-    credited at that K, its ``b/<K>`` the period's weights, each window's session run from a commit the ledger's pins
-    log records on its `main` (core's `challenger.credited_session`, ``circuit``), and each sampled proof block verified from its
-    statement's proof files by `run` (default credit's verifier). The credit is ``{windows, work, k, delta,
-    eps}``."""
-    return CR.period_credit(ledger.key.to_json(), list(ledger.lines), _listed(ledger.pins), _listed(ledger.main),
-                            period, [dict(w) for w in windows], verify, **({} if run is None else {"run": run}))
-
-
 __all__ = ["DRAW_EPS", "EXPECTED_CREDIT", "Fetch", "Ledger", "NO_DRAW_SESSION", "REPLY_FIELDS", "SCHEME", "SESSION_FIELDS",
            "address", "carried", "credit_reason", "draw_families", "draw_files", "draw_k", "draw_reason",
            "draw_session_reason", "drawn_of", "evidence", "families", "held", "lms_verify",
-           "manifest_reason", "period_credit", "period_reason", "pinned_key", "pins_head", "pins_of", "program_salt_of",
+           "manifest_reason", "period_reason", "pinned_key", "pins_head", "pins_of", "program_salt_of",
            "salt_session_reason", "session_of", "session_reason", "statement", "trusted_rounds_reason", "window_evidence"]

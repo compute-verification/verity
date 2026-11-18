@@ -139,9 +139,9 @@ A spec-level reference for network attestation's timing channel:
   served through the network attester's egress, every cell of an egress execution phase is opened, each a pad, the
   canonical event of one token id or the response's end on the stream the network attester set, and each is the cell
   the advice's map names at its place (`window_map`, from the advice's outputs, release buckets and advice v1's order
-  permutation, each request on its ingress ordinal's stream from 1; the verifier
-  computes it in the clear from the opened advice, the named gap, until the map is read in the proof under the advice's
-  hiding root), with the id the Commit sampled for it (the port: one hiding row of ids a step, read under the Commit's
+  permutation, each request on its ingress ordinal's stream from 1: the prototype's map, computed in the clear from the
+  opened advice, which a verifier of the design would compute until the map is read in the proof under the advice's
+  hiding root; no verifier computes it today, and no real path runs the map or the tie's check), with the id the Commit sampled for it (the port: one hiding row of ids a step, read under the Commit's
   root). The cells are the network attester's (`network_attester`): a connection's r slots a bucket, a `PAD` on its stream before
   its first cell and after its `END`, one id event a `DATA` cell. The network attester commits each bucket's cells as
   one hiding row. It has the reference and the proof block's Boolean Definition, one a bucket row (`IoTieBucket`: the
@@ -156,8 +156,9 @@ A spec-level reference for network attestation's timing channel:
   hold each request's prompt_len to the advice's and which the ingress tie's verdict (`tie_service.IoTieVerdict`) is
   built from. It has the reference, the lanes the verifier computes from the advice and the network attester's release
   (`lanes`, `Release`), and the proof block's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and
-  `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the
-  Commit's `c00.input/ids` rows to the same scan and holds every prompt id to them;
+  `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) would add the
+  Commit's `c00.input/ids` rows to the same scan and hold every prompt id to them: a reference on a fake upstream
+  Commit, run by no driver;
 - the capacity counts;
 - the egress side of the step-indexed scan (`egress`, N2) on a fake upstream, in no Spec: one proof block a link and
   bucket t (`EgressBucket`) that reads the scan's slot state S_t, a registered read, and computes the bucket's row of

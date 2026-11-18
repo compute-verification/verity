@@ -13,7 +13,10 @@
 # states (VERITY_PROTOCOLS_CONFIG's `wipe`) is the application's: SETTINGS stating it otherwise is refused. The control
 # link is the node's own (`ip route`) unless SETTINGS names `links`; a `disk.paths` directory gets a scratch directory of
 # the run's inside it, removed when the wipe ends. With `run_keys` the memory attester is this node's, under a key made for
-# the run in SERVE_DIR/private/run-keys/wipe (0700), removed when the wipe ends: a rehearsal.
+# the run in SERVE_DIR/private/run-keys/wipe (0700), removed when the wipe ends: a rehearsal. A memory attester on this
+# node streaming natively runs the streamer (wipe_stream.c) this launcher builds into a mktemp -d of its own, never under
+# SERVE_DIR, which may be on a filesystem that runs no programs (/dev/shm mounted noexec), handed as the attach's
+# `wipe_stream` and removed with the key directory; a cc that fails exits 7.
 #   WIPE_KEY_SHA512    the memory attester's key the verifier trusts (the attach's `trusted`), in 128 lowercase hex
 #                      digits; unset, the key the run's configuration pins for the wipe (VERITY_PINS); set empty, none:
 #                      refused
@@ -28,7 +31,8 @@
 # key's pin), lake-build.log and stamps.txt (`UTC EVENT` lines). The case goes to SERVE_DIR/private/wipe (0700), and
 # served_case.py writes the composite's piece beside it. Its last line is `WIPE {...}`.
 # A refusal, the attach's or this launcher's, each by name, writes its one sentence to DIR/refused.txt and no
-# answer.json, and exits 3. Exit 0 on accept, 1 on another verdict or a wipe that failed, 7 when the judge doesn't build.
+# answer.json, and exits 3. Exit 0 on accept, 1 on another verdict or a wipe that failed, 7 when the judge or the
+# streamer doesn't build.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 SELF=$HERE/$(basename "$0")
@@ -38,18 +42,20 @@ SERVE_DIR=${1:?$USAGE} WINDOW=${2?$USAGE} DIR=${3:?$USAGE} SETTINGS=${4:-}
 mkdir -p "$DIR"
 DIR=$(cd "$DIR" && pwd)
 PY=${PY:-$ROOT/.venv/bin/python}
+STREAM=
 stamp() { echo "$(date -u +%FT%TZ) $*" >> "$DIR/stamps.txt"; }
 refuse() { echo "WIPE REFUSED: $*" > "$DIR/refused.txt"; refused; }
 refused() { cat "$DIR/refused.txt"; stamp refused; exit 3; }
 # `attach.py check|run`: the settings checked and the attach's refusals made before any lease, then the wipe itself
 attach() { "$PY" - "$@" "$DIR" "$SERVE_DIR" "$WINDOW" "$SETTINGS" "${WIPE_NODE:-$(hostname)}" \
   "${WIPE_KEY_SHA512:-}" "${WIPE_PROTOCOL_EXE:-}" "${VERITY_PINS:-}" "${VERITY_CONFIGURATION:-}" \
-  "${VERITY_PROTOCOLS_CONFIG:-}" "${GPU_LEASE_UUID:-}" "${WIPE_OWN_LEASE:+own}" "$CTRL" <<'EOF'
-import json, os, shutil, sys, tempfile
+  "${VERITY_PROTOCOLS_CONFIG:-}" "${GPU_LEASE_UUID:-}" "${WIPE_OWN_LEASE:+own}" "$CTRL" "${STREAM:-}" <<'EOF'
+import json, os, shutil, socket, sys, tempfile
 from pathlib import Path
 from verity import hooks as H
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_served as WS
 from verity.protocols.resource_accounting.memory.pous.scheme import MEMORY_ATTESTER
 from verity.runtime.stream import Side
@@ -57,12 +63,20 @@ from verity_vllm.messages import Exchange
 
 DEFAULT = {"host": "vy-auditor-2", "address": "10.96.0.36:47611", "reads": 5500,
            "command": ["ssh", "-i", "~/.ssh/vy-auditor2-wipe", "-o", "BatchMode=yes", "research@10.96.0.36"]}
-mode, d, serve_dir, window, given, node, trusted, judge, pins, configuration, app, lease, own, ctrl = sys.argv[1:]
+mode, d, serve_dir, window, given, node, trusted, judge, pins, configuration, app, lease, own, ctrl, stream = sys.argv[1:]
 d, wipe = Path(d), schemes.get("wipe")
 
 
+def unnamed(why):
+    """``why`` with the machines' own names put by party (`memory_attester.unnamed`): this node's, and the challenger's
+    host and address as the settings give them."""
+    at = globals().get("doc") or {}
+    address = str(at.get("address") or "")
+    return mc.unnamed(why, (node, socket.gethostname()), (at.get("host"), address or None, address.rpartition(":")[0] or None))
+
+
 def refused(why):
-    (d / "refused.txt").write_text(f"WIPE REFUSED: {why}\n")
+    (d / "refused.txt").write_text(f"WIPE REFUSED: {unnamed(why)}\n")
     sys.exit(3)
 
 
@@ -85,7 +99,7 @@ if unknown := sorted(set(doc) - set(wipe.settings) - set(WS.FACTS)):
 given = {k: v for k, v in doc.items() if k in wipe.settings}
 facts = json.loads(json.dumps(WS.FACTS | {k: v for k, v in doc.items() if k in WS.FACTS}))
 ctx = {"process": H.PIECE, "side_of": Side.of, "private": f"{serve_dir}/private", "trusted": trusted or None,
-       "node": node, "judge": judge or None, **facts}
+       "node": node, "judge": judge or None, "wipe_stream": stream or None, **facts}
 try:
     settings = S.settings(wipe, given)
     # the scheme's attach hands the party in (below); this check runs before it, so it hands the scheme's own
@@ -95,7 +109,8 @@ try:
 except ValueError as e:
     refused(str(e).removeprefix("wipe: "))
 if mode == "check":
-    print(settings["store"])
+    # the store, and whether the memory attester streams natively on this node, so needs the streamer built here
+    print(settings["store"], "here" if facts["streamer"] == "native" and not facts["host"] else "away")
     sys.exit(0)
 made = []
 for i, p in enumerate(facts["disk"].get("paths") or ()):
@@ -109,7 +124,7 @@ try:
 except ValueError as e:
     refused(str(e).removeprefix("wipe: "))
 except Exception as e:
-    print(f"WIPE FAILED: the wipe raised {type(e).__name__}: {e}"[:600], flush=True)
+    print(unnamed(f"WIPE FAILED: the wipe raised {type(e).__name__}: {e}")[:600], flush=True)
     sys.exit(1)
 finally:
     for m in made:
@@ -129,7 +144,7 @@ card = lease.split(",")[0] or ran["card"]
 print("WIPE " + json.dumps({"verdict": answer["verdict"], "reason": answer["reason"], "protocol": answer["protocol"],
                             "decided_by": s.get("decided_by"), "k": s.get("k"), "segments": s.get("segments"),
                             "fill_GBps": (s.get("challenger") or {}).get("fill_GBps"), "t0": s.get("t0"),
-                            "t1": s.get("t1"), "server": ran["server"], "card": card, "key_pin": ran["key_pin"],
+                            "t1": s.get("t1"), "server": mc.PROVER_MACHINE, "card": card, "key_pin": ran["key_pin"],
                             "exit": 0 if answer["verdict"] == "accept" else 1}, sort_keys=True), flush=True)
 sys.exit(0 if answer["verdict"] == "accept" else 1)
 EOF
@@ -207,7 +222,8 @@ fi
 CTRL=${WIPE_CTRL:-}
 CARD=${GPU_LEASE_UUID%%,*}
 export CUDA_VISIBLE_DEVICES=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-}}
-STORE=$(attach check) || { [ $? != 3 ] || refused; exit 1; }
+CHECKED=$(attach check) || { [ $? != 3 ] || refused; exit 1; }
+read -r STORE STREAMS <<< "$CHECKED"
 if [ "${WIPE_CARD:-h200-sxm-141gb}" != any ] && [ "$STORE" = cuda ]; then
   NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader -i "$CARD" 2>&1 | head -1) \
     || refuse "nvidia-smi can't read the card $CARD: $NAME"
@@ -217,9 +233,15 @@ fi
 K=$SERVE_DIR/private/run-keys/wipe
 rm -rf "$K" && (umask 077 && mkdir -p "$K") \
   || refuse "the serve dir's private directory $SERVE_DIR/private can't hold the run's keys and the wipe's case"
+X=
+if [ "$STREAMS" = here ]; then
+  X=$(mktemp -d)
+  cc -O3 -pthread "$ROOT/verity/protocols/resource_accounting/memory/pous/attester/wipe_stream.c" -o "$X/wipe_stream" \
+    || { rm -rf "$K" "$X"; echo "WIPE FAILED: wipe_stream doesn't build"; stamp "wipe_stream didn't build"; exit 7; }
+fi
 rc=0
-SAID=$(TMPDIR=$K attach run) || rc=$?
-rm -rf "$K"
+SAID=$(TMPDIR=$K STREAM=${X:+$X/wipe_stream} attach run) || rc=$?
+rm -rf "$K" ${X:+"$X"}
 [ "$rc" != 3 ] || refused
 stamp "the wipe exit $rc"
 if [ -e "${WIPE_PROTOCOL_EXE:-}.lock" ] \

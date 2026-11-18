@@ -40,9 +40,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   scan's answers held by `NetworkCheck.Period`). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with
-  the vLLM adapter's `verity_vllm.pipeline.window_chain` (a served endpoint's Commit periods as one I1 v0 advice),
+  `benchmarks/network_e2e/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice),
   `leak_guard.py` (the record's leak guard, below) and `prover/released_keys.py` (the keys a record releases, each declared public by name, below).
-  `prover/block_attester.py` writes a period's accepted answer into the block record.
   `served_session.py` is the served session's runbook (below).
 - **The weights' load:** the network attester's `attester/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
@@ -280,7 +279,7 @@ binding and the two provers, and writes `out/report/report.json` and `report.md`
 | attestations | each execution phase's two attested records, at the client, under the network attester's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept attestations by the Lean (`NetworkCheck.TransferBlocks.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's attested heads, under no sync (the network attester's link declares none) |
 | endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the attested I/O off the network attester's cells: `chain_record.py endpoint`) | none: in the clear | all of it |
 | N2 | each execution phase's N2 proof block, proved `--zk` and decided by N2's verifier (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no execution phase unsampled; a sample of k of n execution phases hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the sample, the attestations' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
-| scan | the scan's ingress and egress proof blocks of an execution phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
+| scan | the scan's ingress and egress proof blocks of an execution phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit |
 | Lean | every proof of both steps is the verifier's own `verity-verify-proof verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
 The job's environment picks what it runs: N2's sample on the relay path is `CR_N2_DRAW` (`n2_zk.py prove
@@ -338,9 +337,9 @@ start is refused here: such a run is read by the chain of the tree its gate ran.
 so none is read. The endpoint step binds the endpoint's own
 advice to the attested I/O read off the relay's cells (`chain_record.py endpoint`, with `CR_EOS_IDS` the model's EOS
 ids). N2 is the plain proof block on the relay's link (`n2_zk.py prove --warden-run`: both heads at the relay's grid and
-parameters digest, no sync declared or charged). The I/O tie is proved on the relay's ingress (`n2_tie_zk.py prove
---class warden`, the report's `tie` step), and the scan is `scan_zk.py prove --warden-run`'s. Each step is held to the
-one relay run the attestations step read, and every one is required.
+parameters digest, no sync declared or charged). The ingress tie (lengths and order, no id) is proved on the relay's
+ingress (`n2_tie_zk.py prove --class warden`, the report's `tie` step), and the scan is `scan_zk.py prove
+--warden-run`'s. Each step is held to the one relay run the attestations step read, and every one is required.
 
 A Commit period that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
 `verity-vllm/window-advice/v1`) is bound with the Commit period before it: `chain.served_advice` joins them into one I1
@@ -429,8 +428,9 @@ registration's (`--group 1`, the only group the rows form reads). A schedule of 
 every execution phase under one.
 Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
 and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
-K charges to the execution phase's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
-tied audit's inputs; K is unchanged in what it bounds, and the registered reading's free term is those slot entries.
+K charges to the execution phase's term (`tiedAudits`). This tied audit of the slot entries (`read`, n, the egress rows'
+output ids) is Lean's egress tie, not `io_tie`'s; K bounds the same; the registered reading's free term is those
+entries.
 
 The two forms:
 - The pooled form (`PooledLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ incorrect proof blocks of b = NS + NV bits, and

@@ -2088,7 +2088,8 @@ def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_
 def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):
     """`pearl_tie`: with ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
     window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
-    the retained passes' manifests at their rounds; `h1_tie` then stands aside. Refused by name without W, beside
+    the retained passes' manifests at their rounds, each pass's directory its manifest's, which `reuse` reads the kept
+    salts under; `h1_tie` then stands aside. Refused by name without W, beside
     ``--h1-prover``, for a W whose entry isn't Pearl+'s declared option (H1's, another Pearl-C kernel's, the FP4 kernel's) or
     whose scheme isn't its entry's, and where the rounds retained aren't the class's outputs."""
     from verity_vllm.program.predict.window_circuit import PearlTables
@@ -2097,7 +2098,8 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     d.mkdir()
     mans = []
     for i in range(3):
-        (m := tmp_path / f"m{i}.json").write_text(json.dumps({"salt": f"s{i}"}))
+        (tmp_path / f"pass-{i}").mkdir()
+        (m := tmp_path / f"pass-{i}" / "manifest.json").write_text(json.dumps({"salt": f"s{i}"}))
         mans.append({"pass": 4 + i, "units": 1, "manifest": str(m)})
     (d / "served.json").write_text(json.dumps({"passes": [{"pass": 3, "units": 0}, *mans]}))
     def record(name, entry, scheme):
@@ -2113,8 +2115,9 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     with pytest.raises(ValueError, match=r"retained rounds \[0, 1, 2\] aren't its class's 2 outputs"):
         tie()
     (d / "retention.json").write_text(json.dumps({"rounds": [0, 1]}))
-    w, got, rounds, tables = tie()
+    w, got, rounds, tables, dirs = tie()
     assert [m["salt"] for m in got] == ["s0", "s1"] and rounds == [0, 1] and tables == PearlTables("pearl-c-h100-v1-h3")
+    assert dirs == [tmp_path / "pass-0", tmp_path / "pass-1"]
     with pytest.raises(ValueError, match="give --window-registration W"):
         tie(window_registration=None)
     with pytest.raises(ValueError, match="--h1-prover is H1's prover directory"):

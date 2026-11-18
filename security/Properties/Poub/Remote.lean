@@ -107,7 +107,12 @@ plan:
    leaf `p / 16` of pass `i`'s receipt tree under the pass's root, in the domain of the pass's seed and plan;
 3. and 4. its block decodes to a payload: a registered block (`j < N`) under the registration's key, the payload's leaf
    under its salt and path at `j` under the payload root; an appended block under the bound key of its digest and its
-   append's coin, the payload's leaf at `j` under its append's root (the append holding `j`, `appendOf`);
+   append's coin (an append's coin keys only its own blocks: `checkOpening` decodes block `j` under the coin of the
+   append holding `j`, never another's), and, for a fresh append (the append holding `j`, `appendOf`), the payload's leaf at `j` under its
+   append's root, or, for a re-key, it has an origin leaf (`originLeaf`; `checkOpening` refuses with `origin` a re-key
+   whose origin slot holds no append), the opening names the origin's position `q` and the payload's leaf is leaf `q`
+   under the origin's root. For a re-key's block this gives the origin's leaf under whatever append the list holds in
+   the origin's slot; that the slot is the schedule's and its append fresh is `OriginsOnRota`;
 5. the receipt recomputed from `j` and the block, under the pass's receipter, is `y`. -/
 def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecord) (i p : Nat) (o : Opening) :
     Prop :=
@@ -125,8 +130,15 @@ def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecor
             SCHEMA o.payloadPath = true) ∨
         (reg.blocks ≤ j ∧ ∃ a, appendOf appends j = some a ∧
           Codec.decode o.block j reg.key (some (o.digest, some a.coin)) = .ok (some payload) ∧
-          (appendDomain reg.digest a.first a.count).verifyOpening a.root (appendDomain reg.digest a.first a.count).count
-            j (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)) ∧
+          match a.origin with
+          | .fresh =>
+            (appendDomain reg.digest a.first a.count).verifyOpening a.root
+              (appendDomain reg.digest a.first a.count).count j (hidden payload o.payloadSalt) SCHEMA
+              o.payloadPath = true
+          | .registered _ | .rekey _ =>
+            ∃ q oroot odom, originLeaf reg reg.digest appends a j = some (q, oroot, odom) ∧
+              o.originPosition = some q ∧
+                odom.verifyOpening oroot odom.count q (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)) ∧
       (receipterOf reg w i).receipt j o.block = y
 
 /-- An accepted window drew `sampled` from its openings coin, has exactly one opening a sample, and each sampled receipt's
@@ -225,14 +237,18 @@ def ReceiptsBelowLimit : Prop :=
       ∀ t (ht : t < s.windows.size), s.windows[t].receipts < Session.RECEIPT_LIMIT
 
 /-- The appends are the store's next indices in order (append `k` starts where the one before it ends, the first at
-`N`, and the store ends at the last), and append `k` answered with the `k`-th append coin, each sampled once. -/
+`N`, and the store ends at the last), and append `k` answered with the append coin of its slot, a coin of the family
+(`appendCoins[slot]?` is some), the slots strictly increasing along the appends: so each coin answers at most one
+append, and append `k`'s slot is at or past `k`. -/
 def AppendsInOrder : Prop :=
   ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
     Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
       s.extent = reg.blocks + (s.appends.toList.map (·.count)).sum ∧
       (∀ k (hk : k < s.appends.size), s.appends[k].first = reg.blocks + ((s.appends.toList.take k).map (·.count)).sum) ∧
-      s.appends.size ≤ appendCoins.size ∧ ∀ k (hk : k < s.appends.size), s.appends[k].coin = appendCoins[k]!
+      s.appends.size ≤ appendCoins.size ∧
+      (∀ k (hk : k + 1 < s.appends.size), s.appends[k].slot < s.appends[k + 1].slot) ∧
+      ∀ k (hk : k < s.appends.size), appendCoins[s.appends[k].slot]? = some s.appends[k].coin
 
 /-- The session's head is the chain over its appends, and every pass is bound to the chain over the appends received
 before it, a prefix of them, and reads only registered blocks and theirs: so its seed,
