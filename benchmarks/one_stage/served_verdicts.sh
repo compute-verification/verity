@@ -665,8 +665,10 @@ PEARLPLUS_CIRCUIT=$D/pearlplus/circuit-record.json
 if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-180m}
 elif [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-60m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}
 else V3C_TIMEOUT=${V3C_TIMEOUT:-15m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}; fi
-V3C_WARM_TIMEOUT=${V3C_WARM_TIMEOUT:-$V3C_AUDIT_TIMEOUT}
+V3C_WARM_TIMEOUT=${V3C_WARM_TIMEOUT:-90m}
+V3C_WARM_GIVEN=${V3C_WARM_JOBS+1} V3C_WARM_JOBS=${V3C_WARM_JOBS-$(($(nproc) < 8 ? $(nproc) : 8))}
 V3C_AUDIT_MEM_GIVEN=${V3C_AUDIT_MEM_GB:+1} V3C_AUDIT_MEM_GB=${V3C_AUDIT_MEM_GB:-290}
+V3C_MIN_FREE_GB=${V3C_MIN_FREE_GB:-100}
 NODE_MEM_GB=${NODE_MEM_GB:-$(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/meminfo)}
 short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, saying both
   [ "$NODE_MEM_GB" -lt "$V3C_AUDIT_MEM_GB" ] || return 1
@@ -877,8 +879,10 @@ piece_unread() {  # $1 as the split network attester's piece's refusal, which le
 # samples a stratum of each reader template, so a table W registers has a sampled reader where its readers are templates of its own
 # (Record.checks), and V3C_PORTS defaults to the size of R's sample, its strata's k summed: at most a session for each
 # sampled proof block. The preflight refuses H1_TIE on a tree whose records_audit.py takes no --tie, or at another rule.
-# With V3C_WARM_JOBS=N, `records_audit.py warm` first composes every template of the committed window into
-# $VW/compose-cache, N at a time, each in a process of its own, within V3C_WARM_TIMEOUT (default V3C_AUDIT_TIMEOUT): the
+# With V3C_WARM_JOBS=N (default the cores this run is given, at most 8; set empty, no warm, and the audit composes each
+# template itself, one at a time), `records_audit.py warm` first composes every template of the committed window into
+# $VW/compose-cache, N at a time, each in a process of its own, within V3C_WARM_TIMEOUT (default 90m), printing each
+# template's line as it finishes into warm.log and starting none past V3C_AUDIT_MEM_GB by earlier peaks: the
 # templates and their binding are public, so this precedes the audit's coins, and the audit, taking the cache, composes
 # none, its limit then its sessions'. A compose holds up to what the audit needs (V3C_AUDIT_MEM_GB, a 4,32,4 window's
 # Int8RowQuant at K 8,192), so N is what the run's memory takes. A warm that fails says so, and the audit composes what it
@@ -894,14 +898,23 @@ piece_unread() {  # $1 as the split network attester's piece's refusal, which le
 # bound to its own, the entry held to its pin as it is copied (`compose_circuit.cached`). A kept entry is trusted as the
 # tree is: staging takes a circuit's META, pin and class off the line its compose kept beside it, a sampled member's
 # circuit is held to that line before its prover reads it (`a5.held`), and nothing else says what a template's circuit is.
+# On a tree whose records_audit.py takes them, an entry is the compose's record alone (its META, pin, class and size, the
+# text hashed as it is rendered) unless V3C_KEEP_CIRCUITS=1, and the audit composes a sampled member's template after its
+# sample, held to the record's pin; the warm and the audit start no compose, and the warm stops, where the cache's file
+# system would have less than V3C_MIN_FREE_GB (default 100) free.
+v3c_compose_args() {  # the warm's and the audit's disk floor and text keeping, on a tree whose records_audit.py takes them
+  grep -q -- '--min-free-gb' "$TREE/benchmarks/prove_path/records_audit.py" || return 0
+  printf '%s\n' --min-free-gb "$V3C_MIN_FREE_GB" ${V3C_KEEP_CIRCUITS:+--keep-circuits}
+}
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
+  local ca; mapfile -t ca < <(v3c_compose_args)
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py warm --window "$VW/window" --sampling-design "$V3C_LAW" \
-    --compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}" --jobs "$V3C_WARM_JOBS") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
+    --compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}" --jobs "$V3C_WARM_JOBS" --mem-gb "$V3C_AUDIT_MEM_GB" "${ca[@]}") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
   local rc=$? why
-  if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM' "$OUT/v3c-audit/warm.log" | cut -c1-600)
+  if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM {' "$OUT/v3c-audit/warm.log" | cut -c1-600)
   else
-    if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then why="timed out after V3C_WARM_TIMEOUT=$V3C_WARM_TIMEOUT"
+    if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then why="timed out after V3C_WARM_TIMEOUT=$V3C_WARM_TIMEOUT with $(grep -c '^COMPOSED ' "$OUT/v3c-audit/warm.log") of $(grep -m1 '^WARMING' "$OUT/v3c-audit/warm.log" | cut -d' ' -f2) templates composed (each one's seconds in warm.log)"
     else why=$(tail -3 "$OUT/v3c-audit/warm.err" | tr '\n' ' ' | cut -c1-800); why=${why% }; fi
     why+="; the audit composes the templates it didn't keep"
   fi
@@ -909,7 +922,7 @@ v3c_warm() {  # every template of the committed window composed into $VW/compose
 }
 v3c_cuda() { FLOCK_WORK=$FW . "$TREE/verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh" >&2 && echo "${CUDA_TK:-/usr/local/cuda-13.3}"; }
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
-  local run leanb m0 rc gl tk tie=() day=() cache=() ch=(--challenger "$V3C_CHALLENGER") ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
+  local run leanb m0 rc gl tk tie=() day=() cache=() ca=() ch=(--challenger "$V3C_CHALLENGER") ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
   [ -n "${DAY:-}" ] && day=(--day "$DAY" --day-log "$DAY_LOG" ${DAY_PARAMS:+--day-params "$DAY_PARAMS"})
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
@@ -952,9 +965,10 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     n=${V3C_GPUS//[^,]/}
     lease=(gpu-lease "$((${#n} + 1))" --wait --on "$V3C_GPUS" --mem-gb 0 -- env -u CUDA_VISIBLE_DEVICES)
   fi
+  mapfile -t ca < <(v3c_compose_args)
   (cd "$TREE" && "${lease[@]}" env -u PYTHONPATH "${ld[@]}" RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --sampling-design "$V3C_LAW" \
-    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" \
+    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" "${ca[@]}" \
     "${pool[@]}" "${gpus[@]}" \
     "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --ports "$ports" "${link[@]}" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
@@ -2082,7 +2096,8 @@ esac
 if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
   [[ $V3C_WARM_JOBS =~ ^[1-9][0-9]*$ ]] \
     || { say "PREFLIGHT: V3C_WARM_JOBS is how many of the window's templates warm composes at once, a positive integer, not $V3C_WARM_JOBS"; exit 3; }
-  grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" \
+  grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" || [ -n "$V3C_WARM_GIVEN" ] || V3C_WARM_JOBS=
+  [ -z "$V3C_WARM_JOBS" ] || grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: V3C_WARM_JOBS composes the window's templates before its audit with records_audit.py warm, which this tree's records_audit.py doesn't have"; exit 3; }
 fi
 if [ -n "${V3C_NEGATIVE_WORKERS:-}" ]; then  # V3c's audit's negatives side by side
