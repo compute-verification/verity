@@ -238,11 +238,7 @@
     "io/violations": "output",
     "advice/bound": "output",
     "advice/rebuilt": "output",
-    "advice/commit_windows": "output",
-    "advice/bound_windows": "output",
-    "advice_bits/T": "structure",
-    "advice_bits/v0_total": "output",
-    "advice_bits/derived": "output"
+    "advice_bits/T": "structure"
    }
   }
  ],

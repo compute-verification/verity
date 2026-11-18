@@ -246,10 +246,35 @@ def test_every_declaration_fills_each_field_or_says_why_not() -> None:
              "C.load()\n"
              "F = ('parties', 'channels', 'channel_schemas', 'colocated', 'needs', 'depends', 'record', 'symbol',\n"
              "     'published', 'check', 'reader', 'premises', 'tables', 'output_format', 'product_family',\n"
-             "     'y_committed', 'salt_open_root', 'kernels')\n"
+             "     'y_committed', 'salt_open_root', 'kernels', 'answers')\n"
              "print(json.dumps(sorted([n, f] for n in C.DECLARATIONS for f in F if getattr(C.get(n), f) == S.UNDECLARED)))\n")
     out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout) == [], "fill each field a declaration leaves unset, or say why not with S.Lacks(why)"
+
+
+def test_an_answers_entry_is_module_colon_attribute_and_a_lacks_is_refused_by_name() -> None:
+    for entry in ("toy.answers", "toy:", ":ANSWERS", "toy answers:ANSWERS", "toy:A.B"):
+        with pytest.raises(ValueError, match="answers is an entry, module:attribute"):
+            _toy(answers=entry)
+    with pytest.raises(LookupError, match="toy-bandwidth declares no answers: it keeps no session$"):
+        S.answering(_toy(answers=S.Lacks("it keeps no session")))
+
+
+def test_the_bandwidth_audit_is_answered_through_its_entry_in_a_process_with_no_exchange(tmp_path: Path) -> None:
+    probe = ("import json, sys\n"
+             "from pathlib import Path\n"
+             "from verity.protocols.compose import schemes as C\n"
+             "from verity.protocols.resource_accounting import scheme as S\n"
+             "A = S.answering(C.get('bandwidth'))\n"
+             "out = A.missing(Path(sys.argv[1]), 3, 'no session ran')\n"
+             "print(json.dumps({'line': A.line(out), 'held': A.held, 'session': dict(A.session),\n"
+             "                  'loaded': sorted(m for m in sys.modules if m.startswith('verity_vllm') or 'exchange' in m)}))\n")
+    out = json.loads(subprocess.run([sys.executable, "-c", probe, str(tmp_path)], capture_output=True, text=True,
+                                    check=True).stdout)
+    assert out["line"].startswith("BANDWIDTH: undecided: no session ran; "), out
+    assert json.loads((tmp_path / "answer.json").read_text())["verdict"] == "undecided"
+    assert out["held"] == "held-case.json" and out["loaded"] == [], out
+    assert out["session"] == {"windows": 6, "passes": 4, "samples": 1024, "window_s": 20.0, "deadline_s": 1.0}
 
 
 def test_a_component_that_charges_nothing_is_a_scheme_bound_and_credited_refuse() -> None:

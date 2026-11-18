@@ -4241,14 +4241,14 @@ def test_v3c_runs_no_audit_without_a_line_of_main_for_its_session_to_pin_on(tmp_
     assert sum(x.startswith(head) and x.endswith(tail) for x in lines) == 1, lines
 
 
-LOCAL_COINS = "a local development challenger session on vy-dc-h200, the served node, not an auditor's (PP_CHALLENGER local)"
+LOCAL_COINS = "a local development challenger session on the served node, not an auditor's (PP_CHALLENGER local)"
 V3C_COINS = f" V3c's audit: {V3C_DEV};"
 LIVE = "gate:research@auditor"
 LIVE_SAID = "gate:research"
 LIVE_COINS = f"the challenger {LIVE_SAID} (peer vy-dc-h200)"
 V3C_LIVE = (f"the challenger {LIVE_SAID} (peer vy-dc-h200), the window's run root's one session, the sampled-proofs audit "
             "of record")
-STEP3_LOCAL = ("a local development challenger session on vy-dc-h200, the served node, for step 3, a development check, since "
+STEP3_LOCAL = ("a local development challenger session on the served node, for step 3, a development check, since "
                "V3c's audit's live session takes the window's run root, which the gate opens once, ever")
 NO_V3C = {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}
 #: in a parametrized environment, the path of the challenger key record `_key` writes
@@ -5411,7 +5411,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert rc == 2 and order == ["audit", "period", "composite", "record"], (lines, order)
     assert lines.pop(0) == V3C_ENTRY
     assert lines[:2] == [
-        "FOLLOW-ON on cpu-6, 755 GB: V3c's audit and the composite, which the served node vy-dc-h200 deferred, from its "
+        "FOLLOW-ON on a prover node, 755 GB: V3c's audit and the composite, which the served node (SERVED_NODE) deferred, from its "
         "serve dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's "
         "private/deferred/inputs.sha256): PASS",
         f"WINDOW-CIRCUIT class {W63K4}: the served node's record at the class (step 3's), from its tree's commit {SHA} "
@@ -5421,10 +5421,10 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert lines[-2] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
     assert json.loads(lines[-1].removeprefix("RECORD "))["composed"] == "pending"
     assert (tmp_path / "order.development").read_text().startswith(
-        "composed by a deferral's follow-on on cpu-6, a prover node, which the prover controls: a development check")
+        "composed by a deferral's follow-on on a prover node, which the prover controls: a development check")
     if lean:
         assert json.loads((out / "composite" / "remote-v1" / "composite.json").read_text())["development"].startswith(
-            "composed by a deferral's follow-on on cpu-6")
+            "composed by a deferral's follow-on on a prover node")
     assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
     argv = json.loads((tmp_path / "order.record").read_text())
@@ -5475,7 +5475,7 @@ def test_a_follow_ons_audit_takes_its_memory_from_v3c_audit_mem_gb_only_where_it
     assert _pool(tmp_path) == want
 
 
-FOLLOW_FAIL = ("FOLLOW-ON on cpu-6, 755 GB: V3c's audit, which the served node vy-dc-h200 deferred, "
+FOLLOW_FAIL = ("FOLLOW-ON on a prover node, 755 GB: V3c's audit, which the served node (SERVED_NODE) deferred, "
                "from its serve dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's "
                "private/deferred/inputs.sha256): FAIL (the serve dir's private/deferred/check.log)")
 CLASH = ("PREFLIGHT: the follow-on runs at the deferral's settings (the serve dir's private/deferred/deferred.env), and "
@@ -5759,7 +5759,7 @@ def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_pa
     node's tree) and stops before its copy's check or V3c's audit."""
     assert _deferred(tmp_path).returncode == 0
     rc, lines, order, _limits = _follow(tmp_path, PREFLIGHT_ONLY="1")
-    assert (rc, lines, order) == (0, ["PREFLIGHT passed, 755 GB: the follow-on of vy-dc-h200's deferral, its "
+    assert (rc, lines, order) == (0, ["PREFLIGHT passed, 755 GB: the follow-on of the served node's (SERVED_NODE) deferral, its "
                                       f"compose hand-off for COMPOSE_NODE. {ONLY}"], [])
 
 
@@ -6452,7 +6452,7 @@ def test_the_hand_off_carries_pearlpluss_piece_of_record_which_the_compose_follo
     tied = [f"pearlplus/w7/tie/{f}" for f in (S.WINDOW_REGISTRATION, S.AUDIT_SUMMARY, S.CIRCUIT_RECORD)]
     assert set(listed) >= {*tied, *(f"private/compose/pieces/pouw/{f}" for f in PEARLPLUS_HANDED)}
     assert S.witness(listed) == []
-    rc, lines, order = _compose(tmp_path, H1_KEY_SHA512=pin)
+    rc, lines, order = _compose(tmp_path, H1_KEY_SHA512=pin, VERITY_HOLD_PLACEMENT=None)  # pin: the test's own key
     assert rc == 2 and order == ["composite", "record"], (lines, order)
     assert lines[0] == COMPOSED.format(audit="no V3c audit", sampled=STEP3, verdict="PASS")
     argv = json.loads((tmp_path / "order.record").read_text())
@@ -8364,3 +8364,48 @@ def test_a_placements_unchecked_premises_follow_its_trusted_device_by_name(premi
                                         "attester-key-pinned-outside-the-case "
                                         f"{UNCHECKED['attester-key-pinned-outside-the-case']}"]
     assert S.terms({"answer": {"profile": {"placement": {"links": []}}}}, None) == []
+
+
+H1_KEY_REFUSED = ("PREFLIGHT: H1_KEY_SHA512 replaces the challenger key of record (vy-challenger-1's), which under "
+                  "VERITY_HOLD_PLACEMENT=1 only a development run takes: unset H1_KEY_SHA512, DEVELOPMENT=1, or "
+                  "VERITY_HOLD_PLACEMENT unset")
+
+
+@pytest.mark.parametrize("key, development, hold, want", [
+    ("ab" * 64, None, "1", "refused"), ("ab" * 64, "1", "1", "passed"), ("ab" * 64, None, None, "passed"),
+    (re.search(r"^H1_KEY_OF_RECORD=(\w+)", (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text(),
+               re.M)[1], None, "1", "not by its key")])
+def test_a_run_of_record_refuses_a_challenger_key_other_than_the_one_of_record(tmp_path, key, development, hold, want):
+    """Under VERITY_HOLD_PLACEMENT=1 a run that is not a development run (DEVELOPMENT unset) refuses an H1_KEY_SHA512
+    other than the key of record, by name, before anything runs; a development run or a run with placement not held
+    takes it. The key of record set by name is no refusal of its own (that run's step-3 session is refused after it)."""
+    rc, lines, order, _limits = _v3c(tmp_path, (), HOST="vy-dc-h200", PP_PEER="vy-dc-h200", DEVELOPMENT=development,
+                                     VERITY_HOLD_PLACEMENT=hold, H1_KEY_SHA512=key, PREFLIGHT_ONLY="1",
+                                     PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **NO_V3C)
+    if want == "refused":
+        assert (rc, lines, order) == (3, [H1_KEY_REFUSED], [])
+    elif want == "passed":
+        assert rc == 0 and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed"), lines
+    else:
+        assert rc == 3 and H1_KEY_REFUSED not in lines and lines[0].startswith("PREFLIGHT: with V3c off"), lines
+
+
+def test_every_piece_the_launcher_names_to_pieces_is_one_the_parser_takes(tmp_path, monkeypatch):
+    """Each ``--only``/``--skip`` word served_verdicts.sh passes to `served_verdicts.py pieces`, read off the script,
+    goes through the real parser to `pieces` as that word; a word the parser's choices lack exits 2 there."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    words = re.findall(r"--(only|skip) ([a-z][a-z-]*)", script)
+    assert {f for f, _w in words} == {"only", "skip"}, words
+
+    class Taken(Exception):
+        pass
+
+    def taken(*_a, only=None, skip=(), **_k):
+        raise Taken(only, skip)
+
+    monkeypatch.setattr(S, "pieces", taken)
+    for flag, word in words:
+        with pytest.raises(Taken) as got:
+            S.main(["pieces", "--serve-run", str(tmp_path), "--window", "0", "--out", str(tmp_path / "out"),
+                    f"--{flag}", word])
+        assert got.value.args[0 if flag == "only" else 1] == [word], (flag, word)
