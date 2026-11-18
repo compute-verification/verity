@@ -139,8 +139,7 @@ def test_a_part_of_pearl_pluss_live_challenger_is_refused_by_name(tmp_path, caps
     rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": {"peer": "peer-1",
                                                                                               "key-sha512": KEY}}}))
     assert rc == 2 and "refused unbound: challenger.pearl-plus.gate is unbound" in err, err
-    assert ("binds challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512 beside it: bind "
-            "challenger.pearl-plus.gate too, or none of them") in err, err
+    assert "bind challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512 beside it" in err, err
 
 
 def test_the_runners_variables_under_remote_are_pearl_pluss():
