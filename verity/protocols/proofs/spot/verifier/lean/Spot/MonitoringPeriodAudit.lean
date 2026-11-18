@@ -102,7 +102,7 @@ def UNDERIVED_KEYS : Array String := #["day", "declarations", "seed_salt"]
 
 def AUDIT_FORM : String :=
   "the audit's parameters are one-stage v2's less what a window sets: an object with a log, proofs of exactly " ++
-  "circuit and registered, and no challenger, window_root, day, declarations or seed_salt"
+  "registered, and no challenger, window_root, day, declarations or seed_salt"
 
 /-- One-stage v2's parameters at the window whose root is `root`, for the audit of the registration whose public
 file's digest is `pub`, after the audits whose records are `before` (module docstring). -/
@@ -114,7 +114,7 @@ def paramsAt (p : AuditParams) (root pub : String) (before : Array Json) : Json 
   Json.mkObj (((entries p.audit).filter fun kv => kv.1 != "log" && kv.1 != "proofs").toList ++
     [("challenger", Json.mkObj [("key", p.keyJ), ("label", Json.str p.ledger.label)]),
      ("log", Json.arr (log ++ before)),
-     ("proofs", Json.mkObj [("circuit", getD pr "circuit"), ("public", Json.str pub),
+     ("proofs", Json.mkObj [("public", Json.str pub),
                             ("registered", getD pr "registered")]),
      ("window_root", Json.str root)])
 
@@ -136,7 +136,7 @@ def AuditParams.of (j : Json) : V AuditParams := do
   let ledger ← Params.of (getD j "key") (getD j "label") (getD j "lane") (getD j "start") (getD j "stop")
   let audit := getD j "audit"
   let formed := (audit matches .obj _) && (getD audit "log" matches .arr _) &&
-    keys? (getD audit "proofs") == some #["circuit", "registered"] &&
+    keys? (getD audit "proofs") == some #["registered"] &&
     (WINDOW_KEYS ++ UNDERIVED_KEYS).all fun k => (field? audit k).isNone
   unless formed do throw AUDIT_FORM
   let p : AuditParams := { ledger, keyJ := getD j "key", main := getD j "main", registration, audit }

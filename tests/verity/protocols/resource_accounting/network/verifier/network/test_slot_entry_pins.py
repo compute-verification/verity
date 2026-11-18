@@ -1,7 +1,9 @@
 """`period_case.SLOT_ENTRY_PINS` and `SELECT_ENTRY_PINS` against `io_shell.SlotEntry_v1` and `SelectEntry_v1` at their
 circuit-check rows (`ROWS` and `SELECT_ROWS`, bound in `io_shell.circuit-check.py`): each row's closure digest
 (`period_case.slot_entry_digest`, over its population of one member) is its pin, so a change to either body, or to any
-Definition it reaches, fails here until it re-pins. Run as a script, it prints each row's descriptor id and digest:
+Definition it reaches, fails here until it re-pins; and the period cases' fixtures (`FIXTURES`: `fixtures/slot_entry.json`
+and `fixtures/select_entry.json`) are the canonical descriptors of that population at each one's row. Run as a script,
+it prints each row's descriptor id and digest and writes the fixtures:
 
     uv run python tests/verity/protocols/resource_accounting/network/verifier/network/test_slot_entry_pins.py
 """
@@ -20,23 +22,34 @@ from verity_vllm.definitions.registry import io_shell as X
 ROWS = ("SlotEntry_v1:2", "SlotEntry_v1:64")
 #: the sidecar's `SelectEntry_v1` rows the pins are of, in `SELECT_ENTRY_PINS`' order
 SELECT_ROWS = ("SelectEntry_v1:2", "SelectEntry_v1:4", "SelectEntry_v1:64")
+#: each fixture of the period cases (`period_case.slot_entry` and `select_entry`) and the row whose population of one
+#: member's canonical descriptor it is
+FIXTURES = {"slot_entry.json": "SlotEntry_v1:2", "select_entry.json": "SelectEntry_v1:2"}
 SCRIPT = "tests/verity/protocols/resource_accounting/network/verifier/network/test_slot_entry_pins.py"
 PERIOD = Path(__file__).resolve().parents[7] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean" / "NetworkVerifier" / "Period" / "Decode.lean"
 
 
-def digests(rows: tuple[str, ...] = ROWS) -> dict[str, tuple[str, str]]:
-    """Each of ``rows``: its descriptor id and closure digest, from the sidecar's binding of its Definition."""
+def descriptors(rows: tuple[str, ...]) -> dict[str, tuple[str, dict]]:
+    """Each of ``rows``: its descriptor id and the descriptor of its population of one member, from the sidecar's
+    binding of its Definition."""
     path = Path(X.__file__).with_name("io_shell.circuit-check.py")
     spec = importlib.util.spec_from_file_location("io_shell_sidecar", path)
     sidecar = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(sidecar)
     bound = dict(sidecar._model_roots())
-    out = {}
-    for r in rows:
-        d = bound[r]()
-        key = codec.descriptor_id(d)
-        out[r] = key, PC.slot_entry_digest(codec.encode_program(population.population_program(d, 1)), key)
-    return out
+    return {r: (codec.descriptor_id(d := bound[r]()), codec.encode_program(population.population_program(d, 1)))
+            for r in rows}
+
+
+def digests(rows: tuple[str, ...] = ROWS) -> dict[str, tuple[str, str]]:
+    """Each of ``rows``: its descriptor id and closure digest."""
+    return {r: (key, PC.slot_entry_digest(desc, key)) for r, (key, desc) in descriptors(rows).items()}
+
+
+def fixtures() -> dict[str, str]:
+    """Each fixture's name and its text, the canonical descriptor of its row's population of one member."""
+    got = descriptors(tuple(FIXTURES.values()))
+    return {name: PC.D.canonical(got[r][1]) for name, r in FIXTURES.items()}
 
 
 def _pinned(rows: tuple[str, ...], pins: str, what: str) -> None:
@@ -57,6 +70,13 @@ def test_the_select_pins_are_io_shells_select_entry_at_its_rows():
     _pinned(SELECT_ROWS, "SELECT_ENTRY_PINS", "SelectEntry_v1")
 
 
+def test_the_fixtures_are_io_shells_entries_at_their_rows():
+    for name, text in fixtures().items():
+        assert (Path(PC.__file__).parent / "fixtures" / name).read_text() == text, (
+            f"fixtures/{name} is not the descriptor of {FIXTURES[name]}'s population of one member: write it with "
+            f"`uv run python {SCRIPT}`")
+
+
 def test_leans_pins_are_the_mirrors():
     """`slotEntryPins` and `selectEntryPins` in `NetworkCheck/Period/Decode.lean` are the mirror's lists, digest for digest."""
     text = re.sub(r"\\\n\s*", "", PERIOD.read_text())
@@ -70,3 +90,6 @@ def test_leans_pins_are_the_mirrors():
 if __name__ == "__main__":
     for r, (key, d) in {**digests(ROWS), **digests(SELECT_ROWS)}.items():
         print(r, key, d)
+    for name, text in fixtures().items():
+        (Path(PC.__file__).parent / "fixtures" / name).write_text(text)
+        print("wrote", f"fixtures/{name}")

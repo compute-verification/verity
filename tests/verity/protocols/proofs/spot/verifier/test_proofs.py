@@ -37,7 +37,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC, proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import members as M, one_circuit as OC, proofs as PF
 from verity.commitments import hm96
 
 from holes import waits_on
@@ -77,7 +77,7 @@ def test_without_registered_reads_a_program_that_reads_registered_values_is_refu
         tmp_path, monkeypatch, program):
     monkeypatch.setattr(PF, "executable", _never)
     got, why = PF.verify(PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub.bin", (tmp_path / "session",)),
-                         program=program, partition={}, units=[(0, 1)], registered=None)
+                         program=program, partition={}, block=0, registered=None)
     assert got is None and why[0] == "registered", why
     assert PF.reads_registered(program)
 
@@ -88,8 +88,8 @@ def test_a_program_without_registered_reads_or_given_them_goes_on_to_its_block(t
                                                                                registered):
     monkeypatch.setattr(PF, "executable", _never)
     got, why = PF.verify(PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub.bin", (tmp_path / "session",)),
-                         program=program, partition={}, units=[(0, 1)], registered=registered)
-    assert got is None and why[0] == "circuit" and why[1].startswith("E_DESCRIPTOR"), why
+                         program=program, partition={}, block=0, registered=registered)
+    assert got is None and why[0] == "circuit" and why[1].startswith("E_PARTITION"), why
 
 
 @pytest.mark.parametrize("indices, strata, ok", [
@@ -140,6 +140,7 @@ def _derived(monkeypatch, circuit: Path) -> None:
     """C_S, which `verify` derives from C and the partition (`one_circuit.restrict`), taken to be `circuit`'s bytes:
     these tests are of what `verify` does with a verdict, whatever the derivation."""
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units: circuit.read_bytes())
+    monkeypatch.setattr(OC, "block", lambda c, partition, k: [(0, 1)])
     monkeypatch.setattr(OC, "lower", lambda c_s: c_s)
 
 
@@ -153,7 +154,7 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
     monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
-                         units=[(0, 1)], registered=None)
+                         block=0, registered=None)
     assert got is None and why[0] == "form" and why[1].endswith(SCOPE), why
 
 
@@ -178,7 +179,7 @@ def test_the_verifier_runs_under_its_allocator_setting_unless_the_caller_sets_it
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", child)
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
-                         units=[(0, 1)], registered=None)
+                         block=0, registered=None)
     assert why is None and [(f.accepted, f.why) for f in got] == [(False, "refused")]
     (env,) = children
     wanted = {**os.environ, "MIMALLOC_PURGE_DELAY": want}
@@ -273,7 +274,7 @@ def test_a_session_lean_accepts_on_a_template_the_mirror_refuses_is_rejected_wit
     monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
-                         units=[(0, 1)], registered=None)
+                         block=0, registered=None)
     assert why is None, why
     (f,) = got
     assert (f.accepted, f.why, f.units) == (False, PF.NO_ROW_WHY, ()), f
@@ -298,19 +299,14 @@ def _verify(fx: Path, session: Path, public: str = "pub-32.bin", own: bool = Tru
     return PF.verify(PF.Proof(circuit or st / "circuit.txt", st / public, (session,)),
                      program=(st / "program.json").read_bytes(),
                      partition=partition or json.loads((st / "partition.json").read_text()),
-                     units=_units(st / public),
+                     block=_block(st / public, partition or json.loads((st / "partition.json").read_text())),
                      registered=json.loads((st / "registered.json").read_text()) if own else None, strata=strata)
 
 
-def _units(public: Path) -> list[tuple[int, int]]:
-    """The statement's block as its public file's units, maximal runs of consecutive indices."""
-    out: list[tuple[int, int]] = []
-    for u in PF._header(public)["units"]["indices"]:
-        if out and out[-1][1] == u:
-            out[-1] = (out[-1][0], u + 1)
-        else:
-            out.append((u, u + 1))
-    return out
+def _block(public: Path, partition: dict) -> int:
+    """The partition's block holding the statement's first unit, as its public file names it."""
+    u = PF._header(public)["units"]["indices"][0]
+    return next(k for k, (lo, hi) in enumerate(partition.get("blocks", [[0, u + 1]])) if lo <= u < hi)
 
 
 @lean
@@ -414,19 +410,29 @@ def test_the_verifier_runs_on_c_s_and_never_on_the_statements_own_circuit_file(t
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", child)
     got, why = PF.verify(PF.Proof(tmp_path / "absent.txt", public, (tmp_path / "s",)), program=RUN_ONLY,
-                         partition={"program": "p"}, units=[(0, 1)], registered=None)
+                         partition={"program": "p"}, block=0, registered=None)
     assert why is None and ran == [circuit.read_bytes()], (why, ran)
+
+
+def test_a_members_own_units_are_refused_and_its_block_is_the_partitions():
+    """A member's units are its block of the partition object's ``blocks`` (`one_circuit.block`): units its parameters
+    hand it are refused, and a partition naming no blocks gives it none."""
+    with pytest.raises(M._Refused, match=M.UNITS_HANDED):
+        M._block("a/c0", {"block": 0, "units": [[0, 1]]}, b"", {})
+    with pytest.raises(M._Refused, match="partition: E_PARTITION"):
+        M._block("a/c0", {"block": 0}, b"", {"program": "p"})
 
 
 def test_the_door_refuses_at_the_base_arguments_lowering_of_c_s(tmp_path, monkeypatch):
     """C_S derived, the door stops where the base argument takes no Boolean block circuit (`one_circuit.lower`)."""
     circuit, public = _files(tmp_path)
+    monkeypatch.setattr(OC, "block", lambda c, partition, k: [(0, 1)])
     monkeypatch.setattr(OC, "restrict", lambda c, partition, units: b"C_S")
     monkeypatch.setattr(PF, "executable", _never)
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
-                         units=[(0, 1)], registered=None)
+                         block=0, registered=None)
     assert got is None and why == ("circuit", OC.PREFIX + OC.LOWER), why
 
 
@@ -466,7 +472,7 @@ def test_missing_proof_files_are_refused(fx, tmp_path):
     st = fx / "stage"
     got, why = PF.verify(PF.Proof(st / "circuit.txt", st / "pub-32.bin", (tmp_path / "none",)),
                          program=(st / "program.json").read_bytes(),
-                         partition=json.loads((st / "partition.json").read_text()), units=_units(st / "pub-32.bin"),
+                         partition=json.loads((st / "partition.json").read_text()), block=_block(st / "pub-32.bin", json.loads((st / "partition.json").read_text())),
                          registered={})
     assert got is None and why[0] == "proof", why
 

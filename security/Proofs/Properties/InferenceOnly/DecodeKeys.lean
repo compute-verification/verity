@@ -30,7 +30,7 @@ namespace InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys
 open Flock.Program
 open Std.Do
 open BodiesOk (DM ex_throw_bind decode_root)
-open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs liftV
+open private getDef composite staticFns decodeAll DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs liftV
   from Circuits.Program
 
 /-! ## Reading the decoder's functions -/
@@ -325,6 +325,14 @@ theorem go_kept (desc : Desc) (rootId programFn : String) :
   mvcgen [hg, discard_eq] invariants
     · ⇓? _ s => ⌜Kept (fun _ => False) s⌝
 
+/-- `decodeAll`, the decoding of the primitives and the Boolean map's bodies, keeps `Kept` with no name busy. -/
+theorem decodeAll_kept (desc : Desc) (fs : Array String) :
+    ⦃fun s => ⌜Kept (fun _ => False) s⌝⦄ (decodeAll desc fs : DM Unit) ⦃⇓? _ s => ⌜Kept (fun _ => False) s⌝⦄ := by
+  have hg := fun f => (kept_fuel Flock.Steps.FUEL).1 desc f (fun _ => False)
+  unfold decodeAll
+  mvcgen [hg, discard_eq] invariants
+    · ⇓? _ s => ⌜Kept (fun _ => False) s⌝
+
 /-- **What `decode` returns**: the Definitions and the index of a decoder state that has `Kept`. -/
 theorem decode_kept (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     ∃ st, P.defs = DecState.defs st ∧ P.index = DecState.index st ∧ Kept (fun _ => False) st := by
@@ -371,10 +379,12 @@ theorem decode_kept (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   · exact (ex_throw_bind h).elim
   simp (config := { zeta := false }) only [jpR] at h
   obtain ⟨u, -, h⟩ := Walk.except_bind_ok h
+  obtain ⟨⟨⟨⟩, st'⟩, hall, h⟩ := Walk.except_bind_ok h
+  obtain ⟨bmap, -, h⟩ := Walk.except_bind_ok h
   obtain ⟨c, -, h⟩ := Walk.except_bind_ok h
   injection h with h
   subst h
-  refine ⟨st, rfl, rfl, of_triple (go_kept _ _ _) hgo ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩⟩
+  refine ⟨st', rfl, rfl, of_triple (decodeAll_kept _ _) hall (of_triple (go_kept _ _ _) hgo ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩)⟩
   · intro k v h
     exact absurd h (by simp)
   · intro i h

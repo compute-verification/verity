@@ -35,9 +35,9 @@ TRIPLE = bind(CompositeDefinition("MembersRunTriple", 0, (), lambda S: ((("x", A
                                   lambda B, S, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
 PROGRAM = PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)])
 QUERY = P.template_instances_query([PAIR.id, TRIPLE.id])
-PARTITION = P.partition(PROGRAM, QUERY)
 A, B = "a/c0", "b/c0"
 UNITS = {A: [[0, 2]], B: [[2, 5]]}
+PARTITION = {**P.partition(PROGRAM, QUERY), "blocks": [UNITS[A][0], UNITS[B][0]]}
 SCHEME = "frame-v3-sha512/hm96-sha512"
 SPEC = {"block": 8, "rounds_log": 1, "scheme": CT.SCHEME, "streams": [CT.SESSION, "circuit/rep0", "circuit/rep1"]}
 ROOTS = {A: ("11" * 64, "aa" * 64), B: ("22" * 64, "bb" * 64)}
@@ -72,7 +72,7 @@ class Window:
                 self.put(OC.restrict(self.descriptor, PARTITION, UNITS[name]))
             except (OC.NotDerived, OC.Refused):
                 pass
-            members[name] = {"public": self.put(public), "registered": None, "units": UNITS[name], "vus_per_block": 4}
+            members[name] = {"public": self.put(public), "registered": None, "block": k, "vus_per_block": 4}
             if name not in sessions:
                 continue
             tree, line = challenger.sample_tree(SPEC, bytes([k]) * CT.NONCE_BYTES)

@@ -25,7 +25,7 @@ Its case splits the check's instance and trusted input as SPOT's one-stage audit
   (`Γ`), `log` (the deployment's registration records before the run's own, oldest first, each one's `previous` the
   digest of the one before; empty for the deployment's first run), `parameters` (the registered circuit's program
   function's `[[name, type], ...]`, which the descriptor does not carry) and `program` (the registered circuit, a
-  `verity-ir/descriptor/v1` Program, as text);
+  `verity-ir/descriptor/v2` Program, as text);
 * **commitment**: the run's own registration record, canonical JSON, an object, fixed before the run: the record whose
   digest SPOT's one-stage audit commits to. Its digest is `SHA-512(format || 0 || canon(record))`
   (`InferenceOnlyCheck.Theta.digest`, as one-stage's). Its `program` must be the registered circuit's SHA-512 (`names`), and
