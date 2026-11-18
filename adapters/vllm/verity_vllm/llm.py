@@ -138,6 +138,23 @@ def option_settings(entry: str, doc: Mapping[str, Any]) -> dict[str, Any]:
     return own
 
 
+def listed_by_name(value: Any) -> tuple[list[str], list[str]]:
+    """``protocols``' entries that name a declared scheme (`messages.option`), in their order, and the rest, which the
+    selector's grammar reads (`config.parse_protocols`): a declared scheme attaches by name whether or not the selector
+    has its protocol.  ``ValueError`` where two entries name one protocol."""
+    if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
+        return [], []
+    items = ([f"{k}:{v}" for k, v in value.items()] if isinstance(value, Mapping)
+             else [x.strip() for x in value.split(",")] if isinstance(value, str) else [str(x).strip() for x in value])
+    named = [e for e in items if messages.option(e) is not None]
+    for e in named:
+        for other in items:
+            if other != e and other.partition(":")[0] == e.partition(":")[0]:
+                raise ValueError(f"protocol {e.partition(':')[0]!r} is enabled twice ({e!r} and {other!r}); a run enables "
+                                 "one scheme per protocol")
+    return named, [e for e in items if e not in named]
+
+
 def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = None) -> Any:
     """The protocol options' serving context for resolved options, None when none is enabled; ``ValueError`` names every
     refusal, before any engine exists.  The settings an adapter takes from the built engine (`protocol_options.engine_fills`)
@@ -257,8 +274,9 @@ class LLM:
         self.pin = EnginePin.resolve(model, revision, world=opts["tensor_parallel_size"])
         if opts["engine_class"] is not None:
             EC.check_model(opts["engine_class"], self.pin.model, self.pin.revision)
-        enabled = config.parse_protocols(opts["protocols"])
-        named = {e: s for e in enabled if (s := messages.option(e)) is not None}
+        by_name, selected = listed_by_name(opts["protocols"])
+        enabled = config.parse_protocols(selected)
+        named = {e: messages.option(e) for e in by_name}
         doc = PO.load_settings(opts["protocols_config"])
         listed = [(s, option_settings(e, doc)) for e, s in named.items()]
         for s, own in listed:
