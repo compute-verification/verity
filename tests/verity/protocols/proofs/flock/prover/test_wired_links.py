@@ -670,12 +670,13 @@ NO_START = "where no return field starts"
 @pytest.mark.parametrize("defn,widths,word,cheats", [
     (PAIR8, [8, 8, 16], 1, {2: NO_START}),
     (QUANT, [8, 8, 8, 8, 32], 2, {4: NO_START, 1: NO_START, 3: NO_START}),
-    (WIDE, [32, 32, 16], 4, {2: NO_START, 3: NO_START, 5: "is not a hm96-sha512/row/v1 row whose word 5"})],
+    (WIDE, [32, 32, 16], 4, {2: NO_START, 3: NO_START, 5: NO_START, 4096: "is not a hm96-sha512/row/v1 row whose word 4096"})],
     ids=["two-8-bit-leaves", "a-quantisers-codes", "two-32-bit-leaves"])
 def test_lean_reads_a_links_offset_in_its_writers_words(defn, widths, word, cheats, tmp_path):
     """A reader of the field behind a field of 8-bit or 32-bit leaves: its link's offset is the field's first word, each
     earlier field ``ceil(bits / 16)`` words (`Flock.Program.wordsOf`), not its first leaf, and the Lean verifier accepts the
-    honest link and refuses it at the field's first leaf (the old offset), a unit off, or inside the earlier field."""
+    honest link and refuses it at the field's first leaf (the old offset), a unit off, inside the earlier field, past the
+    fields, or past the row."""
     CS.cache_slot_circuits()
     uc = _stage_mix(tmp_path, 1, defn)
     assert list(uc.out_widths) == widths
