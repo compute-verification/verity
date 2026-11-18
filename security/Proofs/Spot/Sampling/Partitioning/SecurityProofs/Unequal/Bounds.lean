@@ -67,7 +67,7 @@ theorem cost_const {n : ℕ} (L : SamplingDesign n) (c : ℝ) : cost L (fun _ =>
 theorem miss_toReal_le_of {n : ℕ} {L : SamplingDesign n} {K : ℕ} {δ : ℝ} (hδ : 0 ≤ δ)
     (h : ∀ B : Finset (Fin n), K ≤ B.card → (L.missProb B).toReal ≤ δ) : (L.miss K).toReal ≤ δ := by
   have hle : L.miss K ≤ ENNReal.ofReal δ := iSup₂_le fun B hB =>
-    (ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (L.escape_le_one B)) hδ).2 (h B hB)
+    (ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (L.missProb_le_one B)) hδ).2 (h B hB)
   calc (L.miss K).toReal ≤ (ENNReal.ofReal δ).toReal := ENNReal.toReal_mono ENNReal.ofReal_ne_top hle
     _ = δ := ENNReal.toReal_ofReal hδ
 

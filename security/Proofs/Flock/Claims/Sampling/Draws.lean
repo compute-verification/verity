@@ -208,6 +208,6 @@ theorem work_miss_le {n m : ℕ} (σ : Fin n → Fin m) (w : Fin m → ℕ) (f :
 of at least `t` units. -/
 theorem miss_le_count {n t : ℕ} (L : SamplingDesign n) {B : Finset (Fin n)} (ht : t ≤ B.card) :
     Claims.Pr (fun ω : L.Ω => Disjoint (L.draw ω) B) ≤ (L.miss t).toReal :=
-  Pr_miss_le L B (ne_top_of_le_ne_top ENNReal.one_ne_top (L.miss_le_one t)) (L.escape_le_miss ht)
+  Pr_miss_le L B (ne_top_of_le_ne_top ENNReal.one_ne_top (L.miss_le_one t)) (L.missProb_le_miss ht)
 
 end Claims.Sampling

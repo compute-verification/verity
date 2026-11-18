@@ -146,7 +146,7 @@ theorem JointStratifiedPooled : Flock.Guarantees.JointStratifiedPooled := by
   have hB := monitoringPeriod_prod (fun t => (W t).game) (StratifiedBlock.record W) (fun r => ¬ r.sampledWrong)
     BlockRec.missProb (fun t τ => t < T ∧ cr t τ)
     (fun t τ hτ => ⟨(W t).ideal.missProb ((W t).incorrectSet τ),
-      ne_top_of_le_ne_top ENNReal.one_ne_top (SamplingDesign.escape_le_one _ _), fun _ => rfl,
+      ne_top_of_le_ne_top ENNReal.one_ne_top (Verity.SamplingDesign.missProb_le_one _ _), fun _ => rfl,
       (W t).sampleMiss_le (hA3 t hτ.1) ((W t).incorrectSet τ) τ⟩) T 0 s (ENNReal.ofReal δ) hs
   calc value (fun l => (∀ r ∈ l, r.accepted) ∧ ¬ Stratified.Within W δ ands bits l) (Stratified.run W T s)
       ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledWrong) ∨

@@ -258,7 +258,7 @@ theorem execSel_missProb_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L 
   classical
   rcases W.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
   · rw [Finset.map_empty, pa_empty_of_samplingDesignOn hlaw, ENNReal.ofReal_one]
-    exact Spot.Sampling.SamplingDesign.escape_le_one _ _
+    exact Verity.SamplingDesign.missProb_le_one _ _
   have hU : W.map Fin.valEmbedding ⊆ Finset.range n := fun u hu => by
     obtain ⟨v, -, rfl⟩ := Finset.mem_map.1 hu
     exact Finset.mem_range.2 v.isLt

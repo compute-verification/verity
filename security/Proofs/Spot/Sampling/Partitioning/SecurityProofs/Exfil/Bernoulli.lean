@@ -66,7 +66,7 @@ theorem bern_certifies {n num N b K : ℕ} [NeZero N] (h : num ≤ N) {δ ℓ : 
   have hbig : ∀ B : Finset (Fin n), K + 1 ≤ B.card →
       (Verity.SamplingDesign.bernoulli n num N).missProb B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
     intro B hB
-    rw [ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (SamplingDesign.escape_le_one _ B))
+    rw [ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (Verity.SamplingDesign.missProb_le_one _ B))
       (pow_nonneg ht0 _), bern_missProb_toReal h]
     exact pow_le_pow_of_le_one ht0 ht1 hB
   have hmiss_le : (Verity.SamplingDesign.bernoulli n num N).miss (K + 1) ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) :=
@@ -78,7 +78,7 @@ theorem bern_certifies {n num N b K : ℕ} [NeZero N] (h : num ≤ N) {δ ℓ : 
   intro B hB
   have hcard : B.card ≤ K := by
     by_contra hc
-    exact absurd (hB.trans (SamplingDesign.escape_le_miss (Verity.SamplingDesign.bernoulli n num N) (K := K + 1) (by omega))) (not_le.2 hmiss)
+    exact absurd (hB.trans (Verity.SamplingDesign.missProb_le_miss (Verity.SamplingDesign.bernoulli n num N) (K := K + 1) (by omega))) (not_le.2 hmiss)
   have hcard' : (B.card : ℝ) ≤ K := by exact_mod_cast hcard
   simp only [Finset.sum_const, nsmul_eq_mul]
   push_cast

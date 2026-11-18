@@ -202,7 +202,7 @@ theorem stratified_miss_eq_greedy (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
     have hcard : ∑ s, a s ≤ B.card := by
       rw [hfib B]
       exact le_of_eq (Finset.sum_congr rfl fun s _ => by rw [hfil, hTc])
-    refine le_trans (le_of_eq ?_) ((stratified σ k hk).escape_le_miss hcard)
+    refine le_trans (le_of_eq ?_) ((stratified σ k hk).missProb_le_miss hcard)
     rw [stratified_missProb]
     exact Finset.prod_congr rfl fun s _ => by rw [hfil, hTc]; rfl
 

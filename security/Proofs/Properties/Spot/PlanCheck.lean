@@ -237,7 +237,7 @@ theorem bern_miss_lt {n num N K : ℕ} [NeZero N] (h : num ≤ N) {δ : ℝ}
   have hbig : ∀ B : Finset (Fin n), K + 1 ≤ B.card →
       (Verity.SamplingDesign.bernoulli n num N).missProb B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
     intro B hB
-    rw [ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (SamplingDesign.escape_le_one _ B))
+    rw [ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (Verity.SamplingDesign.missProb_le_one _ B))
       (pow_nonneg ht0 _), Spot.Sampling.Partitioning.SecurityProofs.Exfil.bern_missProb_toReal h]
     exact pow_le_pow_of_le_one ht0 ht1 hB
   have hmiss_le : (Verity.SamplingDesign.bernoulli n num N).miss (K + 1) ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) :=
@@ -390,7 +390,7 @@ theorem leakCountSound_honest :
 theorem leakCountSound_nontrivial :
     ∀ k : ℕ, ¬ (Verity.SamplingDesign.bernoulli 1 0 (k + 1)).miss (0 + 1) < ENNReal.ofReal ((1 / 2 : ℚ) : ℝ) := by
   intro k h
-  have he := SamplingDesign.escape_le_miss (Verity.SamplingDesign.bernoulli 1 0 (k + 1)) (K := 0 + 1) (B := {0}) (by simp)
+  have he := Verity.SamplingDesign.missProb_le_miss (Verity.SamplingDesign.bernoulli 1 0 (k + 1)) (K := 0 + 1) (T := {0}) (by simp)
   have h1 : ((Verity.SamplingDesign.bernoulli 1 0 (k + 1)).missProb {0}).toReal = 1 := by
     rw [Spot.Sampling.Partitioning.SecurityProofs.Exfil.bern_missProb_toReal (Nat.zero_le _)]
     simp

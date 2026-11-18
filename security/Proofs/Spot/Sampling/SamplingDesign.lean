@@ -54,12 +54,6 @@ theorem prCoin_not {C : Type} [Fintype C] [Nonempty C] (p : C → Prop) :
   have hne : prCoin p ≠ ∞ := ne_top_of_le_ne_top ENNReal.one_ne_top (h ▸ le_self_add)
   exact ENNReal.eq_sub_of_add_eq hne (by rw [add_comm]; exact h)
 
-theorem escape_le_one (L : SamplingDesign n) (B : Finset (Fin n)) : L.missProb B ≤ 1 := by
-  classical
-  unfold missProb prCoin
-  refine (avg_mono fun ω => ?_).trans (avg_const (C := L.Ω) 1).le
-  split_ifs <;> simp
-
 /-- Missing more units is less likely. -/
 theorem missProb_anti (L : SamplingDesign n) {B B' : Finset (Fin n)} (h : B ⊆ B') : L.missProb B' ≤ L.missProb B :=
   prCoin_mono fun _ hd => hd.mono_right h
@@ -80,16 +74,12 @@ theorem missProb_le_of_mem (L : SamplingDesign n) {B : Finset (Fin n)} {u : Fin 
     L.missProb B ≤ 1 - L.incl u :=
   (L.missProb_anti (Finset.singleton_subset_iff.2 hu)).trans (L.missProb_singleton u).le
 
-theorem escape_le_miss (L : SamplingDesign n) {K : ℕ} {B : Finset (Fin n)} (h : K ≤ B.card) :
-    L.missProb B ≤ L.miss K :=
-  le_iSup₂_of_le (f := fun (B : Finset (Fin n)) (_ : K ≤ B.card) => L.missProb B) B h le_rfl
-
 theorem miss_le_one (L : SamplingDesign n) (K : ℕ) : L.miss K ≤ 1 :=
-  iSup₂_le fun B _ => L.escape_le_one B
+  iSup₂_le fun B _ => L.missProb_le_one B
 
 /-- The count curve falls as `K` grows. -/
 theorem miss_anti (L : SamplingDesign n) {K K' : ℕ} (h : K ≤ K') : L.miss K' ≤ L.miss K :=
-  iSup₂_le fun _ hB => L.escape_le_miss (h.trans hB)
+  iSup₂_le fun _ hB => L.missProb_le_miss (h.trans hB)
 
 /-- **A sampling design that draws every unit has no sampling term**: no non-empty set escapes it, so `miss K = 0` for `K ≥ 1`. -/
 theorem miss_eq_zero_of_sample_univ (L : SamplingDesign n) (hL : ∀ ω, L.draw ω = Finset.univ) {K : ℕ} (hK : 1 ≤ K) :
@@ -110,7 +100,7 @@ theorem subset_miss {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n) :
     gcongr
   · obtain ⟨B, -, hB⟩ := Finset.exists_subset_card_eq (s := (Finset.univ : Finset (Fin n)))
       (by simpa using hK)
-    have := escape_le_miss (Verity.SamplingDesign.subset n k hk) (K := K) hB.ge
+    have := Verity.SamplingDesign.missProb_le_miss (Verity.SamplingDesign.subset n k hk) (K := K) hB.ge
     rwa [Verity.SamplingDesign.subset_missProb, hB] at this
 
 /-- A uniform `k`-subset of `n` misses one given unit with probability `(n − k)/n`. -/
@@ -380,7 +370,7 @@ theorem subset_minimax (L : SamplingDesign n) {k : ℕ} (hk : k ≤ n) (hmean : 
       _ = _ := by rw [avg_card, hmean]
   -- the average over `K`-sets is at most the maximum
   have hmax : avg (fun B : (Verity.SamplingDesign.subset n K hK).Ω => L.missProb B.1) ≤ L.miss K :=
-    (avg_mono fun B => L.escape_le_miss B.2.ge).trans (avg_const _).le
+    (avg_mono fun B => L.missProb_le_miss B.2.ge).trans (avg_const _).le
   calc (Verity.SamplingDesign.subset n k hk).miss K = (((n - k).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := hU
     _ ≤ (avg fun ω => (((n - (L.draw ω).card).choose K : ℕ) : ℝ≥0∞)) / (n.choose K : ℝ≥0∞) := by
         gcongr

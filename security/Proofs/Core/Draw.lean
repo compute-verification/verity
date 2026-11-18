@@ -61,6 +61,17 @@ namespace SamplingDesign
 
 open Game
 
+theorem missProb_le_one {U : Type} (D : SamplingDesign U) (T : Finset U) : D.missProb T ≤ 1 := by
+  classical
+  unfold missProb prCoin
+  refine (avg_mono fun ω => ?_).trans (avg_const (C := D.Ω) 1).le
+  split_ifs <;> simp
+
+/-- A set of at least `K` units escapes the sample no more often than the count curve at `K`. -/
+theorem missProb_le_miss {U : Type} (D : SamplingDesign U) {T : Finset U} {K : ℕ} (h : K ≤ T.card) :
+    D.missProb T ≤ D.miss K :=
+  le_iSup₂ (f := fun (B : Finset U) (_ : K ≤ B.card) => D.missProb B) T h
+
 /-- **The product misses a set exactly as often as every kind's design misses that kind's share, independently**:
 the miss probability of `⋃ₖ {k} × T k` under the product of designs by kind is `∏ₖ missProb (L k) (T k)`. -/
 theorem missProb_prod {K : Type} [Fintype K] [DecidableEq K] {V : K → Type} (L : (k : K) → SamplingDesign (V k))
