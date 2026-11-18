@@ -10,7 +10,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier import p2, p2_par
 
 
 def test_registered_under_the_name_a_configuration_lists() -> None:
-    assert S.get("bandwidth") is poub.SCHEME
+    assert S.SCHEMES["bandwidth"] is poub.SCHEME
     assert (p2_parties.COMPONENT, p2_parties.PROTOCOL) == (poub.SCHEME.name, poub.SCHEME.protocol)
     assert poub.SCHEME.unit == "bits"
 

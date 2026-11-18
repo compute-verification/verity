@@ -11,7 +11,7 @@ from verity.protocols.resource_accounting.network.prover.response_tie import Res
 
 
 def test_registered_and_found_by_name() -> None:
-    assert S.get("certifier") is NS.NETWORK_ATTESTER
+    assert S.SCHEMES["certifier"] is NS.NETWORK_ATTESTER
     assert NS.NETWORK_ATTESTER.unit == "bits"
 
 

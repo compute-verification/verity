@@ -13,7 +13,7 @@ LOCKS = (ROOT / "security" / "lean-audit.json", ROOT / "security" / "Properties"
 
 
 def test_found_by_name_at_their_verifiers_ids() -> None:
-    assert S.get("pous") is POUS and S.get("wipe") is WIPE
+    assert S.SCHEMES["pous"] is POUS and S.SCHEMES["wipe"] is WIPE
     assert (POUS.protocol, WIPE.protocol) == (period.PROTOCOL, wipe_period.PROTOCOL)
     assert POUS.unit == WIPE.unit == "bits"
 
