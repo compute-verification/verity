@@ -61,7 +61,7 @@ open Flock Transcript Replay
 /-- **A returned zerocheck's points are its coins'** (`ZcOutAt`), whatever the masked values, after `3 + (m − 6)`
 bodies. -/
 theorem zerocheckCut_at (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray)
-    (lay : Zk.PadLayout) (mk : ℕ → F128) {t t' : Transcript} {l l' : Array Claims.Msg} {zp : ZerocheckProof}
+    (lay : Zk.PadLayout) (mk : ℕ → F128) {t t' : Transcript} {l l' : Array Hash.Msg} {zp : ZerocheckProof}
     {zc : ZcOut} (h : ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l = (.ok ((zp, zc), t'), l')) :
     ZcOutAt m (zcCoins coin l.size) zc ∧ l'.size = l.size + 3 + (m - 6) := by
   have hA : GoAlike (fun (p q : ZerocheckProof × ZcOut) L => p = q ∧ ZcOutAt m (zcCoins coin l.size) p.2 ∧
@@ -139,7 +139,7 @@ theorem zerocheckCut_at (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : 
 /-- **A returned lincheck's points are its coins'** (`LcOutAt`), whatever the masked values, after `3 + (k_log − 6)`
 bodies. -/
 theorem lincheckCut_at (coin : ℕ → ℕ → F128) (n : ℕ) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (mk : ℕ → F128)
-    (zc : ZcOut) {t t' : Transcript} {l l' : Array Claims.Msg} {lp : LincheckProof} {lc : LcOut}
+    (zc : ZcOut) {t t' : Transcript} {l l' : Array Hash.Msg} {lp : LincheckProof} {lc : LcOut}
     (h : ((lincheckCut (asksCut coin n) c m lay mk zc).run t).go l = (.ok ((lp, lc), t'), l')) :
     LcOutAt (c.kLog - 6) (lcCoins coin l.size (c.kLog - 6)) lc ∧ l'.size = l.size + 3 + (c.kLog - 6) := by
   have hA : GoAlike (fun (p q : LincheckProof × LcOut) L => p = q ∧
@@ -208,7 +208,7 @@ theorem lincheckCut_at (coin : ℕ → ℕ → F128) (n : ℕ) (c : CircuitFold)
 batching `γ` at `l.size + |claims|`, whatever the switched vectors, after `|claims| + 1` bodies, the last before the
 cut's stop `n`. -/
 theorem ringSwitchCut_sws (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128) (claims : Array Claim)
-    (hc : claims.size ≠ 0) {t t' : Transcript} {l l' : Array Claims.Msg} {ss : Array (Array F128)} {T : F128}
+    (hc : claims.size ≠ 0) {t t' : Transcript} {l l' : Array Hash.Msg} {ss : Array (Array F128)} {T : F128}
     {sws : Array Switched}
     (h : ((ringSwitchCut (asksCut coin n) sv claims).run t).go l = (.ok ((ss, T, sws), t'), l')) :
     sws = Rs.sws claims ⟨fun k => coin (l.size + k), coin (l.size + claims.size)⟩ ∧
@@ -268,7 +268,7 @@ returns, its switched claims are `Rs.sws` of the closed-form claims at any trace
 points are their coins', and a switched claim reads its claim's point alone, `Rs.sws_congr`) at the ring switch's coins,
 and it sent `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies, all before the cut's stop `n`. -/
 theorem piopFw_at {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {g : Array F128} {mk : ℕ → F128}
-    {cap root : ByteArray} {extras : Array Claim} {t₀ : Transcript} {l : Array Claims.Msg} {zp lp ss T sws t₃ l₃}
+    {cap root : ByteArray} {extras : Array Claim} {t₀ : Transcript} {l : Array Hash.Msg} {zp lp ss T sws t₃ l₃}
     (hm : 14 ≤ st.m)
     (h : ((_root_.Flock.ZkServer.Finish.piopFw (asksCut coin n) st lay g mk cap root extras).run t₀).go l =
       (.ok ((zp, lp, ss, T, sws), t₃), l₃)) (tr : Trace) :

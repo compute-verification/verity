@@ -168,17 +168,17 @@ open Flock
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A trimmed full-width column**: a column of the code's width (`wide`) trimmed of its trailing zeros. -/
-def trimWide (zk : Bool) : Claims.Msg → List 𝔽 → Prop := Claims.Flock.OkThrough trimCol (wide zk)
+def trimWide (zk : Bool) : Hash.Msg → List 𝔽 → Prop := Claims.Flock.OkThrough trimCol (wide zk)
 
 /-- **`[]` is a trimmed full-width column**: the zero column's trim. -/
-theorem trimWide_nil (zk : Bool) (x : Claims.Msg) : trimWide zk x [] := by
+theorem trimWide_nil (zk : Bool) (x : Hash.Msg) : trimWide zk x [] := by
   refine ⟨zeroCol zk x, rfl, ?_⟩
   unfold zeroCol
   split
   · exact trimCol_replicate _
   · rfl
 
-theorem wide_trimCol_inj (zk : Bool) (x : Claims.Msg) (u v : List 𝔽) (hu : wide zk x u) (hv : wide zk x v)
+theorem wide_trimCol_inj (zk : Bool) (x : Hash.Msg) (u v : List 𝔽) (hu : wide zk x u) (hv : wide zk x v)
     (h : trimCol u = trimCol v) : u = v :=
   trimCol_inj (hu.trans hv.symm) h
 

@@ -72,8 +72,8 @@ open Flock FlockDeploy
 /-! ## The deployed prover's run -/
 
 /-- **The masked verifier's every reply is its last coin's bytes.** -/
-theorem next_msg {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    {m : Claims.Msg} (h : ((FlockDeploy.next true x as cs).eval H).1 = .msg m) :
+theorem next_msg {H : Hash.Msg → Hash.Msg} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
+    {m : Hash.Msg} (h : ((FlockDeploy.next true x as cs).eval H).1 = .msg m) :
     ∃ c, cs.getLast? = some c ∧ m = c.bytes := by
   cases ha : act true x as cs with
   | rej =>
@@ -94,12 +94,12 @@ theorem next_msg {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {as : List Cla
 
 /-- **Rounds against the masked verifier read the prover only at histories its coins answer**: two provers whose next
 messages agree wherever round `j` was answered with coin `j`'s bytes have the same rounds. -/
-theorem stepWith_congr_coins (H : Claims.Msg → Claims.Msg) {Ω : Type} {P P' : Claims.Prover Ω} {x : Claims.Msg}
+theorem stepWith_congr_coins (H : Hash.Msg → Hash.Msg) {Ω : Type} {P P' : Claims.Prover Ω} {x : Hash.Msg}
     {ω : Ω} {k : ℕ} (r : Fin k → Coin)
-    (hP : ∀ hist : List (Claims.Msg × Claims.Msg),
+    (hP : ∀ hist : List (Hash.Msg × Hash.Msg),
       hist.map Prod.snd = (List.range hist.length).map (fun j => (Claims.coinSeq r j).bytes) →
         P.next x hist ω = P'.next x hist ω) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
+    ∀ (n : ℕ) (hist : List (Hash.Msg × Hash.Msg)) (as : List Hash.Msg) (t : Claims.Transcript),
       as.length = hist.length →
       hist.map Prod.snd = (List.range hist.length).map (fun j => (Claims.coinSeq r j).bytes) →
       Claims.stepWith H P x ω (fun as => (V true).next x as ((List.range as.length).map (Claims.coinSeq r))) n hist
@@ -134,7 +134,7 @@ theorem stepWith_congr_coins (H : Claims.Msg → Claims.Msg) {Ω : Type} {P P' :
     | rej => rfl
 
 /-- **Outside `BadZk` no outer coin the verifier has sent is `1`.** -/
-theorem outerHit_coins {x : Claims.Msg} {k : ℕ} {r : Fin k → Coin} (hr : ¬ BadZk x r) (n : ℕ) :
+theorem outerHit_coins {x : Hash.Msg} {k : ℕ} {r : Fin k → Coin} (hr : ¬ BadZk x r) (n : ℕ) :
     outerHit x ((List.range n).map fun j => (Claims.coinSeq r j).bytes) = false := by
   unfold outerHit
   rw [List.any_eq_false]
@@ -146,7 +146,7 @@ theorem outerHit_coins {x : Claims.Msg} {k : ℕ} {r : Fin k → Coin} (hr : ¬ 
   exact fun h => hr (Or.inl ⟨p, hp, h⟩)
 
 /-- **Outside `BadZk` the deployed prover's run is `honestP`'s at the tape's mask words.** -/
-theorem run_honestPR (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
+theorem run_honestPR (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     (r : Fin ((V true).k x) → Coin) (hr : ¬ BadZk x r) :
     Claims.run H (honestPR w) (V true) x ω r = Claims.run H (honestP (maskWOf x w ω.mask)) (V true) x ω r :=
   stepWith_congr_coins H r (fun hist hh => honestPR_next (by rw [hh]; exact outerHit_coins hr _)) _ _ _ _ rfl rfl
@@ -163,7 +163,7 @@ def MaskFree (rel : Readable.Parsed → Readable.Relation) : Prop :=
 the masked verifier can accept and every witness in the relation, the honest masked prover is accepted at every tape and
 every coin outside `BadZk`, and the relation does not read the mask slots, then Flock's masked verifier is complete
 for the deployed prover (`honestPR`) with error `δc H`. -/
-theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem complete_of (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel)
     (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →
       ready H x = true → ∀ (ω : TapeZk) (r : Fin ((V true).k x) → Coin), ¬ BadZk x r →
@@ -186,7 +186,7 @@ theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
     exact Claims.Pr_nonneg _
 
 /-- **A setup with several tables is never `readyZk`**, so `δcZk H` is `1` there. -/
-theorem readyZk_tables {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem readyZk_tables {H : Hash.Msg → Hash.Msg} {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts)) (h : 1 < sts.size) : readyZk H x = false := by
   unfold readyZk
   rw [hs]

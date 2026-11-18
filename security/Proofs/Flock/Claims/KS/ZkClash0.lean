@@ -176,7 +176,7 @@ variable [S : ZkSetup]
 
 /-- **An accepted masked run's reps open a row of table `j` only as a Merkle opening** of table `j`'s level 0 in its
 own log: `zk_openingJ_raw` at each row whole. -/
-theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
+theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
     {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
@@ -285,7 +285,7 @@ end Gen
 
 /-- **An accepted masked run's reps open a row of table `j` only as a Merkle opening** of table `j`'s level 0 in its
 own log: `zk_openingJ_raw` at each row whole. -/
-theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
+theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
     {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
@@ -305,7 +305,7 @@ variable [S : ZkSetup]
 /-- **Two different rows two accepted masked runs open at one position collide in their logs**: the runs share `P`'s
 first message, so table `j`'s level-0 root, and a row of each at one position that differ give a collision among the
 two runs' verifier calls, at SHA-512. -/
-theorem zk_rowClash_tiedJ₂ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_rowClash_tiedJ₂ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r r' : Fin ((V true).k x) → Coin} {j q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (h' : (Claims.run sha512 P (V true) x ω r').out = .acc)
     (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j)
@@ -329,7 +329,7 @@ end Gen
 /-- **Two different rows two accepted masked runs open at one position collide in their logs**: the runs share `P`'s
 first message, so table `j`'s level-0 root, and a row of each at one position that differ give a collision among the
 two runs' verifier calls, at SHA-512. -/
-theorem zk_rowClash_tiedJ₂ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_rowClash_tiedJ₂ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r r' : Fin ((V true).k x) → Coin} {j q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (h' : (Claims.run sha512 P (V true) x ω r').out = .acc)
     (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j)
@@ -345,7 +345,7 @@ variable [S : ZkSetup]
 
 /-- **Two different rows an accepted masked run opens at one position collide in its own log**: two rows table `j`'s
 reps open at one position that differ give a collision among the run's verifier calls, at SHA-512. -/
-theorem zk_rowClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_rowClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j)
     (hv : (q, v) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j) (huv : u ≠ v) :
@@ -356,7 +356,7 @@ end Gen
 
 /-- **Two different rows an accepted masked run opens at one position collide in its own log**: two rows table `j`'s
 reps open at one position that differ give a collision among the run's verifier calls, at SHA-512. -/
-theorem zk_rowClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_rowClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j)
     (hv : (q, v) ∈ zkRawRowsJ (Claims.run sha512 P (V true) x ω r).seen j) (huv : u ≠ v) :
@@ -397,7 +397,7 @@ def PadsZ (m : ℕ) (T : TabZK 𝔽 m) (out : OutZC 𝔽 Refine.Dig (List UInt8)
 `P` deciding a record, a decoded output of table `j` at the record's live outcome in `Q` (`LiveSelfClashZ` at
 `viewOf` with `Q` for `SelfClashZ`) gives two different columns the run's reps open at one position of some table, or
 a collision among the run's verifier calls. -/
-def ZkViewClashQ (x : Claims.Msg) (Q : (m : ℕ) → TabZK 𝔽 m → OutZC 𝔽 Refine.Dig (List UInt8) → Prop) : Prop :=
+def ZkViewClashQ (x : Hash.Msg) (Q : (m : ℕ) → TabZK 𝔽 m → OutZC 𝔽 Refine.Dig (List UInt8) → Prop) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (_ : parse true Readable.relation x = some s) (_ : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -430,7 +430,7 @@ variable [S : ZkSetup]
 `P` deciding a record, a decoded output of table `j` at the record's live outcome in `Q` (`LiveSelfClashZ` at
 `viewOf` with `Q` for `SelfClashZ`) gives two different columns the run's reps open at one position of some table, or
 a collision among the run's verifier calls. -/
-def ZkViewClashQ (x : Claims.Msg) (Q : (m : ℕ) → TabZK 𝔽 m → OutZC 𝔽 Refine.Dig (List UInt8) → Prop) : Prop :=
+def ZkViewClashQ (x : Hash.Msg) (Q : (m : ℕ) → TabZK 𝔽 m → OutZC 𝔽 Refine.Dig (List UInt8) → Prop) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (_ : parse true Readable.relation x = some s) (_ : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -455,7 +455,7 @@ def ZkViewClashQ (x : Claims.Msg) (Q : (m : ℕ) → TabZK 𝔽 m → OutZC 𝔽
           Claims.TiedColl sha512 (Claims.run sha512 P (V true) x ω r).vLog
 
 /-- **The view's clash from its three cases**: `SelfClashZ` is `Clash₀Z`, `LaterClashZ` or `PadsZ`. -/
-theorem zkViewClash_of_Q {x : Claims.Msg} (h₀ : ZkViewClashQ x Clash₀Z) (h₁ : ZkViewClashQ x LaterClashZ)
+theorem zkViewClash_of_Q {x : Hash.Msg} (h₀ : ZkViewClashQ x Clash₀Z) (h₁ : ZkViewClashQ x LaterClashZ)
     (h₂ : ZkViewClashQ x PadsZ) : ZkViewClash x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC r hacc s' spec' sts' link c₁ mids f hact
     ⟨a, ha, hq⟩
@@ -470,7 +470,7 @@ theorem zkViewClash_of_Q {x : Claims.Msg} (h₀ : ZkViewClashQ x Clash₀Z) (h�
 end Gen
 
 /-- **The view's clash from its three cases**: `SelfClashZ` is `Clash₀Z`, `LaterClashZ` or `PadsZ`. -/
-theorem zkViewClash_of_Q {x : Claims.Msg} (h₀ : ZkViewClashQ x Clash₀Z) (h₁ : ZkViewClashQ x LaterClashZ)
+theorem zkViewClash_of_Q {x : Hash.Msg} (h₀ : ZkViewClashQ x Clash₀Z) (h₁ : ZkViewClashQ x LaterClashZ)
     (h₂ : ZkViewClashQ x PadsZ) : ZkViewClash x :=
   Gen.zkViewClash_of_Q (S := S₀) (x := x) (h₀ := h₀) (h₁ := h₁) (h₂ := h₂)
 
@@ -482,7 +482,7 @@ variable [S : ZkSetup]
 tapes, so table `j`'s output there is right at `OpensRows` (`decodesTableR_deploy`); its level-0 openings are the reps'
 `zkRepRowsOf` rows at `wrS`'s transcript, which records the run's rep streams and proof files (`recordsLiveAtS_wrS`),
 so they are the run's rows (`rawRows_zk`). -/
-theorem zkViewRows₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkViewRows₀ {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -570,7 +570,7 @@ end Gen
 tapes, so table `j`'s output there is right at `OpensRows` (`decodesTableR_deploy`); its level-0 openings are the reps'
 `zkRepRowsOf` rows at `wrS`'s transcript, which records the run's rep streams and proof files (`recordsLiveAtS_wrS`),
 so they are the run's rows (`rawRows_zk`). -/
-theorem zkViewRows₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkViewRows₀ {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -602,7 +602,7 @@ variable [S : ZkSetup]
 
 /-- **A level-0 self-clash at an accepting run's view is a collision in its log**: its level-0 openings are the run's
 rows (`zkViewRows₀`), and two of them at one position that differ collide in the run's log (`zk_rowClash_tiedJ`). -/
-theorem zkViewClashQ₀ (x : Claims.Msg) : ZkViewClashQ x Clash₀Z := by
+theorem zkViewClashQ₀ (x : Hash.Msg) : ZkViewClashQ x Clash₀Z := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C _ r hacc s' spec' sts' link c₁ mids f hact hret
   obtain ⟨a, ha, hcl⟩ := hret
   have hrows := zkViewRows₀ hs hin hset h0 L hz hk hlay hd hj hacc hact ha
@@ -619,7 +619,7 @@ end Gen
 
 /-- **A level-0 self-clash at an accepting run's view is a collision in its log**: its level-0 openings are the run's
 rows (`zkViewRows₀`), and two of them at one position that differ collide in the run's log (`zk_rowClash_tiedJ`). -/
-theorem zkViewClashQ₀ (x : Claims.Msg) : ZkViewClashQ x Clash₀Z :=
+theorem zkViewClashQ₀ (x : Hash.Msg) : ZkViewClashQ x Clash₀Z :=
   Gen.zkViewClashQ₀ (S := S₀) (x := x)
 
 end Clash

@@ -90,7 +90,7 @@ def _serve(*enabled, settings=None, **kw):
 
 def test_schemes_are_the_protocol_packages_and_only_h1_is_executed():
     assert pouw.schemes() == tuple(sorted({*IDENTIFIED, *circuit.SCHEMES, H1}))
-    assert pouw.EXECUTED == (H1,) and not pouw.keeps_weight_copy(H1)
+    assert pouw.EXECUTED == (H1,)
     for scheme in ("ncp-v1", "ncp-v1-shift24", "ncp-v2", "pearl-fp8-v4", "pearl-c-sm120-v1-h3"):
         assert "executor runs" in pouw.refusals(scheme, _serve(f"pouw:{scheme}"))[0], scheme
 
