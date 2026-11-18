@@ -48,7 +48,6 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/schedule.py",
           # the slot schedule the refresh attacks lay out (`verifier/rota.py`) and the rota `audit_prover` imports
           "verity/protocols/resource_accounting/memory/poub/verifier/rota.py",
-          "verity/protocols/resource_accounting/memory/poub/prover/rota.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/period.py", "verity/protocols/interface",
           "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/verifier/challenger/challenger.py",
