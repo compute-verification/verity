@@ -185,6 +185,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/circuits/ops/boolean/versions.py", "benchmarks/pouw", "calibration/pouw"]
 parallel = true
 worker_gb = 4
+typical_worker_gb = 2
 workers = 8
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
