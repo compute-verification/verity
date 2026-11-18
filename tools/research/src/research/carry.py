@@ -29,7 +29,8 @@ can still be wrong where two changes interact; that is the risk a candidate take
 Lean check and full check catch it.
 
 No other PR's verdict vouches for a commit of the PR's own line (a PR stacked on this one was reviewed over it, not for it),
-nor for an older head of that PR.
+nor for an older head of that PR.  A hold at a later head of the PR voids an older head's land for whatever carries from it
+(`voided`).
 
 ``python -m research.carry OLD NEW [--repo DIR] [--landed REF ...] [--head REF ...]`` prints the verdict as JSON and exits 0
 when it carries: each ``--landed`` ref and its ancestors landed (`origin/main` when none is given), each
@@ -286,6 +287,14 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
     why = (f"its {len(rows)} commit(s) since only {' and '.join(did)}" if did else
            f"its {len(rows)} commit(s) since change only generated content")
     return Delta("merge-only", why + (f", leaving {_some(left)} to the checks" if left else ""), **done)
+
+
+def voided(repo: Path, head: str, held: Iterable[str]) -> str | None:
+    """The first of ``held`` (heads of ``head``'s PR whose verdicts a hold keeps) that is a later head than ``head``: any but
+    ``head`` and its ancestors (a head pushed on it, or one that took its place), and one this clone lacks.  A fault found
+    there may be one ``head`` holds, so such a hold voids ``head``'s land for whatever carries from it, however old the hold;
+    a hold at an ancestor is what ``head`` answered.  None when no hold voids it."""
+    return next((h for h in sorted(set(held)) if h != head and not _ok(repo, "merge-base", "--is-ancestor", h, head)), None)
 
 
 def trust(repo: Path, landed: Iterable[str], heads: Iterable[str] = (),
