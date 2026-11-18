@@ -437,7 +437,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.replay.evaluate', '_Unresolved'),
     ('verity_vllm.check.replay.evaluate', '_evaluate_row'),
     ('verity_vllm.check.replay.evaluate', '_weight_runs'),
-    ('verity_vllm.compiler.served_rows', '_row'),
     ('verity_vllm.compiler.served_tie', '_bits'),
     ('verity_vllm.compiler.served_tie', '_int'),
     ('verity_vllm.definitions.registry.hopper', '_BoundPrims'),

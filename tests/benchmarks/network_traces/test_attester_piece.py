@@ -806,7 +806,7 @@ def _numbers(p: Path) -> set[int]:
     return {int(x) for x in re.findall(rb"(?<![0-9A-Za-z])[0-9]+(?![0-9A-Za-z])", p.read_bytes())}
 
 
-def _private_chain_out(out: Path) -> Path:
+def _private_chain_out(out: Path, v0: int = V0, derived: int = DERIVED) -> Path:
     """What the chain's relay path leaves in out/ on a served window, the endpoint's report the served node's: each
     step's file carrying the window's private values where the chain writes them, and the report and report.md that
     ``chain_record.py report`` makes of them."""
@@ -817,10 +817,10 @@ def _private_chain_out(out: Path) -> Path:
         "endpoint/report.json": {
             "warden_run": RUN, "at": CR.SERVED_NODE, "verdict": "accepted",
             "io": {"accepted": True, "requests": REQUESTS, "tokens": OUTPUTS, "violations": []},
-            "chain": {"bits": {"T": 1, "bound": True, "rebuilt": True, "v0_total": V0, "commit_windows": [
+            "chain": {"bits": {"T": 1, "bound": True, "rebuilt": True, "v0_total": v0, "commit_windows": [
                 {"window": K, "requests": REQUESTS, "carried": 0, "steps": STEPS, "outputs": OUTPUTS,
-                 "committed_bits": COMMITTED, "v0_bits": V0, "derived_bits": DERIVED, "bound": True, "rebuilt": True}],
-                "windows": [{"window": 0, "v0_bits": V0, "derived_bits": DERIVED, "in_run": True}]}}},
+                 "committed_bits": COMMITTED, "v0_bits": v0, "derived_bits": derived, "bound": True, "rebuilt": True}],
+                "windows": [{"window": 0, "v0_bits": v0, "derived_bits": derived, "in_run": True}]}}},
         "n2/summary.json": {"warden_run": RUN, "ok": True, "link": {"unit": "n2"}, "members": {"honest": {
             "network": {"accepted": True}, "windows": [{"window": 0, "accepted": True, "as_expected": True}]}}},
         "tie/summary.json": {"warden_run": RUN, "class": "warden", "ok": True, "prompt_lens": PROMPT_LENS,
@@ -843,10 +843,27 @@ def _private_chain_out(out: Path) -> Path:
     return out
 
 
+def test_no_advice_length_reaches_the_endpoints_public_document_or_the_report(tmp_path):
+    """The advice's lengths (v0's and the residual's) are private: the endpoint step's public document and the chain's
+    report, report.md included, carry neither, and a run whose advice is longer leaves the same bytes."""
+    longer = (V0 * 7 + 3, DERIVED * 5 + 1)
+    made = {n: _private_chain_out(tmp_path / str(n), *n) for n in ((V0, DERIVED), longer)}
+    public = {}
+    for (v0, derived), out in made.items():
+        assert {v0, derived} <= _numbers(out / "endpoint" / "report.json")
+        doc = CR.endpoint_public(CR.network_attester_endpoint_step(json.loads((out / "endpoint/report.json").read_text())))
+        (out / "public.json").write_text(json.dumps(doc, sort_keys=True))
+        public[v0, derived] = [(out / rel).read_bytes() for rel in ("public.json", "report/report.json", "report/report.md")]
+        assert not [rel for rel in ("public.json", "report/report.json", "report/report.md")
+                    if {v0, derived} & _numbers(out / rel)]
+    assert public[V0, DERIVED] == public[longer]
+    assert '"open": "not established' in public[longer][1].decode()
+
+
 def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path):
     """The chain's out/ holds the window's private values: the endpoint's report (its Commit window's request, step and
-    output counts and its advice's bits), the report made of it (the attestations step's counts, the advice's bits
-    as K's term, never the attested I/O's counts) and report.md, the attestations step's view of the attester's check and the tie's prompt lengths. `publish`
+    output counts and its advice's bits), the report made of it (the attestations step's counts, never the advice's
+    lengths or the attested I/O's counts), the attestations step's view of the attester's check and the tie's prompt lengths. `publish`
     puts none of them in the hold, only `PUBLIC`'s key paths, the endpoint's step its verdict and where it ran, and
     nothing of the scan's answers, the period check's evidence less its attestations. A file put past `publish`, in the
     hold (the endpoint's report and the scan's answers copied whole, as the piece once published them) or in DIR (the
@@ -855,8 +872,8 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     out = _private_chain_out(tmp_path / "out")
     held = {p.relative_to(out).as_posix(): _numbers(p) & PRIVATE for p in out.rglob("*") if p.is_file()}
     assert held["endpoint/report.json"] == PRIVATE - set(PROMPT_LENS) and held["tie/summary.json"] == set(PROMPT_LENS)
-    assert held["report/report.json"] >= {REQUESTS, V0, DERIVED} and OUTPUTS not in held["report/report.json"]
-    assert held["report/report.md"] == {DERIVED} and held["certs.json"] == {REQUESTS}
+    assert held["report/report.json"] == {REQUESTS} and held["report/report.md"] == set()
+    assert held["certs.json"] == {REQUESTS}
     assert json.loads((out / "report" / "report.json").read_text())["verdict"] == "accepted"
     hold, d, q = tmp_path / "hold", tmp_path / "pieces" / "certifier", tmp_path / "quarantine"
     CP.publish(out, hold)
