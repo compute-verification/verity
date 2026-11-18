@@ -435,7 +435,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
                     if p not in IR.TABLE)
     links = (*table, *opening)
     w = IR.interior_window(member, cells, "00", [0], values=IR.link_values(links, Q))
-    rule = TS.Rule(f"rate:{Q}/{N}", K, tuple(v for m in w.members for v in TS.interior_values(m)), 60.0,
+    rule = TS.Rule(f"rate:{Q}/{N}", K, TS.interior_values(w), 60.0,
                    IR.span_values(links))
     pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables={t: h.root for t, h in hs.items()}).public()))
     got = TS.first(pub, check, rule, _placed(pub))
@@ -997,6 +997,6 @@ def test_the_long_rows_class_over_a_131072_id_prompt_has_its_rule_from_its_repla
     rule = TS.rule_of(layout, "rate:1/1", 1)
     d = TS.design(layout, unlinked=True)
     assert d.rows == tuple(SS.replay_rows(layout.program, d.key)) and d.rows
-    assert rule.interior == tuple(v for m in d.window("00", [0]).members for v in TS.interior_values(m)) and rule.interior
+    assert rule.interior == TS.interior_values(d.window("00", [0])) and rule.interior
     with pytest.raises(ValueError, match="reads a writer of 2 units a block.*give the replay block's rows"):
         replace(d, rows=()).window("00", [0])
