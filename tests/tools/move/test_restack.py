@@ -1449,6 +1449,39 @@ def test_a_commit_its_entry_says_is_no_move_is_read_as_none_by_both_readers_and_
     assert r["status"] == "no-moves"
 
 
+def test_a_move_main_holds_only_through_a_merge_that_kept_its_first_parents_tree_and_ran_itself_is_none_a_branch_lacks(
+        repo, lines):
+    """A branch's earlier, landed work merged back with `-s ours` brought into main's history a copy of a move main ran
+    itself, by another commit: the merge's tree is its first parent's, so the copy changed nothing on main, and `moves_on`
+    leaves it out, as research's `queue.moves_between` does (`test_queue.py`), whether the branch holds main's run or lacks
+    it too. A copy whose line main never ran elsewhere stays, as this script's moved merge holds a move in flight whose
+    change its rerun, with no move line, brought; a move on main's first-parent line, the same line again on a merge's
+    second parent with its tree, and `move = false` are as they were."""
+    ran = commit(repo, "main runs the move itself" + LINE, {"NOTES.md": "notes, ran\n"})
+    git(repo, "checkout", "-q", "-b", "stale", "base")
+    copy = commit(repo, "a copy of the move, made again on the branch" + LINE, {"NOTES.md": "notes, copied\n"})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-s", "ours", "-m", "merge the branch's earlier, landed work, keeping this tree", "stale")
+    assert RS.tree_of("HEAD", str(repo)) == RS.tree_of("HEAD^1", str(repo)) and RS.contains(copy, "main", str(repo))
+    layout = (RS.LINE_SCRIPT["Layout-move"], ("--map", "tools/move/layout_map.toml"))
+    assert RS.moves_on("main", ran, str(repo)) == []
+    assert RS.moves_on("main", "pr", str(repo)) == [(ran, *layout)]
+    git(repo, "checkout", "-q", "-b", "inflight")
+    inflight = commit(repo, "a move in flight\n\nLayout-move: tools/move/other_map.toml", {"NOTES.md": "notes, moved\n"})
+    git(repo, "checkout", "-q", "main")
+    commit(repo, "restack: rerun tools/move/layout.py", {"NOTES.md": "notes, moved\n"})
+    git(repo, "merge", "-q", "--no-ff", "-s", "ours", "-m", "merge the layout move, restacked", "inflight")
+    real = commit(repo, "a move on main" + LINE, {"README.md": "readme 2\n"})
+    git(repo, "checkout", "-q", "-b", "side")
+    side = commit(repo, "a move a merge lands" + LINE, {"README.md": "readme 3\n"})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-m", "land the side's move", "side")
+    found = [(inflight, RS.LINE_SCRIPT["Layout-move"], ("--map", "tools/move/other_map.toml")), (real, *layout), (side, *layout)]
+    assert RS.moves_on("main", ran, str(repo)) == found, "the copy stays out, the moves that changed main are in"
+    correct(lines, {real: {"move": False, "reason": "It ran nothing."}})
+    assert RS.moves_on("main", ran, str(repo)) == [found[0], found[2]]
+
+
 @pytest.mark.parametrize("entry, fix", [
     ({"id": "f7b30e1f7ce9", "line": "Move: tools/move/m.toml", "reason": "r"}, "the commit's 40-hex id"),
     ({"line": "Move: tools/move/m.toml --lock", "reason": "r"}, "is no move line"),

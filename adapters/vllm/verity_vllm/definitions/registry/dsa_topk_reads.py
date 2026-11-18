@@ -2,12 +2,12 @@
 the request's history for the layer, so that no unit routes the row's every history row (`DsaButterflyRows_v1`'s form).
 
     DsaTopKReadRows_v1{N,TOPK,BLOCK,READ}
-        (scores: Array<N, F32>, n: I32, root, domain, row: Array<TOPK, Row>, salt: Array<TOPK, Salt>, path: Array<TOPK, Path>)
-            -> Tuple<Array<TOPK, Row>, Array<TOPK, Value<1>>>                                                       (kv, ok)
+        (scores: Array<N, F32>, n: I32, root, domain, row: Array<TOPK, Opening>, salt: Array<TOPK, Salt>,
+         path: Array<TOPK, Path>) -> Tuple<Array<TOPK, Row>, Array<TOPK, Value<1>>>                                 (kv, ok)
 
-READ is the read, `commitments.gates.embedding`'s `EmbeddingRead_v1{V, H}` where served (V the table's capacity, at least N,
-and Row its H u16 words): a static, as `boolean_fp8_moe`'s is, so this module imports no commitment code.  Root, domain, Salt
-and Path are READ's; `READ_PORTS` its parameters.  The body is three stages, each a unit or several (`cut`, `CUTS`):
+READ is the read, `commitments.gates.embedding`'s `EmbeddingRead_v2{V, H}` where served (V the table's capacity, at least N,
+Row its H u16 words, Array<H, Value<16>>, and Opening the row it opens): a static, as `boolean_fp8_moe`'s is, so this module
+imports no commitment code.  Root, domain, Opening, Salt and Path are READ's; `READ_PORTS` its parameters.  The body is three stages, each a unit or several (`cut`, `CUTS`):
 
 * the mask, `DsaTopKMaskCounted_v2{N,TOPK}` (scores, n), cut past `dsa_topk_mask_cut.WHOLE_MAX` keys and up to it a unit,
   `DsaTopKMaskWhole_v2{N,TOPK}`;
@@ -56,8 +56,9 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import ZERO, add, const_bits, mux, sub
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.population import BitsWord
 from verity.circuits.refs import Coll, concat, strided_view, tuple_of
-from verity.circuits.types import Array, Tuple
+from verity.circuits.types import Array, Tuple, Value
 from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 from verity_vllm.definitions.registry import dsa_topk_mask as M
 from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
@@ -403,10 +404,10 @@ def _read(S) -> tuple[tuple, Any]:
     params, ret = S.READ.signature()
     fields = getattr(ret, "fields", ())
     row = fields[0] if len(fields) == 2 else None
-    if (tuple(n for n, _ in params) != READ_PORTS or params[0][1] != I32 or fields[1:] != (BIT,)
-            or not isinstance(row, Array) or row.elem != BF16):
+    if (tuple(n for n, _ in params) != READ_PORTS or params[0][1] != Value(32) or fields[1:] != (BIT,)
+            or not isinstance(row, Array) or row.elem != Value(16)):
         raise ValueError(f"READ = {S.READ.id} is no read of u16 rows: it takes {[n for n, _ in params]} and returns {ret!r}; "
-                         f"bind EmbeddingRead_v1{{V, H}}")
+                         f"bind EmbeddingRead_v2{{V, H}}")
     V = getattr(S.READ, "bindings", {}).get("V")
     if V is not None and V < S.N:
         raise ValueError(f"READ = {S.READ.id} reads V = {V} rows, fewer than the row's N = {S.N} keys: bind V >= N")
@@ -415,8 +416,8 @@ def _read(S) -> tuple[tuple, Any]:
 
 def _rows_sig(S):
     params, row = _read(S)
-    root, domain, _, salt, path = (t for _, t in params[1:])
-    return ((("scores", Array(S.N, F32)), ("n", I32), ("root", root), ("domain", domain), ("row", Array(S.TOPK, row)),
+    root, domain, opening, salt, path = (t for _, t in params[1:])
+    return ((("scores", Array(S.N, F32)), ("n", I32), ("root", root), ("domain", domain), ("row", Array(S.TOPK, opening)),
              ("salt", Array(S.TOPK, salt)), ("path", Array(S.TOPK, path))), Tuple(Array(S.TOPK, row), Array(S.TOPK, BIT)))
 
 
@@ -424,6 +425,7 @@ def _rows(B, S, scores, n, root, domain, row, salt, path):
     _, row_t = _read(S)
     mask = B.call(bind(BM.DsaTopKMaskCountedV2, N=S.N, TOPK=S.TOPK), scores, n)
     tok = index(B, S.N, S.TOPK, index_block(S.N, S.TOPK, S.BLOCK), mask)
+    tok = B.batch(bind(BitsWord, W=32), tok, axes=(0,))
     out = B.batch(S.READ, tok, root, domain, row, salt, path, axes=(0, None, None, 0, 0, 0))
     w = row_t.leaves
     return tuple_of(Coll(Array(S.TOPK, row_t), strided_view(out, 0, w, w + 1, 1, S.TOPK * w)),
