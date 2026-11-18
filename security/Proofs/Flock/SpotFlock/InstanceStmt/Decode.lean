@@ -260,7 +260,7 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
     (ho : (B.nodes[0]!).out = .array 2 (.value 16)) (ht : B.retType = .array 2 (.value 16))
     (hr : B.ret.parts = #[.affine false 0 0 2]) (hs : B.ret.starts = #[0]) :
     (Widths.bodyBad defs key B).run w = .ok none w := by
-  obtain ⟨params, retType, nodes, ret, offsets⟩ := B
+  obtain ⟨params, retType, nodes, ret, offsets, recut⟩ := B
   obtain ⟨parts, starts, count⟩ := ret
   simp only at hn ha ho ht hr hs
   subst ht hr hs
@@ -272,7 +272,19 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
     subst ho
     rw [Array.eq_empty_of_size_eq_zero ha]
     obtain ⟨s', hs'⟩ : ∃ s', Std.Stream.next? (Std.toStream (#[0] : Array ℕ)) = some (0, s') := ⟨_, rfl⟩
-    simp only [hs', Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
+    -- node 0 is an input node or not, as `defs` says; either way it is read at its own width 16 (`recutOk`)
+    have hi : Widths.inputWidths defs ⟨params, .array 2 (.value 16), ⟨[⟨form, fn, #[], .array 2 (.value 16), axes, n,
+        nxs⟩]⟩, ⟨#[.affine false 0 0 2], #[0], count⟩, offsets, recut⟩ = #[none] ∨
+        Widths.inputWidths defs ⟨params, .array 2 (.value 16), ⟨[⟨form, fn, #[], .array 2 (.value 16), axes, n,
+        nxs⟩]⟩, ⟨#[.affine false 0 0 2], #[0], count⟩, offsets, recut⟩ = #[some 16] := by
+      simp only [Widths.inputWidths, List.map_toArray, List.map_cons, List.map_nil]
+      split
+      · split
+        · exact .inr (by rw [homo_A])
+        · exact .inl rfl
+      · exact .inl rfl
+    rcases hi with hi | hi <;>
+    simp only [hi, hs', Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
       List.getElem!_toArray, List.getElem!_eq_getElem?_getD, Widths.seqBad, Widths.partOk, Widths.Src.ty?,
       Array.getElem?_map, List.map_toArray, List.map_cons, List.map_nil, List.getElem?_toArray, Widths.Src.homo?,
       homo_A, Part.count, slice_A, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, gt_iff_lt, Nat.div_pos_iff, List.cons_append,
@@ -283,7 +295,7 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
       Nat.div_self, List.range'_one, List.forIn_cons, getElem?_pos, List.getElem_cons_zero, Option.getD_some,
       List.range'_zero, Nat.not_lt_zero, not_false_eq_true, getElem!_neg, ↓reduceIte, List.forIn_nil, pure_bind,
       Nat.lt_one_iff, Option.isSome_some, Bool.true_and, List.forIn_toArray, Bool.false_eq_true, Option.join_some,
-      Bool.true_eq_false, EStateM.run_bind]
+      Bool.true_eq_false, EStateM.run_bind] <;>
     rfl
 
 /-! ## The canonical JSON domain, with fuel
