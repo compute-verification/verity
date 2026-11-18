@@ -26,6 +26,26 @@ def test_found_by_name() -> None:
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
 
 
+def test_its_window_record_values_are_named_in_the_tables_it_declares() -> None:
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+
+    assert S.declared(PS.PEARL_PLUS, "tables") == PWR.tables() == ("pearl-a", "pearl-y", "pearl-b")
+    assert (PWR.a_value(2, 3), PWR.y_value(2, 3), PWR.b_value(5)) == ("pearl-a/2/3", "pearl-y/2/3", "pearl-b/5")
+
+
+def test_it_hands_the_model_a_committed_bf16_y_and_opens_its_salt_after_the_epoch_root() -> None:
+    assert (S.declared(PS.PEARL_PLUS, "output_format"), S.declared(PS.PEARL_PLUS, "y_committed")) == ("bf16", True)
+    assert S.declared(PS.PEARL_PLUS, "salt_open_root") is PSALT.epoch_open_root
+    assert PSALT.epoch_open_root(bytes(64), 3) != PSALT.epoch_open_root(bytes(64), 4)
+
+
+def test_its_useful_products_are_rowwise_scaled_e4m3_whatever_format_y_leaves_in() -> None:
+    """The forming casts each operand row to E4M3 under its own scale (`pearl_c`'s ``atom``), and the products chain on
+    the E4M3 atom into FP32; y is the unscaled sum, written as BF16."""
+    assert S.declared(PS.PEARL_PLUS, "product_family") == "fp8-e4m3-rowwise"
+    assert S.declared(PS.PEARL_PLUS, "output_format") == "bf16"
+
+
 def test_its_record_row_is_verified_compute_in_the_macs_its_verifier_credits() -> None:
     """The run verdict's ``credited`` (`Credit.lean`'s `creditAtAssumption`) is MACs, the unit its costs are in."""
     assert (S.declared(PS.PEARL_PLUS, "record"), S.declared(PS.PEARL_PLUS, "symbol")) == ("work", "V")

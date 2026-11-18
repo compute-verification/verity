@@ -21,8 +21,7 @@ emits, and what it asks:
   scheduler's running, waiting and finished requests as `StepDue`) and holds the step while one says no;
 - ``schedule()``: `StepBegan`, every call one step numbered from 0, with its requests, its tokens less draft tokens (0
   for a step that scheduled none) and the requests left waiting;
-- ``update_from_output``: `OutputReleased` for each new token, `OutputsComplete` for each request that finished, then
-  `StepEnded`;
+- ``update_from_output``: `OutputsComplete` for each request that finished, then `StepEnded`;
 - ``finish_requests``: `OutputsComplete` for each request it ends; where vLLM names none, every gate is opened first.
 """
 from __future__ import annotations
@@ -76,7 +75,6 @@ class Hook(scheduler_step.Part):
         self.began: collections.deque[int] = collections.deque()    # steps scheduled whose outputs haven't come
         self.held: dict[str, str] = {}                      # vLLM's request id -> its input, until a gate starts it
         self.live: dict[str, str] = {}                      # vLLM's request id -> its input, in the scheduler
-        self.sent: dict[str, int] = {}                      # vLLM's request id -> its tokens released so far
         self.heads: dict[str, tuple[str, Mapping[str, str]]] = {}   # input -> its first line and headers, until added
         self._removal: scheduler_step.Removal | None = None
 
@@ -111,16 +109,10 @@ class Hook(scheduler_step.Part):
         wants = self.ex.wants("steps")
         for batch in (outs or {}).values():
             for o in getattr(batch, "outputs", None) or ():
-                rid, k = o.request_id, len(o.new_token_ids or ())
+                rid = o.request_id
                 input_ = self.live.get(rid) or self.key(rid)
-                index = self.sent.get(rid, 0)
-                self.sent[rid] = index + k
-                if wants:
-                    for j in range(k):
-                        self.ex.emit(H.OutputReleased(input_, index + j, step))
                 if o.finish_reason is not None:
                     self.live.pop(rid, None)
-                    self.sent.pop(rid, None)
                     if wants:
                         self.ex.emit(H.OutputsComplete(input_, step))
         if wants:
@@ -134,12 +126,10 @@ class Hook(scheduler_step.Part):
             ended = [*self.held.values(), *self.live.values()]
             self.held.clear()
             self.live.clear()
-            self.sent.clear()
             rest = None
         else:
             rest, ended = [], []
             for rid in (request_ids,) if isinstance(request_ids, str) else request_ids:
-                self.sent.pop(rid, None)
                 if rid in self.held:
                     ended.append(self.held.pop(rid))
                     continue

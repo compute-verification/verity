@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Core.Levels
+public import Proofs.Core.Draw
 public import Definitions.Claims.SamplingTwo
 
 /-!
@@ -24,13 +25,6 @@ namespace Verity
 
 open Game Claims.Sampling
 open scoped ENNReal
-
-theorem SamplingDesign.missProb_le_one {U : Type} (D : SamplingDesign U) (T : Finset U) : D.missProb T ≤ 1 := by
-  classical
-  unfold missProb prCoin
-  refine (avg_mono fun ω => ?_).trans (avg_const (C := D.Ω) 1).le
-  split_ifs <;> simp
-
 
 /-- A uniform `min(k_t, |C_t|)`-subset of each cell `C_t`, `t < m`, each on coins of its own: `Design.Two`'s inner
 sample in one outer block. -/

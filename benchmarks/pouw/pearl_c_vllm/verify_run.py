@@ -146,6 +146,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pea
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import H100, K_MIN, TILE
 from verity.protocols.resource_accounting.compute.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.scheme import declared
 from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveCommitment
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as REG
 from verity.errors import ProtocolError
@@ -507,9 +509,9 @@ def run_commitment(passes: list[Pass]) -> bytes:
                                                          p.epoch.salt, *(bytes.fromhex(r or "") for r in y_roots(p)))))
 
 
-TIE_A, TIE_Y, TIE_B = "pearl-a/{s}/{c}", "pearl-y/{s}/{c}", "pearl-b/{w}"
-#: W's Pearl+ values: a call's (a round's, `TIE_CALLS`) and a fixed operand's
-TIE_PREFIXES = ("pearl-a/", "pearl-y/", "pearl-b/")
+#: W's Pearl+ values: a call's (a round's, `TIE_CALLS`) and a fixed operand's, in the tables Pearl+ declares
+TIE_PREFIXES = tuple(f"{t}/" for t in declared(schemes.get("pearl-plus"), "tables"))
+TIE_A, TIE_Y, TIE_B = TIE_PREFIXES[0] + "{s}/{c}", TIE_PREFIXES[1] + "{s}/{c}", TIE_PREFIXES[2] + "{w}"
 TIE_CALLS = TIE_PREFIXES[:2]
 #: why `tie` refuses a version-2 W that ties the calls alone: it reads as untied fixed operands, never as a tie
 UNTIED_WEIGHTS = "W registers no weight's B rows (no pearl-b/ value: a window record written before W registered them)"
