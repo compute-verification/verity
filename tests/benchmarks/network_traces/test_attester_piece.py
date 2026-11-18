@@ -51,8 +51,7 @@ import served_verdicts as S  # noqa: E402
 from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS  # noqa: E402
 from tests.verity.protocols.resource_accounting.network.prover.test_scan_zk import published, sz  # noqa: E402
 from test_served_session import RUN  # noqa: E402
-from tests.verity.protocols.resource_accounting.network.verifier.test_network_attester_chain import gate_run  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import network_attester_chain as WC  # noqa: E402
+from test_network_attester_chain import WC, gate_run  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import network_attester as W  # noqa: E402

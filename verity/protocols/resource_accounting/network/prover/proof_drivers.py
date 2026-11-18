@@ -2,7 +2,8 @@
 
 The drivers (`scan_zk`, `network_attester_zk`, `n2_zk`, `n2_tie_zk`, `leak_scan`) stage, prove and verify through the
 one-stage audit's benchmark drivers under `benchmarks/one_stage/`, Flock's own distribution and Flock's proof-format
-reader. `verity` loads none of them, so they come in as one `ProofDrivers`, installed by the command line that runs a driver
+reader, and read a network attester's run through the chain's reader under `benchmarks/network_traces/`. `verity` loads
+none of them, so they come in as one `ProofDrivers`, installed by the command line that runs a driver
 (`benchmarks/network_traces/zk_drivers.py`) before the driver reads it:
 
     proof_drivers.install(drivers)   # once, by the caller
@@ -32,6 +33,8 @@ class ProofDrivers(Protocol):
     class_statement: Any
     #: Flock's proof-format reader (``redigest``: ``layout``, and ``tc.R``, the reads it records)
     redigest: Any
+    #: the chain's reader of a network attester's run: ``pairs``, ``link``
+    network_attester_chain: Any
 
 
 _installed: ProofDrivers | None = None

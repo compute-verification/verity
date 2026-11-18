@@ -62,7 +62,7 @@ def network_traces() -> Iterator[None]:
 
 with network_traces():
     import attester_piece as CP
-    from verity.protocols.resource_accounting.network.verifier import network_attester_chain as WCH
+    from benchmarks.network_traces import network_attester_chain as WCH
     from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS
 
 

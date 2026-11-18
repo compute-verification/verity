@@ -35,7 +35,7 @@ inputs = ["calibration/hardware/cards", "verity", "adapters/vllm", "adapters/tor
           # signs with auditor read
           "benchmarks/network_traces/attester_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/settings.py",
-          "verity/protocols/resource_accounting/network/verifier/network_attester_chain.py", "verity/protocols/resource_accounting/network/attester/network_attester_serve.py",
+          "benchmarks/network_traces/network_attester_chain.py", "verity/protocols/resource_accounting/network/attester/network_attester_serve.py",
           "verity/protocols/resource_accounting/network/attester/connection_rows_run.py",
           "verity/protocols/resource_accounting/network/attester/runner_parts.py", "verity/protocols/resource_accounting/network/attester/attester_key.py",
           "verity/protocols/resource_accounting/network/attester/runner_cli.py",

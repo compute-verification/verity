@@ -3,7 +3,8 @@
 `proof_drivers.ProofDrivers`. This builds it from SPOT's template audit, challenger session and development challenger
 (`a0`, `a5_coins`, `local_challenger`),
 `benchmarks/one_stage/` (`a7`, `a8`, `prove_subprotocol`), Flock's distribution (`verity_flock.circuit`,
-`verity_flock.class_statement`) and Flock's proof-format reader (`redigest`), installs it, and runs the driver's `main`:
+`verity_flock.class_statement`), Flock's proof-format reader (`redigest`) and the chain's reader (`network_attester_chain`),
+installs it, and runs the driver's `main`:
 
     python benchmarks/network_traces/zk_drivers.py scan_zk prove --bin flock-circuit --lean verity-verify-proof --out DIR
     python benchmarks/network_traces/zk_drivers.py network_attester_zk|n2_zk|n2_tie_zk ARGS...
@@ -33,9 +34,10 @@ def proof_drivers() -> SimpleNamespace:
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as a5_coins
     from verity.protocols.proofs.spot.prover.audit import local_challenger
     import a0
+    from benchmarks.network_traces import network_attester_chain
 
     return SimpleNamespace(a0=a0, a5_coins=a5_coins, local_challenger=local_challenger, a7=a7, a8=a8, prove_subprotocol=prove_subprotocol, circuit=circuit, class_statement=class_statement,
-                           redigest=redigest)
+                           redigest=redigest, network_attester_chain=network_attester_chain)
 
 
 def install() -> None:

@@ -104,6 +104,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
 sys.path[:0] = [str(HERE)]
+sys.path.append(str(TREE))  # for benchmarks.network_traces
 import served_session as SS  # noqa: E402
 
 from verity.protocols.compose import schemes  # noqa: E402
@@ -196,7 +197,7 @@ def kept_ingress(serve_dir: Path) -> tuple[object, dict, list[tuple[int, list]]]
     (`prove_path.kept_scan`, which takes this from its caller): the run's deployment parameters, its attested I/O
     (`network_attester_chain.io`) and its attested ingress, each execution phase's number and rows (`network_attester_rows.window_rows`);
     None where the front kept no run. ValueError, naming why, where the kept run can't be read."""
-    from verity.protocols.resource_accounting.network.verifier import network_attester_chain as WC
+    from benchmarks.network_traces import network_attester_chain as WC
     from verity.protocols.resource_accounting.network.verifier import relay_check as RC, network_attester_rows as WRW
 
     if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
@@ -443,7 +444,7 @@ def rows_check(exe: str, run: Path, record: dict) -> None:
     ``record``, the record of its deployment (`network_attester_chain.RECORD`): `Rejected` on its reject, `NotRun` where the case
     can't be read or the check gives no `ROWS` accept or reject."""
     from verity.protocols.resource_accounting.network.prover import scan_period as SP
-    from verity.protocols.resource_accounting.network.verifier import network_attester_chain as WC
+    from benchmarks.network_traces import network_attester_chain as WC
     try:
         case = WC.rows_audit_case(run, record)
     except (SystemExit, OSError, KeyError, ValueError) as e:
@@ -465,7 +466,7 @@ def rows_check(exe: str, run: Path, record: dict) -> None:
 def own_rows(exe: str) -> Callable[[Path], None]:
     """`decide`'s ``rows``: `rows_check` by ``network-rows`` ``exe`` under the kept run's own deployment
     (`network_attester_chain.own_record`), the one the piece's other checks read."""
-    from verity.protocols.resource_accounting.network.verifier import network_attester_chain as WC
+    from benchmarks.network_traces import network_attester_chain as WC
 
     def rows(run: Path) -> None:
         try:
@@ -547,7 +548,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
     chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's chain
     step). `NotRun` when a step can't run."""
     import chain_record as CR
-    from verity.protocols.resource_accounting.network.verifier import network_attester_chain as WC
+    from benchmarks.network_traces import network_attester_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
     reqs = window_requests(serve_dir, window)

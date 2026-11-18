@@ -189,7 +189,7 @@ def network_attester_link(run: Path) -> tuple[TransferBlocks, dict, dict, list]:
     """A network attester run's link (`network_attester_chain.link`: the active network attester's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its attested records by (direction, window) and
     the signer's refusals. A network attester rehearsal's run is refused by name (`network_attester_chain.PROXY`)."""
-    from verity.protocols.resource_accounting.network.verifier import network_attester_chain as WC
+    WC = proof_drivers.drivers().network_attester_chain
     lw, dep, _ = WC.link(run)
     got, refused = WC.pairs(run, dep)
     certified = {(d, w): r for w, pair in enumerate(got) for d, r in zip((Direction.EGRESS, Direction.INGRESS), pair)}

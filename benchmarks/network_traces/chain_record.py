@@ -75,6 +75,7 @@ from verity.protocols.resource_accounting.network.prover import released_keys as
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 SCHEMA = "verity-network-chain/record-report/v1"
 DELTAS = (0.5, 2.0 ** -20)
@@ -248,7 +249,7 @@ ADVICE_CLI = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 def network_attester_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
     """The endpoint's own advice for a network attester run (`served_endpoint`), on the attested I/O read off its
     cells (`network_attester_chain.io`)."""
-    from verity.protocols.resource_accounting.network.verifier import network_attester_chain as WC
+    from benchmarks.network_traces import network_attester_chain as WC
 
     if not (ep / "advice_trace.jsonl").is_file():
         raise SystemExit(f"{ep} holds no advice_trace.jsonl: the endpoint step reads the endpoint's private records (its "
@@ -365,7 +366,7 @@ def on_network_attester(step: dict, doc: dict | None, run_id: str | None, what: 
     """A network-certifier-path step held to the network attester run the attestations step read (``run_id``): refused
     by name (`network_attester_chain.PROXY`) when its input is a network attester rehearsal's (it names no active network attester run),
     and when it is another network attester run's."""
-    from verity.protocols.resource_accounting.network.verifier.network_attester_chain import PROXY
+    from benchmarks.network_traces.network_attester_chain import PROXY
 
     if doc is None or step.get("verdict") in ("not run", "not given"):
         return step
@@ -1105,7 +1106,7 @@ def main(argv=None) -> int:
     if a.command == "custody":
         doc = custody(a.gates)
     elif a.command == "certs":
-        from verity.protocols.resource_accounting.network.verifier import network_attester_chain as WC
+        from benchmarks.network_traces import network_attester_chain as WC
         doc, private = WC.checked(a.network_attester_run, a.deployed)
         doc |= {"in_the_clear": CLEAR["warden_certificates"]}
         if a.witness is not None:
