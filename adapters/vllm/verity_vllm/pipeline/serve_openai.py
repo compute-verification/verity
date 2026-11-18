@@ -624,7 +624,7 @@ def listed(opts: Any, out: Path) -> list[tuple[Any, dict[str, Any]]]:
 def private() -> str | None:
     """The directory outside the run output each scheme keeps its own under: ``VERITY_PROTOCOLS_CONFIG``'s ``private``,
     as `scheme_plugin` hands it."""
-    return (settings.get("VERITY_PROTOCOLS_CONFIG") or {}).get("private")
+    return settings.get("VERITY_PROTOCOLS_CONFIG").get("private")
 
 
 def scheme_refusal(opts: Any, found: list[tuple[Any, dict[str, Any]]]) -> str | None:

@@ -93,7 +93,7 @@ def private_refusal(environ: Mapping[str, str] | None = None) -> str | None:
     from verity_vllm import settings
     from verity_vllm.pipeline.serve_guard import inside_run
 
-    d = (settings.get("VERITY_PROTOCOLS_CONFIG", environ) or {}).get("private")
+    d = settings.get("VERITY_PROTOCOLS_CONFIG", environ).get("private")
     if not d:
         return ("a replay bundle's salt keys and salts go to VERITY_PROTOCOLS_CONFIG's private, which names none: set it, outside "
                 "the run's directory")
