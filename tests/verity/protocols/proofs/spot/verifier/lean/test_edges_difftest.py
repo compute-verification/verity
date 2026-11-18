@@ -278,6 +278,32 @@ SLOTS = _slots_toy("CoreEdgesSlots")
 ROPE_WIDE = _fields_toy("CoreEdgesRoPEWide", 48, 64, Array(64, Value(16)),
                         lambda w: {"strided": ["n", w, 0, 2048, 3072, 1, 2**26]}, readers=2**20, writers=2**15)
 
+def _weight_toy(name: str, part) -> dict:
+    """A matmul's shared weight: a reader (16 members, each 64 leaves) whose argument is `part` over the root's input
+    node 0 (256 leaves)."""
+    col = Array(64, Value(16))
+    reader = bind(CompositeDefinition(f"{name}R", 0, (), lambda S: ((("x", col),), col),
+                                      lambda B, S, x: B.batch(XOR16, x, x, axes=(0, 0)), register=False))
+    defn = bind(CompositeDefinition(name, 0, (), lambda S: ((("w", Array(4, col)), ("y", Array(16, col))), Array(16, col)),
+                                    lambda B, S, w, y: B.batch(reader, y, axes=(0,)), register=False))
+    desc = json.loads(D.canonical(codec.encode_program(Program(defn))))
+    tr = codec.descriptor_id(reader)
+    r = next(k for k, x in enumerate(_nodes(desc)) if desc["callees"][x["fn"]] == tr)
+    _nodes(desc)[r]["args"][0]["refs"] = part
+    template = {"units": 1, "rows": {"x": [64, 1]}, "outs": {"out": 64}}
+    return {"program": desc, "ranges": [[r, tr, 0, 16]], "wiring": {"templates": {tr: template}, "cuts": {}, "wires": []}}
+
+
+#: a part all of whose lanes read input nodes states no wire, however its members step over it
+INPUT_CASES = [
+    ("the shared weight, strided: members read successive stretches of a run, then repeat",
+     _weight_toy("CoreEdgesWeightS", {"strided": ["n", 0, 0, 256, 0, 1, 1024]}), {"wires": []}),
+    ("the shared weight, a grid lane of outer step 0",
+     _weight_toy("CoreEdgesWeightG", {"grid": [256, [["n", 0, 0, 1, [[4, 0]]]]]}), {"wires": []}),
+    ("the shared weight in runs the members straddle",
+     _weight_toy("CoreEdgesWeightR", {"strided": ["n", 0, 0, 100, 0, 1, 1024]}), {"wires": []}),
+]
+
 #: the served classes' reads, whose field's place in the writer unit steps with a digit (the wire's `ostep`)
 SERVED_CASES = [
     ("the tied class's rotary head: 32 fields of each of 4 writer units", ROPE,
@@ -340,7 +366,8 @@ def _code(out: dict) -> dict:
 
 
 EDGES = D.Port("spot-difftest", "edges", reference,
-               st.sampled_from([c[1] for c in CASES + SEED_CASES + WORD_CASES + SERVED_CASES] + _variants()),
+               st.sampled_from([c[1] for c in CASES + SEED_CASES + WORD_CASES + SERVED_CASES + INPUT_CASES]
+                               + _variants()),
                package=PACKAGE, need_rejects=False, of_record="lean")
 pieces = D.server_fixture(EDGES)
 
@@ -356,6 +383,13 @@ def test_the_named_cases(pieces, name, j, want):
 def test_the_generators_forms(pieces, name, j, want):
     """Members stepping inside a run are a wire in closed form, and an explicit part's rows each a wire or none, in
     Lean and in the twin."""
+    assert _code(got := reference(j)) == want
+    assert pieces.call("edges", j) == ("output", D.canonical(got))
+
+
+@pytest.mark.parametrize("name, j, want", INPUT_CASES, ids=[c[0] for c in INPUT_CASES])
+def test_a_read_of_input_nodes_is_no_edge(pieces, name, j, want):
+    """A part all of whose lanes read input nodes is skipped before its rows are read, in Lean and in the twin."""
     assert _code(got := reference(j)) == want
     assert pieces.call("edges", j) == ("output", D.canonical(got))
 

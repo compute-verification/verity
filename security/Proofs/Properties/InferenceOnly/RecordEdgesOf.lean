@@ -129,6 +129,8 @@ theorem partWires_wire {P : Prog} {fu W k i q s0 out} (h : partWires P fu W k i 
   split at h
   · rename_i rt rb hfu
     dsimp only at h
+    split at h
+    · cases h; simp
     generalize (P.defs[(P.defs[P.root]!.body.nodes[k]!).fn]!).params[i]! = pt at h
     obtain ⟨port, ty⟩ := pt
     dsimp only at h

@@ -355,6 +355,8 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
     if k not in fu:
         raise Refusal("edge-template")
     rt, rb = fu[k]
+    if q[0] != "e" and q[2] and all(not ln[0] and R.nodes[ln[1]]["input"] for ln in q[2]):
+        return []
     port, ty = node["params"][i]
     a = node["args"][i]
     cuts = cuts_of(rt, port)

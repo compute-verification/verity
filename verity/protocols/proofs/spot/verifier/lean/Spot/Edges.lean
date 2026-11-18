@@ -14,7 +14,8 @@ meta import Std.Data.HashMap
 
 `edgesOf` reads the wiring off the Program itself: each argument part of a root node that reads an earlier non-input
 root node's outputs is one `Spot.Wires.Wire` per row of the reader's port, in closed form. Units are numbered as
-`UnitAt` numbers them: a root node's members after its template's units in the earlier ranges.
+`UnitAt` numbers them: a root node's members after its template's units in the earlier ranges. A part all of whose
+lanes read input nodes (a shared weight, however its members step over it) states no wire.
 
 The rule is by row. A reader row (the port whole, or one of the `k` rows the wiring cuts it into: leaves
 `[j·n/k, (j+1)·n/k)` of a member's `n`) lies in one part of its argument, adjacent affine parts that continue one
@@ -291,6 +292,8 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
   let nodes := (P.defs[P.root]!).body.nodes
   let node := nodes[k]!
   let some (rt, rb) := fu[k]? | throw "edge-template"
+  let lanes := (partLanes q).2
+  if !lanes.isEmpty && lanes.all (fun ln => !ln.p && isInputNode P ln.i) then return []
   let (port, ty) := (P.defs[node.fn]!).params[i]!
   let a := node.args[i]!
   let cuts := W.cutsOf rt port
