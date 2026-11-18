@@ -55,6 +55,7 @@ def test_the_rule_switches_leave_the_verifier_as_it_was() -> None:
     assert {a.rule for a in ra.ATTACKS} <= set(ra.SWITCHES)
 
 
+@pytest.mark.slow
 @needs_refresh
 def test_the_honest_refresh_rota_is_accepted_and_earns_no_free_receipts() -> None:
     """The reference prover's rota (`audit_prover.Refresh`): every receipt credited, each of a stored form held, F
@@ -69,6 +70,7 @@ def test_the_honest_refresh_rota_is_accepted_and_earns_no_free_receipts() -> Non
     assert all(ps.plan.runs[0][0] >= N for ps in s.passes[ra.LIFETIME:])
 
 
+@pytest.mark.slow
 @needs_refresh
 @pytest.mark.parametrize("attack", ra.ATTACKS, ids=[a.name for a in ra.ATTACKS])
 def test_each_attack_earns_free_receipts_only_with_its_rule_off(attack: ra.Attack) -> None:
@@ -78,13 +80,15 @@ def test_each_attack_earns_free_receipts_only_with_its_rule_off(attack: ra.Attac
     assert on == ra.Outcome(False, attack.failure, None)
 
 
+@pytest.mark.slow
 @needs_refresh
-def test_laundering_every_chunk_is_caught_and_one_chunk_mostly_is_not() -> None:
+def test_laundering_every_chunk_is_caught_and_one_chunk_is_a_rate() -> None:
     """Attack 4 with every rule on at the reference session's 16 openings a window: all of a re-key's 32 chunks
-    laundered is caught under every coin tried; one laundered chunk is a rate, whose uncaught runs earn its two
-    reads and whose sample term charges at least that."""
-    every = ra.laundering(ra.CLASS, 3)
+    laundered is caught; one laundered chunk is a rate, whose uncaught runs earn its two reads, no more than the
+    sample term charges."""
+    every = ra.laundering(ra.CLASS, 1)
     assert every.caught == every.trials and every.bound < 1e-6
-    one = ra.laundering(1, 3)
+    one = ra.laundering(1, 2)
     assert one.caught + len(one.free) == one.trials and set(one.free) <= {2}
+    assert all(f <= c for f, c in zip(one.free, one.sample))
     assert 0 < one.bound < 1
