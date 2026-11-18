@@ -289,10 +289,11 @@
 # and PoUW's period case once each of its windows names R (`served_cases.py`). The
 # preflight refuses H1_TIE on a tree whose window-commit takes no --window-registration.
 # DAY=N (off by default: unset, serve-openai writes what it wrote before) declares day N's one circuit in DAY_LOG, the
-# deployment's registration log kept across runs, before the model loads (serve-openai's --day, `serve_day`): DAY_PROGRAM,
-# the SHA-512 of the program the day's windows register, DAY_BLOCKS its block Definitions, and DAY_PARAMS the log's
-# {auditor, composite} (needed for a new log). A second declaration of the day, to another circuit, is refused by the
-# log's check (duplicate-declaration) and the serve doesn't start; the same one again (a rerun within the day) is the day's.
+# deployment's registration log, which holds one compiler for its life, before the model loads (serve-openai's --day,
+# `serve_day`): DAY_PROGRAM, the SHA-512 of the program the day's windows register, DAY_BLOCKS its block Definitions, and
+# DAY_PARAMS the log's {auditor, composite} (needed for a new log). A second declaration of the day, to another circuit, is
+# refused by the log's check (duplicate-declaration) and the serve doesn't start; the same one again (a rerun within the
+# day) is the day's.
 # Each H1 W names the declaration, an R of another program is refused at its close, and V3c's audit runs R2 against the
 # log's declarations (records_audit's --day). Under H1_TIE DAY_PROGRAM is V3C_CLASS's window circuit's at H1's tables, R's
 # `program` (h1/w<k>/record.json), which the model, the class and H1's layout alone fix. A deferral carries the day: DAY
@@ -345,7 +346,8 @@
 # the serve dir's pearl/w<k>/. Each epoch's salt coin is a live salt-only session of its window's own on vy-challenger-1
 # (`serve_pearl.live`: serve-openai's --challenger-gate PEARLC_CHALLENGER_GATE, --challenger-peer PEARLC_CHALLENGER_PEER
 # and --challenger-lane PEARLC_CHALLENGER_LANE, defaulted as above), reserved under the lane as the window opens and
-# joining its open Pearl-C period; PEARLC_CHALLENGER_GATE set empty leaves them in-process, and the piece claims no
+# joining its open Pearl-C period (with CERTIFIER_FRONT, on the fixed load's windows alone: --pearl-users, so the
+# front's windows reserve nothing in the period's cap of 1); PEARLC_CHALLENGER_GATE set empty leaves them in-process, and the piece claims no
 # verdict. Its defaults are then Llama 3.2 1B's
 # BF16 checkpoint (REPO unsloth/Llama-3.2-1B, PRECISION bfloat16, the arm's), the BF16 B4 row's traced Build under
 # /workspace/research/vllm-pearlc-h200bf16 as ROW, LOAD=fixed at V3C_CLASS's load (SLOTS its slots, PROMPTS P:P at its
@@ -1083,6 +1085,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       "$PEARLC_KERNEL" "$PEARLC_CUBIN")")
     [ -n "$PEARLC_CHALLENGER_GATE" ] && h1+=(--challenger-gate "$PEARLC_CHALLENGER_GATE"
                                             --challenger-peer "$PEARLC_CHALLENGER_PEER" --challenger-lane "$PEARLC_CHALLENGER_LANE")
+    [ -z "${CERTIFIER_FRONT:-}" ] || h1+=(--pearl-users 'fixed\.[0-9]+')
   fi
   local polls=450
   if [ -n "${H1_TIE:-}" ]; then  # a window's line waits for its release, which waits for its window commit

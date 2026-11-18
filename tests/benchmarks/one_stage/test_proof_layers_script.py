@@ -32,7 +32,8 @@ def test_its_runs_and_partitions_are_the_readmes():
     assert script_designs == DESIGNS and "ZK_DESIGN=subset:880 " in TEXT
     assert script_runs == PLAIN
     assert "A5_COINS=challenger $1A5_PARTITION=" in TEXT and "bash benchmarks/one_stage/a5_llama1b_h200.sh" in TEXT
-    assert "pod_bootstrap.sh --cases LLAMA32_1B_INT8" in TEXT
+    assert "kept_bootstrap.sh $A5_CARD LLAMA32_1B_INT8" in TEXT
+    assert 'flock -s 9' in TEXT and "export VENV=$boot/venv312 HF_HOME=$boot/hf A5_TAPS=$boot/cp" in TEXT
     assert "verity bench prove layers --flock" in TEXT and "--recursion" not in TEXT
     assert '--sampling $(q "$WORK/out-sampling")${A5_STEPS:+ --batch $A5_STEPS} |' in TEXT
 

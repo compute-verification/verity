@@ -70,6 +70,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
 from verity.circuits import requirement
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec
 from verity.protocols.resource_accounting.memory.poub.verifier.memory_map import (

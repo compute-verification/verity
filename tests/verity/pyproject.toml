@@ -6,9 +6,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_periods_difftest.py"]
-# What the tests import of `verity`: the Site, the wire whose canonical JSON its digests are taken over, and what the
-# wire's test holds the wire to: the commitments' canonical JSON, and S1's LMS, the handshake's party keys; and the
-# monitoring periods (`verity/protocol.py`). Each module is named by its file, so it stays an input wherever it sits;
+# What the tests import of `verity`: the Site, the site log a node's entry is in (`site_log.py`, with the packages
+# above it), the wire whose canonical JSON its digests are taken over, and what the wire's test holds the wire to: the
+# commitments' canonical JSON, and S1's LMS, the handshake's party keys; and the monitoring periods (`verity/protocol.py`). Each module is named by its file, so it stays an input wherever it sits;
 # the handshake's package is read when it is imported. The card and node files' tests read the files, and the sheets
 # held to them: the B200's data sheet (`Accounting/Sheets/B200.lean`) and the H200's figures as a value (`Sheet.lean`'s
 # `sheetCard`).
@@ -17,6 +17,8 @@ untraced = ["tests/test_periods_difftest.py"]
 # requires (under `verity/circuits` and `verity/commitments`), and these files of Flock's verifier (`Flock.Canon` and
 # what it imports, and the package's configuration).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/device.py",
+          "verity/protocols/__init__.py", "verity/protocols/registration/__init__.py",
+          "verity/protocols/registration/verifier/__init__.py", "verity/protocols/registration/verifier/site_log.py",
           "verity/channel.py", "verity/protocol.py", "verity/runtime/handshake.py", "verity/runtime/framing.py",
           "verity/party.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
