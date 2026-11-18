@@ -30,9 +30,8 @@ from typing import Any
 
 from verity import hooks as H
 from verity.channel import Int, Json, Schema
-from verity.protocols.resource_accounting.compute.pouw.prover import workload
-from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import runs_on
-from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
+from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.scheme import VERIFIER, Block, Charge, Lacks, Order, Scheme, Term, register
 
@@ -113,11 +112,10 @@ def spend_epoch(private: str | os.PathLike[str]) -> int:
     directory, before it is returned: a killed server's number is never handed out again, so no later server opens a
     session on a root already used (the gate's one session a root); a number may be skipped."""
     path = Path(private) / EPOCH_FILE
-    try:
-        text = path.read_text()
-    except FileNotFoundError:
+    if not path.exists():
         k = 0
     else:
+        text = path.read_text()
         if not re.fullmatch(r"(0|[1-9][0-9]*)\n", text) or int(text) >= 2**64 - 1:
             raise ValueError(f"pearl-plus: {path} holds {text[:40]!r}, not the last salt epoch number spent below 2^64 - 1: "
                              "refused rather than risk a number already used")
@@ -490,7 +488,7 @@ PEARL_PLUS = register(Scheme(
     output_format="bf16",
     product_family="fp8-e4m3-rowwise",
     y_committed=True,
-    salt_open_root=epoch_open_root,
+    salt_open_root=serving.epoch_open_root,
     kernels=runs_on(KERNEL),
     keeps_weight_copy=True,
 ))

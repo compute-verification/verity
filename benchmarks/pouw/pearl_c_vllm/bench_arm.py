@@ -209,13 +209,13 @@ class PearlCArm:
         if self._kernel is None:
             from verity.protocols.resource_accounting.scheme import declared
             from verity_bench import kit
-            from verity_bench.schemes import served, useful_work
+            from verity_bench.schemes import arch, served, useful_work
 
             if self.protocol is None:
                 raise ValueError(f"{self.id} names no useful-work scheme: build it as {type(self).__name__}(NAME), NAME "
                                  "a registered compute scheme's name")
             card = card or kit.card_short(kit.host_stamp()["card"])
-            scheme = declared(served(useful_work(self.protocol)), "kernels")(card, pinned=True)
+            scheme = declared(served(useful_work(self.protocol)), "kernels")(card, pinned=True, arch=arch(card))
             self._kernel = scheme, Path(settings.PEARLC_KERNEL or kernel_directory(scheme, card))
         return self._kernel
 
