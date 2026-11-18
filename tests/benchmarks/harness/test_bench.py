@@ -37,7 +37,6 @@ from verity_bench.vllm.presets import (
     expand_sweep,
     load_spec,
     load_sweep,
-    local_checkpoint,
     resolve_spec,
 )
 from verity_bench.vllm.runner import (
@@ -288,22 +287,6 @@ def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_othe
         jobs.check_point_environment(stock, {"VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"})
 
 
-def test_a_point_refuses_a_local_checkpoint_whose_files_differ_from_the_spec_digest(tmp_path, monkeypatch, capsys):
-    checkpoint = tmp_path / "model"
-    checkpoint.mkdir()
-    (checkpoint / "config.json").write_text("{}")
-    digest = local_checkpoint(resolve_spec("llama31-8b-fp8-1gpu").preset, checkpoint).model_digest
-    path = _spec_with(tmp_path, "")
-    text = path.read_text().replace('model = "unsloth/Llama-3.1-8B"', f'model = "{checkpoint}"\nmodel_digest = "{digest}"')
-    path.write_text(re.sub(r'(?m)^(revision|case) = .*\n', "", text))
-    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
-    item = jobs.make_plan(path, lookup=lambda identity, commit: None).points[0]
-    (checkpoint / "config.json").write_text('{"changed": true}')
-    with pytest.raises(SystemExit):
-        main(["_vllm-point", "--spec", str(path), "--point", item.point.id, "--identity", item.identity])
-    assert f"not the spec's model_digest {digest}" in capsys.readouterr().err
-
-
 @pytest.mark.parametrize("card", ["NVIDIA H100 80GB HBM3", "NVIDIA H200"])
 def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(tmp_path, monkeypatch, capsys, card):
     path = _spec_with(tmp_path, "")
@@ -321,19 +304,6 @@ def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(t
         assert stop.value.code == 2 and (
             f"the card is a {card}, not the h200 of spec 'llama31-8b-fp8-1gpu' (NVIDIA H200): run it on a node whose "
             "card is a NVIDIA H200, or name this card where the spec lists it (`SPEC@CARD`)") in capsys.readouterr().err
-
-
-def test_a_local_checkpoint_is_bound_by_the_files_a_loader_reads_not_the_hub_snapshots_metadata(tmp_path):
-    preset = resolve_spec("llama31-8b-fp8-1gpu").preset
-    checkpoint = tmp_path / "model"
-    checkpoint.mkdir()
-    (checkpoint / "config.json").write_text("{}")
-    digest = local_checkpoint(preset, checkpoint).model_digest
-    (checkpoint / ".gitattributes").write_text("*.safetensors filter=lfs\n")
-    (checkpoint / "README.md").write_text("# a model card\n")
-    assert local_checkpoint(preset, checkpoint).model_digest == digest
-    (checkpoint / "generation_config.json").write_text("{}")
-    assert local_checkpoint(preset, checkpoint).model_digest != digest
 
 
 def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
@@ -362,8 +332,8 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
     assert spec.env["VERITY_VLLM_BENCH_KV_RECEIPTS"] == "on"
     stock = resolve_spec("llama31-8b-fp8-1gpu")
     bound = dict(id=stock.preset.id, model=stock.preset.model, revision=stock.preset.revision, case=stock.preset.case,
-                 model_digest=None)
-    assert spec.preset.model_digest and replace(spec.preset, **bound) == stock.preset
+                 engine_settings={k: v for k, v in spec.preset.engine_settings.items() if k != "batch_invariant"})
+    assert spec.preset.revision.startswith("sha256:") and replace(spec.preset, **bound) == stock.preset
     root = Path(__file__).resolve().parents[3]
     setup = (root / spec.setup).read_text()
     bench_arm = (root / "benchmarks/vllm_encoded/bench_arm.py").read_text()
@@ -468,7 +438,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     class Run:
         def __init__(self, y, **commits):
             self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
-            self.scheme, self.schedule = SimpleNamespace(name="pearl-c-sm120-v1-h3"), SimpleNamespace(name="deferred")
+            self.scheme, self.schedule = SimpleNamespace(name="pearl-c-h100-v1-h3"), SimpleNamespace(name="deferred")
             self.commits = {"weights_root": "ab" * 64, **commits}
             g = torch.Generator().manual_seed(0)
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))

@@ -114,7 +114,7 @@ def vu_export(args: Any, pair: int, rc: Any, manifest: Any, versions: dict[str, 
 def live_weights_check(register: Callable[[], dict[str, Any]], com: Any, rc: Any) -> dict[str, Any]:
     """[O5] the weight slices the relations consume must be the COMMITTED weights: re-register the live parameters now (`register`) and
     compare the root with the run's weights root (registered before the workload; a param swap after it is a named FAIL).  `register`
-    re-registers under the run's recorded key (`register_weights(replay=True)`)."""
+    re-registers under the run's recorded salts (`register_weights(replay=True)`)."""
     try:
         _w_saved = getattr(com, "weights", None)
         _w_now = register()     # through what a protocol option released

@@ -321,7 +321,7 @@ def test_a_row_whose_served_words_are_not_its_splits_combine_is_refused():
     s = Served()
     s.y[3] ^= np.uint16(1)
     with pytest.raises(ValueError, match="the twin's end of its 3 blocks is not the row's served out words"):
-        read(s, members(s))
+        read(s, SRW.members(TMPLS, [s.rows] * len(TMPLS), None, PER_CHUNK))
 
 
 def test_a_partition_without_a_writer_s_template_is_refused():
@@ -559,7 +559,7 @@ def test_a_key_rows_writer_whose_return_is_not_its_input_is_refused_by_its_defin
     """A key rows' writer returns its input: an output row that is not its input row is not its Definition's output (the
     Boolean body's own refusal is the Definitions' test)."""
     s = Served(row(HALF))
-    ms = members(s, UNITS, UNITS_CHUNK)
+    ms = SRW.members(UNITS, [s.rows] * len(UNITS), None, UNITS_CHUNK)
     got = [(m, g) for m, (g, _e) in zip(ms, read(s, ms, UNITS)) if is_keys(m.template)]
     assert {m.template for m, _g in got} == set(filter(is_keys, UNITS)) and len(got) == 6
     for m, g in got:

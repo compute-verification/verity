@@ -12,10 +12,12 @@
 #               Under `gpu-lease 1 --wait --on $GPUS --max-min 25`: `bwchip` (its sweeps' gates are the chains' and
 #               chases' final states against the host's; a failed sweep reports nothing, and bwchip exits 3), then
 #               `bwchip --ur` for each pair, one process each (a register that doesn't exist may fault the context):
-#               ur.jsonl. Env: GPUS (0,1,2,3: NUMA node 0's), TIMED, ONLY (one sweep), UR_PAIRS. Outputs under
+#               ur.jsonl. Env: CUDA_HOME (the toolkit's directory, required: the probe names no version of its
+#               own), GPUS (0,1,2,3: NUMA node 0's), TIMED, ONLY (one sweep), UR_PAIRS. Outputs under
 #               $RESEARCH_RUN_DIR/out: build.txt, gpu.txt, sass.txt, uniform.txt, chip.json, ur.jsonl.
 #   write_gpu   The write ceilings' GPU half: builds write.cu (bwwrite) for ARCH (90a, 120a; where it isn't given, the
-#               node's first card's name tells it) and runs every arm on one card, the queue's GPU (GPU_LEASE_UUID) or
+#               node's first card's name tells it) with toolkit 13.0 (NVCC, else $CUDA_HOME, else the machine's
+#               record: `machine.py toolkit 13.0`) and runs every arm on one card, the queue's GPU (GPU_LEASE_UUID) or
 #               one it leases, with the card's clocks, PCIe link and ECC mode before and after and nvidia-smi dmon
 #               beside it. Outputs in $OUT: build.txt, sass.txt, gpu.txt, dmon.txt, write.jsonl, rc.txt. ARGS go to
 #               bwwrite (default: 32 GiB on the card, 8 GiB pinned on the host, 7 reps).
@@ -26,7 +28,7 @@
 #               build.txt, write_host.jsonl, rc.txt; its number only where no record has a wrong byte (else exit 5).
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign resource-accounting \
-#     --declared-output 'out/*' -- taskset -c 48-95 verity calibrate bandwidth chip
+#     --declared-output 'out/*' -- env CUDA_HOME=DIR taskset -c 48-95 verity calibrate bandwidth chip
 #   research run --queue --gpus 1 --max-min 30 --cpus 8 --mem-gb 32 --project verity --source . --cwd source \
 #     -- verity calibrate bandwidth write_gpu
 #   research run --on auto --cpus 48 --mem-gb 64 --project verity --cwd source -- verity calibrate bandwidth write_host
@@ -57,7 +59,8 @@ if [ "${1:-}" = leased ]; then
   exit $rc
 fi
 
-CUDA=${CUDA:-/usr/local/cuda}
+CUDA=${CUDA:-${CUDA_HOME:-}}
+[ -n "$CUDA" ] || { echo "REFUSED: chip: no CUDA toolkit given: set CUDA_HOME to its directory (the machine's own: python3 benchmarks/kernels/machine.py toolkit)" >&2; exit 3; }
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 FLAGS=(-O3 -std=c++17 -arch=sm_120 -Xptxas -v)
 { "$CUDA/bin/nvcc" --version; echo "flags: ${FLAGS[*]}"; } > "$O/build.txt"
@@ -109,7 +112,7 @@ set -uxo pipefail
 export O=${OUT:?run under research run}; mkdir -p "$O"
 BW=$PWD/calibration/bandwidth
 export B=$(mktemp -d /tmp/bwwrite.XXXXXX); trap 'rm -rf "$B"' EXIT
-NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
+NVCC=${NVCC:-$(python3 benchmarks/kernels/machine.py toolkit 13.0)/bin/nvcc} || { echo 3 > "$O/rc.txt"; exit 3; }
 if [ -z "${ARCH:-}" ]; then
   case $(nvidia-smi --query-gpu=name --format=csv,noheader -i 0 2> /dev/null || true) in
     *H200* | *H100*) ARCH=90a ;;
