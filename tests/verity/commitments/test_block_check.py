@@ -725,18 +725,18 @@ def test_v3s_range_is_v2s_less_the_value_tree(rows) -> None:
                 assert BC.opening_rows_v3(S)
         if top < 28 + 32:
             for more in (dict(DR=most - 31, DO=32), dict(DR=28, DO=most - 27)):
-                with pytest.raises(ValueError, match=f"^BlockOpeningCheck_v3: DR \\+ DO is at most {top} levels at {low} to "
+                with pytest.raises(ValueError, match=f"^RekeyOpeningCheck_v1: DR \\+ DO is at most {top} levels at {low} to "
                                                      f"{rows} sketch rows, not {top + 1}"):
                     BC.opening_rows_v3(_v3(_v2(P1024), ROWS=n, **more))
     assert BC.opening_rows_v3(_v3(_v2(P1024), ROWS=64, DR=23, DO=27))
     assert BC.opening_rows_v3(_v3(_v2(P1024), ROWS=16, DR=24, DO=28))
-    with pytest.raises(ValueError, match="^BlockOpeningCheck_v3: DR \\+ DO is at most 51 levels"):
+    with pytest.raises(ValueError, match="^RekeyOpeningCheck_v1: DR \\+ DO is at most 51 levels"):
         BC.opening_rows_v3(_v3(_v2(P1024), ROWS=64, DR=24, DO=28))
 
 
 @pytest.mark.parametrize("bad", [dict(K=4), dict(ROWS=65), dict(LEAF=17), dict(DR=29), dict(DO=33), dict(DO=0)])
 def test_a_v3_binding_past_its_range_is_refused_by_name(bad) -> None:
-    with pytest.raises(ValueError, match="^BlockOpeningCheck_v3: "):
+    with pytest.raises(ValueError, match="^RekeyOpeningCheck_v1: "):
         BC.opening_rows_v3(_v3(_v2(P1024), **bad))
 
 

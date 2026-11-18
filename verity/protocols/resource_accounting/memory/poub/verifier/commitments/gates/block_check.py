@@ -126,10 +126,10 @@ them the 789 GB store's 192,626,953, which needs 53 levels. At 17 to 63 rows the
 toy's 16-row units fit at every depth the width limits admit. A fourth round (32 more word rounds, about 15.1M ANDs) takes the
 masked p1024 unit past 2^26 even at DR = DP = DV = 1.
 
-**The third version** opens a block of a re-key append (refresh on; with it off no v3 unit is made), under the identity
-plan with u32 positions:
+**The re-key's unit** (v3 in this module's names; a Definition of its own beside v2, which stays the unit of every other
+opening) opens a block of a re-key append (refresh on; with it off none is made), under the identity plan with u32 positions:
 
-    BlockOpeningCheck_v3{N, C, K, MASKED, BYTES, ROWS, LEAF, DR, DO}
+    RekeyOpeningCheck_v1{N, C, K, MASKED, BYTES, ROWS, LEAF, DR, DO}
         (j, seed, coin, tau, t0, c, [mask], mid, pos, rroot, rdom, rdepth, oroot: H, odom: H, orank: Array<2, U16>,
          opos: Array<2, U16>, odepth: U16; signs, block, payload, leaf, salts, rpath, opath: Array<DO, H>) -> U16
 
@@ -899,18 +899,18 @@ def _check_opening_v3(S) -> None:
         _check_field(S)
         _check_bytes(S, True)
     except ValueError as e:
-        raise ValueError(f"BlockOpeningCheck_v3: {e}") from None
+        raise ValueError(f"RekeyOpeningCheck_v1: {e}") from None
     if S.MASKED not in (0, 1):
-        raise ValueError(f"BlockOpeningCheck_v3: MASKED is 0 or 1, not {S.MASKED!r}")
+        raise ValueError(f"RekeyOpeningCheck_v1: MASKED is 0 or 1, not {S.MASKED!r}")
     for k, top, why in LIMITS_V3:
         v, low = getattr(S, k), 2 if k == "K" else 1
         if isinstance(v, bool) or not isinstance(v, int) or not low <= v <= top:
             past = f": {why}" if isinstance(v, int) and v > top else ""
-            raise ValueError(f"BlockOpeningCheck_v3: {k} is {low} to {top}, not {v!r}{past}")
+            raise ValueError(f"RekeyOpeningCheck_v1: {k} is {low} to {top}, not {v!r}{past}")
     rows = min(r for r in LEVELS_V3 if S.ROWS <= r)
     low = max((r for r in LEVELS_V3 if r < rows), default=0) + 1
     if S.DR + S.DO > LEVELS_V3[rows]:
-        raise ValueError(f"BlockOpeningCheck_v3: DR + DO is at most {LEVELS_V3[rows]} levels at {low} to {rows} sketch rows, "
+        raise ValueError(f"RekeyOpeningCheck_v1: DR + DO is at most {LEVELS_V3[rows]} levels at {low} to {rows} sketch rows, "
                          f"not {S.DR + S.DO}: v2's {LEVELS[rows]} less the value tree's level")
 
 
@@ -927,10 +927,10 @@ def _build_verdict_v2(C, S, oks, match, reads):
 
 
 BlockVerdictV2 = _part(
-    "BlockVerdict", ("W",), _sig_verdict_v2, _build_verdict_v2,
+    "RekeyVerdict", ("W",), _sig_verdict_v2, _build_verdict_v2,
     "A re-key's opening's verdict word: bit 0 the AND of its four checks, bits 1-5 each failure (receipt-path: the receipt "
     "leaf's read and pos = j; codec: the W words' decodes; bit 3, payload-path, zero; receipt: y = leaf[k]; origin-path: the "
-    "payload's read under its origin's root), bits 6-15 zero", version=2)
+    "payload's read under its origin's root), bits 6-15 zero")
 
 PUBLIC_V3 = ("j", "seed", "coin", "tau", "t0", "c", "mask", "mid", "pos", "rroot", "rdom", "rdepth", "oroot", "odom", "orank",
              "opos", "odepth")
@@ -964,7 +964,7 @@ def _opening_body_v3(B, S, *colls):
 
 
 BlockOpeningCheckV3 = CompositeDefinition(
-    "BlockOpeningCheck", 3, ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "DR", "DO"), _opening_signature_v3,
+    "RekeyOpeningCheck", 1, ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "DR", "DO"), _opening_signature_v3,
     _opening_body_v3, conformance="exact-model-tested",
     doc="The opening of a block of a re-key append, under the identity plan, u32 positions: v2's receipt-path, codec (always "
         "with b_j(c_a), a re-key's key being bound) and receipt; no payload-path or value commitment, a re-key having no "
@@ -983,11 +983,11 @@ def _unit_body_v3(B, S, *colls):
 
 
 BlockOpeningUnitV3 = CompositeDefinition(
-    "BlockOpeningUnit", 3, ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "DR", "DO"), _unit_signature_v3,
+    "RekeyOpeningUnit", 1, ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "DR", "DO"), _unit_signature_v3,
     _unit_body_v3, conformance="exact-model-tested",
-    doc="BlockOpeningCheck_v3 as a proof block's unit commits it, in `opening_rows_v3`'s six rows: `pub` (its public "
+    doc="RekeyOpeningCheck_v1 as a proof block's unit commits it, in `opening_rows_v3`'s six rows: `pub` (its public "
         "parameters in `PUBLIC_V3`'s order), `signs`, `block`, `payload`, `leaf` and `aux` (`AUX_V3`'s); its verdict word as "
-        "BlockOpeningCheck_v3's")
+        "RekeyOpeningCheck_v1's")
 
 
 # --- references --------------------------------------------------------------------------------------------------------------
