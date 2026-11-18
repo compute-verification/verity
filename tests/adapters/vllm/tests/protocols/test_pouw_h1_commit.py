@@ -37,7 +37,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import weights a
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from tests.check import opened as O
 from tests.protocols import challenger_host as CH
@@ -575,7 +575,7 @@ def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_t
     assert window["program"] == run.served.program_digest and window["window"]["open_root"] == run.served.root
     assert window["registered"] == c["served"]["entries"]
     for e in window["registered"]:
-        want = {"leaves": e["leaves"], "words": e["words"], "word_bits": e.get(G.WIDTH_KEY, G.WORD_BITS)}
+        want = {"leaves": e["leaves"], "words": e["words"], "word_bits": e.get(RV.WIDTH_KEY, RV.WORD_BITS)}
         assert REG._earlier([window], REG.digest(window), "value", e["value"], want) == e
     assert c["commit"] == canonical_json(rec).hex() == CT.record_of(run) != run.served.tap.hex(run.served)
     assert CT.digest(c["commit"]).hex() == REG.digest(rec)
