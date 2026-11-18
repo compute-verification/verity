@@ -43,7 +43,6 @@ What is a placeholder is listed in `info` (``placeholder``).
 from __future__ import annotations
 
 import functools
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache
@@ -62,7 +61,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     H1_SCHEME,
     H1Run,
     HM96,
-    HM96_WEIGHTS,
     host_array,
     in_process_draw,
     LEAD_BACKEND,
@@ -99,6 +97,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     Workload,
 )
 
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import fresh_salts
 from verity_torch.pouw import PearlCDeviceRun, hook_steps, pearl_c_weight_roots  # importing it hands PoUW its tensors and H1's device
 from verity import hooks as H
 from verity.protocols.compose import schemes as declarations
@@ -320,10 +319,18 @@ def linear_types() -> tuple[type, ...]:
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
 #: replay (`protocols.pouw.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[NcpCircuitRun, dict[str, int]]] = {}
-# The prover's hm96 salt key per entry outside Pearl-C, whose install takes none: its weight trees' salts, read by `install`,
-# never in the record (published commitments without it fail its root check), once a process, one execution phase
-# (`commit_weights`).
-_SALT_KEYS: dict[str, bytes] = {}
+# The prover's weight-row salts per entry, by linear, fresh from the OS at the entry's first commit: Pearl-C's B rows'
+# (`pearl_c_weight_roots`, read again by `install`'s run) and the int7 rows' elsewhere; never in the record (published
+# commitments without them fail their root check), once a process, one execution phase (`commit_weights`).
+_WEIGHT_SALTS: dict[str, dict[int, Any]] = {}
+
+
+def _pearl_c_weight_salts(entry: str, weights: Mapping[int, Any]) -> dict[int, bytes]:
+    from verity_torch.pouw.pearl_c.run_device import fresh_weight_salts
+
+    salts = _WEIGHT_SALTS.setdefault(entry, {})
+    salts.update(fresh_weight_salts({w: t for w, t in weights.items() if w not in salts}))
+    return salts
 
 
 def circuit_run(entry: str) -> tuple[NcpCircuitRun, dict[str, int]] | None:
@@ -416,10 +423,10 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     Under H1 and the lead, the int8_exact arm's int8 weight rows as they are served, once a process
     (`pouw_h1_hooks.committed`).
 
-    Outside Pearl-C the rows' hm96 key is `_SALT_KEYS[entry]`, sampled from the OS at the entry's first commit and reused by
-    every later commit of its weights for the process's life, which is one execution phase (one `Challenger`). The salt is keyed by
+    The rows' hm96 salts are `_WEIGHT_SALTS[entry]`, fresh from the OS at the entry's first commit and reused by every later
+    commit of its weights for the process's life, which is one execution phase (one `Challenger`). The salt is keyed by
     the weights' root (`audit.salt_of`), so a salt's later execution phases and the device and host settings must commit the
-    weights to one root. The key is fixed before `install` opens the salt coin, and is never derived from public data."""
+    weights to one root. The salts are fixed before `install` opens the salt coin, and are never derived from public data."""
     if scheme in (H1_SCHEME, LEAD_SCHEME):
         ks = Settings.of(target.context.settings_of(NAME)).ks
         return PHK.committed(PHK.layers(target.model, linear_types(), ks, scheme=scheme))
@@ -427,14 +434,15 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     _, layers, shapes = _layers(scheme, target)
     if scheme in PEARL_C_SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
-        device_roots = pearl_c_weight_roots(PearlCKernel.load(cast(str, settings.kernel), settings.cubin),
-                                        {w: m.weight for w, m in enumerate(layers)}, scheme)
+        weights = {w: m.weight for w, m in enumerate(layers)}
+        device_roots = pearl_c_weight_roots(PearlCKernel.load(cast(str, settings.kernel), settings.cubin), weights, scheme,
+                                            weight_salts=_pearl_c_weight_salts(entry, weights))
         return {"weight_roots": {str(w): r.hex() for w, r in device_roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
-    key, roots = _SALT_KEYS.setdefault(entry, os.urandom(32)), {}
+    salts, roots = _WEIGHT_SALTS.setdefault(entry, {}), {}
     for w, layer in enumerate(layers):
         b, _ = quantize(host_array(layer.weight))
-        roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])], HM96, key,
-                                    HM96_WEIGHTS + w).commitment.root.hex()
+        roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])], HM96,
+                                    salts.setdefault(w, fresh_salts(b.shape[0]))).commitment.root.hex()
     return {"weight_roots": roots, "shapes": {str(w): list(v) for w, v in shapes.items()}}
 
 
@@ -487,13 +495,15 @@ def install(scheme: str, target: Target) -> Option:
         salt = Epoch.start(declared, roots, commitment, opening).salt
     with closed_on_error(session):
         if device:
+            weights = {w: m.weight for w, m in enumerate(layers)}
             run = PearlCDeviceRun(s, entry, PearlCKernel.load(cast(str, settings.kernel), settings.cubin),
-                                      {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
-                                      schedule=settings.schedule, pass_index=k)
+                                      weights, roots, commitment, opening,
+                                      schedule=settings.schedule, pass_index=k,
+                                      weight_salts=_pearl_c_weight_salts(entry, weights))
             run.commits["registration"], end_pass = weights_claim(s), run.end_pass
         else:
             run = (NcpCircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
-                   else NcpRun(s, entry, settings, roots, salt, _SALT_KEYS.setdefault(entry, os.urandom(32))))
+                   else NcpRun(s, entry, settings, roots, salt))
             run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
         if session is not None:
             run.commits.update(coin_source=H1_CHALLENGER, session=carried)

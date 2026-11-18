@@ -15,7 +15,7 @@ import sys
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import manifest as PM
@@ -25,7 +25,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.serving import S
 from verity_torch.pouw.pearl_c import graphs as PG
 from verity_torch.pouw.pearl_c import lanes_device as L
 from verity_torch.pouw.pearl_c import run_device as PPDR
-from verity_torch.pouw.pearl_c.host import joined
 from verity_torch.pouw.pearl_c.whole import WholeStep
 
 from verity_vllm import protocols as PO
@@ -375,7 +374,7 @@ def test_a_pearl_c_scheme_whose_settings_name_no_kernel_hands_the_kernels_load_n
         raise Refused
 
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(load))
-    monkeypatch.setattr(P, "_SALT_KEYS", {})
+    monkeypatch.setattr(P, "_WEIGHT_SALTS", {})
     monkeypatch.setattr(P, "_layers",
                         lambda scheme, target: (pearl_c_scheme(scheme), [SimpleNamespace(weight=None)], {0: (128, 1024)}))
     committed = {entry: {"weight_roots": {"0": "05" * 64}, "shapes": {"0": [128, 1024]}}}
