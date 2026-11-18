@@ -11,3 +11,5 @@
 "llama31-8b-fp8-1gpu-bandwidth-served-r6" = { spec = "llama31-8b-fp8-1gpu-bandwidth-served-reps6", card = "rtx-pro-6000" }
 "llama31-8b-fp8-1gpu-bandwidth-served-h200" = { spec = "llama31-8b-fp8-1gpu-bandwidth-served-reps6", card = "h200" }
 "llama32-1b-fp8-1gpu-bandwidth-served-h200" = { spec = "llama32-1b-fp8-1gpu-bandwidth-served", card = "h200" }
+"llama31-8b-1gpu-pearl-c-whole-served-h200" = { spec = "llama31-8b-1gpu-pearl-c-whole-served", card = "h200" }
+"llama32-1b-1gpu-pearl-c-whole-served-h100" = { spec = "llama32-1b-1gpu-pearl-c-whole-served", card = "h100" }

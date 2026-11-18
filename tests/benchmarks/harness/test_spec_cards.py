@@ -83,6 +83,22 @@ def test_card_settings_take_the_specs_place_on_their_card_alone_and_name_only_it
         load_spec(path)
 
 
+def test_a_cards_arms_replace_the_specs_and_its_arm_settings_add_to_the_specs_on_that_card_alone(tmp_path):
+    path = _two_cards(tmp_path, "", '\n[arm_settings."stock-fp8@compiled"]\ncontrol = "none"\n'
+                      '\n[card_settings.h200]\narms = ["stock-fp8", "stock-fp8@compiled", "stock@compiled"]\n'
+                      '[card_settings.h200.arm_settings."stock@compiled"]\ncontrol = "none"\n')
+    path.write_text(path.read_text().replace('arms = ["stock", "stock-fp8"]', 'arms = ["stock", "stock-fp8", "stock-fp8@compiled"]'))
+    stem = path.with_suffix("")
+    rtx, h200 = resolve_spec(f"{stem}@rtx-pro-6000.toml"), resolve_spec(f"{stem}@h200.toml")
+    assert (rtx.arms, [*rtx.arm_settings]) == (("stock", "stock-fp8", "stock-fp8@compiled"), ["stock-fp8@compiled"])
+    assert (h200.arms, [*h200.arm_settings]) == (("stock-fp8", "stock-fp8@compiled", "stock@compiled"),
+                                                 ["stock-fp8@compiled", "stock@compiled"])
+    assert h200.arm_settings["stock@compiled"].control == "none"
+    path.write_text(path.read_text().replace('"stock-fp8", "stock-fp8@compiled", "stock@compiled"]',
+                                             '"stock-fp8", "stock-fp8@compiled"]'))
+    with pytest.raises(ConfigError, match=r"card_settings.h200.arm_settings \['stock@compiled'\] name no arm"):
+        load_spec(path)
+
 def test_a_spec_argument_names_its_card_after_an_at_by_id_or_recorded_path():
     assert split_card(POUW) == (POUW, None)
     assert split_card(f"{POUW}@h100") == (POUW, "h100")
