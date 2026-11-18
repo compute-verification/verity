@@ -22,6 +22,7 @@ from tests.verity.protocols.resource_accounting.network.verifier.test_network_at
                                                                                  request, run)
 from verity.protocols.resource_accounting.network.verifier.network_attester import cell
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 T, R, S = PARAMS.window, PARAMS.slots, PARAMS.lanes * PARAMS.slots
 
@@ -116,7 +117,7 @@ def test_every_row_opens_the_signed_root_at_its_position_and_nowhere_else(traffi
     for k in range(len(cells_.rows)):
         bc = W.bc(cells_.rows[k], cells_.salts[k])
         assert bc == hm96.SHA512.commit_string(
-            hm96.SHA512.default_key, G.row_digest(W.words(cells_.rows[k]), 16, G.SCHEMA_V2), cells_.salts[k])
+            hm96.SHA512.default_key, RV.row_digest(W.words(cells_.rows[k]), 16, G.SCHEMA_V2), cells_.salts[k])
         assert W.opens(dom, head.root, k, bc, cells_.path(k))
     k = next(i for i, r in enumerate(cells_.rows) if r != bytes(S * B))
     flipped = bytes([cells_.rows[k][0] ^ 1]) + cells_.rows[k][1:]

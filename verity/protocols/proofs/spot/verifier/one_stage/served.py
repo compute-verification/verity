@@ -9,7 +9,7 @@ the session's statement and coin (`RowsSession.ServedRegistered`), and verifies 
 `Flock.Guarantees.ServedRowsLinked` then gives the committed tree's row at every served read.
 
 **The port form.** A served tree is the registered value of the program parameter whose rows it commits (`value`): its
-`leaves` rows, each `words` leaves of `word_bits` bits (16 or 32), under `root` and `domain`. It enters the docket as one `registered` entry (`registered.ENTRY_KEYS`, plus `word_bits` when it is not 16), which R7 holds to the
+`leaves` rows, each `words` leaves of `word_bits` bits (16 or 32), under `root` and `domain`. It enters the docket as one `registered` entry (`registered_value.ENTRY_KEYS`, plus `word_bits` when it is not 16), which R7 holds to the
 verifier's own (`registration.check(..., registered=values, outputs=outputs, schemas=schemas, window_root=, held=)`), and
 the verifier's
 `--registered` file as one port per circuit port that reads it (`registered.reads_file`: the value, root, leaves, words,
@@ -17,7 +17,7 @@ word_bits, domain, and the row each proof block of the population reads, from th
 is one of three, and no other:
 
 * the registered-value domain of `value` in the verifier's own program (`registered.registered_entries`), when serving
-  committed the tree as a registered value (`Registered.commit`): under the window's open root R (`window_root`, from
+  committed the tree as a registered value (`registered_value.Registered.commit`): under the window's open root R (`window_root`, from
   the challenger's signed open of the window) for a per-window value, and without it for a value held across windows
   (`held`, the weights), so a window-independent program registers each window's values under the same names;
 * an earlier record's port's domain, when the tree is that port (`output`: `(record digest, port)`):
@@ -63,10 +63,11 @@ from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
+from verity.commitments import registered_value as RV
 
 _HEX64 = re.compile(r"[0-9a-f]{128}")
 #: the row formats a served tree may name, each one the registered form reads
-SCHEMAS = G.SCHEMAS
+SCHEMAS = RV.SCHEMAS
 
 
 @dataclass(frozen=True)
@@ -81,21 +82,21 @@ class ServedTree:
     leaves: int
     words: int
     domain: str
-    word_bits: int = G.WORD_BITS
+    word_bits: int = RV.WORD_BITS
     output: tuple[str, str] | None = None
     row_schema: str = G.SCHEMA
     reused: tuple[str, str] | None = None
 
     @classmethod
-    def of(cls, reg: G.Registered) -> "ServedTree":
-        """A tree serving committed as a registered value (`Registered.commit`), under its registered-value domain."""
+    def of(cls, reg: RV.Registered) -> "ServedTree":
+        """A tree serving committed as a registered value (`registered_value.Registered.commit`), under its registered-value domain."""
         e = reg.entry()
         return cls(e["value"], e["root"], e["leaves"], e["words"], e["domain"], reg.word_bits, row_schema=reg.schema)
 
     def entry(self) -> dict[str, Any]:
         """The docket's `registered` entry."""
         return {"value": self.value, "root": self.root, "leaves": self.leaves, "words": self.words,
-                **G.width_entry(self.word_bits), "domain": self.domain}
+                **RV.width_entry(self.word_bits), "domain": self.domain}
 
 
 @dataclass(frozen=True)
@@ -147,9 +148,9 @@ def _check_form(t: Any) -> None:
         raise ValueError(f"served tree {t.value!r}: {t.leaves!r} leaves, and a tree has at least one")
     if not (_int(t.words) and t.words > 0):
         raise ValueError(f"served tree {t.value!r}: {t.words!r} words to a leaf, and a leaf has at least one")
-    if not (_int(t.word_bits) and t.word_bits in G.WIDTHS):
+    if not (_int(t.word_bits) and t.word_bits in RV.WIDTHS):
         raise ValueError(f"served tree {t.value!r}: words of {t.word_bits!r} bits, not "
-                         f"{' or '.join(map(str, G.WIDTHS))}")
+                         f"{' or '.join(map(str, RV.WIDTHS))}")
     if t.row_schema not in SCHEMAS:
         raise ValueError(f"served tree {t.value!r}: rows of {t.row_schema!r}, not one of {SCHEMAS}")
     for o, what in ((t.output, "an output is (record digest, port)"), (t.reused, "reused is (record digest, value)")):
@@ -181,7 +182,7 @@ def register_served(program: Program, query: Mapping[str, Any], served: Sequence
     values = {t.value: t.words for t in served}
     schemas = {t.value: t.row_schema for t in served if t.row_schema != G.SCHEMA}
     fixed = [*(held or ()), *(t.value for t in served if t.output is not None or t.reused is not None)]
-    mine = G.registered_entries(program, values, schemas, G.window_root(window_root), fixed)
+    mine = G.registered_entries(program, values, schemas, RV.window_root(window_root), fixed)
     log = list(log)
     again = R.unwindowed(program, values, schemas, window_root, fixed, log)
     logged = R.held_roots(log)
