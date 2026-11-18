@@ -5,10 +5,15 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 import hashlib
+import shutil
+import subprocess
+from pathlib import Path
 
 import numpy as np
 import pytest
 from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
+
+from verity.device import gpu_card_reporting
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as PD
@@ -113,24 +118,30 @@ def test_the_build_is_keyed_by_its_sources(tmp_path, monkeypatch):
     assert PD.source_digest() != before
 
 
+CARDS = Path(__file__).resolve().parents[7] / "calibration" / "hardware" / "cards"
+
+
 @pytest.fixture(scope="module")
-def device():
-    """The nvcc build, which compiles and loads without a GPU; the tests that run it need one."""
-    if PD.nvcc() is None:
-        pytest.skip("needs nvcc")
+def arch():
+    """The ``arch`` of this machine's card, by the name nvidia-smi reports for its first GPU: the CUDA builds' target."""
+    smi = shutil.which("nvidia-smi")
+    if PD.nvcc() is None or smi is None:
+        pytest.skip("needs nvcc and a GPU, whose card's arch the CUDA builds target")
+    name = subprocess.run([smi, "--query-gpu=name", "--format=csv,noheader"], capture_output=True, text=True,
+                          check=True).stdout.splitlines()[0].strip()
+    PD.configure(arch=gpu_card_reporting(name, directory=CARDS)["arch"])
+    return PD.TOOLCHAIN.arch
+
+
+@pytest.fixture(scope="module")
+def device(arch):
+    """The nvcc build for this machine's card."""
     return PD.device()
 
 
 def _has_gpu(dll) -> bool:
     rate = ctypes.c_double(0)
     return dll.ncp2_ceiling(0, 1, 32, 1, ctypes.byref(rate)) == 0
-
-
-def test_the_device_build_loads_and_without_a_gpu_reports_cuda_errors(device):
-    if _has_gpu(device):
-        pytest.skip("a CUDA device is present")
-    with pytest.raises(ValueError, match="CUDA error"):
-        PD.commit_call(0, "ncp-v2", dict(PD.gate_calls())["five-strips"], on="device")
 
 
 @pytest.mark.parametrize("name, call", PD.gate_calls(), ids=[n for n, _c in PD.gate_calls()])
@@ -171,17 +182,8 @@ def test_the_low_byte_variant_hashes_each_checkpoints_low_byte(five_strips):
 
 
 @pytest.fixture(scope="module")
-def fused():
-    if PD.nvcc() is None:
-        pytest.skip("needs nvcc")
+def fused(arch):
     return PD.fused()
-
-
-def test_the_fused_build_loads_and_without_a_gpu_reports_cuda_errors(fused, device):
-    if _has_gpu(device):
-        pytest.skip("a CUDA device is present")
-    with pytest.raises(ValueError, match="CUDA error"):
-        PD.commit_call(0, "ncp-v2", dict(PD.gate_calls())["five-strips"], on="fused")
 
 
 @pytest.mark.parametrize("name, call", PD.gate_calls(), ids=[n for n, _c in PD.gate_calls()])

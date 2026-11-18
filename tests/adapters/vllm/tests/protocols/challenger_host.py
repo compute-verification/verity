@@ -27,7 +27,7 @@ from pathlib import Path
 
 import numpy as np
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
