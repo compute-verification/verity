@@ -165,7 +165,8 @@ import numpy as np
 
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import levels as LV, second_stage as SS, service as S, window_place as WP
-from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG
+from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
@@ -225,7 +226,7 @@ class Rule:
     span_values: tuple[tuple[str, int, tuple[int, ...]], ...] = ()
 
     def __post_init__(self) -> None:
-        if D.parse_rate(self.replay) is None:
+        if RND.parse_rate(self.replay) is None:
             raise ValueError("a two-stage rule's replay law is a rate law, rate:NUM/DEN or rate:NUM/DEN:T, "
                              f"not {self.replay!r}")
 

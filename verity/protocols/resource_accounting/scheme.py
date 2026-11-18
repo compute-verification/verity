@@ -38,21 +38,24 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   ``hooks``, ``ports`` (each with its `Layout` at a public shape when an adapter's circuit reads it, `Port.layout`),
   ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
   (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels (``ctx``'s keys:
-  `verity.hooks.FRONT`), returning what the adapter reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`, a
-  `verity.hooks.Releases`, a `verity.hooks.Commits`), and
+  `verity.hooks.FRONT`), returning what the adapter reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`, or a report: any of
+  ``summary()``, the run's totals, ``record()``, what it ran with, ``release()``, called once when the workload stops,
+  and ``commitment()``, what it committed to, read after ``release``), and
   ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`), and
   ``messages``, the message types its workload writes and reads on disk (`verity.channel.Schema`s), which an adapter's
   codec reads by the scheme's name, and ``framings``, the completion framings it serves by name, each built over the
   adapter's own framing (``framing(base=..., **settings)``), and ``provides``, the roles an adapter asks a scheme for
-  by role rather than by name (``admission``: with ``admit`` in its ``ctx``, `attach` installs and returns its gate).
+  by role rather than by name (``admission``: with ``admit`` in its ``ctx``, `attach` installs and returns its gate;
+  ``cut``: an execution phase's circuit is cut at the blocks it computes, reading the values each call commits there in
+  place of their computation).
   ``ctx`` is a mapping: ``settings``, the scheme's own (`settings`, the application's over its defaults); ``build``,
   the key of the build it attaches to (one per exchange); ``gate``, the auditor device's challenger gate in its own
   words, ``gate(*words) -> answer`` (``open --session S --root R`` opens a reserved session on a root; a scheme forms
   its own requests of it), or None where the launcher holds none; ``private``, the scheme's own directory
   (``<launcher's private>/<scheme's name>``), outside every run output, where it keeps what never leaves the node across
   a server's lives, or None where the launcher holds none; and what the launcher passes: ``process``, ``feed``
-  (`verity.hooks.FRONT`), and for the network attester ``admit``, ``source``, ``submit``, ``abort``, ``take``, ``pull``,
-  ``log``, ``clock`` and ``schedule``. The adapter's exchange attaches it (``Exchange.attach``), files those of
+  (`verity.hooks.FRONT`), for the network attester ``admit``, ``source``, ``submit``, ``abort``, ``take``, ``pull``,
+  ``log``, ``clock`` and ``schedule``, and for Pearl+ reserving a session an epoch ``ledger``, the gate's ledger as lines. The adapter's exchange attaches it (``Exchange.attach``), files those of
   ``requests(ctx)`` that ``attach`` did not, and declares it with its settings under its name (`verity.hooks.Declared`).
 
 What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks

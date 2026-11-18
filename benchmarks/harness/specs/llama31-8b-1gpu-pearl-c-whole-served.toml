@@ -1,13 +1,11 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-1gpu-pearl-c-whole-served"
-cards = ["rtx-pro-6000"]
+cards = ["h200"]
 # Pearl-C served through the whole-step graph path (the experimental arm `pouw-pearl-c-whole`,
 # `bench_arm.PearlCWholeArm`: each decode step one CUDA graph replay of vLLM's FULL decode graph with every call's Pearl-C
-# graph steps inside it), beside `llama31-8b-1gpu-pouw-protocol-served`'s three arms, all in one run under one host load:
-# `stock-fp8` (eager, batch invariant), `pouw:pearl-c-sm120-v1-h3` (the PoUW option as served today: eager, batch
-# invariant, the deferred schedule) and `stock-fp8@compiled` (vLLM's serving defaults). The preset and the protocol arm's
-# settings are that spec's.
+# graph steps inside it), against `stock-fp8@compiled` (vLLM's serving defaults) in one run under one host load. The
+# preset is `llama31-8b-1gpu-pouw-protocol-served`'s.
 #
 # The whole-step arm runs vLLM's FULL_DECODE_ONLY graphs at the preset's capture sizes without torch.compile, at the
 # `compiled` execution label (vLLM's kernels without batch invariance, as `stock-fp8@compiled`), the serial schedule and
@@ -16,22 +14,20 @@ cards = ["rtx-pro-6000"]
 # Pearl-C call check with the calls graphed and `e2e.whole_check` (a forward captured whole, replayed bit for bit as the
 # eager calls). The PoUW option refuses a non-eager engine (`pouw.refusals`), so this arm installs Pearl-C itself, as
 # `PearlCArm` does, with one pass per engine step. Pearl-C's y carries the epoch's live salt: no arm is its token control.
-arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3", "stock-fp8@compiled", "pouw-pearl-c-whole"]
+#
+# The whole arm's kernel is the one its useful-work scheme (`pearl-plus`) runs on the card (`schemes.kernel_scheme`):
+# pearl_c_sm90's `pearl-c-h100-v1-h3` on the H200 (sm_90a), whose setup exports PEARLC_KERNEL and PEARLC_CUBIN. The PoUW
+# option's protocol arm on that card is `llama32-1b-1gpu-pouw-protocol-served`'s.
+arms = ["stock-fp8@compiled", "pouw-pearl-c-whole"]
 arm_modules = ["benchmarks.pouw.pearl_c_vllm.bench_arm:PEARL_C_WHOLE"]
 sweep = "quick"
 reps = 3
 eager = true
-setup = "benchmarks/harness/setup/pearl_c.sh"
+setup = "benchmarks/harness/setup/pearl_c_sm90.sh"
 
-[arm_settings."pouw:pearl-c-sm120-v1-h3"]
-precision = "bfloat16"
-control = "none"
-
-[arm_settings."pouw:pearl-c-sm120-v1-h3".protocols_config.pouw]
-device = "cuda"
-kernel = "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120"
-cubin = "$PEARLC_CUBIN"
-schedule = "deferred"
+[refused]
+rtx-pro-6000 = """its whole step served Pearl-C on sm_120 (`pouw:pearl-c-sm120-v1-h3`), which is no declared scheme: \
+declaring one is compute-accounting's"""
 
 [arm_settings."stock-fp8@compiled"]
 control = "none"

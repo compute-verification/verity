@@ -28,7 +28,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c im
 from verity.protocols.resource_accounting.compute.pouw.verifier import registration
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
-    HM96_WEIGHTS,
     Epoch,
     Workload,
     activation_binding,
@@ -229,9 +228,9 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     settings = {"pouw": {"coins": coins, "transcript_dir": str(tmp_path)}}
     with PO.install(model, _serve("pouw:ncp-v1", settings=settings)) as comp:
         opt = comp.get("pouw")
-        key = pouw._SALT_KEYS["pouw:ncp-v1"]
+        salts = pouw._WEIGHT_SALTS["pouw:ncp-v1"]
         rows = {w: [r.tobytes() for r in OPS.quantize(m)[0]] for w, m in enumerate((w0, w1))}
-        roots = {w: commit_rows(weight_binding(w), -2, r, HM96, key, HM96_WEIGHTS + w).commitment.root for w, r in rows.items()}
+        roots = {w: commit_rows(weight_binding(w), -2, r, HM96, salts[w]).commitment.root for w, r in rows.items()}
         plain = {commit_rows(weight_binding(w), -2, r, h, public=True).commitment.root for w, r in rows.items() for h in ("sha256", "sha512")}
         assert not plain & set(roots.values())                   # hiding: the weights' candidates alone don't give the roots
         declared = Workload((Matmul(0, Shape(16, K, N), 0), Matmul(1, Shape(16, N, N + 64), 1)))
@@ -427,7 +426,7 @@ def test_an_unregistered_served_fp8_checkpoint_is_served_and_its_commitment_clai
             pass
 
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
-    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, salt_key=None: roots)
+    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, *, weight_salts: roots)
     monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPDR.weight_roots)
     monkeypatch.setattr(PPDR, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
@@ -444,6 +443,6 @@ def test_pearl_cs_schedule_is_a_setting_checked_against_the_scheme():
     scheme, on = "pearl-c-sm120-v1-h3", {"coins": _coins(), "device": "cuda", "kernel": "k"}
     for name in ("serial", "deferred", "deferred-caller"):
         assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": name}})) == ()
-    assert any("'schedule' is one of" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": "h3o"}})))
+    assert any("schedule is one of" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": "h3o"}})))
     assert any("Pearl-C's; this executor runs serially" in r
                for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"coins": _coins(), "schedule": "deferred"}})))

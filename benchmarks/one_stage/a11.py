@@ -72,14 +72,16 @@ import a0  # noqa: E402
 import a6  # noqa: E402
 import a11_kinds as K  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.evaluation.reference import evaluate_region  # noqa: E402
+from verity.circuits.population import wired_population_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 
 ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 WINDOW_OF = ("GLM-5.3 TP8 B1 rank 0's step values: the Match capture's activation snapshots of row " + ROW
@@ -700,11 +702,16 @@ def session_port(base: int, j: int) -> int:
         return s.getsockname()[1]
 
 
+def listed(templates: list) -> tuple:
+    """The wired population Program of ``(Definition, units)`` in order, with no wire, and its template query."""
+    return wired_population_program(templates, {"templates": [[descriptor_id(t), n] for t, n in templates]})
+
+
 def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> None:
     """Each staged kind's rows and outputs (``<kind>.npz``), its unit Definitions as one encoded Program, and the staging notes."""
     d.mkdir(parents=True, exist_ok=True)
     units = {kv["unit"].id: kv["unit"] for kv in rows_of_kind.values()}
-    (d / "units.json").write_bytes(canonical_json(encode_program(P.mixed_population_program([(u, 1) for u in units.values()]))))
+    (d / "units.json").write_bytes(canonical_json(encode_program(listed([(u, 1) for u in units.values()])[0])))
     for f, kv in rows_of_kind.items():
         np.savez(d / f"{f}.npz", **{f"i.{r}": np.asarray(v, dtype=np.uint16) for r, v in kv["rows"].items()},
                  **{f"o.{o}": np.asarray(v, dtype=np.uint16) for o, v in kv["outs"].items()})
@@ -752,7 +759,7 @@ def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tupl
     registry = load_registry()[0]
     doc = json.loads((d / "values.json").read_text())
     defs = {x.id: x for x in decode_program(json.loads((d / "units.json").read_text()), registry).defs.values()}
-    enc = lambda u: canonical_json(encode_program(P.mixed_population_program([(u, 1)])))  # noqa: E731
+    enc = lambda u: canonical_json(encode_program(listed([(u, 1)])[0]))  # noqa: E731
     staged = {f: s for f, s in doc["staged"].items() if f in lowers}
     rows_of_kind = {}
     for f, s in staged.items():
@@ -858,8 +865,7 @@ def main() -> int:
         templates.setdefault(kv["unit"].id, {"defn": kv["unit"], "kinds": []})["kinds"].append(f)
     defs = [t["defn"] for t in templates.values()]
     ns = [sum(rows_of_kind[f]["n"] for f in t["kinds"]) for t in templates.values()]
-    program = P.mixed_population_program(list(zip(defs, ns)))
-    query = P.template_instances_query(defs)
+    program, query = listed(list(zip(defs, ns)))
     part = P.partition(program, query)
     pd = P.digest(part)
     n_all = P.units(program, query)
@@ -867,7 +873,7 @@ def main() -> int:
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     k = a.k or len(defs)
-    sampling_design = D.parse_design(f"stratified:{k}")
+    sampling_design = RND.parse_design(f"stratified:{k}")
     bound = {"partition": pd, "program": part["program"]}
 
     members, tags = [], {}
@@ -1006,8 +1012,8 @@ def main() -> int:
     if len(defs) > 1:
         v = V.check(rec, program, P.template_instances_query(defs[:-1]), sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    for name, other in (("registration-law-another-k (R1)", D.parse_design(f"stratified:{k + 1}")),
-                        ("registration-law-subset-not-stratified (R1)", D.parse_design(f"subset:{k}"))):
+    for name, other in (("registration-law-another-k (R1)", RND.parse_design(f"stratified:{k + 1}")),
+                        ("registration-law-subset-not-stratified (R1)", RND.parse_design(f"subset:{k}"))):
         v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, sampling_design, a0.SCHEME, want,
@@ -1035,8 +1041,7 @@ def main() -> int:
     if tm is not None:
         tn = min(tm["n"], 4)
         tdef = tm["defn"]
-        tprog = P.mixed_population_program([(tdef, tn)])
-        tq = P.template_instances_query([tdef])
+        tprog, tq = listed([(tdef, tn)])
         tpart = P.partition(tprog, tq)
         tdir = out / "tampered"
         tdir.mkdir(exist_ok=True)
@@ -1056,7 +1061,7 @@ def main() -> int:
         tst_d = {"dir": d, "meta": tst.meta, "pin": tst.pin, "partition_file": tdir / "partition.json", "program_file": tdir / "program.json",
                  **a0.templated(tst, tdir, a.tmpl_unit_bin)}
         theader = a0.public_header(d, tn)
-        tlaw = D.parse_design("subset:2")
+        tlaw = RND.parse_design("subset:2")
         twant = a6.frame_ports(set_name, tst.meta, tn)
         trec = R.record(tprog, tq, tlaw, a0.SCHEME, a0.registered_roots(theader, twant),
                         {"kind": "stand-in", "of": f"tampered copy of {tm['kind']}'s first {tn} units: bit 0 of every instance's "

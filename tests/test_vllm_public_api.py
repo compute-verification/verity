@@ -78,6 +78,7 @@ PUBLIC = {
                                     "block pool's allocations, writes and frees and the scheduler's steps as events to the "
                                     "exchange, which benchmarks/poub_session and benchmarks/vllm_encoded attach to an engine "
                                     "they build",
+    "verity_vllm.engine.admission": "I2: the admission and release hook on a scheduler (install), which a tick gate admits by",
     "verity_vllm.engine.hooks": "I2: the one owner of runtime patches: the patches one component installs on an engine and puts "
                                 "back (Hooks, Patch, patch, wrap, patched, triton_launch), a hook run at a module's import "
                                 "(OnImport) and the patches installed now (live), which the harness's arms and engine install "
@@ -94,9 +95,6 @@ PUBLIC = {
     "verity_vllm.engine.int8_k_scales": "I1: the int8 attention's K scales, a calibrated parameter of the served "
                                         "checkpoint: its manifest (MANIFEST), a revision's table (table) and a calibration's "
                                         "entry (entry, with_entry), which benchmarks/ppl's calibration job writes",
-    "verity_vllm.engine.pool_row": "I1: the carried pool's row, a prefix cache's block pool at a window's edge (snapshot, row, "
-                                   "export), its genesis reset and its BlockKey_v1 keys (install_keys), which "
-                                   "benchmarks/network_e2e/encodings drives over recorded traces",
     "verity_vllm.engine.profiles.dense_generic": "I1: a checkpoint role's HF config.json: the checkpoints the manifests "
                                                  "pin (MANIFEST, checkpoint_entries), a pin's config (pinned_hf_config, "
                                                  "find_hf_config, hf_snapshot) and its profile module's name, which "
@@ -190,8 +188,6 @@ PUBLIC = {
     "verity_vllm.pipeline.cut_plugin": "I1: the carried pool's cut at each window edge under vLLM's own OpenAI server: its "
                                        "general plugin (register, an edge of the engine core's seam) and ASGI middleware "
                                        "(SentFeed), configured by VERITY_CUT, which the trace corpus's cut traces serve under",
-    "verity_vllm.pipeline.serve_pearl": "I1: serve-openai's Pearl+ arm (PearlWindows), its --protocols-config (config_of, "
-                                        "CONFIG) and where a serve dir holds each window's epoch (DIR)",
     "verity_vllm.pipeline.scheme_plugin": "I1: schemes turned on by name inside vLLM's own OpenAI server: its general "
                                           "plugin (register) and ASGI middleware (Front), configured by VERITY_PROTOCOLS, "
                                           "which serve-tax's tick arms and the trace corpus serve under",
@@ -294,7 +290,7 @@ PUBLIC = {
                                  "build under",
     "verity_vllm.protocols": "I1: the protocol options of a vLLM run (PoUW, PoUS and SPOT, each enabled on its own): "
                              "their selector, context, install and refusals (parse, adapter, Context, install, refused, "
-                             "requests, commit_guard), which the harness's arms and the served benchmarks of PoUW, PoUS and "
+                             "requests, commit_context), which the harness's arms and the served benchmarks of PoUW, PoUS and "
                              "the Commit install",
     "verity_vllm.protocols.interface": "I1: what every protocol option implements, and what the selector hands it (Option, "
                                        "Context, Target)",
@@ -326,10 +322,7 @@ KNOWN = frozenset({
     "verity_vllm.commit.opened",
     # the compile slice and its pieces (`verity_vllm.compiler`), which the network attester's drivers under `benchmarks/` import
     "verity_vllm.compiler.cache_step",
-    "verity_vllm.compiler.cache_step_v3",
     "verity_vllm.compiler.compile_slice",
-    "verity_vllm.compiler.compile_slice_v4",
-    "verity_vllm.compiler.compile_slice_v6",
     "verity_vllm.compiler.compile_slice_v7",
     "verity_vllm.compiler.served_rows",
     "verity_vllm.compiler.served_statics",

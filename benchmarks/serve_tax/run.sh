@@ -2,7 +2,7 @@
 # The serve tax on one node (README.md), from the shipped tree's root under `research run`, the C4 shard sent with
 # --send (or C4=PATH) unless a ready plan is:
 #   ARMS="compiled eager ..." RATES=light=R,medium=R,saturated=R [MODEL_ID=moonlight] [REPS=3] [SPAN_S=60]
-#     [REQUESTS=N] [DRAIN_S=600] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR] [TICK_RULE=JSON]
+#     [REQUESTS=N] [DRAIN_S=600] [WINDOW_S=600] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR] [TICK_RULE=JSON]
 #     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"] [REPLAY_LOGPROBS=1]] [MAX_MIN=240]
 #     bash benchmarks/serve_tax/run.sh
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
@@ -10,7 +10,7 @@
 #     # only replay an earlier window, at the model's GPUs as tensor-parallel width, taking REPLAY_CAPTURE's requests'
 #     # logits rows and ids at the sampler into OUT/replay-<mode>/capture (replay.py --capture)
 #   ARMS="restore-base restore-pause restore" RATES=medium=R REPS=1 SPAN_S=720 EDGES_S=180,360,540 [SAVE_KV=1]
-#     [RESTORE=1:2 [RESTORE_ARM="restore ..."] [RESTORE_WARM=N]] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR]
+#     [RESTORE=1:2 [RESTORE_ARM="restore ..."] [RESTORE_WARM=N]] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR] [SCHEME_SETTINGS=JSON]
 #     bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
 #   ARMS="compiled record tokens-only boundary" RATES=... EDGES_EVERY_S=30 [KV_COPY=all|first|none] [PLAN_FILE=PLAN.jsonl]
 #     [MAX_MODEL_LEN=N] [FLASHINFER=1] [LDCONFIG=1] [BUDGET_MIN=M] bash benchmarks/serve_tax/run.sh   # the served configuration's tax
@@ -46,7 +46,9 @@
 # refuses what the profile has on, the result is `cannot run` in the refusal's words and the job exits 1, as for an
 # arm whose run refuses it; where a change on our side alone lets the same prompts through, ARM is served with it
 # (OURS, its label in the result) as the second line, stock unchanged. The passes are planned within the model's
-# cap_minutes (BUDGET_MIN and STOP_AT, the earlier of the given and the cap).
+# cap_minutes (BUDGET_MIN and STOP_AT, the earlier of the given and the cap). An arm that turns a scheme on inside
+# vLLM's server (pearl-plus) takes SCHEME_SETTINGS, serve_tax.py run's --scheme-settings, a list of one object a server
+# lifetime under a profile (each lifetime opens its own reserved session); the plan checks it before any GPU is held.
 # PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own, and
 # NAME=Kx K prompts for each request its rung holds in flight (serve_tax.parse_pass_prompts): for a ladder past the
 # rungs the load's own prompts can hold, and the same for every arm of a cost. SAMPLED=1 has every request sampled at
@@ -254,7 +256,7 @@ else
 fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}; DOCS=${DOCS:-45000}
-WINDOW_S=${WINDOW_S:-600}; KV_WINDOW_S=${KV_WINDOW_S:-$WINDOW_S}; PLAN=${PLAN:-${PRIVATE:+$PRIVATE/plan.jsonl}}
+WINDOW_S=${WINDOW_S:-600}; PLAN=${PLAN:-${PRIVATE:+$PRIVATE/plan.jsonl}}
 PLAN_FILE=${PLAN_FILE:-$(ls "$D"/inputs/plan.jsonl 2>/dev/null)}
 [ -z "$PLAN_FILE" ] || [ -f "$PLAN_FILE" ] || { echo "serve-tax: no plan at PLAN_FILE=$PLAN_FILE"; exit 2; }
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
@@ -271,7 +273,7 @@ if [ -n "${PROFILE:-}" ] && [ "${1:-}" != leased ]; then
   # stock arm and the model's minutes (CAP_MIN), within which the arms' passes are planned. No arm where the feature
   # cannot run and no change on our side lets the profile through: its result is written now, and no GPU is held
   plan=$("$PY" "$here/serve_tax.py" profile plan --profile "$PROFILE" --model-id "$MODEL_ID" ${FEATURE:+--feature "${FEATURE[@]}"} \
-    ${FIND_LOAD:+--find-load}) || exit 2
+    ${FIND_LOAD:+--find-load} ${SCHEME_SETTINGS:+--scheme-settings "$SCHEME_SETTINGS"}) || exit 2
   eval "$plan"
   { [ -n "${BUDGET_MIN:-}" ] && [ "$BUDGET_MIN" -le "$CAP_MIN" ]; } || BUDGET_MIN=$CAP_MIN
   export ARMS LOADS REPS LIFETIMES OURS STOCK CAP_MIN BUDGET_MIN
@@ -331,6 +333,7 @@ if [ "${1:-}" = leased ]; then
   if [ -n "${TICK_MS:-}" ]; then tick=(--tick-ms "$TICK_MS"); else tick=(--tick-from "${TICK_FROM:-$OUT/record}"); fi
   [ -n "${TICK_RULE:-}" ] && tick+=(--tick-rule "$TICK_RULE")
   count=(); [ -n "${REQUESTS:-}" ] && count=(--requests "$REQUESTS")
+  [ -n "${SCHEME_SETTINGS:-}" ] && count+=(--scheme-settings "$SCHEME_SETTINGS")
   [ -n "${NUM_GPU_BLOCKS:-}" ] && count+=(--num-gpu-blocks "$NUM_GPU_BLOCKS")
   [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")
   [ -n "${EDGES_EVERY_S:-}" ] && count+=(--edges-every-s "$EDGES_EVERY_S" ${SAVE_KV:+--save-kv "$SAVE_KV"} --kv-copy "${KV_COPY:-all}")
@@ -373,7 +376,7 @@ if [ "${1:-}" = leased ]; then
     profile=(); [ -n "${PROFILE:-}" ] && profile=(--profile "$PROFILE")
     [ -n "${PROFILE:-}" ] && [ "$arm" != "$STOCK" ] && [ -n "${OURS:-}" ] && profile+=(--ours "$OURS")
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" "${profile[@]}" --reps "$reps" ${STOP_AT:+--stop-at "$STOP_AT"} \
-      --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" "${life[@]}" \
+      --window-s "$WINDOW_S" "${tick[@]}" "${count[@]}" "${life[@]}" \
       ${LEAVE_OUT:+--leave-out "$LEAVE_OUT"} ${SIDE:+--side "$SIDE"} ${FRONT:+--front "$FRONT"} ${CELLS:+--cells "$CELLS"} \
       ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$dir"} --out "$OUT/$dir" || rc=1
     echo "after $dir: $(fi_cache)" >> "$OUT/engine_env.txt"
@@ -432,7 +435,7 @@ fresh_kv=0
 if [ -n "${EDGES_S:-}" ] && [ -z "${KV_DIR:-}" ]; then
   KV_DIR=$(mktemp -d "${SCRATCH:-/workspace/research/scratch}/serve-tax-kv.XXXXXX") || exit 2; fresh_kv=1
 fi
-export PLAN DOCS WINDOW_S KV_WINDOW_S KV_DIR
+export PLAN DOCS WINDOW_S KV_DIR
 # LDCONFIG=1: the linker cache refreshed first, so libnvrtc and the rest resolve to the toolkit the node's dev packages
 # were installed for, the same for every engine of the job
 [ "${LDCONFIG:-0}" = 1 ] && ldconfig

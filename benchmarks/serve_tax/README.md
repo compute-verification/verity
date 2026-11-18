@@ -19,9 +19,8 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `release-order` | requests added in the network attester's release order (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`, in the engine core) | `record` |
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.scheme_plugin`, the network attester's scheme turned on by name), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
-| `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
 | `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
-| `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
+| `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under salts fixed for its life and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
 | `boundary-rows` | the two-stage audit's boundary commitment at serve, vLLM's prefix cache left on: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`), and prefix caching off, which the tables need | `boundary-rows` |
@@ -451,13 +450,10 @@ reads as more than it is:
 - **τ.** The tick's bucket is the network attester's 100 ms; τ_sat and τ_free are 0.9 and 1.1 times the mean engine
   cycle of a `prod-record` step trace on the agentic load at four users (`serve_tax.py tick OUT/prod-record.1 --load
   agentic@4`, which prints them), given as `TICK_MS`.
-- **The chosen rule, measured beside the registered one** (`TICK_RULE='{"token_ns": N}'`, with `TICK_MS=B,B`): at
-  each engine step the tick's clock advances by a fixed amount plus a fixed amount for each non-draft token the step
-  schedules, and that token count is the one the replay's own step computes from its state and the inputs it already
-  holds, never a number the engine reports. The gate counts it as the step's scheduled tokens less its draft tokens
-  (`tick_plugin.non_draft_tokens`), the sum of the rows' n that `replay_step.reference` forms as the batch's token
-  limit less the budget left, on a clock of nanoseconds. `serve_tax.py tick` prints the two amounts fitted to the
-  trace's busy cycles (`per_token`: `base_us`, `token_ns`).
+- **The token term** (`TICK_RULE='{"token_ns": N}'`, with `TICK_MS=B,B`): each engine step also advances the tick's
+  clock `token_ns` ns per non-draft token it schedules (`engine.admission.non_draft_tokens`), the count the replay's
+  own step computes, never one the engine reports. `serve_tax.py tick` prints both amounts fitted to the trace's busy
+  cycles (`per_token`: `base_us`, `token_ns`).
 - **The edge snapshot** is taken every `EDGES_EVERY_S` seconds of a load's serving, counted on through the load's
   passes and users (`servetax_plugin.edge_load`) and again from a new load: the engine drains, every rank's KV
   cache is hashed where it lies (its root is part of the snapshot) and copied to host memory on every rank
@@ -494,10 +490,9 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
   --env REPLAY=saturated -- bash benchmarks/serve_tax/run.sh
 ~~~
 
-`run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit period and the KV edge's window).
-`MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
-edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
-The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.scheme_plugin` and the corpus client's stand-in attester,
+`run.sh`'s header lists its parameters (the model, reps, the loads' span and the Commit period).
+`MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint.
+The `tick` and `tokens` arms need `verity_vllm.pipeline.scheme_plugin` and the corpus client's stand-in attester,
 and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=server`, in `run.sh`'s header),
 then the network attester's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
@@ -579,6 +574,48 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   --profile chat --feature sampled-proofs levels=2
 ~~~
 
+The first number, coding-agent on one card with Llama 3.2 1B and Pearl+, in order. `NODE` is an H100 or H200 node of
+ours (Pearl+'s kernel is sm_90's), and the find-load and the pair run on the same card model.
+
+1. Stock alone over coding-agent's ladder (1 to 64 users). It prints the line for `llama32-1b.h200` (or `.h100`)
+   under `[profiles.coding-agent.users]`, the version to raise (2 to 3) and the pin for
+   `tests/benchmarks/harness/test_profiles.py`, and keeps them in `OUT/find_load.json`. Write the three into the
+   tree and land them; until then `--feature` refuses with "the load is not found yet".
+
+   ~~~text
+   research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
+     --profile coding-agent --find-load
+   ~~~
+
+2. Two salt-only sessions reserved at infra's challenger gate, one for each of the Pearl+ arm's two server lifetimes
+   (a reserved session opens once). Run this from a machine that holds the lane's gate key. `GATE` is the gate command
+   (`ssh -i KEY -o IdentitiesOnly=yes research@HOST`), `LANE` the lane whose key it holds, and `PEER` the node's name
+   among the auditor device's peers. Run it once per session, close enough to the launch that neither reserve expires
+   (`expires_utc`) before its lifetime opens it.
+
+   ~~~text
+   uv run python -c 'import json, sys
+   from verity_vllm.pipeline.commit_coins import ChallengerGate
+   from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.window import reserve_salt
+   g = ChallengerGate(sys.argv[1]); print(json.dumps(reserve_salt(g.call, g.ledger, sys.argv[2], sys.argv[3], 0)[0]))' \
+     "$GATE" LANE PEER
+   ~~~
+
+3. The pair, stock (`compiled`) and `pearl-plus` (the same server, eager, Pearl+ turned on by name through vllm's
+   scheme plugin), at the found load: two lifetimes each, three reps a lifetime, in the model's 20 minutes.
+   `SCHEME_SETTINGS` holds one object per lifetime: the gate command, Pearl+'s kernel directory in the run's tree,
+   the challenger at the node's `127.0.0.1` (the port comes from the gate's open), and that lifetime's reserve
+   answer. The plan refuses a missing or shared session by name before any GPU is held.
+
+   ~~~text
+   research run --on NODE --source . --cwd source \
+     --env 'SCHEME_SETTINGS=[{"gate": "GATE", "pearl-plus": {"kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90", "challenger": "127.0.0.1:0", "session": RESERVE_1}}, {"gate": "GATE", "pearl-plus": {"kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90", "challenger": "127.0.0.1:0", "session": RESERVE_2}}]' \
+     -- bash benchmarks/serve_tax/run.sh --model llama32-1b --profile coding-agent --feature pearl-plus
+   ~~~
+
+GLM-5.3's `prod-pearl-plus` is refused at the plan, naming vllm's goal `vllm/scheme-on-in-vllm-server`: the scheme
+plugin turns schemes on in a one-GPU server, and GLM-5.3 serves on 8.
+
 Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
 multi-turn and 8k-32k-token prompts, half of them sampled at temperature 0.7 under the public seed rule, each stopping at
 its end of text or its max_tokens), sent as `plan.jsonl` or named by `PLAN_FILE` (then no C4 shard is needed), with FlashInfer on:
@@ -628,10 +665,6 @@ replay matches serving's values only when both picked the same; a window served 
 replay with it. A finished run's large files (`plan.jsonl`, `client.jsonl`) are
 evicted to its files artifact (`run-files.evicted.json` names it) after custody; `research data fetch ART --path GLOB
 --to RUN_DIR` puts them back first.
-
-The `kv` arm hashes the whole pool, free blocks too, at each edge: an upper bound on hashing the blocks live there, and a
-measurement of the cost, not a commitment of the state (a block written after the edge before the side stream reads it
-is hashed as written). With a KV window shorter than the Commit's, its tax scales down with the window's length.
 
 A restore arm (`EDGES_S`, `SAVE_KV`, `RESTORE`, `NUM_GPU_BLOCKS` in `run.sh`'s header) takes its edges at fixed seconds
 after its load's first request. Each edge first drains: the engine core schedules nothing until both batches in flight

@@ -31,6 +31,7 @@ from tests.pipeline import test_commit_main as M
 from tests.pipeline import test_commit_weights_of_record as W
 from tests.pipeline.test_commit_main import RUN, WARMUP, Committer, Ended, Record, run
 from verity_vllm.pipeline import commit
+from verity_vllm.pipeline import research_outputs as RO
 
 #: `test_commit_main`'s fixture and `test_commit_weights_of_record`'s, under their names in this module.
 stand_ins, pinned = M.stand_ins, W.pinned
@@ -386,6 +387,7 @@ def test_the_retained_blocks_tensors_are_digested_on_request_and_a_hidden_row_of
     digests = [ended.doc(f"tensor_digests_pair{pair}.json") for pair in (0, 1)]
     assert digests[0] == digests[1] and list(digests[0]) == ["0"] and list(digests[0]["0"]) == ["head.out", "fa3.m1/L0"]
     assert all(len(bytes.fromhex(d)) == 8 for d in digests[0]["0"].values())
+    assert all(RO.private(f"commit/tensor_digests_pair{pair}.json") for pair in (0, 1))
     why = "1 FA2 hidden rows bound as all-zero bytes (tap staged after it was zeroed: ordering fault)" if zero_rows else NO_C2
     assert stand_ins.answers == [(False, why)] * 2 and ended.exit == 3
     assert ended.printed[-1] == M.FAIL_LINE.format(failed=2, n=2, pair=0, arm="instrumented", why=why)

@@ -36,6 +36,10 @@ from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.program.compact import runs_from_file_items
 from verity_vllm.records.schema_ids import RANK_COMMIT_BINDING_SCHEMA, RANK_MATCH_SCHEMA
 
+#: beside a tp2_match.json, kept on the node: the recorder files' SHA-256s its provenance record is bound to (unsalted digests
+#: of the run's collective values); the cross-rank check reads them as the provenance's ``recorder_sha256``
+RECORDER_DIGESTS = "recorder_sha256.json"
+
 __all__ = ["commit_binding", "cross_rank_check", "load_recorder", "own_producers_from_record", "same_module_path"]
 
 PARTIAL_PRODUCERS = ("EmbeddingShard_v1", "Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "MoeSum", "MoeExpertSum", "batch:Gemm")   # own-partial producer classes

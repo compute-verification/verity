@@ -43,7 +43,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.ma
 )
 
 __all__ = ["CALL_CAPACITY", "CALL_STEPS", "EPOCH_STEPS", "FLAG_ROWS", "JOB_STEPS", "Kernel", "LEAF_CAPACITY", "ROW_ALIGN",
-           "SCHEDULES", "SERIAL", "epoch_of", "manifest_epoch", "manifest_schema", "no_salt_key", "refusals",
+           "SCHEDULES", "SERIAL", "epoch_of", "manifest_epoch", "manifest_schema", "refusals",
            "rotated", "schedule_of", "splits", "weight_row_salts"]
 
 #: each device record's kernels' (k, n) grain past its domain, the record being GPU 1's pipeline variant too: ``sm120``
@@ -59,9 +59,9 @@ LEAF_CAPACITY = 1 << 23
 CALL_CAPACITY = 1 << 16
 FLAG_ROWS = 1 << 22
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
-                  "epb_codes", "bt", "bf", "pb_t", "tree_b", "rowdig_b")
+                  "epb_codes", "bt", "bf", "pb_t", "tree_b", "rowdig_b", "salts_b")
 CALL_BUFFERS = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "ea_codes", "at", "af", "pa_t", "c", "u", "tree_a", "line_a",
-                "seed_a", "rowdig_a", "seeds_a", "lkeys_a", "segdig_a", "segdig_t")
+                "seed_a", "rowdig_a", "seeds_a", "lkeys_a", "segdig_a", "segdig_t", "salts_a")
 #: per-call buffers only some kernels' pipelines size (`Pipeline.sizes`), each made where its pipeline has it: pearl_c_sm90's
 #: A'F_B windows
 CALL_BUFFERS_OWN = ("af_win",)
@@ -93,15 +93,6 @@ def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
         except Exception as e:  # noqa: BLE001 - DomainError, named per layer
             out.append(f"linear {w}: {e}")
     return out
-
-
-def no_salt_key(scheme: str) -> bytes:
-    """Pearl+ draws no salt key: every leaf's salt is fresh bytes from the OS, B's rows' those of the weights' registration
-    (`weight_row_salts`)."""
-    _runs(scheme)
-    raise NotImplementedError("Pearl+'s device run with no salt key: hash_h3.cuh's hm_leaves taking each leaf's salt as "
-                              "data (p2, 192 bytes a leaf; @kernels), then the device run handing it B's salts "
-                              "(`weight_row_salts`) and A's, the tiles' and y's fresh ones")
 
 
 def weight_row_salts(registration: str | Path, param: str, rows: Iterable[int] | None = None) -> bytes:

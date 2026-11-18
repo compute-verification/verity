@@ -98,7 +98,8 @@ class CardSettings:
 @dataclass(frozen=True)
 class BenchmarkSpec:
     """One runnable benchmark configuration before its named sweep and its card are resolved: the cards it runs on
-    (``cards``, by their `short`; none where any card will do), and what differs on one (``card_settings``)."""
+    (``cards``, by their `short`; none where any card will do), what differs on one (``card_settings``), and why it
+    refuses a card it doesn't list (``refused``, each said in that card's refusal)."""
 
     schema: str
     backend: str
@@ -110,6 +111,7 @@ class BenchmarkSpec:
     preset: SpecPreset
     cards: tuple[str, ...] = ()
     card_settings: Mapping[str, CardSettings] = field(default_factory=dict)
+    refused: Mapping[str, str] = field(default_factory=dict)
     arm_modules: tuple[str, ...] = ()
     arm_settings: Mapping[str, ArmSettings] = field(default_factory=dict)
     env: Mapping[str, str] = field(default_factory=dict)
@@ -190,10 +192,14 @@ def former_specs() -> dict[str, tuple[str, str]]:
 
 
 def current_spec(spec_id: str) -> str:
-    """The name a stored run's spec id has now: ``SPEC@CARD`` for a former id (`FORMER_IDS`), else the id itself."""
+    """The name a stored run's spec id has now: for a former id (`FORMER_IDS`), its spec, ``@CARD`` where that spec runs on
+    more than its card; else the id itself."""
 
     now = former_spec(spec_id)
-    return spec_id if now is None else f"{now[0]}@{now[1]}"
+    if now is None:
+        return spec_id
+    doc = tomllib.loads(_spec_path(now[0]).read_text())
+    return now[0] if doc.get("cards", [doc.get("card")]) == [now[1]] else f"{now[0]}@{now[1]}"
 
 
 def _spec_path(spec: str | Path) -> Path:
@@ -232,6 +238,8 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
             raise ConfigError(f"{path}: gpu_count is outside {card!r}'s per-node capacity")
     if stray := sorted(set(doc.card_settings) - set(doc.cards)):
         raise ConfigError(f"{path}: card_settings {stray} name no card of the spec's cards {list(doc.cards)}")
+    if stray := sorted(set(doc.refused) & set(doc.cards) | set(doc.refused) - _card_shorts()):
+        raise ConfigError(f"{path}: refused {stray}: each names a card's `short` the spec doesn't list in cards")
     unknown = sorted(set(doc.preset.engine_settings) - set(ENGINE_SETTINGS))
     if unknown:
         raise ConfigError(f"{path}: unknown engine_settings {unknown}; known: {list(ENGINE_SETTINGS)}")
@@ -292,6 +300,8 @@ def run_card(doc: BenchmarkSpec, card: str | None) -> str:
             raise ConfigError(f"spec {doc.id!r} runs on {' or '.join(doc.cards) or 'any card'}, and no card is here: name "
                               f"one, `{doc.id}@CARD`")
         card = kit.card_short(found)
+    if card in doc.refused:
+        raise ConfigError(f"spec {doc.id!r} refuses the {card}: {doc.refused[card]}")
     if doc.cards and card not in doc.cards:
         raise ConfigError(f"spec {doc.id!r} runs on {', '.join(doc.cards)}, not the {card}")
     if card not in GPUS:

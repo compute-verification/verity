@@ -8,7 +8,7 @@ An adapter is one module of this package (`spot`, `pous`, `pouw`) that defines:
   alone, before the engine is built;
 * ``install(scheme, target) -> Installed``: install it on the built model;
 * optionally ``requests(scheme, ctx) -> tuple[verity.hooks.Request, ...]``: what it requires or refuses of the workload
-  (`verity.hooks.RequireProperty`, `RefuseProperty`), read against `Context.properties`; one whose computation is the
+  (`verity.hooks.RequireProperty`), read against `Context.properties`; one whose computation is the
   row's Build requires the profile's kernels (`BUILD_BOUND`, with ``fixes``);
 * optionally ``EXECUTES: tuple[str, ...]``: the sites where the option replaces the computation rather than wrapping
   it (PoUW: ``LinearBase.quant_method.apply``).  A site has at most one executor, innermost; the others wrap it from
@@ -42,8 +42,7 @@ from verity_vllm.engine.hooks import Hooks
 __all__ = ["BUILD_BOUND", "Context", "Option", "Target"]
 
 #: Where a composition runs: ``serve`` is `verity_vllm.LLM`; ``capture`` is a row's Match capture (its executors only, so the
-#: observed run executes what the Commit serves); ``commit`` is a Commit: a row's Commit stage, or serve-openai's Commit
-#: windows, whose composition states the executor beside the server's own Commit (`serve_pearl`).
+#: observed run executes what the Commit serves); ``commit`` is a row's Commit stage.
 STAGES = ("serve", "capture", "commit")
 #: An adapter's request whose served computation is the row Build's: the engine serves the profile's kernels.
 BUILD_BOUND = H.RequireProperty("kernels", "profile", "its served computation is the row's Build, and engine overrides can "

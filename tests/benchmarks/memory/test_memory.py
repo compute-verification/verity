@@ -1360,6 +1360,44 @@ def test_local_refuses_another_session_form(store, capsys, work, monkeypatch, gi
     assert all(f"{k}={v}" in err for k, v in given.items())
 
 
+@pytest.mark.parametrize("given, leaf", [({"LEAF_CTAS": "132"}, " --leaf-ctas 132"), ({}, ""), ({"LEAF_CTAS": ""}, ""),
+                                         ({"LEAF_CTAS": "132", "NODE_ARGS": "--leaf-ctas 132"}, " --leaf-ctas 132"),
+                                         ({"NODE_ARGS": "--leaf-ctas=160"}, " --leaf-ctas=160")],
+                         ids=["leaf-pass", "unset", "empty", "said-twice-alike", "node-args-alone"])
+def test_local_asks_the_node_for_the_leaf_pass_where_leaf_ctas_says_as_the_node_run_does(store, work, monkeypatch,
+                                                                                         given, leaf):
+    """LEAF_CTAS is the node's `--leaf-ctas` under --local as `gate_run.sh` makes it in the node run; unset, the node's
+    arguments name no leaf pass and its passes are today's."""
+    for k, v in given.items():
+        monkeypatch.setenv(k, v)
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    snap = Path(env["MODEL"])
+    assert env["NODE_ARGS"] == f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap}{leaf}"
+    assert env["SESSION_NODE"] == "local/h200-sxm-141gb-x1/serving"
+
+
+@pytest.mark.parametrize("given, why", [
+    ({"LEAF_CTAS": "0"}, "LEAF_CTAS is 0: the leaf pass's reading CTAs, 1 to 999, or unset for today's pass"),
+    ({"LEAF_CTAS": "1000"}, "LEAF_CTAS is 1000: the leaf pass's reading CTAs, 1 to 999, or unset for today's pass"),
+    ({"LEAF_CTAS": "13x"}, "LEAF_CTAS is 13x: the leaf pass's reading CTAs, 1 to 999, or unset for today's pass"),
+    ({"LEAF_CTAS": "132", "NODE_ARGS": "--leaf-ctas 160"},
+     ("LEAF_CTAS is 132 and NODE_ARGS asks for --leaf-ctas 160: set the leaf pass's reading CTAs once, as LEAF_CTAS, "
+      "and take --leaf-ctas out of NODE_ARGS")),
+    ({"LEAF_CTAS": "132", "NODE_ARGS": "--decode-s 30 --leaf-ctas=64"},
+     "LEAF_CTAS is 132 and NODE_ARGS asks for --leaf-ctas 64"),
+], ids=["zero", "too-many", "not-a-number", "another-number", "another-number-with-equals"])
+def test_local_refuses_a_leaf_ctas_that_isnt_one_to_999_or_that_node_args_contradicts(store, capsys, work, monkeypatch,
+                                                                                      given, why):
+    for k, v in given.items():
+        monkeypatch.setenv(k, v)
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 2
+    assert machine.started == []
+    assert why in capsys.readouterr().err
+
+
 def test_a_store_below_half_the_cards_memory_prints_no_number(store, capsys, work, tmp_path, monkeypatch):
     """The share is of the card's read rate while its memory is read in timed passes: a session whose store is a
     request's bytes (the served row's 0.02 GB, which left 1.000 uncertified) is not this benchmark's, so a store
@@ -1476,7 +1514,7 @@ def test_local_states_the_arena_its_engine_recorded_and_not_its_own_arguments(st
      3),
     (Machine(card="NVIDIA A100-SXM4-80GB, 8.0"), f"0 GPU card files under {M.CARD_FILES} have 'NVIDIA A100-SXM4-80GB', "
      "the name the device reports, in `driver`: add { value = 'NVIDIA A100-SXM4-80GB', source = ... } to its one card "
-     "file's `driver`", 3),
+     "file's `driver`, adding its <sku>.toml if it has none, and give it a `short`", 3),
     (Machine(fetch_rc=1), "unsloth/Llama-3.2-1B@9535bd9b1d1d (config.json, generation_config.json, model.safetensors, "
      "special_tokens_map.json, tokenizer.json, tokenizer_config.json) couldn't be fetched into", 3),
     (Machine(rc=5), "the node's session failed (run.sh exited 5)", 3),

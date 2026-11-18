@@ -1906,3 +1906,48 @@ def test_the_runner_reads_an_earlier_job_again_and_refuses_what_it_cannot_run(tm
     (tmp_path / "empty").mkdir()
     p = bash(script, run_dir=tmp_path / "empty", STAND_IN_RC="2")
     assert p.returncode == 2 and "nothing was served" in p.stdout
+
+
+def test_the_runner_stores_a_stage_record_after_the_report_and_refuses_a_stage_it_cannot_make(tmp_path: Path):
+    from test_priced import units_file
+
+    script = runner(tmp_path)
+    for f in ("stage.py", "priced.py"):
+        shutil.copy(Path(P.__file__).parent / f, script.parent / f)
+    (script.parent / "topk_units.py").write_text(
+        "import os, shutil, sys\nshutil.copy(os.environ['STAND_IN_UNITS'], os.path.join(sys.argv[1], 'units.jsonl'))\n")
+    lease = tmp_path / "bin" / "gpu-lease"
+    lease.parent.mkdir()
+    lease.write_text('#!/usr/bin/env bash\necho "$*" > "$RESEARCH_RUN_DIR/leased"\n'
+                     'while [ "$1" != -- ]; do shift; done; shift; exec "$@"\n')
+    lease.chmod(0o755)
+    path = {"PATH": os.pathsep.join([str(lease.parent), *os.get_exec_path()]), "STAND_IN_UNITS": str(units_file(tmp_path))}
+    line = ("--client", "vllm-bench", "--load", "chat=16", "--model", "glm53-standin", "--reps", "1",
+            "--arms", "prod prod-record", "--again", "none")
+    run_dir = tmp_path / "run"
+    for k, name in enumerate(("prod", "prod-record")):
+        bench_arm(run_dir / "out", name, {"chat@16": [300.0]}, t0=1000.0 * k)
+    for argv, said in ((("--stage", "price"), "--stage capture or minify, not price"),
+                       (("--stage", "capture"), "--stage capture --minify RUN"),
+                       (("--minify", "r20261117-110000-0001"), "--minify and --exact name the runs a capture")):
+        p = bash(script, *line, *argv, run_dir=run_dir)
+        assert p.returncode == 2 and said in p.stdout, p.stdout
+    p = bash(script, "--report", str(run_dir / "out"), "--load", "chat", "--stage", "minify")
+    assert p.returncode == 2 and "--stage is the record of a job that serves its arms" in p.stdout
+    # minify: the stand-in's arms, then the top-k timed under a lease of one card, then the record
+    p = bash(script, *line, "--stage", "minify", run_dir=run_dir, **path)
+    assert p.returncode == 0 and "stage minify: passed (serving-cost-minify/v1)" in p.stdout, p.stdout + p.stderr
+    assert (run_dir / "leased").read_text().startswith("1 --wait --max-min 60 --")
+    r = json.loads((run_dir / "result.json").read_text())
+    assert (r["kind"], r["validation"]["status"]) == ("serving-cost-minify/v1", "passed") and r["measurements"] == []
+    # capture: the record names its minify run, and fails the job where the out/ lacks what a price reads
+    run_dir = tmp_path / "run2"
+    for k, name in enumerate(("prod", "prod-record")):
+        bench_arm(run_dir / "out", name, {"chat@16": [300.0]}, t0=1000.0 * k)
+    p = bash(script, *line, "--stage", "capture", "--minify", "r20261117-110000-0001", run_dir=run_dir)
+    assert p.returncode == 1 and "stage capture: FAILED: no lifetime of the reference prod-trace" in p.stdout, p.stderr
+    assert "prod-record: 1 pass records lack load, rep, t0_unix, wall_s" in p.stdout
+    assert "glm53-standin is a stand-in: a capture serves the full model" in p.stdout
+    r = json.loads((run_dir / "result.json").read_text())
+    assert r["kind"] == "serving-cost-capture/v1" and r["workload_fingerprint"]["minify"] == "r20261117-110000-0001"
+    assert not (run_dir / "leased").exists()

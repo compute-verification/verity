@@ -17,6 +17,7 @@ from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R
+from verity.commitments import randomness as RND
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
@@ -100,7 +101,7 @@ def test_an_output_class_the_design_samples_whole_needs_no_closure_map():
     a5 takes it; at K of N the same class is refused, and a class split across a whole stratum and a sampled one is refused
     for the sampled one's units alone."""
     table = S.selection_table(RULE, program(), QUERY, TABLE)
-    whole, part = (D.derive(program(), QUERY, D.parse_design(f"work:{k}"), table) for k in (N, K))
+    whole, part = (D.derive(program(), QUERY, RND.parse_design(f"work:{k}"), table) for k in (N, K))
     assert [s["k"] for s in whole["strata"]] == [N]
     assert A5.output_refusal(args(), whole) is None
     assert A5.output_refusal(args(), part) == {"output-class-needs-a-closure-map": {"units": len(OUTS)}}

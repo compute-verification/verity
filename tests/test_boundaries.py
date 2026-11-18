@@ -145,12 +145,12 @@ BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments
 BENCHMARKS_IMPORTERS = {
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
-        "verity/protocols/proofs/flock/prover/pod/gemm_hill.py", "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
+        "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py", "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py", "verity/protocols/proofs/flock/prover/python/verity_flock/ir_bench.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
         "tests/verity/protocols/proofs/flock/prover/test_backend_bench.py", "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
-        "tests/verity/protocols/proofs/flock/prover/test_gemm_hill.py", "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
+        "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
     **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tests/tools/research/test_store_prov.py"),
@@ -1014,13 +1014,13 @@ RESOURCE_ACCOUNTING = ("verity.protocols.resource_accounting", "verity.protocols
 RESOURCE_ACCOUNTING_SHARED = ("verity.protocols.resource_accounting", "verity.protocols.resource_accounting.scheme")
 
 
-def _resource_accounting_importers(texts: dict[str, str]) -> dict[str, list[str]]:
-    """``{file: ["line: module", ...]}`` for each file of the vLLM adapter outside its tests that names a module of a
-    resource-accounting protocol (``RESOURCE_ACCOUNTING`` but ``RESOURCE_ACCOUNTING_SHARED``): in an import statement,
-    or as a whole string (an import call's argument, a ``"module:attr"``, a registry's entry)."""
+def _adapter_importers(texts: dict[str, str], modules: tuple[str, ...], shared: tuple[str, ...] = ()) -> dict[str, list[str]]:
+    """``{file: ["line: module", ...]}`` for each file of the vLLM adapter outside its tests that names a module under
+    ``modules`` but ``shared``: in an import statement, or as a whole string (an import call's argument, a
+    ``"module:attr"``, a registry's entry)."""
     found: dict[str, list[str]] = {}
     for rel, text in sorted(texts.items()):
-        if not rel.startswith("adapters/vllm/") or _is_test(rel) or not any(r in text for r in RESOURCE_ACCOUNTING):
+        if not rel.startswith("adapters/vllm/") or _is_test(rel) or not any(r in text for r in modules):
             continue
         hits = set()
         for node in ast.walk(ast.parse(text, filename=rel)):
@@ -1032,8 +1032,8 @@ def _resource_accounting_importers(texts: dict[str, str]) -> dict[str, list[str]
                 names = [node.value.partition(":")[0]]
             else:
                 continue
-            named = {n for n in names if any(n == r or n.startswith(r + ".") for r in RESOURCE_ACCOUNTING)}
-            hits |= {(node.lineno, n) for n in named if n not in RESOURCE_ACCOUNTING_SHARED}
+            named = {n for n in names if any(n == r or n.startswith(r + ".") for r in modules)}
+            hits |= {(node.lineno, n) for n in named if n not in shared}
         if hits:
             found[rel] = [f"{line}: {name}" for line, name in sorted(hits)]
     return found
@@ -1042,7 +1042,6 @@ def _resource_accounting_importers(texts: dict[str, str]) -> dict[str, list[str]
 #: attaches through `verity_vllm.messages` and `verity.hooks`, and its own code moves to its package.
 RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/acquire/h1_commit.py",
-    "adapters/vllm/verity_vllm/check/replay/pouw_circuit.py",
     "adapters/vllm/verity_vllm/commit/history_tables_device.py",
     "adapters/vllm/verity_vllm/commit/row_tables_device.py",
     "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
@@ -1050,7 +1049,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
     "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
     "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
-    "adapters/vllm/verity_vllm/pipeline/serve_pearl.py",
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
     "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
@@ -1062,13 +1060,14 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pouw_circuit.py",
 )
 
 
 def test_the_vllm_adapter_imports_no_resource_accounting_protocol() -> None:
     """No file of the vLLM adapter, outside its tests, names a module of a resource-accounting protocol, apart from
     ``RESOURCE_ACCOUNTING_IMPORTERS``, which only shrinks."""
-    found = _resource_accounting_importers(_tracked_python())
+    found = _adapter_importers(_tracked_python(), RESOURCE_ACCOUNTING, RESOURCE_ACCOUNTING_SHARED)
     offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in RESOURCE_ACCOUNTING_IMPORTERS for hit in hits]
     assert not offenders, ("the vLLM adapter imports no resource-accounting protocol: emit the event or answer the request "
                            "through `verity_vllm.messages` (the types are `verity.hooks`), and leave the scheme's code in "
@@ -1089,10 +1088,68 @@ def test_a_resource_accounting_import_is_found() -> None:
         "adapters/vllm/x/tests/test_a.py": f"import {pouw}\n",
         "verity/protocols/x/d.py": f"import {pouw}\n",
     }
-    assert _resource_accounting_importers(texts) == {
+    assert _adapter_importers(texts, RESOURCE_ACCOUNTING, RESOURCE_ACCOUNTING_SHARED) == {
         "adapters/vllm/x/a.py": [f"1: {pouw}", f"2: {pouw}"],
         "adapters/vllm/x/b.py": [f"2: {pouw}", f"3: {pouw}"],
         "adapters/vllm/x/c.py": ["1: verity.protocols.experimental.dither"],
+    }
+
+
+#: The sampled proofs' verifier, its challenger included.
+SPOT_VERIFIER = ("verity.protocols.proofs.spot.verifier",)
+#: Files of the vLLM adapter that name a module of the sampled proofs' verifier all the same. It only shrinks: a record
+#: format or a re-export is read where it is defined (`verity.commitments`, `verity.circuits`), and verifier code stays in
+#: the verifier.
+SPOT_VERIFIER_IMPORTERS = (
+    "adapters/vllm/verity_vllm/commit/registered_rows.py",
+    "adapters/vllm/verity_vllm/compiler/replay_chain.py",
+    "adapters/vllm/verity_vllm/compiler/served_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_stop.py",
+    "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
+    "adapters/vllm/verity_vllm/pipeline/edge.py",
+    "adapters/vllm/verity_vllm/pipeline/interior_links.py",
+    "adapters/vllm/verity_vllm/pipeline/interior_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/registration_log.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
+    "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
+    "adapters/vllm/verity_vllm/program/predict/weights_tie.py",
+    "adapters/vllm/verity_vllm/program/predict/window_rows.py",
+    "adapters/vllm/verity_vllm/program/predict/window_weights.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+)
+
+
+def test_the_vllm_adapter_imports_no_spot_verifier() -> None:
+    """No file of the vLLM adapter, outside its tests, names a module of the sampled proofs' verifier or its challenger,
+    apart from ``SPOT_VERIFIER_IMPORTERS``, which only shrinks."""
+    found = _adapter_importers(_tracked_python(), SPOT_VERIFIER)
+    offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in SPOT_VERIFIER_IMPORTERS for hit in hits]
+    assert not offenders, ("the vLLM adapter imports no module of the sampled proofs' verifier: read a format or a "
+                           "re-exported name where it is defined (`verity.commitments.rowleaf`, `verity.commitments.scheme`, "
+                           "`verity.circuits.partition_object`, `verity.circuits.codec`), and leave the verifier's checks "
+                           "in the verifier. SPOT_VERIFIER_IMPORTERS only shrinks.\n" + "\n".join(offenders))
+    stale = sorted(set(SPOT_VERIFIER_IMPORTERS) - set(found))
+    assert not stale, f"SPOT_VERIFIER_IMPORTERS entries that no longer import one; remove them: {stale}"
+
+
+def test_a_spot_verifier_import_is_found() -> None:
+    """The check above isn't vacuous: a statement, a ``from`` import, the challenger and an import call are found; SPOT's
+    prover, a test and a file outside the adapter are not."""
+    one = "verity.protocols.proofs.spot.verifier.one_stage"
+    texts = {
+        "adapters/vllm/x/a.py": f"import {one}.docket\nfrom {one} import registered as G\n",
+        "adapters/vllm/x/b.py": "from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveRecord\n",
+        "adapters/vllm/x/c.py": f"import importlib\nimportlib.import_module('{one}.draw')\n",
+        "adapters/vllm/x/clean.py": "from verity.protocols.proofs.spot.prover import workload\n",
+        "adapters/vllm/x/tests/test_a.py": f"from {one} import registered\n",
+        "verity/protocols/x/d.py": f"from {one} import registered\n",
+    }
+    assert _adapter_importers(texts, SPOT_VERIFIER) == {
+        "adapters/vllm/x/a.py": [f"1: {one}.docket", f"2: {one}"],
+        "adapters/vllm/x/b.py": ["1: verity.protocols.proofs.spot.verifier.challenger.challenger"],
+        "adapters/vllm/x/c.py": [f"2: {one}.draw"],
     }
 
 
@@ -1180,10 +1237,6 @@ WORLD_PATHS_ALLOWED: dict[str, str] = {
     "circuits/silicon/instructions.py":
         "circuits: each instruction's source string cites the probe run that measured it",
     "circuits/silicon/models.py": "circuits: each model's source string cites the probe run that measured it",
-    "protocols/proofs/spot/prover/cost/inputs.py":
-        "proofs: `MEASURED`, the sampling plan's measured inputs, read by default until every caller passes them",
-    "protocols/proofs/spot/prover/cost/transformer.py":
-        "proofs: a table row saying `SERVERS` is assumed, not in the census",
 }
 
 

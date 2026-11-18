@@ -52,7 +52,8 @@ from typing import Any, cast
 
 import numpy as np
 
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.circuits.codec import program_digest
 from verity.commitments import history as HT
 from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
@@ -553,7 +554,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     took_in = _taken(window.members, cells, sample, inputs, {(x.template, x.port) for x, _k, _at in placed})
     tcs = _served(window.members, readers, links, tables, served, positions)
     regs = _registered(window.members, tied, registered, pins)
-    prog = P.program_digest(window.program)
+    prog = program_digest(window.program)
     schemas = link_schemas(window.members, links)
     given = {v.value: v for v in supplied(prog, links, q, [t.entry() for t in tcs], schemas, pins)}
     if device is not None:

@@ -36,7 +36,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cached_property
-from typing import Any
+from typing import Any, NamedTuple
 
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
 RUN_SCHEMA = "verity-bench/overhead/v1"
@@ -75,9 +75,8 @@ class Gpu:
     def sku(self) -> str:
         from verity.device import load_node
         from verity_bench import kit
-        from verity_bench.host_weight import NODE_FILES
 
-        return load_node(self.node, directory=NODE_FILES, cards_directory=kit.cards_directory())["device"]["sku"]
+        return load_node(self.node, directory=kit.nodes_directory(), cards_directory=kit.cards_directory())["device"]["sku"]
 
     @cached_property
     def record(self) -> dict[str, Any]:
@@ -133,11 +132,24 @@ def cards() -> dict[str, Gpu]:
     """The door's GPUs by their card's `short`, the `--card` that names one."""
     return {card.gpu: card for card in DOOR}
 
-#: one layer's linears, (n, k) each: qkv's n is the query width and two KV widths, gate_up's twice the intermediate size
-MODELS = {
-    "llama3.1-70b": {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192), "down": (8192, 28672)},
-    "llama3.2-1b": {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192)},
+class Shape(NamedTuple):
+    """A model's decoder: its layer count and one layer's linears, (n, k) each: qkv's n is the query width and two KV
+    widths, gate_up's twice the intermediate size, as the model's HF config gives them."""
+
+    layers: int
+    linears: dict[str, tuple[int, int]]
+
+
+#: every benchmark's model shapes, by the name a member opens with
+SHAPES = {
+    "llama-3.1-8b": Shape(32, {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}),
+    "llama-3.1-70b": Shape(80, {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192),
+                                "down": (8192, 28672)}),
+    "llama-3.2-1b": Shape(16, {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192)}),
+    "qwen3-8b": Shape(36, {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (24576, 4096), "down": (4096, 12288)}),
 }
+#: the door's models by its `--model`: one layer's linears each
+MODELS = {"llama3.1-70b": SHAPES["llama-3.1-70b"].linears, "llama3.2-1b": SHAPES["llama-3.2-1b"].linears}
 #: the kernel points' model, whose γ is each metric's own reading; every other model's is a member of it
 KERNEL_MODEL = "llama3.1-70b"
 #: what a model's entry leaves out of the layer its γ is over, though serving the model computes it

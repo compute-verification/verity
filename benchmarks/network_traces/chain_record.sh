@@ -51,6 +51,8 @@
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
 # state, a gate run's witness/ (custody uploads all of $OUT; a network attester run's witness is its lane key's only)
+# nor a network attester run's certified.jsonl (its heads, their frames' root and salt) or cells.jsonl (each
+# registration's wiring and cost) wherever a gate's files hold one,
 # nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's attested I/O, out-witness.jsonl's rows),
 # nor a file that holds a row registration whole, its wiring's digest with it: the registrations a verifier takes
 # (warden-registration*.json) and the scan's answers, which carry them (answers.json), nor what the attestations step
@@ -150,7 +152,7 @@ else NETWORK_CERTIFIER=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); 
 log "chain: the network attester path, network attester run ${NETWORK_CERTIFIER#$G/}"
 mkdir -p "$OUT/gates"
 (cd "$G" && find . -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.log' \) -size -64M ! -path '*/witness/*' \
-  ! -name plan.json ! -name probe.json ! -name io.json ! -name out-witness.jsonl -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
+  ! -name plan.json ! -name probe.json ! -name io.json ! -name out-witness.jsonl ! -name certified.jsonl ! -name cells.jsonl -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
 
 setup
 (cd verity/protocols/resource_accounting/network/verifier/lean && lake build network-records) \
@@ -229,7 +231,10 @@ tie() {
     --bin $BIN --lean $LEAN --out $W/tie ${CR_TIE_GPU:+--gpu}"
   log "chain: tie: $cmd"
   bash -c "$cmd" > "$OUT/tie.log" 2>&1
-  echo $? > "$W/tie.rc"; keep "$W/tie" "$OUT/tie"; log "chain: tie done, rc $(cat "$W/tie.rc")"
+  echo $? > "$W/tie.rc"; mkdir -p "$OUT/tie"   # the tie's summary and public parameters; its inputs stay in $W
+  (cd "$W/tie" && for f in summary.json stager/program.json stager/partition.json; do
+    [ -f "$f" ] && cp --parents "$f" "$OUT/tie/"; done)
+  log "chain: tie done, rc $(cat "$W/tie.rc")"
   [ "$(cat "$W/tie.rc")" = 0 ] || tail -n 1 "$OUT/tie.log" | cut -c1-600 > "$W/tie.why"
 }
 if [ -n "${CR_SCAN_ONLY:-}" ]; then scan; else n2; tie; scan; fi
