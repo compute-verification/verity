@@ -139,11 +139,11 @@ def minutes(ns: argparse.Namespace, harness_opts: list[str], m: dict) -> int:
     """The job's minutes: --timeout's or --max-min's (the larger), else the entry's max_minutes.  ValueError above max_minutes."""
     t = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
     asked = [x for x in (math.ceil(t / 60) if t else None, ns.max_min) if x]
-    cap = m["max_minutes"]
-    n = max(asked) if asked else cap
-    if n > cap:
-        raise ValueError(f"the run asks {n} min (--timeout / --max-min), above {ns.on}'s max_minutes {cap} (its register entry): "
-                         f"pass --timeout {cap}m or less, or split the work into runs of at most {cap} min")
+    most = m["max_minutes"]
+    n = max(asked) if asked else most
+    if n > most:
+        raise ValueError(f"the run asks {n} min (--timeout / --max-min), above {ns.on}'s max_minutes {most} (its register entry): "
+                         f"pass --timeout {most}m or less, or split the work into runs of at most {most} min")
     return n
 
 
