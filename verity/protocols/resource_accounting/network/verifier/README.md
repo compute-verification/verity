@@ -91,7 +91,9 @@ Open premises (`open`):
   no egress cell to the id egress form (the io tie's, `IoTieCell` on every cell) and no response to a `max_tokens_cap`
   (`network-rows` refuses such a schedule).
 - **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
-  runs the check and writes it as network attestation's piece (`attester_piece.py`), which `benchmarks/one_stage` reads. It also writes the
+  runs the check and writes it as network attestation's piece (`attester_piece.py`), which `benchmarks/one_stage` reads;
+  on the served launch the piece, its chain's and its period's checks included, runs on the node that serves, so its
+  answer is the developer's and establishes no `trusted-device`. It also writes the
   check's parameters, whose `"keys"` list the link's network attester's entries, each a key, its session and the
   start of its stretch of execution phases (`../prover/scan_period.py`: the deployment's one key and session, from execution
   phase 0), and its evidence, whose `"starts"` show each listed entry's session's signed start (the deployment's
@@ -266,7 +268,7 @@ A spec-level reference for network attestation's timing channel:
   and, with content rows (`NetworkAttesterParams.content`), three tables a class of what each filed release carried
   (`content_rows`: its request, response and end rows; under form 2 a class's held rows alone, whose count the head
   makes public; with `request_words`, a fourth of its request's words), all committed as the cells' rows are and listed under one
-  head the network attester signs once; the registration the verifier reads (`check_registration`) and its
+  head the network attester signs once; the read of that registration (`check_registration`) and its
   `--registered` port of the proof blocks that read a table, one a row (`port`); under form 2, the signed word
   that an execution phase has no head (`check_no_head`);
 - how an execution phase's class is charged (`class_charge.charge`): below its schedule only with a count above 0
@@ -286,7 +288,8 @@ A spec-level reference for network attestation's timing channel:
   ``load``, ingress), committed as a registered value under the network attester's own salts at the reading port's
   leaf width and row format, its root in a head the network attester signs for the session's first execution phase
   (`TransferHead`, `registration`); every other row into the host is the scan's state, with no head of its own.
-  `check_registration` is the verifier's read of it for the transfer it expects, and `port` the verifier's own
+  `check_registration` reads it for the transfer it expects (`benchmarks/one_stage/a5_network_attester.py` calls it; no
+  verifier does yet), and `port` the verifier's own
   `--registered` port of the value at the signed root (the load relayed and committed as it crosses,
   `verity/protocols/resource_accounting/network/attester/load_relay.py`);
 - the class circuit's check (`blocks`): a circuit record is one host's class execution phase circuit, and which host runs which
