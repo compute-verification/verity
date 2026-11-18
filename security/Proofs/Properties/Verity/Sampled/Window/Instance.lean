@@ -669,14 +669,15 @@ theorem spotSound (K₀ : ExecutionPhaseConstructions I.base) (k : Verity.Regist
     (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hC : I.ClaimReads (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest))
-    (hWa : I.ExecutionPhaseAt k) (hWR : I.ExecutionPhaseReads k ev filesDec) :
+    (hWa : I.ExecutionPhaseAt k) (hWR : I.ExecutionPhaseReads k ev filesDec)
+    (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)) k) :
     (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)).SpotSound k :=
   executionPhaseSpotSound_sessions (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)) k
     (I.liftOf (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) K₀) I.pinned I.dev reg ExecutionPhase.table ev filesDec
     record₀ recordDigest (fun θ _ _ _ => labelAt θ) _root_.Spot.Challenger.MAX_COINS
     (I.deployed (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) (fun _ _ _ _ => rfl)
       (fun _ _ _ _ => rfl) hC)
-    (I.covers (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) k hWa)
+    (I.covers (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) k hWa) hTwo
     (fun _ _ _ _ o _ => Device.printsLog_dev _ o)
     (fun θ F _ _ c => Device.signsPlay_dev (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest))
       I.deployment θ F c (I.signer θ))
@@ -691,7 +692,7 @@ verifier accepts files that passed the commit phase's check while one of its thr
 most their errors summed, at the vocabulary `ExecutionPhaseInstance.vocab` builds from the deployment and the constructions
 `ExecutionPhaseInstance.constructionsAt` assembles, wherever what the claim reads of the window (`ClaimReads`), the
 verifier's window at an accepted play (`ExecutionPhaseAt`), what the verifier's acceptance gives of each play
-(`ExecutionPhaseReads`), the base's PoUW target, the wires' statement at that vocabulary and gate A's row hold
+(`ExecutionPhaseReads`), the base's PoUW target and the wires' statement at that vocabulary hold
 (`RemoteSoundness`).
 The sampled subprotocol's error at a window is `ExecutionPhase.delta`: the sample's own miss and the members' knowledge and binding
 terms summed (`JointShareV5`), each member's registration's roots term (`ExecutionPhase.rootsErr`), a two-continuation term
@@ -705,11 +706,11 @@ theorem remote_soundness_executionPhase (I : ExecutionPhaseInstance d α) (K₀ 
     (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hC : I.ClaimReads (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
     (hWa : I.ExecutionPhaseAt .remote) (hWR : I.ExecutionPhaseReads .remote ev filesDec)
+    (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)) .remote)
     (hW : I.base.PouwSound .remote)
-    (hWi : (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).WiresSound .remote)
-    (hG : GateARow) :
+    (hWi : (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).WiresSound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).SoundnessAt .remote :=
   Verity.remote_soundness_of_subprotocols ι α d _
-    (I.spotSound K₀ .remote reg ev filesDec record₀ recordDigest hC hWa hWR) hW hWi hG
+    (I.spotSound K₀ .remote reg ev filesDec record₀ recordDigest hC hWa hWR hTwo) hW hWi
 
 end Verity.Sampled

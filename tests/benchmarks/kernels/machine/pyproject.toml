@@ -1,0 +1,11 @@
+# What kernels' runners read from a machine's record and a card's (benchmarks/kernels/machine.py). Not a package.
+[tool.pytest.ini_options]
+testpaths = ["."]
+
+[tool.verity.tests]
+# test_machine reads machine records written from the harness's fixture of one (the kit's reader's) and the card records.
+inputs = ["benchmarks/kernels/machine.py", "tests/benchmarks/harness/fixtures/machines/one-card.toml",
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/overhead.py",
+          "benchmarks/harness/verity_bench/settings.py", "calibration/hardware/cards", "tools/config/verity_config",
+          "verity/__init__.py", "verity/channel.py", "verity/device.py", "verity/errors.py"]

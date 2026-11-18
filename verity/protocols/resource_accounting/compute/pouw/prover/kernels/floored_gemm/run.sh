@@ -10,7 +10,8 @@
 # STAGE=build|gate|all (default all); REPS (default 15); SHAPES (name:m:n:k:C ..., C the tile config P, Q, W or D); NCU_SHAPES (same).
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2  # CUDA_HOME, else the run's machine's
+export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm
 export B; B=$(mktemp -d /tmp/floored-gemm.XXXXXX); trap 'rm -rf "$B"' EXIT
 STAGE=${STAGE:-all}

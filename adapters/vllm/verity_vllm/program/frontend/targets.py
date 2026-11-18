@@ -39,6 +39,7 @@ from verity.circuits.ops.prims import (
     HopperE4m3MmaV2Dot32,
     HopperE4m3QgmmaDot32,
 )
+
 from verity_vllm.definitions.numerics import fa3_model as FA3
 from verity_vllm.definitions.registry import (
     attention_vocab,

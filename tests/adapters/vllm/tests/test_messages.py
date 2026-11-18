@@ -163,7 +163,14 @@ def test_exchange_answers_requests_by_name_before_serving():
     ex.requests.pop()
     assert ex.answer(declared) is True and seen == [declared]
     with pytest.raises(Refused, match="after the requests were answered"):
-        ex.subscribe("c", "values", seen.append)
+        ex.request("c", H.HoldRelease("in-0", 1))
+    off = ex.subscribe("c", "values", seen.append)
+    ex.emit(H.ValueProduced("layers.0", "producer_output", 0, "rows"))
+    off()
+    ex.emit(H.ValueProduced("layers.0", "producer_output", 1, "rows"))
+    assert seen[1:] == [H.ValueProduced("layers.0", "producer_output", 0, "rows")]
+    ex.emit(H.StepBegan(4))
+    assert ex.step == 4
 
 
 def test_exchange_refuses_an_unknown_hook():
@@ -210,11 +217,20 @@ def test_exchange_starts_through_every_gate_and_holds():
 
 
 def test_one_exchange_a_process():
-    ex = M.open_exchange()
+    M.close()
+    ex = M.current()
     try:
-        assert M.current() is ex
-        with pytest.raises(Refused, match="open in this process"):
-            M.open_exchange()
+        assert M.current() is ex and not ex.wants("values")
     finally:
         M.close()
-    assert M.current() is not ex and not M.current().wants("values")
+    assert M.current() is not ex
+
+
+def test_a_process_beside_is_refused_without_a_launcher():
+    ex = M.Exchange()
+    ex.request("network", H.StartBeside("id-front", ("python", "-m", "relay"), ("ingress",)))
+    with pytest.raises(Refused, match="network: starts id-front beside the workload, and no launcher"):
+        ex.answer(H.Declared("", {}))
+    ex.launches = True
+    ex.answer(H.Declared("", {}))
+    assert [r.process for _, r in ex.beside()] == ["id-front"]
