@@ -1,6 +1,6 @@
 """The messages between the adapter and the prover, in both directions.
 
-In one process, through its one `Exchange` (`current`): the adapter's hooks emit the events of `verity.hooks` to the
+In one process, through one `Exchange` a build (`build`; `current` is the build in scope): the adapter's hooks emit the events of `verity.hooks` to the
 subscribers of their hooks, and a scheme, attached by its name before the engine is built, files its requests, each
 answered yes or refused by the scheme's name before serving starts.  A subscriber only reads, so it may attach at any
 time; a request changes what is served: one on what the workload declares (a property, a process beside it) is filed
@@ -14,7 +14,8 @@ message's writers and readers.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -27,7 +28,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover import workload as
 from verity.protocols.resource_accounting.memory.pous.prover import workload as pous
 from verity.protocols.resource_accounting.network.prover import workload as certifier
 
-__all__ = ["TYPES", "Exchange", "append", "body", "close", "current", "line", "lines", "read", "write"]
+__all__ = ["TYPES", "Exchange", "append", "body", "build", "close", "current", "line", "lines", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
 
@@ -187,15 +188,35 @@ _CURRENT: Exchange | None = None
 
 
 def current() -> Exchange:
-    """This process's exchange, opened on first use."""
+    """The exchange of the build in scope: the last build's (`build`), or the one `using` names; opened on first use."""
     global _CURRENT
     if _CURRENT is None:
         _CURRENT = Exchange()
     return _CURRENT
 
 
+def build() -> Exchange:
+    """The exchange the build about to start files on and answers: the current one until a build answered it, then a
+    fresh one, made current. An answered exchange stays with its engine, which puts it back in scope with `using`."""
+    global _CURRENT
+    if _CURRENT is None or _CURRENT.declared is not None:
+        _CURRENT = Exchange()
+    return _CURRENT
+
+
+@contextmanager
+def using(exchange: Exchange) -> Iterator[Exchange]:
+    """``exchange`` is the build in scope (`current`) inside the block, the one before it after."""
+    global _CURRENT
+    before, _CURRENT = _CURRENT, exchange
+    try:
+        yield exchange
+    finally:
+        _CURRENT = before
+
+
 def close() -> None:
-    """End this process's exchange; the next `current` opens a fresh one."""
+    """End the exchange in scope; the next `current` opens a fresh one."""
     global _CURRENT
     _CURRENT = None
 

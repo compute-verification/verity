@@ -44,6 +44,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinErro
 
 from tests.protocols import challenger_host as CH
 from verity_vllm import llm as L
+from verity_vllm import messages
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.engine import int8_exact as E
@@ -485,7 +486,8 @@ def engine(monkeypatch):
     def build_engine(checkpoints, **kw):
         got["builds"] += 1
         return SimpleNamespace(llm=got.get("vllm") or _vllm_with(got["runner"]), model=got["model"], kwargs={},
-                               env_flags={}, execution=kw["execution"], effective={}, build_s=0.0)
+                               env_flags={}, execution=kw["execution"], effective={}, build_s=0.0,
+                               exchange=messages.build())
 
     monkeypatch.setattr(va, "build_engine", build_engine)
     return got
