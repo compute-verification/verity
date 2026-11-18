@@ -32,7 +32,7 @@ def test_bound_reads_its_term_at_the_parameters_given() -> None:
         S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, {**names, "rebuilt": 0}, {"q": 1, "N": 1})
 
 
-CTX = {"pearl-plus": {"challenger": "127.0.0.1:1", "kernel": "k.so"}}
+CTX = {"settings": {"challenger": "127.0.0.1:1", "kernel": "k.so"}}
 
 
 class _Exchange:
@@ -101,11 +101,11 @@ def test_attach_ends_a_pass_at_each_step_and_refuses_a_step_over_one(monkeypatch
 
 
 def test_attach_refuses_without_coins_or_a_challenger() -> None:
-    for ctx in ({}, {"pearl-plus": {"kernel": "k.so"}}):
-        with pytest.raises(ValueError, match="neither 'coins' nor 'challenger' is set under pearl-plus"):
+    for ctx in ({}, {"settings": {"kernel": "k.so"}}):
+        with pytest.raises(ValueError, match="neither 'coins' nor 'challenger' is among its settings"):
             PS.PEARL_PLUS.attach(_Exchange(), ctx)
-    with pytest.raises(ValueError, match="no 'kernel' under pearl-plus"):
-        PS.PEARL_PLUS.attach(_Exchange(), {"pearl-plus": {"challenger": "127.0.0.1:1"}})
+    with pytest.raises(ValueError, match="no 'kernel' among its settings"):
+        PS.PEARL_PLUS.attach(_Exchange(), {"settings": {"challenger": "127.0.0.1:1"}})
 
 
 def test_opening_the_run_names_what_is_missing() -> None:
@@ -204,7 +204,7 @@ def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch) -> Non
         raising=False)
     monkeypatch.setattr(SV, "finish_window", lambda run, session: finished.append(session), raising=False)
     on = PS.Attached(CTX)
-    on.run = on.open({0: "w0"}, CTX["pearl-plus"])
+    on.run = on.open({0: "w0"}, CTX["settings"])
     assert opened == [(PS.OPTION, "127.0.0.1:1", SV.weights_root({0: bytes([0]) * 64}), True)]
     assert on.run.made[2] == ("kernel", "k.so", None) and on.run.made[5:] == ("c", "o", {"pass_index": 0})
     assert on.run.commits == {"coin_source": SV.H1_CHALLENGER, "session": {"gate": 1}}

@@ -47,12 +47,12 @@ class Attached:
     ``summary`` its details; `release` finishes the run once serving ends."""
 
     def __init__(self, ctx: Mapping[str, Any]) -> None:
-        self.own: Mapping[str, Any] = ctx.get(PEARL_PLUS.name) or {}
+        self.own: Mapping[str, Any] = ctx.get("settings") or {}
         if self.own.get("coins") is None and self.own.get("challenger") is None:
-            raise ValueError("pearl-plus: neither 'coins' nor 'challenger' is set under pearl-plus in ctx: the salt is "
+            raise ValueError("pearl-plus: neither 'coins' nor 'challenger' is among its settings (ctx['settings']): the salt is "
                              "the challenger's salt coin, opened after the weights' root, and there is no beacon")
         if not self.own.get("kernel"):
-            raise ValueError("pearl-plus: no 'kernel' under pearl-plus in ctx: its run computes on the device, through "
+            raise ValueError("pearl-plus: no 'kernel' among its settings (ctx['settings']): its run computes on the device, through "
                              "the kernel's library")
         self.declared: H.Declared | None = None
         self.run: Any = None
