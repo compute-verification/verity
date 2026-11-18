@@ -399,7 +399,7 @@ class TickGate:
                 self.ns += event.slots * self.token_ns
                 self.T += self.ns // 1000
                 self.ns %= 1000
-        elif isinstance(event, H.OutputsComplete):
+        elif isinstance(event, H.OutputLeft):
             n = self.held_ids.pop(event.input, None)
             if n is not None:
                 del self.held[n]
@@ -843,7 +843,7 @@ class FrontFeed:
             if k is not None:
                 self.inputs[ev.input] = k
                 self.admit.submit(_Release(k, ev.input))
-        elif isinstance(ev, H.OutputsComplete) and ev.input in self.inputs:
+        elif isinstance(ev, H.OutputLeft) and ev.input in self.inputs:
             k = self.inputs.pop(ev.input)
             self.admit.submitted.pop(k, None)
             if ev.step == 0:
