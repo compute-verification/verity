@@ -65,7 +65,7 @@ def defAt : List (ℕ × ℕ) → ℕ → ℕ
   | (i, c) :: ns, j => if j < c then i else defAt ns (j - c)
 
 /-- **A proof block's output bits**, computed from the description: its Definition's output bits. This is the width
-`hb` that `FlockSoundness.Audit.Partition.audit_exfiltration` takes as an argument today. -/
+`hb` that `Spot.Sampling.Partition.audit_exfiltration` takes as an argument today. -/
 def blockWidth (j : ℕ) : ℕ := D.outWidth (defAt D.nodes j)
 
 /-- An inference block's fresh input bits, computed from the description: its Definition's fresh input bits. -/
@@ -92,7 +92,7 @@ end Description
 
 /-- **The computed widths meet the influence bound's width hypothesis**: for a partition its description describes,
 the exits of any set `B` of units hold at most the sum of their computed widths. This is the hypothesis `hw` of
-`FlockSoundness.Audit.Partition.audit_exfiltration` and `card_influenceSet_le_harm` with `hb := blockWidth` and `K B`
+`Spot.Sampling.Partition.audit_exfiltration` and `card_influenceSet_le_harm` with `hb := blockWidth` and `K B`
 the exits of `B`'s gates, which `separates_exits` shows separate `B`.
 
 It follows from `Describes`, since the exits of a union lie in the union of the exits; it is not proved yet. -/
@@ -166,7 +166,7 @@ that sees only the delivered values, succeed together (accepted, and `rcv` retur
 `H` and the computed widths come from the description; `consumers.exfiltration_bound` computes this figure.
 
 It would follow from `Spot.Sampling.Sound` at the event "the incorrect set is missed with probability below `δ`", as
-`FlockSoundness.Audit.Partition.audit_exfiltration` follows from `audit_profile`, with `hb := blockWidth`, `hw` by
+`Spot.Sampling.Partition.audit_exfiltration` follows from `audit_profile`, with `hb := blockWidth`, `hw` by
 `WidthsMeet` and `hsep` by `separates_exits`, restated over core's circuit. Not yet true: the wires premise
 (`OneValuePerWire`) stays a hypothesis until a wire has one commitment. -/
 def ExfiltrationLimit (committed : (R : Reg) → ((ω : L.Ω) → Strategy (session (L.draw ω) R)) → C.Trace)
@@ -187,7 +187,7 @@ the anchors, the design and `δ`, with at most `2^H · ∑_{j ≤ k} C(n, j)` me
 the delivered values lie outside `Y` with probability at most the errors. The incorrect proof blocks steer the delivered
 values by at most `H + log₂ ∑_{j ≤ k} C(n, j)` bits; `consumers.infiltration_bound` computes `H`.
 
-It would follow from `Spot.Sampling.Sound` as `FlockSoundness.Audit.Partition.audit_influence` follows from
+It would follow from `Spot.Sampling.Sound` as `Spot.Sampling.Partition.audit_influence` follows from
 `audit_profile`, with `card_influenceSet_le_harm` and `card_admissible_le` at `hb := blockWidth`, restated over core's
 circuit. Not yet true: the wires premise stays a hypothesis until a wire has one commitment. -/
 def InfiltrationLimit (committed : (R : Reg) → ((ω : L.Ω) → Strategy (session (L.draw ω) R)) → C.Trace)

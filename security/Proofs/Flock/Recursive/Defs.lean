@@ -107,7 +107,7 @@ end FlockSoundness.StrictCR
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit
+open Game Spot.Sampling
 open scoped ENNReal
 
 /-- **`r` committed rounds**: in each, the prover sends a message of type `M`, and then the verifier flips a live coin from

@@ -64,7 +64,7 @@ def _prove(ts: list[int]) -> list[tuple[int, bytes, np.ndarray]]:
 def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs: int = 1) -> Path:
     """The head's pass in the device run's layout under `d`, its manifest's path. Tiles `prove` are proved (every tile
     with None), in `jobs` forked processes, the rest of the transcript and of y left +0."""
-    s = T.PPD.scheme_of(SCHEME)
+    s = T.pouw_schemes.get(SCHEME)
     rng = np.random.default_rng(64)
     h = s.commitment_hash
     (d / "calls").mkdir(parents=True)
@@ -148,7 +148,7 @@ def head(tmp_path_factory):
 
 @pytest.fixture
 def fixed_draw(monkeypatch):
-    tiles = T.PPD.scheme_of(SCHEME).tiles(T.Shape(M16, K, N))
+    tiles = T.pouw_schemes.get(SCHEME).tiles(T.Shape(M16, K, N))
     monkeypatch.setattr(T.VR.CW, "draw", lambda scheme, records, key, draws: [(0, tiles[t]) for t in DRAWN][:draws])
 
 
@@ -171,7 +171,7 @@ def test_the_verifier_accepts_the_heads_call_opens_its_last_column_tile_and_cred
     assert "y committed and checked on 1 of 1 calls" in got["line"] and "on its 3 tables" in got["line"], got["line"]
     assert public["tie"]["tables"] == 3 and "weights" not in public["tie"]
     work = public["work"]
-    eps, rho = Fraction(work["epsilon"]), T.PPD.scheme_of(SCHEME).cap
+    eps, rho = Fraction(work["epsilon"]), T.pouw_schemes.get(SCHEME).cap
     assert work["macs"] == REAL * (N - 64) * K and work["credited_tiles"] == 2_003
     assert work["credited"] == int((1 - rho) * (1 - eps) * work["macs"]) and eps == T.VR.epsilon(DRAWS, T.VR.DELTA)
     entry = next(e for e in T.window_record(head)["registered"] if e["value"] == f"pearl-b/{WEIGHT}")

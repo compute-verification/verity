@@ -40,6 +40,18 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     # a profile's job (tests/test_profile.py): the profiles' reader, and the code whose refusals a profile's result
     # quotes, the boundary commitment's and the modules it imports
     "benchmarks/harness/verity_bench/profiles.py",
+    # --feature's scheme by name (`serve_tax.feature`): the kit's reader of the schemes' table, the table, and the
+    # schemes it registers
+    "benchmarks/harness/verity_bench/schemes.py",
+    "verity/protocols/resource_accounting/scheme.py",
+    "verity/protocols/experimental/__init__.py",
+    "verity/protocols/experimental/dither/__init__.py",
+    "verity/protocols/experimental/dither/scheme.py",
+    "verity/protocols/resource_accounting/compute/pouw/scheme.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/schemes/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/kernel_schemes.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/protocol.py",
     "adapters/vllm/verity_vllm/commit/__init__.py",
     "adapters/vllm/verity_vllm/commit/history_tables.py",
     "adapters/vllm/verity_vllm/engine/sampler_capture.py",

@@ -4,7 +4,7 @@
   python bench.py --gpu 5 --expect-uuid GPU-... [--arm module:Class ...] [--arm-path DIR] [--shapes LABEL ... | headline]
                   [--families bf16 fp8-e4m3 ...] [--reps 20] [--seed N] [--lock-mhz F]
                   [--decode-method dependent-chain|independent] [--bridge] [--traced] [--twins] --out run.json
-  python bench.py --plan [--shapes ...]          the shapes' operand sets, bursts and memory, without a GPU
+  python bench.py --plan SKU [--shapes ...]      the shapes' operand sets, bursts and memory on card SKU, without a GPU
 
 On an RTX PRO 6000 (sm_120), or an H200 (sm_90: native/build.sh with PH_ARCH=sm_90a, cuBLASLt in the library and vLLM's
 CUTLASS and DeepGEMM through torch with --bridge). A shape is any panel or model label, or any `m{m}-n{n}-k{k}`.
@@ -56,7 +56,7 @@ import shapes as SH
 
 #: what `characterize.py` and the tests read
 __all__ = [
-    "Bench", "EXIT_DEVICE", "EXIT_OK", "EXIT_USAGE", "Entry", "L2_SM120", "METHODS", "NamesNotTaken",
+    "Bench", "EXIT_DEVICE", "EXIT_OK", "EXIT_USAGE", "Entry", "METHODS", "NamesNotTaken",
     "NegativeControlFailed", "PREFLIGHT_DERIVE", "PRIME_READY_S", "S", "Stages", "Terminated", "arm_entries",
     "bad_throttle", "chain_entries", "dump_transcripts", "finalists_of", "free_entries", "gate_baselines", "lt_pick",
     "lt_range", "now", "operand_overlaps", "panel_reps", "parse", "poison_dump", "prime_profiler", "run_shape",
@@ -85,7 +85,6 @@ DECODE_METHODS = ("dependent-chain", "independent")
 #: an arm's `inputs` -> the operands' fill format, and the family whose scale factors it gets
 INPUT_FORMATS = {"f32": (F.F32, None), "bf16": (F.BF16, None), "e4m3": (F.E4M3, None), "e2m1-nv": (F.E2M1, "nvfp4"),
                  "e2m1-mx": (F.E2M1, "mxfp4"), "int8": (F.INT8, None)}
-L2_SM120 = 128 << 20
 TUNE_REPS, FINALISTS = 3, 2
 SCREEN_KEEP, SCREEN_CHUNK = 8, 16
 #: operands may take at most this share of the free device memory
@@ -1193,10 +1192,11 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
                         "(traced_prime)")
     p.add_argument("--twins", action="store_true",
                    help="time each family's fastest finalist twice, the second as ('twin', ...): an A/A control")
-    p.add_argument("--plan", action="store_true", help="print each shape's operand sets, burst and memory, and exit")
+    p.add_argument("--plan", metavar="SKU", help="print each shape's operand sets, burst and memory on this card (a file of "
+                                                 "calibration/hardware/cards/), and exit")
     p.add_argument("--out", type=Path)
     a = p.parse_args(argv)
-    if a.plan:
+    if a.plan is not None:
         return a
     if a.gpu is None or a.out is None:
         p.error("--gpu and --out are required")
@@ -1216,9 +1216,15 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
 
 
 def print_plan(args) -> int:
+    from verity.device import load_card, number   # here: loading the harness needs the standard library alone
+
+    try:
+        l2 = int(number(load_card(args.plan, directory=I.CARD_FILES)["store"]["l2"]))
+    except KeyError as e:
+        raise SystemExit(f"--plan {args.plan}: {e.args[0]}") from None
     fams = [B.FAMILIES[f] for f in args.families]
     for s in SH.select(args.shapes):
-        pl = shape_plan(s, fams, (), L2_SM120)
+        pl = shape_plan(s, fams, (), l2)
         print(f"{s.label:36s} m={s.m:<6d} k={s.k:<6d} n={s.n:<6d} sets={pl['sets']:<4d} burst={pl['burst']:<4d} "
               f"memory={pl['memory_bytes'] / 2**30:6.2f} GiB")
     return EXIT_OK
@@ -1304,7 +1310,7 @@ def now() -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse(argv)
-    if args.plan:
+    if args.plan is not None:
         return print_plan(args)
     for p in args.arm_path:
         sys.path.insert(0, str(p.resolve()))

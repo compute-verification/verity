@@ -318,7 +318,7 @@ theorem posOf_lt_length (g : Fin C.N) : posOf C g < (progOf C κ).gates.length :
     (show gateSize (C.op g) - 1 < (lower C κ g).length by rw [length_lower]; omega)] at h
   exact (List.getElem?_eq_some_iff.1 h).1
 
-theorem lt_length_of_mem_unitGates {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {i : ℕ}
+theorem lt_length_of_mem_unitGates {n : ℕ} {P : Spot.Sampling.Partition C n} {u : Fin n} {i : ℕ}
     (hi : i ∈ unitGates P u) : i < (progOf C κ).gates.length := by
   obtain ⟨g, -, j, hj, rfl⟩ := mem_unitGates.1 hi
   have h := gates_off (κ := κ) g hj
@@ -368,7 +368,7 @@ member's own program. -/
 theorem lowers_bitsProgs (ms : Spot.Bits.Members)
     (htop : ∀ ci ∈ ms, (memberProg ci.1 ci.2.size).Topological) (m : ℕ) (hm : m < ms.length)
     {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
-    (hC : progOf C κ = memberProg ms[m].1 ms[m].2.size) {k : ℕ} (P : FlockSoundness.Audit.Partition C k)
+    (hC : progOf C κ = memberProg ms[m].1 ms[m].2.size) {k : ℕ} (P : Spot.Sampling.Partition C k)
     (u : Fin k) (φ : ℕ → Fin C.N) (hφ : ∀ g, φ (posOf C g) = g) (Xv : Fin C.N → Bool)
     (hκ : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) →
       C.eval Xv a = b) :

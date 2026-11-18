@@ -67,7 +67,7 @@ theorem groups_cover {S : RecAlgebra.GfS} {sizes : Array ℕ} {gs : Array (Array
       rw [Bool.not_eq_true, bne_eq_false_iff_eq] at hall
       rw [hall]
       exact List.mem_range.2 hi
-    rw [Array.mem_toList_iff, FlockSoundness.Audit.SampleExec.mem_qsort, ← Array.foldl_toList,
+    rw [Array.mem_toList_iff, Spot.Sampling.SampleExec.mem_qsort, ← Array.foldl_toList,
       mem_foldl_append] at hr
     rcases hr with hr | ⟨g, hg, hx⟩
     · simp at hr

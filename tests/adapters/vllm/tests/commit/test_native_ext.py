@@ -27,6 +27,7 @@ def loads(monkeypatch) -> tuple[list[dict[str, Any]], SimpleNamespace, list[str]
         calls.append({"name": name, "sources": list(sources), **kw})
         return built, f"{kw['parent']}/{DIGEST[:12]}", DIGEST
 
+    monkeypatch.setenv("CARD_SKU", "h100-sxm-80gb")
     monkeypatch.setattr(native_ext, "_EXT", None)
     monkeypatch.setattr(native_jit, "jit_load", jit_load)
     monkeypatch.setattr(native_jit, "missing_bindings", lambda module, cpp_path: list(missing))
@@ -37,7 +38,8 @@ def test_the_extension_loads_once_and_logs_where_it_was_built(loads, caplog, cap
     calls, built, _missing = loads
     caplog.set_level(logging.INFO, logger="verity_vllm")
     assert native_ext.ext(build_dir=str(tmp_path)) is built
-    assert calls == [{"name": "verity_native_collect", "sources": native_jit.source_paths(native_ext.HERE), "parent": str(tmp_path),
+    assert calls == [{"name": "verity_native_collect", "sources": native_jit.source_paths(native_ext.HERE), "arch": "9.0a",
+                      "parent": str(tmp_path),
                       "cflags": native_jit.CFLAGS, "cuda_cflags": native_jit.CUDA_CFLAGS, "verbose": False}]
     (record,) = caplog.records
     assert (record.name, record.levelname) == ("verity_vllm.commit.committer.native_ext", "INFO")
@@ -59,6 +61,14 @@ def test_an_extension_that_lacks_a_bound_name_is_refused_and_not_kept(loads, cap
     assert native_ext._EXT is None and not caplog.records
     missing.clear()
     assert native_ext.ext(build_dir=str(tmp_path)) is built and len(calls) == 2, "the refused module was not kept"
+
+
+def test_an_extension_without_a_card_is_refused_by_name_before_it_builds(loads, monkeypatch, tmp_path):
+    calls, _built, _missing = loads
+    monkeypatch.delenv("CARD_SKU")
+    with pytest.raises(ValueError, match="CARD_SKU is not set"):
+        native_ext.ext(build_dir=str(tmp_path))
+    assert calls == [] and native_ext._EXT is None
 
 
 def test_importing_the_module_loads_neither_numpy_nor_torch_nor_the_core():

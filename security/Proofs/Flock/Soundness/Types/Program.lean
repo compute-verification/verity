@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Types.Units
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 
 /-!
 # A program of units over circuit types: its rows circuit, its Boolean circuit, and `RowsL1` between them (phase 1, S4c)
@@ -29,7 +29,7 @@ open Flock Flock.DeriveAll
 
 namespace FlockSoundness
 
-open Audit Types.Dag Types.Flatten Compose Audit.Partition
+open Spot.Sampling Types.Dag Types.Flatten Compose Spot.Sampling.Partition
 
 /-! ## `flatten`'s input gates are its first `inBits + 1` -/
 
@@ -253,7 +253,7 @@ structure UnitSpec where
 theorem getD_of_lt {a : Array ℕ} {i : ℕ} (h : i < a.size) : a.getD i 0 = a[i] := by
   simp [Array.getD, h]
 
-theorem Audit.Partition.mem_committed_iff {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) (g : Fin C.N) :
+theorem _root_.Spot.Sampling.Partition.mem_committed_iff {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) (g : Fin C.N) :
     g ∈ P.committed ↔ (C.op g).isInput = true ∨ g ∈ C.outputs ∨ ∃ h, g ∈ (C.op h).args ∧ P.unit h ≠ P.unit g := by
   classical
   simp [Partition.committed]

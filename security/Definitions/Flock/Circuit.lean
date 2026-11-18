@@ -16,7 +16,7 @@ A transcript assigns a bit to every gate; only its committed entries are ever re
 inputs (`Partition.Correct`): evaluate `u`'s gates in order, reading every other gate from `X`
 (`Partition.localEval`), and compare with `X` on `u`'s committed gates.
 
-The lemmas about them (composition, congruence, refinement) are in `Proofs.Flock.Soundness.Audit.Circuit`.
+The lemmas about them (composition, congruence, refinement) are in `Proofs.Spot.Sampling.Circuit`.
 -/
 
 @[expose] public section
@@ -36,7 +36,7 @@ inductive Feeds : Fin C.N → Fin C.N → Prop
 
 end Verity.Boolean.Circuit
 
-namespace FlockSoundness.Audit
+namespace Spot.Sampling
 
 /-- A partition of a circuit's computed gates into `n` units; the input gates are the input unit
 (`none`). -/
@@ -86,4 +86,4 @@ structure Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) wher
 
 end Partition
 
-end FlockSoundness.Audit
+end Spot.Sampling
