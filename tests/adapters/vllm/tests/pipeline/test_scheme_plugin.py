@@ -5,6 +5,7 @@ released at shutdown."""
 from __future__ import annotations
 
 import asyncio
+import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -265,3 +266,103 @@ def test_without_the_setting_the_front_passes_everything():
     front = SP.Front(app, {})
     drive(front, http("/anything"), [])
     assert calls == ["/anything"] and front.ex is None
+
+
+HEAD = {"type": "http.response.start", "status": 200, "headers": [(b"content-type", b"text/event-stream")]}
+SIZED = {"type": "http.response.start", "status": 200, "headers": [(b"Content-Length", b"4")]}
+NULL = {"type": "http.response.body", "body": b"null"}
+
+
+class Waiting:
+    """vLLM's server with a request it waits on. It reads the body and sends ``head`` at once, if it has one: a stream's
+    200 head, which vLLM sends before any token, or a whole answer's with its length. From there it waits on the
+    request's disconnect alone, as vLLM's listener beside each handler does, and once it has it sends ``late``."""
+
+    def __init__(self, head: dict | None, late: list[dict]) -> None:
+        self.head, self.late, self.waits, self.ended = head, late, 0, 0
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        more = True
+        while more:
+            more = (await receive()).get("more_body", False)
+        if self.head is not None:
+            await send(self.head)
+        self.waits += 1
+        while (await receive())["type"] != "http.disconnect":
+            pass
+        for m in self.late:
+            await send(m)
+        self.ended += 1
+
+
+async def turns(k: int = 16) -> None:
+    loop = asyncio.get_running_loop()
+    for _ in range(k):
+        turn = loop.create_future()
+        loop.call_soon(turn.set_result, None)
+        await turn
+
+
+@pytest.mark.parametrize("head", [None, HEAD, SIZED], ids=["no response begun", "a stream's head gone", "a whole answer's head gone"])
+def test_a_lost_releases_request_in_the_server_is_given_its_disconnect_and_answered(tmp_path, head):
+    """Release 0's request is in vLLM's server, its client's connection open, when a watermark line names it lost, and
+    the front ends it: the server gets the request's disconnect. Where the server had begun no response, what it sends
+    after goes nowhere and the client gets 400 and the network attester's sentence. Where a stream's 200 head had gone,
+    the client gets the stream's end, with no later chunk. Where a whole answer's head had gone with its length, which
+    takes an open gate, its body goes on, and the front adds nothing."""
+    from verity.protocols.resource_accounting.network.prover import admission as NA
+    from verity.protocols.resource_accounting.network.verifier import release as REL
+
+    name = NA.scheme_name()
+    late = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else
+            [{"type": "http.response.body", "body": b"data: late\n\n", "more_body": True}])
+    app = Waiting(head, late)
+    front = SP.Front(app, {"VERITY_PROTOCOLS": name, "VERITY_PROTOCOLS_CONFIG": json.dumps(
+        {"feed": str(tmp_path), name: {"bucket_us": 100_000, "sat_us": 30_000, "free_us": 40_000}})})
+    numbered = http("/v1/completions", [(NA.RELEASE_HEADER, "0"), (NA.RUN_HEADER, "ab"), ("x-request-id", "c0")])
+    mark = http(NA.WATERMARK_PATH, [(NA.RUN_HEADER, "ab"), ("transfer-encoding", "chunked")])
+    sent: list[dict] = []
+    try:
+        async def run() -> tuple[bool, list[dict], bool]:
+            body, never = [GREEDY], asyncio.Event()
+
+            async def receive() -> dict:
+                if not body:
+                    await never.wait()
+                return body.pop(0)
+
+            async def send(m: dict) -> None:
+                sent.append(m)
+
+            call = asyncio.ensure_future(front(numbered, receive, send))
+            await turns()
+            held = app.waits == 1 and not app.ended and not call.done()
+            lines = [{"type": "http.request", "body": REL.watermark_chunk(0, 2, [0]).split(b"\r\n")[1], "more_body": True},
+                     {"type": "http.request", "body": b"", "more_body": False}]
+            answer: list[dict] = []
+
+            async def put(m: dict) -> None:
+                answer.append(m)
+
+            async def lines_in() -> dict:
+                return lines.pop(0)
+            await front(mark, lines_in, put)
+            await turns()
+            done = call.done()
+            call.cancel()
+            await asyncio.wait({call})
+            return held, answer, done
+
+        held, answer, done = asyncio.run(run())
+        assert held and answer[0]["status"] == 200 and done and app.ended == 1
+        if head is None:
+            assert [m.get("status") for m in sent] == [400, None]
+            assert sent[1]["body"] == NA.LOST.format(n=0, run="ab").encode()
+        else:
+            assert sent == [head, NULL if head is SIZED else {"type": "http.response.body", "body": b""}]
+        assert SP.FeedReader(NA.feed_file(str(tmp_path)))() == [
+            {"key": "c0", "run": "ab", "n": 0, "bucket": None}, {"run": "ab", "t": 0, "n": 2, "lost": [0]},
+            {"run": "ab", "end": True}, *([{"run": "ab", "n": 0, "passed": True}] if head is None else [])]
+        assert front.inside == {}
+    finally:
+        messages.close()
