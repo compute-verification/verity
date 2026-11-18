@@ -43,7 +43,7 @@ RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "a
                "pipeline", "kernel_outcome", "kernel_reason", "memory-line-of-record", "run_of_record", "unit_lowering",
                "compile_cost", "training-slowdown")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
-                     "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
+                     "hot_card", "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
                      "challenger-pins", "challenger-models", "verdict", "executor_shadow", "tasks_graph", "verity_graph", "result",
                      "ready_verdict", "label_auth", "label_delegation", "nightly_check")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
@@ -196,7 +196,7 @@ def test_lane_shorthand_folds_into_one_spelling(env, capsys):
     st = LocalStore()
     for key, value, want in (("axis", "l", ("sweep", "l")), ("milestone", "1M-vu", ("arm", "1M-vu")), ("tree", "main@6babe27", ("source", "main@6babe27")),
                              ("release", "lane/x@ec45c0b", ("source", "lane/x@ec45c0b")), ("verifier_note", "Rust", ("note", "Rust")),
-                             ("same_device", "false", ("same_device", False)), ("below_bar", "true", ("below_bar", True)), ("fold", "4", ("fold", 4)), ("pipeline", "2", ("pipeline", 2)),
+                             ("same_device", "false", ("same_device", False)), ("below_bar", "true", ("below_bar", True)), ("hot_card", "true", ("hot_card", True)), ("fold", "4", ("fold", 4)), ("pipeline", "2", ("pipeline", 2)),
                              ("hash", "poseidon2-babybear-w24", ("hash", "poseidon2-babybear-w24")), ("lane", "b-verify-par", ("lane", "b-verify-par")),
                              ("superseded_by", "r20260922-231034-0693", ("superseded_by", "r20260922-231034-0693"))):
         assert main(["label", ART, key, value, "--by", "lane-x"]) == 0, key
