@@ -3579,8 +3579,8 @@ else:
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
         w = json.load(open(tail[1]))
         if "--pearl-passes" in a:
-            from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
-            r = {{"format": "toy", "previous": "ef" * 64 if os.environ.get("BREAK_CHAIN") else REG.digest(w)}}
+            from verity.commitments import docket_digest as DD
+            r = {{"format": "toy", "previous": "ef" * 64 if os.environ.get("BREAK_CHAIN") else DD.digest(w)}}
         else:
             r = {{"format": "toy", "after": w}}
         (out / "registration.json").write_text(json.dumps(r))

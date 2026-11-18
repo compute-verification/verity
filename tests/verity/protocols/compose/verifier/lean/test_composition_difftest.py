@@ -904,7 +904,7 @@ def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_i
                                 (R.PEARL_PLUS.id, "{}", commitment, b"")])
 
     w = record(9)
-    assert R.run_window(run(w), b"") == [digest(w)] == [bytes.fromhex(R.REG.digest(w))]
+    assert R.run_window(run(w), b"") == [digest(w)] == [bytes.fromhex(DD.digest(w))]
     assert R.policy_previous(canonical(record(0, previous=digest(w).hex())).encode(), b"") == [digest(w)]
     assert strays(record(0, previous=digest(w).hex()), run(w)) is None
     stray = f"window: {R.INFERENCE_ONLY.id} and {R.PEARL_PLUS.id} named different values"
