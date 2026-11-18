@@ -28,7 +28,6 @@ untraced = [
     "test_declaration.py",
     "test_deferred_run.py",
     "test_guard.py",
-    "test_landing_gates.py",
     "test_lean_audit.py",
     "test_lean_changed.py",
     "test_lean_prebuild.py",

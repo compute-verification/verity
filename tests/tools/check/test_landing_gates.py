@@ -43,10 +43,6 @@ CHECK = _module("landing_gates_check", ROOT / "tools" / "check" / "check.py")
 D = _module("landing_gates_declaration", ROOT / "tools" / "check" / "declaration.py")
 LA = _module("landing_gates_lean_audit", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
 PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
-#: each plan's shards on this tree, and what a shard runs beside a part (`check.shard_needs`)
-RESOLVED = {n: D.resolve(plan, CHECK.JOBS, {**CHECK._parts_of(plan), "lean-audit": PACKAGES}, CHECK.audit_provers(PACKAGES))
-            for n, plan in D.plans().items()}
-NEEDS = CHECK.shard_needs()
 
 
 class Repo:
@@ -180,13 +176,15 @@ def test_a_cold_node_judges_on_the_facts_its_own_audit_wrote(tmp_path, monkeypat
     assert (tmp_path / "cold" / "unread-gate" / "k1.jsonl.gz").read_bytes() == b"facts"
 
 
-def test_every_run_holding_the_step_audits_the_facts_packages_before_it(tmp_path, monkeypatch):
+def test_every_run_holding_the_step_audits_the_facts_packages_before_it(tmp_path, provers):
     """The step runs only after the audits whose facts its gate reads, on the same node: each plan's shard holding it holds
     them, a run of the step alone (the slim run, a `--deferred` without lean-audit) audits them too, both in the step's group
     before it, and an auto plan keeps the step with them (`shard_needs`)."""
     audits = CHECK.gate_audits()
     assert audits == ["lean-audit:security", "lean-audit:security/Proofs"]
-    for n, shards in RESOLVED.items():
+    provers(CHECK)
+    for n, plan in D.plans().items():
+        shards = D.resolve(plan, CHECK.JOBS, {**CHECK._parts_of(plan), "lean-audit": PACKAGES}, CHECK.audit_provers(PACKAGES))
         [held] = [s for s in shards if "landing-gates" in s]
         assert set(audits) <= set(held), f"plan {n}: landing-gates in a shard without {set(audits) - set(held)}"
     for only in (["landing-gates"], ["landing-gates", "ratchet-gate"], ["lean-audit:security/Proofs", "landing-gates"]):
@@ -196,7 +194,7 @@ def test_every_run_holding_the_step_audits_the_facts_packages_before_it(tmp_path
         argv = dict((s[0], s[1]) for s in group)["lean-audit"]
         assert [argv[i + 1] for i, x in enumerate(argv) if x == "--package"] == [*dict.fromkeys(
             [p.partition(":")[2] for p in only if p.startswith("lean-audit:")] + [a.partition(":")[2] for a in audits])], only
-    assert set(audits) <= set(NEEDS["landing-gates"])
+    assert set(audits) <= set(CHECK.shard_needs()["landing-gates"])
 
 
 def test_the_step_is_on_the_merge_gate_after_lean_audit_and_in_one_shard_of_every_plan():
