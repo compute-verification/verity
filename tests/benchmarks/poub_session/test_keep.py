@@ -78,7 +78,9 @@ def test_the_engine_and_the_prover_keep_through_keep_py():
     node = (ROOT / "benchmarks/poub_session/node.py").read_text()
     assert '**keep.export_kept(info), "checks": keep.checks_kept(checks)' in engine
     assert 'write_json(d / f"engine.{g}.json", info)' in engine       # the full export: --dir, run.sh's scratch
-    assert 'out["engines"] = [keep.export_kept(e) for e in exports]' in node
+    assert 'write_json(a.out / f"engine.{g}.json", out)' in engine and "out = record(info, checks, a, d," in engine
+    assert 'out["engines"] = prover_engines(exports)' in node
+    assert '(a.out / "prover.json").write_text(json.dumps(out' in node
 
 
 def test_the_commits_run_table_and_memory_map_are_refused_by_name(tmp_path):

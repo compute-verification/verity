@@ -67,6 +67,8 @@ reason = "the PoUS Lean check (`pous-verifier`), whose Python is run by path bes
 directory = "verity/protocols/resource_accounting/memory/poub/prover"
 owner = "memory-accounting"
 reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never imports: loaded by path under its own names (`prover`, `device`, `kv`, `paged`) by the vLLM adapter and by its harness in `benchmarks/`; the session's prover party (`session_prover.py`), which only tests load by name; and the honest provers, the period's prover side and the P2 session's (`audit_prover.py`, `p2_prover.py`, `period_prover.py`, `opening_prover.py`, `p2_party_prover.py`), which tests, `benchmarks/` and the vLLM adapter load by name; and the P2 session's staging (`p2_stage/`: `bandwidth.py`, run as a script, and the `stage` and `layout` it loads), which `benchmarks/` loads by path under those names"
+known = ["verity/protocols/resource_accounting/memory/poub/scheme.py"]
+known_reason = "PoUB's declaration hands the prover out by name (`PROVER`): its binder to `POUB.attach` and its process `poub-session`, each module imported on its first use, on the machine that serves, so that an adapter gets the prover through the scheme and imports no protocol; importing the declaration loads none of it"
 
 [[distribution]]
 directory = "verity/protocols/resource_accounting/memory/pous/prover/p2"
@@ -640,6 +642,7 @@ paths = [
 ]
 loads = [
     "verity/commitments",
+    "verity/protocols/resource_accounting/memory/poub/prover",
     "verity/protocols/resource_accounting/memory/pous/prover",
     "verity/protocols/resource_accounting/scheme.py",
 ]
@@ -672,6 +675,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py",
     "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py",
     "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sketch_receipt.py",
+    "verity/protocols/resource_accounting/memory/poub/prover/commit_session.py",
     "verity/protocols/resource_accounting/memory/poub/prover/node_store/memory_map.py",
     "verity/protocols/resource_accounting/memory/poub/prover/node_store/plan.py",
     "verity/protocols/resource_accounting/memory/poub/prover/node_store/registry.py",
