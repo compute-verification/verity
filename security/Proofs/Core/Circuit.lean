@@ -204,15 +204,38 @@ theorem before_total {g h : Fin C.N} (hne : g ≠ h) : P.Before g h ∨ P.Before
     · exact Or.inr (Or.inr ⟨h1.symm, h2⟩)
   · exact Or.inr (Or.inl h1)
 
-/-- **A position is defined exactly on the boundary.** -/
-theorem pos_some {g : Fin C.N} : (P.pos g).isSome ↔ g ∈ P.boundary := by
-  classical
-  unfold pos
-  split_ifs with h <;> simp [h]
+theorem commitsIn_of_committed {L : Layout C} {g : Fin C.N} (hg : g ∈ P.committed) : ∃ j, P.CommitsIn L g j := by
+  simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and] at hg
+  rcases hg with h | h | ⟨k, hk, hne⟩
+  · exact ⟨_, Or.inl ⟨Or.inl h, rfl⟩⟩
+  · exact ⟨_, Or.inl ⟨Or.inr h, rfl⟩⟩
+  · exact ⟨_, Or.inr ⟨k, hk, hne, rfl⟩⟩
 
-theorem pos_lt_of_before {g h : Fin C.N} (hg : g ∈ P.boundary) (hh : h ∈ P.boundary) (hb : P.Before g h) :
-    (P.boundary.filter fun k => P.Before k g).card < (P.boundary.filter fun k => P.Before k h).card := by
+/-- A committed gate is committed in the phase `commitPhase` names. -/
+theorem commitsIn_commitPhase {L : Layout C} {g : Fin C.N} (hg : g ∈ P.committed) :
+    P.CommitsIn L g (P.commitPhase L g) := by
   classical
+  unfold commitPhase
+  rw [dif_pos (P.commitsIn_of_committed hg)]
+  exact Nat.find_spec _
+
+/-- **No earlier phase commits it**: `commitPhase` is the first phase that commits `g`. -/
+theorem commitPhase_le {L : Layout C} {g : Fin C.N} {j : ℕ} (h : P.CommitsIn L g j) : P.commitPhase L g ≤ j := by
+  classical
+  unfold commitPhase
+  rw [dif_pos ⟨j, h⟩]
+  exact Nat.find_min' _ h
+
+/-- **A position is defined exactly on the boundary.** -/
+theorem pos_some {L : Layout C} {g : Fin C.N} : (P.pos L g).isSome ↔ g ∈ P.boundary := by
+  unfold pos
+  split_ifs with h
+  · simp only [h, iff_true]
+    split <;> rfl
+  · simp [h]
+
+theorem rank_lt_of_before {T : Finset (Fin C.N)} {g h : Fin C.N} (hg : g ∈ T) (hb : P.Before g h) :
+    (T.filter fun k => P.Before k g).card < (T.filter fun k => P.Before k h).card := by
   apply Finset.card_lt_card
   refine Finset.ssubset_iff_of_subset (fun k hk => ?_) |>.2 ⟨g, ?_, ?_⟩
   · rw [Finset.mem_filter] at hk ⊢
@@ -220,17 +243,24 @@ theorem pos_lt_of_before {g h : Fin C.N} (hg : g ∈ P.boundary) (hh : h ∈ P.b
   · exact Finset.mem_filter.2 ⟨hg, hb⟩
   · exact fun hk => P.before_irrefl g (Finset.mem_filter.1 hk).2
 
-/-- **No two boundary gates share a position**, for every circuit and partition. -/
-theorem pos_inj {g h : Fin C.N} (hg : (P.pos g).isSome) (he : P.pos g = P.pos h) : g = h := by
-  classical
+/-- **No two boundary gates share a position**, for every circuit, partition and layout. -/
+theorem pos_inj {L : Layout C} {g h : Fin C.N} (hg : (P.pos L g).isSome) (he : P.pos L g = P.pos L h) : g = h := by
   have hgb := P.pos_some.1 hg
   have hhb : h ∈ P.boundary := P.pos_some.1 (he ▸ hg)
-  by_contra hne
   unfold pos at he
-  rw [if_pos hgb, if_pos hhb, Option.some.injEq] at he
-  rcases P.before_total hne with hb | hb
-  · exact absurd he (Nat.ne_of_lt (P.pos_lt_of_before hgb hhb hb))
-  · exact absurd he.symm (Nat.ne_of_lt (P.pos_lt_of_before hhb hgb hb))
+  rw [if_pos hgb, if_pos hhb] at he
+  rcases hrg : L.reg g with _ | ⟨i, r⟩ <;> rcases hrh : L.reg h with _ | ⟨i', r'⟩ <;>
+    simp only [hrg, hrh, Option.some.injEq, Prod.mk.injEq, Root.phase.injEq, Root.reg.injEq, reduceCtorEq,
+      false_and] at he
+  · obtain ⟨hj, hc⟩ := he
+    by_contra hne
+    have hgw : g ∈ P.window L (P.commitPhase L g) := Finset.mem_filter.2 ⟨hgb, hrg, rfl⟩
+    have hhw : h ∈ P.window L (P.commitPhase L g) := Finset.mem_filter.2 ⟨hhb, hrh, hj.symm⟩
+    rw [← hj] at hc
+    rcases P.before_total hne with hb | hb
+    · exact absurd hc (Nat.ne_of_lt (P.rank_lt_of_before hgw hb))
+    · exact absurd hc.symm (Nat.ne_of_lt (P.rank_lt_of_before hhw hb))
+  · exact L.reg_inj g h (by simp [hrg]) (by rw [hrg, hrh, he.1, he.2])
 
 theorem io_subset_boundary (u : Fin n) : P.io u ⊆ P.boundary := by
   classical
@@ -240,14 +270,63 @@ theorem io_subset_boundary (u : Fin n) : P.io u ⊆ P.boundary := by
 
 /-- **A reader's input is its writer's output, at one position**: a gate of unit `w` that unit `r` reads as an input is
 also among `w`'s committed outputs, and both open it at the one position `pos g`, which every gate a unit opens has. -/
-theorem mem_io_writer {g : Fin C.N} {r w : Fin n} (hr : g ∈ P.io r) (hw : P.unit g = some w) :
-    g ∈ P.io w ∧ ∃ i, P.pos g = some i := by
+theorem mem_io_writer {L : Layout C} {g : Fin C.N} {r w : Fin n} (hr : g ∈ P.io r) (hw : P.unit g = some w) :
+    g ∈ P.io w ∧ ∃ p, P.pos L g = some p := by
   classical
   refine ⟨?_, ?_⟩
   · simp only [io, Finset.mem_filter] at hr ⊢
     exact ⟨hr.1, Or.inl hw⟩
   · have hb := P.io_subset_boundary r hr
     exact Option.isSome_iff_exists.1 (P.pos_some.2 hb)
+
+/-- A proof block's in(S) and out(S) are its committed inputs and outputs, `io u`, so each has a position. -/
+theorem into_union_exits_eq_io (u : Fin n) : C.into (P.gates u) ∪ C.exits (P.gates u) = P.io u := by
+  classical
+  ext g
+  constructor
+  · intro hg
+    rcases Finset.mem_union.1 hg with h | h
+    · simp only [Circuit.into, Finset.mem_filter, Finset.mem_univ, true_and] at h
+      obtain ⟨hgS, k, hk, hgk⟩ := h
+      have hku := P.mem_gates.1 hk
+      simp only [io, Finset.mem_filter]
+      refine ⟨P.mem_committed_of_read hgk fun he => hgS (P.mem_gates.2 (he ▸ hku)), Or.inr ⟨k, hku, hgk⟩⟩
+    · rw [← P.committed_inter_gates u, Finset.mem_inter] at h
+      simp only [io, Finset.mem_filter]
+      exact ⟨h.1, Or.inl (P.mem_gates.1 h.2)⟩
+  · intro hg
+    simp only [io, Finset.mem_filter] at hg
+    obtain ⟨hc, hu | ⟨k, hku, hgk⟩⟩ := hg
+    · rw [Finset.mem_union, ← P.committed_inter_gates u, Finset.mem_inter]
+      exact Or.inr ⟨hc, P.mem_gates.2 hu⟩
+    · by_cases hgS : g ∈ P.gates u
+      · rw [Finset.mem_union, ← P.committed_inter_gates u, Finset.mem_inter]
+        exact Or.inr ⟨hc, hgS⟩
+      · refine Finset.mem_union.2 (Or.inl ?_)
+        simp only [Circuit.into, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨hgS, k, P.mem_gates.2 hku, hgk⟩
+
+/-- **`C_S`'s run is the block's correctness**: out(S) holds what `C_S` computes exactly when the block is correct. -/
+theorem restrict_run_iff_correct (X : C.Trace) (u : Fin n) :
+    (∀ g ∈ C.exits (P.gates u),
+      X g = (C.restrict (P.gates u)).run (fun a => if P.unit a = some u then none else some (X a)) g) ↔
+      P.Correct X u := by
+  rw [← P.localEval_eq_restrict_run X u, ← P.committed_inter_gates u]
+  simp only [Correct, Finset.mem_inter, mem_gates]
+  constructor
+  · intro h g hc hu
+    exact h g ⟨hc, hu⟩
+  · rintro h g ⟨hc, hu⟩
+    exact h g hc hu
+
+theorem rblk_iff {α : Type} (Sc : Hash.StringCommitment α) (H : Hash.Msg → Digest)
+    (enc : (g : Fin C.N) → BitVec (C.w g) → α) (L : Layout C) (c : Root → Sc.Com) (u : Fin n) (X : C.Trace)
+    (π : Fin C.N → Sc.Op) :
+    P.Rblk Sc H enc L c u X π ↔
+      (∀ g ∈ C.into (P.gates u) ∪ C.exits (P.gates u),
+          ∃ p, P.pos L g = some p ∧ Sc.Opens H (c p.1) p.2 (enc g (X g)) (π g)) ∧
+        P.Correct X u :=
+  and_congr Iff.rfl (P.restrict_run_iff_correct X u)
 
 /-- **How the boundary and the committed wires differ**: exactly by the input gates that no gate reads. -/
 theorem mem_committed_sdiff_boundary {g : Fin C.N} :
@@ -345,6 +424,18 @@ theorem correct_congr {X Y : C.Trace} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g =
   have hio : g ∈ P.io u := by simp only [io, Finset.mem_filter]; exact ⟨hg, Or.inl hu⟩
   rw [hXY g hio, P.localEval_congr hXY g.val g rfl hu]
   exact hY g hg hu
+
+/-- **The free inputs are free**: `Rblk` reads the trace only at in(S) and out(S), so every other gate, a gate outside
+`S` that `S` never reads among them, takes any value without changing it. -/
+theorem rblk_congr {α : Type} (Sc : Hash.StringCommitment α) (H : Hash.Msg → Digest)
+    (enc : (g : Fin C.N) → BitVec (C.w g) → α) (L : Layout C) (c : Root → Sc.Com) (u : Fin n) {X X' : C.Trace}
+    (π : Fin C.N → Sc.Op) (hX : ∀ g ∈ C.into (P.gates u) ∪ C.exits (P.gates u), X g = X' g) :
+    P.Rblk Sc H enc L c u X π ↔ P.Rblk Sc H enc L c u X' π := by
+  have hio : ∀ g ∈ P.io u, X g = X' g := fun g hg => hX g (P.into_union_exits_eq_io u ▸ hg)
+  rw [P.rblk_iff, P.rblk_iff]
+  refine and_congr ?_ ⟨fun h => P.correct_congr (fun g hg => (hio g hg).symm) h, P.correct_congr hio⟩
+  refine forall₂_congr fun g hg => ?_
+  rw [hX g hg]
 
 /-! ## Refinement -/
 
