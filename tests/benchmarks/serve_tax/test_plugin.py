@@ -434,7 +434,8 @@ def test_a_tensor_parallel_edge_takes_each_ranks_part_through_collective_rpc(mon
     r = recs[-1]
     assert (r["edge"], r["load"], r["next_step"], r["drain_s"], r["pause_s"]) == (0, "medium2", 7, 0.25, 0.25)
     assert [x["rank"] for x in r["ranks"]] == [0, 1, 2] and r["state_requests_bytes"] == 3
-    assert r["kv"] == {"root": "aa", "roots_equal": False, "bytes": 20, "copied_bytes": 10, "hash_kernel_ms": 6.0,
+    assert not any("root" in x for x in r["ranks"])
+    assert r["kv"] == {"roots_equal": False, "bytes": 20, "copied_bytes": 10, "hash_kernel_ms": 6.0,
                        "copy_ms": 9.0, "rank_kv_s": 0.5, "runner_s": 0.2}
 
 
