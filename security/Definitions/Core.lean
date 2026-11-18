@@ -12,6 +12,7 @@ public import Definitions.Core.Game
 public import Definitions.Core.Uniform
 public import Definitions.Core.Draw
 public import Definitions.Core.Levels
+public import Definitions.Core.LevelsCredited
 public import Definitions.Core.Scheme
 public import Definitions.Core.Challenger
 public import Definitions.Core.Decisive
