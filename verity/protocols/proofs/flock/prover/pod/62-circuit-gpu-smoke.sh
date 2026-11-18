@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # flock-circuit's smallest proof, rope-head d64 at 4 instances, on CPU and the card, each honest record given to the Lean verifier.
 # usage, from the tree root under research run (OUT), the same tree and machine for both steps:
-#   SM=90 [DRV=580] 62-circuit-gpu-smoke.sh prepare   no card: the toolkit (CUDA_TK, else 13.3 found or unpacked), the input set,
+#   SM=90 [DRV=580] 62-circuit-gpu-smoke.sh prepare   no card: the toolkit (CUDA_TK, else the machine record's 13.3, else 13.3
+#                                                     unpacked under SMOKE_WORK, no root), the input set,
 #                                                     the prover's GPU build (DRV: the driver's major version, when nvidia-smi can't run)
 #                                                     and the Lean verifier, all under SMOKE_WORK (default $HOME/flock-smoke)
 #   SM=90 62-circuit-gpu-smoke.sh run                 the card: the selftest build (incremental on prepare's), the CPU and GPU
@@ -10,15 +11,15 @@
 set -uo pipefail
 STEP=${1:?usage: 62-circuit-gpu-smoke.sh prepare|run}
 : "${OUT:?OUT: the output directory of the research run}"
-GPU=${GPU:-1}; [ "$GPU" = 1 ] && : "${SM:?SM: the architecture, 90 for sm_90, 120 for sm_120}"
+GPU=${GPU:-1}; [ "$GPU" = 1 ] && : "${SM:?SM: the architecture as a compute capability, as in the usage}"
 W=${SMOKE_WORK:-$HOME/flock-smoke}; export FLOCK_WORK=$W; mkdir -p "$W"
 VER=verity/protocols/proofs/flock/verifier
+. verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh
 case $STEP in
 prepare)
   if [ "$GPU" = 1 ]; then
     . benchmarks/one_stage/toolkit.sh
-    [ -z "${CUDA_TK:-}" ] && [ -x /usr/local/cuda-13.3/bin/nvcc ] && export CUDA_TK=/usr/local/cuda-13.3
-    ls -d /usr/local/cuda-* 2>/dev/null | sed 's/^/TOOLKITS /'
+    ls /usr/local | grep '^cuda' | tr '\n' ' ' | sed 's/^/TOOLKITS /'; echo
     cuda_13_3 "$OUT/toolkit.log" || { cat "$OUT/toolkit.log"; exit 3; }
     echo "CUDA_TK=$CUDA_TK"; "$CUDA_TK/bin/nvcc" --version | tail -1; echo "export CUDA_TK=$CUDA_TK" > "$W/env"
   else : > "$W/env"; fi
@@ -45,7 +46,7 @@ run)
     [ -d "$D/records-$dev" ] || continue
     python3 verity/protocols/proofs/flock/prover/agreement/selftest_records.py "$D/records-$dev" "$R/s-$dev" > /dev/null || exit 6
     # a selftest record is never accepted: the honest verdict is a scope refusal, reached once every check has passed
-    "$W/bin/verity-verify-proof" verify --statement verity/flock-circuit+seed-injection --circuit "$D/stage/circuit.txt" --public "$D/stage/pub-4.bin" \
+    $(verifier_env) "$W/bin/verity-verify-proof" verify --statement verity/flock-circuit+seed-injection --circuit "$D/stage/circuit.txt" --public "$D/stage/pub-4.bin" \
       $( [ -d "$D/stage/tables" ] && echo --tables "$D/stage/tables" ) --session "$R/s-$dev/honest" | grep '^VERDICT ' | sed "s/^/LEAN-$dev /"
   done
   [ -d "$D/records-gpu" ] && for f in "$D"/records-cpu/honest.rep*.proof; do
