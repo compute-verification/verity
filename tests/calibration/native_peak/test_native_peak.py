@@ -49,8 +49,8 @@ def test_spec_table_and_size_parsing() -> None:
     assert m.spec_peak("NVIDIA A100-SXM4-80GB", "bf16")[0] == 312.0e12
     assert m.spec_peak("NVIDIA A100-SXM4-80GB", "e4m3") == (None, m.SPEC_PEAKS[1][2])
     assert m.spec_peak("NVIDIA A100 80GB PCIe", "bf16")[0] == 312.0e12
-    assert m.spec_peak("NVIDIA H100 80GB HBM3", "bf16")[0] == 989.4e12
-    assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.9e12
+    assert m.spec_peak("NVIDIA H100 80GB HBM3", "bf16")[0] == 989.42976e12
+    assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.85952e12
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "nvfp4")[0] is None
     assert m.spec_peak("NVIDIA H100 PCIe", "bf16")[0] == 756.0e12
     assert m.spec_peak("NVIDIA H200", "bf16")[0] == 989.42976e12 and m.spec_peak("NVIDIA H200", "e4m3")[0] == 1978.85952e12
@@ -156,11 +156,12 @@ def test_the_cards_reading_by_path_is_verity_devices_rate_at_the_tensor_pipes_cl
 
 
 def test_spec_peaks_agree_with_every_census_line() -> None:
-    """The pod-side table reads nothing on a pod but the shipped tree's cards; it must quote calibration/census/hardware.json's peak
-    for every line."""
+    """The pod-side table reads nothing on a pod but the shipped tree's cards; it must agree with calibration/census/hardware.json's
+    peak for every line, to the 0.1 TFLOPS the census states (a line read from a card is exact)."""
     m = _measure()
     hardware = json.loads((REPO / "calibration" / "census" / "hardware.json").read_text(encoding="utf-8"))
     smi = {"NVIDIA A100 SXM4 80GB": "NVIDIA A100-SXM4-80GB", "NVIDIA H100 SXM5 80GB": "NVIDIA H100 80GB HBM3", "NVIDIA L40S 48GB": "NVIDIA L40S"}
     dtype = {"bf16": "bf16", "e4m3": "e4m3", "e2m1": "nvfp4"}
     for h in hardware:
-        assert m.spec_peak(smi.get(h["device"], h["device"]), dtype[h["dtype"]])[0] == h["flop_per_second"], h["id"]
+        peak = m.spec_peak(smi.get(h["device"], h["device"]), dtype[h["dtype"]])[0]
+        assert peak == pytest.approx(h["flop_per_second"], abs=0.05e12), (h["id"], "the census states TFLOPS to 0.1")
