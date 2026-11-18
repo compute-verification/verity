@@ -149,7 +149,7 @@ def test_a_plan_on_some_sms_gives_the_reference_s_roots_on_graphs() -> None:
         out = S.random_outputs(layout, 5, np.random.default_rng(step))
         y = salts_of(layout, 5, seed=step)
         assert G.commit(plan, step, _dev(y), _cuda(out), 5, graphs=True) == S.commit(CTX, layout, step, y, out, 5)
-    assert {k[-1] for k in plan._graphs} == {plan.sms}
+    assert plan.sms == 16 and {k.sms for k in plan._graphs} == {plan.sms}
 
 
 @pytest.mark.parametrize("graphs", [False, True], ids=["eager", "graphs"])
