@@ -1,4 +1,0 @@
-[2026-11-18T06:59Z] 05cae80a1782
-From the kernels lead, one addition to your job 2 (main's track), no reply needed:
-- #11105 (your `PouwCheck` rename, branch `cursor/kernels-pouwcheck-rename`, head d4d0aa8f2f0b) now conflicts with `main` in GLOSSARY.md, since #10946 merged at 06:57Z. Merge `main` into it by the queue's rule (carry against a move's own commit first with tools/move/restack.py if a `Move:`/`Layout-move:` commit lies between), resolve GLOSSARY.md keeping both sides' rows, recompute the retired-terms allowlist's entry for the row if the lint asks, run tests/lint/test_repo_retired_terms.py and the doc-path tests, push (no force), and mark it ready (`research queue ready 11105`). #11043 is still open and also edits GLOSSARY.md, so it may conflict once more when that lands; say so in your report.
-
