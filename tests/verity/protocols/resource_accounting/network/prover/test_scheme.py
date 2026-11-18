@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from verity import hooks as H
 from verity.circuits.defs import REGISTRY, CompositeDefinition
 from verity.protocols.compose import schemes
@@ -60,8 +62,18 @@ def test_requests_are_the_id_relay_unless_admission_is_configured() -> None:
     ex = _Exchange()
     NS.NETWORK_ATTESTER.attach(ex, {})
     assert ex.filed == [("network-attester", NS.START_ID_RELAY)]
-    assert NS.NETWORK_ATTESTER.requests({}) == (NS.START_ID_RELAY,) and NS.NETWORK_ATTESTER.requests({"admit": {}}) == ()
+    assert NS.NETWORK_ATTESTER.requests({}) == (NS.START_ID_RELAY,) and NS.NETWORK_ATTESTER.requests({"settings": {"order": "release-order"}}) == ()
     assert set(NS.NETWORK_ATTESTER.processes) == {"id-relay"}
+
+
+def test_settings_are_the_admissions_with_their_defaults_and_refuse_what_admission_would() -> None:
+    assert NS.settings({}) == NS.SETTINGS and NS.settings({"order": "release-order"})["hold_ms"] == 5000
+    tick = {"order": "tick", "sat_us": 30_000, "free_us": 40_000}
+    assert NS.settings(tick)["bucket_us"] == 100_000
+    for bad in ({"feed": "f"}, {"hold_ms": 1.5}, {"order": "fifo"}, {"hold_ms": 0}, {"order": "tick"},
+                {**tick, "catch_up": "open"}):
+        with pytest.raises(ValueError):
+            NS.settings(bad)
 
 
 class _Hooks(_Exchange):

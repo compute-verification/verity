@@ -27,7 +27,11 @@ that used the coder. Then the length terms (`codec.Registered.send_lengths`, on 
 each a plain tail after the segment (`window_code.Encoder.raw`, `lengths.tails`): its output_len in
 `width(max_tokens + 1) = bitlen(max_tokens)` bits, then its finish in 1 (`tailBits`). The carry is the decisions'
 (`AdviceV1.Carry`) and the last order entry's position and rank, each `+ 1` (0 before the session's first entry),
-chained from execution phase to execution phase under `executionPhase-charge` (`window_charge.check_chain`); the length terms carry nothing.
+committed in each window's rows (its carry-in and carry-out) and chained from execution phase to execution phase by the
+honest prover; the length terms carry nothing. No verifier holds one window's carry-out row to the next window's
+carry-in, so the chain is the honest prover's and not a checked fact: the check that would hold it is
+`verity/protocols/resource_accounting/network/verifier/charge_check.py`'s `window_check_chain` over
+`interface/charge/charge_chain.check_rows`, and no verifier calls it.
 
 **Scope.** Every advice v1 execution phase: v1 sends order entries and length terms, and never hits, resumes or lag bits
 (every hit is the replay's block pool's, and `advice_code.codec` refuses an execution phase that sends any), so the three are
