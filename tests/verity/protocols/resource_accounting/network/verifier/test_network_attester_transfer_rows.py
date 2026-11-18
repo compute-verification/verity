@@ -31,7 +31,7 @@ def rows(n: int, words: int, seed: int = 1) -> list[list[int]]:
 def attested(tmp_path, data=None):
     """A load value of 4 one-word rows in window 0 on `LINK`, its attestation and the issuer that signed it."""
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
-    t, cert = TR.attest(issuer, LINK, Direction.INGRESS, 0, "load", PROGRAM, "bias", data or rows(4, 1))
+    t, cert = signers.attest_transfer(issuer, LINK, Direction.INGRESS, 0, "load", PROGRAM, "bias", data or rows(4, 1))
     assert cert is not None
     return t, cert, issuer
 
@@ -84,7 +84,7 @@ def test_a_value_at_another_width_or_row_format_is_registered_so_and_its_head_bi
     rng = random.Random(3)
     data = [[rng.randrange(1 << word_bits) for _ in range(words)] for _ in range(4)]
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
-    t, cert = TR.attest(issuer, LINK, Direction.INGRESS, 0, "load", PROGRAM, "w", data, word_bits=word_bits, schema=schema)
+    t, cert = signers.attest_transfer(issuer, LINK, Direction.INGRESS, 0, "load", PROGRAM, "w", data, word_bits=word_bits, schema=schema)
     assert t.root == RV.Registered.commit(PROGRAM, "w", data, t.salts, word_bits, schema).root
     assert t.head.domain == TR.domain(PROGRAM, "w", words, 4, word_bits).domain_id == \
         RV.domain(PROGRAM, "w", words, 4, word_bits).domain_id
