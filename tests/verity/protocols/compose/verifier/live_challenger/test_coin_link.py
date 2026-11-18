@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.clock import Reading
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier.challenger import coins as T
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
@@ -147,30 +148,37 @@ def test_the_tunnel_goes_straight_to_the_peer_and_its_end_stops_the_link(tmp_pat
 
 def test_the_links_origin_is_read_on_the_clock_its_ticks_read_and_a_host_without_it_starts_no_link(tmp_path, monkeypatch,
                                                                                                    capsys):
-    """The runner reads the link's origin on the network attester's clock and gives the link no other, so bucket 0's
-    time and every tick's are one clock's readings: a link asked for no bucket is made with the origin that clock read
-    and keeps its own default. On a host that gives no such clock the runner refuses before it reads the session's
-    record, and nothing listens."""
-    attesters, made = L.raw_clock, []
+    """The runner's device is the network attester's, on the host's raw clock, and the link's origin is that device's
+    reading in its own log, so bucket 0's time and every tick's are one device's readings: a link asked for no bucket
+    is made with that origin, that device and that log, late past `--slack-ms`. On a host that gives no such clock the
+    runner refuses before it reads the session's record, and nothing listens."""
+    made = []
 
     class Made(L.CoinLink):
         def __init__(self, *args, **given) -> None:
             super().__init__(*args, **given)
             made.append((self, given))
 
+    def raw() -> int:
+        return 41_500_000_000
+
     monkeypatch.setattr(L, "CoinLink", Made)
-    monkeypatch.setattr(L, "raw_clock", lambda: 41.5)
+    monkeypatch.setattr(L, "raw_ns", raw)
+    monkeypatch.setattr(L, "raw_resolution_ns", lambda: 1)
     coins = C.LiveChallenger("verity/test/coins/v1", 0, [("positions", 1)], random.Random("coins").randbytes).commitment
     args = L.parse(["--out", str(tmp_path), "--port", "1", "--minutes", "0", *FAST])
     summary = asyncio.run(L.serve(args, L.CoinLinkParams(), coins, None))
     (link_, given), = made
-    assert given["origin"] == 41.5 and "clock" not in given and link_.clock is attesters
+    device = given["device"]
+    assert (device.key, device.clock, device.lateness_ns) == (L.DEVICE_KEY, raw, args.slack_ms * 1_000_000)
+    assert given["origin"] == Reading(L.DEVICE_KEY, 41_500_000_000) and given["log"] is link_.clock_log
+    assert [(e.data, e.reading) for e in link_.clock_log.entries] == [({"origin": "bucket 0"}, given["origin"])]
     assert (summary["buckets"], summary["windows"], summary["peer"]) == (0, [], None)
 
-    def none() -> float:
+    def none() -> int:
         raise L.ClockRefused("this host gives no raw monotonic clock")
 
-    monkeypatch.setattr(L, "raw_clock", none)
+    monkeypatch.setattr(L, "raw_ns", none)
     capsys.readouterr()
     assert L.main(["--out", str(tmp_path / "empty"), "--port", "1"]) == 2
     out, err = capsys.readouterr()

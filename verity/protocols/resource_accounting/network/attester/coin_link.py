@@ -16,9 +16,9 @@ both ways, one connection at a time, in the challenger's order:
   bucket's tick, and so do a direction's end and a connection's close, so what either side sees of the other's timing is
   the grid's occupancy, T·log2(r + 1) bits an execution phase (the K charge's unit). Nothing the prover does moves a
   tick or slows the link: a prover that doesn't take what a tick releases fails the link closed, so there is no flow
-  control from inside. The ticks read one clock, the network attester's (`pacer.raw_clock`, this host's raw monotonic
-  one), which the challenger's release log reads too; a tick whose wait ends early waits again, so none runs before
-  its time on that clock.
+  control from inside. The ticks are the one tick source's (`verity.clock.ticks`) on one device, the network
+  attester's (`device`, on this host's raw monotonic clock, `verity.clock.raw_ns`), whose clock the challenger's
+  release log reads too; a tick whose wait ends early waits again, so none runs before its time on that clock.
 - **Content (RP5).** Each challenger frame answers the prover's oldest unanswered frame (`remote.serve` answers in order).
   It is exempt, a `COIN`, only when that frame asked for coin (label, index) after `after` and the answer is an opening
   of that coin that opens against the session's committed coin root (`live_reason` against `commitment`, the one the
@@ -28,7 +28,7 @@ both ways, one connection at a time, in the challenger's order:
   counted.
 - **Fail closed.** A frame `remote` would refuse whole (a body, a head past `remote.MAX_HEAD`, a stream that ends inside
   one), a queue past `queue_cells`, a prover that leaves more than `backlog` bytes untaken, cells still queued when their
-  connection ends, and a tick later than `slack` each fault a grid (`grid.Reason`), which cuts the connection at that
+  connection ends, and a tick later than the device's lateness (an entry of its log, `clock_log`) each fault a grid (`grid.Reason`), which cuts the connection at that
   tick: nothing leaves the link unattested, and the fault is the execution phase's status.
 
 `CoinLink.summary` is what the link publishes for its window: its parameters, each execution phase's status, the coins'
@@ -49,10 +49,10 @@ from functools import cached_property
 from typing import Any
 
 from verity.protocols.resource_accounting.network.verifier.grid import Certifier, GridParams, Reason, BlockGrid, row_count
-from verity.protocols.resource_accounting.network.verifier.pacer import raw_clock
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.protocols.proofs.spot.verifier.challenger.remote import HEADER, MAX_HEAD
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.clock import NS, Device, Log, Reading, ticks
 
 PARAMETERS_TAG = "verity-network-coin-link/parameters/v1"
 #: the link's two grids: the challenger's frames to the prover (ingress), the prover's to the challenger (egress)
@@ -227,7 +227,7 @@ def _status(record: BlockGrid) -> str | None:
 
 class CoinLink:
     """The coin link (the module docstring): `handle(reader, writer)` serves one connection from the prover's side, after
-    every one before it; `run()` ticks both grids from `origin`, the clock's time of bucket 0, until `stop()` or
+    every one before it; `run()` ticks both grids from `origin`, the device's reading at bucket 0, until `stop()` or
     `buckets`, then on to the end of that execution phase, and cuts whatever is still open. `connect()` opens a
     connection to the challenger, a (reader, writer) pair.
 
@@ -237,12 +237,13 @@ class CoinLink:
     - `until(predicate)` waits until the link's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: CoinLinkParams, commitment: LiveCommitment,
-                 connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
-                 clock: Callable[[], float] = raw_clock, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
-                 slack: float = 0.025, buckets: int | None = None, backlog: int = BACKLOG,
+                 connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: Reading, device: Device,
+                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep, log: Log | None = None,
+                 buckets: int | None = None, backlog: int = BACKLOG,
                  publish: Callable[[BlockGrid, GridParams], None] | None = None) -> None:
         self.params, self.connect = params, connect
-        self.origin, self.clock, self.sleep, self.slack, self.buckets = origin, clock, sleep, slack, buckets
+        self.origin, self.device, self.sleep, self.buckets = origin, device, sleep, buckets
+        self.clock_log = Log(device.key) if log is None else log
         self.backlog, self.publish = backlog, publish
         self.coins = Certifier(COINS, params.coins_grid)
         self.requests = Certifier(REQUESTS, params.requests_grid)
@@ -291,16 +292,14 @@ class CoinLink:
             await c.done
 
     async def run(self) -> None:
-        tau, T = self.params.bucket_ms / 1000, self.params.window
+        T = self.params.window
+        source = ticks(self.device, self.origin, self.params.bucket_ms * 1_000_000, sleep=self.sleep, log=self.clock_log)
         t = 0
         try:
             while not ((self.stopping or (self.buckets is not None and t >= self.buckets)) and t % T == 0):
-                deadline = self.origin + t * tau
-                await self.sleep(deadline - self.clock())
-                while (late := self.clock() - deadline) < 0:  # a wait that ended early: no tick runs before its time
-                    await self.sleep(-late)
-                self.max_late = max(self.max_late, late)
-                if late > self.slack:
+                tick = await anext(source)
+                self.max_late = max(self.max_late, tick.late_ns / NS)
+                if tick.late is not None:
                     self.late += 1
                     for grid in (self.coins, self.requests):
                         grid.fault(Reason.MONITOR_UNAVAILABLE)
@@ -308,6 +307,7 @@ class CoinLink:
                 t = self.ticks = t + 1
                 self._changed.set()
         finally:
+            await source.aclose()
             self.closed = True
             if self.current is not None:
                 self._end(self.current, cut=True)
@@ -431,7 +431,7 @@ class CoinLink:
                 "complete": complete, "coins": {"frames": self.frames[COIN], "bytes": self.frame_bytes[COIN]},
                 "counted": counted, "requests": {"frames": self.request_frames, "bytes": self.request_bytes},
                 "cells": dict(self.cells), "connections": self.log,
-                "late": {"ticks": self.late, "max_s": round(self.max_late, 6), "slack_s": self.slack},
+                "late": {"ticks": self.late, "max_s": round(self.max_late, 6), "slack_s": self.device.lateness_ns / NS},
                 "charge_bits": {COINS: {"timing": self.ticks * math.log2(p.coin_cells + 1),
                                         "content": 8 * sum(v["bytes"] for v in counted.values())},
                                 REQUESTS: {"timing": self.ticks * math.log2(p.request_cells + 1),

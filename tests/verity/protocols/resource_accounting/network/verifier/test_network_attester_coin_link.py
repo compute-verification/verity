@@ -24,7 +24,7 @@ from verity.protocols.resource_accounting.network.verifier.run_clock import Virt
 from verity.protocols.resource_accounting.network.attester.coin_link import (COIN, COINS, COUNTED, REQUESTS, CoinLink, CoinLinkParams,
                                                        canonical, recut)
 from verity.protocols.resource_accounting.network.verifier.grid import Reason
-from verity.protocols.resource_accounting.network.verifier.pacer import raw_clock
+from verity.clock import NS, Device, Reading
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveChallenger, LiveOpening, live_reason
 
@@ -35,6 +35,20 @@ FAMILIES = [("positions", 3), ("replay", 2)]
 PARAMS = CoinLinkParams(cell_bytes=512, coin_cells=2, request_cells=1, bucket_ms=100, window=40, queue_cells=64)
 B, TAU, STEPS = PARAMS.cell_bytes, PARAMS.bucket_ms / 1000, 4
 EOF = None
+KEY = "network-attester"
+
+
+def device_on(clock: VirtualClock) -> Device:
+    """The link's device on `clock` (seconds), read in whole nanoseconds, late past the runner's 25 ms."""
+    return Device(KEY, lambda: round(clock() * NS), 1, 25_000_000)
+
+
+def sleep_on(clock: VirtualClock):
+    """`clock`'s wait for the link's ticks: to the nanosecond the tick asks for, as a time on `clock` itself, so a
+    float second never holds a tick past the advance that reaches its time."""
+    async def sleep(seconds: float) -> None:
+        await clock.sleep((round(clock() * NS) + round(seconds * NS)) / NS - clock())
+    return sleep
 HELLO, CLOSE = {"type": "hello"}, {"type": "close"}
 
 
@@ -243,7 +257,8 @@ def session(provers: list[dict], *, params: CoinLinkParams = PARAMS, seed: str =
     async def main():
         clock = VirtualClock()
         ch = Challenger(coins, clock, answers=answers, delay=delay, refuse=refuse)
-        link = CoinLink(params, coins.commitment, ch.connect, origin=0.0, clock=clock, sleep=clock.sleep)
+        link = CoinLink(params, coins.commitment, ch.connect, origin=Reading(KEY, 0), device=device_on(clock),
+                        sleep=sleep_on(clock))
         ch.link = link
         running = asyncio.create_task(link.run())
         opened: list[Prover] = []
@@ -434,16 +449,16 @@ def test_the_link_stops_at_its_window_boundary():
     assert link.ticks == PARAMS.window and statuses(link) == [(None, None)] and link.summary()["complete"]
 
 
-def test_the_links_clock_is_the_network_attesters_and_a_tick_whose_wait_ends_early_waits_again():
-    """Unless a caller injects one, the link's ticks read the network attester's clock. A wait may end before its time
-    (a timer against another clock, a signal): here every tick's first wait ends at once, and each tick still runs only
-    once the clock reads its time, none of them late and the execution phase complete."""
-    assert inspect.signature(CoinLink).parameters["clock"].default is raw_clock
+def test_the_links_ticks_are_its_devices_and_a_tick_whose_wait_ends_early_waits_again():
+    """The link's ticks are the one tick source's on the device its caller gives, which it has no default for. A wait
+    may end before its time (a timer against another clock, a signal): here every tick's first wait ends at once, and
+    each tick still runs only once the clock reads its time, none of them late and the execution phase complete."""
+    assert inspect.signature(CoinLink).parameters["device"].default is inspect.Parameter.empty
 
     async def go():
         clock = EarlyClock(-TAU / 2)
-        link = CoinLink(PARAMS, live().commitment, Challenger(live(), clock).connect, origin=0.0, clock=clock,
-                        sleep=clock.sleep, buckets=PARAMS.window)
+        link = CoinLink(PARAMS, live().commitment, Challenger(live(), clock).connect, origin=Reading(KEY, 0),
+                        device=device_on(clock), sleep=sleep_on(clock), buckets=PARAMS.window)
         running = asyncio.create_task(link.run())
         before, after = [], []
         for t in range(PARAMS.window):
@@ -494,10 +509,13 @@ def test_a_frame_remote_refuses_whole_or_a_flood_fails_closed():
 
 
 def test_a_late_tick_faults_the_window_and_an_unreachable_challenger_sends_nothing():
-    """A tick more than the slack late is `monitor-unavailable` on both grids. A connection whose challenger doesn't
-    answer the connect is closed at the next tick with nothing sent either way."""
+    """A tick later than its device's lateness is `monitor-unavailable` on both grids and an entry of the device's log,
+    with its reading. A connection whose challenger doesn't answer the connect is closed at the next tick with nothing
+    sent either way."""
     link, _, _ = session([{"frames": honest_frames(ASKS)}], late={3: 0.05})
     assert statuses(link) == [(Reason.MONITOR_UNAVAILABLE.value,) * 2] and link.late == 1
+    assert [(e.data, e.reading) for e in link.clock_log.entries] == [({"late_tick": 3}, Reading(KEY, 350_000_000))]
+    assert link.summary()["late"] == {"ticks": 1, "max_s": 0.05, "slack_s": 0.025}
 
     link, (prover,), ch = session([{"frames": honest_frames(ASKS)}], refuse=True)
     assert prover.writes == [] and prover.closed_at is not None and ch.conns == []

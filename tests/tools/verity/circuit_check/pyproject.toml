@@ -131,6 +131,7 @@ inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/veri
           "verity/protocols/resource_accounting/network/verifier/io_request.py", "verity/protocols/resource_accounting/network/verifier/io_request.circuit-check.py",
           "verity/protocols/resource_accounting/network/verifier/io_request.circuit-check.json",
           "verity/protocols/resource_accounting/network/verifier/network_attester.py", "verity/protocols/resource_accounting/network/verifier/pacer.py",
+          "verity/clock.py",
           "verity/protocols/resource_accounting/network/verifier/release.py", "verity/release.py",
           "verity/protocols/resource_accounting/network/verifier/link_frame.py", "verity/protocols/resource_accounting/network/verifier/id_form.py", "verity/protocols/resource_accounting/network/verifier/run_clock.py",
           "verity/protocols/resource_accounting/network/prover/io_ids.py", "verity/protocols/resource_accounting/network/prover/io_ids.circuit-check.py",

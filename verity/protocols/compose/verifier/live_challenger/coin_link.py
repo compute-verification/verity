@@ -13,8 +13,9 @@ prover's client on the peer connects to its own 127.0.0.1:PORT; without `--peer`
 connects to LISTEN. It prints `listening 127.0.0.1:LISTEN` and relays each connection to serve.py's port, one at a time,
 until SIGTERM, the tunnel's end or `--minutes`; then it runs to the end of its execution phase and writes `coin-link.json` to
 `--out` (`CoinLink.summary`, with PORT, LISTEN, the peer and how the tunnel ended), which the window's `end` entry seals.
-The defaults are D7's parameters (`CoinLinkParams`). The link's origin is read on the clock its ticks read, the network
-attester's (`pacer.raw_clock`); on a host that gives no such clock the link refuses to start.
+The defaults are D7's parameters (`CoinLinkParams`). The link's origin is a reading its device stamps in its own log on
+the clock its ticks read, the network attester's (`verity.clock.raw_ns`, under `--device-key`, late past `--slack-ms`);
+on a host that gives no such clock the link refuses to start.
 
 The tunnel goes straight to the peer: `ProxyJump` and `ProxyCommand` are `none`, and a `--peers` line that names a jump
 or a proxy is refused, so the coins leave this host encrypted to the peer's own sshd and are read on no other host
@@ -38,11 +39,13 @@ sys.path.insert(0, str(HERE))
 
 from serve import peer_ssh  # noqa: E402
 from verity.protocols.resource_accounting.network.attester.coin_link import CoinLink, CoinLinkParams  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.pacer import ClockRefused, raw_clock  # noqa: E402
+from verity.clock import ClockRefused, Device, Log, raw_ns, raw_resolution_ns, stamp  # noqa: E402
 from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E402
 from verity.protocols.proofs.spot.verifier.challenger.challenger import ChallengerRecord, CoinError, LiveCommitment  # noqa: E402
 
 SUMMARY = "coin-link.json"
+#: the key the link's device, the network attester's, reads its clock under until the registration carries it
+DEVICE_KEY = "network-attester"
 TUNNEL = ["ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15",
           "-o", "ProxyJump=none", "-o", "ProxyCommand=none"]
 
@@ -61,6 +64,7 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--bucket-ms", type=int, default=d.bucket_ms)
     p.add_argument("--window", type=int, default=d.window)
     p.add_argument("--slack-ms", type=int, default=25)
+    p.add_argument("--device-key", default=DEVICE_KEY)
     return p.parse_args(argv)
 
 
@@ -88,8 +92,10 @@ def commitment(out: Path) -> LiveCommitment:
 async def serve(args: argparse.Namespace, params: CoinLinkParams, coins: LiveCommitment,
                 ssh: list[str] | None) -> dict:
     loop = asyncio.get_running_loop()
-    link = CoinLink(params, coins, lambda: asyncio.open_connection("127.0.0.1", args.port), origin=raw_clock(),
-                    slack=args.slack_ms / 1000,
+    device = Device(args.device_key, raw_ns, raw_resolution_ns(), args.slack_ms * 1_000_000)
+    log = Log(device.key)
+    link = CoinLink(params, coins, lambda: asyncio.open_connection("127.0.0.1", args.port),
+                    origin=stamp(device, log, {"origin": "bucket 0"}), device=device, log=log,
                     buckets=None if args.minutes is None else args.minutes * 60_000 // params.bucket_ms)
     server = await asyncio.start_server(link.handle, "127.0.0.1", 0)
     listen = server.sockets[0].getsockname()[1]
@@ -124,7 +130,7 @@ async def serve(args: argparse.Namespace, params: CoinLinkParams, coins: LiveCom
 def main(argv: list[str] | None = None) -> int:
     args = parse(argv)
     try:
-        raw_clock()
+        raw_ns()
         params = CoinLinkParams(args.cell_bytes, args.coin_cells, args.request_cells, args.bucket_ms, args.window)
         coins = commitment(args.out)
         ssh = None

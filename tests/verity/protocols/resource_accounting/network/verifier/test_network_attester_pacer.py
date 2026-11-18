@@ -10,8 +10,9 @@ import socket
 
 import pytest
 
+from verity.clock import ClockRefused
 from verity.protocols.resource_accounting.network.verifier import pacer as pacer_module
-from verity.protocols.resource_accounting.network.verifier.pacer import CLOCKS, ClockRefused, Pacer, _end, raw_clock
+from verity.protocols.resource_accounting.network.verifier.pacer import CLOCKS, Pacer, _end, raw_clock
 
 
 async def _paced(buckets: list[tuple[int, bytes]], refuse: bool = False, clock: str = "monotonic"):
@@ -272,8 +273,8 @@ def test_a_link_past_the_backlog_is_closed_and_its_parts_are_unwritten():
 
 
 def test_a_pacer_runs_on_a_clock_its_starter_names_and_the_raw_clock_refuses_where_the_host_has_none(monkeypatch):
-    """The clocks are the two named, and a pacer on any other is not started. The raw clock is the host's
-    `CLOCK_MONOTONIC_RAW` and nothing else: where the host refuses the read, or has no such clock, it refuses by name
+    """The clocks are the two named, and a pacer on any other is not started. The raw clock is the one clock's raw read
+    (`verity.clock.raw_ns`, the host's `CLOCK_MONOTONIC_RAW`) in seconds, and nothing else: where the host refuses the read, or has no such clock, it refuses by name
     and gives no other clock's reading."""
     assert sorted(CLOCKS) == ["monotonic", "raw"] and CLOCKS["raw"] is raw_clock
 
@@ -283,13 +284,13 @@ def test_a_pacer_runs_on_a_clock_its_starter_names_and_the_raw_clock_refuses_whe
     with pytest.raises(ValueError, match="a pacer's clock is one of"):
         asyncio.run(start())
     asked = []
-    monkeypatch.setattr(pacer_module.time, "clock_gettime", lambda clock_id: asked.append(clock_id) or 7.25)
+    monkeypatch.setattr(pacer_module.time, "clock_gettime_ns", lambda clock_id: asked.append(clock_id) or 7_250_000_000)
     assert raw_clock() == 7.25 and asked == [pacer_module.time.CLOCK_MONOTONIC_RAW]
 
     def refuse(clock_id):
         raise OSError(22, "Invalid argument")
 
-    monkeypatch.setattr(pacer_module.time, "clock_gettime", refuse)
+    monkeypatch.setattr(pacer_module.time, "clock_gettime_ns", refuse)
     with pytest.raises(ClockRefused, match=r"no raw monotonic clock \(OSError\)"):
         raw_clock()
     monkeypatch.delattr(pacer_module.time, "CLOCK_MONOTONIC_RAW")

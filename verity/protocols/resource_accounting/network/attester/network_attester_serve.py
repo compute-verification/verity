@@ -240,7 +240,8 @@ from verity.protocols.resource_accounting.network.verifier.id_form import id_req
 from verity.protocols.resource_accounting.network.verifier.certificate import (CertifiedStart, DeviceState, Direction, Issuer, LmsKey,
     SignerRefused, StartRefused)
 from verity.protocols.resource_accounting.network.verifier.grid import GridParams, BlockGrid, Status, row_count
-from verity.protocols.resource_accounting.network.verifier.pacer import ClockRefused, raw_clock
+from verity.clock import ClockRefused
+from verity.protocols.resource_accounting.network.verifier.pacer import raw_clock
 from verity.release import WATERMARK_PATH
 from verity.protocols.resource_accounting.network.verifier.network_attester import (EGRESS_FORMS, INTEGER_FIELDS, Shim, NetworkAttester,
     NetworkAttesterParams, cells)
@@ -1002,7 +1003,7 @@ async def serve(params: NetworkAttesterParams, out: Path, *, upstream: tuple[str
     caller's own clock has none.
 
     It starts in this order, and a step that refuses starts nothing after it. The clock is read: a host without the
-    raw clock runs no network attester (`pacer.ClockRefused`). The key's device state (`DEVICE` in `key`) is opened
+    raw clock runs no network attester (`verity.clock.ClockRefused`). The key's device state (`DEVICE` in `key`) is opened
     and held until the publisher has closed, so no other run under the key ticks or signs meanwhile, and gives the
     session its base: the key's life, moved on by the run's whole span on disk before the base is used
     (`certificate.StartRefused` for a state that is held, missing or another key's, and for a session already

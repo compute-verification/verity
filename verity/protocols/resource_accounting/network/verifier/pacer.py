@@ -47,6 +47,8 @@ from collections import deque
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import dataclass
 
+from verity.clock import NS, raw_ns
+
 #: a bucket handed to the pacer: its index (u64be), its time (f64be, on the pacer's clock) and its parts (u32be)
 HEAD = struct.Struct(">QdI")
 #: a part of a bucket: its link's key (u32be), its length (u32be) and whether the link closes after it (u8)
@@ -62,20 +64,11 @@ READY = b"\x01"
 SPIN_S = 0.002
 
 
-class ClockRefused(Exception):
-    """The host gives no raw monotonic clock, so the network attester does not start: it runs on no other clock."""
-
-
 def raw_clock() -> float:
-    """The network attester's clock, in seconds: the host's raw monotonic clock (`CLOCK_MONOTONIC_RAW`), the count of
-    the host's oscillator, which no time service steers or steps, so its rate against true time is the hardware's
-    alone. The network attester's ticks, its origin and its pacer's releases all read it and nothing else: a tick is
-    late or in time by this clock. Raises `ClockRefused` where the host has none."""
-    try:
-        return time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
-    except (AttributeError, OSError) as e:
-        raise ClockRefused(f"this host gives no raw monotonic clock ({type(e).__name__}), and the network attester "
-                           "runs on no other") from None
+    """The network attester's clock, in seconds: the one raw clock (`verity.clock.raw_ns`, the host's raw monotonic
+    clock), counted in seconds. The network attester's ticks, its origin and its pacer's releases all read it and
+    nothing else: a tick is late or in time by this clock. Raises `verity.clock.ClockRefused` where the host has none."""
+    return raw_ns() / NS
 
 
 #: the clocks a pacer's starter names, each the clock the starter gives its buckets' times on

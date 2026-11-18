@@ -857,6 +857,7 @@ paths = [
 ]
 loads = [
     "verity/channel.py",
+    "verity/clock.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/protocols/proofs/spot/verifier",
@@ -867,6 +868,7 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
+    "verity/clock.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -916,6 +918,7 @@ paths = [
 loads = [
     "verity/channel.py",
     "verity/circuits",
+    "verity/clock.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/protocols/proofs/spot/verifier",
@@ -924,6 +927,7 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
+    "verity/clock.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",

@@ -493,13 +493,13 @@ def test_the_network_attesters_clock_is_the_hosts_raw_one_and_its_wait_is_agains
 
     def read(clock_id):
         asked.append(clock_id)
-        return now[0]
+        return round(now[0] * 1e9)
 
     async def short(delay, clock):
         waits.append(clock)
         now[0] += delay / 2 if len(waits) % 2 else delay
 
-    monkeypatch.setattr(pacer.time, "clock_gettime", read)
+    monkeypatch.setattr(pacer.time, "clock_gettime_ns", read)
     monkeypatch.setattr(device_module, "precise_sleep", short)
     monkeypatch.setattr(device_module, "Pacer", Paced)
     device = NetworkAttester(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=0.05)
