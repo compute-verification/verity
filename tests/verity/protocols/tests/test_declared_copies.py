@@ -11,7 +11,7 @@ from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 
 #: the names the composites list that no scheme declares yet, each with the lane that declares it; only shrinks
-UNDECLARED = {"pouw": "compute-accounting"}
+UNDECLARED: dict[str, str] = {}
 MANIFESTS = {"sampled-proofs": SP.MANIFEST, "inference-only": IO.MANIFEST, "network-attester": NC.MANIFEST}
 
 

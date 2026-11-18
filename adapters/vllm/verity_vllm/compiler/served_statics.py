@@ -18,9 +18,8 @@ step's statics are zero.
   opened to the verifier's own copy;
 - ``srb``, the block's served rows, leaf w·(P / G) + j of the served-rows registration (`served_rows.block_bits`: G
   steps of R slots of (valid, request, kind, start, n), `compile_slice.rows_bits`' packing). A proof of the tie would
-  have its b‖c held to that leaf by the Lean verifier's registered reads (`served_rows.reads_port`,
-  ``verity-verify-proof verify --registered``), so the proof block hashes the block's rows and no more; no proof of it
-  runs.
+  have its b‖c held to that leaf by the Lean verifier's registered reads (``verity-verify-proof verify --registered``),
+  so the proof block hashes the block's rows and no more; no proof of it runs.
 
 **The statement** (`check`). For every step of the block and every slot k: bit 0 ``count``, the served row's valid and n
 are the statics'; bit 1 ``pos``, its start is the statics'. ``ACCEPT`` = 0x3. A slot the Program has no row in is zero in

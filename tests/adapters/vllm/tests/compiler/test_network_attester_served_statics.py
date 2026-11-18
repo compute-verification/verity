@@ -130,7 +130,7 @@ def test_an_idle_step_is_held_zero(x):
 
 def test_a_block_is_its_leaf_of_the_registration(x):
     """A row a block: leaf w·(P / G) + j, its b‖c on its path to the root under the run root, and at G = P the window's
-    row, the slice's ``srv``; the Lean verifier's port names the leaves, the rows' words and the domain."""
+    row, the slice's ``srv``."""
     S = x.S
     two = [x.rows, list(x.rows[:3]) + [None] * (S.P - 3)]
     window = SR.register(S, two, RUN_ROOT)
@@ -145,17 +145,11 @@ def test_a_block_is_its_leaf_of_the_registration(x):
         assert i == w * S.P + j and reg.rows[i] == SR._row(SR.block_bits(S, two[w], 1, j))[0]
         assert SR.leaf_ok(rec, RUN_ROOT, i, served.bc(i), reg.open(i).path)
         assert not SR.leaf_ok(rec, RUN_ROOT, i ^ 1, served.bc(i), reg.open(i).path)
-    port = SR.reads_port(rec, RUN_ROOT, [0, None, 9], reads_from=4)
-    assert port["leaves"] == 2 * S.P and port["words"] * 16 == rec["n_bits"] and port["reads"] == [0, None, 9]
-    assert port["root"] == rec["root"] and port["row_schema"] == "hm96-sha512/row/v2" and port["reads_from"] == 4
     dom = ADV.domain(SR.binding(RUN_ROOT), rec["count"])
-    assert dom.domain_id.hex() == port["domain"]
     for i in (0, 9, 2 * S.P - 1):
         path = b"".join(reg.open(i).path)
-        assert REG.verify_read(dom, bytes.fromhex(port["root"]), i, served.bc(i), path, port["row_schema"])
-        assert not REG.verify_read(dom, bytes.fromhex(port["root"]), i ^ 1, served.bc(i), path, port["row_schema"])
-    with pytest.raises(ValueError, match="another run root"):
-        SR.reads_port(rec, bytes(64), [0])
+        assert REG.verify_read(dom, bytes.fromhex(rec["root"]), i, served.bc(i), path, "hm96-sha512/row/v2")
+        assert not REG.verify_read(dom, bytes.fromhex(rec["root"]), i ^ 1, served.bc(i), path, "hm96-sha512/row/v2")
     with pytest.raises(ValueError, match="G dividing P"):
         SR.register(S, two, RUN_ROOT, G=2)
 
