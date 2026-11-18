@@ -10,7 +10,10 @@
 //   pass             one shard's part of a pass (its blocks at store positions base …): its receipts by one persistent
 //                    grid on tensor cores, each subtree's leaves and levels hashed by a persistent grid on a second
 //                    stream while the later blocks are read, keeping the shard's levels h0 … hc (hc: a chunk's subtree),
-//                    and the padding leaves past the store this GPU hashes up to level hc (`rs_pass`)
+//                    and the padding leaves past the store this GPU hashes up to level hc (`rs_pass`); a refresh
+//                    plan's run, whose blocks' store indices are not its positions, hashes each receipt at its block's
+//                    index and its leaves and nodes at their positions (`rs_pass_at`, `rs_subtrees_at`), and a chained
+//                    pass after an append takes the previous root with the appends' head (`rs_chain_head`)
 //   top              the receipt tree's levels hc … H on one GPU, from every shard's and every padding share's level
 //                    hc read over P2P, the root then written to each GPU's root ring (`rs_top`)
 //   subtrees         the levels below h0 and the receipts of the subtrees a window's openings fall in, recomputed from
@@ -1790,6 +1793,42 @@ int rs_chain_prepare(unsigned i, const uint64_t *previous, uint8_t *seed, uint32
                               cudaMemcpyDeviceToDevice, s))
     return 4;
   return rb_chain(seed, s);
+}
+
+// `audit.chained` on the device: out = SHA512(dom ‖ previous ‖ head), each digest a root's 8 big-endian words, so a
+// chained pass after an append takes out as its previous root (`rs_chain_prepare`). dom is at most 64 bytes.
+struct ChainHead {
+  uint8_t dom[64];
+  int dom_len;
+  u64 head[8];
+};
+
+__global__ void chain_head_kernel(const ChainHead c, const u64 *__restrict__ previous, u64 *__restrict__ out) {
+  uint8_t m[256];
+  u64 h[8];
+  for (int b = 0; b < 256; ++b) m[b] = 0;
+  int n = 0;
+  for (int b = 0; b < c.dom_len; ++b) m[n++] = c.dom[b];
+  for (int b = 0; b < 64; ++b) m[n++] = (uint8_t)(previous[b >> 3] >> (56 - 8 * (b & 7)));
+  for (int b = 0; b < 64; ++b) m[n++] = (uint8_t)(c.head[b >> 3] >> (56 - 8 * (b & 7)));
+  sha512_bytes(m, n, h, nullptr);
+  for (int w = 0; w < 8; ++w) out[w] = h[w];
+}
+
+int rs_chain_head(const uint8_t *dom, int dom_len, const uint8_t *head, const uint64_t *previous, uint64_t *out,
+                  cudaStream_t s) {
+  if (!dom || !head || !previous || !out || dom_len < 0 || dom_len > 64) return 1;
+  ChainHead c;
+  memset(&c, 0, sizeof c);
+  memcpy(c.dom, dom, dom_len);
+  c.dom_len = dom_len;
+  for (int w = 0; w < 8; ++w) {
+    u64 x = 0;
+    for (int b = 0; b < 8; ++b) x = x << 8 | head[8 * w + b];
+    c.head[w] = x;
+  }
+  chain_head_kernel<<<1, 1, 0, s>>>(c, previous, out);
+  return cudaGetLastError() ? 4 : 0;
 }
 
 int rs_sketch16_receipts(const void *data, uint64_t j0, uint64_t n, const uint32_t *pk, uint64_t *ys, int ctas,

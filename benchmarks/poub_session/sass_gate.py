@@ -1,9 +1,9 @@
 """rows.sh's gate on the kernels a 64-row pass adds to `session.cu`, and their record: ptxas's report and cuobjdump's
-SASS of those seven, through the harness's `mma_gate` (verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py). Every
+SASS of those nine, through the harness's `mma_gate` (verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py). Every
 other kernel of the build is held to the base's, instruction for instruction, by `same_sass.py`. Refuses (exit 1, the
 reasons on stderr):
 
-- one of the seven missing from the build or from the listing, compiled for another arch, an arch this gate has no
+- one of the nine missing from the build or from the listing, compiled for another arch, an arch this gate has no
   table for (`ARCHS`: sm_90a and sm_120a, each as read from its build), or with a ptxas warning; with --no-leaf64 (a
   build without -DLEAF_PASS64) the leaf pass's two (`LEAF64`) are not wanted, and refused if the build has either;
 - a sketching kernel (`SKETCHING`, the five that compute σ) whose tensor-core instructions aren't the int8 form alone,
@@ -55,9 +55,10 @@ def _harness() -> ModuleType:
 H = _harness()
 ATOM = "IMMA.16832.S8.S8"
 #: the kernels that compute σ at 64 rows: the pass's receipt grid, its consumers (a consumer's own tile), an
-#: opening's receipts, and the leaf pass's reading grid and its consumers
+#: opening's receipts, the leaf pass's reading grid and its consumers, and the consumers and an opening's receipts of a
+#: shard whose store indices are not its positions (`rs_pass_at`, `rs_subtrees_at`)
 SKETCHING = {"sketch64_pass_kernel", "pass_consumer_kernel<64>", "subtree64_receipts_kernel", "leaf_pass64_kernel",
-             "leaf_consumer64_kernel"}
+             "leaf_consumer64_kernel", "pass_consumer_at_kernel<64>", "subtree64_receipts_at_kernel"}
 #: a pass's packed signs from its seed, and a chained pass's seed and signs: one launch a pass
 ONCE = {"signs_kernel<64>", "chain_prepare_kernel<64>"}
 WANT = SKETCHING | ONCE
@@ -68,10 +69,11 @@ LEAF64 = {"leaf_pass64_kernel", "leaf_consumer64_kernel"}
 #: registers (two receipt CTAs an SM) may hold beside. The leaf pass's two are sm_120a's alone, as CUDA 13.0.88 builds
 #: them; the rest as 12.9's does
 ARCHS = {
-    "sm_90a": {"local": {"pass_consumer_kernel<64>": 224, "signs_kernel<64>": 256, "chain_prepare_kernel<64>": 304},
+    "sm_90a": {"local": {"pass_consumer_kernel<64>": 224, "pass_consumer_at_kernel<64>": 224, "signs_kernel<64>": 256,
+                         "chain_prepare_kernel<64>": 304},
                "capped": {}},
-    "sm_120a": {"local": {"pass_consumer_kernel<64>": 160, "signs_kernel<64>": 368, "chain_prepare_kernel<64>": 352,
-                          "leaf_pass64_kernel": 64, "leaf_consumer64_kernel": 88},
+    "sm_120a": {"local": {"pass_consumer_kernel<64>": 160, "pass_consumer_at_kernel<64>": 160, "signs_kernel<64>": 368,
+                          "chain_prepare_kernel<64>": 352, "leaf_pass64_kernel": 64, "leaf_consumer64_kernel": 88},
                 "capped": {"sketch64_pass_kernel": 32}},
 }
 REGS_MAX = 128
@@ -146,7 +148,7 @@ def _check(name: str, r: dict) -> list[str]:
 
 
 def gate(ptxas: str, sass: str, arch: str = "sm_90a", leaf64: bool = True) -> tuple[dict, list[str]]:
-    """The seven kernels' records by `short` name, and what the gate refuses; without leaf64, the five not `LEAF64`."""
+    """The nine kernels' records by `short` name, and what the gate refuses; without leaf64, the seven not `LEAF64`."""
     listed = H.sass_functions(sass)
     mine = {n for n in [*listed, *_COMPILING.findall(ptxas)] if short(n) in WANT}
     kept, keep = [], False
