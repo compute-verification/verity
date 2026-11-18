@@ -183,9 +183,13 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
 
 
-#: the check slot rank (`slot.py --rank`) of every part of a candidate's check and of its records run: a ranked
-#: priority waiter takes the next free check slot ahead of the unranked ones, so `main` never waits on a slot for them
+#: the check slot rank (`slot.py --rank`) of a candidate's quick tier and of its records run, both short and on `main`'s
+#: critical path: a priority waiter goes by rank, then arrival, and an unranked one after every ranked one, so they take the
+#: next free check slot ahead of every part of a candidate's check (`CHECK_SLOT_RANK`) and of the unranked priority waiters
 AFTER_LANDING_SLOT_RANK = 0
+#: the check slot rank of every part of a candidate's check and of the loop's own detached check: after the quick tiers and
+#: records runs (`AFTER_LANDING_SLOT_RANK`), ahead of the unranked priority waiters
+CHECK_SLOT_RANK = 1
 #: where detached launches (`detach`) keep their output and exit, under the queue's TMPDIR
 LAUNCHES = "drive-launches"
 #: how long a detached launch may print no run ids before it is taken as having registered none: train.sh stops its launcher
@@ -228,7 +232,8 @@ QUICK_WAIT_S, QUICK_RUN_S = 3600, 3 * 3600
 
 def quick_launch(repo: Path, commit: str, base: str, machine: str, auth: tuple[str, ...] = ()) -> dict:
     """The quick tier of candidate ``commit`` since ``base`` (`queue.QUICK_TIER`, as `research queue ready` runs it remotely:
-    `queue.quick_run`) launched detached (`detach`) as a `research run` on ``machine``, in a `--priority` check slot there, from
+    `queue.quick_run`) launched detached (`detach`) as a `research run` on ``machine``, in a `--priority` check slot there at
+    `AFTER_LANDING_SLOT_RANK`, from
     a worktree of ``commit`` of its own: the record `launched` reads, whose `RUN` line names the run."""
     from . import runs as R
     from .queue import quick_run
@@ -238,9 +243,22 @@ def quick_launch(repo: Path, commit: str, base: str, machine: str, auth: tuple[s
     t = tempfile.mkdtemp(prefix="quick-", dir=root)
     rid = R.new_run_id()
     argv = quick_run(rid, machine, Path(t) / "tree", commit, base, by="ci", wait_s=QUICK_WAIT_S, timeout_s=QUICK_RUN_S,
-                     priority=True)
+                     priority=True, rank=AFTER_LANDING_SLOT_RANK)
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0"}
     return detach(repo, ["sh", "-c", QUICK_JOB, "sh", t, commit, rid, *argv], env)
+
+
+def place_quick(repo: Path, machines: str) -> tuple[str | None, str]:
+    """Of ``machines`` (`M1,M2`), the one a quick tier takes now, as `research queue ready --on M1,M2` places one (`queue.place`:
+    the first with a free check slot, else the shortest line, read from each machine's slots), and why; (None, why) when no
+    machine's slots could be read."""
+    from .queue import place
+
+    try:
+        got, why, _, _ = place(machines, repo)
+    except Exception as e:  # noqa: BLE001  (check.py unreadable in the clone, or a read that broke: the caller picks by sha)
+        return None, f"its slots couldn't be read: {type(e).__name__}: {e}"[:300]
+    return (got, why) if got in machines.split(",") else (None, why)
 
 
 def _epoch(ts: object) -> float | None:
@@ -1029,7 +1047,7 @@ class Landing:
         self.plan_shards: Callable[..., dict] = plan_shards
         self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
         #: a candidate's check, or the run beside it (`vqueue_slim.start`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
-        #: (`_started`), its check at `AFTER_LANDING_SLOT_RANK`; an injected `launch` launches it too
+        #: (`_started`), its check at `CHECK_SLOT_RANK`; an injected `launch` launches it too
         self.launch_after_landing: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
                     shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None, ratchet_base=None,
@@ -1037,7 +1055,7 @@ class Landing:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
                           no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base,
                           cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan,
-                          ratchet_base=ratchet_base, rank=AFTER_LANDING_SLOT_RANK, script_from=train_from, deselect=deselect))
+                          ratchet_base=ratchet_base, rank=CHECK_SLOT_RANK, script_from=train_from, deselect=deselect))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: a candidate's records run (`vqueue_records.start`): `train.sh SHA MACHINES --deferred lean-audit --bookkeeping-warn`,
         #: the loop's own (`OWN_TRAIN`), detached, its check at `AFTER_LANDING_SLOT_RANK`, repairing the locks' bookkeeping
@@ -1049,6 +1067,10 @@ class Landing:
         #: a candidate's quick tier (`vqueue_slim.start_quick`): `quick_launch`, detached
         self.launch_quick: Callable[[Path, str, str, str], tuple[list[str], str] | dict] = (
             lambda repo, commit, base, machine: quick_launch(repo, commit, base, machine, auth=q.auth))
+        #: of machines `M1,M2`, the one a candidate's quick tier takes (`vqueue_slim.start_quick`): `place_quick`'s, with a free
+        #: check slot now where one has, and why; (None, why) when none could be read, and no reading where launches are injected
+        self.place_quick: Callable[[str], tuple[str | None, str]] = (
+            (lambda machines: place_quick(q.workdir, machines)) if launch is train_launch else (lambda machines: (None, "")))
         #: what a detached launch has printed so far (`launched`, `_resolve`)
         self.launched: Callable[[dict], tuple[list[str] | None, str]] = launched
         if launch is train_launch:
@@ -1288,7 +1310,8 @@ class Landing:
         None when there is none.  Of each reviewer's newest verdict at each of ``heads``, a hold by anyone or a land by none of
         `_owners` nor that head's ready mark's author, the newest decides: a hold keeps ``m``, as one at its head does (``why``,
         `queue.unreviewed`'s of its head, says so), and a land at a head with no hold carries when `delta` says so, trusting
-        ``landed`` (the landed tips) and the ``trusted`` heads."""
+        ``landed`` (the landed tips) and the ``trusted`` heads.  The land judged is the newest one no hold at a later head of
+        ``m``'s voids (`carry.voided`), and a land every such hold voids keeps ``m``, however old the hold."""
         owners = self._owners(m)
         labels = {h: self.reviews(m.pr, h) for h in heads}
         verdicts = []                                   # (when, a hold, the head, the label)
@@ -1301,15 +1324,19 @@ class Landing:
                          if lab.value == "hold" or by not in mine]
         if not (lands := [v for v in verdicts if not v[1]]):
             return None
-        old = max(lands, key=lambda v: v[0])[2]
+        holds = {v[2] for v in verdicts if v[1]}
+        standing = [v for v in lands if not carry.voided(self.repo, v[2], holds)]
+        old = max(standing or lands, key=lambda v: v[0])[2]
         if why.startswith("held"):
             return old, f"{why} at {m.head[:12]}", False
         if (v := max(verdicts, key=lambda v: v[:2]))[1]:
             return old, f"{v[3].by.lstrip('@')}'s hold at {v[2][:12]} ({v[3].ref or 'no reason'}) is newer", False
         if held := unreviewed(labels[old], (*owners, self.ready_by(m.pr, old))):
             return old, f"{held} at {old[:12]}", False
-        if _who(CI) in {_who(o) for o in owners if o}:
-            return old, f"{CI} is among its owners, so its verdict wouldn't count", False
+        if later := carry.voided(self.repo, old, holds):
+            v = max((v for v in verdicts if v[1] and v[2] == later), key=lambda v: v[0])
+            return old, (f"{v[3].by.lstrip('@')}'s hold at {later[:12]} ({v[3].ref or 'no reason'}), a later head, voids the land "
+                         f"at {old[:12]}"), False
         d = self.delta(old, m.head, landed, trusted)
         return old, d.why if d.carries else f"{d.kind}: {d.why}", d.carries
 

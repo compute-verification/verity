@@ -296,6 +296,50 @@ def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch
     assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1
 
 
+_TREE = {"result.json": "{}", "argv.json": "[]", "ci/sets.json": '{"sets": []}', "ci/set0/agreement.tsv": "s\tagree\n",
+         "ci/set0/lean.err": "", "ci/set0/archive/ab/blob": "x" * 4096, "work/set0/agree/agreement.tsv": "s\tagree\n",
+         "work/set0/agree/lean.txt": "L\n", "work/set0/agree/upstream.txt": "U\n", "work/set0/agree/archive/ab/blob": "x" * 4096,
+         "work/set0/fuzz/case/case.json": "{}", "work/set0/fuzz/case/session.json": "{}" * 512,
+         "work/set0/selftest/0/u/circuit.rep0.bin": "b" * 4096}
+
+
+def _agreeing(tmp_path, monkeypatch, rc, binary=_BIN):
+    import json
+
+    out, sent = _pinned(tmp_path, monkeypatch, binary=binary, pinned=binary)
+    (CHECK.FLOCK_VERIFIER / "ci.py").write_text(
+        f"import json, pathlib, sys\nw = pathlib.Path(sys.argv[sys.argv.index('--out') + 1])\n"
+        f"for k, v in json.loads({json.dumps(json.dumps(_TREE))}).items():\n"
+        f"    (w / k).parent.mkdir(parents=True, exist_ok=True); (w / k).write_text(v)\nsys.exit({rc})\n")
+    return out, sent
+
+
+def test_the_agreement_leaves_its_verdicts_not_its_work_tree_in_the_run_directory(tmp_path, monkeypatch, capsys):
+    import tarfile
+
+    cases = {"work/set0/fuzz/case/session.json", "work/set0/selftest/0/u/circuit.rep0.bin"}
+    dropped = {"ci/set0/archive/ab/blob", "work/set0/agree/archive/ab/blob", *cases}
+    for rc in (0, 3):
+        out, sent = _agreeing(tmp_path / str(rc), monkeypatch, rc)
+        assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == rc
+        w = out / "flock-agreement"
+        left = {str(p.relative_to(w)) for p in w.rglob("*") if p.is_file()}
+        assert not (w / "upstream").exists() and not (w / "inputs").exists()
+        assert left - {"cases.tar.gz"} == set(_TREE) - dropped
+        assert all((w / k).read_text() == _TREE[k] for k in set(_TREE) - dropped)
+        assert set(CHECK.agreement_verdicts(out)) >= {"flock-agreement/result.json", "flock-agreement/work/set0/agree/lean.txt"}
+        said = capsys.readouterr().out
+        if rc:
+            with tarfile.open(w / "cases.tar.gz") as t:
+                assert set(t.getnames()) == cases and t.extractfile("work/set0/fuzz/case/session.json").read() == b"{}" * 512
+            assert "are in cases.tar.gz" in said
+        else:
+            assert "cases.tar.gz" not in left and "are dropped on a pass" in said
+    out, sent = _agreeing(tmp_path / "ill", monkeypatch, 0, binary=b"#!/bin/sh\nkill -ILL $$\n")
+    assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1
+    assert not (out / "flock-agreement" / "upstream").exists() and not (out / "flock-agreement" / "inputs").exists()
+
+
 def test_the_agreement_step_fetches_the_pinned_files_through_their_urls(tmp_path, monkeypatch, capsys):
     """The launch used to fetch the pinned upstream build and inputs from the store and send them, minutes of every shard's
     launch on the control pod; the step now fetches them through the URLs the launch signed, into scratch outside the run

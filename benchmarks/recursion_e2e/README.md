@@ -34,7 +34,13 @@ verity bench recursion_e2e store RESULT... [--merge] --dir DIR    the results an
                                                                    and the `research data put` command that stores it
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes zk_server --oprove-runs 1 --lease-min M --neg challenge,query
        --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
+       --window DIR --member K --units A-B --subcircuit ID --serves NAME
 ~~~
+
+`--window` runs `stage.sh` over a served window where it lies, on `--on`'s machine (on a window node, a plain run on its
+calendar row's `--cores`): the staging is the job's work tree there, removed at its end, and `record.py job` deletes from
+`out/` any file that holds one of the window's private files and fails the run's validation. Its measurements' member is
+`--serves` and N, `llama-3.2-1b-h200-n16`.
 
 `job.sh` needs GNU time at `/usr/bin/time`, cargo, lake (or curl to install elan), 32 cores and 128 GB of memory with an oprove behind the ZK server (else 64), and refuses, before it builds anything, a machine that lacks one.
 
@@ -117,7 +123,8 @@ them, so a cancelled run's rows are still read.
 - **Peak memory**: the prover process's peak RSS (`/usr/bin/time -v` over the invocation) and the leased GPU's memory in
   use, sampled every half second (`gpu-mib.txt`, a lower bound). For CPU steps, each tool's `/usr/bin/time -v` peak RSS.
 - **CPU steps** (`icheck`, `vstage`, `vcap`, `oreplay`, `lean`, `negative`): each tool's `/usr/bin/time -v` wall, median
-  and [min, max] over the repeats. Lean's verify also splits into `inputs`, `setup` and the verification's own checks. The pod script
+  and [min, max] over the repeats: `REPEAT` of `vstage`, `vcap` and `lean`, whose medians the pipeline sum adds, and one of
+  `icheck` and `oreplay`, which no metric reads. Lean's verify also splits into `inputs`, `setup` and the verification's own checks. The pod script
   runs `vstage`'s statements and `lean`'s verifications `JOBS` at a time (4 here), so each one's wall is measured under its
   neighbours' load. The step's whole wall (`lean step`) is what an auditor waits, and it is what the pipeline sum adds.
   `stage <name>` rows carry what `rec_vstage` printed of each proof block (template, rows, lowering seconds, circuit bytes).

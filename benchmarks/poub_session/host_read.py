@@ -248,7 +248,7 @@ def main() -> int:
     s, torch = b.store, b.torch
     rng = np.random.default_rng(a.seed)
     source, node = rng.bytes(32), a.node.encode()
-    b.set_payload_key(rng.bytes(32))
+    rng.bytes(32)  # the sample that once made the payload key: the nonce after it stays as it was
     reg = audit.register(source, node, b.blocks, b.payload_root(node), nonce=rng.bytes(audit.NONCE_BYTES))
     hbm = [q for q in range(len(s.n)) if not s.on_host[q]]
     host = [q for q in range(len(s.n)) if s.on_host[q]]

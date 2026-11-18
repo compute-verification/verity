@@ -28,8 +28,8 @@ from typing import Any
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.prims import BF16, I32
 from verity_vllm.definitions.registry.b1 import (
     B1_CONFIG,
     ZERO16,
@@ -46,6 +46,7 @@ from verity_vllm.definitions.registry.b1 import (
     layer_weights_type,
     weights_type,
 )
+from verity_vllm.definitions.registry.prims import BF16, I32
 
 B1_TP2_CONFIG: dict[str, Any] = dict(B1_CONFIG, TP=2)
 
@@ -158,6 +159,17 @@ def AllGather(B, S, parts):
     """`torch.ops.vllm.all_gather` along the trailing axis over WORLD ranks: rank r's `[N]` becomes columns r*N..(r+1)*N of every rank's
     `[WORLD*N]`.  A copy: the output IS the concatenation of the parts in rank order (no gate)."""
     return parts.reshape(Array(int(S.WORLD) * S.N, BF16))
+
+
+@composite("AllGatherTail", 1, ["WORLD", "N", "TAIL", "TN"],
+           lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))), ("tail", Array(int(S.TAIL), Array(S.TN, BF16)))),
+                      Array(int(S.WORLD) * S.N + int(S.TAIL) * S.TN, BF16)),
+           conformance="protocol-defined: the node window's gather of rows of two widths, a copy with no gates")
+def AllGatherTail(B, S, parts, tail):
+    """WORLD rows of N words, then TAIL rows of TN words, as one row: a gather of rows of two widths, such as a whole read of
+    a count of rows no chunk size divides (its chunks, then the rows left over). A copy: the output IS the parts in turn, then
+    the tail's rows (no gate)."""
+    return Coll(Array(int(S.WORLD) * S.N + int(S.TAIL) * S.TN, BF16), concat([parts.refs, tail.refs]))
 
 
 def all_reduce(world: int, N: int):

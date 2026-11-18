@@ -120,6 +120,71 @@ def test_a_fresh_store_takes_the_pack_in_one_fetch_and_pulls_only_the_difference
     assert _hashes(LocalStore(tmp_path / "C")) == _hashes(a)
 
 
+def test_a_syncs_pulled_assertions_are_indexed_in_batches_and_all_before_it_returns(env, remote, tmp_path, monkeypatch):
+    """A commit per pulled assertion took a node's fill of the whole catalog half an hour: the pack's members and the assertions
+    pulled one by one are indexed `INDEX_BATCH` at a time, each batch one transaction, and the last part batch before the sync
+    returns, so the catalog answers for every assertion pulled."""
+
+    a = LocalStore(tmp_path / "A")
+    _assert(a, 12)
+    LS.sync(a)
+    LS.publish_pack(LocalStore(tmp_path / "P"))
+    _assert(a, 3, first=12)
+    LS.sync(a)
+
+    monkeypatch.setattr(LS, "INDEX_BATCH", 5)
+    b = LocalStore(tmp_path / "B")
+    batches: list[int] = []
+    many, one = b.index.index_labels, b.index.index_label
+    monkeypatch.setattr(b.index, "index_labels", lambda rows: (batches.append(len(rows)), many(rows))[1])
+    monkeypatch.setattr(b.index, "index_label", lambda label, path: pytest.fail("a pulled assertion indexed on its own"))
+    rep = LS.sync(b, push=False)
+    assert len(rep["pulled"]) == 15 and rep["pack"] == 12
+    assert batches == [5, 5, 2, 3], "the pack's twelve in batches of five and the rest, then the three pulled one by one"
+    assert len(b.index.labels(ART)) == 7 and sum(len(b.index.labels(f"r20260922-105905-{i:04d}")) for i in range(0, 15, 2)) == 8
+    monkeypatch.setattr(b.index, "index_label", one)
+    assert LS.sync(b, push=False)["pulled"] == []
+
+
+def test_a_pull_killed_between_a_batchs_files_and_its_commit_is_indexed_by_the_next_pull(env, remote, tmp_path, monkeypatch):
+    """A pull killed at a time limit inside a batch leaves its files without catalog rows, and the next pull fetches only what the
+    store lacks, so without a repair those assertions would stay out of every query until a `reindex`."""
+
+    class Killed(BaseException):
+        pass
+
+    a = LocalStore(tmp_path / "A")
+    _assert(a, 12)
+    LS.sync(a)
+
+    monkeypatch.setattr(LS, "INDEX_BATCH", 5)
+    b = LocalStore(tmp_path / "B")
+    commit = b.index.index_labels
+    commits: list[int] = []
+
+    def die_at_the_second_commit(rows):
+        commits.append(len(rows))
+        if len(commits) > 1:
+            raise Killed
+        commit(rows)
+
+    monkeypatch.setattr(b.index, "index_labels", die_at_the_second_commit)
+    with pytest.raises(Killed):
+        LS.sync(b, push=False)
+    files = sorted(str(p) for p in (b.root / "labels").glob("*/*.json"))
+    rowless = sorted(set(files) - {r[0] for r in b.index.sql("SELECT path FROM labels")})
+    assert len(files) == 10 and len(rowless) == 5, "the second batch's five files are on disk with no row"
+
+    monkeypatch.setattr(b.index, "index_labels", commit)
+    lost = LS.parse_label_bytes(Path(rowless[0]).read_bytes())
+    rep = LS.sync(b, push=False)
+    assert sorted(r[0] for r in b.index.sql("SELECT path FROM labels")) == sorted(str(p) for p in (b.root / "labels").glob("*/*.json"))
+    assert len(b.index.sql("SELECT path FROM labels")) == 12
+    assert [r["path"] for r in b.index.labels(lost.target, key="note") if r["value"] == lost.value] == [rowless[0]]
+    assert rep["indexed"] == 5 and len(rep["pulled"]) == 2, "the five are indexed, and only the two never written are pulled"
+    assert LS.sync(b, push=False)["indexed"] == 0
+
+
 def test_a_store_that_lacks_few_assertions_never_asks_for_the_pack(env, remote, tmp_path):
     a = LocalStore(tmp_path / "A")
     _assert(a, 4)
@@ -140,7 +205,7 @@ def test_with_no_pack_a_sync_pulls_each_assertion_as_before(env, remote, tmp_pat
     b = LocalStore(tmp_path / "B")
     rep = LS.sync(b, push=False, log=lines.append)
     assert rep == {"remote": remote.describe(), "local": 0, "remote_before": 9, "pushed": [], "pulled": sorted(_hashes(a)), "pack": 0,
-                   "already": 0, "bad": []}
+                   "already": 0, "indexed": 0, "bad": []}
     assert lines == [] and remote.gets == _label_gets(remote) and len(remote.gets) == 9, "the same GETs as with no pack to ask for"
     assert _hashes(b) == _hashes(a)
     assert not (env / "vault" / "packs").exists() and not list((b.root / "scratch").iterdir())

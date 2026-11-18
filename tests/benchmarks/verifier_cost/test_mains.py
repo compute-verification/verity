@@ -66,6 +66,22 @@ def test_main_elaborates_against_the_checkouts_verifier(name):
         f"can run. Fix the main in the change that moved what it calls:\n{got.stdout[-3000:]}{got.stderr[-3000:]}")
 
 
+def test_scaling_runs_every_main():
+    """`verity bench verifier_cost scaling --list` names a script for every `<name>/Main.lean`, and that script exists and
+    builds that main: a benchmark here that no registered command runs is deleted, not kept."""
+    got = subprocess.run([sys.executable, str(HERE / "run.py"), "scaling", "--list"], cwd=ROOT, capture_output=True,
+                         text=True)
+    assert got.returncode == 0, got.stderr
+    listed = dict(line.split("\t", 1) for line in got.stdout.splitlines())
+    assert sorted(listed) == MAINS, (
+        f"scaling --list names {sorted(listed)}, the mains here are {MAINS}: list a main's script in run.py's SCALING "
+        f"at a small size, or delete the main and its script")
+    for name, command in listed.items():
+        script = ROOT / command.split()[0]
+        assert script.is_file() and f"verifier_cost/{name}/Main.lean" in script.read_text(), (
+            f"SCALING's {name} runs {command.split()[0]}, which doesn't build benchmarks/verifier_cost/{name}/Main.lean")
+
+
 def test_whole_run_writes_a_run_its_check_accepts(tmp_path):
     """whole_run.py on the toy at whole_run.sh's smallest size: `--check` exits nonzero unless the Python reference
     (`test_difftest.run`) accepts the run it wrote."""

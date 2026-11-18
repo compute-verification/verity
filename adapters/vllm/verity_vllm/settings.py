@@ -218,7 +218,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_REPLAY_FORK_GC_FREEZE", not_off, True, VALUE, "the replay freezes the GC before it forks its workers"),
     S("VERITY_RESEARCH", str, None, WHERE, "the research tree a row's stages import (the row sets it)"),
     S("VERITY_TICK", json.loads, None, VALUE, "the certified tick under vLLM's own OpenAI server (`pipeline.tick_plugin`), a JSON "
-      "object: the registered bucket_us, sat_us and free_us, hold_ms, the feed file and the gate's log directory; unset, none"),
+      "object: the registered bucket_us, sat_us and free_us, hold_ms, the feed file, the gate's log directory and a rule measured "
+      "against the registered one (token_ns, catch_up, and the arm measuring it where catch_up is open); unset, none"),
     S("VERITY_TIMELINE", str, None, WHERE, "the stage telemetry file"),
     S("VERITY_TREE", str, None, WHERE, "the source tree that runs (the mixed-tree refusal)"),
     S("VERITY_UNIT_RULE_CACHE", str, None, WHERE, "the host's unit-rule cache directory (`sweep --unit-rule-cache`)"),
@@ -303,7 +304,8 @@ ELSEWHERE = frozenset((
     "VERITY_E2E_BOUNDED", "VERITY_E2E_CASE", "VERITY_E2E_EXCLUDE", "VERITY_E2E_GPU_UTIL", "VERITY_E2E_HIDDEN_SO", "VERITY_E2E_LEARN_MB",
     "VERITY_E2E_UTIL", "VERITY_E2E_WINDOW_MB", "VERITY_E2E_WORKLOAD", "VERITY_ENCODINGS_ADVICE_V0", "VERITY_EVALUATE_FULL_LOGF",
     "VERITY_EXHAUSTIVE", "VERITY_FA2_CSRC", "VERITY_FLOCK_CACHE", "VERITY_FLOCK_INNER_FOLD", "VERITY_FLOCK_SAME_SHAPE_FULL",
-    "VERITY_GIT_GUARD", "VERITY_GPU_TORCH_ONLY", "VERITY_H1_REGISTER", "VERITY_HP_ARCHIVE", "VERITY_KV_SO", "VERITY_LEAF_LAYOUT",
+    "VERITY_GIT_GUARD", "VERITY_GPU_TORCH_ONLY", "VERITY_H1_REGISTER", "VERITY_HOLD_PLACEMENT", "VERITY_HP_ARCHIVE", "VERITY_KV_SO",
+    "VERITY_LEAF_LAYOUT",
     "VERITY_LEAN_MEM_FLOOR_GIB", "VERITY_ML_BOOLEAN_EXHAUSTIVE", "VERITY_ML_DEFINITIONS_SLOW", "VERITY_MOE_PROGRAM_DIRS",
     "VERITY_MUFU_TABLES", "VERITY_MUFU_TANH_TABLES", "VERITY_NETWORK_RECORDS_EXE", "VERITY_NUMERICAL_STORE", "VERITY_PAGED_SO", "VERITY_PINS",
     "VERITY_POUS_SLOW", "VERITY_POUW_CUDA_ARCH", "VERITY_POUW_CUDA_BUILD", "VERITY_POUW_H1_PIN", "VERITY_POUW_H1U_SO",
