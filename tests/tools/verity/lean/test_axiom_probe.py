@@ -112,6 +112,15 @@ def test_the_probe_appends_one_print_axioms_per_theorem_after_the_files_last_lin
         "theorem t : True := trivial", "", "#print axioms t", "#print axioms A.u"]
 
 
+def test_the_copy_reads_each_include_str_path_from_the_files_own_directory():
+    text = ('def a : String := include_str "../run.txt"\n-- include_str "x.txt"\n'
+            'def b : String := "include_str \\"y.txt\\""\ndef c : String := include_str  "/abs/z.txt"\n')
+    assert AP.rehomed(text, "Control", ".lake/axiom-probe/Control/N.lean").splitlines() == [
+        'def a : String := include_str "../../../Control/../run.txt"', '-- include_str "x.txt"',
+        'def b : String := "include_str \\"y.txt\\""', 'def c : String := include_str  "/abs/z.txt"']
+    assert AP.rehomed(SOURCE, "Control", ".lake/axiom-probe/Control/X.lean") == SOURCE, "a file with none is as it is"
+
+
 def test_an_error_only_on_an_appended_line_is_the_probes_and_any_other_is_the_files():
     copy = ".lake/axiom-probe/X.lean"
     assert AP.own_rc(1, f"{copy}:12:14: error(lean.unknownIdentifier): Unknown constant `t`\n", 10, copy) == 0
@@ -263,6 +272,20 @@ def test_on_the_controls_fixture_the_probe_names_the_sorry_backed_theorem_only(c
         assert (rc, said) == (0, f"axiom probe: 1 of its 2 theorems use axioms beyond propext, Classical.choice and "
                                  f"Quot.sound: {ns}.holey (sorryAx)"), rel
         assert not (pkg / AP.COPIES / rel).exists(), "the copy goes"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_on_the_controls_fixture_a_file_reading_a_neighbour_by_its_relative_path_is_probed(control):
+    """`include_str "../run.txt"` is read from the tried file's directory, not from its copy's under `.lake`: lean exits 0
+    on the copy and the probe answers for its theorems."""
+    pkg, lean = control
+    rel = "Control/Neighbour.lean"
+    text = ('namespace Control\n\ndef run : String := include_str "../run.txt"\n\n'
+            'theorem holey : run = "" := sorry\n\ntheorem clean : run.length = run.length := rfl\n\nend Control\n')
+    (pkg / rel).write_text(text)
+    assert AP.probe(pkg, rel, text, lean)[:2] == (0, "axiom probe: 1 of its 2 theorems use axioms beyond propext, "
+                                                     "Classical.choice and Quot.sound: Control.holey (sorryAx)")
+    assert not (pkg / AP.COPIES / rel).exists(), "the copy goes"
 
 
 LEAN_REFUSES = '''namespace Probe

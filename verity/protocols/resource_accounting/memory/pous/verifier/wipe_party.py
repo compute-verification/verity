@@ -122,7 +122,8 @@ def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Ma
     `prover-node`. `store_gaps` is what the memory the prover kept the fill in leaves outside the bound
     (`wipe_period.store_gaps`), by tier and never by device: the placement names no device. `links` are the links
     leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's declared tiers
-    (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
+    (`{"tier", "bytes", "what"}`), which the bound doesn't count; and `memory_attester.UNCHECKED` under
+    ``unchecked``."""
     if simulated and host != node:
         raise ValueError(f"a simulated placement runs the memory attester on the developer's node {node}, not on {host}")
     kind = "own-host" if host != node else "simulated" if simulated else "prover-node"
@@ -134,7 +135,7 @@ def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Ma
                                 committed=committed)
     return {"kind": kind, "parties": {"memory_attester": host, "prover": node, "verifier": verifier or node},
             PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared],
-            "store_gaps": list(store_gaps)}
+            "store_gaps": list(store_gaps), **mc.unchecked()}
 
 
 def holds(where: Mapping[str, Any]) -> bool:

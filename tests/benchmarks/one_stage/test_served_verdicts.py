@@ -927,8 +927,10 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     error: the composed verdict is ``reject``, with no block record."""
     from verity.protocols.resource_accounting.memory.poub.prover.p2_stage import bandwidth as BW
     from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
     beside = ledger.DELTA_FORM.removeprefix("δ")
+    unchecked = "".join(f"{n} {w}; " for n, w in mc.UNCHECKED.items())
     (d := tmp_path / "bandwidth").mkdir()
     (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
 
@@ -957,7 +959,8 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     refusal = BR._bound(BR._scheme("bandwidth"), a["profile"])["unbounded"]["why"]
     assert rec["legs"]["bandwidth"]["answer"]["verdict"] == "accept" and rec["legs"]["bandwidth"]["unbounded"]["why"] == refusal
     assert all(x["not_established"] == ["bandwidth"] for x in sums["at"].values())
-    assert (f"; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: {refusal}; "
+    assert (f"; the bandwidth audit: accept ({unchecked}its quantity is not established at δ = 1/100 or 1/1000000: "
+            f"{refusal}; "
             f"its error reads 1/1099511627776{beside}); ") in line["reason"]
     assert line["reason"] == report["composed"]["reason"]
 
@@ -965,7 +968,8 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     assert BR.check(rec) == {}
     assert all(x["not_established"] == ["bandwidth"] for x in rec["composed"]["joint_horizon"]["at"].values())
     assert rec["legs"]["bandwidth"]["answer"]["verdict"] == "accept"
-    assert (f"; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: {refusal}; "
+    assert (f"; the bandwidth audit: accept ({unchecked}its quantity is not established at δ = 1/100 or 1/1000000: "
+            f"{refusal}; "
             f"its error reads 1/100 + 2^-64{beside}); ") in line["reason"]
 
     silent = {**a, "profile": {k: v for k, v in a["profile"].items() if k != "named_terms"}}
