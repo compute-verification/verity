@@ -39,7 +39,6 @@ LEFT: list[tuple[str, str]] = [
     ("PoUSSetup reader adapters/vllm/verity_vllm/protocols/pous.py", "the memory-accounting lane's file"),
     ("PoUSStore writer adapters/vllm/verity_vllm/protocols/pous.py", "the memory-accounting lane's file"),
     ("PoUWScheme reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", FLAG),
-    ("PoUWValues writer adapters/vllm/verity_vllm/pipeline/serve_pearl.py", IN_PROCESS),
     ("PoUWValues writer adapters/vllm/verity_vllm/protocols/pouw/__init__.py", "the compute-accounting lane's file"),
     ("RegisteredCompiler reader adapters/vllm/verity_vllm/pipeline/advice.py", "flags whose values are the compiler's "
      "name and digest, which the advice binds"),

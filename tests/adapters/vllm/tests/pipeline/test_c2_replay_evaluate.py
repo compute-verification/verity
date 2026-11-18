@@ -320,7 +320,7 @@ def test_a_run_s_protocols_take_its_replay_and_a_premise_its_rows_leave_unshown_
     """With protocols the replay runs under them (`pouw_circuit.replayed`), while a plan and the sample taken again for the reads
     do not; what the Programs' rows leave unshown (`definitions.premises`, over every Program's rows) is put beside the verdict."""
     from verity_vllm.check.replay import definitions as DF
-    from verity_vllm.check.replay import pouw_circuit as PWC
+    from verity_vllm.protocols.pouw import pouw_circuit as PWC
 
     steps, s, under, rows = Steps(monkeypatch), sources(tmp_path), list[tuple[Any, int]](), list[Record]()
     s.protocols, s.reads = SimpleNamespace(entries=["pous:any"]), {}

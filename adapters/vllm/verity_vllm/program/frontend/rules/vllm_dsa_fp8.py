@@ -51,6 +51,7 @@ from verity_vllm.program.frontend.rules.vllm_dsa import (
     _rows,
     _static_float,
     _value,
+    emit_indexer,
 )
 from verity_vllm.program.frontend.rules.vllm_dsa_dense import DsaDenseMhaRule
 from verity_vllm.program.frontend.rules.vllm_iface import iface
@@ -282,12 +283,16 @@ class DsaFlashMlaAttnRule(StateRule):
             klog, slog = _log(ctx, (layer, "ik"), hist["ik"]), _log(ctx, (layer, "iks"), hist["iks"])
             sel_fn = ctx.kind("dsa_topk_short_row", node, TOPK=TOPK)
             selected = {}
-            for i, (P, n) in enumerate(zip(pos, keys)):
-                logits = ctx.kind("dsa_mqa_logits", node, N=n, H=H, D=D)
-                ctx.call(logits, iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)), Coll(Array(n, Value(32)), slog.cut(n)),
-                         node=node, rule=self, name=f"{h}/logits[t={P}]")
-                ln = ctx.call(ctx.kind("const", node, W=32, BITS=n), node=node, rule=self, name=f"{h}/len[t={P}]")
-                selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")
+
+            def logits(i: int, n: int) -> Coll:
+                return ctx.call(ctx.kind("dsa_mqa_logits", node, N=n, H=H, D=D), iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)),
+                                Coll(Array(n, Value(32)), slog.cut(n)), node=node, rule=self, name=f"{h}/logits[t={pos[i]}]")
+
+            def alone(i: int, n: int, _logits: Coll) -> None:
+                ln = ctx.call(ctx.kind("const", node, W=32, BITS=n), node=node, rule=self, name=f"{h}/len[t={pos[i]}]")
+                selected[pos[i]] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={pos[i]}]")
+
+            emit_indexer(keys, [], logits, alone, lambda *_: None)
             ctx.state["dsa_topk"] = {"layer": layer, "rows": selected, "keys": dict(zip(pos, keys))}
             source = layer
         else:

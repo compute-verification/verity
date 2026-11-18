@@ -83,21 +83,22 @@ def test_card_settings_take_the_specs_place_on_their_card_alone_and_name_only_it
         load_spec(path)
 
 
-def test_a_cards_arms_replace_the_specs_and_its_arm_settings_add_to_the_specs_on_that_card_alone(tmp_path):
-    path = _two_cards(tmp_path, "", '\n[arm_settings."stock-fp8@compiled"]\ncontrol = "none"\n'
-                      '\n[card_settings.h200]\narms = ["stock-fp8", "stock-fp8@compiled", "stock@compiled"]\n'
-                      '[card_settings.h200.arm_settings."stock@compiled"]\ncontrol = "none"\n')
-    path.write_text(path.read_text().replace('arms = ["stock", "stock-fp8"]', 'arms = ["stock", "stock-fp8", "stock-fp8@compiled"]'))
-    stem = path.with_suffix("")
-    rtx, h200 = resolve_spec(f"{stem}@rtx-pro-6000.toml"), resolve_spec(f"{stem}@h200.toml")
-    assert (rtx.arms, [*rtx.arm_settings]) == (("stock", "stock-fp8", "stock-fp8@compiled"), ["stock-fp8@compiled"])
-    assert (h200.arms, [*h200.arm_settings]) == (("stock-fp8", "stock-fp8@compiled", "stock@compiled"),
-                                                 ["stock-fp8@compiled", "stock@compiled"])
-    assert h200.arm_settings["stock@compiled"].control == "none"
-    path.write_text(path.read_text().replace('"stock-fp8", "stock-fp8@compiled", "stock@compiled"]',
-                                             '"stock-fp8", "stock-fp8@compiled"]'))
-    with pytest.raises(ConfigError, match=r"card_settings.h200.arm_settings \['stock@compiled'\] name no arm"):
-        load_spec(path)
+def test_a_refused_card_is_a_card_the_spec_doesnt_list_and_its_refusal_says_why(monkeypatch, tmp_path):
+    whole = "llama31-8b-1gpu-pearl-c-whole-served"
+    with pytest.raises(ConfigError, match=rf"^spec '{whole}' refuses the rtx-pro-6000: its whole step served Pearl-C on "
+                                          r"sm_120 \(`pouw:pearl-c-sm120-v1-h3`\), which is no declared scheme: declaring "
+                                          r"one is compute-accounting's$"):
+        resolve_spec(f"{whole}@rtx-pro-6000")
+    _on(monkeypatch, RTX)
+    assert resolve_spec(whole).preset.gpu_id == "h200"
+    assert [served_table._on_card(whole, card) for card in ("rtx-pro-6000", "h200")] == [f"{whole}@rtx-pro-6000", whole]
+    path = _two_cards(tmp_path, "", '\n[refused]\nh100 = "not measured there"\n')
+    with pytest.raises(ConfigError, match=r"refuses the h100: not measured there$"):
+        resolve_spec(f"{path.with_suffix('')}@h100.toml")
+    for card in ("h200", "a100"):
+        path.write_text(path.read_text().replace("\nh100 = ", f"\n{card} = ").replace("\nh200 = ", f"\n{card} = "))
+        with pytest.raises(ConfigError, match=rf"refused \['{card}'\]: each names a card's `short` the spec doesn't list"):
+            load_spec(path)
 
 
 def test_a_spec_argument_names_its_card_after_an_at_by_id_or_recorded_path():

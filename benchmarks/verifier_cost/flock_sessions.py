@@ -106,11 +106,10 @@ def summary(out: Path) -> dict:
     if len(by) > 1:
         slope, fixed = statistics.linear_regression(list(by), list(by.values()))
         fit = {"session_fixed_s": round(fixed, 3), "per_block_s": round(slope, 6), "points": len(by)}
-    phases = out / "phases.jsonl"
     return {"schema": SCHEMA, "block": st.get("census") or st["definition"], "full_blocks": st["n"], "ands": st["ands"],
             "unit_nnz": st["unit_nnz"], "k_log": st["k_log"], "circuit_bytes": st["circuit_bytes"], "circuit_sha512": st["circuit_sha512"],
             "read_s": round(statistics.median(c["read_s"] for c in calls), 3) if calls else None, "by_blocks": by, "fit": fit,
-            "calls": calls, "phases": [json.loads(x) for x in phases.read_text().splitlines()] if phases.exists() else []}
+            "calls": calls}
 
 
 def main() -> None:
