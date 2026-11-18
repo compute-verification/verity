@@ -76,7 +76,7 @@ def check_settings(values: Mapping[str, Any]) -> str | None:
     if values["idle_mib"] < 0:
         return f"idle_mib is a count of MiB, not {values['idle_mib']}"
     try:
-        wipe_run.config({"wipe": period_wipe(values)})
+        wipe_run.config({NAME: period_wipe(values)})
     except ValueError as e:
         return str(e)
     return None
@@ -151,7 +151,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
     pins = [dict(p) for p in ctx.get("pins") or ()]
     doc: dict[str, Any] = {
         "tools": {} if ctx.get("judge") is None else {"wipe-protocol": str(ctx["judge"])},
-        "wipe": period_wipe(s) | {"trusted_sha512": None if s["run_keys"] else ctx.get("trusted") or pin_of(pins)},
+        NAME: period_wipe(s) | {"trusted_sha512": None if s["run_keys"] else ctx.get("trusted") or pin_of(pins)},
         "deployment": {"configuration": ctx.get("configuration"), "pins": pins}}
     if s["host"]:
         doc |= {"challenger_host": s["host"], "challenger": {NAME: {"command": list(s["command"]),
