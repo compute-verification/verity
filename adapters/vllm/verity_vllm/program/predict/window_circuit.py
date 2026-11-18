@@ -135,7 +135,7 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Any
 
-from verity.circuits.codec import descriptor_id, program_digest
+from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.periods import interface as IF
 
@@ -260,12 +260,6 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     return Lowered(circuit, fn, tuple(progs), b.spans)
 
 
-def population_digest(circuit: IF.Circuit) -> str:
-    """The digest of the Program ``circuit`` registers (`Circuit.program`, its wired Program), which its registered values'
-    domains bind (`window_rows.state_value`'s ``program``)."""
-    return program_digest(circuit.program()[0])
-
-
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
                    placed: Sequence[tuple[int, int | None]] | None = None, provable: bool = True,
                    tables: FixedLoad | None = None) -> IF.Circuit:
@@ -280,5 +274,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Row", "Tables", "WEIGHTS",
-           "WindowClass", "class_circuit", "class_program", "lower", "population_digest", "stop_ids", "takes",
+           "WindowClass", "class_circuit", "class_program", "lower", "stop_ids", "takes",
            "window_circuit"]

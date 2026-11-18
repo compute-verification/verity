@@ -2667,10 +2667,10 @@ def test_each_members_committed_reads_are_its_units_rows_of_the_supplied_values(
     row of the table's supplied value for every unit. A member with no registration reads none."""
     lay = I.layout(EMB)
     ms = (CS.Member(EID, lay.rows, lay.outs, 2, 0, name=f"{EID}/c0"), CS.Member(EID, lay.rows, lay.outs, 1, 2, name=f"{EID}/c1"))
-    got = [{p: (v, rows, refs.tolist()) for p, (v, rows, refs) in g.items()} for g in I.member_reads(ms, embedding().registered)]
+    got = [{p: (v, rows, refs.tolist()) for p, (v, rows, refs) in g.items()} for g in I.member_reads(ms, embedding().registered, ((EID, 0, 3),))]
     assert got == [{p: (f"embed/{of}", [0], [0] * n) for p, of in (("root", "root"), ("domain", "domain"), ("o1", "opened"))}
                    for n in (2, 1)]
-    assert I.member_reads(ms, None) == [{}, {}]
+    assert I.member_reads(ms, None, ((EID, 0, 3),)) == [{}, {}]
 
 
 def listed_embedding(*wired: tuple[str, str, tuple[int, ...]], registered: I.Registered | None = None) -> dict:
