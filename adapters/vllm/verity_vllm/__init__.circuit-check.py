@@ -30,23 +30,6 @@ def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
     return P, Q, lambda: iter_instance_rows(inst)
 
 
-def served_bindings(config: str, cls: str) -> list[Any]:
-    """The served bindings of the model a φ file registers (``config``: `Phi.to_json()`, as a served run states φ) at the window
-    class ``cls`` (``SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]``): the Definition of each proof block of its class circuit, the
-    templates of `window_circuit.lower`'s units (unwired: the units alone), by id."""
-    import json
-    from pathlib import Path
-
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
-    from verity_vllm.program.predict import window_circuit as WC
-    from verity_vllm.program.predict.phi import Phi
-    from verity_vllm.program.predict.steps import Registered
-
-    phi = Phi.from_json(json.loads(Path(config).read_text()))
-    low = WC.lower(Registered.of(phi, DEFAULT_SEED), WC.WindowClass(*(int(x) for x in cls.split(","))), wired=False)
-    return sorted((fn for fn, _ in low.circuit.templates), key=lambda fn: fn.id)
-
-
 def _served_kind_statics() -> dict[str, dict[str, Any]]:
     """The kinds no small table binds (launch tiles and CTA sizes, collective routes, split counts, the DSA and sparse-MLA shapes; DeepSeek-V4's
     mHC, FlashMLA, compressors, routers and Marlin MoE; GLM-5.3's fp8_ds_mla cache rows and FlashMLA decode; the int8 attention row,
