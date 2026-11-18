@@ -12,8 +12,8 @@
 #      (the statements and the host's read of them only)
 # Kept in $OUT/run: what the gate publishes of the rehearsal (`auditor.py publish`: the deployment's public keys,
 # the certificates, the cells' registrations less their wiring and cost, and outcome.json); $OUT/wzk:
-# network_attester_zk's summary and logs and everything the verifier received; never a prover's file (inst-*) nor a
-# circuit (its pin is kept), nor a session's archive.
+# network_attester_zk's summary alone. A member's registrations (the network attester's with its wiring, its own
+# with its units' connection and cells) and the verifier's registered reads open the wiring, so they stay in $W.
 set -uo pipefail
 export HZ_CONFIGS=wzk HZ_MEM_GB=${WZ_MEM_GB:?}
 WZ_CACHE=${WZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -41,6 +41,6 @@ log "wzk: proving, units ${WZ_UNITS:-16}${WZ_DRY:+, dry}"
   --units "${WZ_UNITS:-16}" ${WZ_DRY:+--dry} 2>&1 | tee -a "$OUT/wzk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/wzk"
-(cd "$W/wzk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/wzk/")
+[ -f "$W/wzk/summary.json" ] && cp "$W/wzk/summary.json" "$OUT/wzk/"
 log "wzk: done, rc $rc"
 exit "$rc"
