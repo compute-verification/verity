@@ -7,8 +7,8 @@
 
 The interior is ``--spans`` shared-row members of ``--units`` units each, one table row a unit a port, every port's rows
 ``--words`` u16 words under ``hm96-sha512/row/v2``: an input ``x`` and an output ``y`` a member, and every member's
-``x`` but the first's a wired port with no tree of its own, the output rows of the member before (``Member.wired_trees``
-false), as an interior's window lays its templates out. The members are consecutive chunks of one template's units; a
+``x`` but the first's a wired port, which commits nothing: its rows are the leaves of the template's ``y`` tree the
+member before wrote (``Member.wired``), as an interior's window lays its templates out. The members are consecutive chunks of one template's units; a
 row's words are a function of its member, port and index alone, so both arms commit the same rows.
 
 ``whole`` holds every member's rows as arrays and commits them in one call, as an interior is committed today.
@@ -43,7 +43,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.periods import rows as SR
+from verity.commitments.periods import rows as SR, wiring as WI
 from verity_config.settings import SHARED
 
 RESULT_SCHEMA = "research/result/v0.1"
@@ -89,8 +89,8 @@ def window(spans: int, units: int, words: int) -> SR.Binding:
     tid = descriptor_id(TEMPLATE)
     return SR.Binding(program, query, {}, RUN, tuple(
         SR.Member(tid, (("x", words),), (("y", words),), units, s * units, tables=(("x", units),), name=f"{tid}/c{s}",
-                  schemas=(("x", V2), ("y", V2)), wired_trees=False,
-                  wired=(("x", "y", tuple(range((s - 1) * units, s * units))),) if s else ())
+                  schemas=(("x", V2), ("y", V2)),
+                  wired=(WI.Wired("x", tid, "y", units, ((spans - 1) * units,), 0, (1,)),) if s else ())
         for s in range(spans)))
 
 

@@ -52,13 +52,16 @@ writes and dequantize as these do, so that it inlines this text and keeps no cop
 from __future__ import annotations
 
 import functools
+import re
 
 import torch
 import triton
 import triton.language as tl
 
+from verity_vllm import settings
 from verity_vllm.engine import int8_wgmma
 from verity_vllm.engine.int8_exact import UNIT, ZY_BYTES, zy_units
+from verity_vllm.engine.profiles.devices import card_arch
 from verity_vllm.engine.profiles.int8_gemm_configs import CONFIGS
 from verity_vllm.engine.profiles.int8_quant_plans import PRODUCER_WARPS, QUANT_PLANS
 
@@ -414,7 +417,7 @@ def quant_warps(k: int) -> int:
 def quant_plan(m: int, k: int, sm: str | None = None) -> tuple[int, int]:
     """(num_warps, rows a program) of the row quantizer at [m, k] on `sm` (default: the current device's): QUANT_PLANS'
     first plan for k whose M floor m reaches, else one row a program at `quant_warps`.  The plan never changes a value."""
-    for floor, warps, rows in QUANT_PLANS.get(sm or arch(torch.cuda.current_device()), {}).get(k, ()):
+    for floor, warps, rows in QUANT_PLANS.get(sm or arch(), {}).get(k, ()):
         if m >= floor:
             return warps, rows
     return quant_warps(k), 1
@@ -457,15 +460,15 @@ def default_cfg(m: int, n: int, k: int) -> Cfg:
 
 
 @functools.cache
-def arch(index: int | None = None) -> str:
-    major, minor = torch.cuda.get_device_capability(index)
-    return f"sm_{major}{minor}"
+def arch() -> str:
+    """The tables' key: the arch of the card file `CARD_SKU` names without its a/f suffix (sm_90a -> sm_90)."""
+    return re.sub(r"[af]$", "", card_arch(settings.card_sku()))
 
 
 def pick(m: int, n: int, k: int, sm: str | None = None) -> Cfg:
     """The GEMM config for one call on `sm` (default: the current device's): CONFIGS' first (m_max, cfg) for (n, k)
     with m <= m_max, else vLLM's tiles."""
-    for m_max, text in CONFIGS.get(sm or arch(torch.cuda.current_device()), {}).get((n, k), ()):
+    for m_max, text in CONFIGS.get(sm or arch(), {}).get((n, k), ()):
         if m <= m_max:
             return Cfg.parse(text)
     return default_cfg(m, n, k)
@@ -473,8 +476,8 @@ def pick(m: int, n: int, k: int, sm: str | None = None) -> Cfg:
 
 def pick_wgmma(m: int, n: int, k: int, index: int, zy: bool = False) -> int8_wgmma.WgCfg | None:
     """`int8_wgmma.row` on device `index`, where `int8_wgmma` builds and loads there."""
-    cfg = int8_wgmma.row(m, n, k, arch(index), zy)
-    return cfg if cfg is not None and int8_wgmma.available(index) else None
+    cfg = int8_wgmma.row(m, n, k, arch(), zy)
+    return cfg if cfg is not None and int8_wgmma.available() else None
 
 
 class Workspace:
@@ -493,7 +496,7 @@ def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: in
     assert x.dtype == torch.bfloat16 and x.stride(1) == 1, (x.dtype, x.stride())
     assert xq.dtype == torch.int8 and xq.shape == x.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    warps, r = quant_plan(m, k, arch(x.device.index))
+    warps, r = quant_plan(m, k, arch())
     warps, r = num_warps or warps, rows or r
     return exactlin_quant_rows[(triton.cdiv(m, r),)](x, xq, s, m, k, x.stride(0), xq.stride(0), BLOCK_M=r,
                                                      BLOCK_K=triton.next_power_of_2(k), num_warps=warps, **OPTS)
@@ -520,7 +523,7 @@ def silu_mul_quant(gu: torch.Tensor, h: torch.Tensor, xq: torch.Tensor, s: torch
     assert gu.dtype == h.dtype == torch.bfloat16 and gu.shape == (m, 2 * i) and gu.stride(1) == 1 and h.stride(1) == 1
     assert xq.dtype == torch.int8 and xq.shape == h.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    warps = num_warps or producer_warps("silu", m, i, arch(h.device.index)) or FUSE_FALLBACK["silu"]
+    warps = num_warps or producer_warps("silu", m, i, arch()) or FUSE_FALLBACK["silu"]
     bk = triton.next_power_of_2(i)
     return exactlin_silu_mul_quant[(m,)](gu, h, xq, s, m, i, gu.stride(0), h.stride(0), xq.stride(0), BLOCK_M=1,
                                          BLOCK_K=bk, EVEN=i == bk, num_warps=warps, **OPTS)
@@ -545,7 +548,7 @@ def add_norm_quant(x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor
     assert x.stride(1) == 1 and residual.stride(1) == 1 and weight.is_contiguous()
     assert xq.dtype == torch.int8 and xq.shape == x.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    warps = num_warps or producer_warps("norm", m, h, arch(x.device.index)) or FUSE_FALLBACK["norm"]
+    warps = num_warps or producer_warps("norm", m, h, arch()) or FUSE_FALLBACK["norm"]
     return exactlin_add_norm_quant[(m,)](x, residual, weight, xq, s, h, eps, x.stride(0), residual.stride(0), xq.stride(0),
                                          NT=nt, R=triton.next_power_of_2(triton.cdiv(h, nt)), num_warps=warps, **OPTS)
 
@@ -665,7 +668,7 @@ def _plan(m: int, n: int, k: int, device: torch.device) -> tuple[Cfg, Workspace 
     capture that would make it runs the config unsplit instead (the same values), since a workspace made inside a capture
     would live in the graph's pool."""
     dev = device.index
-    cfg, work = pick(m, n, k, arch(dev)), None
+    cfg, work = pick(m, n, k, arch()), None
     if cfg[5] > 1:
         if dev not in _WORK and not torch.cuda.is_current_stream_capturing():
             _WORK[dev] = Workspace(device)

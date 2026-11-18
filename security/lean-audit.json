@@ -189,46 +189,6 @@
    "digest": "78c6fa47f0dc063e9c9ab51977f4550acf9a218d2181c903eeaf26274823277a",
    "why": "A masked session in scope (`Complete_meets_zk`)."
   },
-  "Spot.Sampling.Adaptive.Play.Drawn": {
-   "owner": "@proofs",
-   "digest": "ef816d57f09f96e5d85fa30756f436a6d89a4e07a85a32199d367a146c74c52d",
-   "why": "The adaptive audit's lemmas take each round's sampled-block bound, the layer below's guarantee."
-  },
-  "Spot.Sampling.Adaptive.Play.SamplingDesigns": {
-   "owner": "@proofs",
-   "digest": "d442a98000fa03cede434ca998ac30723ee7f4d8c5e2e475199fec2c651db86e",
-   "why": "Each round's sampling design meets the design `S`."
-  },
-  "Spot.Sampling.Analysis.BindSound": {
-   "owner": "@proofs",
-   "digest": "c269a653ad6ea5812fad6ed356e4c0166f66b287c808ba6db3f68c414f6b526a",
-   "why": "ε_bind of the layer below, as `KnowledgeSound`."
-  },
-  "Spot.Sampling.Analysis.KnowledgeSound": {
-   "owner": "@proofs",
-   "digest": "ffd6d9c69fa5b115d0ebe345985f2901be0129e84c7648e233667c7985bc6ff3",
-   "why": "ε_ks of the layer below: the audit's lemmas are proved over it, as the modular rule says."
-  },
-  "Spot.Sampling.IsHarmBound": {
-   "owner": "@proofs",
-   "digest": "df09065bded6ca9f1d9100877f05ec8dde44c6624d076a4167921c6607d1809b",
-   "why": "`harm_bound`'s specification, which the lemma is about."
-  },
-  "Spot.Sampling.Partition.AnchorsSound": {
-   "owner": "@proofs",
-   "digest": "52187a14e095d75188d633870e8f0cb668586d677dbacaad258d87c0d3ae445b",
-   "why": "δ_in, the input proof block's term."
-  },
-  "Spot.Sampling.Partition.Separates": {
-   "owner": "@proofs",
-   "digest": "393604a253c16a5bf33cba09422d67348f39084ac2e3d341b18e4d07faf93f7c",
-   "why": "A separator, the subject of the influence lemma."
-  },
-  "Spot.Sampling.SamplingDesign.Design": {
-   "owner": "@proofs",
-   "digest": "bfd5ed4389cc2ed89d432ed544fc77fa31bb4e35fc51ed32eea0ad1dce687584",
-   "why": "A sampling design's design condition, which the lemma is about."
-  },
   "Hash.EmbeddingRead.ok": {
    "owner": "@proofs",
    "digest": "55db410ca03b42f0bcbc44ddb6f42663d04a21375939217812faf046819f1401",
@@ -428,6 +388,46 @@
    "owner": "@training",
    "digest": "67876f46d527e13a979ab8be69884864f9d34b6ffcf6e96875eb89fdff2b9f95",
    "why": "What `val` is: it names the value each word carries, one-to-one on each matmul's w-words and on its x-words."
+  },
+  "Spot.Sampling.Adaptive.Play.Drawn": {
+   "owner": "@proofs",
+   "digest": "ef816d57f09f96e5d85fa30756f436a6d89a4e07a85a32199d367a146c74c52d",
+   "why": "The adaptive audit's lemmas take each round's sampled-block bound, the layer below's guarantee."
+  },
+  "Spot.Sampling.Adaptive.Play.SamplingDesigns": {
+   "owner": "@proofs",
+   "digest": "d442a98000fa03cede434ca998ac30723ee7f4d8c5e2e475199fec2c651db86e",
+   "why": "Each round's sampling design meets the design `S`."
+  },
+  "Spot.Sampling.Analysis.BindSound": {
+   "owner": "@proofs",
+   "digest": "c269a653ad6ea5812fad6ed356e4c0166f66b287c808ba6db3f68c414f6b526a",
+   "why": "ε_bind of the layer below, as `KnowledgeSound`."
+  },
+  "Spot.Sampling.Analysis.KnowledgeSound": {
+   "owner": "@proofs",
+   "digest": "ffd6d9c69fa5b115d0ebe345985f2901be0129e84c7648e233667c7985bc6ff3",
+   "why": "ε_ks of the layer below: the audit's lemmas are proved over it, as the modular rule says."
+  },
+  "Spot.Sampling.IsHarmBound": {
+   "owner": "@proofs",
+   "digest": "df09065bded6ca9f1d9100877f05ec8dde44c6624d076a4167921c6607d1809b",
+   "why": "`harm_bound`'s specification, which the lemma is about."
+  },
+  "Spot.Sampling.Partition.AnchorsSound": {
+   "owner": "@proofs",
+   "digest": "52187a14e095d75188d633870e8f0cb668586d677dbacaad258d87c0d3ae445b",
+   "why": "δ_in, the input proof block's term."
+  },
+  "Spot.Sampling.Partition.Separates": {
+   "owner": "@proofs",
+   "digest": "393604a253c16a5bf33cba09422d67348f39084ac2e3d341b18e4d07faf93f7c",
+   "why": "A separator, the subject of the influence lemma."
+  },
+  "Spot.Sampling.SamplingDesign.Design": {
+   "owner": "@proofs",
+   "digest": "bfd5ed4389cc2ed89d432ed544fc77fa31bb4e35fc51ed32eea0ad1dce687584",
+   "why": "A sampling design's design condition, which the lemma is about."
   },
   "SpotFlock.BuiltWired": {
    "owner": "@proofs",
@@ -28082,33 +28082,6 @@
    "Flock.SecurityProofs.recursiveZK_os_gap": {
     "∀ (a : Ωa) (p : Ωp) (y : Fin nh → FlockSoundness.Discharge.ZkView.Salt) (E : V → Prop), ENNReal.instLE.le (Verity.Game.prCoin fun r => E (view a (fun i => Flock.Guarantees.zkServerLeaf (msgs a p i) (y i)) p y r)) (instHAdd.hAdd (Verity.Game.prCoin fun s => E (sim a (fun i => Flock.Guarantees.zkServerLeaf (msgs a p i) (y i)) s)) εo)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Spot.Sampling.Adaptive.harm_budget": {
-    "∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Spot.Sampling.Adaptive.harm_count_kstar": {
-    "Real.instLE.le (Spot.Sampling.Adaptive.kStar num den p) H": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Spot.Sampling.Adaptive.life_harm_budget": {
-    "∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Spot.Sampling.Partition.audit_exfiltration": {
-    "Finset.instPartialOrder.le D P.committed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (B : Finset (Fin n)), Finset.instPartialOrder.le (K B) P.committed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (B : Finset (Fin n)), instLENat.le (K B).card (B.sum fun u => hb u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instPartialOrder.lt (Verity.SamplingDesign.miss L (instHAdd.hAdd k 1)) δ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Spot.Sampling.audit_executionPhase_split_of_record": {
-    "instLTNat.lt 0 (Spot.Sampling.SamplingDesign.totalWork σ w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin m), instLTNat.lt 0 (w s) → Eq (Spot.Sampling.SamplingDesign.callWork σ call w (call s)) (instHMul.hMul (w s) (Spot.Sampling.SamplingDesign.stratum σ s).card)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLTNat.lt 0 (Spot.Sampling.SamplingDesign.totalWork σ v)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin m), instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (Spot.Sampling.SamplingDesign.stratum σ s).card) (instHMul.hMul (f s) (Spot.Sampling.SamplingDesign.totalWork σ v))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Spot.Sampling.audit_work_floor": {
-    "(Spot.Sampling.SamplingDesign.stratum σ s).Nonempty": "Spot.Sampling.Law.stratum taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Spot.Sampling.audit_work_whole_stratum": {
-    "(Spot.Sampling.SamplingDesign.stratum σ s).Nonempty": "Spot.Sampling.Law.stratum taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "InferenceOnly.SecurityProofs.ExpandComplies": {
     "∀ (g : Fin d.D.N), Eq (d.D.isInput g) Bool.false → instLENat.le 1 (d.D.w g)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Fin d.D.N), instLENat.le (d.D.w g) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -29179,6 +29152,33 @@
     "Real.instLE.le (instHMul.hMul Φ H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), SetLike.instMembership.mem bad b → SetLike.instMembership.mem I (ident b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (j : ι) (t : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (ident b) j) (And (Real.instLE.le t (τ b)) (Real.instLE.le (τ b) (instHAdd.hAdd t Δ)))) bad).sum fun b => w b) (instHMul.hMul Φ Δ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.Adaptive.harm_budget": {
+    "∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.Adaptive.harm_count_kstar": {
+    "Real.instLE.le (Spot.Sampling.Adaptive.kStar num den p) H": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.Adaptive.life_harm_budget": {
+    "∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.Partition.audit_exfiltration": {
+    "Finset.instPartialOrder.le D P.committed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (B : Finset (Fin n)), Finset.instPartialOrder.le (K B) P.committed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (B : Finset (Fin n)), instLENat.le (K B).card (B.sum fun u => hb u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "ENNReal.instPartialOrder.lt (Verity.SamplingDesign.miss L (instHAdd.hAdd k 1)) δ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.audit_executionPhase_split_of_record": {
+    "instLTNat.lt 0 (Spot.Sampling.SamplingDesign.totalWork σ w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Fin m), instLTNat.lt 0 (w s) → Eq (Spot.Sampling.SamplingDesign.callWork σ call w (call s)) (instHMul.hMul (w s) (Spot.Sampling.SamplingDesign.stratum σ s).card)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLTNat.lt 0 (Spot.Sampling.SamplingDesign.totalWork σ v)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Fin m), instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (Spot.Sampling.SamplingDesign.stratum σ s).card) (instHMul.hMul (f s) (Spot.Sampling.SamplingDesign.totalWork σ v))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.audit_work_floor": {
+    "(Spot.Sampling.SamplingDesign.stratum σ s).Nonempty": "Spot.Sampling.Law.stratum taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.audit_work_whole_stratum": {
+    "(Spot.Sampling.SamplingDesign.stratum σ s).Nonempty": "Spot.Sampling.Law.stratum taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.AmpereUnitBf16": {
     "∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)), List.instMembership.mem steps s → And (Eq s.fst.length 16) (And (Eq s.snd.fst.length 16) (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16)) (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -58865,7 +58865,7 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "d40f102326788faf4320a9e8875d2bff39d6e74644b7d430ddccffb5d556d7cb",
+   "digest": "5c7a7e65201f2cf056e17161b315ad66feac990c76e1e5b03f2f8afb39480b43",
    "definitions": {
     "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
     "Spot.OneStageZk.FORMS": "277fb91256a030d6dd998d03a7fb10f0cfdb3771d48d10ea9e599110280caa51",
@@ -58874,7 +58874,8 @@
     "Spot.OneStageZk.Member.sampled": "1bc5a059e781874f7a93e57a79f39431cb655deb772f6c195eeb9519dfe55a5b",
     "Spot.OneStageZk.Rows": "346303bcda7c2af8f18827f704196cdefce9655258cba0145120008fbec87b99",
     "Spot.OneStageZk.WIRES_SAMPLED": "a47085dcaae888fb8fc139e0addd902c996618980bbad8920589099e8c4ced5f",
-    "Spot.OneStageZk.WIRES_TEMPLATE": "d5a3ead6f4592bbc37465092ca0fcf3e24dc2159f1cde216439bb2d78333a3cb",
+    "Spot.OneStageZk.WIRES_TEMPLATE": "162bda20b87509e5a8f1912d55109b98e703b5a2b7bec982ce7c7706203f7958",
+    "Spot.OneStageZk.byFirst": "97957c106ae3350911c3320ffbd08c059564d788eb10ce41449ad3a4d928d655",
     "Spot.OneStageZk.checkBlobs": "ff544fbc735b16c2b1c1045c9d788bba61521521ba21d54995e6537e40588e90",
     "Spot.OneStageZk.checkBlobsAt": "0580739ebc357459d8da351ee6a63099cd8ed19aa8959ae777d81e8e13843850",
     "Spot.OneStageZk.checkMembersAt": "3cee0809ca8182bf6f9e0cae58aff8bdd6bc0c6a4dadb986aa293e34338378e2",
@@ -58884,6 +58885,8 @@
     "Spot.OneStageZk.classTwo": "cb9cce8f01cfbc699e1c82e8f47c64e05009271f397de991ce0e0290ac1a3268",
     "Spot.OneStageZk.evidenceBytes": "ee22e17150755c25c7db5daa18c38317350755b1577ac10bdf8eb52f89edca2a",
     "Spot.OneStageZk.laidHeld": "62fee0acf3a5a492387a44adf427ef87c0cf94e9ad0468c226f74cf3f8c22754",
+    "Spot.OneStageZk.lastAtMost": "9d6f8a57634fce078d6f52dfb7a5461a2a9b042b8ed73dfc3971e98c9be6bf6e",
+    "Spot.OneStageZk.lastAtMost.go": "e22c621b7a9183821b452f759e68948213eb042a5184db2e4db1fde5b3ebbb42",
     "Spot.OneStageZk.memberAt": "5ac8bf82e61d4342d8d5347d06ef18afa6d0fdd05e688ee71187c9c5496eaa2a",
     "Spot.OneStageZk.membersRootsOf": "270afa76bb28e4e9a01cccf277bf44790fa56c26617d8958a687a3ea65fd6c30",
     "Spot.OneStageZk.membersRun": "d11f7faa4ff724903a7ac1ed83a6241980fbc83b9a2416d2cf0c7f92c424010c",
@@ -58894,13 +58897,16 @@
     "Spot.OneStageZk.runMembers": "4a93c94704665fa61c5fb80388dacccb8e31912074d42b8b5c62e186f18e9c7c",
     "Spot.OneStageZk.sampledHeld": "7e4b11ec177cad651a62ee4032b11327eff4dde29bd08e143478b7d9bdeee0ea",
     "Spot.OneStageZk.sessionEvidence": "b7c784997338fbfe811fb30bbe5e4717a87f8bb9704cac295ccccb5c09ac110f",
+    "Spot.OneStageZk.spanUnit": "1e90f8ec63e86e70f6db5e4927924269014588dbc645ae254f15302db507063e",
+    "Spot.OneStageZk.spansOf": "6d734d46d0fb74473a406d3206385f3f56bbd04d243241a192c26a89627028cc",
     "Spot.OneStageZk.statementAt": "e569643c828f2a85cabb02918dfbc3c2cac9f1dd861f7872a40db6a2a20f6a45",
     "Spot.OneStageZk.stepMember": "608e8bfd59a145d82a09efdf39d95d03dc071160e50ca520bbb0721df6e0a32a",
+    "Spot.OneStageZk.templateUnit": "ae9a7f5b1cf7f70efdfd3f93a771d1212b72e2f49048e8dce7dee99b1a826a6f",
     "Spot.OneStageZk.unsampled": "cc0881394b3c73372586e80cdf08a76f305c0794ede0c65155eb9fcc002b76df",
-    "Spot.OneStageZk.wiredRoot": "08717354d184f52c771afc8c1a1465be9a95a95f24b864c3e4b61ae5d652307c",
-    "Spot.OneStageZk.wiredRoots": "c79fa245819a41a4646e6989b97c8033cb797148e4c9e832c49b16c8e560fa91",
+    "Spot.OneStageZk.wiredRoot": "970f4106c20e56cbd4817c969544b28ead26ee90a8d6528d381b7e29fdeaaa6c",
+    "Spot.OneStageZk.wiredRoots": "e1ecb3c3723f4b5c4308c6bf3feb539f3a774b3f48d3f81fa045a120ec1e2bd4",
     "Spot.OneStageZk.wiresHeld": "06fbb993cf59b20768b411cc1b4af9265f0f2e7eeba5db479e63714f7cd43598",
-    "Spot.OneStageZk.wiresOn": "cc9b2ba62ea74e2c2a3192d0c726d9bb018d03591033529815382c326b7d423b"
+    "Spot.OneStageZk.wiresOn": "22dbdce2aca9384c55bb3f7a12c5cb0a7e89e6a04354bfa0f179dc75fcc0114c"
    }
   },
   "Spot.OneStageZkStatement": {
