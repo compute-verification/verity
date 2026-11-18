@@ -58,7 +58,7 @@ def run(monkeypatch):
 def test_the_weights_are_committed_before_the_salt_released_and_restored_from_c_star(run):
     s, ex, plain = run
     _, commitment = ws.commit(P2, plain)
-    assert s.commits["commitment"] == commitment.hex()
+    assert s.record()["commitment"] == commitment.hex() and s.summary()["weights"] == 2
     released = ex.filed(H.ReleaseValue)
     assert [r.value for r in released] == ["a.weight", "b.weight"]                  # the scale is no linear weight
     for r in released:

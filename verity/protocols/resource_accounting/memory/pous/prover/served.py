@@ -13,8 +13,9 @@ weight store (`weight_store`), and the adapter's hooks emit the events and answe
   from ``C*`` into a fresh buffer and hands it inward, so the blocks inside it read what PoUS stores. It is filed after
   PoUW's (an executor's), so it runs outside it.
 
-`attach` raises until a served engine hands its linear layers' calls to the exchange (`WAITS_ON`): without that, the
-release would empty weights no kernel decodes.
+Its report (`record`, `summary`) is what the composition record reads of it. `attach` raises until a served engine
+hands its linear layers' calls to the exchange (`WAITS_ON`): without that, the release would empty weights no kernel
+decodes.
 """
 from __future__ import annotations
 
@@ -144,6 +145,13 @@ class Served:
         if name not in self.shapes:
             return original(None)
         return original({"weight": self.decoded(name)})
+
+    def record(self) -> Mapping[str, Any]:
+        """What PoUS committed to (`verity.hooks.Reports`): the scheme, ``W``'s commitment, the salt, ``C*``'s root."""
+        return dict(self.commits)
+
+    def summary(self) -> Mapping[str, Any]:
+        return {"answered": self.answered, "weights": len(self.shapes)}
 
     def answer(self, index: int) -> bytes:
         """The prover's reply to challenge ``index``: block ``index`` of ``C*``."""
