@@ -1163,19 +1163,19 @@ MARKED = {NEW: "marker", OLD: "old-marker"}
     ({OLDER: [("top", "hold", "T1", "x"), ("rev", "land", "T2")]}, "no land verdict", "lane-1", True,
      (OLDER, f"held by top (x) at {OLDER[:12]}", False)),
     ({OLD: [("rev", "land", "T2"), ("rev", "hold", "T1", "x")]}, "no land verdict", "lane-1", True, (OLD, "only merges", True)),
-    ({OLD: [("rev", "land", "T1")]}, "no land verdict", "ci", True, (OLD, "@ci is among its owners, so its verdict wouldn't count",
-                                                                     False)),
+    ({OLD: [("rev", "land", "T1")]}, "no land verdict", "ci", True, (OLD, "only merges", True)),
+    ({OLD: [("@ci", "land", "T1")]}, "no land verdict", "ci", True, None),
     ({OLDER: [("rev", "land", "T1")], OLD: [("rev2", "land", "T2")]}, "no land verdict", "lane-1", True,
      (OLD, "only merges", True)),
 ], ids=["carries", "no-carry", "owners-only", "held-here", "newer-hold", "owners-hold", "tie-hold", "standing-hold",
-        "standing-hold-older", "reviewers-newest", "ci-owned", "newest-land"])
+        "standing-hold-older", "reviewers-newest", "ci-owned", "ci-owned-own-land", "newest-land"])
 def test_the_verdict_carry_takes_the_newest_land_at_an_older_head_but_for_a_hold_or_an_owners_own(world, labels, why, owner,
                                                                                                  carries, got):
     """`Landing._carried_from`: of each reviewer's newest verdict at each older head, a hold by anyone or a land by none of the
     PR's owners nor the head's ready mark's author (without case or a leading `@`), the newest decides, a hold over a land of
     the same time.  A hold at the new head (``why``) or a newer one at an older head keeps it, as a hold standing at the land's
-    own head does; `CI` among its owners carries nothing; else the land carries when `delta` says so, of the new head over the
-    land's, trusting the landed tips and the trusted heads."""
+    own head does; else the land carries when `delta` says so, of the new head over the land's, trusting the landed tips and
+    the trusted heads, a PR `CI` owns as any lane's (its own land counting no more than any owner's)."""
     from research.carry import Delta
     from research.store.model import Label
 

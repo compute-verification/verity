@@ -47,8 +47,9 @@ NODE_JOB = "benchmarks/harness/overhead_node.sh"
 DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
                 "run": {"--card", "--scheme", "--points", "--points-art", "--point", "--cubin", "--cubin-art",
                         "--keep-reports"}}
-#: the one variable a run of the door sets with `--env` (`launch_argv`): any other could change what the node job runs
-DOOR_ENV = frozenset({"VERITY_BENCH_VENV"})
+#: the variables a run of the door sets with `--env` (`launch_argv`): its interpreter, and whether it is a trial; any other
+#: could change what the node job runs
+DOOR_ENV = frozenset({"VERITY_BENCH_VENV", kit.TRIAL})
 #: what `research run` records in every job's `params.env` (`research.result.ONEDNN_ISA`), admitted at that value alone
 RUN_DEFAULT_ENV = {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
 #: the run's bound, which its GPU lease enforces too: the sweep's and a timed run's
@@ -77,6 +78,7 @@ def launch_argv(root: Path, node: str, minutes: float, job: Sequence[str], sends
     checkout."""
 
     env = [f"VERITY_BENCH_VENV={v}"] if (v := settings.VERITY_BENCH_VENV) else []
+    env += [f"{kit.TRIAL}=1"] if kit.is_trial() else []
     return ["research", "run", "--on", node, "--project", "verity", "--campaign", "overhead",
             "--source", str(root), "--cwd", "source", "--timeout", f"{minutes:g}m", "--require-result",
             *[x for f in sends for x in ("--send", str(f))], *[x for e in env for x in ("--env", e)],
@@ -172,6 +174,17 @@ def _json(store: Any, files: str, path: str) -> dict:
     return json.loads((Path(store.fetch(files, paths=[path])) / path).read_text())
 
 
+def trial_why(store: Any, attempt: Mapping, files: str, run: str) -> str | None:
+    """Why `run` is never of record as a trial: its result says ``trial`` or its attempt set `kit.TRIAL`; or why its
+    result can't tell."""
+
+    try:
+        result = _json(store, files, kit.RESULT)
+    except Exception as ex:  # noqa: BLE001 - the store's NotFound, named in the why
+        return f"{run}'s {kit.RESULT} can't be read ({type(ex).__name__}: {ex}), so not whether it is a trial"
+    return kit.trial_why(run, attempt, result)
+
+
 def _superseded(store: Any, target: str) -> list[str]:
     return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
 
@@ -195,7 +208,7 @@ def of_record(store: Any, run: str) -> tuple[dict | None, list[str]]:
         doc = _json(store, files, "out/overhead.json")
     except (OSError, ValueError, KeyError) as ex:
         return None, [f"{run} has no readable out/overhead.json ({type(ex).__name__}: {ex})"]
-    whys = []
+    whys = [why] if (why := trial_why(store, attempt, files, run)) else []
     if doc.get("schema") != O.RUN_SCHEMA:
         whys.append(f"{run}'s overhead.json is {doc.get('schema')!r}, not {O.RUN_SCHEMA}")
     if RUN_RECORD not in [lab.value for lab in store.labels(run, key=RUN_OF_RECORD)]:
@@ -266,8 +279,8 @@ def store_points(store: Any, run: str, by: str = BY) -> str:
     record; the version it replaces is labelled `superseded_by` it."""
 
     attempt, files = run_files(store, run, "points")
-    if attempt is None:
-        raise ValueError(files)
+    if attempt is None or (why := trial_why(store, attempt, files, run)):
+        raise ValueError(files if attempt is None else why)
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(store.fetch(files, paths=["out/points.json"])) / "out" / "points.json"
         doc = json.loads(path.read_text())

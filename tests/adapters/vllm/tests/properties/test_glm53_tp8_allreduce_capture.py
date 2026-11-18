@@ -980,19 +980,19 @@ def test_each_captured_route_is_the_dispatchs_at_its_setting() -> None:
 
 
 def test_vllms_defaults_are_covered_through_the_captured_range() -> None:
-    """The GO capture covers every GLM-5.3 call at vLLM's defaults through 2048 tokens, and DeepSeek-V4-Pro's standalone
-    all-reduces there through 2048. It covers neither width past that range, DeepSeek-V4-Pro at another setting, nor NCCL;
-    a setting `SETTINGS` does not name is refused."""
+    """The GO captures cover every GLM-5.3 call at vLLM's defaults through 8192 tokens (symmetric memory to 5461, NCCL past
+    it), and DeepSeek-V4-Pro's standalone all-reduces there through 2048. They cover neither width past that range,
+    DeepSeek-V4-Pro at another setting, nor NCCL at another setting; a setting `SETTINGS` does not name is refused."""
     routes = ("fused", "fi_ar_comm", "ca_comm", "symm_mem_comm", "pynccl_comm")
-    for M in (1, 9, 10, 11, 36, 37, 42, 43, 256, 682, 683, 2048, 5461, 5462):
-        for n in (X.HIDDEN, X.DSV4_HIDDEN):
+    for M in (1, 9, 10, 11, 36, 37, 42, 43, 256, 682, 683, 2048, 2049, 5461, 5462, 8192, 8193):
+        for n, last in ((X.HIDDEN, 8192), (X.DSV4_HIDDEN, 2048)):
             expected = X.expected_comm(M, "defaults", n)
-            assert (T.covered("defaults", n, expected, M) is not None) == (M <= 2048)
+            assert (T.covered("defaults", n, expected, M) is not None) == (M <= last), (n, M)
             assert all(T.covered("defaults", n, r, M) is None for r in routes if r != expected and r != "fused")
         assert (T.covered("defaults", X.HIDDEN, "fused", M) is not None) == (M <= X.FUSED_MAX)
         assert T.covered("defaults", X.DSV4_HIDDEN, "fused", M) is None
         assert all(T.covered(s, X.DSV4_HIDDEN, r, M) is None for s in ("custom-off", "switch") for r in routes)
-        assert all(T.covered(s, X.HIDDEN, "pynccl_comm", M) is None for s in T.SETTINGS)
+        assert all(T.covered(s, X.HIDDEN, "pynccl_comm", M) is None for s in ("custom-off", "switch"))
     with pytest.raises(ValueError, match="setting 'served'"):
         T.covered("served", X.HIDDEN, "fi_ar_comm", 1)
 
@@ -1024,6 +1024,8 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
 
 H200 = ("9.0", 132)
 NODE_TREE = "(((((((0,2),3),1),5),6),4),7)"
+#: the record of the register run that read `GLM53_H200_TREE`'s node past 2048 tokens
+NODE_RUN = "art:2d3224f6655934a9cccbb3db37485a4c618ba7c2cd64d2457d57d9e0ce643521"
 
 
 def _tree_strs(trees) -> set[str]:
@@ -1033,8 +1035,9 @@ def _tree_strs(trees) -> set[str]:
 def test_the_node_records_are_the_two_h200_nodes() -> None:
     """`NODE_RECORDS` holds two H200 nodes.  The first read `NODE_TREE` on every owner, FTZ off, and NCCL's all-reduces past symmetric
     memory as NVLS in one f32 sum on that tree, so it covers symmetric memory to 5461 tokens and NCCL from 5462 to 8192 at vLLM's
-    defaults, both at that tree (offset-free).  The second is `CAPTURE_RUNS`' node, `GLM53_H200_TREE` on every owner and no NCCL
-    logged, its routes at the runs `CAPTURE_RUNS` names, and `UNSTATED_NODE`."""
+    defaults, both at that tree (offset-free).  The second is `CAPTURE_RUNS`' node, `GLM53_H200_TREE` on every owner, and
+    `UNSTATED_NODE`: its routes to 2048 tokens rest on the runs `CAPTURE_RUNS` names, and `NODE_RUN`'s register run on a node of
+    that tree carries its symmetric memory at vLLM's defaults to 5461 and NCCL's NVLS f32 sum on that tree from 5462 to 8192."""
     new, old = TN.NODE_RECORDS
     assert _tree_strs(new["multimem"]["trees"]) == {NODE_TREE} and _tree_strs(old["multimem"]["trees"]) == {X.tree_str(T.GLM53_H200_TREE)}
     assert TN.node_key(new)[0] == TN.node_key(old)[0] == H200 and new["multimem"]["ftz"] is old["multimem"]["ftz"] is False
@@ -1043,10 +1046,14 @@ def test_the_node_records_are_the_two_h200_nodes() -> None:
     assert new["nccl"]["fit"] == "f32" and [(s["M"], s["algo"], s["proto"], s["channels"], len(s["runs"])) for s in new["nccl"]["sizes"]] == [
         (5462, "NVLS", "SIMPLE", "0..15", 1), (8192, "NVLS", "SIMPLE", "0..15", 1)]
     assert X.tree_str(TN.nvls_tree(new["nccl"], X.WORLD)) == NODE_TREE and new["versions"]["nccl"] == "2.29.7+cuda12.9"
-    assert old["nccl"] is None and tuple(s["run_record"] for s in old["source"]) == T.CAPTURE_RUNS
+    assert tuple(s["run_record"] for s in old["source"]) == (*T.CAPTURE_RUNS, NODE_RUN)
+    assert old["nccl"]["fit"] == "f32" and [(s["M"], s["algo"], s["proto"], s["channels"], len(s["runs"])) for s in old["nccl"]["sizes"]] == [
+        (5462, "NVLS", "SIMPLE", "0..15", 1), (8192, "NVLS", "SIMPLE", "0..15", 1)]
+    assert TN.multimem_tree(TN.nvls_tree(old["nccl"], X.WORLD), X.WORLD) == TN.multimem_tree(T.GLM53_H200_TREE, X.WORLD)
     assert [(r["setting"], r["N"], r["route"], r["lo"], r["hi"], tuple(r["run_records"])) for r in old["routes"]] == [
-        ("custom-off", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[:2]), ("defaults", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[2:]),
-        ("defaults", 7168, "symm_mem_comm", 37, 2048, T.CAPTURE_RUNS[2:])]
+        ("custom-off", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[:2]),
+        ("defaults", 6144, "symm_mem_comm", 43, 5461, (*T.CAPTURE_RUNS[2:], NODE_RUN)),
+        ("defaults", 7168, "symm_mem_comm", 37, 2048, T.CAPTURE_RUNS[2:]), ("defaults", 6144, "pynccl_comm", 5462, 8192, (NODE_RUN,))]
     assert (TN.node_key(old)[0], *TN.node_key(old)[2:]) == T.UNSTATED_NODE
     nvls = T.covered("defaults", 6144, "pynccl_comm", 5462, device=H200, trees=new["multimem"]["trees"], ftz=False)
     assert nvls.statics == {"TREES": TN.node_key(new)[2], "FTZ": False} and T.offset_free(nvls, X.WORLD)
@@ -1054,8 +1061,8 @@ def test_the_node_records_are_the_two_h200_nodes() -> None:
 
 def test_covered_takes_the_stated_node_tree() -> None:
     """At the first node's stated tree, symmetric memory covers 43..5461 tokens at vLLM's defaults and NCCL 5462..8192, each at that
-    tree.  At `CAPTURE_RUNS`' tree, or with none stated (`UNSTATED_NODE`), symmetric memory covers up to 2048 at its own tree and
-    NCCL nothing.  Half a statement (TREES or FTZ alone), another tree, FTZ on, a tree not one per owner, or another device
+    tree.  At `CAPTURE_RUNS`' tree, or with none stated (`UNSTATED_NODE`), symmetric memory covers 43..5461 and NCCL 5462..8192,
+    each at its own tree.  Half a statement (TREES or FTZ alone), another tree, FTZ on, a tree not one per owner, or another device
     covers neither."""
     new_t, old_t = TN.NODE_RECORDS[0]["multimem"]["trees"], [T.GLM53_H200_TREE] * X.WORLD
 
@@ -1069,8 +1076,9 @@ def test_covered_takes_the_stated_node_tree() -> None:
     assert at("pynccl_comm", 8193, trees=new_t, ftz=False) is None
     stated: dict[str, Any]
     for stated in ({"trees": old_t, "ftz": False}, {}):
-        assert at("symm_mem_comm", 2048, **stated).statics["TREES"] == TN.multimem_trees(old_t, X.WORLD)
-        assert at("symm_mem_comm", 2049, **stated) is None and at("pynccl_comm", 5462, **stated) is None
+        for route, M in (("symm_mem_comm", 2049), ("symm_mem_comm", 5461), ("pynccl_comm", 5462), ("pynccl_comm", 8192)):
+            assert at(route, M, **stated).statics["TREES"] == TN.multimem_trees(old_t, X.WORLD), (route, M)
+        assert at("symm_mem_comm", 5462, **stated) is None and at("pynccl_comm", 8193, **stated) is None
     for stated in ({"trees": new_t}, {"ftz": False}, {"trees": new_t, "ftz": True}, {"trees": [BALANCED] * X.WORLD, "ftz": False},
                    {"trees": new_t[:7], "ftz": False}):
         assert at("symm_mem_comm", 256, **stated) is None, stated

@@ -260,6 +260,21 @@ def proved(defs: dict[str, dict]) -> None:
                 d["bounded_by"] = top["proved_as"]
 
 
+def staged(c: dict, stages: list[dict]) -> dict:
+    """The census ``c`` with each Definition a `served_units/stage.py` statement staged (its stage.json's ``census``, the name
+    here verbatim) carrying that statement's ANDs as ``staged_ands``, and the totals' ``staged_ands`` the proof blocks' ANDs
+    with them in the estimates' place."""
+    defs = c["definitions"]
+    for s in stages:
+        if s.get("census") in defs:
+            defs[s["census"]]["staged_ands"] = s["ands"]
+    for p in PHASES:
+        c["totals"][p]["staged_ands"] = sum(d[p] * d.get("staged_ands", d["ands"]) for d in defs.values())
+        c["per_token"][p]["staged_ands"] = c["totals"][p]["staged_ands"] / c["tokens"][p]
+    c["per_request"]["staged_ands"] = sum(c["totals"][p]["staged_ands"] for p in PHASES)
+    return c
+
+
 def _by_family(rows: dict[str, dict]) -> list[tuple[str, list[dict]]]:
     """``rows`` grouped by family (a primitive's bracketed constant dropped), the most rows first."""
     out: dict[str, list[dict]] = defaultdict(list)
@@ -293,7 +308,8 @@ def table(c: dict) -> str:
             ("ands", "proof blocks' ANDs (estimate)"), ("open_ands", "ANDs opening their rows"),
             ("row_bytes", "opened row bytes"), ("circuit_ands", "the circuit's ANDs (rows unsplit)"),
             ("circuit_macs", "served MACs"), ("rows", "Program rows"), ("rows gap", "rows in a gap"),
-            ("gap_ands", "their ANDs"))
+            ("gap_ands", "their ANDs"), *((("staged_ands", "proof blocks' ANDs (staged where staged)"),)
+                                          if "staged_ands" in c["per_request"] else ()))
     out = [f"Ranks {c['ranks'][0]}-{c['ranks'][-1]}, one request: a prefill step of {t['prefill']} prompt tokens and "
            f"{t['decode']} decode steps.", "",
            "| quantity | prefill token | decode token | request |", "| --- | ---: | ---: | ---: |"]
@@ -304,7 +320,9 @@ def table(c: dict) -> str:
     for s, d in c["definitions"].items():
         of = ", ".join(f"{k} ({v})" for k, v in sorted(d["of"].items()))
         out.append(f"| `{s}` | {of} | {_n(d['prefill'] / t['prefill'])} | {_n(d['decode'] / t['decode'])} | {d['out_bits']:,} | "
-                   f"{d['class_bits']:,} | {d['in_bits']:,} | {d['ands']:,} | {d['macs']:,} | {d['row_bytes']:,} | 2^{d['k_log']} |")
+                   f"{d['class_bits']:,} | {d['in_bits']:,} | {d['ands']:,}"
+                   + (f" (staged {d['staged_ands']:,})" if "staged_ands" in d else "")
+                   + f" | {d['macs']:,} | {d['row_bytes']:,} | 2^{d['k_log']} |")
     out += ["", "Gaps: rows no cut fits, by family (each Definition in `census.json`).", "",
             "| row family | Definitions | prefill rows | decode rows | their ANDs | why (its most rows' Definition) |",
             "| --- | ---: | ---: | ---: | ---: | --- |"]
@@ -335,8 +353,12 @@ def main() -> int:
     ap.add_argument("--sized", nargs="+", required=True, help="each rank's `m1_families.py --estimate` output")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--request", default=None, metavar="RID", help="this request's census alone (a row of several request shapes)")
+    ap.add_argument("--staged", nargs="+", default=[], metavar="STAGE_JSON",
+                    help="`served_units/stage.py` stage.json files: each staged Definition's ANDs beside its estimate")
     a = ap.parse_args()
     c = census([json.loads(Path(p).read_text()) for p in a.sized], a.request)
+    if a.staged:
+        c = staged(c, [json.loads(Path(p).read_text()) for p in a.staged])
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "census.json").write_text(json.dumps(c, indent=1, default=str) + "\n")
     (a.out / "table.md").write_text(table(c))
