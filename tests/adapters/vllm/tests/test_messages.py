@@ -375,7 +375,7 @@ def test_a_scheme_that_reads_its_pin_gets_the_settings_and_refuses_by_name_witho
 def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
     monkeypatch.setattr(schemes, "PROCESSES", {"id-front": lambda request, ids: ("relay", request(), ids())})
     ex = M.Exchange()
-    ex.request("network", H.StartBeside("id-front", ("server-request", "stream-token-ids")))
+    ex.start_beside("network", "id-front", ("server-request", "stream-token-ids"))
     with pytest.raises(Refused, match=r"network: starts id-front beside the workload with readers \['server-request', "
                                       r"'stream-token-ids'\] no launcher here offers"):
         ex.answer(H.Declared("", {}))
@@ -384,7 +384,7 @@ def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkey
     ((process, start),) = ex.beside()
     assert process == "id-front" and start() == ("relay", "req", [1, 2])
     other = M.Exchange()
-    other.request("network", H.StartBeside("tap"))
+    other.start_beside("network", "tap")
     with pytest.raises(Refused, match="starts tap beside the workload, which no scheme registered"):
         other.answer(H.Declared("", {}))
 
@@ -394,6 +394,8 @@ def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_firs
     ex.answer(H.Declared("", {}))
     with pytest.raises(Refused, match="pouw: files RequireProperty after the build was answered"):
         ex.request("pouw", H.RequireProperty("eager", True, "its kernels"))
+    with pytest.raises(Refused, match="network: starts id-relay beside the workload after the build was answered"):
+        ex.start_beside("network", "id-relay")
     ex.compute_with("pouw", lambda due, original: original(None))
     ex.step = 0
     with pytest.raises(Refused, match=r"pouw: files a kernel after serving began \(step 0\)"):

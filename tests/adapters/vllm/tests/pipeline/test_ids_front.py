@@ -450,9 +450,8 @@ def test_the_command_is_registered_with_the_scans_payload_as_its_default():
 
 
 def test_the_launcher_starts_each_process_a_named_scheme_files_with_this_servers_readers(monkeypatch, capsys):
-    """A stand-in registry: scheme ``stand-in`` files a `StartBeside` of its registered process with both readers; the
+    """A stand-in registry: scheme ``stand-in`` starts its registered process beside the server with both readers; the
     launcher calls it with the server's own readers and its options, and refuses a name the registry lacks."""
-    from verity import hooks as H
     from verity.protocols.resource_accounting import scheme as schemes
     from verity_vllm import messages
 
@@ -467,7 +466,7 @@ def test_the_launcher_starts_each_process_a_named_scheme_files_with_this_servers
         return run
 
     stand_in = SimpleNamespace(name="stand-in", settings={}, check_settings=lambda s: None, requests=lambda ctx: (),
-                               attach=lambda ex, ctx: ex.request("stand-in", H.StartBeside("relay", tuple(F.READERS))))
+                               attach=lambda ex, ctx: ex.start_beside("stand-in", "relay", tuple(F.READERS)))
     monkeypatch.setitem(schemes.SCHEMES, "stand-in", stand_in)
     monkeypatch.setitem(schemes.PROCESSES, "relay", process)
     try:
@@ -490,8 +489,9 @@ def test_the_launcher_starts_the_network_attesters_id_relay_from_the_one_table()
 
     ex = messages.Exchange()
     (name, start), = F.launch(ex, [network.NETWORK_ATTESTER.name])
-    assert name == network.START_ID_RELAY.process and ex.requests == [(network.NETWORK_ATTESTER.name, network.START_ID_RELAY)]
-    assert network.START_ID_RELAY.readers == id_relay.READERS and callable(start())
+    assert name == network.ID_RELAY and not ex.requests
+    assert ex.besides == [(network.NETWORK_ATTESTER.name, network.ID_RELAY, id_relay.READERS)]
+    assert callable(start())
 
 
 def test_a_broken_stream_is_the_hooks_broken():

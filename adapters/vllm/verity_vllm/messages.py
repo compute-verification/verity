@@ -66,6 +66,8 @@ class Exchange:
         self.kernels: list[tuple[str, H.Kernel]] = []
         #: the routes schemes answer on the workload's server (`serve`): path -> (scheme, route)
         self.routes: dict[str, tuple[str, H.Route]] = {}
+        #: the processes schemes start beside the workload (`start_beside`): (scheme, process, readers)
+        self.besides: list[tuple[str, str, tuple[str, ...]]] = []
         self.declared: H.Declared | None = None
         self.fixed = False
         self._step: int | None = None
@@ -177,7 +179,7 @@ class Exchange:
             if self.refuse is not None:
                 self.refuse(request.input, request.why)
             return
-        if self.declared is not None and isinstance(request, (H.RequireProperty, H.StartBeside)):
+        if self.declared is not None and isinstance(request, H.RequireProperty):
             raise Refused(name, f"files {kind} after the build was answered; file it before the engine is built")
         if self._step is not None:
             raise Refused(name, f"files {kind} after serving began (step {self._step}); file it before the first step")
@@ -200,6 +202,15 @@ class Exchange:
                           "step")
         self.routes[path] = (name, route)
 
+    def start_beside(self, name: str, process: str, readers: tuple[str, ...] = ()) -> None:
+        """Scheme ``name`` starts the process it registered as ``process``
+        (`verity.protocols.resource_accounting.scheme.register_process`) beside the workload, called with the
+        workload's readers it names by what they do, in that order; filed before the engine is built."""
+        if self.declared is not None:
+            raise Refused(name, f"starts {process} beside the workload after the build was answered; file it before the "
+                          "engine is built")
+        self.besides.append((name, process, tuple(readers)))
+
     def _filed[R](self, kind: type[R]) -> list[tuple[str, R]]:
         return [(n, r) for n, r in self.requests if isinstance(r, kind)]
 
@@ -212,12 +223,12 @@ class Exchange:
         why: dict[str, list[str]] = {}
         for name, r in H.unmet(self.requests, declared.properties):
             why.setdefault(name, []).append(f"requires {r.property} = {r.value!r}: {r.why}")
-        for name, r in self.requests:
-            if isinstance(r, H.StartBeside) and (r.process not in schemes.PROCESSES or set(r.readers) - set(self.readers)):
-                missing = sorted(set(r.readers) - set(self.readers))
+        for name, process, readers in self.besides:
+            if process not in schemes.PROCESSES or set(readers) - set(self.readers):
+                missing = sorted(set(readers) - set(self.readers))
                 why.setdefault(name, []).append(
-                    f"starts {r.process} beside the workload, which no scheme registered" if r.process not in schemes.PROCESSES
-                    else f"starts {r.process} beside the workload with readers {missing} no launcher here offers")
+                    f"starts {process} beside the workload, which no scheme registered" if process not in schemes.PROCESSES
+                    else f"starts {process} beside the workload with readers {missing} no launcher here offers")
         if why:
             name, reasons = next(iter(why.items()))
             raise Refused(name, "; ".join(reasons))
@@ -304,9 +315,9 @@ class Exchange:
         """The processes schemes asked to start beside the workload, each by its name and bound to the readers it
         named, for the launcher to call before serving."""
         out = []
-        for _, r in self._filed(H.StartBeside):
-            start, readers = schemes.PROCESSES[r.process], [self.readers[k] for k in r.readers]
-            out.append((r.process, (lambda f, a: lambda: f(*a))(start, readers)))
+        for _, process, names in self.besides:
+            start, readers = schemes.PROCESSES[process], [self.readers[k] for k in names]
+            out.append((process, (lambda f, a: lambda: f(*a))(start, readers)))
         return out
 
 

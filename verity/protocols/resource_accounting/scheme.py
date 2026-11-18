@@ -41,7 +41,8 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   `verity.hooks.FRONT`), returning what the adapter reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`, or a report: any of
   ``summary()``, the run's totals, ``record()``, what it ran with, ``release()``, called once when the workload stops,
   and ``commitment()``, what it committed to, read after ``release``), and
-  ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`), and
+  ``processes``, what it starts beside the workload by name (its attach's ``exchange.start_beside``, entered in
+  `PROCESSES`), and
   ``messages``, the message types its workload writes and reads on disk (`verity.channel.Schema`s), which an adapter's
   codec reads by the scheme's name, and ``framings``, the completion framings it serves by name, each built over the
   adapter's own framing (``framing(base=..., **settings)``), and ``provides``, the roles an adapter asks a scheme for
@@ -634,7 +635,7 @@ def register(scheme: Scheme) -> Scheme:
     return scheme
 
 
-#: the processes schemes start beside a workload, by name (`verity.hooks.StartBeside`): each called with the readers
+#: the processes schemes start beside a workload, by name (``exchange.start_beside``): each called with the readers
 #: its request names
 PROCESSES: dict[str, Callable[..., Any]] = {}
 

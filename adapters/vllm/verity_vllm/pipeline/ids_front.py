@@ -4,7 +4,7 @@
         [--log FILE]
 
 Each scheme ``--protocols`` names (`verity.protocols.compose.schemes.get`) is attached to this process's
-exchange, where it files the processes it starts beside the workload (`verity.hooks.StartBeside`), each bound to the
+exchange, where it files the processes it starts beside the workload (``Exchange.start_beside``), each bound to the
 readers it names by what they do (`READERS`): ``server-request``, an input's copy for the server (`server_request`, a
 ``POST /v1/completions`` of its fields with ``return_token_ids``, under the release headers it came with), and
 ``stream-token-ids``, the reader of the server's streamed chunks (`token_ids`, through ``data: [DONE]``, `Broken` where
@@ -25,7 +25,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity import hooks as H
 from verity.hooks import Broken
 from verity.protocols.compose import schemes
 
@@ -109,7 +108,7 @@ async def token_ids(reader: asyncio.StreamReader) -> AsyncGenerator[list[int], N
     raise Broken("the server's stream ended before [DONE]")
 
 
-#: the workload's readers a scheme's process names by what they do (`verity.hooks.StartBeside`)
+#: the workload's readers a scheme's process names by what they do (``Exchange.start_beside``)
 READERS = {"server-request": server_request, "stream-token-ids": token_ids}
 
 
@@ -138,7 +137,7 @@ def launch(exchange: messages.Exchange, names: list[str]) -> list[tuple[str, Any
     started = exchange.beside()
     if not started:
         raise UsageError(f"--protocols {','.join(names) or '(none)'}: no scheme starts a process beside the server "
-                         f"({H.StartBeside.__name__})")
+                         "(Exchange.start_beside)")
     return started
 
 
