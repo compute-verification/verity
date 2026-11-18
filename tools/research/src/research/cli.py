@@ -374,6 +374,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "(research/pipefail.py)")
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
+    if not ns.claimed and remote.flag_value(harness_opts, "--lane") is None and (lane := launching_lane(ns.lane)):
+        harness_opts = [*harness_opts, "--lane", lane]
     from . import launcher
 
     if why := launcher.refusal(ns.source):
@@ -441,6 +443,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         _auto_size(ns, harness_opts, command)
         return _auto_launch(ns, harness_opts, command, clones)
     return _run_placed(ns, harness_opts, command, clones)
+
+
+def launching_lane(as_lane: str | None) -> str | None:
+    """The lane a run's job.json records when its launch gives no `--lane`, and so the owner of its retention record: the
+    launcher's $TELEMETRY_LANE, else `--as` (default $RESEARCH_LANE), as a handle without its @; None when neither names one."""
+    from . import settings
+
+    lane = (settings.get("TELEMETRY_LANE") or as_lane or "").strip().lstrip("@")
+    return lane or None
 
 
 def _named_asks(ns: argparse.Namespace, command: list[str]) -> dict | None:
