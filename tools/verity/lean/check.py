@@ -5807,41 +5807,87 @@ _GRAPHS: dict[tuple[str, str], str | None] = {}
 _GRAPHS_LOCK = threading.Lock()
 
 
-def replay_digest(m: str, parts: list[Path], digest, og, mk) -> str:
-    """What module ``m``'s replay key reads of its `.olean` files ``parts``: each part's ``digest``, or, when its
-    `olean.server` holds its source's path (a message's file, which Lean writes as the absolute path it compiled), the
-    parts' object graph with that path left out (``og``: `olean_graph.canonical`, under `graph:`; ``mk``: `module_keys`,
-    for the path), which the module compiled in another tree shares."""
-    plain = ",".join(digest(p) for p in parts)
+#: one pool of graph walks at a time in this process, so a package whose closure another's walks already covered reads
+#: them from `_GRAPHS` rather than walking them again beside it
+_WALK_LOCK = threading.Lock()
+#: the share of the cores the graph walks take (`walk_graphs`): the sampled recompile runs beside the replay on the rest
+WALK_CORE_SHARE = 0.5
+
+
+def walk_job(m: str, parts: list[Path], plain: str, mk) -> tuple[str, dict[str, Path]] | None:
+    """(source path, {part: file}) when module ``m``'s replay key reads the object graph of its `.olean` files ``parts``
+    (whose digests are ``plain``) and `_GRAPHS` lacks it: its `olean.server` holds its source's path (a message's file,
+    which Lean writes as the absolute path it compiled; ``mk``: `module_keys`, for the path). Else None, and a module whose
+    server part names no source is recorded so in `_GRAPHS`."""
     server = next((p for p in parts if p.name.endswith(".olean.server")), None)
-    if server is None:
-        return plain
     with _GRAPHS_LOCK:
-        known = (m, plain) in _GRAPHS
-        graph = _GRAPHS.get((m, plain))
-    if not known:
-        source = mk.path_of(m, ".lean").as_posix()
-        graph = None
-        if f"/{source}".encode() in server.read_bytes():
-            graph = og.canonical({"olean" + p.name.rpartition(".olean")[2]: p for p in parts}, source)
-        with _GRAPHS_LOCK:
-            _GRAPHS[(m, plain)] = graph
-    return f"graph:{graph}" if graph else plain
+        if server is None or (m, plain) in _GRAPHS:
+            return None
+    source = mk.path_of(m, ".lean").as_posix()
+    if f"/{source}".encode() in server.read_bytes():
+        return source, {"olean" + p.name.rpartition(".olean")[2]: p for p in parts}
+    with _GRAPHS_LOCK:
+        _GRAPHS[(m, plain)] = None
+    return None
 
 
-def replay_keys(facts: dict, toolchain: str, digest=None) -> dict[str, str]:
+def walk_graphs(jobs: dict[tuple[str, str], tuple[str, dict[str, Path]]], walked: dict | None = None
+                ) -> dict[tuple[str, str], str | None]:
+    """`olean_graph.canonical` of each job ({(module, its parts' digests): `walk_job`'s answer}), in `WALK_CORE_SHARE` of
+    `cores` (this process's affinity, bounded by its cgroup's quota) processes, each running `olean_graph.py --canonical`
+    on its share: the walk is pure Python, which threads would run under one interpreter lock. RuntimeError, with the
+    process's last words, where one exits other than 0 or answers other than once per job: no key is computed another
+    way. ``walked`` adds the modules, the processes and the walks' own seconds, summed over the processes."""
+    items = sorted(jobs.items())
+    n = max(1, min(len(items), int(cores() * WALK_CORE_SHARE)))
+    chunks = [items[i::n] for i in range(n)]
+
+    def walk(chunk) -> dict:
+        doc = [[source, {p: str(f) for p, f in files.items()}] for _, (source, files) in chunk]
+        r = subprocess.run([sys.executable, str(HERE / "olean_graph.py"), "--canonical"], input=json.dumps(doc),
+                           capture_output=True, text=True)
+        if r.returncode:
+            raise RuntimeError(f"replay keys: olean_graph.py --canonical exited {r.returncode} on {len(chunk)} module(s), "
+                               f"{chunk[0][0][0]} first:\n{r.stderr[-2000:]}")
+        got = json.loads(r.stdout)
+        if len(got["graphs"]) != len(chunk):
+            raise RuntimeError(f"replay keys: olean_graph.py --canonical answered {len(got['graphs'])} of "
+                               f"{len(chunk)} module(s), {chunk[0][0][0]} first")
+        return got
+
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        done = list(ex.map(walk, chunks))
+    if walked is not None:
+        walked["modules"] = walked.get("modules", 0) + len(items)
+        walked["processes"] = max(walked.get("processes", 0), n)
+        walked["seconds"] = round(walked.get("seconds", 0) + sum(d["seconds"] for d in done), 1)
+    return {k: g for chunk, d in zip(chunks, done) for (k, _), g in zip(chunk, d["graphs"])}
+
+
+def replay_keys(facts: dict, toolchain: str, digest=None, walked: dict | None = None) -> dict[str, str]:
     """{module: key} for every module of the import closure (``facts``' `graph`): what its kernel replay's verdict is a
-    function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files (every part, `replay_digest`), and
-    the name and key of each module it imports, so it covers the `.olean` files of everything it imports, transitively, each
-    under its module's name, never a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the
-    package is built, and so does one whose parts differ only in where its source was. ``digest`` hashes a file in place of
-    `sha256` (`Pipeline.digest` for a batch's private copies, `Sealed.digest` for a seal's copies, which `Replay.lean` reads
-    in step)."""
-    graph, digest, og, mk = facts["graph"], digest or sha256, sibling("olean_graph"), sibling("module_keys")
+    function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files, and the name and key of each module
+    it imports, so it covers the `.olean` files of everything it imports, transitively, each under its module's name, never
+    a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the package is built, and so does
+    one whose parts differ only in where its source was. A module's files count as each part's ``digest`` (in place of
+    `sha256`: `Pipeline.digest` for a batch's private copies, `Sealed.digest` for a seal's copies, which `Replay.lean` reads
+    in step), or, where its server part holds its source's path (`walk_job`), as the parts' object graph with that path left
+    out (`olean_graph.canonical`, under `graph:`; `walk_graphs`, whose counts go to ``walked``), which the module compiled
+    in another tree shares."""
+    graph, digest, mk = facts["graph"], digest or sha256, sibling("module_keys")
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
     with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
-        digests = dict(zip(files, ex.map(lambda m: replay_digest(m, files[m], digest, og, mk), files)))
+        plain = dict(zip(files, ex.map(lambda m: ",".join(digest(p) for p in files[m]), files)))
+        jobs = {(m, plain[m]): j for m, j in zip(files, ex.map(lambda m: walk_job(m, files[m], plain[m], mk), files)) if j}
+    with _WALK_LOCK:
+        with _GRAPHS_LOCK:
+            jobs = {k: j for k, j in jobs.items() if k not in _GRAPHS}
+        found = walk_graphs(jobs, walked) if jobs else {}
+        with _GRAPHS_LOCK:
+            _GRAPHS.update(found)
+            graphs = {m: _GRAPHS.get((m, plain[m])) for m in files}
+    digests = {m: f"graph:{graphs[m]}" if graphs[m] else plain[m] for m in files}
     head = f"{REPLAY_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Replay.lean')}\0"
     keys: dict[str, str] = {}
     for root in graph:
@@ -5968,8 +6014,10 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     took, at = {}, [time.monotonic()]
     def lap(part):
         took[part], at[0] = round(time.monotonic() - at[0], 1), time.monotonic()
-    keys = replay_keys(facts, toolchain, digest) if replay_cache is not None else {}
+    walked: dict = {}
+    keys = replay_keys(facts, toolchain, digest, walked) if replay_cache is not None else {}
     lap("keys")
+    took["keys-walks"] = walked.get("seconds", 0)
     def passed(m):
         return m in keys and has_replay(replay_cache, keys[m])
     n = replay_threads(pkg)
@@ -6009,7 +6057,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
                 store_replay(replay_cache, keys[m], m)
         lap("store")
     stats = {"checked": len(checked), "reused": len(reused), "peak_gib": round(_peak.bytes / 2**30, 1),
-             "phases": doc.get("seconds", {}), "evicted": evicted, "seconds": took}
+             "phases": doc.get("seconds", {}), "evicted": evicted, "seconds": took, "walked": walked}
     if closure:
         stats["closure"] = {"modules": len(facts["graph"]) - len(facts["modules"]), "checked": len(deps_checked),
                             "reused": len(facts["graph"]) - len(facts["modules"]) - len(deps_checked),
@@ -6123,7 +6171,8 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
     if replay_cache is None or not store:
         replay_cache, store, kept = set(), True, "this run's memory: it has no replay cache it may write"
     s = time.monotonic()
-    keys = replay_keys(facts, toolchain, digest)
+    walked: dict = {}
+    keys = replay_keys(facts, toolchain, digest, walked)
     first_keys = round(time.monotonic() - s, 1)
     def passed(m):
         return has_replay(replay_cache, keys[m])
@@ -6141,7 +6190,8 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
                       "failures": [f.split("\n")[0][:300] for f in fails if f.code != "replay.axioms"]})
     fails, stats = last()
     stored = sum(s["stored"] for s in steps)
-    took = stats.get("seconds", {}) | {"first-keys": first_keys, "first": round(sum(s["seconds"] for s in steps), 1)}
+    took = stats.get("seconds", {}) | {"first-keys": first_keys, "first-keys-walks": walked.get("seconds", 0),
+                                       "first": round(sum(s["seconds"] for s in steps), 1)}
     return fails, stats | {"checked": stats["checked"] + stored, "reused": stats["reused"] - stored, "first": steps,
                            "seconds": took,
                            "first_kept": kept, "peak_gib": max([stats["peak_gib"], *(s["peak_gib"] for s in steps)])}
