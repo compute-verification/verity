@@ -177,6 +177,7 @@ BANDWIDTH = S.register(S.Scheme(
     needs=frozenset({"receipts"}),
     depends=("pous",),
     pieces={"prover": S.Launch(optional=("host", "command"), development="host")},
+    reads={P2.CLOSER_PARTY: {"challenger": ("pous", "memory-challenger")}},
     answers="verity.protocols.resource_accounting.memory.poub.prover.p2_stage.bandwidth:ANSWERS",
     unchecked=P2.mc.UNCHECKED,
     record="bandwidth",

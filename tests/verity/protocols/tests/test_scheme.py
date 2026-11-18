@@ -443,3 +443,17 @@ def test_a_pieces_party_is_a_declared_developer_party_and_its_development_one_of
                          "start may leave out is among what it writes, not \\['host'\\]")):
         with pytest.raises(ValueError, match=why):
             _toy(parties=parties, pieces=pieces)
+
+
+def test_a_partys_start_reads_runs_only_of_its_depends_and_a_scheme_that_says_none_refuses_by_name() -> None:
+    from verity.protocol import Role
+    parties = (Role("prover", "developer"), Role("verifier", "auditor"))
+    ok = _toy(parties=parties, depends=("other",), reads={"verifier": {"key": ("other", "attester")}})
+    assert dict(ok.reads["verifier"]) == {"key": ("other", "attester")}
+    for reads, why in (({"oracle": {}}, "by its parties \\['prover', 'verifier'\\], not 'oracle'"),
+                       ({"verifier": {"key": ("third", "attester")}}, "reads runs of \\['third'\\], which are not among "
+                                                                       "its depends \\['other'\\]")):
+        with pytest.raises(ValueError, match=why):
+            _toy(parties=parties, depends=("other",), reads=reads)
+    with pytest.raises(LookupError, match="declares no reads"):
+        S.declared(_toy(parties=parties), "reads")

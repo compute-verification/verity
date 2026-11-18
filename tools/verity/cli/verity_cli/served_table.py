@@ -319,15 +319,13 @@ class Session:
     """A protocol whose parties the table starts through the runtime (module docstring): its `ProtocolDef`'s halves,
     each a ``module:attribute`` (`_protocol_def`), whose manifests are one; each configuration party's role in it
     (``roles``); for each role that reads a clock, the read and the name its header gives (``clocks``); the
-    configuration party that listens (``listener``, the auditor's), whose run is beside the served window. ``reads`` gives a configuration party's start, beside its bindings, the state
-    directory of another party's run on the same machine: binding name -> (component, party). ``starts`` are a role's
-    starts the table makes, over its halves': a start handed what its protocol's code may not load."""
+    configuration party that listens (``listener``, the auditor's), whose run is beside the served window. ``starts``
+    are a role's starts the table makes, over its halves': a start handed what its protocol's code may not load."""
 
     halves: tuple[str, ...]
     roles: Mapping[str, str]
     clocks: Mapping[str, tuple[Callable[[], int], str]]
     listener: str
-    reads: Mapping[str, Mapping[str, tuple[str, str]]] = field(default_factory=dict)
     starts: Mapping[str, Starter] = field(default_factory=dict)
 
     def protocol(self) -> ProtocolDef:
@@ -632,12 +630,11 @@ POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.chall
                MEMORY_ATTESTER)
 #: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
 #: the verifier's monotonic clock; the verifier reads the memory attester's PoUS key from that party's run beside it
-#: on the auditor's device (``challenger``)
+#: on the auditor's device, as the bandwidth audit declares (`Scheme.reads`)
 POUB = Session(("verity.protocols.resource_accounting.memory.poub.verifier.p2_parties:PROTOCOLS",
                 "verity.protocols.resource_accounting.memory.poub.prover.p2_party_prover:PROTOCOL"),
                {BANDWIDTH_VERIFIER: P2.VERIFIER, PROVER: P2.PROVER}, {P2.VERIFIER: (time.monotonic_ns, MONOTONIC)},
-               BANDWIDTH_VERIFIER, reads={BANDWIDTH_VERIFIER: {"challenger": ("pous", MEMORY_ATTESTER)}},
-               starts=P2.starts())
+               BANDWIDTH_VERIFIER, starts=P2.starts())
 
 
 #: what the network attester's front asks of serve-openai: its id-form requests answered in the id form, an id event the
@@ -875,7 +872,8 @@ def request_bound(protocol: ProtocolDef, params: Mapping[str, Any]) -> None:
 def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], piece: Piece) -> Callable[[], Any]:
     """``piece``'s party run through the runtime (`verity.runtime.runner.run`), ready to start: its `ProtocolDef`, its
     protocol's start (`ProtocolDef.starts`: its request and capabilities, from the configuration, the piece's bindings and
-    its state directory ``state/runs/<component>/<party>``), the two sides' request bound (`request_bound`), what this
+    its state directory ``state/runs/<component>/<party>``, beside the runs its scheme declares it reads,
+    `Scheme.reads`), the two sides' request bound (`request_bound`), what this
     machine hands it (`held`), its clock, and the listener's address, which it listens at or dials. Refused ``no-piece`` while a half of its protocol isn't in this
     tree; a party its protocol declares no start for raises `NOT_YET`."""
     s = piece.session
@@ -887,7 +885,8 @@ def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], pi
         raise NotImplementedError(NOT_YET)
     here = state / "runs" / piece.component / piece.party
     bound = {**piece._bindings(bindings),
-             **{k: str(state / "runs" / c / p) for k, (c, p) in s.reads.get(piece.party, {}).items()}}
+             **{k: str(state / "runs" / c / p)
+                for k, (c, p) in declared(schemes.get(piece.component), "reads").get(piece.party, {}).items()}}
     begun = protocol.starts[role.name](cfg, bound, here)
     request_bound(protocol, begun.params)
     h = held(piece, role)

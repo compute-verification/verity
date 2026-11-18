@@ -323,7 +323,9 @@ class Scheme:
     cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
     against the committed root once at build; ``copy_beside_storage_ruled`` (`BESIDE_STORAGE`), the sentence that rules
     that copy beside storage, empty or a `Lacks` where none has. ``pieces``, by developer-side party, what the served runner launches for
-    it (`Launch`), a `Lacks` where it launches nothing. ``answers``, the entry (``module:attribute``) of the functions
+    it (`Launch`), a `Lacks` where it launches nothing. ``reads``, by party, what that party's start reads beside its
+    bindings: each binding's name to (scheme, party), the state directory of that party's run of a scheme among
+    ``depends`` on the same machine; empty where none reads any. ``answers``, the entry (``module:attribute``) of the functions
     that answer its kept session in a process with no exchange (`Answers`, read through `answering`). ``tie``, the
     parameters an application that ties its workload to this scheme states over its settings' defaults. ``unchecked``,
     what of its run no auditor-side entry checks yet, by name, each with its sentence, which its row's stated source
@@ -381,6 +383,7 @@ class Scheme:
     keeps_weight_copy: bool | Lacks = UNDECLARED
     copy_beside_storage_ruled: str | Lacks = UNDECLARED
     pieces: Mapping[str, Launch] | Lacks = UNDECLARED
+    reads: Mapping[str, Mapping[str, tuple[str, str]]] | Lacks = UNDECLARED
     answers: str | Lacks = UNDECLARED
     unchecked: Mapping[str, str] = field(default_factory=dict)
 
@@ -439,6 +442,18 @@ class Scheme:
                     raise ValueError(f"{self.name}: what {party}'s start may leave out is among what it writes, "
                                      f"not {extra}")
             object.__setattr__(self, "pieces", MappingProxyType(dict(self.pieces)))
+        if not isinstance(self.reads, Lacks):
+            named = set() if isinstance(self.parties, Lacks) else {r.name for r in self.parties}
+            beside = () if isinstance(self.depends, Lacks) else self.depends
+            for party, read in self.reads.items():
+                if party not in named:
+                    raise ValueError(f"{self.name}: what its parties' starts read is by its parties {sorted(named)}, "
+                                     f"not {party!r}")
+                if stray := sorted({s for s, _ in read.values()} - set(beside)):
+                    raise ValueError(f"{self.name}: {party}'s start reads runs of {stray}, which are not among its "
+                                     f"depends {list(beside)}")
+            object.__setattr__(self, "reads", MappingProxyType({p: MappingProxyType(dict(r))
+                                                               for p, r in self.reads.items()}))
         if not isinstance(self.answers, Lacks) and not _ENTRY.fullmatch(self.answers):
             raise ValueError(f"{self.name}: answers is an entry, module:attribute, not {self.answers!r}")
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))

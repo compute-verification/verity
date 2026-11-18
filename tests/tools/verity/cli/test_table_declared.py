@@ -48,6 +48,14 @@ def test_a_tied_application_states_each_listed_schemes_declared_tie(monkeypatch)
     assert T.MANIFESTS["sampled-proofs"].id not in got
 
 
+def test_each_declared_read_is_a_run_of_a_party_its_scheme_declares():
+    reads = {(n, p, k): run for n, c in T.MANIFESTS.items() if n not in T.UNDECLARED
+             and not isinstance(said := T.schemes.get(n).reads, T.Lacks) for p, r in said.items() for k, run in r.items()}
+    assert reads == {("bandwidth", T.BANDWIDTH_VERIFIER, "challenger"): ("pous", T.MEMORY_ATTESTER)}
+    for scheme, party in reads.values():
+        assert party in {r.name for r in T.MANIFESTS[scheme].parties}
+
+
 def test_the_declared_components_are_the_schemes_whose_record_names_a_row():
     rowed = {n for n in T.schemes.DECLARATIONS if not isinstance(T.schemes.get(n).record, T.Lacks)}
     assert set(T.MANIFESTS) == rowed | set(T.UNDECLARED)

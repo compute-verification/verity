@@ -132,6 +132,7 @@ POUS = register(Scheme(
     needs=frozenset({"store"}),
     depends=(),
     pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
+    reads={},
     answers=Lacks("its kept session is answered by the PoUS piece's own code, not yet by functions of this package"),
     unchecked=MA.UNCHECKED,
     record="space",
