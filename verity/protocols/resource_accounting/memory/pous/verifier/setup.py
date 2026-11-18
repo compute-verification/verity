@@ -8,11 +8,10 @@
      `vk` from the labels it decoded (`verifier_key_from_encoding`).  It never runs the encoder and never holds `W`;
    - **private encoder** (`verifier_key`): it encodes `W` itself and builds `vk` from its own encoding.
 
-On a served run setup is checked by the developer, not the auditor (`challenger_session.SETUP`): the tie (`period.tie`,
-and `PousCheck.RunProtocol.tie` with `SetupProtocol.check`) decodes the case's `C*` and holds `vk.root` to the root the
-run published, in the prover's piece on the developer's node, both sides from the prover's case, and no auditor-side
-entry compares that root with anything.  The signed run takes setup's acceptance as the open premise
-`period.SETUP_ACCEPTED`.
+On a served run setup is checked by the developer, not the auditor (`challenger_session.SETUP`): the developer's tie on
+the prover's case (`period.tie`, and `PousCheck.RunProtocol.tie` with `SetupProtocol.check`, in the prover's piece on the
+developer's node) decodes the case's `C*` and holds `vk.root` to the root the run published, and no auditor-side entry
+compares that root with anything.  The signed run takes setup's acceptance as the open premise `period.SETUP_ACCEPTED`.
 
 The encoder is deterministic and public given `W`, the salt and the primitives, so the server running it changes nothing
 in the timed game; a server-chosen or predictable salt would break the model's "`W` before coins" order.  Everything
