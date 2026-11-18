@@ -53,6 +53,16 @@ struct BlockClk {
     rec[blockIdx.x].role[1] = (r1);                    \
   }
 #define CLK_END(rec) CLK_END_ROLES(rec, 0, 0)
+// The block's cycles and SM only; its roles are left as they were (setup zeroes them, and main times the lane ops
+// before any k_spec writes one).
+#define CLK_END_CYC(rec)                               \
+  __syncthreads();                                     \
+  if (threadIdx.x == 0) {                              \
+    rec[blockIdx.x].cyc = clock64() - _t0;             \
+    int s_;                                            \
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(s_));    \
+    rec[blockIdx.x].smid = s_;                         \
+  }
 
 struct Timing {
   double ms = 0, cyc_med = 0, cyc_min = 0, cyc_max = 0, mhz = 0, role_med[2] = {0, 0};
@@ -626,7 +636,9 @@ __device__ __forceinline__ uint32_t fold_acc(typename F::Acc (*d)[4]) {
 }
 
 // A lane op alone at 8 warps a SMSP (ISSUE's saturation geometry): tensor_kinds.py gates on LANE_MIX issuing at ~1
-// a SMSP-cycle, so the mixed points sit on the issue facet rather than on a pipe's own rate.
+// a SMSP-cycle, so the mixed points sit on the issue facet rather than on a pipe's own rate. It ends with CLK_END_CYC:
+// CLK_END's role stores make sm_120a's ptxas schedule the LANE_MIX loop as runs of up to four IADD3 or FFMA, which
+// issue below one a SMSP-cycle; without them the loop alternates as the source does (tensor_kinds.py checks the order).
 template <int X>
 __global__ void __launch_bounds__(1024) k_opalone(int iters, uint32_t* sink, BlockClk* rec) {
   Lane r;
@@ -637,7 +649,7 @@ __global__ void __launch_bounds__(1024) k_opalone(int iters, uint32_t* sink, Blo
 #pragma unroll
     for (int q = 0; q < 64; q++) lane_op<X>(r, q);
   }
-  CLK_END(rec)
+  CLK_END_CYC(rec)
   sink[blockIdx.x * blockDim.x + threadIdx.x] = threadIdx.x + consume(r);
 }
 
@@ -832,6 +844,7 @@ static void setup() {
   CK(cudaDeviceGetAttribute(&g_sms, cudaDevAttrMultiProcessorCount, d));
   CK(cudaMalloc(&g_sink, (size_t)g_sms * 1024 * 4));
   CK(cudaMalloc(&g_rec, (size_t)g_sms * sizeof(BlockClk)));
+  CK(cudaMemset(g_rec, 0, (size_t)g_sms * sizeof(BlockClk)));
 }
 
 #ifndef TENSOR_KINDS_NO_MAIN

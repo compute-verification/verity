@@ -13,7 +13,6 @@ from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Tuple, Value
-from verity_vllm.definitions.registry import prims
 
 from verity_vllm.acquire import plan as PL
 from verity_vllm.correspondence.reader_for_acquire import (
@@ -21,6 +20,7 @@ from verity_vllm.correspondence.reader_for_acquire import (
     runtime_tree_from_paths,
 )
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.definitions.registry import prims
 from verity_vllm.query import program_view as pv
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView

@@ -33,15 +33,16 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
+from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.commitments import row_table as RT
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.commitments.rowleaf import bit_row
 from verity.commitments.periods import interface as WI
-from verity.circuits.ops.boolean import gemm as BG
-from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
-from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
+from verity.commitments.rowleaf import bit_row
+
 from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 from verity_vllm.definitions.registry import boolean_moe as BMOE
 from verity_vllm.definitions.registry import fp8_moe as FM
