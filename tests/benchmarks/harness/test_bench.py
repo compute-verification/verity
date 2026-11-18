@@ -209,7 +209,7 @@ def test_the_launcher_runs_the_point_in_the_venv_the_launch_gives_and_refuses_wi
     python.write_text('#!/bin/sh\necho "$PYTHONPATH"\necho "$@"\n')
     python.chmod(0o755)
     missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
-    assert missing.returncode == 2 and "no Python at VERITY_BENCH_VENV (unset)" in missing.stderr
+    assert missing.returncode == 2 and "no Python at VERITY_BENCH_VENV, else VIRTUAL_ENV (both unset)" in missing.stderr
     nope = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root,
                           env={**env, "VERITY_BENCH_VENV": str(tmp_path / "nope")}, capture_output=True, text=True)
     assert nope.returncode == 2 and f"{tmp_path}/nope" in nope.stderr
