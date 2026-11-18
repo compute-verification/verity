@@ -112,11 +112,10 @@ def spend_epoch(private: str | os.PathLike[str]) -> int:
     directory, before it is returned: a killed server's number is never handed out again, so no later server opens a
     session on a root already used (the gate's one session a root); a number may be skipped."""
     path = Path(private) / EPOCH_FILE
-    try:
-        text = path.read_text()
-    except FileNotFoundError:
+    if not path.exists():
         k = 0
     else:
+        text = path.read_text()
         if not re.fullmatch(r"(0|[1-9][0-9]*)\n", text) or int(text) >= 2**64 - 1:
             raise ValueError(f"pearl-plus: {path} holds {text[:40]!r}, not the last salt epoch number spent below 2^64 - 1: "
                              "refused rather than risk a number already used")
