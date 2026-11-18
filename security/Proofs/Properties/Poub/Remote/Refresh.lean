@@ -14,6 +14,11 @@ public import Proofs.Properties.Poub.Remote.Released
 below `N` a recorded pass of window `t` reads has `t < lifetime`; `receive` adds a pass only past `refreshRefusal`,
 whose `lifetime` arm refuses a plan of window `t ≥ lifetime` with a run starting below `N` (`cap_check`), and a block a
 plan reads lies in one of its runs (`block_mem`).
+
+`ProbationKept` the same way, over the invariant `Prob`: every append holding a block a recorded pass of window `t`
+reads is `Kept` at `t`. A new pass is past `refreshRefusal`'s `probation` arm (`prob_check`), which reads each append's
+birth: defined, since every append's slot is in the schedule and so is a re-key's origin slot, which `State.slotOk`
+finds an append holding (`Slots`). An append comes after every block a recorded pass reads (`InvOn.reads`).
 -/
 
 @[expose] public section
@@ -70,26 +75,27 @@ theorem opensOrigin : OpensOrigin := by
 
 /-! ## `RegisteredCapped` -/
 
-/-- Every block below `N` a recorded pass of window `t` reads has `t < L`. -/
-def CapOn (N L : Nat) (ws : Array Win) : Prop :=
-  ∀ t (ht : t < ws.size) i (hi : i < ws[t].plans.size) p, p < ws[t].plans[i].length →
-    ws[t].plans[i].block p < N → t < L
+/-- `Q t b` of every block `b` a recorded pass of window `t` reads. -/
+def PlansOn (Q : Nat → Nat → Prop) (ws : Array Win) : Prop :=
+  ∀ t (ht : t < ws.size) i (hi : i < ws[t].plans.size) p, p < ws[t].plans[i].length → Q t (ws[t].plans[i].block p)
 
-def Cap (s : State) : Prop := s.params.refresh = true → CapOn s.reg.blocks s.params.lifetime s.windows
+/-- With refresh, every block below `N` a recorded pass of window `t` reads has `t < L`. -/
+def Cap (s : State) : Prop :=
+  s.params.refresh = true → PlansOn (fun t b => b < s.reg.blocks → t < s.params.lifetime) s.windows
 
 theorem cap_init (params : Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat) :
     Cap (State.init params reg coins appendCoins notBeforeNs) :=
   fun _ t ht => by simp [State.init] at ht
 
-theorem capOn_same {N L ws} {ws' : Array Win} (h : CapOn N L ws) (hs : SamePlans ws ws') : CapOn N L ws' := by
+theorem plansOn_same {Q ws} {ws' : Array Win} (h : PlansOn Q ws) (hs : SamePlans ws ws') : PlansOn Q ws' := by
   obtain ⟨hsz, hw⟩ := hs
   have e : ∀ t (h' : t < ws'.size), ws'[t].plans = ws[t].plans := fun t h' => hw t (by omega) h'
-  intro t ht i hi p hp hN
+  intro t ht i hi p hp
   have hi' : i < ws[t].plans.size := by rw [← e t ht]; exact hi
-  simp only [e t ht] at hp hN
-  exact h t (by omega) i hi' p hp hN
+  simp only [e t ht] at hp ⊢
+  exact h t (by omega) i hi' p hp
 
-theorem capOn_push {N L ws} (h : CapOn N L ws) (w : Win) (hp : w.plans = #[]) : CapOn N L (ws.push w) := by
+theorem plansOn_push {Q ws} (h : PlansOn Q ws) (w : Win) (hp : w.plans = #[]) : PlansOn Q (ws.push w) := by
   intro t ht i hi
   by_cases hl : t < ws.size
   · have k : (ws.push w)[t] = ws[t] := by simp [Array.getElem_push, hl]
@@ -98,10 +104,10 @@ theorem capOn_push {N L ws} (h : CapOn N L ws) (w : Win) (hp : w.plans = #[]) : 
   · have g : (ws.push w)[t] = w := by simp [Array.getElem_push, hl]
     simp only [g, hp] at hi; simp at hi
 
-theorem capOn_add {N L ws filling} {below now : Nat} {pr : Array Nat → Array Nat} (h : CapOn N L ws)
+theorem plansOn_add {Q ws filling} {below now : Nat} {pr : Array Nat → Array Nat} (h : PlansOn Q ws)
     (root : ByteArray) (plan : Plan) (post : Nat) (st : Int) (head : Option ByteArray)
-    (hav : ∀ p, p < plan.length → plan.block p < N → filling < L) :
-    CapOn N L (ws.modify filling (addPass root plan post st head below now pr)) := by
+    (hav : ∀ p, p < plan.length → Q filling (plan.block p)) :
+    PlansOn Q (ws.modify filling (addPass root plan post st head below now pr)) := by
   have get : ∀ t (ht : t < (ws.modify filling (addPass root plan post st head below now pr)).size),
       (ws.modify filling (addPass root plan post st head below now pr))[t] =
         if filling = t then addPass root plan post st head below now pr (ws[t]'(by simpa using ht)) else ws[t]'(by simpa using ht) :=
@@ -121,7 +127,7 @@ theorem capOn_add {N L ws filling} {below now : Nat} {pr : Array Nat → Array N
 
 theorem cap_same {s : State} (h : Cap s) {ws' : Array Win} (hs : SamePlans s.windows ws') :
     Cap { s with windows := ws' } :=
-  fun hr => capOn_same (h hr) hs
+  fun hr => plansOn_same (h hr) hs
 
 theorem cap_fail {s : State} (h : Cap s) (t : Nat) (f : Failure) (at? : Option (Nat × Nat)) :
     Cap (s.fail t f at?).2 := by
@@ -148,7 +154,7 @@ theorem cap_accept {s : State} (h : Cap s) (u : Nat) :
   cap_same h (samePlans_modify _ _ _ fun _ => rfl)
 
 theorem cap_releaseCoin {s : State} (h : Cap s) (t now : Nat) : Cap (s.releaseCoin t now) :=
-  fun hr => capOn_push (h hr) _ rfl
+  fun hr => plansOn_push (h hr) _ rfl
 
 /-- A plan `receive` lets past `refreshRefusal` in window `t`, with refresh, reads a block below `N` only if
 `t < lifetime`. -/
@@ -271,7 +277,7 @@ theorem cap_receive {s : State} {t i : Int} {root : ByteArray} {runs : Option (A
       all_goals first
         | exact cap_fail h₂ _ _ _
         | exact cap_fail h₃ _ _ _
-        | exact fun hr => capOn_add (h₃ hr) _ _ _ _ _
+        | exact fun hr => plansOn_add (h₃ hr) _ _ _ _ _
             (cap_check (s := s₃) (hW _ (by first | exact hq | exact hq.trans ‹_›)) ‹_› hr)
     split at hj
     · split at hj
@@ -302,5 +308,313 @@ theorem registeredCapped : RegisteredCapped := by
   intro t ht i hi p hpl hN
   have := hc (by rw [hp]; exact hr) t ht i hi p hpl (by rw [hreg]; exact hN)
   rwa [hp] at this
+
+/-! ## `ProbationKept` -/
+
+/-- Append `x`'s payload is seasoned at window `t`: registered, or born (by `sw`, the window of its fresh slot) at a
+window `b` with `b + L ≤ t`. -/
+def Kept (sw : Nat → Option Nat) (L t : Nat) (x : Append) : Prop :=
+  match x.origin with
+  | .registered _ => True
+  | .fresh => ∃ b, sw x.slot = some b ∧ b + L ≤ t
+  | .rekey k => ∃ b, sw k = some b ∧ b + L ≤ t
+
+/-- Every append holding a block a recorded pass of window `t` reads is `Kept` at `t`. -/
+def ProbOn (sw : Nat → Option Nat) (L : Nat) (ws : Array Win) (as : Array Append) : Prop :=
+  PlansOn (fun t b => ∀ a (ha : a < as.size), as[a].first ≤ b → b < as[a].first + as[a].count → Kept sw L t as[a]) ws
+
+/-- With refresh, every append's slot is in the schedule, and so is a re-key's origin slot. -/
+def Slots (s : State) : Prop :=
+  s.params.refresh = true → ∀ k (hk : k < s.appends.size), (s.slotWindow s.appends[k].slot).isSome ∧
+    ∀ m, s.appends[k].origin = .rekey m → (s.slotWindow m).isSome
+
+/-- With refresh, `Slots` and `ProbOn`. -/
+def Prob (s : State) : Prop :=
+  Slots s ∧ (s.params.refresh = true → ProbOn s.slotWindow s.params.lifetime s.windows s.appends)
+
+/-- What the probation check reads of the appends: `Slots`, and each append at or above `N`. -/
+def Held (s : State) : Prop :=
+  Slots s ∧ ∀ k (hk : k < s.appends.size), s.reg.blocks ≤ s.appends[k].first
+
+theorem held_of {s : State} (hi : Inv s) (h : Prob s) : Held s :=
+  ⟨h.1, fun k hk => by rw [hi.firsts k hk]; exact Nat.le_add_right _ _⟩
+
+theorem prob_init (params : Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat) :
+    Prob (State.init params reg coins appendCoins notBeforeNs) :=
+  ⟨fun _ k hk => by simp [State.init] at hk, fun _ t ht => by simp [State.init] at ht⟩
+
+theorem probOn_push {sw L ws as} (h : ProbOn sw L ws as) (x : Append) (hx : PlansOn (fun _ b => b < x.first) ws) :
+    ProbOn sw L ws (as.push x) := by
+  intro t ht i hi p hp a ha h1 h2
+  have hb := hx t ht i hi p hp
+  by_cases hl : a < as.size
+  · simp only [Array.getElem_push_lt hl] at h1 h2 ⊢
+    exact h t ht i hi p hp a hl h1 h2
+  · have : a = as.size := by simp only [Array.size_push] at ha; omega
+    subst this
+    simp only [Array.getElem_push_eq] at h1
+    omega
+
+theorem prob_same {s : State} (h : Prob s) {ws' : Array Win} (hs : SamePlans s.windows ws') :
+    Prob { s with windows := ws' } :=
+  ⟨h.1, fun hr => plansOn_same (h.2 hr) hs⟩
+
+theorem prob_fail {s : State} (h : Prob s) (t : Nat) (f : Failure) (at? : Option (Nat × Nat)) :
+    Prob (s.fail t f at?).2 := by
+  unfold State.fail
+  dsimp only
+  split
+  · exact prob_same h (samePlans_modify _ _ _ fun _ => rfl)
+  · exact h
+
+theorem prob_final {s : State} (h : Prob s) (u : Nat) :
+    Prob { s with windows := s.windows.modify u ({· with final := true}) } :=
+  prob_same h (samePlans_modify _ _ _ fun _ => rfl)
+
+theorem prob_boundaryNs {s : State} (h : Prob s) (u now : Nat) :
+    Prob { s with windows := s.windows.modify u ({· with boundaryNs := some now}) } :=
+  prob_same h (samePlans_modify _ _ _ fun _ => rfl)
+
+theorem prob_sample {s : State} (h : Prob s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat) :
+    Prob { s with windows := s.windows.modify u ({· with drawn := some d, openedNs := some now}) } :=
+  prob_same h (samePlans_modify _ _ _ fun _ => rfl)
+
+theorem prob_accept {s : State} (h : Prob s) (u : Nat) :
+    Prob { s with windows := s.windows.modify u ({· with verdict := some .accept}) } :=
+  prob_same h (samePlans_modify _ _ _ fun _ => rfl)
+
+theorem prob_releaseCoin {s : State} (h : Prob s) (t now : Nat) : Prob (s.releaseCoin t now) :=
+  ⟨h.1, fun hr => plansOn_push (h.2 hr) _ rfl⟩
+
+/-- With refresh, `append` fills only a slot of the schedule, and a re-key slot only re-keys a slot an append holds
+(`State.slotOk`). -/
+theorem slot_held {s : State} {count : Nat} {origin : _root_.Poub.Origin} {slot : Option Nat} (hS : Slots s)
+    (h2 : ¬(s.params.refresh && !(slot.any fun k => s.slotOk k count origin)) = true) (hr : s.params.refresh = true) :
+    (s.slotWindow (slot.getD s.appends.size)).isSome ∧ ∀ m, origin = .rekey m → (s.slotWindow m).isSome := by
+  have hS := hS hr
+  rw [hr] at h2
+  cases slot with
+  | none => simp at h2
+  | some k =>
+    have h3 : s.slotOk k count origin = true := by simpa using h2
+    unfold State.slotOk at h3
+    rw [Bool.and_eq_true] at h3
+    obtain ⟨-, h3⟩ := h3
+    simp only [Option.getD_some]
+    split at h3
+    · rename_i hk
+      exact ⟨by simp [State.slotWindow, hk], fun m hm => by cases hm⟩
+    · rename_i hk
+      exact ⟨by simp [State.slotWindow, hk], fun m hm => by cases hm⟩
+    · rename_i k₀ k' hk
+      refine ⟨by simp [State.slotWindow, hk], fun m hm => ?_⟩
+      cases hm
+      simp only [Bool.and_eq_true, beq_iff_eq, Option.any_eq_true] at h3
+      obtain ⟨hkk, y, hy, -⟩ := h3
+      have hys := Array.find?_some (p := fun x : Append => x.slot == k₀) hy
+      obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_of_find?_eq_some hy)
+      simp only [beq_iff_eq] at hys
+      rw [← hkk, ← hys]
+      exact (hS j hj).1
+    · simp at h3
+
+theorem prob_push {s : State} (hi : Inv s) (h : Prob s) {count : Nat} {origin : _root_.Poub.Origin}
+    {slot : Option Nat} (h2 : ¬(s.params.refresh && !(slot.any fun k => s.slotOk k count origin)) = true)
+    (x : Append) (hx : x.first = s.extent) (hxs : x.slot = slot.getD s.appends.size) (hxo : x.origin = origin) (m : Nat)
+    (hd : Option ByteArray) (n : Nat) :
+    Prob { s with appendSampled := m, appends := s.appends.push x, head := hd, extent := n } := by
+  refine ⟨fun hr k hk => ?_, fun hr => ?_⟩
+  · show (s.slotWindow (s.appends.push x)[k].slot).isSome ∧
+      ∀ m', (s.appends.push x)[k].origin = .rekey m' → (s.slotWindow m').isSome
+    rw [Array.getElem_push]
+    split
+    · exact h.1 hr k ‹_›
+    · rw [hxs, hxo]; exact slot_held h.1 h2 hr
+  · show ProbOn s.slotWindow s.params.lifetime s.windows (s.appends.push x)
+    exact probOn_push (h.2 hr) x fun t ht i hi' p hp => by rw [hx]; exact (hi.reads t ht i hi').1 p hp
+
+/-- A plan past `refreshRefusal` in window `t`, with refresh: every append holding a block it reads is `Kept` at `t`.
+Its `probation` arm refuses a run holding a block of an append whose birth `b` has `t < b + lifetime`, and with every
+slot in the schedule each append's birth is defined. -/
+theorem prob_check {s : State} {t : Nat} {plan : Plan} (hP : EndsOk plan)
+    (hchk : ∀ f, s.refreshRefusal t plan = some f → False) (hr : s.params.refresh = true) (hH : Held s) :
+    ∀ p, p < plan.length → ∀ a (ha : a < s.appends.size), s.appends[a].first ≤ plan.block p →
+      plan.block p < s.appends[a].first + s.appends[a].count → Kept s.slotWindow s.params.lifetime t s.appends[a] := by
+  intro p hp a ha h1 h2
+  obtain ⟨hS, hN⟩ := hH
+  replace hchk : s.refreshRefusal t plan = none := Option.eq_none_iff_forall_ne_some.2 hchk
+  obtain ⟨⟨f, c⟩, hrun, hr1, hr2⟩ := block_mem hP hp
+  dsimp only at hr1 hr2
+  have hNa := hN a ha
+  have hb : ¬(s.born a).any (t < · + s.params.lifetime) = true := by
+    intro hb
+    unfold State.refreshRefusal at hchk
+    dsimp only at hchk
+    split at hchk
+    · rename_i hn; simp [hr] at hn
+    split at hchk
+    · cases hchk
+    split at hchk
+    · cases hchk
+    rename_i hno
+    apply hno
+    refine Array.any_eq_true'.2 ⟨(f, c), hrun, ?_⟩
+    simp only [Bool.and_eq_true, decide_eq_true_eq]
+    refine ⟨by omega, ?_⟩
+    unfold State.probation
+    refine Array.any_eq_true'.2 ⟨a, Array.mem_range.2 ha, ?_⟩
+    simp only [getElem!_pos s.appends a ha, Bool.and_eq_true, decide_eq_true_eq]
+    exact ⟨⟨by omega, by omega⟩, hb⟩
+  unfold Kept
+  cases hor : s.appends[a].origin with
+  | registered x => trivial
+  | fresh =>
+    obtain ⟨b, hbw⟩ := Option.isSome_iff_exists.1 (hS hr a ha).1
+    simp [State.born, Array.getElem?_eq_getElem ha, hor, hbw] at hb
+    exact ⟨b, hbw, by omega⟩
+  | rekey k =>
+    obtain ⟨b, hbw⟩ := Option.isSome_iff_exists.1 ((hS hr a ha).2 k hor)
+    simp [State.born, Array.getElem?_eq_getElem ha, hor, hbw] at hb
+    exact ⟨b, hbw, by omega⟩
+
+theorem prob_start {s : State} {now : Nat} {r : Result} {s' : State} (h : Prob s)
+    (he : start s now = (r, s')) : Prob s' := by
+  unfold start at he
+  repeat' split at he
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact prob_releaseCoin h _ _
+
+theorem prob_boundary {s : State} {now : Nat} {r : Result} {s' : State} (h : Prob s)
+    (he : boundary s now = (r, s')) : Prob s' := by
+  unfold boundary at he
+  simp only [Id.run] at he
+  repeat' split at he
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact prob_releaseCoin (prob_boundaryNs h _ _) _ _
+    | exact prob_boundaryNs h _ _
+
+theorem prob_append {s : State} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat}
+    {r : Result} {s' : State} (hi : Inv s) (h : Prob s) (he : append s root count origin slot = .ok (r, s')) :
+    Prob s' := by
+  unfold append at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact prob_fail h _ _ _
+    | exact prob_push hi h ‹_› _ rfl rfl rfl _ _ _
+
+theorem prob_release {s : State} {runs withdrawn : Array (Int × Int)} {r : Result} {s' : State} (h : Prob s)
+    (he : release s runs withdrawn = (r, s')) : Prob s' := by
+  unfold release at he
+  simp only [Id.run] at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact prob_fail h _ _ _
+
+theorem prob_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State} (h : Prob s)
+    (he : close s t now = .ok (r, s')) : Prob s' := by
+  unfold close at he
+  dsimp only at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact prob_fail (prob_final h _) _ _ _
+    | exact prob_sample (prob_final h _) _ _ _
+
+theorem prob_verify {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State}
+    (h : Prob s) (he : verify s t openings = (r, s')) : Prob s' := by
+  unfold verify at he
+  simp only [Id.run] at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact prob_fail h _ _ _
+    | exact prob_accept h _
+
+theorem prob_receive {s : State} {t i : Int} {root : ByteArray} {runs : Option (Array (Int × Int))}
+    {change : Option (Array (Int × Int) × Array (Int × Int))} {step : Option Int} {now : Nat} {r : Result}
+    {s' : State} (hi : Inv s) (h : Prob s) (he : receive s t i root runs change step now = (r, s')) : Prob s' := by
+  have hH := held_of hi h
+  unfold receive at he
+  split at he
+  · cases he; exact h
+  split at he
+  · cases he; exact h
+  split at he
+  · cases he; exact prob_fail h _ _ _
+  change (have s := s; _) = _ at he
+  extract_lets s₀ jp s₁ at he
+  have key : ∀ s₂ : State, Prob s₂ → Held s₂ → jp () s₂ = (r, s') → Prob s' := by
+    intro s₂ h₂ hH₂ hj
+    dsimp -zeta only [jp] at hj
+    extract_lets t₂ N₂ ext₂ plan₂ s₃ below₂ head₂ jp₂ at hj
+    have hW : ∀ plan, plan₂ = some plan → EndsOk plan := by
+      intro plan hp
+      dsimp only [plan₂, ext₂, N₂] at hp
+      split at hp
+      · cases hp
+      · exact endsOk_changed hp
+      · cases hp; exact endsOk_whole _
+      · exact (make_spec hp).1
+    have h₃ : Prob s₃ := h₂
+    have hH₃ : Held s₃ := hH₂
+    have key₂ : jp₂ () = (r, s') → Prob s' := by
+      intro hj
+      dsimp only [jp₂] at hj
+      generalize hq : plan₂ = q at hj
+      repeat' split at hj
+      all_goals (try dsimp only at hj)
+      all_goals cases hj
+      all_goals first
+        | exact prob_fail h₂ _ _ _
+        | exact prob_fail h₃ _ _ _
+        | exact ⟨h₃.1, fun hr => plansOn_add (h₃.2 hr) _ _ _ _ _
+            (prob_check (s := s₃) (hW _ (by first | exact hq | exact hq.trans ‹_›)) ‹_› hr hH₃)⟩
+    split at hj
+    · split at hj
+      · cases hj; exact prob_fail h₂ _ _ _
+      · exact key₂ hj
+    · exact key₂ hj
+  split at he
+  · exact key s₁ (prob_final h _) hH he
+  · split at he
+    · cases he; exact prob_fail h _ _ _
+    · exact key s₀ h hH he
+
+theorem step_prob {s : State} {e : Event} {r : Result} {s' : State} (hi : Inv s) (h : Prob s)
+    (he : step s e = .ok (r, s')) : Prob s' := by
+  cases e with
+  | start now => injection he with he; exact prob_start h he
+  | boundary now => injection he with he; exact prob_boundary h he
+  | append root count origin slot => exact prob_append hi h he
+  | release runs withdrawn => injection he with he; exact prob_release h he
+  | receive t i root runs change st now => injection he with he; exact prob_receive hi h he
+  | close t now => exact prob_close h he
+  | verify t openings => injection he with he; exact prob_verify h he
+
+theorem probationKept : ProbationKept := by
+  intro params reg coins appendCoins notBeforeNs events rs s hrun hr
+  have hc := run_inv (fun s => Inv s ∧ Prob s) (fun _ _ _ _ hs he => ⟨(step_inv hs.1 he).1, step_prob hs.1 hs.2 he⟩)
+    _ _ _ _ ⟨inv_init _ _ _ _ _, prob_init _ _ _ _ _⟩ hrun
+  obtain ⟨-, hp, -, -⟩ := inv_run hrun
+  intro t ht i hi p hpl a ha h1 h2
+  have := hc.2.2 (by rw [hp]; exact hr) t ht i hi p hpl a ha h1 h2
+  rw [hp] at this
+  revert this
+  unfold Kept
+  cases s.appends[a].origin <;> exact id
 
 end Properties.Poub
