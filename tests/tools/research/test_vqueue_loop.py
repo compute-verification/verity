@@ -2187,6 +2187,33 @@ def test_a_ready_pr_left_out_of_the_ticks_builds_is_logged_once_for_each_head_an
     assert leaves()[3:] == [(3, [h3b], "held")]
 
 
+def test_the_state_file_gives_each_pr_its_place_in_the_loop_and_research_queue_status_reads_it(env):
+    """Each tick's state file (`Loop.keep`) holds what `research queue status` shows of the loop: each candidate's base,
+    members, heads, whether it is built apart or staged and when it was built; the PRs the tick took as ready, those landing
+    on the quick tier, why its `Wait`s build nothing, and each ready PR it left out with its cause (`_leaves`), so a
+    `status` read of it (`queue.loop_places`) gives #1 its candidate on main's chain at place 1 and what it waits on, and #2
+    and #3 the causes that leave them out."""
+    main = env.main()
+    h1 = env.put(1, {"a.txt": "1\n"})
+    h2 = env.put(2, {"b.txt": "2\n"})
+    env.put(3, {"c.txt": "3\n"})
+    env.labels.held.add(3)
+    loop = env.loop(vqueue.decide, batch=1, depth=1, left_out=vqueue.left_out, state=(state := env.tmp / "vqueue" / "state.json"))
+    (built,) = [r for r in loop.tick() if r["action"] == "build"]
+    loop.tick()                                             # the state file holds the candidates a tick judged
+    kept = json.loads(state.read_text())
+    c = kept["candidates"][built["sha"]]
+    assert (c["base"], c["members"], c["heads"], c["apart"], c["staged"], c["built"]) == (main, [1], [h1], False, False,
+                                                                                         built["at"]), c
+    assert kept["ready"] == [[1, h1], [2, h2]] and kept["waits"] == [] and set(kept["left"]) == {"2", "3"}, kept
+    assert kept["left"]["2"]["head"] == h2 and kept["left"]["2"]["cause"] == "chain full", kept["left"]
+    got = loop.world.q.status(loop=True, reviews=env.labels.reviews, places=lambda: (json.loads(state.read_text()), ""))
+    assert (got[1].position, got[1].loop["candidate"], got[1].loop["base"], got[1].loop["where"]) == (1, built["sha"], main,
+                                                                                                       "chain"), got[1]
+    assert got[1].loop["waits_on"] == ("a quick tier" if 1 in kept["plain"] else "a whole check"), got[1].loop
+    assert {n: got[n].loop["waits_on"] for n in (2, 3)} == {2: "chain full", 3: "held"}, got
+
+
 def test_a_left_out_pr_whose_reason_names_another_blocker_under_the_same_cause_is_logged_again(env):
     """A reason whose words change while its cause holds, the PR it waits for, is logged again, each reason once: the blocker
     a reader of the log sees is the tick's."""
@@ -6661,7 +6688,7 @@ def test_a_tick_prints_one_line_of_its_steps_seconds_and_peak_resident_size(env)
     assert line.startswith("research queue vqueue: tick 1: ") and ", peak 2.5 GB; s/GB: log 1.0/2.5 fetch 1.0/2.5 " in line
     steps = line.split("; s/GB: ")[1].split("; ")[0].split()
     assert steps[::2] == ["log", "fetch", "ready", "reads", "below", "judge", "chain", "decide", "notices", "followed",
-                          "on_main", "build", "keep", "mapped"]
+                          "on_main", "build", "mapped", "keep"]
     assert all(x.endswith("/2.5") for x in steps[1::2]) and line.endswith("; graph2 0 read(s) 0.0 MB 0.0 s, 0 cached")
 
     def broken():

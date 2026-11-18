@@ -2704,6 +2704,10 @@ class Tick:
     #: what each `Commit` of this tick put on main's chain, by the staged batch it committed: the candidate, and the record of
     #: the run beside its check as started, which a build after it is built on and reads as its base's (`vqueue.Build.after`)
     committed: dict[str, tuple[str, dict | None]] = field(default_factory=dict)
+    #: why the tick's `Wait`s build nothing, as `vqueue.decide` said
+    waits: tuple[str, ...] = ()
+    #: each ready PR the tick's candidates leave out (`Loop._leaves`): {number: (head, cause, why)}; None until it is read
+    left: dict[int, tuple[str, str, str]] | None = None
     #: each candidate a build this tick rebuilt (`vqueue.Build.replaces`), and each build's `vqueue.Build.name`: what that
     #: build pushed, or what it went on when no member merged, which a later build naming it as its base goes on; None for a
     #: name built nowhere, on which nothing is built
@@ -3248,6 +3252,7 @@ class Loop:
             self.out(self.summary(t))
         actions = list(self.decide(t.snap))
         t.restaged = frozenset(a.replaces for a in actions if isinstance(a, Build) and a.records and a.replaces)
+        t.waits = tuple(a.why for a in actions if isinstance(a, Wait))
         steps.lap("decide")
         if self.dry_run:
             self.out("\n".join(f"would {_name(a)}: {a}" for a in actions) or "nothing to do")
@@ -3287,18 +3292,20 @@ class Loop:
             self.out(f"research queue vqueue: tick {t.n}: {len(past.bad)} line(s) of {self.log_path} read as none: {past.bad[0]}")
         if self.reads is not None:
             self.reads.save()
-        self.keep(t)
-        steps.lap("keep")
         try:
             self.world.q.work_out_mapped()
         except (QueueError, OSError, subprocess.SubprocessError) as e:
             self.out(f"research queue vqueue: tick {t.n}: mapping old heads across `main`'s moves failed: {e}")
         steps.lap("mapped")
-        if not stopped and self.left_out is not None:       # last: a failure here skips none of the tick's bookkeeping
-            for rec in self._leaves(t):
-                self.write(rec)
-                logged.append(rec)
-            steps.lap("leave")
+        try:
+            if not stopped and self.left_out is not None:   # last: a failure here skips none of the tick's bookkeeping
+                for rec in self._leaves(t):
+                    self.write(rec)
+                    logged.append(rec)
+                steps.lap("leave")
+        finally:
+            self.keep(t)
+            steps.lap("keep")
         return logged
 
     def _notices(self, t: Tick) -> list[dict]:
@@ -3402,14 +3409,30 @@ class Loop:
 
     def keep(self, t: Tick) -> None:
         """The state file (``state``): this tick, and each candidate's verdict beside graph2's and the jobs and kinds its graph
-        lacks."""
+        lacks, its base, members and heads, whether it is built apart or staged, and when it was built; the PRs the tick's
+        snapshot took as ready, those that land on the quick tier (`vqueue.Snapshot.plain`), why its `Wait`s build nothing,
+        each ready PR it leaves out and why (`_leaves`), and each riding a candidate.  `research queue status` reads it as each
+        PR's place in the loop (`queue.loop_places`)."""
         if self.state is None:
             return
-        records = {c.sha: c.records.state for c in t.snap.candidates if c.records is not None}
+        cands = {c.sha: c for c in t.snap.candidates}
+
+        def where(sha: str) -> dict:
+            if (c := cands.get(sha)) is None:
+                return {"records": None}
+            built = next((r.get("at") for r in t.past.of("build", sha)), None)
+            return {"records": c.records.state if c.records is not None else None, "base": c.base, "members": list(c.members),
+                    "heads": list(c.heads), "apart": c.apart, "staged": c.waits, "repairs": c.repairs, "built": built,
+                    "enqueued": stamp(c.enqueued) if c.enqueued else None}
+
         doc = {"at": stamp(self.now()), "tick": t.n, "main": t.main, "origin_main": t.origin,
                "candidates": {sha: {"mine": j.verdict.state, "graph2": j.graph2, "lacks": list(j.lacks), "note": j.note,
-                                    "beside": j.slim.state if j.slim is not None else None, "records": records.get(sha)}
+                                    "beside": j.slim.state if j.slim is not None else None, **where(sha)}
                               for sha, j in t.judged.items()},
+               "ready": [[x.number, x.head] for x in t.snap.ready], "plain": sorted(t.snap.plain), "waits": list(t.waits),
+               "left": None if t.left is None else {str(n): {"head": h, "cause": cause, "why": why}
+                                                    for n, (h, cause, why) in t.left.items()},
+               "riding": {str(n): {"head": h, "in": sha} for n, (h, sha) in t.riding.items()},
                "ignored": t.foreign,
                "disagree": sorted(sha for sha, j in t.judged.items()
                                   if j.graph2 in vqueue.STATES and j.graph2 != j.verdict.state)}
@@ -3479,10 +3502,11 @@ class Loop:
         (`left_out`), each (PR, head, cause, why) once: a reason whose words change while its cause holds, another PR it waits
         for, is logged again."""
         seen = {(r.get("number"), h, r.get("cause"), r.get("why")) for r in t.past.of("leave") for h in r.get("heads") or ()}
-        out = []
+        out, t.left = [], {}
         for n, head, cause, why in [*((n, *x) for n, x in sorted(self.world.held_out.items())),
                                     *((n, *x) for n, x in sorted(self.held.items())),
                                     *((x.number, x.head, x.cause, x.why) for x in self.left_out(t.snap))]:
+            t.left.setdefault(n, (head, cause, why))
             if (n, head, cause, why) not in seen:
                 seen.add((n, head, cause, why))
                 out.append(self.record(t, "leave", number=n, heads=[head], why=why, cause=cause))
