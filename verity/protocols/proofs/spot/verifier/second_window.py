@@ -47,9 +47,6 @@ WIRE_TREE_WHY = ("a sampled reader member reads one port through writer rows in 
                  "session reads each wired port from one rank's committed tree")
 PARTS_WHY = "a sampled proof block is in no rank member"
 NO_REGISTERED = {"openings": [], "params": {}, "reads": [], "roots": [], "tables": []}
-#: the `two-stage-form` refusal's detail (`Spot.SecondStage.FORM_WHY`)
-FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
-            "soundness proof does not cover")
 _HEX512 = re.compile(r"[0-9a-f]{128}")
 _DIGITS = re.compile(r"[0-9]+")
 
@@ -595,13 +592,12 @@ def session_failures(g: Given, ranks: Sequence[tuple[str, Mapping[str, int], int
     return out + SS.table_rows_failures(own, statements)
 
 
-def failures(allow: bool, g: Given, record: Mapping[str, Any], records: Sequence[Mapping[str, Any]],
+def failures(g: Given, record: Mapping[str, Any], records: Sequence[Mapping[str, Any]],
              served: Sequence[tuple[str, str]], registrations: Sequence[Mapping[str, Any]], root: str,
              logged: Callable[[str], bool], sample: Sequence[tuple[str, int]],
              statements: Sequence[Mapping[str, Any]]) -> list[tuple[str, Any]]:
     """`Spot.SecondWindow.failures`: the ranks' failures, then ``ranks-members`` where a sampled proof block is in no rank
-    member, else ``ranks-wire-tree`` and the per-session failures; ``two-stage-form`` last while nothing else fails and
-    the form's switch is off."""
+    member, else ``ranks-wire-tree`` and the per-session failures."""
     found = rank_failures(record, records, served, registrations, root, logged)
     ranks = ranks_of(record.get("ranks"))
     if ranks is not None:
@@ -609,4 +605,4 @@ def failures(allow: bool, g: Given, record: Mapping[str, Any], records: Sequence
         found += [("ranks-members", PARTS_WHY)] if ms is None else (
             wire_tree_failures(ranks, record, ms) + session_failures(g, ranks, registrations, record, ms, sample,
                                                                      statements))
-    return [("two-stage-form", FORM_WHY)] if not found and not allow else found
+    return found

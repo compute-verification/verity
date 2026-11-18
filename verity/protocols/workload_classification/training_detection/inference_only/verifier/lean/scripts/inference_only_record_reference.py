@@ -277,6 +277,9 @@ def own_rows(program, form_only: bool = False) -> None:
     runs = sorted((p.idx, p.base, p.count) for p in parts if run(p) and p.count > 0)
     if any(node.form == "batch" and None in node.axes for _, node in units) or not all(map(run, parts)) \
             or any(a[0] == b[0] and a[1] + a[2] > b[1] for a, b in zip(runs, runs[1:])):
+        if any(isinstance(p, Explicit) and any(r[0] == "n" and 0 <= r[1] < len(nodes) and not is_input(nodes[r[1]].fn)
+                                               for r in p.items) for p in parts):
+            raise Malformed("edge-rows")
         raise refused("own-rows", OWN_ROWS)
     if form_only:
         return

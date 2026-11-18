@@ -11,8 +11,11 @@ entries, digest and manifest rows on either path, and the same again, with the s
 with its z/y records hashed where the arm wrote them.
 
 A call's records are its call z table's rows too: `device_hash`'s ``also`` (`zy_commit.cu`, and `host_zy` its CPU twin)
-commits both from one read of each record, held to `hiding_rows`' root and the call tables' twin for the z table and to
-the NumPy path's strings and levels for the value, over 1 to 8 segments a record and trees a launch a level; a window
+commits both from one read of each record, each table under its own salts, handed in as data: held to hm96's own leaf
+under the same salt bytes (`audit.Hm96Domain`'s tree for the z table, core's `Registered.commit` for the value), and, fed
+the bytes the keyed twins still derive, to `hiding_rows`' root, the call tables' twin and the NumPy path, over 1 to 8
+segments a record and trees a launch a level; a caller that hands a nonce where a table's salts go is refused by name
+(nothing derives a salt). A window
 served on the device with each z table committed beside its ``zy@<c>`` commits what it commits with each hashed apart:
 entries, digest, manifest rows, the values' strings, levels and paths, and receipts."""
 from __future__ import annotations
@@ -25,6 +28,7 @@ import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, hm96_salt, rows_domain
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
@@ -86,27 +90,79 @@ ZY = [(1, 6144, 0), (2, 6144, 3), (5, 6144, (1 << 20) + 1), (3, 1024, 7), (4, 20
       (9, 7168, 4)]
 
 
+def _stream(nonce: int, n: int) -> bytes:
+    """The ``n`` salts a keyed table of H1's prover has under ``KEY`` at ``nonce``, as bytes: what a caller hands
+    `zy_commit` as data to commit what the keyed twins commit."""
+    return b"".join(hm96_salt(KEY, nonce, j) for j in range(n))
+
+
 def _zy(n: int, rb: int, owner: int, python: bool = True):
-    """n random records of rb bytes as the value's words, the call z table's ``(domain id, nonce)`` and root (`hiding_rows`'
-    with ``python``, else the call tables' twin's), and the value's nonce, domain id and NumPy strings and levels."""
+    """n random records of rb bytes as the value's words; the call z table's ``(domain id, salts)``, its nonce in H1's
+    prover and its root there (`hiding_rows`' with ``python``, else the call tables' twin's); and the value's salts, nonce,
+    domain id and NumPy strings and levels. Each table's salts are the bytes its keyed twin derives, handed on as data."""
     records = np.random.default_rng(n * 31 + rb).integers(0, 256, (n, rb), dtype=np.uint8)
     binding = tagged(RQ.TABLE_TAGS["z"], hashlib.sha512(b"salt").digest(), owner)
-    call = (rows_domain(binding, owner, n, HM96).domain_id, RQ.TABLES_NONCE + 3 * owner + RQ.TABLE_NONCES["z"])
-    root = (RQ.hiding_rows(binding, owner, [r.tobytes() for r in records], KEY, call[1]).commitment.root if python
-            else TD.host_roots([(*call, *TD.record_rows(records))], KEY)[0])
+    z_nonce = RQ.TABLES_NONCE + 3 * owner + RQ.TABLE_NONCES["z"]
+    call = (rows_domain(binding, owner, n, HM96).domain_id, _stream(z_nonce, n))
+    root = (RQ.hiding_rows(binding, owner, [r.tobytes() for r in records], KEY, z_nonce).commitment.root if python
+            else TD.host_roots([(call[0], z_nonce, *TD.record_rows(records))], KEY)[0])
     nonce = (1 << 42) + 2 * owner + 1
     want, did = _numpy(records.view("<u2"), nonce, window=WINDOW)
-    return records, call, root, nonce, did, want
+    return records, call, z_nonce, root, _stream(nonce, n), nonce, did, want
 
 
 @needs_cxx
 @pytest.mark.parametrize("n,rb,owner", ZY)
 def test_the_cpu_twin_commits_a_calls_z_table_and_its_value_from_one_read(n, rb, owner):
-    """`host_zy`: the call z table's root is `hiding_rows`' and the call tables' twin's, and the value's strings and levels
-    the NumPy path's, from the same records."""
-    records, call, root, nonce, did, want = _zy(n, rb, owner)
-    assert TD.host_roots([(*call, *TD.record_rows(records))], KEY)[0] == root
-    assert D.host_zy(records.view("<u2"), KEY, nonce, did, call) == (root, *want)
+    """`host_zy`, handed the salt bytes the keyed twins derive: the call z table's root is `hiding_rows`' and the call
+    tables' twin's, and the value's strings and levels the NumPy path's, from the same records."""
+    records, call, z_nonce, root, salts, _nonce, did, want = _zy(n, rb, owner)
+    assert TD.host_roots([(call[0], z_nonce, *TD.record_rows(records))], KEY)[0] == root
+    assert D.host_zy(records.view("<u2"), salts, did, call) == (root, *want)
+
+
+@needs_cxx
+@pytest.mark.parametrize("n,rb,owner", ZY)
+def test_the_cpu_twins_leaves_are_hm96s_under_the_salt_bytes_it_is_handed(n, rb, owner):
+    """Each table's leaf is hm96's own under that table's salt, read as data and never derived: with any bytes for the two
+    tables' salts (here a seeded generator's, different for the two), the call z table's root is the frame tree of
+    `audit.Hm96Domain`'s leaves (`hm96.SHA512.commit_string` of each record's row-seg digest under its salt) and the
+    value's strings and levels core's `Registered.commit` under its salts; and one bit of one record's salt in one table
+    moves that table's root and not the other's."""
+    rng = np.random.default_rng(1000 * n + rb + owner)
+    records = rng.integers(0, 256, (n, rb), dtype=np.uint8)
+    call_salts, value_salts = (rng.integers(0, 256, 192 * n, dtype=np.uint8).tobytes() for _ in range(2))
+    dom = rows_domain(tagged(RQ.TABLE_TAGS["z"], hashlib.sha512(b"salt").digest(), owner), owner, n, HM96)
+    leaves = [dom.leaf(j, j, "", r.tobytes() + call_salts[192 * j:192 * (j + 1)]) for j, r in enumerate(records)]
+    root = tree_levels(dom, leaves)[-1][0]
+    ref = _core(records.view("<u2"), 0, value_salts, window=WINDOW)
+    did = ref.domain.domain_id
+    assert D.host_zy(records.view("<u2"), value_salts, did, (dom.domain_id, call_salts)) == (root, ref.bcs, ref.levels)
+    j = n - 1
+
+    def flip(y: bytes) -> bytes:
+        return y[:192 * j + 100] + bytes([y[192 * j + 100] ^ 4]) + y[192 * j + 101:]
+
+    z, bcs, levels = D.host_zy(records.view("<u2"), value_salts, did, (dom.domain_id, flip(call_salts)))
+    assert z != root and (bcs, levels) == (ref.bcs, ref.levels)
+    z, bcs, levels = D.host_zy(records.view("<u2"), flip(value_salts), did, (dom.domain_id, call_salts))
+    assert z == root and levels[-1] != ref.levels[-1] and list(bcs)[:j] == list(ref.bcs)[:j] and bcs[j] != ref.bcs[j]
+
+
+@needs_cxx
+def test_a_caller_that_hands_a_nonce_for_a_tables_salts_is_refused_by_name():
+    """No key makes a table's salts. A caller that still hands ``also`` a nonce (H1's prover, until it draws and keeps its
+    tables' salts), or no salts for the value, is refused by what to hand in and whose switch that is; salts of another
+    length are refused by their bytes."""
+    records = np.random.default_rng(3).integers(0, 256, (2, 1024), dtype=np.uint8).view("<u2")
+    salts = bytes(range(192)) + bytes(192)
+    for row_salts, also in ((salts, (bytes(64), 9)), (None, (bytes(64), salts))):
+        with pytest.raises(NotImplementedError, match="handed in as data.*compute-accounting's switch of PoUW's prover to fresh salts"):
+            D.host_zy(records, row_salts, bytes(64), also)
+    for row_salts, also in ((salts[:-1], (bytes(64), salts)), (salts, (bytes(64), salts + bytes(192)))):
+        with pytest.raises(ValueError, match="one 192-byte salt per row"):
+            D.host_zy(records, row_salts, bytes(64), also)
+    assert [name for name, _type in D.ZyArgs._fields_] == ["did", "hm_key", "pre_v2", "pre_seg_outer", "pre_seg", "n", "R"]
 
 
 def test_both_tables_from_one_read_refuse_what_they_cant_commit(monkeypatch):
@@ -114,7 +170,7 @@ def test_both_tables_from_one_read_refuse_what_they_cant_commit(monkeypatch):
     for n, rb in ((0, 6144), (1, 1000), (1, 9216), (1, 0), (D.MAX_ROWS + 1, 1024)):
         assert not D.zy_fits(n, rb)
         with pytest.raises(ValueError):
-            D.zy_args(n, rb, KEY, (bytes(64), 0), (bytes(64), 0))
+            D.zy_args(n, rb, bytes(64), bytes(64))
     monkeypatch.setattr(NR, "MODE", "numpy")
     with pytest.raises(ValueError, match="also"):
         NR.commit(PROGRAM, "h1/v", _words(2, 512), KEY, 0, later=True, also=(bytes(64), 0), window=WINDOW)
@@ -241,20 +297,28 @@ def test_a_public_table_hashed_on_the_device_derives_its_salts_and_reads_rows_bu
 
 @pytest.mark.parametrize("n,rb,owner", [*ZY, (2049, 1024, 6), (5000, 6144, 1)])
 def test_the_device_commits_a_calls_z_table_beside_its_value_from_one_read(n, rb, owner):
-    """`device_hash` with ``also`` over records on the device: the call z table's root is `hiding_rows`' (the call tables'
-    twin's for the wide trees, whose lower levels are a launch each), and the value's strings and levels the NumPy path's
-    and those `device_hash` gives it alone; the call tables' kernels give that root from the same records."""
+    """`device_hash` with ``also`` over records on the device, each table's salts handed in as data (the bytes the keyed
+    twins derive): the call z table's root is `hiding_rows`' (the call tables' twin's for the wide trees, whose lower
+    levels are a launch each), and the value's strings and levels the NumPy path's and those `device_hash` gives it
+    alone; the call tables' kernels give that root from the same records; and the CPU twin gives all of it."""
     torch = _gpu()
-    records, call, root, nonce, did, want = _zy(n, rb, owner, python=n < 1000)
+    records, call, z_nonce, root, salts, nonce, did, want = _zy(n, rb, owner, python=n < 1000)
     on = torch.from_numpy(records).cuda()
-    got = D.device_hash(on.view(torch.uint16), KEY, nonce, None, did, also=call)
+    got = D.device_hash(on.view(torch.uint16), KEY, nonce, salts, did, also=call)
     assert (got.also(), *got.result()) == (root, *want)
+    assert D.host_zy(records.view("<u2"), salts, did, call) == (root, *want)
     assert D.device_hash(on.view(torch.uint16), KEY, nonce, None, did).result() == want
-    assert TD.device_roots([(*call, *TD.record_rows(on))], KEY) == [root]
+    assert TD.device_roots([(call[0], z_nonce, *TD.record_rows(on))], KEY) == [root]
     with pytest.raises(ValueError, match="also"):
-        D.device_hash(records.view("<u2"), KEY, nonce, None, did, also=call)
+        D.device_hash(records.view("<u2"), KEY, nonce, salts, did, also=call)
+    with pytest.raises(NotImplementedError, match="compute-accounting's switch"):
+        D.device_hash(on.view(torch.uint16), KEY, nonce, None, did, also=(call[0], z_nonce))
 
 
+@pytest.mark.xfail(raises=NotImplementedError, strict=True,
+                   reason="H1's prover hands the fused hash a nonce for its z table's salts and none for the value's; "
+                          "zy_commit takes each table's fresh salts as data, which the prover's switch to fresh salts "
+                          "(compute-accounting's) draws, keeps and hands in")
 def test_a_window_served_on_the_device_commits_each_z_table_beside_its_value(monkeypatch):
     """The window served from the device (as above, with receipts), each served call's z table committed by its
     ``zy@<c>``'s hash (`pouw_h1_tables_device.take_z`): every entry, the served digest, each call's manifest row (its z

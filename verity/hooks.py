@@ -22,8 +22,8 @@ type Handle = object
 class Declared:
     """``declared``: what the workload declares before it runs: the card's file id, its properties (``stage``: serve,
     capture or commit; ``world``; ``eager``; ``async_steps``, whether a step is scheduled before the last one's outputs
-    are read; ``in_process``, whether the steps are taken in this process; a precision, a cache, a sampler), the schemes enabled with it as
-    ``name:scheme`` and each scheme's own settings."""
+    are read; a precision, a cache, a sampler), the schemes enabled with it as ``name:scheme`` and each scheme's own
+    settings."""
 
     hook: ClassVar[str] = "declared"
     card: str
@@ -254,6 +254,34 @@ class Gate(Protocol):
 
     def open(self, why: str) -> None: ...
 
+    def take(self, record: Mapping[str, Any]) -> None:
+        """One record of what the gate orders by, fed on the thread that steps the workload."""
+
+
+class Reports(Protocol):
+    """A gate, frontend or subscriber whose report the workload's run keeps under its scheme's name: ``summary`` at the
+    run's end, ``record`` the versions and parameters it ran with."""
+
+    def summary(self) -> Mapping[str, Any]: ...
+
+    def record(self) -> Mapping[str, Any]: ...
+
+
+class Front(Protocol):
+    """A scheme's frontend, which the workload's server hands each request: ``key`` names a request by its headers
+    (None: not one the scheme orders), ``submit`` and ``abort`` forward one, and ``passed`` says the one ``key`` named
+    has left the server."""
+
+    def key(self, headers: Mapping[str, str]) -> Any: ...
+
+    def submit(self, admission: Any) -> None: ...
+
+    def abort(self, input: str) -> None: ...
+
+    def passed(self, key: Any) -> None: ...
+
+    def summary(self) -> Mapping[str, Any]: ...
+
 
 @dataclass(frozen=True)
 class StartOnBoundary:
@@ -290,14 +318,6 @@ class Broken(Exception):
 
 
 @dataclass(frozen=True)
-class HoldRelease:
-    """A scheme's request that no output of ``input`` leave before step ``until``."""
-
-    input: str
-    until: int
-
-
-@dataclass(frozen=True)
 class HoldResident:
     """A scheme's request that range ``range`` stay allocated until step ``until``."""
 
@@ -320,10 +340,12 @@ class FixRanges:
 
 @dataclass(frozen=True)
 class ReleaseValue:
-    """A scheme's request that registered value ``value``'s storage be released while no block reads it, and restored,
-    with the same bytes, before one does."""
+    """A scheme's request that registered value ``value``'s storage be released once it is resident, the scheme's
+    kernels computing every block that reads it (`ComputeBlockWith`), and restored to ``restore()``, the same bytes,
+    when the workload's memory hook comes off."""
 
     value: str
+    restore: Callable[[], Handle]
 
 
 @dataclass(frozen=True)
@@ -336,12 +358,12 @@ class StartBeside:
     readers: tuple[str, ...] = ()
 
 
-type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
+type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldResident
                 | StartBeside | ReuseOldestFreed | ServeRoute | RefuseInput | FixRanges | ReleaseValue)
 
 
-__all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
-           "Broken", "FixRanges", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+__all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldResident",
+           "Broken", "FixRanges", "Front", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "Route", "RunBegan", "RunEnded", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

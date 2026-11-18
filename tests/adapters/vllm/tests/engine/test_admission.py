@@ -62,16 +62,6 @@ def test_a_gated_request_finished_from_outside_never_reaches_the_scheduler():
     assert sched.added == [] and sched.handed == [[]] and ended == ["a"]
 
 
-def test_a_held_release_is_refused_until_the_adapter_keeps_tokens_back():
-    ex = messages.Exchange()
-    ex.request("h", H.HoldRelease("a", until=5))
-    sched = Outputs()
-    admission.install(sched, ex)
-    sched.add_request(Req("a"))
-    with pytest.raises(NotImplementedError, match="vllm/adapter-names-no-scheme"):
-        step(sched)
-
-
 class Clock:
     def __init__(self) -> None:
         self.t = 0.0
