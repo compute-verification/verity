@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 import tensor_kinds as TK
 
 
@@ -105,25 +106,98 @@ def test_a_form_cheaper_in_issue_a_slot_is_flagged(tmp_path: Path):
     assert "**below**" in (tmp_path / "tensor_kinds.md").read_text()
 
 
-def test_record_writes_the_eight_bit_forms_issue_cost_and_a_failed_gate_writes_none(tmp_path: Path, no_gpu):
-    imma = ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
-    lane = ["IADD3 R3, R3, R4, RZ", "FFMA R5, R5, R6, 1"] * 16 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
-    good, bad = tmp_path / "good", tmp_path / "bad"
-    good.mkdir(), bad.mkdir()
-    _write(good, [_opalone(1000, 8 * 67 / 0.98),
-                  _case("spec", "imma_s8_m16n8k32", "ImmaS8k32", 32, 1000, 16000 * 8.115 + 76000, imma, lane)])
-    assert TK.main(["tensor_kinds.py", str(good), "--record"]) == 0
-    doc = json.loads((good / "result.json").read_text())
+IMMA = ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+MIX = ["IADD3 R3, R3, R4, RZ", "FFMA R5, R5, R6, 1"] * 16 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+
+
+def _on(monkeypatch: pytest.MonkeyPatch, card: str) -> None:
+    from verity_bench import kit
+
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": card, "gpus": [], "node": "n", "commit": None})
+
+
+def _built_for(out: Path, sm: int) -> None:
+    rows = [json.loads(x) for x in (out / "tensor_kinds.jsonl").read_text().splitlines()]
+    groups = {120: [-1], 90: [0, 1]}[sm]
+    rows = [r for r in rows if not r.get("done")] + [{"done": True, "num_sms": 188, "sm": sm, "group": g} for g in groups]
+    (out / "tensor_kinds.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+
+@pytest.mark.parametrize(("card", "short", "sm"), [("NVIDIA H200", "h200", 90), ("NVIDIA H100 80GB HBM3", "h100", 90),
+                                                   ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "rtx-pro-6000", 120)])
+def test_the_build_is_the_card_records_arch(card: str, short: str, sm: int, capsys: pytest.CaptureFixture[str]):
+    assert TK.target(card) == (short, sm)
+    assert TK.main(["tensor_kinds.py", "target", card]) == 0 and capsys.readouterr().out == f"{sm}\n"
+
+
+def test_a_card_no_record_holds_or_an_arch_with_no_forms_refuses(tmp_path: Path):
+    with pytest.raises(SystemExit, match="'NVIDIA L40S'"):
+        TK.target("NVIDIA L40S")
+    with pytest.raises(SystemExit, match="have 'NVIDIA H200, NVIDIA H100 80GB HBM3'"):
+        TK.target("NVIDIA H200, NVIDIA H100 80GB HBM3")
+    text = (TK.CARDS / "h200-sxm-141gb.toml").read_text()
+    (tmp_path / "h200-sxm-141gb.toml").write_text(text.replace('arch = "sm_90a"', 'arch = "sm_80"'))
+    with pytest.raises(SystemExit, match="the h200 card's arch is 'sm_80'"):
+        TK.target("NVIDIA H200", tmp_path)
+
+
+@pytest.mark.parametrize(("card", "short", "sm"), [("NVIDIA H200", "h200", 90),
+                                                   ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "rtx-pro-6000", 120)])
+def test_record_writes_the_eight_bit_forms_issue_cost_as_its_cards_member(tmp_path: Path, monkeypatch, card, short, sm):
+    _on(monkeypatch, card)
+    _write(tmp_path, [_opalone(1000, 8 * 67 / 0.98),
+                      _case("spec", "imma_s8_m16n8k32", "ImmaS8k32", 32, 1000, 16000 * 8.115 + 76000, IMMA, MIX)])
+    _built_for(tmp_path, sm)
+    assert TK.main(["tensor_kinds.py", str(tmp_path), "--record"]) == 0
+    doc = json.loads((tmp_path / "result.json").read_text())
     [m] = doc["measurements"]
     assert doc["validation"]["status"] == "passed"
-    assert (m["name"], m["unit"], m["mark"], m["form"], m["host"]["card"]) == (
-        TK.METRIC, "issue cycles a MMA", "measured", "imma_s8_m16n8k32", "none")
+    assert (m["name"], m["unit"], m["mark"], m["form"], m["member"], m["host"]["card"]) == (
+        TK.METRIC, "issue cycles a MMA", "measured", "imma_s8_m16n8k32", short, card)
     assert abs(m["value"] - 8.115) < 1e-9
+
+
+def test_a_failed_gate_an_unknown_card_or_another_cards_build_writes_no_point(tmp_path: Path, monkeypatch, no_gpu):
+    bad, none, other = tmp_path / "bad", tmp_path / "none", tmp_path / "other"
+    for d in (bad, none, other):
+        d.mkdir()
     _write(bad, [_opalone(1000, 8 * 67 / 0.52)])
     assert TK.main(["tensor_kinds.py", str(bad), "--record"]) == 3
     doc = json.loads((bad / "result.json").read_text())
     assert doc["validation"]["status"] == "failed" and "below 0.9" in doc["validation"]["detail"]
     assert doc["measurements"] == []
+    good = [_opalone(1000, 8 * 67 / 0.98),
+            _case("spec", "imma_s8_m16n8k32", "ImmaS8k32", 32, 1000, 16000 * 8.115 + 76000, IMMA, MIX)]
+    _write(none, good)
+    TK.main(["tensor_kinds.py", str(none), "--record"])
+    doc = json.loads((none / "result.json").read_text())
+    assert doc["validation"]["status"] == "failed" and "'none'" in doc["validation"]["detail"]
+    assert doc["measurements"] == []
+    _on(monkeypatch, "NVIDIA H200")
+    _write(other, good)
+    TK.main(["tensor_kinds.py", str(other), "--record"])
+    doc = json.loads((other / "result.json").read_text())
+    assert doc["validation"]["detail"] == "the binaries are sm_120's, and the h200 card is sm_90"
+    assert doc["measurements"] == []
+
+
+def test_the_reference_must_be_one_imma_s8_k32_a_ptx_mma(tmp_path: Path):
+    # an emulated reference (two s8 k16 IMMAs for each PTX MMA) times another instruction
+    k16 = ["IMMA.16816.S8.S8 R8, R4.ROW, R2.COL, R8"] * 16 + IMMA[-2:]
+    _write(tmp_path, [_opalone(1000, 8 * 67 / 0.98),
+                      _case("spec", "imma_s8_m16n8k32", "ImmaS8k32", 32, 1000, 16000 * 8.115 + 76000, k16, MIX)])
+    assert TK.analyze(tmp_path)[1] == [
+        "('spec', 'imma_s8_m16n8k32', 32): the loop's MMAs are 16 IMMA.16816.S8.S8 for 8 PTX MMAs, want one "
+        "IMMA.16832.S8.S8 each"]
+
+
+def test_an_sm90_run_needs_both_groups(tmp_path: Path):
+    _write(tmp_path, [_opalone(1000, 8 * 67 / 0.98)])
+    _built_for(tmp_path, 90)
+    assert TK.analyze(tmp_path)[1] == []
+    rows = (tmp_path / "tensor_kinds.jsonl").read_text().splitlines()
+    (tmp_path / "tensor_kinds.jsonl").write_text("\n".join(rows[:-1]) + "\n")
+    assert TK.analyze(tmp_path)[1] == ["sm_90: groups [0] finished, want 0-1"]
 
 
 def test_a_program_faster_than_a_joint_row_is_marked_over(tmp_path: Path):

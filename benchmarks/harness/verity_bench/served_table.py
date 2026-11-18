@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs
+from verity_bench import jobs, kit
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, expand_sweep, resolve_spec
 from verity_bench.vllm.runner import summarize
@@ -200,10 +200,14 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
 
 def newest_passing(store: Any, spec: str, point: str, arms: Sequence[str],
             skipped: list[dict[str, Any]]) -> Found | None:
-    """The newest passing run of `spec` at `point` whose result isn't superseded and holds `arms`; each newer run passed
-    over goes into `skipped` with why."""
+    """The newest passing run of `spec` at `point` that isn't a trial (`kit.trial_attempt`), whose result isn't
+    superseded and holds `arms`; each newer run passed over goes into `skipped` with why."""
 
     for run, art, commit in store.index.sql(PASSING, (*spec_paths(spec), point)):
+        if kit.trial_attempt(store.get_attempt(run) or {}):
+            skipped.append({"spec": spec, "point": point, "run": run, "art": art,
+                            "why": f"a trial run ({kit.TRIAL}): its measurements are its own, never a row"})
+            continue
         found, why = _judge(store, run, art, commit, arms, [point])
         if why is None:
             return found[0]
@@ -247,12 +251,15 @@ def _natural(point: str) -> list[Any]:
 
 
 def _recorded(store: Any, run: str, arms: Sequence[str], record: str | None) -> tuple[str, list[Found], str | None]:
-    """A run of record's spec and points as rows, or why it can't stand: the passing rule of `PASSING`, then `_judge`'s."""
+    """A run of record's spec and points as rows, or why it can't stand: a trial (`kit.trial_why`), the passing rule of
+    `PASSING`, then `_judge`'s."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
         return "", [], "not in the store or on its remote"
     spec = spec_name(str(attempt.get("params", {}).get("spec", "")))
+    if why := kit.trial_why(run, attempt):
+        return spec, [], why
     status, source = attempt.get("status") or {}, attempt.get("source") or {}
     art = (attempt.get("outputs") or {}).get("result")
     tool = (attempt.get("tool") or {}).get("name")
@@ -353,6 +360,8 @@ def live_row(store: Any, live: Live) -> tuple[dict[str, Any], str | None]:
     attempt = store.get_attempt(live.run)
     if attempt is None:
         return row, "not in the store or on its remote"
+    if why := kit.trial_why(live.run, attempt):
+        return row, why
     status = attempt.get("status") or {}
     row.update(machine=(attempt.get("execution") or {}).get("machine"), commit=(attempt.get("source") or {}).get("commit"),
                record=(attempt.get("outputs") or {}).get("run_record"))
