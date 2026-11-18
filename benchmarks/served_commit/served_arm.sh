@@ -13,7 +13,7 @@
 # a compiled ratio counts only when the winners are the Build's.
 #
 # From the source tree's root on one RTX PRO 6000 (VERITY_BENCH_VENV names the pinned-vLLM environment, as run.sh's):
-#   SPEC=llama31-8b-fp8-rtx-served-arm SEED_ARGS="--arms stock-fp8,stock-fp8@compiled,commit-rows-4k-eager \
+#   SPEC=llama31-8b-fp8-served-arm SEED_ARGS="--arms stock-fp8,stock-fp8@compiled,commit-rows-4k-eager \
 #     --arm-module served_commit.served_arm:EAGER_ROWS_4K_FP8" bash benchmarks/served_commit/served_arm.sh
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}

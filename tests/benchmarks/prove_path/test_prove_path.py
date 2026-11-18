@@ -1969,7 +1969,7 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     (tmp_path / "advice.bin").write_bytes(s.data)
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-                 str(tmp_path / "advice.bin"), "--key", str(tmp_path / "private" / "key"), "--registration", "unread",
+                 str(tmp_path / "advice.bin"), "--registration", "unread",
                  "--checkpoint-dir", "unread", "--sampling-design", "rate:1/4", "--out", str(out)],
                 kept_ingress=lambda serve_dir: None, scan_state_file="unread")
     assert seen["root"].parent == out.parent and seen["held"] == {seen["root"]} and not seen["root"].exists()

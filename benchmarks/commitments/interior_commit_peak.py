@@ -42,6 +42,7 @@ import numpy as np
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
+from verity.circuits.population import wired_population_program
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.periods import rows as SR, wiring as WI
 from verity_config.settings import SHARED
@@ -89,8 +90,8 @@ def window(spans: int, units: int, words: int) -> SR.Binding:
     """The interior's window: ``spans`` chunk members of one template, each ``units`` units reading one row of ``x`` and
     writing one of ``y``; a member's ``x`` after the first is the output rows of the member before, with no tree. It names
     no sampling design: no registration is made of it."""
-    program, query = SR.population_program([(TEMPLATE, spans * units)])
     tid = descriptor_id(TEMPLATE)
+    program, query = wired_population_program([(TEMPLATE, spans * units)], {"templates": [[tid, spans * units]]})
     return SR.Binding(program, query, {}, RUN, tuple(
         SR.Member(tid, (("x", words),), (("y", words),), units, s * units, tables=(("x", units),), name=f"{tid}/c{s}",
                   schemas=(("x", V2), ("y", V2)),
