@@ -1368,22 +1368,22 @@ BLOCKS_ALONE = ("each sampled proof block is proved alone; that a block's inputs
                 "is assumed, not checked")
 TIED_BY_CONSTRUCTION = ("the circuit the policy was checked on and the circuit the proofs are about are tied by "
                         "construction only")
+#: who graded a row's answer, where it is the developer's piece's and no auditor-side entry runs it (`RAN_BY`)
+GRADED_BY = {
+    "space": ("graded by the developer's piece (benchmarks/pous/served_piece.py: period.answer, with setup's tie, and "
+              "pous-run-protocol) on the served node; no auditor-side entry runs it"),
+    "bandwidth": ("graded by the developer's piece (benchmarks/pous/held_bandwidth.py: poub-p2-protocol's replay of the "
+                  "case) on the served node; no auditor-side entry runs it; a live verdict on the auditor's device exists "
+                  "(poub-verifier, its bandwidth party) and is not the one this row reads"),
+    "wipe": ("graded by the developer's piece (wipe_on_node.py: wipe_period.answer and wipe-protocol, verity/wipe/v0 "
+             "uncounted) on the served node; no auditor-side entry runs it; not certified: survivors bounded by nothing"),
+}
+_MAIN_FORM_SAYS = f"{BLOCKS_ALONE}; {TIED_BY_CONSTRUCTION}"
 #: who ran the check behind what a row shows, by the record's product, then by premise (`PREMISES`, ending its ``why``)
 #: or by row (ending its ``answer_from``); the compose node's Lean re-run reaches only the sampled proofs' row, which
 #: carries no premise, so every premise is the developer's piece's on both paths
-_ROWS_RAN_BY = {
-    "space": ("its check (period.answer, with setup's tie, and pous-run-protocol) ran by the developer's piece "
-              "(benchmarks/pous/served_piece.py) on the served node; no auditor-side entry runs it"),
-    "bandwidth": ("its check (poub-p2-protocol's replay of the case) ran by the developer's piece "
-                  "(benchmarks/pous/held_bandwidth.py) on the served node; no auditor-side entry runs it; a live verdict "
-                  "on the auditor's device exists (poub-verifier, its bandwidth party) and is not the one this row reads"),
-    "wipe": ("its check (wipe_period.answer and wipe-protocol, verity/wipe/v0 uncounted) ran by the developer's piece "
-             "(wipe_on_node.py) on the served node; no auditor-side entry runs it; not certified: survivors bounded by "
-             "nothing"),
-}
-_MAIN_FORM_SAYS = f"{BLOCKS_ALONE}; {TIED_BY_CONSTRUCTION}"
 RAN_BY: Mapping[str, Mapping[str, str]] = {
-    product: {**{n: PIECE + tail for n in PREMISES}, **{k: why + tail for k, why in _ROWS_RAN_BY.items()},
+    product: {**{n: PIECE + tail for n in PREMISES}, **{k: why + tail for k, why in GRADED_BY.items()},
               **({"integrity": _MAIN_FORM_SAYS, INFERENCE_ONLY_ROW: _MAIN_FORM_SAYS} if MAIN_FORM else {})}
     for product, tail in (("onsite", f"; {ONSITE_UNDECIDED}"), ("remote", ""))}
 

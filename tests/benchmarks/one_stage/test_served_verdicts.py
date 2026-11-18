@@ -853,6 +853,10 @@ def test_a_piece_that_left_a_file_that_is_not_json_errs_about_no_server_and_the_
     assert (row["verdict"], row["owner"], at) == ("error", "memory-accounting", (None, "real"))
 
 
+#: what the sampled proofs' and the inference-only rows' ``answer_from`` end with (`served_verdicts.MAIN_FORM`)
+MAIN = f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}"
+
+
 def _accepted() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
          "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
@@ -1512,8 +1516,9 @@ def test_the_record_carries_the_inference_only_verifiers_verdict_as_a_row_the_co
                                  inference_only=io)
     assert report["protocols"].pop("inference-only") == {
         "verdict": verdict, "protocol": io["format"], "reason": io["reason"], "answer": {"c": 1, "k": 2, "n": 3, "theta": io["theta"]},
-        "answer_from": f"{S.AS_WRITTEN} ({S.INFERENCE_ONLY})", "combined": S.INFERENCE_ONLY_UNREAD}
+        "answer_from": f"{S.AS_WRITTEN} ({S.INFERENCE_ONLY}){MAIN}", "combined": S.INFERENCE_ONLY_UNREAD}
     assert line.pop("not_combined") == {"the inference-only verifier": verdict}
+    assert line["answers"].pop("the inference-only verifier") == f"{S.AS_WRITTEN} ({S.INFERENCE_ONLY}){MAIN}"
     assert (report, rec["composed"], line) == (bare, bare_rec["composed"], bare_line)
 
 
@@ -1633,8 +1638,8 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     assert rc == 2 and (line["composed"], line["record_missing"]) == ("pending", []), line
     assert rows["integrity"]["answer"] == answer
     pouw_from = f"{S.AS_WRITTEN} (its piece files in pouw/)"
-    assert line["answers"] == {"sampled proofs": S.LEAN_HERE, "PoUW": pouw_from}
-    assert (rows["integrity"]["answer_from"], rows["work"]["answer_from"]) == (S.LEAN_HERE, pouw_from)
+    assert line["answers"] == {"sampled proofs": S.LEAN_HERE + MAIN, "PoUW": pouw_from}
+    assert (rows["integrity"]["answer_from"], rows["work"]["answer_from"]) == (S.LEAN_HERE + MAIN, pouw_from)
     seen = json.loads((tmp_path / "seen.json").read_text())
     w = tmp_path / "serve" / "sampled-proofs-served" / "window"
     assert seen["argv"][:2] == ["sampled", "check"] and seen["argv"][5:] == [str(w / "m0" / "p0.bin")]
@@ -1652,7 +1657,7 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     assert edited["integrity"] == rows["integrity"] and (line["composed"], line["record_missing"]) == ("pending", [])
     _rc, _line, node_edited = _recorded(tmp_path, plain, capsys)
     assert node_edited["integrity"] != node_rows["integrity"]
-    assert node_rows["integrity"]["answer_from"] == f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']})"
+    assert node_rows["integrity"]["answer_from"] == f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}){MAIN}"
     (tmp_path / "pieces" / "pouw" / "answer.json").write_text(json.dumps({
         "verdict": "reject", "reason": "the node says so", "commitment": "ef" * 64, "protocol": "verity/pouw/v1",
         "public": None, "profile": None}))
@@ -1723,7 +1728,7 @@ def test_a_spot_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nod
     assert row["verdict"] == verdict and said in row["reason"], row
     assert row["answer_from"] == (S.LEAN_HERE if change != "no-v2" else (
         f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}): the records audit wrote no v2 case (window/case-v2.json), so "
-        "there are no proofs to recompute it from"))
+        "there are no proofs to recompute it from")) + MAIN
     assert line["answers"]["sampled proofs"] == row["answer_from"]
 
 
@@ -1761,7 +1766,7 @@ def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_
     assert {k: v for k, v in row["not_started"].items() if k != "reason"} == {
         "blobs": 1, "blob_bytes": size, "limit_bytes": limit}
     assert row["answer_from"] == (f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}): this host's Lean check of the audit's v2 "
-                                  f"case was not started: {row['not_started']['reason']}")
+                                  f"case was not started: {row['not_started']['reason']}{MAIN}")
     assert line["answers"][S.NAMES["integrity"]] == row["answer_from"]
 
 
@@ -6549,7 +6554,7 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
     assert composed["composed_on"] == {"host": socket.gethostname(), "served_node": False, "from": S.HANDED_FROM,
                                        "tree": GATE_PIN, "tree_on": "remote"}
     row = composed["protocols"]["integrity"]
-    assert row["answer_from"] == S.LEAN_HERE and row["answer"]["commitment"] == DD.digest(LEAN_RECORD), row
+    assert row["answer_from"] == S.LEAN_HERE + MAIN and row["answer"]["commitment"] == DD.digest(LEAN_RECORD), row
     seen = json.loads((tmp_path / "seen.json").read_text())
     assert seen["argv"][5:] == [str(scratch / "serve" / b) for b in BLOBS]
     assert not scratch.exists() and list((gate / "var" / "scratch").iterdir()) == []
