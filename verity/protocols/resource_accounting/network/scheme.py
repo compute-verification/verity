@@ -16,7 +16,6 @@ from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBu
 from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Port, Scheme, register
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay
-from verity.protocols.resource_accounting.scheme import register_process
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,
                ResponseTieStop, ResponseTieNoStop, LengthsRow)
@@ -25,6 +24,26 @@ DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, Io
 def output_bits(definition: Any) -> Callable[[Mapping[str, int]], int]:
     """A block's cost: its return bits at the public shape (its statics), all of which a wrong block may set."""
     return lambda shape: sum(bind(definition, **shape).signature()[1].leaf_widths())
+
+
+#: the scheme's request that starts the id relay beside the workload
+START_ID_RELAY = H.StartBeside("id-relay", id_relay.READERS)
+_ADMITTER = ("source", "submit", "abort", "take", "pull", "log", "clock")
+
+
+def requests(ctx: Mapping[str, Any]) -> tuple[Any, ...]:
+    return (START_ID_RELAY,)
+
+
+def attach(exchange: Any, ctx: Mapping[str, Any]) -> None:
+    """File `requests` on ``exchange`` under the scheme's name, and where ``ctx`` holds ``admission`` (`admission.Admitter`'s
+    ``cfg``, with its keyword arguments under their own names) install the admission on it."""
+    from verity.protocols.resource_accounting.network.prover.admission import Admitter
+
+    for r in requests(ctx):
+        exchange.request(NETWORK_ATTESTER.name, r)
+    if (cfg := ctx.get("admission")) is not None:
+        Admitter(cfg, **{k: ctx[k] for k in _ADMITTER if k in ctx}).install(exchange, NETWORK_ATTESTER.name)
 
 
 NETWORK_ATTESTER = register(Scheme(
@@ -46,10 +65,9 @@ NETWORK_ATTESTER = register(Scheme(
     requires={"one-labelling": "the network attester's rows (`verifier.network_attester_rows`)",
               "one-design": "each scan's own sample at its δ (`prover.scan_zk`)"},
     ports=(Port("scan-state", "input", IngressScanStart.id, "sin"), Port("released", "output", EgressBucket.id, "o1")),
+    requests=requests,
+    attach=attach,
+    processes={"id-relay": id_relay.process},
 ))
 
-register_process("id-relay", id_relay.process)
-#: the scheme's request that starts the id relay beside the workload, for the adapter to file under the scheme's name
-START_ID_RELAY = H.StartBeside("id-relay", id_relay.READERS)
-
-__all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "output_bits"]
+__all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "START_ID_RELAY", "attach", "output_bits", "requests"]
