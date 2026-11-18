@@ -16,7 +16,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover import schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
-from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import named, of_family
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import named, names
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SERIAL
 
@@ -47,7 +47,7 @@ __all__ = ["CALL_CAPACITY", "CALL_STEPS", "EPOCH_STEPS", "FLAG_ROWS", "JOB_STEPS
            "rotated", "schedule_of", "scheme_of", "splits"]
 
 #: the schemes this device path runs, in the kernel schemes' order
-SCHEMES = tuple(k.name for k in of_family("pearl-c"))
+SCHEMES = names("pearl-c")
 #: each device record's kernels' (k, n) grain past its domain, the record being GPU 1's pipeline variant too: ``sm120``
 #: (G = 4, the panel's ``pearl-c-sm120`` v1) and ``sm120-unpromoted`` (no promotion, the panel's v2), pearl_c_sm120's
 #: (1,024, 128); ``h100`` (G = 4, a served model's FP8 form on the H200), pearl_c_sm90's (256, 64), 1 KiB row segments,

@@ -65,6 +65,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pea
 from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SchemeId
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names as kernel_names
 from verity_torch.pouw.pearl_c import run_device as PPDR
 
 torch = pytest.importorskip("torch")
@@ -110,7 +112,7 @@ F = load("pearl_c_sm120_fixture", POUW / "pearl_c_sm120" / "fixture.py")
 VR = load("pearl_c_vllm_verify_run", POUW / "pearl_c_vllm" / "verify_run.py")
 SD = load("pearl_c_vllm_served_inert_work", POUW / "pearl_c_vllm" / "served_inert_work.py")
 #: the device path's schemes whose device record is a variant of KERNEL's pipeline (pearl_c_sm90 runs h100's)
-KERNEL_SCHEMES = sorted(s for s in PPD.SCHEMES if SchemeId.parse(s).device in R.VARIANT_G)
+KERNEL_SCHEMES = sorted(s for s in kernel_names("pearl-c") if SchemeId.parse(s).device in R.VARIANT_G)
 
 
 def bf16_words(rng, rows: int, k: int, scale: float = 1.0) -> np.ndarray:
@@ -164,7 +166,7 @@ def test_an_unsure_row_is_decided_exactly():
 
 @pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
 def test_call_keys_are_the_fixtures_keys_of(scheme):
-    s = PPD.scheme_of(scheme)
+    s = pouw_schemes.get(scheme)
     roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
     work = Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1)))
     epoch = Epoch.unverified(work, roots, SEED)
@@ -233,7 +235,7 @@ def device_run():
     salt = Epoch.start(declared, roots, *coins).salt
 
     def make(hashing=True, schedule="serial", flag_rows=PPD.FLAG_ROWS, **kw):
-        return PPDR.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, hashing=hashing,
+        return PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, hashing=hashing,
                                    capacity=1 << 12, schedule=schedule, flag_rows=flag_rows, salt_key=SALT_KEY, **kw)
     return make, kernel, weights, roots, salt
 
@@ -959,7 +961,7 @@ class TwinDev(RecordingDev):
 def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
     """The constants the pipeline reads (the prover's salt key, then `audit.hm96_kernel_constants`) and a run's tree hash are
     the scheme's: hm96-sha512's.  Without the prover's 32-byte key the constants are refused."""
-    s = PPD.scheme_of(scheme)
+    s = pouw_schemes.get(scheme)
     kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
     for bad in (None, bytes(31)):
         with pytest.raises(ValueError, match="salt key"):
@@ -984,7 +986,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     `pearl_c.row_digest` of its row, the row seeds the scheme's `row_seeds` with their line keys, seed_A the scheme's, and E_A's
     lines the m₁₆ committed rows' under their own keys and the filler rows' under line_a; its tile leaves (pd_tiles') over
     the zero C~ and U are `pearl_c.leaf`'s."""
-    s = PPD.scheme_of(scheme)
+    s = pouw_schemes.get(scheme)
     h, nb, key = s.commitment_hash, 64, SALT_KEY
     rng = np.random.default_rng(5)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16) for w, n in ((0, 256), (1, 128))}
@@ -1065,7 +1067,7 @@ def reference_y(s, ctx: Context, a_rows: list[bytes], b_rows: list[bytes]) -> by
 
 
 #: the reference verifier's Skip debit has no rule without promotion, so v2 (sm120-unpromoted) isn't provable here
-PROMOTED = sorted(s for s in PPD.SCHEMES if "unpromoted" not in s)
+PROMOTED = sorted(s for s in kernel_names("pearl-c") if "unpromoted" not in s)
 
 
 @pytest.fixture(params=PROMOTED)
@@ -1097,7 +1099,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     the first call's failing row its row 1."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
-    s = PPD.scheme_of(scheme, k_min=32, tile=tile)
+    s = pouw_schemes.get(scheme, k_min=32, tile=tile)
     rng, k = np.random.default_rng(seed), 128
     n0, n1 = max(16, tile[1]), max(32, tile[1])
     wrows = {0: bf16_words(rng, n0, k), 1: bf16_words(rng, n1, k)}
@@ -1251,8 +1253,8 @@ def test_answer_names_its_schemes_assumption():
     assert all(name.startswith("Pouw.PearlC.Assumptions.") for name in (VR.ASSUMPTION_H100, VR.ASSUMPTION_DEV))
     assert f"def {dev} " in lean, dev
     assert re.search(rf"^def {h100} .*\n(?:.*\n)*?  {dev} CM devH100 sem ρ$", records, re.M), h100
-    assert VR.assumption_of(PPD.scheme_of("pearl-c-h100-v1-h3")) == VR.ASSUMPTION_H100
-    for scheme in map(PPD.scheme_of, PPD.SCHEMES):
+    assert VR.assumption_of(pouw_schemes.get("pearl-c-h100-v1-h3")) == VR.ASSUMPTION_H100
+    for scheme in map(pouw_schemes.get, kernel_names("pearl-c")):
         got = VR.assumption_of(scheme)
         assert got == (VR.ASSUMPTION_H100 if scheme.device.name == "h100" else f"{VR.ASSUMPTION_DEV} at {scheme.device.name}")
         assert "pearl_kw" not in got
@@ -1277,7 +1279,7 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     work = answer["public"]["work"]
     assert work["credited"] == 0 < work["macs"] and work["credited_tiles"] > 0 and answer["profile"]["delta"] == "1/100"
     assert answer["profile"]["test_instance"] and "a test instance's, credited nothing" in doc["line"]
-    named = VR.assumption_of(PPD.scheme_of(answer["public"]["scheme"]))
+    named = VR.assumption_of(pouw_schemes.get(answer["public"]["scheme"]))
     assert answer["public"]["assumption"] == named and f"({named})" in doc["line"]
     assert len(answer["profile"]["tiles"]) == 4 and {i for i, _ in answer["profile"]["tiles"]} == {0}
     man = json.loads(path.read_text())
@@ -2529,7 +2531,7 @@ def class_run(excluded: tuple[int, int, int, int] = (0, 0, 0, 0)) -> list:
     layers of four linears (k, n), q, k and v as one (2048, 3072), o (2048, 2048), gate and up as one (2048, 16384) and
     down (8192, 2048), round 0's calls of 128 rows and each later round's of 4 in 16, on the served scheme.  Round 0's
     first call of each of the four shapes excludes ``excluded``'s rows of that shape."""
-    shapes, scheme = [(2048, 3072), (2048, 2048), (2048, 16384), (8192, 2048)], PPD.scheme_of("pearl-c-h100-v1-h3")
+    shapes, scheme = [(2048, 3072), (2048, 2048), (2048, 16384), (8192, 2048)], pouw_schemes.get("pearl-c-h100-v1-h3")
 
     def records(real: int, m: int, ex: tuple[int, ...]) -> list:
         return [PW.UnitRecord(Matmul(c, Shape(m, *shapes[c % 4]), c), real, shapes[c % 4][0],
@@ -2624,7 +2626,7 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
     (the manifests name them as a device run does), so the passes load and tie, and nothing of them opens."""
     layers, linears = LLAMA32_1B
     slots, prompt, outputs = RECORD_CLASS
-    s, rng = PPD.scheme_of(H100_SCHEME), np.random.default_rng(seed)
+    s, rng = pouw_schemes.get(H100_SCHEME), np.random.default_rng(seed)
     shapes = {len(linears) * layer + j: nk for layer in range(layers) for j, nk in enumerate(linears)}
 
     def root(binding: bytes, owner: int, count: int) -> str:
@@ -2743,7 +2745,7 @@ def test_volunteer_words_gives_up_one_a_row_a_band_and_a_b_row_once_the_a_count_
     rule leaves the other no credit, so it needs no B row.  With V-EX's ⌈m/64⌉ = 2 A rows of a 128-row unit already
     spent, the row furthest over gives up the B row holding its flagged atom-word, whose block of 64 columns is the
     weight's every column, and no tile is left over."""
-    s = PPD.scheme_of("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
+    s = pouw_schemes.get("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
     rec = PW.UnitRecord(Matmul(7, Shape(128, 128, 32), 2), 128, 128)
     tiles = s.tiles(rec.matmul.shape)
     first = next(t for t, x in enumerate(tiles) if x.rows[0] == 0 and x.cols[0] == 0)
@@ -2844,7 +2846,7 @@ def test_volunteer_words_ranks_a_units_rows_over_their_inert_bounds_in_one_scan(
     """`volunteer_words` gives up a unit's A rows over their caps from one scan of its tiles, one a band, since an A row
     given up takes its band out and leaves every other band's rows' sums and caps as they were: on seeded counts with more rows over their caps than ⌈m/64⌉ allows, filler
     rows, and B rows over theirs, across three units, it gives up the A and B rows the one-row-at-a-time statement does."""
-    s = PPD.scheme_of("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
+    s = pouw_schemes.get("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
     rng = np.random.default_rng(7)
     most = 0
     for trial in range(24):
@@ -2973,7 +2975,7 @@ def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_root(
     r = PS.epoch_open_root(root, 1)
 
     def make(c, o, k=1):
-        return PPDR.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, c, o,
+        return PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, c, o,
                                    capacity=1 << 12, salt_key=SALT_KEY, pass_index=k)
     c, o = live_coin(r)
     run = make(c, o)
@@ -3482,7 +3484,7 @@ def _inert_work_codes(rng, rows: int, k: int, zero_first: bool) -> list[list[int
 
 
 def test_the_batch_inert_work_is_the_scalar_inert_work_and_a_nan_code_is_the_scalars_rejection():
-    FT, s = SD.FT, PPD.scheme_of(SCHEME)
+    FT, s = SD.FT, pouw_schemes.get(SCHEME)
     rng, seen = np.random.default_rng(3), set()
     for trial in range(8):
         a, b = _inert_work_codes(rng, 3, 384, trial % 2 == 0), _inert_work_codes(rng, 4, 384, trial % 2 == 0)
@@ -3503,7 +3505,7 @@ def test_the_batch_tile_inert_work_is_the_scalar_tile_inert_work():
     elements (accumulators past both ends' saturation, and at 0), a zero row whose every block every word flags, B rows
     whose ends make dead pairs and forced zeros with them, and a row whose accumulator overflows, where both reject
     alike."""
-    FT, s = SD.FT, PPD.scheme_of(SCHEME)
+    FT, s = SD.FT, pouw_schemes.get(SCHEME)
     rng, seen = np.random.default_rng(7), set()
     one = 0x3F800000
     for trial in range(6):
@@ -3536,7 +3538,7 @@ def test_the_batch_tile_inert_work_is_the_scalar_tile_inert_work():
 def test_the_batch_inert_work_word_by_word_is_each_words_scalar_inert_work():
     """`fast_tile.words_inert_work` is `pearl_c_inert_work.word_inert_work` on every word, and its sums `chain_inert_work`'s on any rows and
     columns, so the remedy's row and column debits are the verifier's."""
-    FT, s = SD.FT, PPD.scheme_of(SCHEME)
+    FT, s = SD.FT, pouw_schemes.get(SCHEME)
     rng = np.random.default_rng(3)
     for trial in range(4):
         a, b = _inert_work_codes(rng, 3, 384, trial % 2 == 0), _inert_work_codes(rng, 4, 384, trial % 2 == 0)
@@ -3552,7 +3554,7 @@ def test_the_batch_inert_work_word_by_word_is_each_words_scalar_inert_work():
 def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
     """`fast_tile.install`'s forms (forming, the peel factors, G, C̃ and U, the debit, native BLAKE3) give a tile's encoding,
     check and debit field for field as the scalar reference, and its undo puts every scalar function back."""
-    FT, s = SD.FT, PPD.scheme_of(SCHEME)
+    FT, s = SD.FT, pouw_schemes.get(SCHEME)
     rng = np.random.default_rng(5)
     shape = Shape(8, 256, 64)
     mm, tile = Matmul(0, shape, 0), s.tiles(shape)[0]
@@ -3581,7 +3583,7 @@ def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
     assert (fast[0].pa, fast[0].pb) == (ref[0].pa, ref[0].pb)
     assert (fast[1].c, fast[1].u) == (ref[1].c, ref[1].u) and fast[2:] == ref[2:]
     with pytest.raises(ValueError):
-        FT.install(PPD.scheme_of("pearl-c-sm120-unpromoted-v1-h3"))
+        FT.install(pouw_schemes.get("pearl-c-sm120-unpromoted-v1-h3"))
 
 
 @pytest.mark.slow
@@ -3617,7 +3619,7 @@ def test_served_inert_work_share_is_the_tile_rules_inert_work_over_its_rev1_cred
     """served_inert_work's credit is the tile rule's cap over ρ, `creditDevRev1`'s share of the credited cells, with the first
     promotion add of every word out once: every share it records is `tileInertWorkRev1` over that credit, none with the add
     taken out a second time."""
-    s = PPD.scheme_of(SCHEME)
+    s = pouw_schemes.get(SCHEME)
     rng, shape, rows, cols = np.random.default_rng(11), Shape(64, 512, 48), 3, 2
     rec = PW.UnitRecord(Matmul(0, shape, 0), shape.m, shape.k, (), ())
     def codes(r):
@@ -4275,11 +4277,11 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     fmt = hash_format(run.scheme)
     assert fmt is HASH_FORMATS["h3"] and run.tree_hash == fmt.tree_hash == run.scheme.commitment_hash == HM96
     assert PPDR._bytes(run.const[:32]) == SALT_KEY and set(HASH_FORMATS) == {"h0", "h3"}
-    assert not hasattr(PPD, "TREE_HASH") and all(SchemeId.parse(n).name == n for n in PPD.SCHEMES)
+    assert not hasattr(PPD, "TREE_HASH") and all(SchemeId.parse(n).name == n for n in kernel_names("pearl-c"))
     assert not hasattr(PPD, "tree_hash") and not hasattr(PPD, "variant")
     assert C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"
-    with pytest.raises(KeyError, match="this device path runs"):
-        PPD.scheme_of("pearl-c-sm120-v1-h0")
+    with pytest.raises(KeyError, match="no PoUW scheme"):
+        pouw_schemes.get("pearl-c-sm120-v1-h0")
 
 
 def test_each_device_records_kernels_refuse_their_own_grain():
@@ -4325,7 +4327,7 @@ def sm90_run():
     coins = salt_coin(roots)
 
     def make(schedule="deferred-a"):
-        return PPDR.PearlCDeviceRun(PPD.scheme_of(H100_SCHEME), f"pouw:{H100_SCHEME}", kernel, weights, roots, *coins,
+        return PPDR.PearlCDeviceRun(pouw_schemes.get(H100_SCHEME), f"pouw:{H100_SCHEME}", kernel, weights, roots, *coins,
                                    capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
     return make, kernel, weights, roots
 
@@ -4336,7 +4338,7 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     sm_120's), each with the buffers it touches rotated.  The screen stays on the caller."""
     from verity.protocols.resource_accounting.compute.pouw.verifier.serving import Schedule
     make, kernel, *_ = device_run
-    s = PPD.scheme_of(SCHEME)
+    s = pouw_schemes.get(SCHEME)
     assert PPD.schedule_of("deferred-a", s).name == "deferred-a" and PPD.splits(kernel)
     assert make(schedule="deferred-a").schedule.name == "deferred-a"
     whole = types.SimpleNamespace(run=types.SimpleNamespace(Pipeline=types.SimpleNamespace(FUSED={"commit_a": ()})))
@@ -4726,7 +4728,7 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
     roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
     got = {}
     for schedule in ("serial", "deferred-a"):
-        run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
+        run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots,
                                   *salt_coin(roots), capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
         run.begin(retain=str(tmp_path / schedule), run=RUN)
         lines = []
@@ -4767,7 +4769,7 @@ def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_p
     roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
     got = {}
     for schedule in ("serial", "deferred-a"):
-        run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots),
+        run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots),
                                   capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
         run.begin(retain=str(tmp_path / schedule), run=RUN)
         for w, x in xs:
@@ -4928,8 +4930,8 @@ def test_the_gates_schedule_check_compares_with_serial_and_keeps_the_runs_schedu
 
 def test_the_unpromoted_scheme_runs_gpu_1s_unpromoted_kernels(device_run):
     _, kernel, weights, roots, salt = device_run
-    s = PPD.scheme_of("pearl-c-sm120-unpromoted-v1-h3")
-    assert s.device.name == "sm120-unpromoted" and "pearl-c-sm120-unpromoted-v1-h3" in PPD.SCHEMES
+    s = pouw_schemes.get("pearl-c-sm120-unpromoted-v1-h3")
+    assert s.device.name == "sm120-unpromoted" and "pearl-c-sm120-unpromoted-v1-h3" in kernel_names("pearl-c")
     run = PPDR.PearlCDeviceRun(s, "pouw:pearl-c-sm120-unpromoted-v1-h3", kernel, weights, roots, *salt_coin(roots), capacity=1 << 12,
                               salt_key=SALT_KEY)
     kernel.dev.log.clear()
