@@ -227,7 +227,6 @@
   "calibration/attester_timing/parties.py": 2,
   "calibration/pouw/theory/cpw_floor.py": 1,
   "calibration/pouw/theory/fold_min.py": 1,
-  "calibration/pouw/theory/fold_root_check.py": 1,
   "calibration/pouw/theory/fold_routes.py": 1,
   "calibration/sampling_plan/demo_a.py": 1,
   "tools/verity/cli/verity_cli/served_table.py": 5

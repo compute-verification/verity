@@ -162,7 +162,6 @@ abbrev WIPE_EGRESS : String := "wipe-egress/v1"
 -- Not yet read from here: PoUB
 abbrev POUB_P2_BLOCK4 : String := "p2-unit4/v0"
 abbrev STORE_ORDER : String := "store-order/v0"
-abbrev POUB_MONITORING_PERIOD : String := "verity/remote-bandwidth-monitoring-period/v1"
 abbrev POUB_PERIOD_CHALLENGER : String := "verity/remote-bandwidth-period/challenger/v1"
 abbrev POUB_APPEND : String := "verity/remote-bandwidth/append/v0"
 abbrev POUB_APPENDS : String := "verity/remote-bandwidth/appends/v0"
