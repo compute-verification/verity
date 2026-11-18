@@ -296,6 +296,18 @@ def test_pearl_plus_row_says_its_coins_signatures_go_unchecked_by_the_auditor_on
         "pearl-plus": "coins' signatures checked on the served node only; not checked by the auditor"}
 
 
+def test_each_listed_unchecked_entry_ends_the_rows_source_and_an_empty_list_prints_nothing(monkeypatch):
+    import dataclasses
+    from verity.protocols.resource_accounting import scheme as S
+    two = dataclasses.replace(S.SCHEMES["pearl-plus"], unchecked={"a": "one", "b": "two"})
+    monkeypatch.setitem(S.SCHEMES, "pearl-plus", two)
+    assert T.unchecked(["pearl-plus"], {"pearl-plus": "src"}) == {"pearl-plus": "src; one; two"}
+    assert T.unchecked(["pearl-plus"], {}) == {"pearl-plus": "one; two"}
+    monkeypatch.setitem(S.SCHEMES, "pearl-plus", dataclasses.replace(two, unchecked={}))
+    assert T.unchecked(["pearl-plus"], {"pearl-plus": "src"}) == {"pearl-plus": "src"}
+    assert T.unchecked(["pearl-plus"], {}) == {}
+
+
 def test_a_component_that_charges_nothing_reads_why_for_its_figure_and_shows_its_verdict(tmp_path, monkeypatch):
     """A stand-in declaration under inference-only's name whose resource is a `Lacks`: the check's line says why it
     has no figure (``charges_nothing``) and keeps its verdict among the components and in the combined verdict, as

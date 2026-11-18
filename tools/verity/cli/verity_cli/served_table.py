@@ -957,10 +957,11 @@ def charges_nothing(component: str) -> str | None:
 
 
 def unchecked(components: Sequence[str], said: Mapping[str, str]) -> dict[str, str]:
-    """``said``, each component's stated source, with what its declared scheme's run has that no auditor-side entry
-    checks (`Scheme.unchecked`) at its end, for each of ``components`` whose declaration says any, whatever its row."""
-    return {**said, **{c: "; ".join(x for x in (said.get(c), why) if x) for c in components
-                       if c in schemes.DECLARATIONS and (why := schemes.get(c).unchecked)}}
+    """``said``, each component's stated source, with the sentence of each entry its declared scheme lists of what no
+    auditor-side entry checks (`Scheme.unchecked`) at its end, for each of ``components`` whose declaration lists any,
+    whatever its row; one that lists none is left as ``said`` has it."""
+    return {**said, **{c: "; ".join([*([said[c]] if said.get(c) else []), *whys]) for c in components
+                       if c in schemes.DECLARATIONS and (whys := list(schemes.get(c).unchecked.values()))}}
 
 
 #: what the served window publishes of the execution phase its record is of, under ``out/serve``: its seal's SHA-512

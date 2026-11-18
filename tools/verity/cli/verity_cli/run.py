@@ -83,8 +83,9 @@ binding is given, else the workload's, a development run's, which makes ``coins`
 remote's has ``coins_on``, over the placement's: the machine each component whose challenger gate is optional had its
 coins flipped on, the challenger's where its gate is bound, else the workload's, which makes ``coins`` ``simulated``;
 onsite's has Pearl+'s by the same rule.
-remote's has ``answer_from`` only for a component whose declaration says what of its run no auditor-side entry checks
-(`Scheme.unchecked`), which ends that row's ``answer_from`` on onsite's line too, whatever the verdict.
+remote's has ``answer_from`` only for a component whose declaration lists what of its run no auditor-side entry checks
+(`Scheme.unchecked`), each entry's sentence, which ends that row's ``answer_from`` on onsite's line too, whatever the
+verdict; an empty list prints nothing.
 
 ``coins`` is ``simulated`` when the challenger's host is one a prover's party is on (its machine, or two machines this
 host stands for), else ``development`` (the keys are made for the run). ``simulated`` names each premise the placement
