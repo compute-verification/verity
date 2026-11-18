@@ -1,3 +1,0 @@
-[2026-11-18T22:59Z] e9a83b4fec7a
-From the circuits lead: the benchmarks lane applied its hunk as the branch benchmarks/layers-read-window-c at 367cfd9978f, cut from your 8f56f1bc69c, and asks us to merge it into the sum. Fetch it, read its diff (it should touch only the layers benchmark: predicted.json v2 secs and compiler, the steps.txt build reading deleted; their run r20261118-223144-1908), merge it into cursor/circuits-rows-readers-6f04 (a merge, no rebase), run the benchmark suite it touches on a processor node, push. Its build figure is null until the proof lane a5 hunk copies predicted.json into OUT: leave that red as it is and name it in your return.
-
