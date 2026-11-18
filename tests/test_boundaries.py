@@ -147,7 +147,7 @@ BENCHMARKS_IMPORTERS = {
     **dict.fromkeys((
         "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py", "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
-        "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py", "verity/protocols/proofs/flock/prover/python/verity_flock/ir_bench.py",
+        "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
         "tests/verity/protocols/proofs/flock/prover/test_backend_bench.py", "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
         "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
@@ -1237,10 +1237,6 @@ WORLD_PATHS_ALLOWED: dict[str, str] = {
     "circuits/silicon/instructions.py":
         "circuits: each instruction's source string cites the probe run that measured it",
     "circuits/silicon/models.py": "circuits: each model's source string cites the probe run that measured it",
-    "protocols/proofs/spot/prover/cost/inputs.py":
-        "proofs: `MEASURED`, the sampling plan's measured inputs, read by default until every caller passes them",
-    "protocols/proofs/spot/prover/cost/transformer.py":
-        "proofs: a table row saying `SERVERS` is assumed, not in the census",
 }
 
 
