@@ -50,8 +50,6 @@ DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
 #: the variables a run of the door sets with `--env` (`launch_argv`): its interpreter, and whether it is a trial; any other
 #: could change what the node job runs
 DOOR_ENV = frozenset({"VERITY_BENCH_VENV", kit.TRIAL})
-#: what `research run` records in every job's `params.env` (`research.result.ONEDNN_ISA`), admitted at that value alone
-RUN_DEFAULT_ENV = {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
 #: the run's bound, which its GPU lease enforces too: the sweep's and a timed run's
 MINUTES = {"points": 150, "run": 60}
 CENSUS = Path("calibration/census")
@@ -137,7 +135,9 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
 def door_why(attempt: Mapping, run: str, sub: str) -> str | None:
     """Why `run` isn't a run of the door's `sub`: its command isn't the node job `bash NODE_JOB sub` with the door's options
     (`DOOR_OPTIONS`), under the gpu-lease that holds its GPU (the door's own, or `research run --gpus`'s) or alone, or it set
-    a variable with `--env` the door doesn't (`DOOR_ENV`)."""
+    a variable with `--env` the door doesn't (`DOOR_ENV`); what `research run` records in every job's `params.env`
+    (`research.result.env_defaults`) is admitted at its default alone."""
+    from research.result import env_defaults
 
     argv = [str(x) for x in attempt.get("argv") or []]
     cmd = argv[argv.index("--") + 1:] if argv[:1] == ["gpu-lease"] and "--" in argv else argv
@@ -145,8 +145,8 @@ def door_why(attempt: Mapping, run: str, sub: str) -> str | None:
     if cmd[:3] != ["bash", NODE_JOB, sub] or options - DOOR_OPTIONS[sub]:
         return (f"{run} isn't a run of the door: it ran `{shlex.join(argv)[:300]}`, not `bash {NODE_JOB} {sub}` with the "
                 f"door's options (launch it with `verity bench overhead {sub}`)")
-    env = (attempt.get("params") or {}).get("env") or {}
-    if extra := sorted(k for k, v in env.items() if k not in DOOR_ENV and RUN_DEFAULT_ENV.get(k) != v):
+    env, defaults = (attempt.get("params") or {}).get("env") or {}, env_defaults({})
+    if extra := sorted(k for k, v in env.items() if k not in DOOR_ENV and defaults.get(k) != v):
         return f"{run} set {', '.join(extra)} with --env, which a run of the door doesn't: it sets only {', '.join(sorted(DOOR_ENV))}"
     return None
 

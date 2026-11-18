@@ -339,7 +339,7 @@ def main() -> int:
 
 def machine(card: str) -> str:
     from verity_bench import kit
-    return "cpu" if card == "none" else kit.card_short(card, directory=CARD_FILES)
+    return "cpu" if card == "none" else kit.card_short(card)
 
 
 def record(out: Path, model: str, window: str, execution: str, rec: dict) -> None:
