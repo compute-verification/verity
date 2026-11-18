@@ -145,7 +145,7 @@ def test_a_point_refuses_a_steady_state_spec_or_point(tmp_path: Path, monkeypatc
     from verity_bench import cli, steady_plan
 
     root = Path(__file__).resolve().parents[3]
-    held = steady_plan.make_plan("glm53-flock-steady-head-block-h200", root=root,
+    held = steady_plan.make_plan("glm53-flock-steady-head-block", root=root,
                                  lookup=lambda spec, item, identity: (None, None))
     plan = held
     if steady == "point":

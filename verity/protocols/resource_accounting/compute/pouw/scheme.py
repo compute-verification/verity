@@ -126,7 +126,7 @@ def requests(ctx: Any) -> tuple[H.RequireProperty, ...]:
 class Attached:
     """Pearl+ on one served run's exchange: the run's declaration (``declared``), its linear weights (``memory``), each
     step's ``steps`` events, and every linear block computed by the device run (`kernel`). What the adapter reads of it
-    (`verity.hooks.Commits`): ``commitment`` the run's commitment, which the composition's record hashes, ``record``
+    (a report, `verity.protocols.resource_accounting.scheme`): ``commitment`` the run's commitment, which the composition's record hashes, ``record``
     and ``summary`` beside it, and `release`, which finishes the run once serving ends."""
 
     def __init__(self, ctx: Mapping[str, Any]) -> None:

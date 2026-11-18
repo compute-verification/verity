@@ -5380,6 +5380,18 @@
         "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-r6.toml": "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-reps6.toml",
         "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served-h200.toml": "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served.toml"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/harness/specs/glm53-flock-steady-head-block-h200-walk.toml": "benchmarks/harness/specs/glm53-flock-steady-head-block-walk.toml",
+        "benchmarks/harness/specs/glm53-flock-steady-head-block-h200.toml": "benchmarks/harness/specs/glm53-flock-steady-head-block.toml",
+        "benchmarks/harness/specs/llama32-1b-flock-steady-gemm-h200-walk.toml": "benchmarks/harness/specs/llama32-1b-flock-steady-gemm-walk.toml",
+        "benchmarks/harness/specs/llama32-1b-flock-steady-gemm-h200.toml": "benchmarks/harness/specs/llama32-1b-flock-steady-gemm.toml",
+        "benchmarks/harness/specs/llama31-8b-fp8-rtx-served-arm.toml": "benchmarks/harness/specs/llama31-8b-fp8-served-arm.toml",
+        "benchmarks/harness/specs/llama32-1b-1gpu-stock-served-h100.toml": "benchmarks/harness/specs/llama32-1b-1gpu-stock-served.toml",
+        "benchmarks/harness/specs/qwen3-8b-bf16-rtx-served-arm-eager.toml": "benchmarks/harness/specs/qwen3-8b-bf16-served-arm-eager.toml",
+        "benchmarks/harness/specs/qwen3-8b-bf16-rtx-served-arm.toml": "benchmarks/harness/specs/qwen3-8b-bf16-served-arm.toml"
+      }
     }
   ]
 }
