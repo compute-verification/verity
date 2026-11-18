@@ -110,6 +110,7 @@ PHASE1 = Shape("cmp92-phase1-h128-l2", 128, 2, 2, 64, 2, 512, 256, 32, 128)
 #: the smallest shape the tests commit whole
 TINY = Shape("tiny-h32-l1", 32, 1, 2, 16, 1, 64, 256, 8, 16)
 SHAPES = {s.name: s for s in (H200, PHASE1, TINY)}
+#: each shape's short name; ``h200`` names the model shape sized to fit that card, not a read of its card file
 ALIASES = {"h200": H200, "phase1": PHASE1, "tiny": TINY}
 
 
