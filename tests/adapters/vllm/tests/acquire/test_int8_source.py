@@ -31,7 +31,7 @@ def _manifest(steps=(0, 1)):
                  "spec": "Int8KvQuant_v1", "request_id": "r0"} for p in I8.KV_PORTS]
         ids.append({"family": "instance_outputs", "op_path": ATTN, "output_member": "out", "port": "out", "step": e, "engine_step": e,
                     "spec": "Int8LutAttentionRow_v1", "request_id": "r0"})
-        ids.append({"family": "instance_outputs", "op_path": LIN, "output_member": "0", "step": e, "engine_step": e, "spec": "ScaledMmS8_v1"})
+        ids.append({"family": "instance_outputs", "op_path": LIN, "output_member": "0", "step": e, "engine_step": e, "spec": "ScaledMmS8_v3"})
     return {"ranks": 1, "identities": ids}
 
 

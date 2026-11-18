@@ -1,6 +1,7 @@
 """The memory hook: vLLM's model runner, KV cache manager, block pool and scheduler patched once, through `hooks`,
 emitting to the process's exchange (`messages.current`) its ``memory`` events (`verity.hooks`) in the order vLLM acts,
-and taking its schemes' `HoldResident` and `ReuseOldestFreed`: a model parameter is a registered value, a KV block a
+and taking its schemes' `HoldResident`, `ReuseOldestFreed` and `ReleaseValue` (after vLLM's ``load_model``, restored at
+the last detach): a model parameter is a registered value, a KV block a
 range, a request an input.  Each event is at the exchange's step, whose `StepBegan` and `StepEnded` are the admission
 hook's (`engine.admission`): inside ``schedule``, the step being scheduled (`Exchange.next_step`), else the last one
 begun.  It names no scheme, and builds no event no scheme reads.
@@ -54,12 +55,17 @@ def attach() -> Callable[[], None]:
     return _HOOK.attach()
 
 
+def model_of(runner: Any) -> Any:
+    model = runner.model
+    while not hasattr(model, "named_parameters") and hasattr(model, "runnable"):
+        model = model.runnable
+    return model
+
+
 def registered_values(runner: Any, step: int = 0) -> H.RegisteredValues:
     """Every parameter of the runner's model once (tied ones once), by its name, as the model holds it; the ``weight``
     of a linear layer (vLLM's ``LinearBase`` or torch's ``Linear``) marked linear."""
-    model, seen, out = runner.model, set(), []
-    while not hasattr(model, "named_parameters") and hasattr(model, "runnable"):
-        model = model.runnable
+    model, seen, out = model_of(runner), set(), []
     for name, p in model.named_parameters():
         if p.numel() == 0 or p.data_ptr() in seen:
             continue
@@ -110,6 +116,7 @@ class _Hook:
         self.scheduling = False
         self.request: str | None = None
         self.held: list[tuple[Any, Any, Callable[..., Any]]] = []
+        self.released: list[tuple[list[Any], H.ReleaseValue]] = []
 
     def attach(self) -> Callable[[], None]:
         if self.hooks is None:
@@ -126,7 +133,28 @@ class _Hook:
             if not self.attached and self.hooks is not None:
                 hooks, self.hooks = self.hooks, None
                 hooks.uninstall()
+                self.restore_values()
         return detach
+
+    def release_values(self, model: Any, ex: messages.Exchange) -> None:
+        """Release each `ReleaseValue`'s parameter: every parameter of ``model`` on its storage holds an empty tensor."""
+        asks = [r for _, r in ex.requests if isinstance(r, H.ReleaseValue)]
+        params = dict(model.named_parameters(remove_duplicate=False)) if asks else {}
+        for r in asks:
+            if r.value not in params:
+                raise RuntimeError(f"a scheme asks registered value {r.value} released, and the model has no such parameter")
+            ptr = params[r.value].data_ptr()
+            held = [p for p in {id(p): p for p in params.values()}.values() if p.data_ptr() == ptr]
+            for p in held:
+                p.data = p.data.new_empty(0)
+            self.released.append((held, r))
+
+    def restore_values(self) -> None:
+        released, self.released = self.released, []
+        for held, r in released:
+            t = r.restore()
+            for p in held:
+                p.data = t
 
     def at(self, ex: messages.Exchange) -> int:
         return ex.next_step if self.scheduling else ex.step
@@ -159,7 +187,7 @@ class _Hook:
         import importlib.util
 
         h, hook = Hooks(tag=TAG), self
-        self.hooks, self.scheduling, self.request, self.held = h, False, None, []
+        self.hooks, self.scheduling, self.request, self.held, self.released = h, False, None, [], []
 
         def allocate(orig):
             def allocate_slots(manager, request, *a, **kw):
@@ -217,6 +245,7 @@ class _Hook:
                 r = orig(runner, *a, **kw)
                 if (ex := messages.current()).wants("memory"):
                     ex.emit(registered_values(runner, ex.step))
+                hook.release_values(model_of(runner), ex)
                 return r
             return load_model
 

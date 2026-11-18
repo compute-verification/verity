@@ -24,7 +24,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.population import wired_population_program
 from verity.circuits.program import is_input
-from verity.circuits.refs import Concat, runs
+from verity.circuits.refs import Concat, Explicit, Grid, runs
 from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import wiring as WI
@@ -1187,13 +1187,30 @@ def _parts(refs: Any) -> list[Any]:
     return [q for p in refs.parts for q in _parts(p)] if isinstance(refs, Concat) else [refs]
 
 
+def _lanes(p: Any) -> list[tuple[str, int]]:
+    if isinstance(p, Grid):
+        return [(s, i) for s, i, *_x in p.lanes]
+    if isinstance(p, Explicit):
+        return [(s, i) for s, i, _j in p.items]
+    return [(p.space, p.idx)]
+
+
 @pytest.mark.slow
-def test_the_tiny_class_wired_roots_parts_are_within_its_wires_times_its_ranges(tiny_wired):
-    circuit, prog, _ = tiny_wired
-    d = circuit.description()
+def test_the_tiny_class_wired_roots_arguments_each_read_in_at_most_one_part_more_than_the_nodes_they_read(tiny_wired):
+    """A lane of a grid, a strided or affine part, an explicit reference: each is one part. However many units read a node,
+    an argument reads it in one part, but one more for the whole argument, so the description grows with the wires' patterns
+    and never with the units."""
+    _circuit, prog, _ = tiny_wired
     nodes = [n for n in prog.root.body.nodes if not is_input(n.fn)]
-    parts = sum(len(_parts(a.refs)) for n in nodes for a in n.args)
-    assert (len(nodes), parts) == (159, 932) and parts <= len(d["wires"]) * len(d["order"])
+    over, parts, lanes = [], 0, 0
+    for k, n in enumerate(nodes):
+        for a in n.args:
+            ls = [x for p in _parts(a.refs) for x in _lanes(p)]
+            parts, lanes = parts + len(_parts(a.refs)), lanes + len(ls)
+            if len(ls) > len(set(ls)) + 1:
+                over.append((k, n.fn.id, len(ls), len(set(ls))))
+    assert not over
+    assert (len(nodes), parts, lanes) == (159, 348, 418)
 
 
 @pytest.mark.slow

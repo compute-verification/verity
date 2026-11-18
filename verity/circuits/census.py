@@ -117,7 +117,7 @@ from verity.circuits.intervals import Intervals, contains, full, norm, ref_inter
 from verity.circuits.layout import resolve
 from verity.circuits.liveness import _MEMBER_LIMIT
 from verity.circuits.program import input_id, is_input
-from verity.circuits.refs import Affine, Concat, Explicit, Refs, Strided, concat
+from verity.circuits.refs import Affine, Concat, Explicit, Grid, Refs, Strided, concat
 from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
 
 SCHEMA = "verity/census/v1"
@@ -340,8 +340,8 @@ class _Marks:
         self.approximate = False
 
     def walk(self, refs: Refs, into: dict) -> None:
-        if isinstance(refs, Concat):
-            for p in refs.parts:
+        if isinstance(refs, (Concat, Grid)):
+            for p in refs.parts if isinstance(refs, Concat) else refs.lane_parts():
                 self.walk(p, into)
         elif isinstance(refs, Explicit):
             for s, i, leaf in refs.items:
@@ -400,7 +400,7 @@ class _Marks:
 
 
 def _flat(r: Refs) -> list[Refs]:
-    return [q for p in r.parts for q in _flat(p)] if isinstance(r, Concat) else [r]
+    return [q for p in r.parts for q in _flat(p)] if isinstance(r, Concat) else r.pieces() if isinstance(r, Grid) else [r]
 
 
 def _through(r: Refs, args) -> Refs:

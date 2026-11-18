@@ -43,6 +43,15 @@ from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEM
                                            row_leaf)
 from verity.commitments.periods import flock_inputs as FI, history as HW, interface as I, rows as CS, wiring as WI
 
+
+def fixed(w, seed: int = 0) -> dict[str, bytes]:
+    """Salts a test hands in for every port a commit takes in full (`rows.full_ports`), so two commits of one period are
+    one commitment."""
+    from verity.commitments.periods import rows
+
+    w = getattr(w, "window", w)
+    return {p: hashlib.shake_256(f"{seed} {p}".encode()).digest(n * rows.SALT_BYTES) for p, n in rows.full_ports(w).items()}
+
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
 ACC = bind(G.GemmAccumulatorS8, K=K, **G.GEMM_SM120_S8)
@@ -195,24 +204,23 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
     win, ins, outs = window()
     with pytest.raises(ValueError, match="past"):
         win.record(COORD, [a[:1] for a in ins], [a[:1] for a in outs])
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     want = CS.expected_ports(win.window)
     assert set(c.roots) == set(want) and all(c.domains[p].domain_id.hex() == want[p]["domain"] for p in want)
     m1 = win.window.members[1]
     assert np.array_equal(c.rows[m1.port("x")], I.words(ins[0][4:8], 8, 4, K // 2))
     assert np.array_equal(c.rows[m1.port("o0")], outs[0][4:8, None])
-    again = win.close(salt_key=bytes(32))
+    again = win.close(salts_of=fixed(win))
     assert again.roots == c.roots
     changed, _, _ = window()
     changed._recorded[TID][1].words[0][0, 0] ^= 1
-    assert changed.close(salt_key=bytes(32)).roots[win.window.members[1].port("x")] != c.roots[m1.port("x")]
+    assert changed.close(salts_of=fixed(changed)).roots[win.window.members[1].port("x")] != c.roots[m1.port("x")]
 
 
 def test_a_periods_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeypatch):
-    """With no test key, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one sample a port in
+    """Unless a test hands salts in, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one sample a port in
     the ports' order, and stretches none from a key: each port's salts are the bytes the generator gave for it. Two closes
-    of one period sample other salts, so other roots; a test's key still gives its ChaCha20 stream (`rows.salts`), the
-    port's index its nonce."""
+    of one period sample other salts, so other roots; salts a test hands in (``salts_of``) are taken as given."""
     win, _ins, _outs = window()
     ports = [m.port(p) for m in win.window.members for p, _ in m.all_rows]
     sampled = []
@@ -228,8 +236,8 @@ def test_a_periods_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeyp
     assert all(len(c.salts[p]) == CS.SALT_BYTES * len(c.rows[p]) > 0 for p in ports)
     one, two = win.close(), win.close()
     assert all(one.salts[p] != two.salts[p] and one.roots[p] != two.roots[p] for p in ports)
-    keyed = win.close(salt_key=bytes(range(32)))
-    assert [keyed.salts[p] for p in ports] == [CS.salts(bytes(range(32)), k, len(keyed.rows[p])) for k, p in enumerate(ports)]
+    given = fixed(win)
+    assert all(win.close(salts_of=given).salts[p] == given[p] for p in ports)
 
 
 def test_close_concatenates_each_templates_words_once(monkeypatch):
@@ -283,7 +291,7 @@ def test_a_label_in_a_circuit_with_blocks_is_its_runs_class_structure():
     a form of the period's: the honest labelling commits what the unlabelled period does, and the index shows only those
     bounds and the members', an unlabelled stretch of runs one run."""
     win = labelled(HONEST)
-    assert win.close(salt_key=bytes(32)).roots == labelled([(12, None)]).close(salt_key=bytes(32)).roots
+    assert win.close(salts_of=fixed(win)).roots == labelled([(12, None)]).close(salts_of=fixed(win)).roots
     assert [m["labels"] for m in win.labels()["members"]] == [[[4 * m + 2 * j, 4 * m + 2 * j + 2, HONEST[2 * m + j][1]]
                                                                for j in range(2)] for m in range(3)]
     whole = labelled([(4, {"step": 0}), (2, {"slot": 0, "form": "evaluated"}), (1, None), (1, None), (4, {})])
@@ -435,15 +443,23 @@ REQUESTS, STEPS, LAYERS = 2, 2, 2
 
 
 def chain() -> I.Circuit:
-    """Two requests' two decode steps through two layers, a ``Gemm_v2{K=16, N=16}`` unit each, in (layer, step, request)
+    """Two requests' two decode steps through two layers, a ``Gemm_v2{K=16, N=16}`` unit each, in (step, layer, request)
     order: layer 1 reads layer 0's output at its step and request, layer 0 at step s + 1 reads layer 1's output at step s,
-    and layer 0's input at step 0 (the embedding) is external. The template reads itself, so the circuit states an order,
-    a range each layer and step (`ordered`)."""
+    and layer 0's input at step 0 (the embedding) is external, so unit u >= 2 reads unit u - 2, one wire. The template
+    reads itself, so the circuit states an order, a range each layer and step (`ordered`)."""
+    n = LAYERS * STEPS * REQUESTS
+    wires = (I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(n - REQUESTS,), base=0, step=(1,)),)
+    return I.Circuit("chain", ((GEMM, n),), external=(f"{GID}/x",), wires=wires,
+                     order=I.ordered({GID: n}, wires, {GID: range(0, n, REQUESTS)}))
+
+
+def layer_chain() -> tuple[dict[str, int], tuple[I.Wire, ...]]:
+    """`chain`'s units in (layer, step, request) order: layer 0's step 1 (units 2, 3) reads layer 1's step 0 (units 4,
+    5), a later unit of its own template, so no order of its ranges rises."""
     layer = REQUESTS * STEPS
-    wires = (I.Wire(GID, "x", GID, "o0", at=layer, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
-             I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=layer, step=(REQUESTS, 1)))
-    return I.Circuit("chain", ((GEMM, LAYERS * layer),), external=(f"{GID}/x",), wires=wires,
-                     order=I.ordered({GID: LAYERS * layer}, wires, {GID: range(0, LAYERS * layer, REQUESTS)}))
+    return {GID: LAYERS * layer}, (
+        I.Wire(GID, "x", GID, "o0", at=layer, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
+        I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=layer, step=(REQUESTS, 1)))
 
 
 def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[np.ndarray], list[np.ndarray]]:
@@ -464,7 +480,7 @@ def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[n
                     x[layer, s, r] = y[0, s, r] if layer else y[1, s - 1, r]
                 y[layer, s, r] = np.asarray(evaluate_batch(GEMM, x[layer, s, r][None], w[layer][None], kernel="reference"),
                                             dtype=np.uint16).reshape(16)
-    order = [(layer, s, r) for layer in range(LAYERS) for s in range(STEPS) for r in range(REQUESTS)]
+    order = [(layer, s, r) for s in range(STEPS) for layer in range(LAYERS) for r in range(REQUESTS)]
     return [np.stack([x[k] for k in order]), np.stack([w[k[0]] for k in order])], [np.stack([y[k] for k in order])]
 
 
@@ -478,7 +494,7 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
     ins, outs = chain_values()
     win.record(GEMM, ins, outs, {"chain": 0})
     assert win.mismatches() == {}
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     publics = {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}
     assert WI.check(win.window.members, publics) == {}
     moved = [replace(m, wired=(("x", "o0", m.wired[0][2][::-1]),)) if m.wired else m for m in win.window.members]
@@ -495,7 +511,7 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
     x[2, 0] ^= 1
     bad.record(GEMM, [x, ins[1]], outs)
     with pytest.raises(ValueError, match="is not the o0 row"):
-        bad.close(salt_key=bytes(32))
+        bad.close(salts_of=fixed(bad))
 
 
 def chain_given(monkeypatch) -> tuple[I.Window, list[dict]]:
@@ -505,7 +521,7 @@ def chain_given(monkeypatch) -> tuple[I.Window, list[dict]]:
     win.record(GEMM, ins, outs, {"chain": 0})
     given = {}
     monkeypatch.setattr(CS, "commit", lambda window, data, **kw: given.setdefault("data", data))
-    win.close(salt_key=bytes(32))
+    win.close(salts_of=fixed(win))
     monkeypatch.undo()
     return win, given["data"]
 
@@ -520,7 +536,7 @@ def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch)
     ms = tuple(replace(m, wired_trees=False) for m in win.window.members)
     held = replace(win.window, members=ms)
     data = [{**d, "rows": {**d["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}}} for d, m in zip(given, ms)]
-    c, plain = CS.commit(held, data, salt_key=bytes(32)), win.close(salt_key=bytes(32))
+    c, plain = CS.commit(held, data, salts_of=fixed(held)), win.close(salts_of=fixed(win))
     wired = {m.port(p) for m in ms for p, _o, _ws in m.wired}
     assert len(wired) == 3 and not wired & (set(c.roots) | set(c.domains) | set(CS.expected_ports(held)))
     assert set(plain.roots) == set(c.roots) | wired and set(CS.expected_ports(win.window)) == set(CS.expected_ports(held)) | wired
@@ -529,7 +545,7 @@ def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch)
         (ms[0].port("o0"), (0, 1)), (ms[1].port("o0"), (0, 1)), (ms[2].port("o0"), (0, 1))]
     assert all(c.bc[m.port("x")] == c.bc[held.held(m, "x")] == plain.bc[m.port("x")] for m in ms[1:])
     with pytest.raises(ValueError, match="given as"):
-        CS.commit(held, given, salt_key=bytes(32))
+        CS.commit(held, given, salts_of=fixed(held))
     with pytest.raises(ValueError, match="several members' outputs"):
         replace(held, members=(ms[0], replace(ms[1], wired=(("x", "o0", (0, 4)),)), *ms[2:]))
     with pytest.raises(ValueError, match="in its writer's order"):
@@ -549,7 +565,7 @@ def _held_window(d: Path, monkeypatch) -> tuple[CS.Binding, CS.Committed, dict]:
     data = [{**g, "rows": {**g["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}},
              **({"refs": np.stack([np.array(w.held_leaves(m, p)) if m.wired else np.arange(m.n) for p, _w in m.rows], axis=1)}
                 if m.tables else {})} for g, m in zip(given, ms)]
-    c = CS.commit(w, data, salt_key=bytes(32))
+    c = CS.commit(w, data, salts_of=fixed(w))
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
                          "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
     CS.write(c, d, {"by": "test"}, {}, registrar=reg)
@@ -766,8 +782,8 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
     fills or the period ingress reads, outside its template's units, of no template or parameter, past its parameter's
     leaves, off its port's rows, cut, or over another's rows is refused by the record, the verifier's period and the
     count, and so is a table that isn't its parameter's every row (the next test takes tables)."""
-    layer, by_id, W = REQUESTS * STEPS, {GID: GEMM}.__getitem__, I.WINDOW_INGRESS
-    weights = I.Read(GID, "w", "weights", 0, (LAYERS, layer), 0, (256, 0))
+    by_id, W = {GID: GEMM}.__getitem__, I.WINDOW_INGRESS
+    weights = I.Read(GID, "w", "weights", 0, (STEPS, LAYERS, REQUESTS), 0, (0, 256, 0))
     reg = I.Registered({"weights": LAYERS * 256}, reads=(weights,))
     win = I.Window(replace(chain(), registered=reg), RUN, SAMPLING_DESIGN, 2)
     plain, tabled = (replace(as_listed(win.window, GEMM), members=tuple(replace(m, tables=t) for m in win.window.members))
@@ -795,11 +811,11 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
     def reads(*rs: I.Read) -> I.Registered:
         return I.Registered({"weights": LAYERS * 256}, reads=rs)
 
-    cut = I.Read(GID, "w", "weights", 0, (LAYERS, layer, 2), 0, (256, 0, 128), cut=(0, 2))
+    cut = I.Read(GID, "w", "weights", 0, (STEPS, LAYERS, REQUESTS, 2), 0, (0, 256, 0, 128), cut=(0, 2))
     for bad, why in [(reads(replace(weights, at=1, radix=(1, 4))), "begins no member"),
                      (reads(replace(weights, port="x")), "a wire or a row table fills"),
                      (reads(weights, I.Read(GID, "x", "weights", 0, (REQUESTS,), 0, (16,))), "both fill rows"),
-                     (reads(replace(weights, radix=(LAYERS, layer + 1))), "among its template's 8"),
+                     (reads(replace(weights, radix=(STEPS, LAYERS, REQUESTS + 1))), "among its template's 8"),
                      (reads(replace(weights, reader="other")), "names no template"),
                      (reads(replace(weights, param="other")), "a registered parameter"),
                      (reads(replace(weights, base=256)), r"leaves \[256, 768\)"),
@@ -863,24 +879,25 @@ def test_a_wires_box_bounds_the_writers_of_the_reader_indices_between_two():
 
 
 def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
-    """`chain`'s template reads itself, and with no order its units in unit order don't fit its wires (layer 1's step 0,
-    units 2 and 3, reads layer 0's step 1, units 4 and 5); its order, a range each layer and step (`ordered`), puts every
-    range a wire reads in a range below that range. An order where a range reads a later one is refused naming the first
-    such wire, an order that doesn't tile each template's units by name, and a cut into ranges no order can rank (layer
-    0's steps one range, read by layer 1's step 0 and reading it) as a cycle."""
+    """`chain`'s template reads itself; its order, a range each layer and step (`ordered`), puts every range a wire reads
+    in a range below that range, and its template's ranges rise. An order where a range reads a later one is refused
+    naming the first such wire, an order that doesn't tile each template's units by name, and a cut into ranges no order
+    can rank (all four steps one range, which reads itself) as a cycle. The same chain in (layer, step, request) order has
+    a unit reading a later unit of its template, so no rising order: a cycle."""
     c = chain()
-    assert c.order == ((GID, 0, 2), (GID, 4, 2), (GID, 2, 2), (GID, 6, 2))
-    with pytest.raises(ValueError, match="order: wire 1 "):
-        I.check_order(c.units, c.wires)
-    for order, why in [(((GID, 0, 4), (GID, 4, 4)), "order: wire 1 "), (((GID, 0, 2), (GID, 2, 2), (GID, 4, 2), (GID, 6, 2)),
-                                                                        "order: wire 1 "),
-                       (((GID, 4, 2), (GID, 0, 2), (GID, 2, 2), (GID, 6, 2)), "order: wire 0 "),
+    assert c.order == ((GID, 0, 2), (GID, 2, 2), (GID, 4, 2), (GID, 6, 2))
+    I.check_order(c.units, c.wires)
+    for order, why in [(((GID, 0, 4), (GID, 4, 4)), "order: wire 0 "),
+                       (((GID, 0, 2), (GID, 4, 2), (GID, 2, 2), (GID, 6, 2)), "order: wire 0 "),
                        (((GID, 0, 2), (GID, 4, 2), (GID, 2, 2)), "don't tile"), (((GID, 0, 4), (GID, 3, 5)), "don't tile"),
                        (((GID, 0, 8), (GID, 8, 0)), "don't tile"), ((("Z", 0, 8),), "order: range 0")]:
         with pytest.raises(ValueError, match=why):
             I.check_order(c.units, c.wires, order)
     with pytest.raises(ValueError, match="cycle: no order of the ranges"):
-        I.ordered(c.units, c.wires, {GID: (4,)})
+        I.ordered(c.units, c.wires, {})
+    units, wires = layer_chain()
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
+        I.ordered(units, wires, {GID: range(0, units[GID], REQUESTS)})
 
 
 EMB = I.resolve("EmbeddingRead_v2{V=4,H=16}")
@@ -1062,7 +1079,7 @@ def test_a_period_commits_a_cut_ports_rows_each_under_its_writers_salt():
     win.record(G8, ins8, outs8)
     win.record(GEMM, ins, outs)
     assert win.mismatches() == {}
-    got = win.close(salt_key=bytes(32))
+    got = win.close(salts_of=fixed(win))
     ms, y8 = win.window.members, outs8[0]
     assert np.array_equal(got.rows[ms[3].port("x#0")], y8[[0, 2]]) and np.array_equal(got.rows[ms[3].port("x#1")], y8[[1, 3]])
     publics = {m.key: got.public_body(k) for k, m in enumerate(ms)}
@@ -1076,7 +1093,7 @@ def test_a_period_commits_a_cut_ports_rows_each_under_its_writers_salt():
     bad.record(G8, ins8, outs8)
     bad.record(GEMM, [x, ins[1]], [np.asarray(evaluate_batch(GEMM, x, ins[1], kernel="reference"), dtype=np.uint16).reshape(3, 16)])
     with pytest.raises(ValueError, match="x#1 row is not the o0 row"):
-        bad.close(salt_key=bytes(32))
+        bad.close(salts_of=fixed(bad))
 
 
 def latent(n: int = 6, at: int = 0, capacity: int = 16, **edit) -> I.History:
@@ -1098,7 +1115,7 @@ def history_window(table: HT.HistoryTable, seed: int = 0) -> tuple[I.Window, CS.
                    registered={"latent": table})
     win.record(G8, ins8, outs8)
     win.record(GEMM, ins, outs)
-    got = win.close(salt_key=bytes(32))
+    got = win.close(salts_of=fixed(win))
     return win, got, {m.key: got.public_body(k) for k, m in enumerate(win.window.members)}
 
 
@@ -1215,7 +1232,7 @@ def test_a_history_tables_period_refuses_rows_it_cant_commit_as_the_tables():
                        registered=None if table is None else {"latent": table})
         win.record(G8, ins8, outs8)
         win.record(GEMM, ins, outs)
-        win.close(salt_key=bytes(32))
+        win.close(salts_of=fixed(win))
 
     table = HT.HistoryTable("program", "latent", 8, 16)
     table.append(outs8[0])
@@ -1612,6 +1629,9 @@ class Supplied(Held):
     def commit(cls, program, value, rows, salts, schema):
         v = cls(value, np.array(rows, dtype=np.uint16))
         v.salts, v.program, v.schema = list(salts), program, schema
+        inner = CS._inner(schema, CS.value_words(v))
+        v.bcs = [CS.INST.commit_string(CS.INST.default_key, inner(np.ascontiguousarray(r, dtype="<u2").tobytes()), y)
+                 for r, y in zip(v.rows, v.salts)]
         return v
 
     def entry(self):
@@ -1737,13 +1757,13 @@ def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_t
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f1", "FORMAT_V2": "f2", "record": staticmethod(record),
                          "digest": staticmethod(lambda rec: "d")})
     win, w = registered(held=("w",))
-    doc = win.write(win.close(salt_key=bytes(32)), tmp_path / "v2", {"by": "test"}, registrar=reg, previous="ab" * 64)
+    doc = win.write(win.close(salts_of=fixed(win)), tmp_path / "v2", {"by": "test"}, registrar=reg, previous="ab" * 64)
     assert (got["registered"], got["previous"], doc["registration"]) == ([w.entry()], "ab" * 64, "f2")
     plain, _ = registered()
-    doc = plain.write(plain.close(salt_key=bytes(32)), tmp_path / "v1", {"by": "test"}, registrar=reg)
+    doc = plain.write(plain.close(salts_of=fixed(plain)), tmp_path / "v1", {"by": "test"}, registrar=reg)
     assert (got["registered"], got["previous"], doc["registration"]) == ([], None, "f1")
     unheld, _ = registered(params={"v": 8}, held=("v",))
-    c = unheld.close(salt_key=bytes(32))
+    c = unheld.close(salts_of=fixed(unheld))
     with pytest.raises(ValueError, match=r"values \['v'\] have no committed value"):
         unheld.write(c, tmp_path / "unheld", {"by": "test"}, registrar=reg)
     assert not (tmp_path / "unheld").exists()
@@ -1763,7 +1783,7 @@ def test_a_registration_names_the_values_its_period_outputs_after_its_ports(tmp_
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f1", "FORMAT_V2": "f2", "record": staticmethod(record),
                          "digest": staticmethod(lambda rec: "d")})
     win, _ = registered()
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     CS.registration(c, {"by": "test"}, registrar=reg)
     ports = list(roots)
     assert [r["port"] for r in ports] == list(c.roots) and ports
@@ -1804,7 +1824,7 @@ def test_the_period_commits_each_read_port_as_a_table_of_the_registered_rows_und
     positions (`write`), the verifier derives the same members from the record, and its ``--registered`` file names each
     unit's row from the record and the pin alone."""
     win, w = registered()
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     m1 = win.window.members[1]
     assert m1.tables == (("x", 4), ("sx", 4), ("wrow", 2), ("sw", 4))
     assert np.array_equal(c.rows[m1.port("wrow")], w.rows[[2, 3]]) and c.salts[m1.port("wrow")] == w.salts[2] + w.salts[3]
@@ -1876,7 +1896,7 @@ def test_a_value_of_a_declared_format_is_read_in_it(tmp_path):
     assert replace(win.circuit, registered=held).program()[0].fn.signature()[0][0] == ("w", Array(6 * K // 4, Value(32)))
     assert I.read_shape(win.circuit, "w") == {"value": "w", "words": K // 4, "rows": 6, "word_bits": 32, "row_schema": SEG}
     assert {s for m in win.window.members for p, s in m.schemas if p == "wrow"} == {SEG}
-    c, m1 = win.close(salt_key=bytes(32)), win.window.members[1]
+    c, m1 = win.close(salts_of=fixed(win)), win.window.members[1]
     assert np.array_equal(c.rows[m1.port("wrow")], w.rows[[2, 3]].view("<u2")) and c.salts[m1.port("wrow")] == w.salts[2] + w.salts[3]
     _same_commit(registered(formats={"w": FP32_SEG})[0], registered(formats={"w": FP32_SEG}, by_reference=True)[0], tmp_path)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
@@ -1948,9 +1968,8 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     units' own rows, and the wiring check reads a unit's string through its ref, the row its statement reads. The verifier
     derives the same members, a wire moved to other writers is refused, and so is a ref moved to another unit's row."""
     ins, outs = chain_values()
-    layer = REQUESTS * STEPS
-    w = Bound("w", ins[1][::layer].reshape(LAYERS, 256))
-    read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
+    w = Bound("w", ins[1][:LAYERS * REQUESTS:REQUESTS].reshape(LAYERS, 256))
+    read = I.Read(GID, "w", "w", at=0, radix=(STEPS, LAYERS, REQUESTS), base=0, step=(0, 256, 0))
     circuit = replace(chain(), registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
     win = I.Window(circuit, RUN, SAMPLING_DESIGN, 2, registered={"w": w})
     ms = win.window.members
@@ -1958,7 +1977,7 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
         (0, (("x", 2), ("w", 1)), ()), (2, (("x", 2), ("w", 1)), (("x", "o0", (0, 1)),)),
         (4, (("x", 2), ("w", 1)), (("x", "o0", (2, 3)),)), (6, (("x", 2), ("w", 1)), (("x", "o0", (4, 5)),))]
     win.record(GEMM, ins, outs)
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     publics = {m.key: c.public_body(k) for k, m in enumerate(ms)}
     assert WI.check(ms, publics) == {} and WI.check_drawn(ms, publics, range(8)) == {}
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
@@ -1978,7 +1997,7 @@ def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
     `write` writes under one index salt byte for byte, and each member's prover body as the files make it
     (`rows.read_private`), where ``refd``'s leave a registered value's rows and salts out of the member's own file
     (``value_rows``); both leave a wired port's (``wired_rows``)."""
-    a, b = full.close(salt_key=bytes(32)), refd.close(salt_key=bytes(32))
+    a, b = full.close(salts_of=fixed(full)), refd.close(salts_of=fixed(refd))
     assert list(a.roots.items()) == list(b.roots.items()) and a.bc == b.bc and a.salts == b.salts
     assert list(a.rows) == list(b.rows) and all(np.array_equal(a.rows[p], b.rows[p]) for p in a.rows)
     def record(_program, *x, **k):
@@ -2011,8 +2030,8 @@ def fed_chain() -> tuple[I.Circuit, Bound, list[np.ndarray], list[np.ndarray], l
     sy = np.asarray(evaluate_batch(SRC, sx, sw, kernel="reference"), dtype=np.uint16).reshape(REQUESTS, 16)
     ins, outs = chain_values(first=sy)
     layer = REQUESTS * STEPS
-    w = Bound("w", ins[1][::layer].reshape(LAYERS, 256))
-    read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
+    w = Bound("w", ins[1][:LAYERS * REQUESTS:REQUESTS].reshape(LAYERS, 256))
+    read = I.Read(GID, "w", "w", at=0, radix=(STEPS, LAYERS, REQUESTS), base=0, step=(0, 256, 0))
     circuit = replace(chain(), templates=((SRC, REQUESTS), (GEMM, LAYERS * layer)), external=(f"{SID}/x", f"{SID}/w"),
                       wires=(I.Wire(GID, "x", SID, "o0", at=0, radix=(REQUESTS,), base=0, step=(1,)), *chain().wires),
                       registered=I.Registered({"w": LAYERS * 256}, reads=(read,)), order=((SID, 0, REQUESTS), *chain().order))
@@ -2071,7 +2090,7 @@ def _long_chain(layers: int, d: Path) -> None:
     win = I.Window(circuit, RUN, SAMPLING_DESIGN, 1, registered={"w": Bound("w", w.reshape(layers, 256))})
     win.record(SRC, [sx, sw], ys[:1])
     win.record(GEMM, [None, None], [np.concatenate(ys[1:])])
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(lambda *x, **k: {"leaf_layer": "l"}),
                          "digest": staticmethod(lambda rec: "d")})
     win.write(c, d, {"by": "test"}, registrar=reg)
@@ -2110,7 +2129,7 @@ def test_wired_and_registered_rows_recorded_by_reference_commit_as_their_rows_gi
         free = I.Window(circuit, RUN, SAMPLING_DESIGN, 2, registered={"w": w})
         free.record(SRC, [None, sw], feed)
         free.record(GEMM, ins, outs)
-        free.close(salt_key=bytes(32))
+        free.close(salts_of=fixed(free))
 
 
 class _Counted(list):
@@ -2134,7 +2153,7 @@ def test_a_periods_registered_rows_are_each_sampled_once(monkeypatch, tmp_path):
     win = I.Window(circuit, RUN, SAMPLING_DESIGN, 2, registered={"w": w})
     win.record(SRC, feed_ins, feed)
     win.record(GEMM, [None, None], outs)
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     reads = [e["w"]["positions"] for e in win._entries.values()]
     assert w.salts.reads == LAYERS and len(reads) == 2 * LAYERS and sorted(reads) == [[0], [0], [1], [1]]
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(lambda *x, **k: {"leaf_layer": "l"}),
@@ -2157,7 +2176,7 @@ def test_a_periods_value_rows_and_paths_are_written_once_and_a_sampled_members_b
     win = I.Window(circuit, RUN, SAMPLING_DESIGN, 2, registered={"w": w})
     win.record(SRC, feed_ins, feed)
     win.record(GEMM, [None, None], outs)
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
                          "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
     win.write(c, tmp_path, {"by": "test"}, registrar=reg)
@@ -2248,7 +2267,7 @@ def test_a_member_reading_a_registered_value_registers_every_other_port_at_the_r
     win = I.Window(circuit, RUN, SAMPLING_DESIGN, 2, registered={"w": w})
     win.record(SRC, feed_ins, feed)
     win.record(GEMM, [None, None], outs)
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
                          "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
     win.write(c, tmp_path, {"by": "test"}, registrar=reg)
@@ -2303,7 +2322,7 @@ def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(
     mixed.record(GEMM, [None, ins[1][:1]], [outs[0][:1]])
     mixed.record(GEMM, [ins[0][1:], ins[1][1:]], [outs[0][1:]])
     with pytest.raises(ValueError, match="by reference for some units"):
-        mixed.close(salt_key=bytes(32))
+        mixed.close(salts_of=fixed(mixed))
 
 
 def _cut(circuit: I.Circuit, units: int = 2, registered: dict | None = None) -> I.Window:
@@ -2316,7 +2335,7 @@ def _handed(win: I.Window) -> tuple[CS.Binding, list[dict], dict]:
     got = []
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(CS, "commit", lambda window, data, **kw: got.append((window, data, kw)))
-        win.close(salt_key=bytes(32))
+        win.close(salts_of=fixed(win))
     ((window, data, kw),) = got
     return window, data, {k: v for k, v in kw.items() if v}
 
@@ -2437,7 +2456,7 @@ def test_a_commit_into_a_directory_refuses_what_it_would_hold_whole(monkeypatch,
         CS.commit(w, short, into=tmp_path / "bad", **kw)
     tabled, rows = _beside_a_row_table(*given_by_reference(monkeypatch)[:2]), given_by_reference(monkeypatch)[1]
     with pytest.raises(ValueError, match="takes no row tables"):
-        CS.commit(tabled, rows, into=tmp_path / "bad", salt_key=bytes(32))
+        CS.commit(tabled, rows, into=tmp_path / "bad", salts_of=fixed(tabled))
     c = CS.commit(w, data, into=tmp_path / "into", **kw)
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(lambda *x, **k: {"leaf_layer": "l"}),
                          "digest": staticmethod(lambda rec: "d")})
@@ -2451,7 +2470,7 @@ def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch,
     """The peak, pinned: committing 2,048 coordinates' rows into a directory, a run of 64 units at a time from a producer
     that makes each run when it is asked, allocates at its peak under a quarter of the bytes the window commits (its
     rows, salts and ``b || c``, `rows.window_bytes`), where the whole commit of the same rows, given as arrays, holds
-    more than all of them; the roots are the same."""
+    more than all of them but the salts it is handed; the roots are the same."""
     import tracemalloc
 
     n, chunk = 2048, 64
@@ -2481,11 +2500,13 @@ def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch,
             tracemalloc.stop()
 
     CS.commit(replace(w), [{k: {p: a[:] for p, a in d[k].items()} for k in d} for d in made()], chunk=chunk)
-    c, streamed = peak(lambda: CS.commit(w, made(), into=tmp_path, chunk=chunk, salt_key=bytes(32)))
+    ys = fixed(w)
+    c, streamed = peak(lambda: CS.commit(w, made(), into=tmp_path, chunk=chunk, salts_of=ys))
     whole, held = peak(lambda: CS.commit(w, [{k: {p: a[:] for p, a in d[k].items()} for k in d} for d in made()],
-                                         chunk=chunk, salt_key=bytes(32)))
+                                         chunk=chunk, salts_of=ys))
     assert c.roots == whole.roots and len(w.members) == 1
-    assert 4 * streamed < total < held, (streamed, total, held)
+    given = sum(len(y) for y in ys.values())
+    assert 4 * streamed < total and total - given < held, (streamed, total, given, held)
 
 
 def given_by_reference(monkeypatch) -> tuple[CS.Binding, list[dict], Bound]:
@@ -2567,9 +2588,9 @@ def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(mo
     whose linked members' rows are read off their ``x`` tables. The rows as `Window.close` gives them commit; each one edit
     is refused."""
     window, data, _w = given_by_reference(monkeypatch)
-    CS.commit(window, data, salt_key=bytes(32))
+    CS.commit(window, data, salts_of=fixed(window))
     with pytest.raises(ValueError, match=re.escape(why)):
-        CS.commit(edit(window, data), data, salt_key=bytes(32))
+        CS.commit(edit(window, data), data, salts_of=fixed(edit(window, data)))
 
 
 def test_a_linked_members_x_rows_are_rows_of_the_row_tables_schema(monkeypatch):
@@ -2596,28 +2617,28 @@ def test_a_row_committed_under_a_registered_values_salt_is_the_values_row(monkey
     given = {}
     with monkeypatch.context() as mp:
         mp.setattr(CS, "commit", lambda window, data, **kw: given.update(window=window, data=data, **kw))
-        win.close(salt_key=bytes(32))
+        win.close(salts_of=fixed(win))
     window, data, salts_of, carried = (given[k] for k in ("window", "data", "salts_of", "carried"))
     port = window.members[1].port("wrow")
     assert sorted(carried) == sorted(salts_of) == sorted(m.port("wrow") for m in window.members)
     assert salts_of[port] == w.salts[2] + w.salts[3] and carried[port] == w.bcs[2] + w.bcs[3]
-    held = CS.commit(window, data, salt_key=bytes(32), salts_of=salts_of, carried=carried)
-    free = CS.commit(window, data, salt_key=bytes(32), salts_of=salts_of)
+    held = CS.commit(window, data, salts_of=salts_of, carried=carried)
+    free = CS.commit(window, data, salts_of=salts_of)
     assert held.roots == free.roots and held.bc == free.bc and held.bc[port] == carried[port]
     other = [dict(d, rows=dict(d["rows"])) for d in data]
     other[1]["rows"]["wrow"] = data[1]["rows"]["wrow"].copy()
     other[1]["rows"]["wrow"][1, 0] ^= 1
     with pytest.raises(ValueError, match=re.escape(f"{port}: rows [1] are not the rows its salts already carry")):
-        CS.commit(window, other, salt_key=bytes(32), salts_of=salts_of, carried=carried)
-    assert CS.commit(window, other, salt_key=bytes(32), salts_of=salts_of).roots[port] != held.roots[port]
+        CS.commit(window, other, salts_of=salts_of, carried=carried)
+    assert CS.commit(window, other, salts_of=salts_of).roots[port] != held.roots[port]
     for no in ({"salts_of": {}, "carried": carried},
                {"salts_of": salts_of, "carried": {**carried, port: carried[port][:-1]}}):
         with pytest.raises(ValueError, match="carried .*: not one 128-byte"):
-            CS.commit(window, data, salt_key=bytes(32), **no)
+            CS.commit(window, data, salts_of=fixed(window), **no)
     moved, _ = registered()
     moved._recorded[TID][0].words[2][:2, 0] ^= 1
     with pytest.raises(ValueError, match=re.escape(f"{window.members[0].port('wrow')}: rows [0] are not the rows its salts")):
-        moved.close(salt_key=bytes(32))
+        moved.close(salts_of=fixed(moved))
 
 
 class Table(Held):
@@ -2779,6 +2800,8 @@ def test_an_opening_may_declare_the_output_that_returns_its_row():
 
 
 @pytest.mark.slow
+@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason="o1 reads embed/opened (3 words) at width 1: the "
+                   "registered leaves cut again at a reader's width waits on circuits and lean defining the cut")
 def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
     """A table's registered reads committed: each table read and verdict a registered read of its supplied value, the opening's row,
     salt and path the units' own; and the verifier derives the same members, and each member's ``--registered`` file, from
@@ -2788,9 +2811,9 @@ def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
     traced in each; the cheap check of the reads themselves is `test_a_tables_reads_and_verdicts_take_its_supplied_values`."""
     win, table = embedding_window()
     with pytest.raises(ValueError, match="Window.supply"):
-        win.close(salt_key=bytes(32))
+        win.close(salts_of=fixed(win))
     win.supply(REG)
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     m0, m1 = win.window.members
     assert [(m.base, m.n, m.tables) for m in (m0, m1)] == [
         (0, 2, (("tok", 2), ("root", 1), ("domain", 1), ("row", 2), ("salt", 2), ("path", 2))),
@@ -2820,7 +2843,7 @@ def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
         I.registered_reads(doc, mine, {}, registered=REG)
     win.registered = {**win.registered, "embed/opened": Held("embed/opened", np.ones((1, 3), dtype=np.uint16))}
     with pytest.raises(ValueError, match="rows of 3 16-bit leaves, not the port's 1 16-bit words"):
-        win.close(salt_key=bytes(32))
+        win.close(salts_of=fixed(win))
 
 
 def test_the_boundary_is_carried_as_given():

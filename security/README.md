@@ -71,7 +71,7 @@ incorrect set of the trace the extractor recovers.
      read in the error.
    - Open: the targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
      `NetworkAttesterSound`, `WipeSound`), each open until proved (PoUW's:
-     `verity/protocols/resource_accounting/compute/pouw/verifier/`). Remote: the first two, `WiresSound`.
+     `verity/protocols/resource_accounting/compute/pouw/verifier/`). Remote: the first two.
 
 **The real assumptions.** Items 1 to 3 rest on three: `Claims.ExpectedCR` (SHA-512 collision resistance, which the
 other SHA-512 shapes fold into) and `Claims.Hm96Hiding` (hm96 leaves hide at the pinned key), each under the lock's
@@ -539,7 +539,7 @@ PoUB, network attestation and memory wipes, with PoUS and PoUB-P2 on one store.
   (`Verity.Sampled.checkBlobs_event`), which has a coupling.
 - **The inference-only policy at remote** (`Properties.Remote.SecurityProofs.acceptInferenceOnly`, proved): remote's
   accept gives `InferenceOnlyHeld`, whose SPOT case is `StageHeld`, the one-stage form's. It has no clause for the
-  two-stage form, which the verifier accepts while `SecondStage.FORM` is true, ahead of its proof; the two-stage case
+  two-stage form (levels 2), which the verifier accepts ahead of its proof; the two-stage case
   needs its own clause and its open premises.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
   `SHA512CRExpected`, `TileServiceSound`, `TileSampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and

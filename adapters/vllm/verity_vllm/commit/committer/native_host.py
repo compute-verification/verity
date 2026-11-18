@@ -628,9 +628,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
 
     # ------------------------------------------------------------------ lifecycle
 
-    def register_weights(self) -> dict:
+    def register_weights(self, replay: bool = False) -> dict:
         """Registered input: every parameter + buffer hashed once (rows-sha512: `weights_rows`, SHA-512).  Timed and reported apart from
-        steady state, outside its denominator."""
+        steady state, outside its denominator.  Each registration salts under a fresh key; ``replay`` re-registers under the key of the
+        registration this committer holds (`weights_tree`), so an unchanged model reproduces its root."""
         t0 = time.perf_counter()
         # host (default) | device | device-checked: device hashes rows-sha512's rows into the same per-tensor tree on the GPU, by
         # native_rows.cu (`weights_rows`); the weights tree over the tensor roots is built the same either way.  device-checked computes
@@ -638,7 +639,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         mode = settings.VERITY_WEIGHTS_HASH
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")
-        WR = weights_rows.WeightsRows(self._geo_digest, weights_rows.key(getattr(self, "weights_tree", None)))
+        WR = weights_rows.WeightsRows(self._geo_digest, weights_rows.key((getattr(self, "weights_tree", None) or {}) if replay else None))
         roots: list[Any]
         roots, names, n_bytes, checked = [], [], 0, 0
         seen: set[int] = set()

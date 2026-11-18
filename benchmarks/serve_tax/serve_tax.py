@@ -122,9 +122,11 @@ An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it tu
 its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
 its run's directory goes to ``--private`` (``{private}`` in its data): a boundary commitment's classes
 (DIR/boundary/w<window>/p<P>-o<O>/: each class's requests' tokens and its salts, which are values; the run's directory
-keeps each class's public commit.json as a line of server/boundary.PID.jsonl), the history tables' rows and salts, and
-the top-k's counters. A serve's later stages read them, so the corpus client needs ``--private``; a cost's run by
-vLLM's client, which nothing reads them of, gets by default a fresh directory removed when the arm stops.
+keeps each class's public commit.json as a line of server/boundary.PID.jsonl), the history tables' rows and salts,
+the top-k's counters, and an arm's step traces, served ids and edges' outputs (DIR/server/, `records`), which the arm's
+meta.json names its directory for (`private_of`). A serve's later stages read them, so an arm that records, and any
+under the corpus client, needs ``--private``; a cost's run by vLLM's client of an arm that records nothing, which
+nothing reads them of, gets by default a fresh directory removed when the arm stops.
 
 `plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
 
@@ -665,10 +667,29 @@ def check_plugins(env: dict[str, str], arm: Arm) -> None:
                          f"environment: {(p.stderr.strip().splitlines() or ['no output'])[-1]}")
 
 
+def records(arm: Arm) -> bool:
+    """Whether an arm's server records request values that a later stage reads (`servetax_plugin._kept`): its step
+    trace, its served ids, its edges' outputs."""
+    return bool({"record", "ids"} & set(arm.plugin)) or arm.edges
+
+
 def keeps_private(arm: Arm) -> bool:
-    """Whether an arm keeps files on the node: it has a boundary commitment, whose classes' directories hold their
-    requests' tokens and their salts, or its environment or its boundary commitment's object names `PRIVATE`."""
-    return "boundary_rows" in arm.plugin or PRIVATE in json.dumps([arm.env, arm.rows])
+    """Whether an arm keeps files on the node: it records (`records`), it has a boundary commitment, whose classes'
+    directories hold their requests' tokens and their salts, or its environment or its boundary commitment's object
+    names `PRIVATE`."""
+    return records(arm) or "boundary_rows" in arm.plugin or PRIVATE in json.dumps([arm.env, arm.rows])
+
+
+def private_of(d: Path) -> Path | None:
+    """The directory on the node where the arm (meta.json, or the server side's server.json behind the network
+    attester) or the replay (replay.json) at ``d`` keeps its files that hold request values: its step traces, served
+    ids and edges' outputs under server/, a replay's tokens and logprobs. None where it names none, as an arm that
+    records nothing."""
+    for name in ("meta.json", "server.json", "replay.json"):
+        if (d / name).is_file():
+            kept = json.loads((d / name).read_text()).get("private")
+            return Path(kept) if kept else None
+    raise SystemExit(f"{d} holds none of an arm's meta.json, its server side's server.json or a replay's replay.json")
 
 
 def _private(x: object, private: Path | None) -> object:
@@ -792,7 +813,8 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     if arm.plugin:
         env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, "kv_window_s": kv_window_s,
                                       **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {}),
-                                      **({"boundary_rows": rows, "private": str(private)} if rows else {})})
+                                      **({"private": str(private)} if private else {}),
+                                      **({"boundary_rows": rows} if rows else {})})
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
@@ -1784,27 +1806,36 @@ def run(a: argparse.Namespace) -> int:
         profile_run(a)
     if ARMS[a.arm].attester:
         return certified(a)
-    out, held = Path(a.out).resolve(), SHARED.RESEARCH_RUN_DIR
-
-    def outside(private: Path) -> Path:
-        for public in (out, *([Path(held).resolve()] if held else [])):
-            if private.is_relative_to(public):
-                raise SystemExit(f"the private directory {private} is inside {public}, which leaves the node: --private "
-                                 "DIR, outside every run's directory")
-        return private
-
     if a.private:
-        private = outside(Path(a.private).resolve())
-        private.mkdir(mode=0o700, parents=True, exist_ok=True)
-        return serve(a, private)
+        return serve(a, private_dir(a))
     if not keeps_private(ARMS[a.arm]):
         return serve(a, None)
+    if records(ARMS[a.arm]):
+        raise SystemExit(f"arm {a.arm} records its step trace, served ids or edges' outputs, which hold request values "
+                         "and later stages read: --private DIR, outside every run's directory (run.sh: PRIVATE)")
     if a.client != BENCH:
         raise SystemExit(f"arm {a.arm} keeps on the node what holds values (a boundary commitment's classes hold its "
                          "requests' tokens and its salts), and a serve's later stages read it: --private DIR, outside "
                          "every run's directory (run.sh: PRIVATE)")
     with tempfile.TemporaryDirectory(prefix="serve-tax-private.") as d:
-        return serve(a, outside(Path(d).resolve()))
+        return serve(a, outside(Path(d).resolve(), Path(a.out)))
+
+
+def outside(private: Path, out: Path) -> Path:
+    """``private``, refused where it is inside ``out`` or the run's directory, which leave the node."""
+    held = SHARED.RESEARCH_RUN_DIR
+    for public in (out.resolve(), *([Path(held).resolve()] if held else [])):
+        if private.is_relative_to(public):
+            raise SystemExit(f"the private directory {private} is inside {public}, which leaves the node: --private "
+                             "DIR, outside every run's directory")
+    return private
+
+
+def private_dir(a: argparse.Namespace) -> Path:
+    """``--private``, resolved, refused inside ``--out`` or the run's directory (`outside`), and made, mode 0700."""
+    private = outside(Path(a.private).resolve(), Path(a.out))
+    private.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return private
 
 
 def tick_rule(name: str, text: str) -> dict:
@@ -1905,7 +1936,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             "model": model.ref, "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "front_end": front,
             "plugin": list(arm.plugin), "env": arm.env, "settings": value_settings(env), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
-            "lifetime": a.lifetime, "left_out": a.leave_out,
+            "lifetime": a.lifetime, "left_out": a.leave_out, "private": str(private) if records(arm) else None,
             "general": entry_points(arm),
             "boundary_rows": ({"window_s": a.window_s, "check": model.check, **(a.boundary_rows or arm.rows)}
                               if "boundary_rows" in arm.plugin else None),
@@ -2008,6 +2039,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         meta["server_stop"] = stop(server, TERM_GRACE_S if termed else 120.0)
         meta["server_rc"] = server.returncode
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
+        public_steps(out)
         shutil.rmtree(out / ".site", ignore_errors=True)
     return rc
 
@@ -2275,6 +2307,10 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
     signal.signal(signal.SIGTERM, on_term)
     nofile = open_files()
     out = Path(a.out)
+    if records(arm) and not a.private:
+        raise SystemExit(f"arm {a.arm} records its step trace, which holds request values: --private DIR, outside every "
+                         "run's directory (run.sh: PRIVATE)")
+    private = private_dir(a) if a.private else None
     srv = out / "server"
     srv.mkdir(parents=True, exist_ok=True)
     site = plugin_site(out / ".site", arm)
@@ -2282,7 +2318,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context_of(loads, a.max_model_len))
     front = front_argv(port, a.front, cell_payload(cells), srv / "front.jsonl")
     try:
-        env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s)
+        env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, private=private)
         check_plugins(env, arm)
     except SystemExit:
         shutil.rmtree(out / ".site", ignore_errors=True)
@@ -2291,7 +2327,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
            "model": model.ref, "checkpoint": str(checkpoint), "server_argv": argv[1:],
            "front_argv": front[1:], "plugin": list(arm.plugin), "general": entry_points(arm),
            "settings": value_settings(env), "tick": tick, "lifetime": a.lifetime,
-           "cells": cells, "stop_at": a.stop_at, "commit": source_commit(), "versions": versions(),
+           "private": str(private) if records(arm) else None, "cells": cells, "stop_at": a.stop_at, "commit": source_commit(), "versions": versions(),
            "host": os.uname().nodename, "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES,
            "open_files": nofile}
     (out / SERVER_RECORD).write_text(json.dumps(rec, indent=1))
@@ -2332,6 +2368,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
         rec["prefix_resets"] = [json.loads(x) for f in sorted(srv.glob("prefix_resets.*.jsonl"))
                                 for x in f.read_text().splitlines() if x.strip()]
         (out / SERVER_RECORD).write_text(json.dumps(rec, indent=1))
+        public_steps(out)
         shutil.rmtree(out / ".site", ignore_errors=True)
     return rc
 
@@ -2556,8 +2593,10 @@ def tick_args(source: str | None, given_ms: str | None, load: str = "saturated",
 
 
 def step_traces(arm_dir: Path) -> list[Path]:
-    """An arm's step traces, one per engine core, plain or gzipped (run.sh gzips them once the job's table is made)."""
-    return sorted((arm_dir / "server").glob("step_trace.*.jsonl*"))
+    """An arm's step traces, one per engine core, plain or gzipped (run.sh gzips them once the job's table is made),
+    under its private directory (`private_of`)."""
+    kept = private_of(arm_dir)
+    return sorted((kept / "server").glob("step_trace.*.jsonl*")) if kept else []
 
 
 def trace_records(trace: Path) -> list[dict]:
@@ -2565,6 +2604,34 @@ def trace_records(trace: Path) -> list[dict]:
 
     with (gzip.open if trace.suffix == ".gz" else open)(trace, "rt", encoding="utf-8") as f:
         return [json.loads(x) for x in f if x.strip()]
+
+
+#: a step trace's public steps beside the arm's other server records, by its engine core's pid (`public_steps`)
+STEPS = "steps.{}.jsonl.gz"
+
+
+def public_steps(arm_dir: Path) -> list[Path]:
+    """Each of the arm's step traces (`step_traces`) written to its server/ as its public steps: the speculative
+    tokens a decode row runs, and each step's index, tokens, time and rows, each row only its start and its tokens,
+    with no request id, emitted count or stop reason. A price reads these off the node."""
+    import gzip
+
+    got = []
+    for trace in step_traces(arm_dir):
+        lines = []
+        for r in trace_records(trace):
+            if r["kind"] == "header":
+                spec = ((r.get("config") or {}).get("speculative") or {}).get("num_speculative_tokens", 0)
+                lines.append({"kind": "header", "num_speculative_tokens": spec})
+            elif r["kind"] == "step":
+                lines.append({"kind": "step", "step": r.get("step"), "T": r.get("T"), "t": r["t"],
+                              "rows": [[start, m] for _, start, m in r["rows"]]})
+        f = arm_dir / "server" / STEPS.format(trace.name.split(".")[1])
+        f.parent.mkdir(parents=True, exist_ok=True)
+        with gzip.open(f, "wt", encoding="utf-8") as g:
+            g.write("".join(json.dumps(x, separators=(",", ":")) + "\n" for x in lines))
+        got.append(f)
+    return got
 
 
 def window_trace(trace: Path, t0: float, t1: float) -> list[dict]:
@@ -2725,8 +2792,8 @@ def past_end(d: Path, tags: Sequence[str], ends: Sequence[int]) -> dict[str, dic
     as every request does that is decoded to its length whatever it generates, and the output tokens after a
     request's first such id. Empty where the server kept none or ``ends`` is."""
     out: dict[str, dict] = {}
-    marks = set(ends)
-    for path in sorted((d / "server").glob("ids.*.jsonl*")) if marks else ():
+    marks, kept = set(ends), private_of(d)
+    for path in sorted((kept / "server").glob("ids.*.jsonl*")) if marks and kept else ():
         with (gzip.open if path.suffix == ".gz" else open)(path, "rt", encoding="utf-8") as f:
             for line in f:
                 head = line.partition(",")[0]                 # a line opens with its request's id
@@ -4710,8 +4777,9 @@ def main(argv: list[str] | None = None) -> int:
                         "drained, inline, verdicts, ids, tables, stop (the serve's stop rule: ids, max_model_len, outputs)")
     r.add_argument("--private", metavar="DIR",
                    help="where the arm keeps what never leaves the node (a boundary commitment's classes, history tables' "
-                        "rows and salts, the top-k's counters), outside every run's directory (under vLLM's client "
-                        "by default a fresh directory, removed when the arm stops; the corpus client needs it)")
+                        "rows and salts, the top-k's counters, its step traces, served ids and edges' outputs), outside "
+                        "every run's directory (needed by an arm that records and by the corpus client; otherwise under "
+                        "vLLM's client by default a fresh directory, removed when the arm stops)")
     r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: OUT/plan.jsonl)")
     r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan samples from")
     r.add_argument("--seed", type=int, default=0)

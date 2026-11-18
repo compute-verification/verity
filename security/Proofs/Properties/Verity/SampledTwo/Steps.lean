@@ -5,8 +5,8 @@ public import VStarRecursive.SampledTwo
 /-!
 # What an accepted two-stage check ran
 
-The two-stage form's check (`VStar.Recursive.SampledTwo.checkBlobsAtWith`) accepts only through its steps. Where it
-accepts at the switch `form` (`accepted_steps`):
+The two-stage form's check (`VStar.Recursive.SampledTwo.checkBlobsAtInner`) accepts only through its steps. Where it
+accepts (`accepted_steps`):
 
 * the switch is on;
 * every second-stage session's statement is under `2^64` bytes (`stmtsBytesFit`, by `accepted_stmtsBytesFit`);
@@ -47,17 +47,17 @@ private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except 
   | error => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- **The last step accepts** only with the switch on, the run of record's symbol `accept` and the interior audit
+/-- **The last step accepts** only with the run of record's symbol `accept` and the interior audit
 accepting with the same public outputs and profile. -/
-theorem finishWith_accept {form : Bool} {two : Core.Outcome OneStage.Public Core.Integrity} {run : Json}
-    {pub : OneStage.Public} {prof : Core.Integrity} (h : finishWith form two run = .accept pub prof) :
-    form = true ∧ Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧ two = .accept pub prof := by
-  unfold finishWith at h
+theorem finish_accept {two : Core.Outcome OneStage.Public Core.Integrity} {run : Json}
+    {pub : OneStage.Public} {prof : Core.Integrity} (h : finish two run = .accept pub prof) :
+    Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧ two = .accept pub prof := by
+  unfold finish at h
   cases two with
   | reject why => cases h
   | undecided why => cases h
   | accept pub' prof' =>
-    cases hj : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") <;> cases form <;> simp_all
+    cases hj : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") <;> simp_all
 
 /-- **What `readBack` returned** is the value the verifier's parser reads from the record's canonical text, and it
 prints back to that text. -/
@@ -170,23 +170,22 @@ theorem inputAt_interior {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     · cases h
 
 /-- **An accepted two-stage check ran every step** (module docstring). -/
-theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
-    form = true ∧ ∃ c₂ ξ₂ r i run, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i true = .ok run ∧
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) :
+    ∃ c₂ ξ₂ r i run, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i = .ok run ∧
       sourceRead ξ run = .ok () ∧ interiorUnshown p e = .ok () ∧
       Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
       ∃ samplingDesign, secondDesignOf p run = .ok samplingDesign ∧
         secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂ { e.interior.base with verdicts := r.out } =
           .accept pub prof := by
-  unfold checkBlobsAtWith at h
-  cases hp : prepare form p c ξ e bs with
+  unfold checkBlobsAtInner at h
+  cases hp : prepare p c ξ e bs with
   | error err => simp [hp] at h
   | ok v =>
     obtain ⟨two, run⟩ := v
     simp only [hp] at h
-    obtain ⟨hf, hj, htwo⟩ := finishWith_accept h
-    subst hf
+    obtain ⟨hj, htwo⟩ := finish_accept h
     replace hp := (prepare_ok hp).1
     unfold prepareRun at hp
     obtain ⟨⟨c₂, ξ₂, r, i⟩, hi, hp⟩ := bind_ok hp
@@ -200,14 +199,14 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     obtain ⟨samplingDesign, hl, hp⟩ := bind_ok hp
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
     obtain ⟨rfl, rfl⟩ := hp
-    exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, samplingDesign, hl, htwo⟩
+    exact ⟨c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, samplingDesign, hl, htwo⟩
 
 /-- **An accepted two-stage check found the stages' sessions in order** (`stagesOrdered`). -/
-theorem accepted_ordered {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_ordered {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : stagesOrdered p e = .ok () := by
-  unfold checkBlobsAtWith at h
-  cases hp : prepare form p c ξ e bs with
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) : stagesOrdered p e = .ok () := by
+  unfold checkBlobsAtInner at h
+  cases hp : prepare p c ξ e bs with
   | error err => simp [hp] at h
   | ok v =>
     replace hp := (prepare_ok hp).1
@@ -222,11 +221,11 @@ theorem accepted_ordered {form : Bool} {p : Params} {c : OneStage.Commitment} {�
     exact ho
 
 /-- **An accepted two-stage check found no coin tree's line in the first session's log** (`firstTreeless`). -/
-theorem accepted_treeless {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_treeless {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : firstTreeless p e = .ok () := by
-  unfold checkBlobsAtWith at h
-  cases hp : prepare form p c ξ e bs with
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) : firstTreeless p e = .ok () := by
+  unfold checkBlobsAtInner at h
+  cases hp : prepare p c ξ e bs with
   | error err => simp [hp] at h
   | ok v =>
     replace hp := (prepare_ok hp).1
@@ -242,11 +241,11 @@ theorem accepted_treeless {form : Bool} {p : Params} {c : OneStage.Commitment} {
     exact ht
 
 /-- **An accepted two-stage check found each coin tree's rounds opened stream by stream** (`repStreamsOrdered`). -/
-theorem accepted_repOrdered {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_repOrdered {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : repStreamsOrdered p e = .ok () := by
-  unfold checkBlobsAtWith at h
-  cases hp : prepare form p c ξ e bs with
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) : repStreamsOrdered p e = .ok () := by
+  unfold checkBlobsAtInner at h
+  cases hp : prepare p c ξ e bs with
   | error err => simp [hp] at h
   | ok v =>
     replace hp := (prepare_ok hp).1
@@ -264,20 +263,20 @@ theorem accepted_repOrdered {form : Bool} {p : Params} {c : OneStage.Commitment}
 
 /-- **An accepted two-stage check found every second-stage session's statement under `2^64` bytes**
 (`stmtsBytesFit`). -/
-theorem accepted_stmtsBytesFit {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_stmtsBytesFit {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : stmtsBytesFit p e bs = .ok () := by
-  unfold checkBlobsAtWith at h
-  cases hp : prepare form p c ξ e bs with
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) : stmtsBytesFit p e bs = .ok () := by
+  unfold checkBlobsAtInner at h
+  cases hp : prepare p c ξ e bs with
   | error err => simp [hp] at h
   | ok v => exact (prepare_ok hp).2
 
 /-- **An accepted two-stage check found each statement its session's and the counts agreed** (`stmtsSessions`). -/
-theorem accepted_stmtsSessions {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_stmtsSessions {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : stmtsSessions p e bs = .ok () := by
-  unfold checkBlobsAtWith at h
-  cases hp : prepare form p c ξ e bs with
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) : stmtsSessions p e bs = .ok () := by
+  unfold checkBlobsAtInner at h
+  cases hp : prepare p c ξ e bs with
   | error err => simp [hp] at h
   | ok v => exact prepare_sessions hp
 
@@ -350,9 +349,9 @@ interior audit read its session's coin trees, and of two rounds the log shows op
 before the `j`-th and neither the tree's last, the `i`-th is of a stream the tree's spec lists before the `j`-th's,
 or an earlier round of the same place's stream. The check's refusal `Challenger.REP_STREAM_ORDER` is what holds the
 log to it; no premise on the play enters. -/
-theorem accepted_roundsBefore {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_roundsBefore {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) :
     ∃ ts, OneStageZk.treesOf p.audit.base e.interior.base = .ok ts ∧
       ∀ t ∈ ts, ∀ (i j : Nat) (_hij : i < j) (hj : j + 1 < t.opened.size),
         Challenger.roundBefore
@@ -407,13 +406,13 @@ theorem stagesFit_le {ξ ξ₂ : ByteArray} {u : Unit} (h : stagesFit ξ ξ₂ =
 
 /-- **An accepted two-stage check's stages each read at most one coin's bytes**: the first stage's bytes `ξ` and the
 bytes `ξ₂` the interior audit's sample read (`inputAt`'s) are each at most `STAGE_BYTES` long. -/
-theorem accepted_fits {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_fits {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) {c₂ : OneStage.Commitment} {ξ₂ : ByteArray}
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) {c₂ : OneStage.Commitment} {ξ₂ : ByteArray}
     {r : OneStageZk.Run} {i : Spot.Run.Input} (hi : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) :
     ξ.size ≤ STAGE_BYTES ∧ ξ₂.size ≤ STAGE_BYTES := by
-  unfold checkBlobsAtWith at h
-  cases hp : prepare form p c ξ e bs with
+  unfold checkBlobsAtInner at h
+  cases hp : prepare p c ξ e bs with
   | error err => simp [hp] at h
   | ok v =>
     replace hp := (prepare_ok hp).1

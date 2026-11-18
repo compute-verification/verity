@@ -13,7 +13,7 @@ instance's composite decodes (`CaseOf`):
 * **The case** (`Case`, `Decoded`): the parameters', commitment's and evidence's bytes and the blobs, decoded by the
   form's own parsers.
 * **The acceptance** (`AcceptsOn`, `FormAccepts`): the form's check accepts the case with its switch on
-  (`checkBlobsAtWith true`), so that nothing a piece proves of an accepted play rests on the switch being off.
+  (`checkBlobsAtInner true`), so that nothing a piece proves of an accepted play rests on the switch being off.
 * **The run of record's input** (`inputOfCase`): the `Spot.Run.Input` the check hands `Spot.Run.run` (`inputAt`), whose
   acceptance RUNCOINS's `RunAcceptsPlay` reads (`AcceptedTwo`).
 * **The reading** (`formReading`, at the coin map's reading of the device's releases, `dev`, a parameter), round by
@@ -58,7 +58,7 @@ def Decoded (k : Case) (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStag
 /-- **The form's check accepts the case, with its switch on.** -/
 def AcceptsOn (k : Case) : Prop :=
   ∃ p c e pub prof, Decoded k p c e ∧
-    VStar.Recursive.SampledTwo.checkBlobsAtWith true p c e.source e k.blobs = .accept pub prof
+    VStar.Recursive.SampledTwo.checkBlobsAtInner p c e.source e k.blobs = .accept pub prof
 
 /-- **The run of record's input on the case**: the one the check hands `Spot.Run.run`; none where the case doesn't
 decode or the check refuses before the run. -/

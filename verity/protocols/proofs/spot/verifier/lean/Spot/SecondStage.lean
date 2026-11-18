@@ -148,8 +148,10 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   rows at to a registered read (`check_ok_refs`), every statement's registered reads to its template's reference
   statement's but for the run's fields, a registered value's rows among what they hold (`check_ok_values`), every
   session's sample to the second sample, cell by cell, and every read it reports to a statement's.
-* **The form**: once every check passes, the run is refused last (`two-stage-form`) unless `FORM` allows it; `FORM`
-  allows it, so a run whose every check passes is accepted, ahead of the soundness proof of its form (`FORM`).
+* **Two levels ahead of their proof**: a run whose every check passes is accepted. A two-level accept's record says
+  what is not covered, and nothing quotes a guarantee for such a run: SPOT[Flock]'s two-stage guarantee
+  (`Flock.SecurityProofs.SpotKSTwo`) takes as a premise that each gate's value has one address, fixed before the run
+  (`SpotFlock.AddressesConnected`), which nothing proves from this check.
 -/
 module
 
@@ -170,20 +172,6 @@ set_option backward.privateInPublic.warn false
 namespace Spot.SecondStage
 
 open Lean (Json)
-
-/-- **The switch**: whether the verifier accepts a two-stage run whose every check of round 2 passes. It is on: the
-verifier accepts the form ahead of its proof, and a two-stage accept's record says what is not covered; nothing quotes a
-guarantee for such a run. Off, it refuses each one last (`two-stage-form`). Three things stand between the form and its
-proof. SPOT[Flock]'s two-stage guarantee (`Flock.SecurityProofs.SpotKSTwo`) takes as a premise that each gate's value has
-one address, fixed before the run (`SpotFlock.AddressesConnected`), which nothing proves from this check. No theorem
-says that a run this verifier accepts is one the verifier that guarantee is stated about (`SpotFlock.V`) accepts. And
-the composite's sampled component has no two-stage form, nor a subprotocol for one, under the one soundness theorem
-(`Verity.Soundness`). -/
-def FORM : Bool := true
-
-def FORM_WHY : String :=
-  "refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the soundness " ++
-  "proof does not cover"
 
 def CELLS_WHY : String :=
   "the interior program's strata are not one range each, of a positive multiple of the replay sample's size"
@@ -1524,11 +1512,10 @@ def interiorFailures (own : Own) : List (String × Json) :=
     | none => []
 
 /-- Every failure of statements `ss` over parts `ps`, the interior record's order's and the schedule's first, the
-`table_rows` they list last (`tableRowsFailures`), then, when there is none and the form isn't allowed, its refusal. -/
-def failures (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
-  let found := interiorFailures own ++ (List.range ss.length).flatMap (stmtFailures own ps ss) ++
+`table_rows` they list last (`tableRowsFailures`). -/
+def failures (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
+  interiorFailures own ++ (List.range ss.length).flatMap (stmtFailures own ps ss) ++
     orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss
-  if found.isEmpty && !allow then [("two-stage-form", Json.str FORM_WHY)] else found
 
 /-- The design is derived over parts `ps`: its links (`linksOk`) and its wires (`wiresOk`). -/
 def designOk (ps : Array Part) (own : Own) : Bool := linksOk ps own && wiresOk ps own
@@ -1539,17 +1526,16 @@ def designFailures (ps : Array Part) (own : Own) : List (String × Json) :=
   (if linksOk ps own then [] else [("second-links", Json.str LINKS_WHY)]) ++
     if wiresOk ps own then [] else [("second-wires", Json.str WIRES_WHY)]
 
-/-- **Round 2's statement check** (module docstring) of statements `stmts`, the two-stage form allowed when `allow`
-(`FORM` in the run): each code once, with the detail it first failed with. The interior record's order and the
+/-- **Round 2's statement check** (module docstring) of statements `stmts`: each code once, with the detail it first failed with. The interior record's order and the
 boundary's schedule are checked before any statement is read (`interiorFailures`). -/
-def check (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
+def check (own : Own) (stmts : Option (Array Json)) : Check :=
   let found := match own.parts, stmts with
     | none, _ => interiorFailures own ++ [("second-cells", Json.str CELLS_WHY)]
     | some ps, none =>
       interiorFailures own ++ if designOk ps own then [("second-statements", Json.str STATEMENTS_WHY)]
         else designFailures ps own
     | some ps, some ss =>
-      if designOk ps own then failures allow own ps ss.toList
+      if designOk ps own then failures own ps ss.toList
       else interiorFailures own ++ designFailures ps own
   found.foldl (fun c x => c.fail x.1 x.2) {}
 
@@ -1583,29 +1569,28 @@ def sampledFailures (own : Own) (ps : Array Part) (ss : List Json) (i : Nat) : L
     | none => [("second-template", detailOf i (.str s.template))]
 
 /-- `failures` over `sampledFailures`. -/
-def failuresSampled (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
-  let found := interiorFailures own ++ (List.range ss.length).flatMap (sampledFailures own ps ss) ++
+def failuresSampled (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
+  interiorFailures own ++ (List.range ss.length).flatMap (sampledFailures own ps ss) ++
     orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss
-  if found.isEmpty && !allow then [("two-stage-form", Json.str FORM_WHY)] else found
 
 /-- **Round 2's statement check of either shape of statement**: `check` itself where every statement is of every slot
 of its part. Where the design is derived and one is of only its part's sampled proof blocks (`anySampled`), the same
 failures in the same order, that statement held to `sampledCodes` (`failuresSampled`). Its theorems say what a pass
 says (`checkAny_ok` and what follows from it) and that it is `check` where no statement is of that shape
 (`checkAny_eq_check`); no guarantee reads it. -/
-def checkAny (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
+def checkAny (own : Own) (stmts : Option (Array Json)) : Check :=
   match own.parts, stmts with
   | some ps, some ss =>
     if designOk ps own && anySampled own ps ss.toList then
-      (failuresSampled allow own ps ss.toList).foldl (fun (c : Check) x => c.fail x.1 x.2) {}
-    else check allow own stmts
-  | _, _ => check allow own stmts
+      (failuresSampled own ps ss.toList).foldl (fun (c : Check) x => c.fail x.1 x.2) {}
+    else check own stmts
+  | _, _ => check own stmts
 
 /-- Where no statement is of only its part's sampled proof blocks, `checkAny` is `check`: what is proved of `check`
 (`check_ok` and what follows from it) holds of `checkAny` at every such run. -/
-theorem checkAny_eq_check {allow : Bool} {own : Own} {stmts : Option (Array Json)}
+theorem checkAny_eq_check {own : Own} {stmts : Option (Array Json)}
     (h : ∀ ps ss, own.parts = some ps → stmts = some ss → anySampled own ps ss.toList = false) :
-    checkAny allow own stmts = check allow own stmts := by
+    checkAny own stmts = check own stmts := by
   unfold checkAny
   cases hp : own.parts with
   | none => rfl

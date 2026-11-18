@@ -1,19 +1,20 @@
 """The serve-tax arms' changes to vLLM's own OpenAI server, as a vLLM general plugin (`register`, entry point group
 ``vllm.general_plugins``, run in each of the server's processes): with ``VERITY_SERVETAX`` set (a JSON object: ``out``, the
-directory its files go to, ``window_s``, and a true value for each change), every V1 scheduler built in the process gets
+directory its files go to, ``private``, the directory on the node for its files that hold request values (`_kept`:
+``private``/server/), ``window_s``, and a true value for each change), every V1 scheduler built in the process gets
 
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), its
-  records stamped with the wall clock and written by a thread of its own to ``step_trace.PID.jsonl``;
+  records stamped with the wall clock and written by a thread of its own to ``private``/server/``step_trace.PID.jsonl``;
 - ``ids``: `ServedIds`, each request's prompt ids and the ids it was served, a line a request when it finishes, written
-  by a thread of its own to ``ids.PID.jsonl``: what a replay of a pass is given and compared with where the client that
-  sent it keeps neither (vLLM's own);
+  by a thread of its own to ``private``/server/``ids.PID.jsonl``: what a replay of a pass is given and compared with
+  where the client that sent it keeps neither (vLLM's own);
 - ``to_length``: each request decoded to its ``max_tokens`` (`to_length`), as vLLM decodes one sent with
   ``ignore_eos``, for requests that come through the network attester, whose id request has no such field;
 - ``idle_reset``: `IdleReset`, the prefix cache emptied for a request that arrives after the scheduler has held none
   for `IDLE_RESET_S`, each reset a line of ``prefix_resets.PID.jsonl``: a load's passes each start from an empty
   cache on a server whose reset route the client can't reach (the certified tick's server answers its allow-list);
 - ``release_order``: `ReleaseGate`, the requests added to the scheduler in the network attester's release order
-  (`serve_admit.ReleaseOrder`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
+  (its frontend, through `verity_vllm.messages.attester`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
   numbers them, standing in for the network attester's headers);
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
@@ -38,7 +39,7 @@ and with ``edges_s`` (seconds after the first request whose id holds ``edge_tag`
 busy time each step since the last edge) is written off the engine loop. With the uniprocess executor, so are its
 `boundary.dump_core` and block fingerprints (``edges/``) and its state (``kv_dir``/edge-K.state.pkl), and the KV pool's
 bytes at the edges ``save_kv`` names to ``kv_dir``/edge-K.kv; from the first edge ``save_kv`` names to the last edge, each
-step's sampled tokens and their logprobs' bits go to ``edges/outputs.PID.jsonl``. With a tensor-parallel executor each
+step's sampled tokens and their logprobs' bits go to ``private``/server/edges/outputs.PID.jsonl. With a tensor-parallel executor each
 rank keeps its part in its own process (`ranks_take`), copied to host memory on the ranks ``kv_copy`` names.
 
 The tick's plugin (`verity_vllm.pipeline.tick_plugin`) is a separate entry point, loaded after this one, so its gate wraps
@@ -120,19 +121,21 @@ class IdleReset:
 
 class ReleaseGate:
     """The scheduler's ``add_request`` in release order: each request's (run, n) from its engine id (``key``), submitted to
-    a `serve_admit.ReleaseOrder` that forwards it to ``add`` once every earlier number of its run has come or passed (an
+    the network attester's release order that forwards it to ``add`` once every earlier number of its run has come or passed (an
     abort of a held one, or ``hold_s`` without it). The order's skip timers fire from `poll`, which the engine core calls
     at each schedule and while it waits on its input with requests held."""
 
     def __init__(self, add: Callable[[Any], Any], abort: Callable[[list[str]], Any], *, hold_s: float = 5.0,
                  key: Callable[[str], tuple[str, int] | None], clock: Callable[[], float] = time.monotonic) -> None:
-        from verity.protocols.resource_accounting.network.prover.admission import RELEASE_HEADER, RUN_HEADER, ReleaseOrder
+        from verity_vllm import messages
 
-        self.headers = (RELEASE_HEADER, RUN_HEADER)
         self.key_of, self.clock = key, clock
         self.timers: list[tuple[float, Callable[[], None]]] = []
-        self.order = ReleaseOrder(lambda adm: add(adm.request), lambda engine_id: abort([engine_id]), hold_s=hold_s,
-                                  schedule=lambda delay, fn: self.timers.append((self.clock() + delay, fn)))
+        self.order = messages.attester().attach(messages.Exchange(), {
+            "admit": {"order": "release-order", "hold_ms": hold_s * 1000}, "submit": lambda adm: add(adm.request),
+            "abort": lambda engine_id: abort([engine_id]),
+            "schedule": lambda delay, fn: self.timers.append((self.clock() + delay, fn))}).front
+        self.headers = self.order.headers
 
     def add(self, request: Any) -> None:
         k = self.key_of(request.request_id)
@@ -489,6 +492,15 @@ def _logits_runner(execute: Callable[..., Any], cfg: Mapping[str, Any], capturin
     return execute_model
 
 
+def _kept(cfg: Mapping[str, Any], name: str) -> Path:
+    """Where the server keeps its file ``name``, which holds request values: ``private``/server/``name``, on the node and
+    never under ``out``. Refused where the configuration names no ``private``."""
+    if not cfg.get("private"):
+        raise RuntimeError(f"{name} holds request values, kept on the node under the configuration's private "
+                           "directory, and it names none (serve_tax.py run --private DIR)")
+    return Path(cfg["private"]) / "server" / name
+
+
 def _lines(path: Path) -> Callable[[dict], None]:
     path.parent.mkdir(parents=True, exist_ok=True)
     fh = path.open("a")
@@ -598,7 +610,7 @@ def local_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
     active = [False]
     last = {"step": trace.scheduled, "resumed_t": None}
     writer: list[threading.Thread | None] = [None]
-    hooks.wrap(sched, "update_from_output", step_outputs_hook(trace, _lines_behind(d / f"outputs.{pid}.jsonl"),
+    hooks.wrap(sched, "update_from_output", step_outputs_hook(trace, _lines_behind(_kept(cfg, f"edges/outputs.{pid}.jsonl")),
                                                               lambda: active[0]))
 
     def take(e: B.Edges, info: dict) -> None:
@@ -728,11 +740,13 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
     pid = os.getpid()
     done: list[Any] = []
     if cfg.get("record"):
-        trace = StepTrace(out / f"step_trace.{pid}.jsonl", clock=time.time, writer=True).install(sched)
+        path = _kept(cfg, f"step_trace.{pid}.jsonl")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        trace = StepTrace(path, clock=time.time, writer=True).install(sched)
         done.append(trace)
     hooks = Hooks(tag="serve-tax")
     if cfg.get("ids"):
-        ids = ServedIds(_lines_behind(out / f"ids.{pid}.jsonl"))
+        ids = ServedIds(_lines_behind(_kept(cfg, f"ids.{pid}.jsonl")))
 
         def keep_prompt(orig):
             def wrapped(request, *a, **kw):

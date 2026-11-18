@@ -1,6 +1,7 @@
-"""The device check of dc's five GPU scripts, run on a CPU with stand-ins for nvidia-smi and nvcc: on a card of another
+"""The device check of dc's GPU scripts, run on a CPU with stand-ins for nvidia-smi and nvcc: on a card of another
 compute capability a script stops with exit 2 and names what the device reports, and on its own card it goes on to the
-build (which the stand-in nvcc refuses). The jobs themselves need an H200 or a B200."""
+build (which the stand-in nvcc refuses). run.sh takes its family from the card: a card whose target dc has no probes
+for stops it with exit 2 before anything is built. The jobs themselves need an H200 or a B200."""
 from __future__ import annotations
 
 import os
@@ -12,8 +13,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 DC = "calibration/pouw/dc"
 #: (script, its arguments, the compute capability it needs, its exit when the build is refused)
-JOBS = [("run.sh", ["sm90"], 9, 1), ("run.sh", ["sm100"], 10, 1), ("uni.sh", ["sm90"], 9, 1), ("uni.sh", ["sm100"], 10, 1),
-        ("pipe.sh", [], 10, 1), ("ffill.sh", [], 9, 1), ("s8_mma.sh", ["sm90"], 9, 4), ("s8_mma.sh", ["sm100"], 10, 4)]
+JOBS = [("uni.sh", ["sm90"], 9, 1), ("uni.sh", ["sm100"], 10, 1), ("pipe.sh", [], 10, 1), ("ffill.sh", [], 9, 1),
+        ("s8_mma.sh", ["sm90"], 9, 4), ("s8_mma.sh", ["sm100"], 10, 4)]
+#: the name nvidia-smi gives a card of each compute capability
+NAMES = {"9.0": "NVIDIA H200", "10.0": "NVIDIA B200", "12.0": "NVIDIA RTX PRO 6000 Blackwell Server Edition"}
 
 
 def _start(tmp_path: Path, script: str, args: list[str], reported: str) -> subprocess.CompletedProcess:
@@ -21,13 +24,14 @@ def _start(tmp_path: Path, script: str, args: list[str], reported: str) -> subpr
     bin_ = tmp_path / "bin"
     bin_.mkdir()
     (bin_ / "nvidia-smi").write_text(
-        '#!/bin/sh\ncase "$*" in *--query-gpu=*) echo "$STAND_IN_CC" ;; *) echo stand-in ;; esac\n')
+        '#!/bin/sh\ncase "$*" in *--query-gpu=name,*) echo "$STAND_IN_NAME, GPU-0, 580.0, 1980, 2619" ;;\n'
+        '  *--query-gpu=name*) echo "$STAND_IN_NAME" ;; *--query-gpu=*) echo "$STAND_IN_CC" ;; *) echo stand-in ;; esac\n')
     (bin_ / "nvcc").write_text('#!/bin/sh\n[ "$1" = --version ] && { echo "nvcc: stand-in"; exit 0; }\nexit 1\n')
     for tool in bin_.iterdir():
         tool.chmod(0o755)
     run_dir = tmp_path / "run"
     (run_dir / "out").mkdir(parents=True)
-    env = {"PATH": f"{bin_}{os.pathsep}{os.defpath}", "NVCC": str(bin_ / "nvcc"), "STAND_IN_CC": reported,
+    env = {"PATH": f"{bin_}{os.pathsep}{os.defpath}", "NVCC": str(bin_ / "nvcc"), "STAND_IN_CC": reported, "STAND_IN_NAME": NAMES[reported],
            "OUT": str(run_dir / "out"), "RESEARCH_RUN_DIR": str(run_dir), "TMPDIR": str(tmp_path)}
     return subprocess.run(["bash", f"{DC}/{script}", *args], cwd=ROOT, env=env, capture_output=True, text=True)
 
@@ -45,3 +49,17 @@ def test_its_own_card_passes_the_check_and_reaches_the_build(tmp_path, script, a
     done = _start(tmp_path, script, args, f"{cc}.0")
     assert done.returncode == refused, (done.stdout, done.stderr)
     assert "needs compute capability" not in done.stderr
+
+
+@pytest.mark.parametrize("reported", ["9.0", "10.0"])
+def test_run_sh_builds_for_the_cards_target(tmp_path, reported):
+    done = _start(tmp_path, "run.sh", [], reported)
+    assert done.returncode == 1, (done.stdout, done.stderr)
+    assert "probes for sm_90a and sm_100a only" not in done.stderr
+
+
+def test_run_sh_refuses_a_card_it_has_no_probes_for_before_any_build(tmp_path):
+    done = _start(tmp_path, "run.sh", [], "12.0")
+    assert done.returncode == 2, (done.stdout, done.stderr)
+    assert "the card's target is sm_120a, and dc has probes for sm_90a and sm_100a only: nothing built" in done.stderr
+    assert not (tmp_path / "run" / "out" / "env" / "nvcc.txt").exists()

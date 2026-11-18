@@ -89,8 +89,9 @@
 #      no GPU visible (STAGES, default
 #      build,commit, in a config run, CONFIG_RUN default 1: the Build, the word check and one instrumented Commit,
 #      the run the session audits; BUILD_GPU=1 leaves the Build to the lease) in SWEEP_DIR (default: scratch removed
-#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; the row's records under 1 MiB are kept in
-#      out/row). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
+#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; the row's public records under 1 MiB are kept in
+#      out/row: its logs, verdicts, summaries, run and step tables, versions, source identity and session record, never
+#      a committed value, a salt, an opening or a binding map). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
 #      holds no vLLM), CUDA_HOME/bin (--cuda-bin) and ROW_ARGS (such as --norm-tap-so PATH);
 #   3. ROLE=both: builds the Lean verifier (LEAN_EXE: that executable instead), starts the verifier on VERIFIER_CPUS
 #      and goes on once it listens;
@@ -430,9 +431,11 @@ card_free() { # NOWAIT=1 with GPU: 75 where a compute process is on those cards,
 }
 if [ -n "$SERVED" ]; then
   card_free || exit 75
-  keep_row() { # the row's records under 1 MiB, into out/row
+  keep_row() { # the row's public records under 1 MiB, into out/row: the sweep holds its committed values and salts too
     [ -d "$SWEEP/$ROW" ] || return 0
-    mkdir -p "$O/row" && (cd "$SWEEP/$ROW" && find . -type f -size -1024k -print0 | xargs -0 -r cp --parents -t "$O/row")
+    mkdir -p "$O/row" && (cd "$SWEEP/$ROW" && find . -type f -size -1024k \( -name '*.log' -o -name verdict.json \
+      -o -name 'summary.*' -o -name runs.jsonl -o -name steps.jsonl -o -name versions.json -o -name source_identity.json \
+      -o -name remote_session.json \) -print0 | xargs -0 -r cp --parents -t "$O/row")
   }
   drop_connection() { # a verifier still waiting for its prover ends at a connection opened and dropped
     (exec 3<> "/dev/tcp/127.0.0.1/$PORT") 2> /dev/null

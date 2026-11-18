@@ -26,8 +26,9 @@ STEPS = ("GEMM_SM90_S8", "GEMM_SM120_S8")
 
 def _definition_rows(x: np.ndarray, sa: np.ndarray, w: np.ndarray, sw: np.ndarray, step: str = "GEMM_SM90_S8") -> np.ndarray:
     k, n = x.shape[1], w.shape[0]
-    defn = bind(gemm.ScaledMmS8, K=k, N=n, **getattr(gemm, step))
-    wv, swv = _words(w), [int(v) for v in sw.view(np.uint32)]
+    defn = bind(gemm.ScaledMmS8V3, K=k, N=n, **getattr(gemm, step))
+    wv = np.ascontiguousarray(w, np.int8).view("<u2").reshape(-1).tolist()
+    swv = np.ascontiguousarray(sw.view(np.uint32), "<u4").view("<u2").reshape(-1).tolist()
     return np.array([evaluate(defn, _words(x[i]), int(sa.view(np.uint32)[i]), wv, swv) for i in range(x.shape[0])],
                     dtype=np.uint16)
 

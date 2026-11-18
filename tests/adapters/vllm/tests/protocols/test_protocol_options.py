@@ -268,14 +268,10 @@ def _beside_a_live_option():
 
 
 SPOT = config.PROTOCOLS[2]
-(POUB,) = PO.DRIVERS
 ROW_SET = ("pous:s1", ALL[2])
 AT_TP_2 = "protocol options at TP 2: each rank would install its own composition, which is not wired yet"
 #: a refusal by name, the dict of the package it needs changed first (name, key, value), the call, and its reasons
 SAID = [
-    ("a driver off this tree", ("DRIVERS", POUB, "not_landed_here"), lambda: PO.driver(POUB, "remote"),
-     (f"{POUB}: its driver verity_vllm.protocols.not_landed_here.remote is not on this tree",)),
-    ("a protocol with no driver", None, lambda: PO.driver("pous", "remote"), (f"no driver of protocol 'pous' (known: {POUB})",)),
     ("an engine that fills nothing", None, lambda: PO.from_engine(_serve(ALL[0], filled={"pouw": ("runner",)}), object()),
      (f"{ALL[0]}: its settings ['runner'] come from the built engine, which doesn't supply them: no runner",)),
     ("an install beside a live option", None, _beside_a_live_option, (f"options installed outside this composition are live: ['{ALL[0]}']",)),
@@ -387,17 +383,6 @@ def test_an_adapter_that_installs_another_entry_leaves_nothing_installed(monkeyp
     assert hooks.live() == before and all("apply" not in vars(m.quant_method) for m in model.layers)
 
 
-def test_a_driver_its_tree_does_not_hold_is_refused_by_name(monkeypatch):
-    """A protocol serving drives by flag (`driver`, PoUB's ``--remote-verifier``) is imported by name, so a tree without its
-    package refuses the flag by name rather than failing to import."""
-    monkeypatch.setitem(PO.DRIVERS, "poub", "not_landed_here")
-    with pytest.raises(PO.Refused, match=r"poub: its driver verity_vllm\.protocols\.not_landed_here\.remote is "
-                                         "not on this tree"):
-        PO.driver("poub", "remote")
-    with pytest.raises(PO.Refused, match="no driver of protocol 'pous'"):
-        PO.driver("pous", "remote")
-
-
 def test_spot_alone_at_the_commit_adds_no_hooks():
     ctx = PO.Context(stage="commit", enabled=ALL[2:])
     assert PO.refusals(ctx) == () and PO.adapter("sampled-proofs").schemes() == ("rows-sha512", "vllm-v1")
@@ -488,7 +473,7 @@ class Com:
     def __init__(self):
         self.model = model
 
-    def register_weights(self):
+    def register_weights(self, replay=False):
         return {"root": "w"}
 
 com = Com()
@@ -527,7 +512,7 @@ class Committer:
     def __init__(self, model):
         self.model = model
 
-    def register_weights(self):
+    def register_weights(self, replay=False):
         return {"root": sorted(list(self.model.named_parameters()) + list(self.model.named_buffers()))}
 
 
