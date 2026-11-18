@@ -9,7 +9,8 @@ Remote's plain sibling (`Core.Site.Registration.Composite.plain`, the inference-
 is refused by name until its soundness is proved (`plainRefusal`): `Verity.PlainSoundness` takes the rows check's target
 as a hypothesis, and no compiled check carries the rows check's id.
 
-    product IDS id | check PARAMS COMMITMENT EVIDENCE | serve        IDS: the subprotocols' ids, comma-separated
+    product IDS [--challenger-key-sha512 H [--challenger-retired FILE]] id | check PARAMS COMMITMENT EVIDENCE | serve
+                                                                     IDS: the subprotocols' ids, comma-separated
 
 The command after `IDS` is the core CLI's (`CoreProtocol.Cli`), of the composite `ofIds IDS`.
 -/
@@ -19,6 +20,7 @@ public import CoreOnsite
 public import CoreProtocol.Cli
 public import CoreProtocol.Site
 public import CoreRemote
+public import VStarRecursive.ChallengerPin
 meta import CoreOnsite
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Site
@@ -62,12 +64,16 @@ def ofIds (ids : List String) : Except String BlobProtocol :=
         .error (s!"[{", ".intercalate ids}] is no composite's subprotocols ({"; ".intercalate named})" ++
           ": protocol soundness covers only those composites")
 
-/-- `product IDS ...`: the core CLI of `ofIds IDS`; 64 when `IDS` is refused or missing. -/
+/-- `product IDS ...`: the core CLI of `ofIds IDS`, under the challenger's pin when given
+(`VStar.Recursive.ChallengerPin.composite`); 64 when `IDS` is refused or missing. -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | ids :: rest =>
     match ofIds ((ids.splitOn ",").filter (· ≠ "")) with
-    | .ok P => P.main rest
+    | .ok P =>
+      match ← VStar.Recursive.ChallengerPin.parse rest with
+      | (some pin, rest) => (VStar.Recursive.ChallengerPin.composite pin P).main rest
+      | (none, rest) => P.main rest
     | .error e => IO.eprintln s!"product: {e}"; return 64
   | [] => IO.eprintln "usage: product IDS id | check PARAMS COMMITMENT EVIDENCE | serve"; return 64
 
