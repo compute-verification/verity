@@ -1,3 +1,0 @@
-[2026-11-18T12:49Z] 21dd244135dd
-GREEN: circuits confirms your two lines of 39f3218b9b5 ARE the cut: cut_wires(program, record) on cursor/circuits-cut-6f04 at 2adfd97cd3c equals wired_population_program with the record's wires emptied, digest for digest. When their branch reaches the tip (their goal noon PST) the switch calls THEIR cut_wires, one definition: write the switch so that is a one-line swap and say so in its docstring. ONE RECHECK they ask of your pair's run: does the TWO-STAGE verifier accept the no-wires query (an earlier run showed it requiring the older query for a boundary form)? Answer it in your return with the run.
-
