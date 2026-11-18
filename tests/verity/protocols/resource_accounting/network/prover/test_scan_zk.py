@@ -868,9 +868,9 @@ def test_an_audit_refused_with_every_member_held_answers_its_execution_phase_nam
     ats = [h.rounds[f"honest-{w}"].at for w in range(G)]
     got = sz.answers(ats, out, results, sz.Fraction(1, 100))
     why = "the scan's audit of execution phase {} refused: check registered: registered"
-    assert got == {w: {"verdict": "reject", "bound": None, "reason": why.format(w), "commitment": R.digest(regs[w])}
-                   for w in range(G)}
     doc = json.loads((out / "answers.json").read_text())
+    assert got == {w: {"verdict": "reject", "bound": None, "reason": why.format(w), "commitment": R.digest(regs[w]),
+                       "public": doc["windows"][w]["answer"]["public"]} for w in range(G)}
     assert (doc["format"], doc["audits"]) == (sz.ANSWERS, []) and "registration" not in doc
     assert [(x["window"], x["registration"], x["answer"]["reason"]) for x in doc["windows"]] == [
         (w, regs[w], why.format(w)) for w in range(G)]

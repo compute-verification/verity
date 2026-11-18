@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from verity_bench.overhead import SHAPES
 
 from verity_vllm.commit import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
@@ -51,8 +52,8 @@ from verity_vllm.engine import int8_exact as E
 
 RESULT_SCHEMA = "research/result/v0.1"
 #: Llama-3.1-8B's int8 linears: (K, N)
-LINEARS = {"self_attn.qkv_proj": (4096, 6144), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (4096, 28672),
-           "mlp.down_proj": (14336, 4096)}
+LINEARS = {f"{'self_attn' if lin in ('qkv', 'o') else 'mlp'}.{lin}_proj": (k, n)
+           for lin, (n, k) in SHAPES["llama-3.1-8b"].linears.items()}
 ARMS = ("plain", "copied", "kept", "overlapped")
 
 

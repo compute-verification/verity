@@ -1,13 +1,13 @@
 """The bench's shapes: the panel's two headlines (prefill m8192-n8192-k8192, decode m32-n8192-k8192), m = n = k from 2,048
-to 32,768, and the linears of Qwen2.5-7B and Llama-3.1-70B at m = 2,048 (prefill) and m = 32 (decode). (n, k) per linear:
-qkv's n is the query width plus two KV widths, gate_up's is twice the intermediate size. Square and headline shapes are
-labelled like the panel (`m{m}-n{n}-k{k}`); every shape's `key` is that form."""
+to 32,768, and Llama-3.1-70B's linears (`verity_bench.overhead.SHAPES`) at m = 2,048 (prefill) and m = 32 (decode). Square
+and headline shapes are labelled like the panel (`m{m}-n{n}-k{k}`); every shape's `key` is that form."""
 
 from __future__ import annotations
 
 import re
 
 from arm import Shape
+from verity_bench.overhead import SHAPES
 
 #: what `bench.py` and the tests read
 __all__ = ["ALIASES", "DECODE_M", "HEADLINE", "all_shapes", "key", "phase_of", "select"]
@@ -17,12 +17,7 @@ SQUARE = (2048, 4096, 8192, 16384, 32768)
 HEADLINE = {"prefill": "m8192-n8192-k8192", "decode": "m32-n8192-k8192"}
 PREFILL_M, DECODE_M = 2048, 32
 
-#: (n, k) of each linear. Qwen2.5-7B: hidden 3,584, intermediate 18,944, 28 heads and 4 KV heads of 128.
-QWEN25_7B = {"qkv": (4608, 3584), "o": (3584, 3584), "gate_up": (37888, 3584), "down": (3584, 18944)}
-#: Llama-3.1-70B: hidden 8,192, intermediate 28,672, 64 heads and 8 KV heads of 128.
-LLAMA31_70B = {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192), "down": (8192, 28672)}
-
-MODELS = {"qwen2.5-7b": QWEN25_7B, "llama3.1-70b": LLAMA31_70B}
+MODELS = {"llama3.1-70b": SHAPES["llama-3.1-70b"].linears}
 
 
 def key(m: int, k: int, n: int) -> str:

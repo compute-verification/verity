@@ -205,7 +205,7 @@ p_pearl_build() {
 # gate JSON BINARY...: the harness's SASS gate
 gate() {
   local json=$1; shift
-  POUW_CUDA_BIN=$CUDA/bin POUW_SASS_GATE_CACHE=none python3 "$POUW/sass_gate.py" "$@" --json "$json"
+  POUW_SASS_GATE_CACHE=none python3 "$POUW/sass_gate.py" --cuda-bin "$CUDA/bin" "$@" --json "$json"
 }
 
 p_pearl_gate() {
