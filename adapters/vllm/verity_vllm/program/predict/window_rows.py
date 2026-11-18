@@ -272,6 +272,22 @@ def _op(d: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
     return str(d["op_path"]), tuple(str(m[0]) for m in d["members"])
 
 
+def captured(pi: Any, rid: str = "") -> list[dict[str, Any]]:
+    """The capture plan of a slot Program (its `ProgramIndex`): the rows the window commits, each with its op path and members
+    as the slot Programs' naming gives them (`ProgramIndex.describe`), a function of the registered compiler alone. A check row
+    (`check_rows`) is not served and is left out; any other row with no committed member is refused by name."""
+    checks = {i for _what, i, _lo, _hi in check_rows(pi)}
+    rows = []
+    for r in pi.rows:
+        d = pi.describe(r)
+        if d is None or not d["members"]:
+            if int(r["i"]) in checks:
+                continue
+            raise ValueError(f"{rid}: row {r['i']} ({r['spec']}) has no committed member")
+        rows.append({**d, "spec": r["spec"]})
+    return rows
+
+
 #: a call boundary's op path: its module, then its fx node, its op counted over the request (`naming`: ``row_quant``,
 #: ``row_quant_1``, ...)
 _NODE = re.compile(r"(.+)/(.+?)(?:_\d+)?")
@@ -406,16 +422,8 @@ class Served:
         ``arrive``, each op read under the op path the record binds it under (`_respelt`). A check of its Program (its
         instances header's ``checks``: the length rule, the seed rule) computes the Program's verdict from committed
         values; the engine never runs it and the record binds no member of it, so it is no served op and is left out. Any
-        other row with no committed member is refused by name."""
-        checks = {i for _what, i, _lo, _hi in check_rows(pi)}
-        rows = []
-        for r in pi.rows:
-            d = pi.describe(r)
-            if d is None or not d["members"]:
-                if int(r["i"]) in checks:
-                    continue
-                raise ValueError(f"{rid}: row {r['i']} ({r['spec']}) has no committed member")
-            rows.append({**d, "spec": r["spec"]})
+        other row with no committed member is refused by name (`captured`)."""
+        rows = captured(pi, rid)
         at = _respelt(rows, store, rid, arrive)
 
         def bound(s: int, op: str, m: str) -> int:
@@ -719,5 +727,5 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *
                              window=window)
 
 
-__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "scan_slots",
+__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "captured", "positions", "scan_slots",
            "state_value"]

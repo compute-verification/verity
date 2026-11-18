@@ -14,6 +14,8 @@ writers = [
 readers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "\"\\$PRED/predicted\\.json\"|--predicted \"\\$PRED\"|--pred \"\\$PRED\"|\"\\$D\" \"\\$PRED\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_compare.py", find = "\"--pred\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "option\\(\"--row-build\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_row.py", find = "PR\\.FILE, \"Circuit\"" },
 ]
 
 [[message]]
@@ -23,10 +25,7 @@ today = "`--required-manifest FILE`: the values the Commit must acquire for the 
 writers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--required-manifest \"\\$PRED/manifest\\.json\"" },
 ]
-readers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "option\\(\"--required-manifest\"" },
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_seal.py", find = "required_manifest" },
-]
+readers = []
 
 [[message]]
 type = "RegisteredCompiler"

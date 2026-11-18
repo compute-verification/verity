@@ -120,6 +120,7 @@ def _point(args: Any) -> int:
     jobs.check_point_environment(spec, settings.environ())
     if why := kit.wrong_card(spec.id, spec.preset.gpu_id, kit.host_stamp()["card"]):
         raise ValueError(why)
+    cpus = kit.machine_cpus()
     preset, eager = served(spec.preset, spec.eager)
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     doc = run_benchmark(
@@ -131,6 +132,7 @@ def _point(args: Any) -> int:
         warmups=spec.warmups,
         max_warmups=spec.max_warmups,
         factory=ProcessEngineFactory(eager=eager),
+        cpus=cpus,
         git_commit=plan.toolchain.commit,
         config_identity={
             "resolved_spec_sha256": plan.spec_sha256,

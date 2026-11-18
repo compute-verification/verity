@@ -30,7 +30,7 @@ NOT_SCRIPTS = frozenset({"tests", "exact_kit"})
 KERNELS = POUW.parents[1] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels"
 MOVED = ("floored_gemm", "gpu_kit", "masked_gemm", "pearl_c")
 #: the directories of ``benchmarks/pouw/`` that went to ``calibration/pouw/``: this suite still takes their scripts, by the
-#: same names (``theory/run.py``)
+#: same names (``theory/fold_opt.py``)
 CALIBRATION = POUW.parents[1] / "calibration" / "pouw"
 CALIBRATED = ("dc", "facet_break", "opcode_probe", "sass_census", "tensor_kinds", "theory")
 #: the directories of ``benchmarks/pouw/`` whose kernels went to `KERNELS` and whose checks, ships and model drivers
