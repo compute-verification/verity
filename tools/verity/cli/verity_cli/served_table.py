@@ -177,9 +177,6 @@ UNDECLARED: dict[str, tuple[Component, str]] = {c.name: (c, row) for c, row in (
                channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                          Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
                needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)), "work"),
-    (Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
-               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
-               colocated=((CHALLENGER, NETWORK_ATTESTER),)), "communication"),
 )}
 MANIFESTS: dict[str, Component] = {**{n: c for n, (c, _) in UNDECLARED.items()}, **{c.name: c for c in (
     replace(_declared("sampled-proofs"), sampling_design=_design, default_sampling_design="rate:1/3481648"),
@@ -188,6 +185,7 @@ MANIFESTS: dict[str, Component] = {**{n: c for n, (c, _) in UNDECLARED.items()},
     _declared("pous"),
     _declared("bandwidth"),
     _declared("wipe"),
+    _declared("network-attester"),
 )}}
 #: each component's row in the record, the one its scheme declares (`record`)
 ROWS: dict[str, str] = {n: row for n, (_, row) in UNDECLARED.items()} | {
@@ -216,11 +214,11 @@ HEADERS = {
         "FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.",
         "`verity run THIS --dry-run` resolves it all."),
     "onsite_compute": (
-        "The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory",
+        "The served window under SPOT, PoUW, the inference-only policy, the network attester and the memory",
         "wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,",
         "each party on its machine, and the key the auditor pinned for its memory attester.", *_UNDECIDED),
     "onsite_network": (
-        "The served window under the network certifier, SPOT and the memory wipe (verity/onsite-network/v0, a",
+        "The served window under the network attester, SPOT and the memory wipe (verity/onsite-network/v0, a",
         "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
         "its memory attester.", *_UNDECIDED),
     "remote": (
@@ -616,15 +614,15 @@ PARTIES: dict[str, dict[str, Piece]] = {
                                   "challenger, on its own coins and clock"),
         VERIFIER: Piece("bandwidth", VERIFIER, CHECK, "PoUB's row"),
     },
-    "certifier": {
-        WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the network attester's developer side: its front before the "
+    "network-attester": {
+        WORKERS: Piece("network-attester", WORKERS, SERVED_WINDOW, "the network attester's developer side: its front before the "
                        "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
                        "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
                        "period.json (CERTIFIER_PERIOD_CMD)", scripts=(ATTESTER_PIECE,), reaches=NETWORK_ATTESTER,
                        binds=("gate", "peer"), hooks=_attester_piece),
-        NETWORK_ATTESTER: Piece("certifier", NETWORK_ATTESTER, GATE, "the network certifier behind the gate, "
+        NETWORK_ATTESTER: Piece("network-attester", NETWORK_ATTESTER, GATE, "the network attester behind the gate, "
                                  "in front of serve-openai before the requests"),
-        VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),
+        VERIFIER: Piece("network-attester", VERIFIER, CHECK, "the network attester's row"),
     },
     "wipe": {
         PROVER: Piece("wipe", PROVER, SERVED_WINDOW, "the streamed wipe of the card before the workload's engine loads "

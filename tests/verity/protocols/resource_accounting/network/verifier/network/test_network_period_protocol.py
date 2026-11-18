@@ -25,11 +25,11 @@ import period_case as PC
 import verity_difftest as D
 from period_case import (ACCEPT, EXPECT, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most, build,
                          clog2, public, reference, verdict_of)
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.network.verifier import scan_ok
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
@@ -1356,7 +1356,7 @@ def registered(case: dict, c: dict, e: dict, reg: dict, x: dict) -> dict:
     registration."""
     size, design = level_of(x)
     reg |= stated(size, design)
-    x["commitment"] = R.digest(reg)
+    x["commitment"] = DD.digest(reg)
     return case | {"commitment": D.canonical(c).encode().hex(), "evidence": D.canonical(e).encode().hex()}
 
 
