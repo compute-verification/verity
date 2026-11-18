@@ -1,0 +1,27 @@
+diff --git a/benchmarks/prove_path/records_audit.py b/benchmarks/prove_path/records_audit.py
+index 8263cb77567..d1e3468006a 100644
+--- a/benchmarks/prove_path/records_audit.py
++++ b/benchmarks/prove_path/records_audit.py
+@@ -389,7 +389,7 @@ def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> di
+     inputs = wired = ext_bits = 0
+     ext = set(external)
+     for m in members:
+-        tables, wires = dict(m.tables), {p for p, _o, _ws in m.wired}
++        tables, wires = dict(m.tables), {w.port for w in m.wired}
+         for p, words in m.rows:
+             n = 16 * int(words) * int(tables.get(p, m.n))
+             inputs += n
+diff --git a/verity/protocols/proofs/spot/verifier/one_stage/members.py b/verity/protocols/proofs/spot/verifier/one_stage/members.py
+index de7b472c2c8..c84f85e1be6 100644
+--- a/verity/protocols/proofs/spot/verifier/one_stage/members.py
++++ b/verity/protocols/proofs/spot/verifier/one_stage/members.py
+@@ -405,8 +405,7 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
+             raise _Refused(ROW_TABLES)
+         mine = [(port[:i], port[i + 1:]) for i, c in enumerate(port) if c == "/" and port[:i] in out]
+         if not mine:
+-            raise _Refused(f"roots: the registration's root {port} is no member's: a member's roots are named "
+-                           "<member>/<port>")
++            continue
+         if len(mine) > 1:
+             raise _Refused(f"roots: the registration's root {port} is two members': a member's roots are named "
+                            "<member>/<port>, and a root is one member's")
