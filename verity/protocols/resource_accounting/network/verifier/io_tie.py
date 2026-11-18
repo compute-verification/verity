@@ -78,13 +78,13 @@ from verity.commitments.gates.frame_v3 import _part, leaf_ref, node_ref, opens
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import _PAD, CommitmentDomain, frame_hash, _uint
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier.id_form import EVENT_END, EVENT_HEAD
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-BIT, BYTE = HC.BIT, HC.BYTE
+BIT, BYTE = GB.BIT, GB.BYTE
 ID_DIGITS = 10
 ID_EVENT_HEAD = EVENT_HEAD[:EVENT_HEAD.index(b'"delta"')] + b'"token_id":'
 ID_EVENT_TAIL = b',"finish_reason":null}]}' + EVENT_END
@@ -385,7 +385,7 @@ def rows_levels(domain_id: bytes, rows: Sequence[bytes], salts: Sequence[bytes])
     if len(rows) != len(salts) or len(rows) < 2:
         raise ValueError(f"a rows tree is over at least 2 rows, each with its salt, not {len(rows)} rows and "
                          f"{len(salts)} salts")
-    level = [leaf_ref(domain_id, SCHEMA, HC.hiding_value(r, s), i) for i, (r, s) in enumerate(zip(rows, salts))]
+    level = [leaf_ref(domain_id, SCHEMA, GB.hiding_value(r, s), i) for i, (r, s) in enumerate(zip(rows, salts))]
     width = 1 << (len(rows) - 1).bit_length()
     level += [frame_hash(_PAD, domain_id, _uint(i), hash="sha512") for i in range(len(rows), width)]
     levels = [level]
@@ -474,7 +474,7 @@ def _check_sizes(inst: Instance) -> None:
 
 def _port_opens(inst: Instance, t: int) -> bool:
     """Bucket t's port rows open at its steps under the Commit's root: its `port_reads`, in the clear."""
-    return all(opens(SCHEMA, inst.port_root, inst.port_domain, HC.hiding_value(r, s), x, list(p)) == 1
+    return all(opens(SCHEMA, inst.port_root, inst.port_domain, GB.hiding_value(r, s), x, list(p)) == 1
                for r, s, x, p in zip(inst.port[t], inst.port_salts[t], inst.steps[t], inst.paths[t]))
 
 
@@ -613,7 +613,7 @@ def _add(C, x: Sequence, y: Sequence) -> list:
 def _digits(C, chars: Sequence[Sequence]) -> tuple[list, list]:
     """The id field's checks (spaces then digits, a nonzero first digit unless it is the last, below 2^32) and its
     value's 32 bits, least significant first."""
-    space = [and_reduce(C, [HC._same(c[b], 0x20 >> b & 1) for b in range(8)]) for c in chars]
+    space = [and_reduce(C, [GB._same(c[b], 0x20 >> b & 1) for b in range(8)]) for c in chars]
     # a digit is 0x30 ... 0x39: high nibble 0011, low nibble at most 9 (not b3 with b2 or b1)
     digit = [C.AND(and_reduce(C, [c[7].inv(), c[6].inv(), c[5], c[4]]), C.AND(c[3], C.AND(c[2].inv(), c[1].inv()).inv()).inv())
              for c in chars]
@@ -647,9 +647,9 @@ def _build_cell(C, S, *cell):
     # a PAD and an END are zero past the END's payload, and before it each is its kind's but for the stream
     fill = and_reduce(C, [cell[i][b].inv() for i in range(head, S.B) for b in range(8)])
     pad = C.AND(fill, and_reduce(C, [cell[i][b].inv() for i in lead for b in range(8)]))
-    end = C.AND(fill, and_reduce(C, [HC._same(cell[i][b], end_t[i] >> b & 1) for i in lead for b in range(8)]))
+    end = C.AND(fill, and_reduce(C, [GB._same(cell[i][b], end_t[i] >> b & 1) for i in lead for b in range(8)]))
     digits_ok, token = _digits(C, cell[ID_AT:ID_AT + ID_DIGITS])
-    data = and_reduce(C, [HC._same(cell[i][b], data_t[i] >> b & 1) for i in range(S.B) if i not in free
+    data = and_reduce(C, [GB._same(cell[i][b], data_t[i] >> b & 1) for i in range(S.B) if i not in free
                           for b in range(8)] + digits_ok)
     # the stream is u32 big-endian at bytes 1 ... 4: its bit j is bit j % 8 of byte 4 - j // 8
     return [[C.AND(data.inv(), C.AND(pad.inv(), end.inv())).inv(), data, end,
@@ -693,19 +693,19 @@ IoTieSwitch = _part(
 
 def _body_route(B, S, xs, switches_):
     W, h = S.W, 1 << (S.D - 1)
-    sw, half = HC._refs(switches_), Array(h, Array(W, BIT))
+    sw, half = GB._refs(switches_), Array(h, Array(W, BIT))
 
     def words(refs: list) -> list:
         return [refs[W * k:W * (k + 1)] for k in range(len(refs) // W)]
 
     def column(pairs: list, bits: list) -> list:
         """The h switches' (a, b) pairs, swapped by their bits: one batch of `IoTieSwitch`."""
-        out = words(HC._refs(B.batch(bind(IoTieSwitch, W=W), HC._coll(half, [r for a, _ in pairs for r in a]),
-                                     HC._coll(half, [r for _, b in pairs for r in b]), HC._coll(Array(h, BIT), bits),
+        out = words(GB._refs(B.batch(bind(IoTieSwitch, W=W), GB._coll(half, [r for a, _ in pairs for r in a]),
+                                     GB._coll(half, [r for _, b in pairs for r in b]), GB._coll(Array(h, BIT), bits),
                                      axes=(0, 0, 0))))
         return list(zip(out[0::2], out[1::2]))
 
-    x = words(HC._refs(xs))
+    x = words(GB._refs(xs))
     if S.D == 1:
         last = column([(x[0], x[1])], sw)
     else:
@@ -713,11 +713,11 @@ def _body_route(B, S, xs, switches_):
         sub = (2 * S.D - 3) << (S.D - 2)
         first = column([(x[2 * k], x[2 * k + 1]) for k in range(h)], sw[:h])
         net = bind(IoTieRoute, W=W, D=S.D - 1)
-        up, down = (words(HC._refs(B.call(net, HC._coll(half, [r for p in first for r in p[i]]),
-                                          HC._coll(Array(sub, BIT), sw[h + i * sub:h + (i + 1) * sub]))))
+        up, down = (words(GB._refs(B.call(net, GB._coll(half, [r for p in first for r in p[i]]),
+                                          GB._coll(Array(sub, BIT), sw[h + i * sub:h + (i + 1) * sub]))))
                     for i in (0, 1))
         last = column(list(zip(up, down)), sw[h + 2 * sub:])
-    return HC._coll(Array(2 * h, Array(W, BIT)), [r for p in last for w in p for r in w])
+    return GB._coll(Array(2 * h, Array(W, BIT)), [r for p in last for w in p for r in w])
 
 
 IoTieRoute = CompositeDefinition(
@@ -792,10 +792,10 @@ def _sig_content(S):
 
 def _body_content(B, S, cells, mp, port, switches_):
     sh = _bucket_shape(S)
-    K, cr, pr = HC._Consts(B), HC._refs(cells), HC._refs(port)
+    K, cr, pr = GB._Consts(B), GB._refs(cells), GB._refs(port)
     outs = []
     for i in range(S.R):
-        outs += HC._refs(B.call(bind(IoTieCell, B=S.B), HC._coll(Array(S.B, BYTE), cr[8 * S.B * i:8 * S.B * (i + 1)])))
+        outs += GB._refs(B.call(bind(IoTieCell, B=S.B), GB._coll(Array(S.B, BYTE), cr[8 * S.B * i:8 * S.B * (i + 1)])))
     xs = []
     for e in range(sh.M):
         if e < sh.E:
@@ -804,8 +804,8 @@ def _body_content(B, S, cells, mp, port, switches_):
         else:
             xs += K.bits(0, 32)
         xs += K.bits(e, sh.D)
-    routed = B.call(bind(IoTieRoute, W=sh.W, D=sh.D), HC._coll(Array(sh.M, Array(sh.W, BIT)), xs), switches_)
-    return B.call(bind(IoTieMatch, N=S.R, D=sh.D, E=sh.E), HC._coll(Array(S.R, Array(CELL_OUT, BIT)), outs), mp, routed)
+    routed = B.call(bind(IoTieRoute, W=sh.W, D=sh.D), GB._coll(Array(sh.M, Array(sh.W, BIT)), xs), switches_)
+    return B.call(bind(IoTieMatch, N=S.R, D=sh.D, E=sh.E), GB._coll(Array(S.R, Array(CELL_OUT, BIT)), outs), mp, routed)
 
 
 IoTieContent = CompositeDefinition(
@@ -840,8 +840,8 @@ IoTieBucket = CompositeDefinition(
 def content_arguments(inst: Instance, t: int, bits: Sequence[int]) -> list[list[int]]:
     """Bucket t's `IoTieContent` arguments in its signature's order, each its leaves' bits."""
     b = inst.bucket(t)
-    return [[x for c in inst.cells[b] for x in HC._bytes_bits(c)], HC._bytes_bits(map_bytes(inst.map[b])),
-            [x for r in inst.port[t] for x in HC._bytes_bits(r)], list(bits)]
+    return [[x for c in inst.cells[b] for x in GB._bytes_bits(c)], GB._bytes_bits(map_bytes(inst.map[b])),
+            [x for r in inst.port[t] for x in GB._bytes_bits(r)], list(bits)]
 
 
 def bucket_arguments(inst: Instance, t: int, bits: Sequence[int]) -> list[list[int]]:
