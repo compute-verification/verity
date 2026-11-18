@@ -228,11 +228,11 @@ class HoldResident:
 
 @dataclass(frozen=True)
 class StartBeside:
-    """A scheme's request to start its process ``process`` beside the workload, by the command line it registered
-    (``command``), handed the readers it names (``readers``)."""
+    """A scheme's request to start the process it registered as ``process``
+    (`verity.protocols.resource_accounting.scheme.register_process`) beside the workload, called with the workload's
+    readers it names by what they do (``server-request``, ``stream-token-ids``), in that order."""
 
     process: str
-    command: tuple[str, ...]
     readers: tuple[str, ...] = ()
 
 
