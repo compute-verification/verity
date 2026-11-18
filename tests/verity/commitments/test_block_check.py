@@ -670,7 +670,7 @@ def test_v3_refuses_a_rekey_opening_off_its_origin_by_name(S) -> None:
         o = _rekey_opening(rng, S, registered, encode, 40, rng.randrange(17, 39))
         for name, (a, want) in _v3_cases(o).items():
             got = BC.opening_check_v3(o.S, a)
-            assert BC.verdict(got, BC.VERDICT_V3) == want, (registered, name, got)
+            assert BC.verdict_v3(got) == want, (registered, name, got)
             assert not got & 1 << 3
 
 
@@ -690,8 +690,8 @@ def test_v3_opens_the_audits_origin_trees() -> None:
                                         merkle_depth(tree.domain.count)), tree.open(position).path)
         o = _rekey_opening(rng, S, True, _core_encode, 40, 30, origin)
         assert BC.opening_check_v3(o.S, o.args) == 1
-        assert BC.verdict(BC.opening_check_v3(o.S, dict(o.args, opos=BC._u16s(o.j, 2))), BC.VERDICT_V3) == "origin-path"
-    assert BC.verdict(BC.opening_check_v3(o.S, dict(o.args, opos=BC._u16s(at, 2))), BC.VERDICT_V3) == "origin-path"
+        assert BC.verdict_v3(BC.opening_check_v3(o.S, dict(o.args, opos=BC._u16s(o.j, 2)))) == "origin-path"
+    assert BC.verdict_v3(BC.opening_check_v3(o.S, dict(o.args, opos=BC._u16s(at, 2)))) == "origin-path"
 
 
 def test_v3s_rows_hold_every_parameter_and_its_public_rows_are_the_verifiers() -> None:
@@ -738,6 +738,101 @@ def test_v3s_range_is_v2s_less_the_value_tree(rows) -> None:
 def test_a_v3_binding_past_its_range_is_refused_by_name(bad) -> None:
     with pytest.raises(ValueError, match="^BlockOpeningCheck_v3: "):
         BC.opening_rows_v3(_v3(_v2(P1024), **bad))
+
+
+def _audit_rekey_check(pass_seed: bytes, plan, root: bytes, j: int, coin: bytes, key, domain, commitment, origin: int,
+                       o: dict, rows: int) -> str | None:
+    """`audit.AuditRun._check` on an opening ``o`` of block j of a re-key append at position j of an identity plan, from
+    the point it has the opening's block, origin and coin (`_committed`): its receipt leaf on its path, the block's decode
+    under the bound key of ``o``'s digest and the re-key's coin, the decoded payload under ``o``'s salt on ``o``'s path at
+    ``origin`` under the origin's commitment (origin-path), and the block's receipt (no tiles)."""
+    y = RC.leaf_receipt(o["leaf"], j, plan.length)
+    if y is None:
+        return "malformed"
+    if not RC.verify_leaf(pass_seed, plan, root, j, o["leaf"], o["leaf_salt"], o["receipt_path"]):
+        return "receipt-path"
+    payload = CO.decode(o["block"], j, key, o["digest"], coin)
+    if payload is None:
+        return "codec"
+    opening = Opening(origin, RC.hidden(payload, o["payload_salt"]), o["payload_path"])
+    if not verify_opening(domain, commitment, opening, AU.PAYLOAD_SCHEMA, AU.LIMITS):
+        return "origin-path"
+    if RC.SketchReceipter(pass_seed, rows)(j, o["block"]) != y:
+        return "receipt"
+    return None
+
+
+def test_v3_accepts_exactly_the_openings_the_verifiers_check_accepts() -> None:
+    """On toy stores (a registration of 12 blocks, a fresh append of 8 after it, and a re-key of each at the store's end,
+    under an identity pass), each re-key opening the verifier's own check (`AuditRun._check`'s steps, the refresh
+    mirror's: the payload's leaf at the origin's store index under the origin's commitment) accepts, v3's reference
+    accepts, and each it refuses, v3 refuses by the same name (`verdict_v3`): among them a bad origin path, the origin's
+    salt, the other origin's path, a tampered block and a wrong receipt leaf. The unit's public origin words are the
+    verifier's own (`opening_public_v3` from the origin's domain); its witness payload is the honest prover's."""
+    from verity.commitments import Commitment
+
+    rng = random.Random(26)
+    S = _v3(_v2(P1024, **SMALL), DO=4)
+    c = _codec(S)
+    node, reg, codec_seed = rng.randbytes(32), rng.randbytes(64), rng.randbytes(32)
+    key = CO.key(codec_seed, c)
+    N, fresh_first, fresh = 12, 12, 8
+    pays = {i: _payload(rng, S) for i in range(N + fresh)}
+    salts = {i: rng.randbytes(BC.SALT_BYTES) for i in pays}
+    ptree = AU.payload_tree(node, [pays[i] for i in range(N)], [salts[i] for i in range(N)])
+    atree = AU.append_tree(reg, fresh_first, [CO.digest(pays[i]) for i in range(N, N + fresh)],
+                           [salts[i] for i in range(N, N + fresh)])
+    origins = {"registered": (ptree, Commitment(ptree.commitment.root, N), 3), "append": (atree, atree.commitment, 2)}
+    rekey_first, count = N + fresh, 5
+    n = rekey_first + 2 * count
+    plan = RC.Plan(((0, n),), n)
+    pass_seed = rng.randbytes(64)
+    rdom = RC.domain(pass_seed, plan)
+    seen = 0
+    for which, (tree, commitment, at) in origins.items():
+        m = rng.randrange(count)
+        j = rekey_first + (count if which == "append" else 0) + m
+        origin = tree.domain.positions.start + at + m
+        pay, salt = pays[origin], salts[origin]
+        coin = rng.randbytes(32)
+        block = CO.encode(pay, j, key, bound=True, coin=coin)
+        ys = [rng.randbytes(64) for _ in range(n)]
+        ys[j] = RC.SketchReceipter(pass_seed, S.ROWS)(j, block)
+        rsalts = [rng.randbytes(BC.SALT_BYTES) for _ in range(RC.leaves(n))]
+        rtree = RC.tree(pass_seed, plan, ys, rsalts)
+        cl = j // PER_LEAF
+        leaf = b"".join(ys[PER_LEAF * cl:PER_LEAF * (cl + 1)])
+        honest = dict(block=block, leaf=leaf, leaf_salt=rsalts[cl], receipt_path=tuple(rtree.open(cl).path),
+                      digest=CO.digest(pay), payload_salt=salt, payload_path=tuple(tree.open(origin).path))
+        other = origins["append" if which == "registered" else "registered"][0]
+        wrong_leaf = leaf[:64 * (j % PER_LEAF)] + bytes(64) + leaf[64 * (j % PER_LEAF + 1):]
+        cases = {"honest": honest, "bad origin path": dict(honest, payload_path=(_flip_bytes(honest["payload_path"][0]),
+                                                                                *honest["payload_path"][1:])),
+                 "origin's salt": dict(honest, payload_salt=_flip_bytes(salt)),
+                 "the other origin's path": dict(honest, payload_path=tuple(other.open(other.domain.positions.start).path)),
+                 "a shorter origin path": dict(honest, payload_path=honest["payload_path"][:-1]),
+                 "tampered block": dict(honest, block=_flip_bytes(block, 7)),
+                 "receipt leaf's salt": dict(honest, leaf_salt=_flip_bytes(rsalts[cl])),
+                 "receipt leaf altered": dict(honest, leaf=wrong_leaf)}
+        Sx = SimpleNamespace(**{**vars(S), "LEAF": len(leaf) // 64})
+        origin_tree = (tree.commitment.root, tree.domain.domain_id, origin - tree.domain.positions.start, origin,
+                       merkle_depth(tree.domain.count))
+        pub = BC.opening_public_v3(Sx, codec_seed, j, coin, RC.sketch_prefix(pass_seed), RC.sign_bits(pass_seed, S.ROWS),
+                                   (rtree.commitment.root, rdom.domain_id, merkle_depth(rdom.count)), origin_tree)
+        for name, o in cases.items():
+            want = _audit_rekey_check(pass_seed, plan, rtree.commitment.root, j, coin, key, tree.domain, commitment,
+                                      origin, o, S.ROWS)
+            a = BC.opening_args_v3(Sx, pub, o["block"], pay, o["leaf"], o["leaf_salt"], o["payload_salt"],
+                                   o["receipt_path"], o["payload_path"])
+            got = BC.opening_check_v3(Sx, a)
+            assert BC.verdict_v3(got) == want, (which, name, got, want)
+            assert (want is None) == (name == "honest"), (which, name, want)
+            seen += want == "origin-path"
+    assert seen == 8
+
+
+def _flip_bytes(b: bytes, at: int = 0) -> bytes:
+    return b[:at] + bytes([b[at] ^ 1]) + b[at + 1:]
 
 
 @pytest.mark.slow

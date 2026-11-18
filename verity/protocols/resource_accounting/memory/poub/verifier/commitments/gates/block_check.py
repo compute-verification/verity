@@ -167,10 +167,10 @@ from verity.commitments.gates.hm96 import Hm96Sha512Leaf, reference as hm96_leaf
 from verity.commitments.gates.sha512 import IV, commit as _commit, compress_gadget, compress_ref, midstate, pad_tail, words_be
 
 __all__ = ["BlockOpeningCheck", "BlockOpeningCheckV2", "BlockOpeningCheckV3", "BlockOpeningUnitV2", "BlockOpeningUnitV3",
-           "FIELDS", "LEVELS", "LEVELS_V3", "LIMITS_V2", "LIMITS_V3", "TOY", "VERDICT", "VERDICT_V3", "key", "opening_args",
-           "opening_args_v2", "opening_args_v3", "opening_check", "opening_check_v2", "opening_check_v3", "opening_public",
-           "opening_public_v2", "opening_public_v3", "opening_rows", "opening_rows_v2", "opening_rows_v3", "receipt",
-           "row_words", "sketch", "verdict"]
+           "CHECKED_V3", "FIELDS", "LEVELS", "LEVELS_V3", "LIMITS_V2", "LIMITS_V3", "TOY", "VERDICT", "VERDICT_V3", "key",
+           "opening_args", "opening_args_v2", "opening_args_v3", "opening_check", "opening_check_v2", "opening_check_v3",
+           "opening_public", "opening_public_v2", "opening_public_v3", "opening_rows", "opening_rows_v2", "opening_rows_v3",
+           "receipt", "row_words", "sketch", "verdict", "verdict_v3"]
 
 BIT = BL.BIT
 U16 = Array(16, BIT)
@@ -1125,6 +1125,20 @@ def verdict(word: int, names: Sequence[str] = VERDICT) -> str | None:
     if word == 1:
         return None
     return next((n for i, n in enumerate(names) if (word >> (1 + i)) & 1), "malformed")
+
+
+#: the order the verifier decides a re-key opening's checks in (`audit.AuditRun._check`): origin-path before receipt
+CHECKED_V3 = ("receipt-path", "codec", "origin-path", "receipt")
+
+
+def verdict_v3(word: int) -> str | None:
+    """The name a v3 verdict word says, as the verifier's own check names the opening: None (accepted, word 1) or the
+    first failed check in `CHECKED_V3`'s order; "malformed" for a word no v3 unit returns (bit 3 among them)."""
+    if word == 1:
+        return None
+    if word & 1 or word >> (1 + len(VERDICT_V3)) or word >> (1 + VERDICT_V3.index("payload-path")) & 1:
+        return "malformed"
+    return next((n for n in CHECKED_V3 if word >> (1 + VERDICT_V3.index(n)) & 1), "malformed")
 
 
 def _tree(t: tuple[bytes, bytes, int, int] | None, D: int, name: str) -> dict[str, list[int]]:
