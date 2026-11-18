@@ -155,7 +155,7 @@ from . import draw as D, link_points as LP, partition as P, registered as G
 from verity.commitments import registered_value as RV
 from .verdict import Verdict, _Collect
 
-RECEIPT = "verity/registration-receipt/v1"
+RECEIPT = DM.REGISTRATION_RECEIPT
 KINDS = ("served", "stand-in")
 #: the window's field naming its seed salt (Seed salt)
 SEED_SALT = "seed_salt"

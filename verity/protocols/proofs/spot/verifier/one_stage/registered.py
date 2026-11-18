@@ -79,11 +79,12 @@ from verity.circuits.types import Array, Value
 from verity.commitments import registered_value as RV
 
 from . import partition as P
+from verity.commitments.domains import ONE_STAGE_PERIOD_SALT, REGISTERED_READS_V0, REGISTERED_READS_V1
 
-READS = "verity/registered-reads/v0"
+READS = REGISTERED_READS_V0
 #: the format whose port may carry `registered_value.READS_FROM`: proof block `reads_from + i` reads `reads[i]`, every other proof block nothing; each
 #: of its objects holds only its own keys (Flock's `Registered.FORMAT`, `FILE_KEYS`, `PORT_KEYS`)
-READS_V1 = "verity/registered-reads/v1"
+READS_V1 = REGISTERED_READS_V1
 #: the `READS_V1` key naming the ports bound to the window's committed values, each `{"root", "domain"}` (`Flock.RegBound`)
 BOUND = "bound"
 SCHEMA_V2 = SCHEMA_HM96_SHA512_ROW_V2
@@ -93,7 +94,7 @@ DIGEST = Array(8, Array(64, Value(1)))
 #: the reads-file key of a port not named after the template parameter it reads: that parameter's `reads` key, which the
 #: Lean verifier holds its program's registered reads to (`Flock.Registered.PARAM_KEY`, `checkCover`)
 PARAM_KEY = "param"
-WINDOW_SALT = "verity/one-stage/window-salt/v1"
+WINDOW_SALT = ONE_STAGE_PERIOD_SALT
 #: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes, a position
 #: after the log's, the verifier's coin bound to the record's window
 SOURCES = ("port", "value", "bytes", "position", "window")

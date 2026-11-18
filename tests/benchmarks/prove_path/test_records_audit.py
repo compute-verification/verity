@@ -53,6 +53,7 @@ from verity.circuits.codec import canonical_json, descriptor_id, encode_program,
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
+from verity.circuits.ops.boolean import gemm as BG
 from verity.commitments.periods import interface as IF, rows as CS
 
 
@@ -73,6 +74,8 @@ from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as 
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
 TID = descriptor_id(COORD)
+#: `COORD` on bits, whose rows read a registered value's 16-bit leaves one bit each
+BITS = bind(BG.ScaledMmS8Coordinate, K=K, **BG.GEMM_SM120_S8)
 SAMPLING_DESIGN = "stratified:2"
 RUN = "ab" * 64
 #: the value a period ties to its scan's state tree, which `period` takes from its caller (the network attester's scan state)
@@ -312,12 +315,12 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
 
 def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
     """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s."""
-    rows, at, reads = IF.layout(COORD).rows, 0, []
+    rows, at, reads = IF.layout(BITS).rows, 0, []
     for p, words in rows:
         if p != free:
-            reads.append(IF.Read(TID, p, "a", at=0, radix=(n,), base=at, step=(words,)))
+            reads.append(IF.Read(descriptor_id(BITS), p, "a", at=0, radix=(n,), base=at, step=(words,)))
         at += n * words
-    return IF.Circuit("test", ((COORD, n),), registered=IF.Registered({"a": at}, reads=tuple(reads)))
+    return IF.Circuit("test", ((BITS, n),), registered=IF.Registered({"a": at}, reads=tuple(reads)))
 
 
 #: the verifier's pin of ``a``, and a window docket's root for it
@@ -480,7 +483,7 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
 
     s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
 
-    def lower(registered, cls, programs=None, grain=None, provable=True, tables=None):
+    def lower(registered, cls, programs=None, grain=None, tables=None):
         seen.append((registered, cls, tables))
         return circuit
 
