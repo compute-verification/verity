@@ -26,7 +26,8 @@ same next tick (`next_tick_eq`), so the same period, `acts` and answer, and the 
 `B2Audit` applies PoUS's guarantee to that responder at `M = N − 1 − τ − H`: an outcome that passes with
 `mem_X(t_j) + 1 + τ + H ≤ N` is on time and one the responder answers correctly. The deployed forms get `TicksIn`
 from a fixed first tick (`ticksIn_of_start`: on time, challenge `j`'s tick is in `[t₀, t₀ + j·span]`).
-`B2Determines` reads `z` back with a left inverse of the length code (`decodeLen`).
+`B2Determines` reads `z` back with a left inverse of the length code (`decodeLen`). `B2_fixed` and `B2Audit_fixed`
+check that the fixed-schedule statements are the case `t x = t`, `τ = 0`.
 -/
 
 @[expose] public section
@@ -515,5 +516,43 @@ theorem fixed_setup (hset : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.e
 end
 
 end Responder
+
+open Responder in
+/-- **`B2` on a fixed schedule**, from `B2` at `t x = t`, `span = t k` and `τ = 0`. -/
+theorem B2_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k : ℕ)
+    (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
+    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (M H N : ℕ)
+    (hc : CausalFrom S) (ht : StrictMono t)
+    (hset : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
+      (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x')
+    (hin : ∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j →
+      (S x).crossing (↑X)ᶜ ↑X (period t j) = (S x').crossing (↑X)ᶜ ↑X (period t j))
+    (hcount : (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) (hN : M + 1 + H ≤ N) :
+    ∃ (A₁ : Pous.Preprocessor sch N) (A₂ : Pous.SeqResponderOn sch N 0 0 0),
+      ∀ x, (∀ j : Fin k, (S x).mem X (t j) ≤ M) →
+        Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) (A₂.step W (sch.enc W x.1 x.2.1).1) 0 (List.ofFn x.2.2)
+            (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
+          List.ofFn fun j : Fin k => ans j ((S x).acts X (period t j)) := by
+  obtain ⟨A₁, A₂, hA⟩ := B2 sch k W S X (fun _ => t) (t k) ans help M 0 H N hc (fun _ j => ht (Nat.lt_succ_self j))
+    (fixed_setup hset) (fixed_ingress hin) fixed_arrival fixed_ticksIn hcount (by omega)
+  exact ⟨A₁, A₂, fun x hm => hA x (fixed_timely ht k) hm⟩
+
+open Responder in
+/-- **`B2Audit` on a fixed schedule**, from `B2Audit` at `t x = t`, `span = t k` and `τ = 0`. -/
+theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p))
+    (N k : ℕ) (δ ε : ℝ≥0∞) (hsec : Pous.AuditSecureOn sch .sequential N 0 0 0 k δ ε)
+    (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
+    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (H : ℕ)
+    (hc : CausalFrom S) (ht : StrictMono t)
+    (hset : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
+      (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x')
+    (hin : ∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j →
+      (S x).crossing (↑X)ᶜ ↑X (period t j) = (S x').crossing (↑X)ᶜ ↑X (period t j))
+    (hcount : (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) :
+    Pous.pr (fun x => PassesFixed sch W S X t ans x ∧ ∀ j : Fin k, (S x).mem X (t j) + 1 + H ≤ N) ≤ δ + ε :=
+  (pr_mono fun _ hx => ⟨⟨fixed_timely ht k, hx.1⟩, hx.2⟩).trans
+    (B2Audit sch N k δ ε hsec W S X (fun _ => t) (t k) ans help 0 H hc (fun _ j => ht (Nat.lt_succ_self j))
+      (fixed_setup hset) (fixed_ingress hin) fixed_arrival fixed_ticksIn hcount)
+
 
 end ResourceAccounting.SecurityProofs
