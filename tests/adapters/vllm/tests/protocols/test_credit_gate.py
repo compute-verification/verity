@@ -1002,9 +1002,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     file credit builds from the window's entries (the call tables' domains bound to the window's open root, the
     weights' to none), and credits the gate-passed call only when every sampled proof block's release is accepted and each
     round's live@<s> proves its step's served rows: none, a rejected one, another circuit's descriptor, or no live
-    evidence refuses the whole window. The closed period's credit
-    (`period_credit`) is that window's, its period opened with ``--model`` (the auditor's registration, whose
-    key salted the window's b/<K>), and a window whose ``b/<K>`` aren't the period's is refused there too."""
+    evidence refuses the whole window."""
     k = PHC.draw_k(LAYOUT)
     auditor = periodic(k, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
@@ -1034,31 +1032,11 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     assert failed["window"][0] == "failed" and failed["credit"] is None
     other = _descriptor(((64, K), (32, K)), ("q", "k"))
     assert _credit(auditor, rec, st, descriptor=other, run=_verifier(drawn))["credit"] is None
-    auditor.ledger.period_close(PERIOD)
-    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
-    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor(), live, _draw_dir(auditor))
-    got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
-    assert why is None and got == {"windows": [[0]], "work": [CR.credited_work(LAYOUT, [0], served)], "k": k,
-                                   "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
-    unpinned = PHC.Ledger.load([auditor.ledger.path], auditor.key, main=CH.MAIN)
-    assert PHC.period_credit(unpinned, PERIOD, [evidence], run=_verifier(drawn))[1] == (
-        "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: {LC.NO_PINS}")
-    off_main = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN[:1])
-    assert PHC.period_credit(off_main, PERIOD, [evidence], run=_verifier(drawn))[1] == (
-        "circuit", (f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: "
-                    f"{LC.first_parent_reason(auditor.session_id, CH.PINNED, list(CH.MAIN[:1]))}"))
-    assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn))[1][0] == \
-        "circuit"
-    b = SV.register_weights(_circuit(), [(64, K)], {0: _rows("s_w")}, _model_key().key).registered[K].entry()
-    forged = {**evidence, "entries": [b if CR.is_held(e["value"]) else e for e in evidence["entries"]]}
-    refused = PHC.period_credit(ledger, PERIOD, [forged], run=_verifier(drawn))[1]
-    assert refused[0] == "window" and refused[1].startswith(f"window 0 of period {PERIOD} is refused, so the period "
-                                                            "earns nothing: weights: "), refused
 
 
 def test_a_period_open_without_draw_k_is_refused(periodic):
     """The proof system commits the sample's K in the period's open (`credit.K_FIELD`) before any sample; a period
-    opened without one leaves its windows no K to be sampled with, so the window, the period's reading and its credit are
+    opened without one leaves its windows no K to be sampled with, so the window and the period's reading are
     each refused (``budget``), and a window in no period has no committed K either."""
     auditor = periodic(None, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
@@ -1072,9 +1050,6 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
     reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id, auditor.draw.session_id],
                                 [auditor.window["root"], rec["commitment"]["draw"]["root"]])
     assert len(reasons) == 1 and reasons[0].startswith(f"budget: period {PERIOD}'s open commits no draw K"), reasons
-    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor(),
-                                   draw_directory=_draw_dir(auditor))
-    assert PHC.period_credit(ledger, PERIOD, [evidence])[1][0] == "budget"
     with pytest.raises(ValueError, match="layout"):
         PHC.draw_k(None)
 
@@ -1303,7 +1278,7 @@ def _two_window_period(tmp_path):
 def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused(tmp_path):
     """A period earns only as its close lists it (`credit.period`): exactly its windows, each once, in the
     close's order. Presented out of order, with one missing, with one past the close, or with a window not its own, the
-    period is refused, by `period_reason` and by `period_credit` before any window is read. Each window's sample
+    period is refused by `period_reason`. Each window's sample
     challenge phase is one of the close's, right after its window, presented as its sample root."""
     ledger, sessions, (a, da, b, db) = _two_window_period(tmp_path)
     other = hashlib.sha512(b"another window").hexdigest()
@@ -1318,13 +1293,6 @@ def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused
     assert why([a, da, b, db, a]).startswith("period: the sessions presented run past the 4")
     assert why([other, a, da, b, db]).startswith(
         f"period: session {other[:16]}... is not one of period {PERIOD}'s sessions")
-    stub = dict.fromkeys(CR.PERIOD_KEYS)
-
-    def window(root, draw):
-        return {**stub, "window": {"root": root}, "draw": {"root": draw}}
-    got, refused = PHC.period_credit(ledger, PERIOD, [window(b, db), window(a, da)])
-    assert got is None and refused[0] == "order"
-    assert PHC.period_credit(ledger, PERIOD, [window(a, da)])[1][0] == "missing"
 
 
 def test_a_credit_bit_changed_after_the_sampling_coin_is_refused(periodic):

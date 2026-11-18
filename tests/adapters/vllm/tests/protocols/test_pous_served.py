@@ -307,7 +307,7 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
         assert got["verdict"] == "accept" and got["protocol"] == TEST_PROTOCOL, got["reason"]
         assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
         assert got["profile"]["placement"]["trusted-device"] == (
-            f"{mc.UNCOMMITTED} (no configuration); the memory attester ran on {AUDITOR}, not the prover's {NODE}")
+            f"{mc.UNCOMMITTED} (no configuration); the memory attester ran on {mc.ATTESTER_MACHINE}, not on {mc.PROVER_MACHINE}")
         assert (out / "pous-setup.case.json").exists() == (n == 0)
     party, request = calls[0]
     assert party.host == AUDITOR and opt.periods == 2
