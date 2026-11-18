@@ -24,10 +24,10 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Properties.InferenceOnly.Walk
 
 /-!
-# Parsed strided parts name no negative leaf
+# Parsed strided and grid parts name no negative leaf
 
-`parsePartsIn` checks a strided part's corners against its collection, so no reference of a parsed strided part steps
-below leaf 0 (`parsePartsIn_nonneg`), given none of an argument an alias may name does. `ReadsExact.PartNonneg` is the
+`parsePartsIn` checks a strided part's corners and a grid's lanes' extremes against their collection, so no reference
+of a parsed strided or grid part steps below leaf 0 (`parsePartsIn_nonneg`), given none of an argument an alias may name does. `ReadsExact.PartNonneg` is the
 same predicate (`partNonneg_iff`).
 -/
 
@@ -36,9 +36,11 @@ same predicate (`partNonneg_iff`).
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
-/-- A part's references never step below leaf 0: a strided part's pattern (`parsePartsIn` checks its corners). -/
+/-- A part's references never step below leaf 0: a strided part's pattern (`parsePartsIn` checks its corners), and a
+grid's lanes at every period and offset in a run (`parsePartsIn` checks each lane's least leaf). -/
 def PartNonneg : Part → Prop
   | .strided _ _ b inner os is c => ∀ k < c, 0 ≤ b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is
+  | .grid run lanes => ∀ l ∈ lanes, ∀ t < (lanes[0]?.map Flock.Program.Lane.periods).getD 0, ∀ o < run, 0 ≤ l.leafAt t o
   | _ => True
 
 /-- One unfolding of `parsePartsIn`, as `Walk.parsePartsIn_step` takes it, for `PartNonneg`: a strided part's corners
@@ -179,7 +181,21 @@ theorem parsePartsIn_nonneg_step (leaves : Bool → Nat → Option Nat) (args : 
                 intro q hq
                 simp only [Array.mem_singleton] at hq
                 subst hq
-                trivial
+                intro l hl t ht o ho
+                obtain ⟨i0, hi0, -⟩ := Array.mem_iff_getElem.1 hl
+                have h0 : 0 < lanes.size := by omega
+                have hper : t < l.periods := by
+                  rw [hp l hl, getElem!_pos lanes 0 h0]
+                  rw [Array.getElem?_eq_getElem h0] at ht
+                  simp only [Option.map_some, Option.getD_some] at ht
+                  exact ht
+                have hb := (Walk.leafAt_mem l ho hper).1
+                have hfl := hf l hl
+                unfold Flock.Program.Lane.fits at hfl
+                split at hfl
+                · simp only [Bool.and_eq_true, decide_eq_true_eq] at hfl
+                  omega
+                · cases hfl
               · exact absurd h (by intro h; injection h)
 
 /-- **No position of a parsed strided part is negative**, given none of an argument an alias may name is. -/

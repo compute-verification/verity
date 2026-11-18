@@ -241,7 +241,7 @@ from verity.protocols.resource_accounting.network.verifier.certificate import (C
     SignerRefused, StartRefused)
 from verity.protocols.resource_accounting.network.verifier.grid import GridParams, BlockGrid, Status, row_count
 from verity.protocols.resource_accounting.network.verifier.pacer import ClockRefused, raw_clock
-from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_PATH
+from verity.release import WATERMARK_PATH
 from verity.protocols.resource_accounting.network.verifier.network_attester import (EGRESS_FORMS, INTEGER_FIELDS, Shim, NetworkAttester,
     NetworkAttesterParams, cells)
 from verity.protocols.resource_accounting.network.verifier.relay_check import (CELLS_TIMING, CERTIFIED, EGRESS, ENDPOINTS,

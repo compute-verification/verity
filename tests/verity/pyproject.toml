@@ -20,6 +20,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/device.py", "verity/
   "verity/protocols/registration/__init__.py", "verity/protocols/registration/verifier/__init__.py",
   "verity/protocols/registration/verifier/site_log.py", "verity/hooks.py",
           "verity/channel.py", "verity/protocol.py", "verity/runtime/handshake.py", "verity/runtime/framing.py",
+          "verity/release.py",
           "verity/party.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/runtime/__init__.py", "calibration/hardware/cards", "calibration/hardware/nodes",
