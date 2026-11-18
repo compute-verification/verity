@@ -144,7 +144,10 @@ def school_square(C, x: Sequence[L]) -> list[L]:
 def join(C, N: int, H: int, a0sq: Sequence[L], a1sq: Sequence[L], ssq: Sequence[L]) -> list[L]:
     """a1² 2^2H + (s² − a0² − a1²) 2^H + a0², 2N bits, from the squares of x's halves and of their sum (its low N + 1 bits)."""
     w = N + 1
-    neg = lambda v: [(v[j] if j < len(v) else ZERO).inv() for j in range(w)]
+
+    def neg(v: Sequence[L]) -> list[L]:
+        return [(v[j] if j < len(v) else ZERO).inv() for j in range(w)]
+
     cols = _columns(w, (0, ssq[:w]), (0, neg(a0sq)), (0, neg(a1sq)))
     cols[1].append(ONE)
     m = column_sum(C, cols, w)
