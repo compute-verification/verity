@@ -5490,6 +5490,11 @@
         "tests/verity/protocols/proofs/flock/prover/test_tmpl_statement.py": "tests/adapters/vllm/flock/test_tmpl_statement.py",
         "tests/verity/protocols/proofs/flock/prover/test_unit_range.py": "tests/adapters/vllm/flock/test_unit_range.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py": "adapters/vllm/verity_vllm/flock/topp_word.py"
+      }
     }
   ]
 }

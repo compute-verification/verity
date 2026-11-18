@@ -1,7 +1,7 @@
-"""The top-p keep word's circuit (``verity_flock.topp_word``) against ``sampling.topp_keep``, bit for bit."""
+"""The top-p keep word's circuit (``verity_vllm.flock.topp_word``) against ``sampling.topp_keep``, bit for bit."""
 import numpy as np
 import pytest
-from verity_flock import topp_word as TW
+from verity_vllm.flock import topp_word as TW
 
 f32 = np.float32
 SPECIALS = [0, 0x80000000, 1, 0x807FFFFF, 0x00800000, 0x3F800000, 0xBF800000, 0x7F7FFFFF, 0xFF7FFFFF, 0x7F800000, 0xFF800000,

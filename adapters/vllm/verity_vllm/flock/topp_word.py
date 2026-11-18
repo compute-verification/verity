@@ -30,10 +30,10 @@ from collections import Counter
 
 import numpy as np
 
-from . import fp, gf2
-from . import ir_lower as IL
-from . import tail_pieces as TP
-from .gf2 import (
+from verity_flock import fp, gf2
+from verity_flock import ir_lower as IL
+from verity_flock import tail_pieces as TP
+from verity_flock.gf2 import (
     NOT,
     ONE,
     OR,

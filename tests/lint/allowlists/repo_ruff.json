@@ -156,7 +156,7 @@
     {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstar.py", "rule": "E731", "count": 1},
     {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/tail.py", "rule": "E731", "count": 1},
     {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/tail_pieces.py", "rule": "F401", "count": 1},
-    {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py", "rule": "RUF100", "count": 3},
+    {"file": "adapters/vllm/verity_vllm/flock/topp_word.py", "rule": "RUF100", "count": 3},
     {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/zk_server_transcript.py", "rule": "E731", "count": 1},
     {"file": "tests/verity/protocols/proofs/flock/prover/stratified_agree.py", "rule": "BLE001", "count": 1},
     {"file": "tests/verity/protocols/proofs/flock/prover/stratified_agree.py", "rule": "F841", "count": 1},

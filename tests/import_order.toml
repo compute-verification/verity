@@ -111,7 +111,7 @@ loaded = "adapters"
 files = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/boolean_export.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py",
+    "adapters/vllm/verity_vllm/flock/topp_word.py",
 ]
 
 [[against]]

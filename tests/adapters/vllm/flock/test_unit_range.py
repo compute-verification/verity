@@ -79,7 +79,7 @@ def test_a_unit_holding_the_top_p_keep_word_is_sized_by_its_composition():
     """The top-p keep word has no piece but counts its composition (`topp_word.ands`), so a unit holding it is sized off its
     Definition: in range at V = 16, and at V = 256 refused by name, before anything lowers it."""
     from verity_vllm.definitions.registry import sampling as SM
-    from verity_flock import topp_word as TW
+    from verity_vllm.flock import topp_word as TW
 
     w = FC.unit_witness(SM.topp_mask_word(16))
     assert w["ands"] == TW.ands(16) and w["k"] <= FC.K_MAX
