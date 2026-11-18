@@ -101,7 +101,7 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
         assert blk.ports["o0"]["root"] == tr.root.hex() == ing.ports[f"prog{j}"]["root"] == last.ports[
             f"prog{j}"]["root"]
         assert blk.ports["o0"]["reads"] == list(range(nb)) and sorted(blk.ports) == sorted(blk.framed) == ["o0", "x"]
-        assert blk.ports["x"]["value"] == sz.value("frame") and blk.ports["x"][sz.REG.SCHEMA_KEY] == sz.REG.SCHEMA_SEG
+        assert blk.ports["x"]["value"] == sz.value("frame") and blk.ports["x"][sz.RV.SCHEMA_KEY] == sz.REG.SCHEMA_SEG
         assert blk.made["o0"] == [sz._bits(tr, b) for b in range(nb)] == [u[0] for u in blk.units]
         assert blk.set_name == at.block_sets[j] and tr.binding == sz.block_binding(at.block_sets[j], nb)
     assert len(set(at.block_sets)) == len({tr.root for tr in trs}) == cls.NR
@@ -263,7 +263,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     first = sz.empty_start(digest, cls)
     assert rounds[0]["start"].ports["sin"] == {
         "value": sz.CARRY, "root": first.root.hex(), "leaves": 1, "words": words, "word_bits": 16,
-        "domain": first.domain.domain_id.hex(), sz.REG.SCHEMA_KEY: v2, "reads": [0]}
+        "domain": first.domain.domain_id.hex(), sz.RV.SCHEMA_KEY: v2, "reads": [0]}
     assert first.rows == (tuple(sz._words(sz.IS.encode(cls, sz.IS.empty(cls)))),)
     assert first.salts == tuple(RV.supplied_salts(digest, sz.CARRY, 1))
     last, start = rounds[0]["last"], rounds[1]["start"]
@@ -271,7 +271,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     dom = sz.ADV.domain(sz.frame_binding(last.set_name, 1, "o1"), 1)
     assert start.ports["sin"] == {
         "value": sz.CARRY, "root": last.ports["o1"]["root"], "leaves": 1, "words": words, "word_bits": 16,
-        "domain": last.ports["o1"]["domain"], sz.REG.SCHEMA_KEY: v2, "reads": [0]}
+        "domain": last.ports["o1"]["domain"], sz.RV.SCHEMA_KEY: v2, "reads": [0]}
     assert (last.ports["o1"]["root"], last.ports["o1"]["domain"]) == (frame.root.hex(), dom.domain_id.hex())
     assert start.bcs["sin"] == last.bcs["o1"] and start.salts["sin"] == last.salts["o1"]
     assert start.entries["sin"] == {"value": sz.CARRY, "positions": [0], "paths": [""]}
@@ -398,7 +398,7 @@ def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_
             own[name, m.name] = [p for p in m.framed if m.ports[p]["value"] == sz.value("frame")]
             for p in own[name, m.name]:
                 port = m.ports[p]
-                schema = port.get(sz.REG.SCHEMA_KEY, sz.REG.SCHEMA)
+                schema = port.get(sz.RV.SCHEMA_KEY, sz.RV.SCHEMA)
                 dom = sz.ADV.domain(sz.frame_binding(m.set_name, m.n, p, schema), m.n)
                 assert (port["domain"], port["leaves"], port["reads"], port.get(RV.READS_FROM, 0)) == (
                     dom.domain_id.hex(), m.n, list(range(m.n)), m.base)
