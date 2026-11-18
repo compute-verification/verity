@@ -538,7 +538,8 @@ def test_readers_of_live_weights_see_the_plaintext_an_option_released(monkeypatc
 
 
 def test_with_pous_on_an_option_keeping_a_resident_weight_copy_is_refused(monkeypatch):
-    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1", "ncp-v2"))
+    pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1", "ncp-v2"))
+    pouw.keeps_weight_copy = lambda scheme: scheme == "ncp-v2"
     _fake_adapter(monkeypatch, "pous", _pous([]), schemes=("band-chain/d12/v1",))
     assert PO.refusals(_serve("pouw:ncp-v2")) == ()
     got = PO.refusals(_serve("pouw:ncp-v2", "pous:band-chain/d12/v1"))
@@ -671,7 +672,8 @@ def test_beside_spot_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
     ``cut`` names. Without it, or naming another entry, or under ncp-v2 (which has a circuit and commits no tables), the
     composition refuses by name; a row's Commit refuses any cut, since its request Programs are never cut."""
 
-    assert PO.cuts("pouw", "pearl-c-h100-v1-h3") and not PO.cuts("pouw", "ncp-v2") and not PO.cuts("pouw", "ncp-v1")
+    pouw = PO.adapter("pouw")
+    assert pouw.cuts("pearl-c-h100-v1-h3") and not pouw.cuts("ncp-v2") and not pouw.cuts("ncp-v1")
     assert PO.refusals(_cut_window(PEARL)) == ()
     uncut = (f"{PEARL}: executes {APPLY}, and no Definition computes what it does there: SPOT takes it only in a "
              f"window whose circuit is cut at its sites and reads the tables its calls commit (window_class.PearlTables), "

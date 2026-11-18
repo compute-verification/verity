@@ -211,7 +211,7 @@ def config_of(value: str | None) -> dict[str, Any]:
                                        else M.read(Path(value), "PoUWScheme")))
     except (OSError, ValueError) as e:
         raise UsageError(f"--protocols-config {value[:80]}: {e}") from None
-    if stray := sorted(set(doc) - {"pouw"}):
+    if stray := sorted(set(doc) - {"pouw", M.providing("admission").name}):
         raise UsageError(f"--protocols-config: {stray} are not the enabled protocols' (pouw)")
     pouw = doc.get("pouw", {})
     if own := sorted(set(pouw) & set(OWN)):
@@ -224,7 +224,7 @@ def config_of(value: str | None) -> dict[str, Any]:
         PW.Settings.of(pouw)
     except ValueError as e:
         raise UsageError(f"--protocols-config: {e}") from None
-    return doc
+    return {k: v for k, v in doc.items() if k == "pouw"}
 
 
 def refusal(opts: Any) -> str | None:
@@ -251,8 +251,8 @@ def refusal(opts: Any) -> str | None:
     if opts.gate.h1_window_commit and DRAWER in (p.strip() for p in after.split(",")):
         return (f"--h1-window-commit waits for the window's seal before its sample coin, and --release-after {DRAWER} holds "
                 "the seal until that coin's flip: give one of them")
-    if opts.protocols_config and not opts.protocols:
-        return "--protocols-config without --protocols"
+    if opts.protocols_config and not opts.protocols and opts.admit == "arrival":
+        return "--protocols-config without --protocols or --admit"
     if not opts.protocols:
         return None
     if opts.protocols != ENTRY:

@@ -931,7 +931,7 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert refusal(*h1, "--max-num-batched-tokens", "1536") is None
     assert "multiple of 32" in SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest",
                                                                      str(man), *h1, "--max-num-batched-tokens", "2050"], environ={}))
-    assert refusal("--protocols-config", "{}") == "--protocols-config without --protocols"
+    assert refusal("--protocols-config", "{}") == "--protocols-config without --protocols or --admit"
     assert "the server's own" in refused(*h1, "--protocols-config", json.dumps({"pouw": {"rows": 64}}))
     assert "one gate session a window" in refused(*h1, "--protocols-config", json.dumps({"pouw": {"challenger": "h:1"}}))
     gate = ("--challenger-gate", GATE, "--challenger-peer", PEER)
