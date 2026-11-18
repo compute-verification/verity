@@ -101,12 +101,13 @@ done
 "$PY" "${LOAD[@]}" > "$SR/load.log" 2>&1 || { say "SMOKE FAILED request ($SR/load.log)"; exit 1; }
 kill -INT "$SERVER"; s=0; wait "$SERVER" || s=$?; SERVER=
 [ "$s" = 0 ] || { say "SMOKE FAILED stop: the server's exit ($SR/serve.log)"; exit 1; }
-said=$("$PY" - "$D/windows/w0" <<'EOF'
-import json, sys
+said=$(CUDA_VISIBLE_DEVICES= "$PY" - "$D/windows/w0" <<'EOF'
+import json, os, sys
+assert os.environ.get("CUDA_VISIBLE_DEVICES") == "", "the opening must run with no card visible"
 from verity_vllm.pipeline import deferred_rows as DR
 w = sys.argv[1]
 r = DR.of_record(json.load(open(f"{w}/commit/verdict.json"))["replay_deferred"]["bundles"][0]["path"], w)
-print(f"SMOKE SEALED AND OPENED window 0: {r.commitment}, run root {bytes(r.run.run_root).hex()[:16]}")
+print(f"SMOKE SEALED AND OPENED window 0 with no card visible: {r.commitment}, run root {bytes(r.run.run_root).hex()[:16]}")
 EOF
 ) || { say "SMOKE FAILED open: the sealed bundle against its record ($D/windows/w0)"; exit 1; }
 say "$said"
