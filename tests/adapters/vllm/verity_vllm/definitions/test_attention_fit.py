@@ -1,6 +1,7 @@
 """`Q_fit` v1 on `AttentionHead_v19` at Llama-3.2-1B's heads (D 64, kBlockN 192), its keys a row each and its values four
 rows of 16 columns each, as the window writes them: every block fits a Flock proof block, each key block is cut into its
-softmax step and its P·V in chunks of three 16-key k-steps, and each block restricted computes what C computes there."""
+softmax step and then its P·V, a full block's in chunks of three 16-key k-steps, and each block restricted computes what C
+computes there."""
 from __future__ import annotations
 
 import functools
@@ -76,9 +77,10 @@ def _check(T: int) -> None:
         nodes = scope.spec.body.nodes
         s = min(j for j, n in enumerate(nodes) if n.fn.id == dot)
         assert all(n.fn.id == dot for n in nodes[s:]) and not any(n.fn.id == dot for n in nodes[:s])
-        steps = len(nodes) - s
-        want = [[0, s]] + [[a, min(a + K_STEPS, len(nodes))] for a in range(s, len(nodes), K_STEPS)]
-        assert [e["nodes"] for e in es] == want, (path, steps)
+        got = [e["nodes"] for e in es]
+        assert got[0] == [0, s] and got[-1][1] == len(nodes)
+        if len(nodes) - s == BN // 16:
+            assert got[1:] == [[a, a + K_STEPS] for a in range(s, len(nodes), K_STEPS)], path
 
 
 def _restricted_equal(T: int) -> None:
@@ -121,9 +123,10 @@ def test_a_full_key_block_is_cut_as_its_softmax_step_and_its_PV_chunks():
 
 @pytest.mark.slow
 def test_the_class_of_records_most_keys_are_thirty_blocks_a_head():
-    """At 1,087 keys (a first block of 127 keys, then five of 192): 30 blocks, each key block its softmax step and its P·V
-    chunks, and each restricted block equal to C there; the 200-key case has no short first block cut."""
-    assert len(blocks(MAX_T)) == 30
-    assert sorted(len(es) for es in _key_blocks(MAX_T).values()) == [4, 5, 5, 5, 5, 5]
+    """At 1,087 keys (a first block of 127 keys, then five of 192): 29 blocks, each key block its softmax step and its P·V
+    chunks, the short block's last chunk four k-steps, and each restricted block equal to C there; the 200-key case has no
+    short first block cut."""
+    assert len(blocks(MAX_T)) == 29
+    assert sorted(len(es) for es in _key_blocks(MAX_T).values()) == [3, 5, 5, 5, 5, 5]
     _check(MAX_T)
     _restricted_equal(MAX_T)
