@@ -1,8 +1,8 @@
-"""``--admit tick`` (`verity.protocols.resource_accounting.network.prover.admission.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
+"""Order ``tick`` (`verity.protocols.resource_accounting.network.prover.admission.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
 physical time, so that the batches can be compared across wall-clock jitter and against the rule in logical time alone;
 what isn't certified (unnumbered, late, missing, aborted, a new run, a stalled or broken watermark); the watermark's
 lines, as the network attester's own code writes them (`line`), and the releases they name lost; and serve-openai's
-``--admit tick`` over HTTP. The gate is a hold of the adapter's admission hook (`verity_vllm.engine.admission`), which
+order ``tick`` over HTTP. The gate is a hold of the adapter's admission hook (`verity_vllm.engine.admission`), which
 these tests put on the stand-in scheduler."""
 from __future__ import annotations
 
@@ -686,7 +686,7 @@ def test_a_run_has_one_watermark_stream_and_a_clients_post_is_none():
 
 @contextlib.contextmanager
 def tick_endpoint() -> Iterator[SimpleNamespace]:
-    """serve-openai under ``--admit tick`` over `SchedEngine`, its engine loop and its HTTP server each in a thread, until
+    """serve-openai under order ``tick`` over `SchedEngine`, its engine loop and its HTTP server each in a thread, until
     the block ends: ``address`` is the server's, ``held`` counts the requests that reached the gate and ``lines`` the
     watermark lines the server has read."""
     engine = SchedEngine()
@@ -914,26 +914,26 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
 def test_the_flag_takes_tick_with_the_engine_class_step_times_under_the_schemes_name():
     base = ["--model", "m", "--revision", "r", "--no-commit"]
     name = messages.providing("admission").name
-    times = ["--protocols-config", json.dumps({name: {"sat_us": 27_500, "free_us": 41_000}})]
-    opts = cli.parse("serve-openai", [*base, "--admit", "tick", *times], environ={})
-    assert so.admission_settings(opts) == {"sat_us": 27_500, "free_us": 41_000, "order": "tick"}
+    times = ["--protocols-config", json.dumps({name: {"order": "tick", "sat_us": 27_500, "free_us": 41_000}})]
+    opts = cli.parse("serve-openai", [*base, *times], environ={})
+    assert so.admission_settings(opts) == {"order": "tick", "sat_us": 27_500, "free_us": 41_000}
     so.preflight(opts, which=lambda _: None)
-    with pytest.raises(cli.UsageError, match="--admit tick: --protocols-config: .*a positive integer of microseconds"):
-        so.preflight(cli.parse("serve-openai", [*base, "--admit", "tick"], environ={}), which=lambda _: None)
+    with pytest.raises(cli.UsageError, match="--protocols-config .*a positive integer of microseconds"):
+        so.preflight(cli.parse("serve-openai", [*base, "--protocols-config", json.dumps({name: {"order": "tick"}})],
+                               environ={}), which=lambda _: None)
     with pytest.raises(cli.UsageError, match="window-requests"):
-        so.preflight(cli.parse("serve-openai", [*base, "--admit", "tick", *times, "--window-requests", "4"], environ={}),
-                     which=lambda _: None)
+        so.preflight(cli.parse("serve-openai", [*base, *times, "--window-requests", "4"], environ={}), which=lambda _: None)
 
 
 def test_serve_openais_tick_setup_takes_the_admission_hook_the_build_installed():
-    """`build.hooked` installs admission on an in-process scheduler with the install's own key; `--admit tick`'s setup
+    """`build.hooked` installs admission on an in-process scheduler with the install's own key; order ``tick``'s setup
     (`serve_openai.network_admission`) then attaches the attester's gate and frontend, by its scheme, beside that one
     hook, refusing nothing."""
     sched = Sched()
     built = admission.install(sched)
     loop = SimpleNamespace(submit=lambda adm: None, abort=lambda eid: None, tick=lambda rec: None, gate=None, hook=None)
-    opts = SimpleNamespace(admit="tick", protocols_config=json.dumps(
-        {messages.providing("admission").name: {"bucket_us": 5000, "sat_us": 1000, "free_us": 1000, "hold_ms": 1000}}))
+    opts = SimpleNamespace(protocols_config=json.dumps(
+        {messages.providing("admission").name: {"order": "tick", "bucket_us": 5000, "sat_us": 1000, "free_us": 1000, "hold_ms": 1000}}))
     try:
         hook, order = so.network_admission(loop, sched, opts)
         assert hook is built is loop.hook and order.take is loop.tick and loop.gate.hold_s == 1.0
