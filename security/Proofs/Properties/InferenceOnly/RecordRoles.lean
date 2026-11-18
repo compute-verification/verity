@@ -61,7 +61,7 @@ theorem front_trusted {j tr : Json} {f : Front} (h : front j tr = .ok f) :
   unfold front at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   repeat (split at h <;> try cases h)
-  rename_i hT hprog hcirc _ _ _ _ _
+  rename_i hT hprog hcirc _ _ _ _
   exact ⟨hT, by simpa using hprog, by simpa using hcirc⟩
 
 /-- **A trusted input's log is chained and holds its run**, which the trusted input names by its digest. -/

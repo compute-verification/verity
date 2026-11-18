@@ -400,7 +400,7 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityPro
     obtain ⟨hl, hres, -, -⟩ := rowLeaf_data (portsNamed hrs hT) hsc hi hp hrl
     rw [inRow_size _ _ _ _ hrow] at hl
     refine closed_not_returned hP hO hrs hsc hi (inRow_get _ i _ _ l hrow hl).1 hres hnot (fun hs => ?_) hret
-    rw [hSh r l g lo up hrl hs] at hw
+    rw [hSh r l g lo up hs hrl] at hw
     cases hw
   · -- each row's leaves are of one width, and the writer's divides the reader's
     obtain ⟨c, rfl⟩ := Nat.dvd_of_mod_eq_zero hdiv

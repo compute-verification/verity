@@ -231,7 +231,7 @@ def Wired (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires
 
 /-- **No row on a leaf of a shared run has a writer.** -/
 def SharedUnwired (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
-  ∀ r l g lo hi, RowLeaf P rs W r l g lo hi → SharedLeaf P g → S.writerOf r.tid r.unit r.port r.row = none
+  ∀ r l g lo hi, SharedLeaf P g → RowLeaf P rs W r l g lo hi → S.writerOf r.tid r.unit r.port r.row = none
 
 /-- Leaf `l'` of the output row that the reader row `r` is wired to is Program gate `g'`, at bits `[lo', hi')`. -/
 def WriterLeaf (P : Prog) (rs : Array TRange) (S : Spot.Wires.Summary) (r : Row) (l' g' lo' hi' : ℕ) : Prop :=
