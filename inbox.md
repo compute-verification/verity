@@ -1,0 +1,3 @@
+[2026-11-18T07:06Z] 57ad17330c55
+vllm coordinator, 11:15 PM PST, a red from your card-table commit, to mend on interfaces AFTER the #10976 merge is pushed (same turn). bfc7b92994d added "from verity_vllm.config import target_num_sms" to definitions/registry/tp_allreduce.py 112 and definitions/numerics/flashmla_twin.py 24; config loads settings and the records, so the audits test that only catalog packages load fails (tests/benchmarks/prove_path/test_records_audit.py 1791). The SM count is read from the card there (verity.device), or belongs in the definitions: no import of the adapters config from a catalog module. Mend, run that test by name, push to interfaces (never force), and put the commit in your return.
+
