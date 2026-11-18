@@ -12,3 +12,21 @@ version = "12.8"
 ptx_isa = "8.7"
 driver_min = "570.26"
 source = "CUDA 12.8 Release Notes, section 1.2 'New Features': 'This release adds compiler support for the following Nvidia Blackwell GPU architectures: SM_100, SM_101, SM_120'; PTX ISA 9.5, Table 73 'PTX Release History': PTX ISA 8.7, 'CUDA 12.8, driver r570' (its first row listing sm_100a is PTX ISA 8.6, 'CUDA 12.7', a version Table 4 lists no toolkit of); CUDA Toolkit 13.5 Release Notes, Table 4 'Corresponding Driver Versions (CUDA 12.9 and earlier)': 'CUDA 12.8 GA', Linux x86_64 '>=570.26'"
+
+[[toolkit]]
+version = "12.9"
+ptx_isa = "8.8"
+driver_min = "575.51.03"
+source = "PTX ISA 9.5, Table 73 'PTX Release History': PTX ISA 8.8, 'CUDA 12.9, driver r575', its targets listing sm_100a; CUDA Toolkit 13.5 Release Notes, Table 4 'Corresponding Driver Versions (CUDA 12.9 and earlier)': 'CUDA 12.9 GA', Linux x86_64 '>=575.51.03'"
+
+[[toolkit]]
+version = "13.0"
+ptx_isa = "9.0"
+driver_min = "580.65.06"
+source = "PTX ISA 9.5, Table 73 'PTX Release History': PTX ISA 9.0, 'CUDA 13.0, driver r580', its targets listing sm_100a; CUDA Toolkit 13.3 Release Notes, Table 3 'CUDA Toolkit and Corresponding Driver Versions': 'CUDA 13.0 GA', Linux x86_64 '>=580.65.06' (13.5's Release Notes give a 13.x toolkit only its branch, Table 2: 'CUDA 13.0 R580')"
+
+[[toolkit]]
+version = "13.3"
+ptx_isa = "9.3"
+driver_min = "610.43.02"
+source = "PTX ISA 9.5, Table 73 'PTX Release History': PTX ISA 9.3, 'CUDA 13.3, driver r610', its targets listing sm_100a; CUDA Toolkit 13.3 Release Notes, Table 3 'CUDA Toolkit and Corresponding Driver Versions': 'CUDA 13.3 GA', Linux x86_64 '>=610.43.02' (13.5's Release Notes give a 13.x toolkit only its branch, Table 2: 'CUDA 13.3 R610')"
