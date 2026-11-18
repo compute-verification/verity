@@ -247,6 +247,12 @@ theorem homo_A : Widths.homo (.array 2 (.value 16)) = some 16 := by
   simp only [leaves_V, rangeWidths_V]
   decide
 
+theorem slice_A : Widths.sliceWidth (.array 2 (.value 16)) 0 2 = some 16 := by
+  unfold Widths.sliceWidth
+  rw [Widths.rangeWidths]
+  simp only [leaves_V, rangeWidths_V]
+  decide
+
 /-- A body of one node without arguments, of type `Array 2 (Value 16)` as its return is, returning that node's leaves
 `0 … 1` as one part, reads no leaf at another width. -/
 theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
@@ -268,7 +274,7 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
     simp only [Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
       List.getElem!_toArray, List.getElem!_eq_getElem?_getD, Widths.seqBad, Widths.partOk, Widths.Src.ty?,
       Array.getElem?_map, List.map_toArray, List.map_cons, List.map_nil, List.getElem?_toArray, Widths.Src.homo?,
-      homo_A, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, gt_iff_lt, Nat.div_pos_iff, List.cons_append,
+      homo_A, Part.count, slice_A, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, gt_iff_lt, Nat.div_pos_iff, List.cons_append,
       List.nil_append, Int.cast_ofNat_Int, Int.zero_mul, Int.add_zero, Int.natCast_ediv, Int.natCast_emod,
       List.foldl_cons, Nat.min_assoc, Nat.max_assoc, List.all_eq_true, bne_iff_ne, ne_eq, ite_not,
       Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.sub_zero, Nat.add_one_sub_one, Nat.div_one,
