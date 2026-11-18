@@ -401,7 +401,7 @@ NETWORK_RECORDS = "verity/network-records/v3"
 PERIOD_CIRCUIT = "verity/window-circuit/v1"
 
 # Not yet read from here: composition (onsite, remote)
-ONSITE_PROTOCOL = "verity/onsite/v0"
+ONSITE_PROTOCOL = "verity/onsite/v1"
 REMOTE_PROTOCOL = "verity/remote/v0"
 
 # Not yet read from here: served periods (`verity.commitments.periods`, the bytes say window)

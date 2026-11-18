@@ -10,9 +10,10 @@
 #      WZ_UNITS (network_attester_zk.py's --units, 16)  WZ_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  WZ_DRY=1
 #      (the statements and the host's read of them only)
-# Kept in $OUT/run: the rehearsal's public files (deployment, attested records, registrations, check; never its records
-# or salts); $OUT/wzk: network_attester_zk's summary and logs and everything the verifier received; never a prover's file (inst-*)
-# nor a circuit (its pin is kept), nor a session's archive.
+# Kept in $OUT/run: what the gate publishes of the rehearsal (`auditor.py publish`: the deployment's public keys,
+# the certificates, the cells' registrations less their wiring and cost, and outcome.json); $OUT/wzk:
+# network_attester_zk's summary alone. A member's registrations (the network attester's with its wiring, its own
+# with its units' connection and cells) and the verifier's registered reads open the wiring, so they stay in $W.
 set -uo pipefail
 export HZ_CONFIGS=wzk HZ_MEM_GB=${WZ_MEM_GB:?}
 WZ_CACHE=${WZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -34,12 +35,12 @@ log "wzk: network-certifier-serve rehearsal (fake endpoint, requests ${WZ_REQUES
   --rate 1 --tail 5 --max-tokens 64 --prompt-max 64 --start-in 2) 2>&1 | tee -a "$OUT/wzk.log" | tail -3
 [ -f "$RUN/check.json" ] || { log "wzk: rehearsal FAILED"; exit 7; }
 mkdir -p "$OUT/run"
-for f in deployment.json certified.jsonl cells.jsonl check.json warden.json; do [ -f "$RUN/$f" ] && cp "$RUN/$f" "$OUT/run/"; done
+"$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$RUN" "$OUT/run" > "$OUT/run/outcome.json" || { log "wzk: the publisher (auditor.py publish) exited $? on $RUN"; exit 6; }
 log "wzk: proving, units ${WZ_UNITS:-16}${WZ_DRY:+, dry}"
 "$PY" benchmarks/network_traces/zk_drivers.py network_attester_zk prove --run "$RUN" --bin "$BIN" --lean "$LEAN" --out "$W/wzk" \
   --units "${WZ_UNITS:-16}" ${WZ_DRY:+--dry} 2>&1 | tee -a "$OUT/wzk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/wzk"
-(cd "$W/wzk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/wzk/")
+[ -f "$W/wzk/summary.json" ] && cp "$W/wzk/summary.json" "$OUT/wzk/"
 log "wzk: done, rc $rc"
 exit "$rc"
