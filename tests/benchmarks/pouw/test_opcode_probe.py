@@ -470,7 +470,8 @@ def _cuda_tools() -> bool:
 @pytest.mark.skipif(not _cuda_tools(), reason="needs nvcc, cuobjdump and nvdisasm (CUDA 13)")
 def test_probes_build_and_gate(tmp_path):
     """What the fixture tests can't: today's nvcc still compiles every probe to SASS whose verdict is the declared one."""
-    built = probe.build(tmp_path, sorted((POUW / "opcode_probe" / "probes").glob("*.cu")))
+    built = probe.build(tmp_path, sorted((POUW / "opcode_probe" / "probes").glob("*.cu")),
+                        "NVIDIA RTX PRO 6000 Blackwell Server Edition")
     _, verdicts = probe.gate_all(built)
     wrong = probe.verdict_lines([v for v in verdicts if not v["correct"]])
     assert not wrong, "\n".join(wrong)

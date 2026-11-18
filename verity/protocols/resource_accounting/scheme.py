@@ -35,7 +35,8 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
 - code only: ``name`` (the configuration's), ``protocol`` (`Core.Protocol.id`), ``resource`` (`Core.Account.Part`),
   ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`), ``hooks``, ``ports``,
   ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
-  (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels, and
+  (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels, returning what the adapter
+  reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`), and
   ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`).
 
 What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks
@@ -185,7 +186,7 @@ class Scheme:
     over: str = ""
     under: str = ""
     requests: Callable[[Any], Sequence[Any]] = _no_requests
-    attach: Callable[[Any, Any], None] = _attaches_nothing
+    attach: Callable[[Any, Any], Any] = _attaches_nothing
     processes: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
