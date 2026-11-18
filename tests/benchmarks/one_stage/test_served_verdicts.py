@@ -5251,11 +5251,11 @@ def _deferral_settings(tmp_path: Path) -> dict[str, str]:
 DEFERRED_LINE = {
     "1": (f"DEFERRED V3c's audit: {SHORT}. A follow-on on a node with the memory runs it there and writes the compose "
           "hand-off, from the serve dir's audit inputs copied prover-side, outside any run dir, each file its "
-          "private/deferred/inputs.txt lists: D={d} bash benchmarks/one_stage/served_verdicts.sh v3c; the final record "
-          "and the composite are composed off both nodes, on COMPOSE_NODE (vy-auditor-2), from that hand-off"),
+          "private/deferred/inputs.txt lists: D=<that path> bash benchmarks/one_stage/served_verdicts.sh v3c; the final record "
+          "and the composite are composed off both nodes, on COMPOSE_NODE, from that hand-off"),
     "0": (f"DEFERRED V3c's audit and the composite: {SHORT}. A follow-on on a node with the memory runs them and composes "
           "the final record there, from the serve dir's audit inputs copied prover-side, outside any run dir, each file "
-          "its private/deferred/inputs.txt lists: D={d} bash benchmarks/one_stage/served_verdicts.sh v3c")}
+          "its private/deferred/inputs.txt lists: D=<that path> bash benchmarks/one_stage/served_verdicts.sh v3c")}
 
 
 @pytest.mark.parametrize("off", ["1", "0"])
@@ -5561,7 +5561,7 @@ def test_a_follow_on_of_a_deferral_of_record_refuses_the_served_nodes_peer_no_pe
 
 ONLY = "PREFLIGHT_ONLY: nothing kept, built or served"
 DEFERS = "so step 6 defers V3c's audit to a follow-on"
-OFF = "the final record composed off this node, on COMPOSE_NODE (vy-auditor-2), from its compose hand-off"
+OFF = "the final record composed off this node, on COMPOSE_NODE, from its compose hand-off"
 SHORT_REMOTE = {**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}
 
 
@@ -5595,7 +5595,7 @@ def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_pa
     assert _deferred(tmp_path).returncode == 0
     rc, lines, order, _limits = _follow(tmp_path, PREFLIGHT_ONLY="1")
     assert (rc, lines, order) == (0, ["PREFLIGHT passed, 755 GB: the follow-on of vy-dc-h200's deferral, its "
-                                      f"compose hand-off for COMPOSE_NODE (vy-auditor-2). {ONLY}"], [])
+                                      f"compose hand-off for COMPOSE_NODE. {ONLY}"], [])
 
 
 def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_follow_ons_record(tmp_path):
@@ -6155,7 +6155,7 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
     (tmp_path / "order").unlink()
     rc, lines, order = _compose(tmp_path, HOST="vy-auditor-2", LEAN="accept")
     assert rc == 0 and order == ["composite", "record"], (lines, order)
-    assert lines[0] == COMPOSED.format(audit="V3c's audit from cpu-6", sampled=f"v3c-wK-{VTAG}/audit", verdict="PASS")
+    assert lines[0] == COMPOSED.format(audit="V3c's audit from its follow-on node", sampled=f"v3c-wK-{VTAG}/audit", verdict="PASS")
     argv = json.loads((tmp_path / "order.record").read_text())
     assert argv[argv.index("--sampled-proofs") + 1] == str(d / v3c) and "--sampled-lean" in argv
     for x in ("serve", "compose-out"):
@@ -6308,7 +6308,7 @@ def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3
     assert not seen.exists() and not dc.exists()
     assert gate_compose("out", "cpu-6") == (0, [
         HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6} (on remote): exit 0, "
-        f"the record accept, 1 files of its $OUT in {tmp_path / 'out' / 'compose'}"])
+        f"the record accept, 1 files of its $OUT in the run's compose/"])
     assert _env_of(dc / "compose.env", COMPOSES) == {
         "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
         "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6",
@@ -6427,7 +6427,7 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
     assert run.returncode == 1, (run.stderr, lines)
     assert lines[0].startswith("HANDOFF ")
     assert lines[-1].startswith(f"GATE-COMPOSE at the compose gate's tree {GATE_PIN[:12]} (on remote): exit 2, the record "
-                                "pending, ") and lines[-1].endswith(f" files of its $OUT in {out / 'compose'}"), lines
+                                "pending, ") and lines[-1].endswith(" files of its $OUT in the run's compose/"), lines
     argv = json.loads((tmp_path / "gate.argv").read_text())
     scratch = gate / "var" / "scratch" / "compose-20261104T120000Z-ab12"
     assert argv[:3] == ["runuser", "-u", "auditor"] and argv[-4:] == ["compose", str(scratch), GATE_PIN, "remote"]
@@ -6500,10 +6500,11 @@ def test_no_answer_from_the_compose_gate_names_the_gate_commands_last_error(tmp_
     err.write_text("Warning: Permanently added 'h' (ED25519) to the list of known hosts.\n"
                    "research@h: Permission denied (publickey).\n\n")
     assert S.composed(answer, tmp_path / "out", 255, err) == (
-        1, "GATE-COMPOSE failed (ssh exit 255): no answer from the compose gate (IndexError): research@h: Permission "
-           "denied (publickey).")
+        1, f"GATE-COMPOSE failed (ssh exit 255): no answer from the compose gate (IndexError): its stderr (no exception, exit "
+           f"255): {PRIVATE}")
     assert S.composed(answer, tmp_path / "out", 255) == (
-        1, "GATE-COMPOSE failed (ssh exit 255): no answer from the compose gate (IndexError)")
+        1, f"GATE-COMPOSE failed (ssh exit 255): no answer from the compose gate (IndexError): its stderr (no exception, exit "
+           f"255): {PRIVATE}")
 
 
 #: rsync as `served_verdicts.sh copy` calls it: each file --files-from lists, from the source dir to $COPIED/HOST/PATH
@@ -6586,17 +6587,17 @@ def test_copy_to_a_write_only_rsync_sends_the_list_under_the_serve_dirs_name_mak
 
 @pytest.mark.parametrize("made, kind, to, extra, rc, line", [
     ("deferred", "deferred", "vy-auditor-2", {}, 3, "COPY refused: the deferral's list holds the window's witness, and "
-     "vy-auditor-2 is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"),
+     "its node is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"),
     ("deferred", "deferred", "research@vy-auditor-3.example", {"COMPOSE_NODE": "vy-auditor-3"}, 3, "COPY refused: the "
-     "deferral's list holds the window's witness, and vy-auditor-3.example is COMPOSE_NODE, an auditor device where no "
+     "deferral's list holds the window's witness, and its node is COMPOSE_NODE, an auditor device where no "
      "witness goes: copy it to a prover node"),
     ("deferred", "deferred", "research@vy-auditor-2:incoming", {}, 3, "COPY refused: the deferral's list holds the "
-     "window's witness, and vy-auditor-2 is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"),
-    ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6"}, 3, "COPY refused: vy-dc-h200.example is the served "
-     "node, which the prover controls: copy the hand-off to COMPOSE_NODE (vy-auditor-2)"),
+     "window's witness, and its node is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"),
+    ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6"}, 3, "COPY refused: its node is the served "
+     "node, which the prover controls: copy the hand-off to COMPOSE_NODE"),
     ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names the served run's "
      "witness (WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds)"),
-    ("deferred", "compose", "vy-auditor-2", {}, 3, "COPY refused: the serve dir {d} holds no compose list "
+    ("deferred", "compose", "vy-auditor-2", {}, 3, "COPY refused: the serve dir D holds no compose list "
      "(private/compose/inputs.txt and compose.env)"),
     ("handed", "values", "vy-auditor-2", {}, 3, "COPY refused: served_verdicts.sh copy deferred|compose HOST[:DIR], not values"),
     ("handed", "compose", "vy-auditor-2", {"RSYNC_EXIT": "23"}, 23, "COPY the hand-off's verifier-side list's 22 files "
@@ -7032,9 +7033,9 @@ sys.exit(1)
     run = lambda: subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
                                  check=False, capture_output=True, text=True)
     host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()
-    on = (f"COMPOSITE: composed on {host}, which holds the serve dir, from the cases the served node wrote there, not "
+    on = ("COMPOSITE: composed on the node that holds the serve dir, from the cases the served node wrote there, not "
           "from the parties that produced them")
-    why = (f"composed on the served node {host}, which the prover controls: a development check, no claim of record "
+    why = ("composed on the served node, which the prover controls: a development check, no claim of record "
            "(COMPOSE_OFF_NODE=0)")
     dev = f"COMPOSITE DEVELOPMENT: {why}"
     assert run().returncode == 1
@@ -7123,7 +7124,7 @@ sys.exit(1)
     assert run().returncode == 0
     said = (out / "verdicts.txt").read_text().splitlines()
     assert said[-1] == (
-        f"COMPOSITE: composed on {host}, not the served node the-served-node: from a prover-side copy of its serve dir's "
+        "COMPOSITE: composed on a follow-on node, not the served node: from a prover-side copy of its serve dir's "
         "audit inputs and the cases written here from it, not from the parties that produced them")
     assert not any("DEVELOPMENT" in x for x in said)
     assert json.loads((p / "remote" / "private" / "development.json").read_text()) is None
@@ -7140,7 +7141,7 @@ sys.exit(1)
     env |= {"COMPOSE_HANDOFF": "1", "COMPOSE_OFF_NODE": "1"}
     assert run().returncode == 0
     assert (out / "verdicts.txt").read_text().splitlines()[-1] == (
-        f"COMPOSITE: composed on {host}, not the served node the-served-node: from its compose hand-off (verifier-side "
+        "COMPOSITE: composed on COMPOSE_NODE, not the served node: from its compose hand-off (verifier-side "
         "files, no witness) and the cases written and checked here from it, not from the parties that produced them")
     (out / "verdicts.txt").unlink()
     for x in (out / "composite", p, v2):
@@ -7148,7 +7149,7 @@ sys.exit(1)
     del env["SERVED_NODE"], env["COMPOSE_OFF_NODE"]
     assert run().returncode == 1
     assert (out / "verdicts.txt").read_text().splitlines() == [
-        f"COMPOSITE refused: this is the served node {host}, which the prover controls, so a composite here claims no "
+        "COMPOSITE refused: this is the served node (SERVED_NODE), which the prover controls, so a composite here claims no "
         "record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it "
         "here as a development check)"]
     assert not (out / "composite").exists() and not p.exists()
@@ -7598,6 +7599,21 @@ def test_a_tool_that_fails_is_said_by_its_exception_and_exit_and_no_line_of_its_
     assert S.tool_said(0, [str(log)]) == "PERIOD served: 7 windows"
 
 
+
+def test_a_deferral_and_a_copy_say_no_host_or_path_of_the_serve_dir(tmp_path):
+    """The deferral's line names the serve dir's copy as ``D=<that path>`` and COMPOSE_NODE by its role, and a copy
+    refused names its node and the serve dir by their roles: neither the serve dir's path nor a host leaves."""
+    assert _deferred(tmp_path).returncode == 0
+    d = tmp_path / "serve"
+    said = (tmp_path / "served-out" / "verdicts.txt").read_text() if (tmp_path / "served-out" / "verdicts.txt").exists() else ""
+    said += "".join(f.read_text(errors="replace") for f in (tmp_path / "out").rglob("*") if f.is_file())
+    assert "D=<that path> bash benchmarks/one_stage/served_verdicts.sh v3c" in said, said
+    rc, lines, _there = _copy(tmp_path, "deferred", "research@vy-auditor-2:incoming")
+    assert rc == 3 and lines, lines
+    left = said + "\n".join(lines)
+    assert str(d) not in left and "vy-auditor-2" not in left, left
+
+
 NO_HOST = ("PREFLIGHT: VY_CHALLENGER_1_HOST is unset, the address of the host the default gate command reaches (ssh -i "
            "{home}/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@): set it, or give the gate's "
            "whole command")
@@ -7746,7 +7762,7 @@ FRONT_CALL = "benchmarks/network_traces/attester_piece.py front 18190 TMP/serve 
 FRONT_LINE = "TMP/tree/benchmarks/one_stage/served_verdicts.py front-line TMP/serve/private/certifier-front/session.json"
 SAID_UP = ["SERVE SERVE-OPENAI listening",
            "NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free "
-           "(weights-registration exit 1: )"]
+           f"(weights-registration (no exception, exit 1): {PRIVATE})"]
 SAID_FRONT = ["CERTIFIER-FRONT (exit 0): "]
 SAID_LOAD = [f"REQUESTS (exit 0, release run {RELEASE_RUN}): every request answered",
              "TIMINGS: no TMP/serve/load.timings.json"]

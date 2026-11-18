@@ -128,6 +128,10 @@ path = "verity/channel.py"
 means = "what two parties exchange messages over: a message and its types, and the configuration's Channel"
 
 [[tree]]
+path = "verity/release.py"
+means = "the formats of a network attester's release of a request: its headers and its watermark"
+
+[[tree]]
 path = "verity/device.py"
 means = "the registered hardware"
 
