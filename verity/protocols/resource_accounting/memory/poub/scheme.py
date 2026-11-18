@@ -156,6 +156,7 @@ BANDWIDTH = S.register(S.Scheme(
     colocated=(),
     needs=frozenset({"receipts"}),
     depends=("pous",),
+    pieces={"prover": S.Launch(optional=("host", "command"), development="host")},
     record="bandwidth",
     symbol="Q_cert",
     published=("bytes", Fraction(1, 8)),
