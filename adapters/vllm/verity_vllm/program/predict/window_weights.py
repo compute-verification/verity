@@ -33,6 +33,7 @@ from typing import Any
 import numpy as np
 from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
@@ -133,7 +134,7 @@ def weight_value(program: str, param: str, words: Any, salts: bytes | None = Non
     rows = _rows(param, words)
     ys = os.urandom(len(rows) * SF.SALT_BYTES) if salts is None else bytes(salts)
     return registered_commit(program, param, rows, bytes(32), 0, keep_rows=keep_rows, row_salts=ys,
-                             schema=G.SCHEMA_SEG if _param(param)[2] else G.SCHEMA_V2)
+                             schema=SCHEMA_HM96_SHA512_ROW_SEG if _param(param)[2] else SCHEMA_HM96_SHA512_ROW_V2)
 
 
 def value_salts(v: G.Registered) -> bytes:
