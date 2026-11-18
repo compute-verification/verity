@@ -1737,6 +1737,13 @@ def members(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | N
                     circuit.order)
 
 
+def partition_blocks(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | None = None) -> list[list[int]]:
+    """The partition object's ``blocks`` (`partition_object`) of the period's members (`members`: cut over the order's
+    ranges, at every wire's and registered read's ends, and at ``cap``): each member's units [base, base + n) in the
+    population's order."""
+    return [[m.base, m.base + m.n] for m in members(circuit, cap, built)]
+
+
 class _ReadIndex:
     """Registered reads by reader template, each template's units cut at its reads' ends into stretches, each with the reads
     that cover it (in the reads' order), so a member's reads (`_reads_of`) are a lookup and not a pass over every read: a
@@ -2472,6 +2479,44 @@ def _listed_count(doc: Mapping[str, Any], pins: Mapping[str, str] | str | None =
     window = listed_ingress(members, doc["templates"], ingress)
     return {"units": sum(int(n) for _t, n in doc["templates"]), "inputs": inputs, "wired": wired, "registered": registered,
             "ingress": 0, WINDOW_INGRESS: window, "free": inputs - wired - registered}
+
+
+#: the position-free registered file the door reads (`Flock.Registered.FORMAT`): no ``reads`` and no ``reads_from``, the
+#: door computing each proof block's position from C (`Flock.OneCircuit.pos`)
+REGISTERED_FILE = "verity/registered-reads/v2"
+
+
+def registered_file(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    """The door's ``--registered`` file (`REGISTERED_FILE`) of each member reading a registered parameter, by member key,
+    from the record ``doc`` and its period ``w`` (`window_of_record`'s), but for each parameter's entry from ``pins``
+    (``{param: entry}``, the value's ``root``, ``leaves``, ``words``, ``word_bits`` and ``domain`` as the verifier pinned
+    them before the run): each read port names its parameter's value, root, rows and domain, and no position. Refused
+    (ValueError) where a read's parameter has no pin, or a pin's rows are not the port's in that width."""
+    _wires, _cuts_, reg, _ingress = declarations(doc)
+    reads = committed_reads(reg)
+    if not reads:
+        return {}
+    pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.partition_digest).items()}}
+    out: dict[str, dict[str, Any]] = {}
+    index = _ReadIndex(reads)
+    for m, a in zip(w.members, own_units(w.members, ranges_of(doc["templates"], order_of(doc)))):
+        got = _reads_of(m.template, a, m.n, index, dict(m.rows + m.outs))
+        if not got:
+            continue
+        ports = {}
+        for p, (param, _positions, _refs) in sorted(got.items()):
+            e = pins.get(param)
+            words = dict(m.rows + m.outs)[p]
+            if e is None:
+                raise ValueError(f"{m.key} {p} reads registered parameter {param!r}, whose root the verifier didn't pin")
+            n, bits, want = e.get("words"), e.get("word_bits", RV.WORD_BITS), value_format(reg, param)[1]
+            if bits != want or type(n) is not int or n * bits != 16 * words or e.get("value") != param:
+                raise ValueError(f"{m.key} {p}: the pin of {param!r} is {e.get('value')!r} rows of {n} {bits}-bit leaves, not "
+                                 f"the port's {words} 16-bit words in {want}-bit leaves")
+            ports[p] = {"value": param, "root": e["root"], "leaves": int(e["leaves"]), "words": n, "word_bits": bits,
+                        "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p)}
+        out[m.key] = {"format": REGISTERED_FILE, "ports": ports}
+    return out
 
 
 def _frozen(x: Any) -> Any:

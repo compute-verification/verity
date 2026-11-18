@@ -1,11 +1,15 @@
 """C_S compacted: Core's `Circuit.restrict` of C to a proof block's units, as a Program of the block's own (`restrict`).
 
-**C's index.** C's gates are numbered by PROTOCOL.md §6's layout of its root: bodies laid out in node order, recursively; a
-primitive node is one gate, a call node its callee's gates, a batch's members (a scan's iterations) consecutive in member
-order, each its callee's gates, a batch of a primitive one gate a member. An input node (`Input<w>_v1`, or
-`RegisteredInput<w>_v1` for a registered value) is a primitive node of the root, one gate a member, at its node's place.
+**C's index, the one that names things.** C's gates are its descriptor's word-level gates, numbered by PROTOCOL.md §6's
+layout of its root: bodies laid out in node order, recursively; a primitive node is one gate, a call node its callee's gates,
+a batch's members (a scan's iterations) consecutive in member order, each its callee's gates, a batch of a primitive one gate
+a member. An input node (`Input<w>_v1`, or `RegisteredInput<w>_v1` for a registered value) is a primitive node of the root,
+one gate a member, at its node's place. A gate has its primitive's width. This index, and only it, names a block (`words`),
+a boundary (in(S) and out(S): `inputs`, `outputs`) and a leaf; `Block.to_c_gate` maps the block's descriptor gates into it.
+Units, and a partition's blocks, are counted in the population's own order (`TemplatePartition`), not in gates.
 
-**C on bits** numbers the bits of C's gates, gate by gate in C's index order: gate g's bit gates come after every bit gate of
+**C on bits, for a statement and a count only.** It never names a block, a boundary or a leaf. It numbers the bits of C's
+gates, gate by gate in C's index order: gate g's bit gates come after every bit gate of
 the gates before g (`Bits.base`), and are, in place:
 - an input gate of w bits, of either binding: w one-bit input gates of that binding, bit j at offset `split(w)[j]`, which is
   j (least significant bit first);
@@ -30,8 +34,9 @@ reads or that C returns, each in increasing index of C (`ports`).
 - returns, for each maximal run of out(S) of one width, `Array<n, Value<w>>`, in a Tuple, each gate as the earliest leaf of
   the block's nodes whose gate it is;
 and whose Definitions and Boolean map are C's (a word primitive's body is C's). Its bytes are the codec's
-(`descriptor_chunks`). Laid out by §6 and on bits as C is, its gates are S's in order, after its input gates, which are
-in(S)'s, each a gate's bits least significant first: `Block.to_c` maps a gate of the block on bits to C's on bits.
+(`descriptor_chunks`). Laid out by §6 as C is, its gates are in(S), one input gate a leaf, then S's gates in order
+(`Block.to_c_gate`). On bits, its gates are in(S)'s bits, each gate's least significant first, then S's bit gates in order
+(`Block.to_c_bit`).
 `listing` writes the block on bits gate by gate, a test's reference: `verity/block-circuit/v1`; `I K O`; per input bit its
 binding (`run`, `registration`, or `wire` for a computed gate of C); per gate its kind and its operands; per output `out`
 and its gate, all in the block's numbering, one ASCII line each.
@@ -127,7 +132,6 @@ def _body(fn: Any) -> _Body:
 
     wrap = bind(CompositeDefinition("RestrictBody", 1, (), lambda S: ((), ret), body, register=False))
     n = sum(t.leaves for _, t in params)
-
     def enc(o: int) -> int:
         return o - n if o >= n else -1 - o
 
@@ -309,17 +313,15 @@ class Block:
     def gate_ranges(self) -> list[tuple[int, int]]:
         return [(self.bits.base[lo], self.bits.base[hi]) for lo, hi in self.words]
 
-    def to_c(self, i: int) -> int:
-        """Gate ``i`` of the block on bits as a gate of C on bits: its input bits are in(S)'s, then its gates are S's."""
-        ins = self.input_bits
-        if i < len(ins):
-            return ins[i]
-        i -= len(ins)
-        for lo, hi in self.gate_ranges:
-            if i < hi - lo:
-                return lo + i
-            i -= hi - lo
-        raise IndexError(i)
+    def to_c_gate(self, i: int) -> int:
+        """Gate ``i`` of the block's descriptor (§6) as C's descriptor gate, the index that names a block, a boundary or a
+        leaf: its input gates are in(S), then its gates are S's (`words`) in order."""
+        return _to_c(i, self.inputs, self.words)
+
+    def to_c_bit(self, i: int) -> int:
+        """Gate ``i`` of the block on bits as a gate of C on bits, for the block's statement and counts only: its input bits
+        are in(S)'s, then its gates are S's."""
+        return _to_c(i, self.input_bits, self.gate_ranges)
 
     def listing(self) -> bytes:
         """The block on bits, gate by gate (module docstring), from C on bits: a test's reference for its layout."""
@@ -332,6 +334,19 @@ class Block:
                 at += 1
         body = [ln for lo, hi in self.words for g in range(lo, hi) for ln in bits.lines(g)]
         return _text(bits, ins, body, self.output_bits, num)
+
+
+def _to_c(i: int, ins: Sequence[int], ranges: Sequence[tuple[int, int]]) -> int:
+    if i < 0:
+        raise IndexError(i)
+    if i < len(ins):
+        return ins[i]
+    i -= len(ins)
+    for lo, hi in ranges:
+        if i < hi - lo:
+            return lo + i
+        i -= hi - lo
+    raise IndexError(i)
 
 
 def _text(bits: Bits, ins: Sequence[int], body, outs: Sequence[int], num: Mapping[int, int]) -> bytes:

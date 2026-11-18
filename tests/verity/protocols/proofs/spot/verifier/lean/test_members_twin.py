@@ -175,7 +175,7 @@ class Audit:
         return self.params | {"proofs": {"members": ms | {name: ms[name] | changes}}}
 
 
-@waits_on("restrict")
+@waits_on("restrict", "lower")
 def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp_path):
     """On an audit with nothing wrong but its stand-in files, Lean's check ends at the first member's files, its
     circuit one that does not parse, and the twin answers that reason, the Flock verifier's own (`members.flock_form`);
@@ -225,7 +225,7 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
     assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
 
 
-@waits_on("restrict")
+@waits_on("restrict", "lower")
 def test_a_member_with_no_statement_has_its_files_held_by_both_before_any_session(tmp_path):
     """A window audited with a statement of its second member alone, that statement's tree logged and closed: Lean
     holds every member's files, sampled or not (`OneStageZk.membersFiles`), so it refuses the first member, which has
@@ -237,7 +237,7 @@ def test_a_member_with_no_statement_has_its_files_held_by_both_before_any_sessio
     assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
 
 
-@waits_on("restrict")
+@waits_on("restrict", "lower")
 def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_both(tmp_path):
     """A window audited with a statement of its second member alone, its first member's files a circuit a prover
     staged and that circuit's public file: Lean holds the public file's header and rows as a session's setup takes
@@ -280,7 +280,7 @@ def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_b
         f"refused: {HEADER_WHY} (row r0: schema is not hm96-sha512/row/v2){FORM}")
 
 
-@waits_on("restrict")
+@waits_on("restrict", "lower")
 def test_a_member_no_statement_names_is_held_to_its_own_circuits_lookup_tables(tmp_path):
     """A window audited with a statement of its second member alone: the first member, which no statement names, is
     held to its own circuit's lookup tables among the blobs as a sampled one is (`OneStageZk.ownTables`, the first read

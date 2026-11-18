@@ -138,6 +138,7 @@ def unwired_why(port: str) -> str:
 
 
 #: `OneStageZk.provedHeld`'s refusal
+UNITS_HANDED = "units: a member's units are its block of the partition object's blocks, never the parameters' own"
 PROVED_UNITS = "the units the sessions proved are not the evidence's proved_units"
 #: the heads of the two refusals `Flock.KsScope.checkOf` and the scope (`Flock.ProvedScope.checkOf`) word alike, of
 #: files neither reads: a circuit that does not parse, a public file that does not load
@@ -220,6 +221,17 @@ def _count(m: Mapping[str, Any]) -> int:
     return sum(hi - lo for lo, hi in m["units"])
 
 
+def _block(name: str, m: Mapping[str, Any], descriptor: bytes, partition: Mapping[str, Any]) -> list[tuple[int, int]]:
+    """Member ``name``'s units, its block of the partition object's ``blocks`` (`one_circuit.block`); a member whose
+    parameters hand it units of its own is refused."""
+    if "units" in m:
+        raise _Refused(f"member {name}: {UNITS_HANDED}")
+    try:
+        return OC.block(descriptor, partition, m["block"])
+    except OC.Refused as e:
+        raise _Refused(f"member {name}: partition: {e}") from None
+
+
 def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dict[str, Any], list[Any]]:
     """The parameters' members and the evidence's statements, as the per-member parsers leave them; `Outside` where
     they are not in that form."""
@@ -234,12 +246,9 @@ def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dic
               and isinstance(params["challenger"], dict) and isinstance(params["partition"], dict)
               and isinstance(params["program"], dict))
         for m in ms.values() if ok else ():
-            ok = ok and (set(m) == {"public", "registered", "units", "vus_per_block"} and type(m["public"]) is str
-                         and (m["registered"] is None or isinstance(m["registered"], dict))
-                         and type(m["units"]) is list and bool(m["units"])
-                         and all(type(u) is list and len(u) == 2 and _nat(u[0]) and _nat(u[1]) and u[0] < u[1]
-                                 for u in m["units"])
-                         and _nat(m["vus_per_block"]) and m["vus_per_block"] > 0)
+            ok = ok and (set(m) - {"units"} == {"public", "registered", "block", "vus_per_block"}
+                         and type(m["public"]) is str and (m["registered"] is None or isinstance(m["registered"], dict))
+                         and _nat(m["block"]) and _nat(m["vus_per_block"]) and m["vus_per_block"] > 0)
         for st in sts if ok else ():
             ok = ok and set(st) == {"member", "sessions"} and type(st["sessions"]) is list
             for s in st["sessions"] if ok else ():
@@ -558,8 +567,8 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
     blobs do not hold refuses (`proofs.tables_match_why`); one only another member's circuit looks up is none of its."""
     try:
         try:
-            c = OC.restrict(descriptor, partition, _first(m))
-        except OC.NotDerived as e:
+            c = OC.lower(OC.restrict(descriptor, partition, m["units"]))
+        except (OC.NotDerived, OC.Refused) as e:
             raise _Refused(f"circuit: {e}") from None
         circuit = _blob(blobs, hashlib.sha512(c).hexdigest(), "circuit")
         meta = _meta(circuit)
@@ -653,7 +662,9 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
     ms, sts = _parsed(params, evidence)
     if P.program_sha512(program) != params["partition"].get("program"):
         raise Outside("the program is not the one the parameters' partition object names")
+    descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
     try:
+        ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"])} for name, m in ms.items()}
         held = _held(ms, sts)
         if [s["name"] for st in sts for s in st["sessions"]] != evidence["sessions"]:
             raise _Refused("the statements' sessions are not the evidence's sessions, in order")
@@ -674,7 +685,6 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
             strata: Any = P.strata(program, params["query"])
         except (P.QueryRefused, ValueError) as e:
             strata = e
-        descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
         files = {name: _files(name, m, blobs, descriptor, params["partition"], strata,
                               {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form)
                  for name, m in ms.items()}
