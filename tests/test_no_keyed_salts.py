@@ -55,7 +55,6 @@ ALLOWED: dict[str, str] = {
     "verity/commitments/hm96/batch.py": "@proofs",
     "verity/protocols/experimental/dither/prover/dither.py": "@compute-accounting",
     "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
-    "verity/protocols/proofs/flock/prover/live/src/zk_hooks.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/zk_server.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/python/verity_flock/zk_server.py": "@proofs",
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Salts.lean": "@proofs",
