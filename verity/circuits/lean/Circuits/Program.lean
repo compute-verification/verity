@@ -735,9 +735,11 @@ def laneRes (b : Int) (off run : Nat) (e : Int) (lv : List (Nat × Int)) (L cap 
 def RCAP : Nat := 2 ^ 16
 
 /-- Whether every leaf of `S` that a lane reaches between its extremes `lo … hi` has width `w`, by structure: `S`'s
-widths between the extremes, or the residues the lane reaches in the period of the array holding them all. `none`
-where neither decides; `some false` only where a leaf the lane reaches has another width. -/
-def laneWidth (S : Ty) (w lo hi : Nat) (b : Int) (run : Nat) (e : Int) (lv : List (Nat × Int)) : Option Bool :=
+widths between the extremes, or the residues the lane reaches in the period of the array holding them all, each of
+which it reaches where `exact`. `none` where neither decides; `some false` only where a leaf the lane reaches has
+another width. -/
+def laneWidth (S : Ty) (w lo hi : Nat) (b : Int) (run : Nat) (e : Int) (lv : List (Nat × Int)) (exact : Bool) :
+    Option Bool :=
   match rangeWidths S lo (hi + 1) with
   | [x] => some (x == w)
   | _ =>
@@ -745,7 +747,7 @@ def laneWidth (S : Ty) (w lo hi : Nat) (b : Int) (run : Nat) (e : Int) (lv : Lis
     | (.array _ f, off) =>
       if f.leaves == 0 then none else
       match laneRes b off run e lv f.leaves RCAP with
-      | some R => if R.all fun r => wAt f r == w then some true else none
+      | some R => if R.all fun r => wAt f r == w then some true else if exact then some false else none
       | none => none
     | _ => none
 
@@ -843,7 +845,7 @@ def partOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M Bool :=
     let vals := corners.map fun (x, y) => (base + (x : Int) * os + (y : Int) * is).toNat
     let lo := vals.foldl min vals.head!
     let hi := vals.foldl max vals.head!
-    match laneWidth S w lo hi base inner is [((n + inner - 1) / inner, os)] with
+    match laneWidth S w lo hi base inner is [((n + inner - 1) / inner, os)] (n % inner == 0) with
     | some true => return true
     | some false => return false
     | none => throw (undecided q s!"the leaves of {if p then "parameter" else "node"} {i} it reads are of several widths")
@@ -854,7 +856,7 @@ def partOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M Bool :=
       | some S =>
         if s.homo? l.p l.i == some w then some true else
         let (lo, hi) := l.bounds run
-        laneWidth S w lo.toNat hi.toNat l.b run l.e l.lv
+        laneWidth S w lo.toNat hi.toNat l.b run l.e l.lv true
     let vs := lanes.map verdict
     if vs.all (· == some true) then return true
     if vs.any (· == some false) then return false
