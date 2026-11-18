@@ -20,7 +20,8 @@ input (a constant) is no proof block.
 Per proof block: its output bits (its returned fields') and size class, its input bits, its estimated ANDs (its leaves'
 ANDs lowered alone, table reads counted apart: not a statement's ``ands`` with its reads inline, as `m1_families` says),
 its served MACs and the bytes of the rows it opens (a row per parameter and per returned field). Beside them, every row's
-own estimate unsplit (the circuit's ANDs and MACs, whatever the cut).
+own estimate unsplit (the circuit's ANDs and MACs, whatever the cut). A word Definition's block names the Definition on bits
+whose proof is its own (``proved_as``) and, where its kind's largest block in the census bounds it, that one (``bounded_by``).
 
     python benchmarks/one_stage/block_census.py --sized sized-rank0.json [sized-rank1.json ...] --out DIR [--request RID]
 """
@@ -224,6 +225,7 @@ def census(docs: list[dict], request: str | None = None) -> dict:
         raise ValueError(f"the ranks' requests are of {sorted(lengths)} (prompt, steps): one request shape a census, so "
                          f"name one with --request (of {sorted({r for d in docs for r in d['requests']})})")
     (prompt, steps), = lengths
+    proved(defs)
     tot = {p: {"blocks": sum(d[p] for d in defs.values()), **{k: sum(d[p] * d[k] for d in defs.values()) for k in SUMS},
                **rows[p]} for p in PHASES}
     tokens = {"prefill": prompt, "decode": steps - 1}
@@ -235,6 +237,27 @@ def census(docs: list[dict], request: str | None = None) -> dict:
             "definitions": dict(sorted(defs.items(), key=lambda kv: -(kv[1]["prefill"] + kv[1]["decode"]) * kv[1]["ands"])),
             "gaps": dict(sorted(gaps.items(), key=lambda kv: -(kv[1]["prefill"] + kv[1]["decode"]))),
             "not_blocks": other, "undescribed": dict(undescribed)}
+
+
+def proved(defs: dict[str, dict]) -> None:
+    """Gives each proof-block Definition of a version on bits its ``proved_as`` (`serving_rows.proved_as`: that version at its
+    statics, whose proof is its block's), and each of a kind (one ``Name_vN`` on bits) at several sizes that the kind's largest
+    entry (the most ANDs) differs from only in integer statics and is at least in k, ANDs, input and output bits, and is not,
+    ``bounded_by``: that entry's ``proved_as``."""
+    for s, d in defs.items():
+        if (p := ST.proved_as(s)) is not None:
+            d["proved_as"] = p
+    kinds: dict[str, list[dict]] = defaultdict(list)
+    for d in defs.values():
+        if "proved_as" in d:
+            kinds[spec_base(d["proved_as"])].append(d)
+    for ds in kinds.values():
+        top = max(ds, key=lambda d: d["ands"])
+        big = spec_statics(top["proved_as"])
+        for d in ds:
+            sizes = all(type(v) is int for k, v in spec_statics(d["proved_as"]).items() if big.get(k) != v)
+            if d is not top and sizes and all(top[k] >= d[k] for k in ("k_log", "ands", "in_bits", "out_bits")):
+                d["bounded_by"] = top["proved_as"]
 
 
 def staged(c: dict, stages: list[dict]) -> dict:
