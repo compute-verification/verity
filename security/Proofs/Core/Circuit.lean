@@ -674,6 +674,163 @@ end Containment
 theorem Contains.implements {C D : Circuit} (h : Contains C D) : Implements C D :=
   h.elim fun M => ⟨M.implementation⟩
 
+namespace Compiler.Output
+
+variable (o : Compiler.Output) (b : Compiler.Phase o)
+
+/-- `o`'s gate `g` as a gate of `o ‖ b`. -/
+def old (g : Fin o.D.N) : Fin (o.append b).D.N := Fin.castAdd b.E.n g
+
+/-- `b`'s gate `i` as a gate of `o ‖ b`. -/
+def new (i : Fin b.E.n) : Fin (o.append b).D.N := Fin.natAdd o.D.N i
+
+/-- `old` as an embedding. -/
+def oldEmb : Fin o.D.N ↪ Fin (o.append b).D.N := ⟨o.old b, Fin.castAdd_injective _ _⟩
+
+theorem oldEmb_apply (g : Fin o.D.N) : o.oldEmb b g = o.old b g := rfl
+
+theorem append_cases (x : Fin (o.append b).D.N) : (∃ g, x = o.old b g) ∨ ∃ i, x = o.new b i :=
+  Fin.addCases (motive := fun x : Fin (o.D.N + b.E.n) => (∃ g, x = o.old b g) ∨ ∃ i, x = o.new b i)
+    (fun g => Or.inl ⟨g, rfl⟩) (fun i => Or.inr ⟨i, rfl⟩) x
+
+theorem old_ne_new (g : Fin o.D.N) (i : Fin b.E.n) : o.old b g ≠ o.new b i := fun h => by
+  have h1 : (g : ℕ) = o.D.N + i := congrArg Fin.val h
+  omega
+
+theorem mem_map_old (S : Finset (Fin o.D.N)) (g : Fin o.D.N) : o.old b g ∈ S.map (o.oldEmb b) ↔ g ∈ S :=
+  Finset.mem_map' (o.oldEmb b)
+
+theorem new_notMem_map (S : Finset (Fin o.D.N)) (i : Fin b.E.n) : o.new b i ∉ S.map (o.oldEmb b) := fun h => by
+  obtain ⟨g, -, hg⟩ := Finset.mem_map.1 h
+  exact o.old_ne_new b g i hg
+
+theorem append_unit_old (g : Fin o.D.N) : (o.append b).P.unit (o.old b g) = (o.P.unit g).map (Fin.castAdd b.m) :=
+  Fin.append_left (fun g => (o.P.unit g).map (Fin.castAdd b.m)) (fun i => (b.unit i).map (Fin.natAdd o.m)) g
+
+theorem append_isInput_old (g : Fin o.D.N) : (o.append b).D.isInput (o.old b g) = o.D.isInput g :=
+  Fin.append_left o.D.isInput b.E.isInput g
+
+theorem append_reads_old (h : Fin o.D.N) : (o.append b).D.reads (o.old b h) = (o.D.reads h).map (o.oldEmb b) :=
+  Fin.append_left (fun g => (o.D.reads g).map (Fin.castAddEmb b.E.n)) b.E.reads h
+
+theorem append_mem_reads_old (a h : Fin o.D.N) : o.old b a ∈ (o.append b).D.reads (o.old b h) ↔ a ∈ o.D.reads h := by
+  rw [append_reads_old, mem_map_old]
+
+theorem append_outputs : (o.append b).D.outputs = o.D.outputs.map (o.oldEmb b) ∪ b.E.outputs := rfl
+
+theorem append_phase_old (g : Fin o.D.N) : (o.append b).L.phase (o.old b g) = o.L.phase g :=
+  Fin.append_left o.L.phase (fun _ => o.phases + 1) g
+
+theorem append_phase_new (i : Fin b.E.n) : (o.append b).L.phase (o.new b i) = o.phases + 1 :=
+  Fin.append_right o.L.phase (fun _ => o.phases + 1) i
+
+theorem append_reg_old (g : Fin o.D.N) : (o.append b).L.reg (o.old b g) = o.L.reg g :=
+  Fin.append_left o.L.reg (fun _ => none) g
+
+theorem append_writerRank_old (g : Fin o.D.N) : (o.append b).P.writerRank (o.old b g) = o.P.writerRank g := by
+  unfold Partition.writerRank
+  rw [append_unit_old]
+  cases o.P.unit g <;> rfl
+
+theorem append_before_old (g h : Fin o.D.N) : (o.append b).P.Before (o.old b g) (o.old b h) ↔ o.P.Before g h := by
+  unfold Partition.Before
+  rw [append_writerRank_old, append_writerRank_old]
+  exact Iff.rfl
+
+/-- **The phase declares no earlier gate an output** that was not one already. -/
+def KeepsOutputs : Prop := ∀ g : Fin o.D.N, o.old b g ∈ b.E.outputs → g ∈ o.D.outputs
+
+variable {o b}
+
+theorem append_mem_outputs_old (hout : o.KeepsOutputs b) (g : Fin o.D.N) :
+    o.old b g ∈ (o.append b).D.outputs ↔ g ∈ o.D.outputs := by
+  rw [append_outputs]
+  exact ⟨fun h => (Finset.mem_union.1 h).elim (mem_map_old o b _ g).1 (hout g),
+    fun h => Finset.mem_union.2 (Or.inl ((mem_map_old o b _ g).2 h))⟩
+
+theorem commitsIn_le_phases {g : Fin o.D.N} {j : ℕ} (h : o.P.CommitsIn o.L g j) : j ≤ o.phases := by
+  rcases h with ⟨-, -, rfl⟩ | ⟨k, -, -, rfl⟩ <;> exact o.phase_le _
+
+/-- **Appending a phase keeps what the phases up to `o.phases` commit.** -/
+theorem append_commitsIn_old (hout : o.KeepsOutputs b) {g : Fin o.D.N} {j : ℕ} (hj : j ≤ o.phases) :
+    (o.append b).P.CommitsIn (o.append b).L (o.old b g) j ↔ o.P.CommitsIn o.L g j := by
+  unfold Partition.CommitsIn
+  rw [append_isInput_old, append_mem_outputs_old hout, append_phase_old, append_unit_old]
+  have hinj : Function.Injective (Option.map (Fin.castAdd b.m : Fin o.m → Fin (o.m + b.m))) :=
+    Option.map_injective (Fin.castAdd_injective _ _)
+  refine or_congr Iff.rfl ⟨?_, ?_⟩
+  · rintro ⟨h, hgh, hne, hph⟩
+    rcases o.append_cases b h with ⟨h, rfl⟩ | ⟨i, rfl⟩
+    · rw [append_mem_reads_old] at hgh
+      rw [append_unit_old] at hne
+      exact ⟨h, hgh, fun he => hne (congrArg _ he), by rw [← hph, append_phase_old]⟩
+    · rw [append_phase_new] at hph
+      omega
+  · rintro ⟨h, hgh, hne, hph⟩
+    refine ⟨o.old b h, (append_mem_reads_old o b g h).2 hgh, ?_, by rw [append_phase_old, hph]⟩
+    rw [append_unit_old]
+    exact fun he => hne (hinj he)
+
+theorem commitPhase_le_phases {g : Fin o.D.N} (hg : g ∈ o.P.boundary) : o.P.commitPhase o.L g ≤ o.phases :=
+  commitsIn_le_phases (o.P.commitsIn_commitPhase hg)
+
+theorem append_mem_boundary_old (hout : o.KeepsOutputs b) {g : Fin o.D.N} (hg : g ∈ o.P.boundary) :
+    o.old b g ∈ (o.append b).P.boundary :=
+  (o.append b).P.mem_boundary_of_commitsIn
+    ((append_commitsIn_old hout (commitPhase_le_phases hg)).2 (o.P.commitsIn_commitPhase hg))
+
+theorem append_commitPhase_old (hout : o.KeepsOutputs b) {g : Fin o.D.N} (hg : g ∈ o.P.boundary) :
+    (o.append b).P.commitPhase (o.append b).L (o.old b g) = o.P.commitPhase o.L g := by
+  have hle : (o.append b).P.commitPhase (o.append b).L (o.old b g) ≤ o.P.commitPhase o.L g :=
+    (o.append b).P.commitPhase_le ((append_commitsIn_old hout (commitPhase_le_phases hg)).2
+      (o.P.commitsIn_commitPhase hg))
+  exact le_antisymm hle (o.P.commitPhase_le ((append_commitsIn_old hout (hle.trans (commitPhase_le_phases hg))).1
+    ((o.append b).P.commitsIn_commitPhase (append_mem_boundary_old hout hg))))
+
+/-- A gate of the appended phase is committed in a later phase than `o`'s. -/
+theorem append_commitsIn_new {i : Fin b.E.n} {j : ℕ} (h : (o.append b).P.CommitsIn (o.append b).L (o.new b i) j) :
+    o.phases < j := by
+  rcases h with ⟨-, -, hph⟩ | ⟨k, hk, -, hph⟩
+  · rw [append_phase_new] at hph
+    omega
+  · have := (o.append b).L.phase_reads k _ hk
+    rw [append_phase_new, hph] at this
+    omega
+
+/-- **Appending a phase keeps the earlier phases' windows.** -/
+theorem append_window_old (hout : o.KeepsOutputs b) {j : ℕ} (hj : j ≤ o.phases) :
+    (o.append b).P.window (o.append b).L j = (o.P.window o.L j).map (o.oldEmb b) := by
+  ext x
+  rcases o.append_cases b x with ⟨y, rfl⟩ | ⟨i, rfl⟩
+  · rw [mem_map_old]
+    unfold Partition.window
+    rw [Finset.mem_filter, Finset.mem_filter, append_reg_old]
+    constructor
+    · rintro ⟨hb, hr, hc⟩
+      have hy : y ∈ o.P.boundary := o.P.mem_boundary_of_commitsIn ((append_commitsIn_old hout hj).1
+        (hc ▸ (o.append b).P.commitsIn_commitPhase hb))
+      exact ⟨hy, hr, by rw [← append_commitPhase_old hout hy, hc]⟩
+    · rintro ⟨hy, hr, hc⟩
+      exact ⟨append_mem_boundary_old hout hy, hr, by rw [append_commitPhase_old hout hy, hc]⟩
+  · refine iff_of_false (fun hx => ?_) (new_notMem_map o b _ i)
+    have hx := Finset.mem_filter.1 hx
+    have := append_commitsIn_new (hx.2.2 ▸ (o.append b).P.commitsIn_commitPhase hx.1)
+    omega
+
+/-- **Appending a phase keeps every earlier boundary gate's position**, when the phase declares no earlier gate an
+output that was not one already. -/
+theorem append_pos_old (hout : o.KeepsOutputs b) {g : Fin o.D.N} (hg : g ∈ o.P.boundary) :
+    (o.append b).P.pos (o.append b).L (o.old b g) = o.P.pos o.L g := by
+  unfold Partition.pos
+  rw [if_pos (append_mem_boundary_old hout hg), if_pos hg, append_reg_old]
+  rcases o.L.reg g with _ | ⟨i, r⟩
+  · rw [append_commitPhase_old hout hg, append_window_old hout (commitPhase_le_phases hg), Finset.filter_map,
+      Finset.card_map]
+    simp only [Function.comp_def, oldEmb_apply, append_before_old]
+  · rfl
+
+end Compiler.Output
+
 end Verity
 
 namespace Verity.SecurityProofs
