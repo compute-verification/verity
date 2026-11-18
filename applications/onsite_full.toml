@@ -34,6 +34,31 @@ free_us = 0
 token_ns = 0
 log = ""
 
+[params."verity/wipe/v0"]
+store = "cuda"
+device = 0
+segments = 0
+reserve_bytes = 1073741824
+tier = ""
+limit_ns = 20000000
+streamer = "native"
+threads = 0
+foreign_bytes = 0
+foreign_past_bound = false
+simulated = false
+egress_bits = -1
+reads = 0
+links = []
+host = ""
+address = ""
+command = []
+run_keys = false
+idle_mib = 1024
+
+[params."verity/wipe/v0".disk]
+
+[params."verity/wipe/v0".dram]
+
 [[party]]
 name = "workers"
 machine = "prover-node"
