@@ -26,6 +26,7 @@ of its own to name. The route form `ResourceAccounting.Remote.Run.Paid` is `Veri
 from __future__ import annotations
 
 from collections.abc import Mapping
+from fractions import Fraction
 from typing import Any
 
 from dataclasses import replace
@@ -113,13 +114,13 @@ BANDWIDTH = S.register(S.Scheme(
     parties=(*(replace(r, name=_named(r.name)) for r in P2.MANIFEST.parties), S.VERIFIER),
     channels=(*(replace(c, sender=_named(c.sender), receiver=_named(c.receiver)) for c in P2.MANIFEST.channels),
               Channel(P2.CLOSER_PARTY, S.VERIFIER.name, ("BandwidthAnswer",), after=("Openings",))),
+    channel_schemas=P2.MANIFEST.messages,
     colocated=(),
     needs=frozenset({"receipts"}),
     depends=("pous",),
     record="bandwidth",
     symbol="Q_cert",
-    record_unit="bytes",
-    title="the bandwidth audit",
+    published=("bytes", Fraction(1, 8)),
     record_owner="memory-accounting",
 ))
 
@@ -150,14 +151,14 @@ POUB = S.register(S.Scheme(
           "(`Remote.Run.paid`), in bits",
     parties=RS.MANIFEST.parties,
     channels=RS.MANIFEST.channels,
+    channel_schemas=RS.MANIFEST.messages,
     colocated=(),
     needs=frozenset(),
     depends=(),
     record=S.Lacks("no combined record has a row for the remote session: its verdict is its own session's "
                    "(benchmarks/poub_session)"),
     symbol=S.Lacks("the remote session publishes no certified quantity in a combined record"),
-    record_unit=S.Lacks("the remote session publishes no certified quantity in a combined record"),
-    title=S.Lacks("no record prints the remote session"),
+    published=S.Lacks("the remote session publishes no certified quantity in a combined record"),
     record_owner=S.Lacks("no combined record has a row for the remote session"),
 ))
 

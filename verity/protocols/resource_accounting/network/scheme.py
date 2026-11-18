@@ -4,6 +4,7 @@ the bits that leave beyond what the registered circuit explains."""
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from fractions import Fraction
 from typing import Any
 
 from verity.circuits.defs import bind
@@ -121,13 +122,13 @@ NETWORK_ATTESTER = register(Scheme(
     processes={"id-relay": id_relay.process},
     parties=NC.MANIFEST.parties,
     channels=NC.MANIFEST.channels,
+    channel_schemas=NC.MANIFEST.messages,
     colocated=(("challenger", NC.NETWORK_ATTESTER),),
     needs=frozenset({"windows", "ingress-relay"}),
     depends=("sampled-proofs",),
     record="communication",
     symbol="K",
-    record_unit="bits",
-    title="the network certifier",
+    published=("bits", Fraction(1)),
     record_owner="network-accounting",
 ))
 

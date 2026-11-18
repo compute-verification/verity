@@ -33,6 +33,6 @@ DITHER = register(Scheme(
     log=(Order("operand roots", "seeds"), Order("value roots", "check")),
     charges=(Charge("sample", _EPS), Charge("egress", _EPS), Charge("answers", _EPS)),
     attach=attach,
-    **dict.fromkeys(("parties", "channels", "colocated", "needs", "depends", "record", "symbol", "record_unit", "title",
-                     "record_owner"), _NOT_RUN),
+    **dict.fromkeys(("parties", "channels", "colocated", "needs", "depends", "record", "symbol", "published",
+                     "channel_schemas", "record_owner"), _NOT_RUN),
 ))

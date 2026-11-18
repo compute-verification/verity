@@ -104,13 +104,13 @@ POUS = register(Scheme(
     attach=_pous_attach,
     parties=(*CS.MANIFEST.parties, VERIFIER),
     channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER.name, ("SignedRun",), after=("End",))),
+    channel_schemas=CS.MANIFEST.messages,
     colocated=(),
     needs=frozenset({"store"}),
     depends=(),
     record="space",
     symbol="S0",
-    record_unit="bits",
-    title="PoUS",
+    published=("bits", Fraction(1)),
     record_owner="memory-accounting",
 ))
 
@@ -136,13 +136,13 @@ WIPE = register(Scheme(
     attach=lambda exchange, ctx: _wipe_attach(),
     parties=(*WP.MANIFEST.parties, VERIFIER),
     channels=(*WP.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER.name, ("WipeReport",), after=("End",))),
+    channel_schemas=WP.MANIFEST.messages,
     colocated=(),
     needs=frozenset(),
     depends=(),
     record="wipe",
     symbol="foreign_bits",
-    record_unit="bits",
-    title="the wipe",
+    published=("bits", Fraction(1)),
     record_owner="memory-accounting",
 ))
 

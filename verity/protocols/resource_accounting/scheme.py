@@ -80,6 +80,7 @@ from types import MappingProxyType
 from typing import Any, Literal
 
 from verity.hooks import HOOKS
+from verity.channel import Schema
 from verity.protocol import Channel, Role
 
 
@@ -250,16 +251,23 @@ class Scheme:
 
     What a configuration, a launcher and the combined record read of it, each a `Lacks` (refused by `declared`, with
     the field's name) until the declaration fills it: ``parties`` and ``channels`` (`verity.protocol.Role`, `Channel`;
-    `VERIFIER` is the party its answer goes to), ``colocated``, the pairs of its parties on one machine, ``needs``, what
-    the workload provides it (``windows``, ``noise``, ``store``, ``receipts``, ``ingress-relay``), ``depends``, the
-    schemes it runs beside, ``record``, its row's name in the record, ``symbol`` and ``record_unit``, its certified
-    quantity's symbol and the unit the record publishes it in, which may be another measure of ``unit``
-    (`Core.Account.Measure`), ``title``, its name in the record's sentences, and ``record_owner``, the lane the record
-    names as answering for its row."""
+    `VERIFIER` is the party its answer goes to) and ``channel_schemas``, the `verity.channel.Schema` of each message its
+    channels carry that has one, by its type; ``colocated``, the pairs of its parties on one machine; ``needs``, what
+    the workload provides it (``windows``, ``noise``, ``store``, ``receipts``, ``ingress-relay``: provisions, which
+    ``requests`` doesn't state, since it answers only for a serve); ``depends``, the schemes a configuration must run
+    beside it (a scheme's names, unlike ``requires``, the proof layer's requirements); ``record``, its row's name in
+    the record; ``symbol``, its certified quantity's symbol; ``published``, the unit the record publishes it in and
+    the exact factor from ``unit`` (``("bytes", 1/8)`` for an amount in bits published in bytes, ``(unit, 1)`` where
+    it is the same); and ``record_owner``, the lane the record names as answering for its row. ``composed_protocol``
+    is the protocol id it carries inside a composite where that differs from ``protocol``, None where it is the same.
+
+    A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
+    is a `Lacks` saying so: it is in the one table with its parties and record, and `bound` and `credited` refuse it by
+    name. A declaration that names a resource is held to every check below."""
 
     name: str
     protocol: str
-    resource: str
+    resource: str | Lacks
     blocks: tuple[Block, ...]
     assumptions: tuple[str, ...]
     log: tuple[Order, ...]
@@ -286,16 +294,17 @@ class Scheme:
     depends: tuple[str, ...] | Lacks = UNDECLARED
     record: str | Lacks = UNDECLARED
     symbol: str | Lacks = UNDECLARED
-    record_unit: str | Lacks = UNDECLARED
-    title: str | Lacks = UNDECLARED
+    channel_schemas: tuple[Schema, ...] | Lacks = UNDECLARED
+    published: tuple[str, Fraction] | Lacks = UNDECLARED
     record_owner: str | Lacks = UNDECLARED
+    composed_protocol: str | None = None
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
             raise ValueError(f"a scheme's name is a configuration's name ({_NAME.pattern}), not {self.name!r}")
         if unknown := sorted(set(self.hooks) - set(HOOKS)):
             raise ValueError(f"{self.name}: {unknown} are not hooks of a served run {HOOKS}")
-        if self.resource not in RESOURCES:
+        if not isinstance(self.resource, Lacks) and self.resource not in RESOURCES:
             raise ValueError(f"{self.name}: its resource is one of {sorted(RESOURCES)}, not {self.resource!r}")
         if unknown := sorted(set(self.requires) - set(REQUIREMENTS)):
             raise ValueError(f"{self.name}: {unknown} are not requirements of the proof layer {REQUIREMENTS}")
@@ -312,12 +321,23 @@ class Scheme:
         if said and not (self.over and self.under):
             raise ValueError(f"{self.name}: a scheme whose term is said says its two sides (Verity.Scheme.over and under) "
                              "in words, each with its unit")
+        if not isinstance(self.channel_schemas, Lacks) and not isinstance(self.channels, Lacks):
+            carried = {m for c in self.channels for m in c.messages}
+            if stray := sorted({x.type for x in self.channel_schemas} - carried):
+                raise ValueError(f"{self.name}: its channel_schemas name {stray}, which none of its channels carries")
+        if not isinstance(self.published, Lacks):
+            unit, per = self.published
+            if not unit or type(per) is not Fraction or per <= 0:
+                raise ValueError(f"{self.name}: published is (the record's unit, a positive Fraction from its own "
+                                 f"unit), not {self.published!r}")
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
 
     @property
     def unit(self) -> str:
-        return RESOURCES[self.resource]
+        """The unit of its sides, costs and charges (`Core.Account.Part.unit`); refused by name for a scheme with no
+        resource."""
+        return RESOURCES[declared(self, "resource")]
 
 
 def settings(scheme: Scheme, given: Mapping[str, Any]) -> dict[str, Any]:
@@ -372,6 +392,7 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
     the registered circuit, ``q`` and the rest the caller's); refuses charges other than exactly the ones it states, a
     scheme with a known charge nothing bounds yet or whose own term is not said, parameters other than exactly the
     term's, and an audit's error ``epsilon`` not given (`GetsBack`'s ε, which the audit supplies, never the scheme)."""
+    declared(scheme, "resource")
     if sorted(charges) != sorted(c.name for c in scheme.charges):
         raise ValueError(f"{scheme.name}'s charges are {sorted(c.name for c in scheme.charges)}, not {sorted(charges)}")
     if unbounded := [f"{c.name} ({c.bound})" for c in scheme.charges if not c.bounded]:
@@ -482,6 +503,8 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     templates whose descriptor id is its Definition id, bare or followed by its statics (``Name_vN{...}``). Refuses a
     declared Definition id that resolves to no block, and a template two blocks would place on, of one scheme or two
     (`Placed.inj`, and one credited set for all)."""
+    for scheme in schemes:
+        declared(scheme, "resource")
     strata = [(tid, rs) for tid, rs in strata]
     placed: dict[str, str] = {}
     out: set[int] = set()
