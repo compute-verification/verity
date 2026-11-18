@@ -31,12 +31,12 @@
 # asked for, in a scratch copy of verity/, which holds every package it requires (WIPE_PROTOCOL_EXE names one built
 # already), never in this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile; it builds beside the
 # lease and the wipe, which waits for it only to answer (WIPE_PROTOCOL_READY, `lean_ready.sh`), and one that doesn't
-# build ends the piece after the wipe with its own error and exit 7. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
+# build ends the piece after the wipe with its own error and exit 7; the build's start is stamped too. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
 # summary.json, which names the program that decided and its host under `decided_by`, the SHA-512 of the challenger key
 # the session was signed under, `key_sha512`, and whether it is the pinned one, `key_pinned`), lake-build.log,
 # answer.json (wipe.json's answer, whatever its verdict), served.json (the serve dir and window the wipe precedes,
 # the server, the card, the lease, the run) and stamps.txt (the piece's timeline, a line `UTC EVENT` each: its start,
-# the Lean build's start and end, the card asked for and leased, a refusal, the wipe's exit and the piece's). The subprotocol's case, which holds the challenger's signed session, goes to
+# the Lean build's end, the card asked for and leased, a refusal, the wipe's exit and the piece's). The subprotocol's case, which holds the challenger's signed session, goes to
 # SERVE_DIR/private/wipe (0700) instead, and there served_case.py (with PY, default python3) writes the composite's
 # piece beside it: case.json and the subprotocol's own answer.json. Its last line is `WIPE {...}`.
 # Exit: demo.sh's (0 on accept, 1 on another verdict), 3 on a refusal, 7 when wipe-protocol doesn't build or verity/
