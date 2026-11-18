@@ -135,17 +135,9 @@ def test_a_scheme_takes_every_event(name, event, serve, tmp_path, monkeypatch):
             ex.emit(e)
 
 
-@pytest.mark.parametrize("name", sorted(declarations.DECLARATIONS))
-def test_a_scheme_takes_the_serves_warm_up_before_its_first_phase(name, serve, tmp_path, monkeypatch):
-    """The serve's order under its Commit: the learn-only warm-up (`serve_learn.warmed`) over a stand-in engine whose
-    steps emit on the current exchange as a served step does, from no input and outside any phase, then the first
-    window's phase (`serve_commit`) and its step."""
-    monkeypatch.chdir(tmp_path)
-    ex = _attached(serve, name, tmp_path)
-    honest = _honest()
-    due = next(e for e in honest if isinstance(e, H.BlockDue))
-    for e in honest[:2]:
-        ex.emit(e)
+def _warmed(serve, ex, due: H.BlockDue) -> int:
+    """The serve's learn-only warm-up (`serve_learn.warmed`) on ``ex``, over a stand-in engine whose steps emit there as a
+    served step does, from no input and outside any phase; the step the workload schedules next after it."""
     opts = parse(*SHAPE)
     engine, com, llm = stand_ins(opts)
     step = engine.step
@@ -161,7 +153,21 @@ def test_a_scheme_takes_the_serves_warm_up_before_its_first_phase(name, serve, t
     vars(engine)["step"] = emitting
     with serve.using(ex):
         sl.warmed(com, llm, opts)
-    shift = ex.next_step
+    return ex.next_step
+
+
+@pytest.mark.parametrize("name", sorted(declarations.DECLARATIONS))
+def test_a_scheme_takes_the_serves_warm_up_before_its_first_phase(name, serve, tmp_path, monkeypatch):
+    """The serve's order under its Commit: the learn-only warm-up (`serve_learn.warmed`) over a stand-in engine whose
+    steps emit on the current exchange as a served step does, from no input and outside any phase, then the first
+    window's phase (`serve_commit`) and its step."""
+    monkeypatch.chdir(tmp_path)
+    ex = _attached(serve, name, tmp_path)
+    honest = _honest()
+    due = next(e for e in honest if isinstance(e, H.BlockDue))
+    for e in honest[:2]:
+        ex.emit(e)
+    shift = _warmed(serve, ex, due)
     for e in honest[2:]:
         if "step" in {f.name for f in dataclasses.fields(e)}:
             e = dataclasses.replace(e, step=e.step + shift)
@@ -198,6 +204,57 @@ def test_the_network_attesters_served_attach_without_the_admission_handle_is_ref
     with pytest.raises(ValueError, match=r"network-attester: .*verity\.hooks\.Admit, ctx's admit"):
         ex.attach(declarations.get("network-attester"), SERVED_TICK, source="--protocols-config", **given)
     assert ex.requests == []
+
+
+@pytest.mark.parametrize("filed", [pytest.param("after", marks=pytest.mark.xfail(
+    raises=Refused, strict=True, reason="the warm-up's unheard steps set the exchange's step, so a gate filed after it "
+                                        "is refused as filed after serving began (`messages.Exchange.request`)")),
+                                    "before"])
+def test_the_network_attesters_admission_through_the_handle_neither_hears_nor_counts_the_serves_warm_up(filed, serve):
+    """The serve's order (`serve_openai.main`): the learn-only warm-up in `build`, then the engine loop and the attach
+    through `hooks.Admit` (``after``); or the gate filed and its run started before the warm-up, as an engine-side gate
+    attached at build is (``before``). The warm-up calls none of the handle's three, the gate neither holds its inputs
+    nor counts its steps, and a release after it goes through the handle's take then submit, the gate counting the
+    served step it hears, numbered from where the warm-up left the exchange's step, as its first."""
+    calls: list[tuple[str, object]] = []
+    got: list[NA.Admitter] = []
+
+    def take(rec: dict) -> None:
+        calls.append(("take", rec))
+        got[0].gate.take(rec)
+
+    admit = H.Admit(lambda adm: calls.append(("submit", adm)), lambda eid: calls.append(("abort", eid)), take)
+    ex = serve.Exchange()
+
+    def attach() -> NA.Admitter:
+        got.append(ex.attach(declarations.get("network-attester"), SERVED_TICK, source="--protocols-config",
+                             admit=admit))
+        return got[0]
+
+    a = attach() if filed == "before" else None
+    if a is not None:
+        a.gate.take({"run": "ab"})
+    honest = _honest()
+    due = next(e for e in honest if isinstance(e, H.BlockDue))
+    for e in honest[:2]:
+        ex.emit(e)
+    shift = _warmed(serve, ex, due)
+    assert shift > 0 and calls == []
+    if a is None:
+        a = attach()
+    assert (a.gate.steps, a.gate.T, a.gate.held, a.gate.counts["aborted"]) == (0, 0, {}, 0)
+    assert [type(r) for _, r in ex.requests] == [H.StartOnBoundary, H.ServeRoute] and ex.requests[0][1].gate is a.gate
+    adm = SimpleNamespace(engine_id="r0", release=a.front.key({"x-verity-release": "0", "x-verity-release-run": "ab"}))
+    a.front.submit(adm)
+    assert [k for k, _ in calls] == ["take", "submit"] and calls[1][1] is adm and a.gate.run == "ab"
+    for e in honest[2:]:
+        if "step" in {f.name for f in dataclasses.fields(e)}:
+            e = dataclasses.replace(e, step=e.step + shift)
+        if isinstance(e, H.BlockDue):
+            ex.compute(e, lambda inputs: due.inputs["x"])
+        else:
+            ex.emit(e)
+    assert a.gate.steps == 1 and a.gate.T > 0 and ex.step == shift
 
 
 def test_a_handler_takes_only_the_events_it_names():
