@@ -67,7 +67,7 @@ from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.challenger.coins import DRAW_FORM
 
-from . import closing as CL, partition as P, proofs as PF
+from . import closing as CL, docket as DK, partition as P, proofs as PF
 from verity.commitments import registered_value as RV
 from .proofs import V2_EXE, LeanError, v2_executable
 
@@ -471,7 +471,7 @@ def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
 def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
     """`OneStageZk.rootsOf`: the docket's roots by the member each is of, its port without the member's name; a root
     ``<template>/<field>`` of a member's template, not named as a member, is the window's tree of the field, no
-    member's own (`_field_trees`)."""
+    member's own (`_field_trees`), and a member's own root at such a field refuses (`OneStageZk.ownFieldsHeld`)."""
     roots = record.get("roots")
     if type(roots) is not list:
         raise _Refused("roots: the registration's roots are not a list")
@@ -494,6 +494,11 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
                            "<member>/<port>, and a root is one member's")
         name, bare = mine[0]
         out[name].append({"domain": r.get("domain"), "leaves": r.get("leaves"), "port": bare, "root": r.get("root")})
+    ft = _field_trees(ts, record)
+    for name, rs in out.items():
+        t = _template_of(name)
+        if (f := next((f for f, _ in ft.get(t[0], ()) if any(r["port"] == f for r in rs)), None) if t else None) is not None:
+            raise _Refused(DK.own_field(name, f))
     return out
 
 

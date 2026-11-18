@@ -907,13 +907,20 @@ NOT_ONE_MEMBER = ("public file: the registration's roots are not one member's: t
                   "a registration whose ports are bare, or are all one window member's, <member>/<port>")
 
 
+def own_field(name: str, field: str) -> str:
+    """`OneStageZk.OWN_FIELD`."""
+    return (f"roots: the member {name} holds a root of its own at {field}, a field its template has a window's tree of: a "
+            "member reads its template's field at the window's one tree, which every wire into the field reads")
+
+
 def public_ports(rec: Mapping[str, Any]) -> dict[str, Any]:
     """`OneStageZk.publicPorts`: the record's roots by port as v2's one statement's public file names them (bare): its
     own where no root's port holds a ``/``; else, where every root's port but the window's trees of a template's field
     (``<template>/<field>``, its template another port's name's template) is ``<member>/<port>`` of one member, whose
     own port names hold no ``/``, that member's roots with its name and the ``/`` taken off, with its template's fields'
-    trees at the fields it has no root of. Raises `ValueError` with v2's refusal where the roots are two members' or
-    more, or bare and a member's (`NOT_ONE_MEMBER`), or one is a row tables' (`ROW_TABLES`) or names no port."""
+    trees at its fields. Raises `ValueError` with v2's refusal where the roots are two members' or more, or bare and a
+    member's (`NOT_ONE_MEMBER`), or one is a row tables' (`ROW_TABLES`) or names no port, or the member holds a root of
+    its own at a field its template has a tree of (`own_field`)."""
     roots = rec["roots"]
     ports = [r["port"] for r in roots if isinstance(r.get("port"), str)]
     if all("/" not in p for p in ports):
@@ -939,7 +946,9 @@ def public_ports(rec: Mapping[str, Any]) -> dict[str, Any]:
         bare = port[len(name) + 1:]
         out.pop(bare, None)
         out[bare] = {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": bare, "root": r.get("root")}
-    return {**out, **{f: e for f, e in fields.items() if f not in out}}
+    if (f := next((f for f in fields if f in out), None)) is not None:
+        raise ValueError(own_field(name, f))
+    return {**out, **fields}
 
 
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],

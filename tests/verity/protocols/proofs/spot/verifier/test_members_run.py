@@ -21,7 +21,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C
-from verity.protocols.proofs.spot.verifier.one_stage import closing as K, members as M, partition as P, proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import closing as K, docket as DK, members as M, partition as P, proofs as PF
 
 from test_challenger import entropy
 
@@ -381,11 +381,21 @@ def test_a_wired_port_with_no_tree_under_its_member_reads_its_writers_field_tree
 def test_a_members_own_output_port_reads_its_templates_field_tree():
     """A root ``<template>/<field>`` of a member's template is the window's tree of the field, no member's own: a
     member of the template with no root at that field has the tree in its slice under the field's port
-    (`OneStageZk.ownFieldsOf`), at which a header naming it holds; a member with its own root there keeps its own."""
+    (`OneStageZk.ownFieldsOf`), at which a header naming it holds; a member with its own root at a field its template
+    has the tree of is refused, in either order of the two roots (`OneStageZk.ownFieldsHeld`), in `slices` and in the
+    one statement's ports (`public_ports`): a wire from the field would read the window's tree, the member its own."""
     tree = {"domain": "cc" * 64, "leaves": 5, "port": "b/o0", "root": "33" * 64}
-    got = M.slices(UNITS, RECORD | {"roots": [*RECORD["roots"], tree, {**tree, "port": "a/out"}]})
+    got = M.slices(UNITS, RECORD | {"roots": [*RECORD["roots"], tree]})
     assert got[B]["roots"][1] == {"domain": "cc" * 64, "leaves": 5, "port": "o0", "root": "33" * 64}
     assert got[A] == M.slices(UNITS, RECORD)[A]
+    for roots in ([*RECORD["roots"], {**tree, "port": "a/out"}], [{**tree, "port": "a/out"}, *RECORD["roots"]]):
+        with pytest.raises(ValueError) as e:
+            M.slices(UNITS, RECORD | {"roots": roots})
+        assert str(e.value) == DK.own_field(A, "out")
+    with pytest.raises(ValueError) as e:
+        DK.public_ports({"roots": [RECORD["roots"][0], {**tree, "port": "a/out"}]})
+    assert str(e.value) == DK.own_field(A, "out")
+    assert set(DK.public_ports({"roots": [RECORD["roots"][0], {**tree, "port": "a/o0"}]})) == {"out", "o0"}
     strata = P.strata(PROGRAM, QUERY)
     named = header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "cc" * 64},
                                 "roots": {"out": ROOTS[B][0], "o0": "33" * 64}})
