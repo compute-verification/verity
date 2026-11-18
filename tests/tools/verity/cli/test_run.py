@@ -519,7 +519,7 @@ def test_onsites_smaller_sets_are_read_and_hashed_and_their_verdict_is_undecided
     """Each of onsite's two smaller sets is a deployment with an id of its own, never onsite's: `check` reads it, and
     `verity run` runs its parties and records each period's verdict under that id, undecided, since no composite
     takes it, even where every subprotocol's verifier accepts."""
-    cfg = config([p for p in ONSITE if p in K.UNACCEPTED[cid]])
+    cfg = config([p for p in ONSITE_H1 if p in K.UNACCEPTED[cid]])
     assert K.composite(cfg["protocols"], REG.components) == cid and K.digest(cfg) != K.digest(config())
     rc, lines = run(tmp_path, verifier_says(accepting(cfg, cid)), cfg=cfg)
     assert rc == 2 and [(x["product"], x["verdict"]) for x in lines] == [(cid, "undecided")]
@@ -529,7 +529,7 @@ def test_onsites_smaller_sets_are_read_and_hashed_and_their_verdict_is_undecided
 
 @pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
 def test_a_smaller_sets_record_never_carries_onsites_id(tmp_path, capsys, cid):
-    cfg = config([p for p in ONSITE if p in K.UNACCEPTED[cid]])
+    cfg = config([p for p in ONSITE_H1 if p in K.UNACCEPTED[cid]])
     rc, lines = run(tmp_path, verifier_says(accepting(cfg, "verity/onsite/v0")), cfg=cfg)
     out = capsys.readouterr().out
     assert rc == 2 and [(x["product"], x["verdict"]) for x in lines] == [(cid, "undecided")]
@@ -541,7 +541,7 @@ def test_a_smaller_sets_record_never_carries_onsites_id(tmp_path, capsys, cid):
 @pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
 def test_a_smaller_sets_verdict_the_table_combined_is_passed_through_with_who_combined_it(tmp_path, capsys, cid,
                                                                                           verdict, rc):
-    cfg = config([p for p in ONSITE if p in K.UNACCEPTED[cid]])
+    cfg = config([p for p in ONSITE_H1 if p in K.UNACCEPTED[cid]])
     by = f"python: no Lean verifier takes {cid}"
     line = {**accepting(cfg, "verity/onsite/v0"), "verdict": verdict, "combined_by": by}
     got, lines = run(tmp_path, verifier_says(line), cfg=cfg)
