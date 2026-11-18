@@ -1,7 +1,7 @@
 # prove_path
 
 The prove path (`prove_path.py`, `run.sh`), an execution phase's audit from its records alone (`records_audit.py`) and the cost
-model's class-of-record execution phase (`window_cost.py`, `class_rows.py`), and what they read from the measurements and the
+model's class-of-record execution phase (`window_cost.py`, `class_rows.py`, and `class_size.py`, the class circuit's padded size), and what they read from the measurements and the
 served-rows tie's runs on a sealed served execution phase:
 
 - `sources.json` and the checkpoint manifests it names: the served models' sources, which `prove_path.py` reads.
