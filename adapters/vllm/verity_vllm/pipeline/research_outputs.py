@@ -80,8 +80,8 @@ KINDS = {"build": "vllm-build/v1", "plan": "vllm-commit-plan/v1", "match": "vllm
 #: never in a stage's outputs (`private`): the replay bundles and the slim keeps, which hold clear values
 KEPT_APART = ("replay_bundle_p", "replay_slim_p")
 #: nor these files, wherever they sit: request values, where each rank ran and when each process ran
-PRIVATE = ("tokens.json", "tokens_p*.json", "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.jsonl",
-           "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json")
+PRIVATE = ("tokens.json", "tokens_p*.json", "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "request_users.jsonl",
+           "step_trace.jsonl", "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json")
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",
                "target_family.build.json", "target_family.json",
