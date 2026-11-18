@@ -86,10 +86,10 @@ def select_alone(ms: list[CS.Member]) -> list[CS.Member]:
     window does not hold, are plain input rows that no unit of the window writes."""
     mine = [m for m in ms if SRW.template(m.template).fn.name == SELECT]
     lo = min(m.base for m in mine)
-    if any(m.base > lo for m in ms if m not in mine) or any(min(ws) < lo <= max(ws) for m in mine for _p, _o, ws in m.wired):
-        raise ValueError("the select chunks are not the row's last units, each wire's writers all before them or all among them")
-    return [replace(m, base=m.base - lo, wired=tuple((p, o, tuple(u - lo for u in ws)) for p, o, ws in m.wired if min(ws) >= lo))
-            for m in mine]
+    if any(m.base > lo for m in ms if m not in mine):
+        raise ValueError("the select chunks are not the row's last units")
+    keep = {m.template for m in mine}
+    return [replace(m, base=m.base - lo, wired=tuple(w for w in m.wired if w.writer in keep)) for m in mine]
 
 
 def commit(out: Path, v: int, splits: tuple[int, ...], rows: int, stages: str, select_only: bool = False
