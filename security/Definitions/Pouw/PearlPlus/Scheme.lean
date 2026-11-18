@@ -8,7 +8,7 @@ public import Definitions.Pouw.PearlC.TileSample
 
 Pearl+'s instance of `Verity.Scheme`, a family over its game's setting (`Setting`): the cost model, Π and its audit
 tiles, the sample's weight, the workload, the adversary and its declarations, the number of samples, the budget, the
-TT_OUT target `g₀`, the gap `γ = γn/γd`, the resolution `D`, the oracle bound `q` and the error `η(q, N)`. Its game is
+TT_OUT target `g₀`, the gap `γ = γn/γd`, the resolution `D` and the oracle bound `q`. Its game is
 Pearl-C's sampled audit sampled as the run samples (`Pouw.PearlC.GGapSampledDraw`, `Definitions.Pouw.PearlC.TileSample`),
 whose python is `verity.protocols.resource_accounting.compute.pouw.scheme` (`pearl-plus`).
 
@@ -31,8 +31,8 @@ whose python is `verity.protocols.resource_accounting.compute.pouw.scheme` (`pea
   challenger's log it is `Verity.Challenger.Log.Cut` at the run commitment and the coin `pouw/draw`, which the code
   checks (`PouwVerifier.PearlPlus.drawReason`).
 * **Breaks** is TT_OUT per tile's event at the budget: the good tiles' credit exceeds `T/(1 − g₀)`
-  (`Pouw.PearlC.Assumptions.TTOutTile`). Its bound, the scheme's own term, is `η(q, N)`, which TT_OUT per tile gives for
-  an adversary within `(T, q)`. Pearl-C's commitments are ideal, so no hash break is here; the code's
+  (`Pouw.PearlC.Assumptions.TTOutTile`). Its bound, the scheme's own term, is `δPearlC q N`, the error TT_OUT per tile is
+  stated at (`TTOutTilePearlC`, `g₀ = 1/400`) for an adversary within `(T, q)`. Pearl-C's commitments are ideal, so no hash break is here; the code's
   (`Properties.Pouw.PearlPlus.OpeningBinds`) is the link's.
 * **Charges** are none: the inert-work share is in the tiles' credit and in `γ`, the sample's share is the missable
   cost, a tile over its bound is incorrect and an excluded row is credited nothing.
@@ -55,7 +55,7 @@ open scoped ENNReal
 
 /-- **Pearl+'s setting**: the game the scheme is an instance at, with its own sides' parameters. `dec` gives each unit's
 declaration on the oracle and salt; `T` is the adversary's budget; `g₀` is TT_OUT's target, `γn/γd` the gap, `D` the
-resolution and `η(q, N)` TT_OUT's error. -/
+resolution and `q` the oracle bound. -/
 structure Setting where
   Q : Type
   R : Type
@@ -74,7 +74,6 @@ structure Setting where
   γd : ℕ
   D : ℕ
   q : ℕ
-  η : ℕ → ℕ → ℝ
 
 namespace Setting
 
@@ -128,8 +127,8 @@ def breaks (r : σ.Run) : Prop :=
   σ.T / (1 - σ.g₀) < ∑ g ∈ PearlC.goodTiles σ.P σ.TR σ.U r.1.1 r.1.2 (σ.trace r),
     σ.TR.credit r.1.1 r.1.2 σ.U g (PearlC.actOf (σ.trace r) ((σ.TR.tiling σ.U.layout).unit g))
 
-/-- The scheme's own term: `η(q, N)`. -/
-noncomputable def δscheme : ℝ≥0∞ := ENNReal.ofReal (σ.η σ.q σ.U.layout.N)
+/-- The scheme's own term: TT_OUT's error `δPearlC q N`. -/
+noncomputable def δscheme : ℝ≥0∞ := ENNReal.ofReal (PearlC.δPearlC σ.q σ.U.layout.N)
 
 /-- **Pearl+'s charge inequality**, an open premise: in an accepted run that doesn't break TT_OUT per tile's event,
 `(1 − γ)` of the claimed work is within the budget plus the incorrect tiles' cost. It rests on TT_OUT per tile, through
