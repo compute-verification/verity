@@ -19,7 +19,8 @@
 #                                        # committed under PRIVATE/two-stage/boundary
 #   bash benchmarks/serve_tax/run.sh --model glm53 [--arms "ARM ..."|all] [--loads NAME[=RUNG+RUNG...],...]
 #     [--dataset NAME=FILE] [--reps 6] [--target PERCENT] [--json]   # the serving cost, by vLLM's own client
-#   bash benchmarks/serve_tax/run.sh --model llama32-1b --profile coding-agent|chat|fixed-size --find-load|--feature SCHEME
+#   bash benchmarks/serve_tax/run.sh --model llama32-1b --profile coding-agent|chat|fixed-size
+#     --find-load|--feature NAME [KEY=VALUE ...]
 #     # a serving profile of benchmarks/production.toml: where stock saturates, or one arm of ours beside stock
 # The last form is the serving cost (README.md): each flag sets the variable of its name (MODEL_ID, ARMS, LOADS, DATASETS,
 # REPS, TARGET, JSON) and any of them makes vLLM's own client the default (CLIENT=vllm-bench: `vllm bench serve`, no C4
@@ -34,11 +35,12 @@
 # sampling flag (the model's generation_config) and each request to its recorded length (fixed-size's 1,024 tokens).
 # It fixes ARMS, LOADS, REPS, LIFETIMES, SAMPLED, MAX_MODEL_LEN, PASS_PROMPTS, the published arm's flags, TARGET and
 # WITH, and refuses each one given, naming it. --profile, --feature and --find-load are flags alone: PROFILE, FEATURE
-# and FIND_LOAD in the environment are refused. --find-load serves stock alone over its load's rungs (serve_tax.LOADS;
-# requests in flight up to the profile's prompts) and prints where its output
+# and FIND_LOAD in the environment are refused. --find-load serves stock alone over the profile's ladder (its users
+# or requests in flight, benchmarks/production.toml) and prints where its output
 # tokens a second stop rising: the file's line, the version to raise and the pin test's digest
-# (OUT/find_load.json); it edits no file. --feature SCHEME names a registered useful-work scheme (serve_tax.feature),
-# whose arm ARM is served with stock in turn at the profile's one load, two lifetimes of three reps each, and writes
+# (OUT/find_load.json); it edits no file. --feature NAME [KEY=VALUE ...] names an application's component and its
+# settings as its [params] lines state them (--feature sampled-proofs levels=2; serve_tax.feature), refused by name
+# where verity config check's components have no such name or setting; the arm ARM that serves it is served with stock in turn at the profile's one load, two lifetimes of three reps each, and writes
 # the run's result through the kit's report: its three lines, the first our extra card time a token under the model's
 # metric id. Where ARM
 # refuses what the profile has on, the result is `cannot run` in the refusal's words and the job exits 1, as for an
@@ -135,22 +137,26 @@
 # through the card files, never from the machine's name.
 set -uo pipefail
 [ -z "${PROFILE:-}${FEATURE:-}${FIND_LOAD:-}" ] || {
-  echo "serve-tax: PROFILE, FEATURE and FIND_LOAD are not read from the environment: --profile NAME with --feature SCHEME" \
-    "or --find-load"; exit 2; }
+  echo "serve-tax: PROFILE, FEATURE and FIND_LOAD are not read from the environment: --profile NAME with --feature NAME" \
+    "[KEY=VALUE ...] or --find-load"; exit 2; }
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
   flag=$1; shift
   case $flag in
     --json) JSON=1 ;;
     --find-load) FIND_LOAD=1 ;;
-    --model|--arms|--loads|--dataset|--reps|--target|--profile|--feature)
+    --feature)
+      [ $# -gt 0 ] || { echo "serve-tax: $flag takes a value"; exit 2; }
+      FEATURE=("$1"); shift
+      while [ $# -gt 0 ] && [[ $1 == *=* && $1 != -* ]]; do FEATURE+=("$1"); shift; done ;;
+    --model|--arms|--loads|--dataset|--reps|--target|--profile)
       [ $# -gt 0 ] || { echo "serve-tax: $flag takes a value"; exit 2; }
       case $flag in
         --model) MODEL_ID=$1 ;; --arms) ARMS=$1 ;; --loads) LOADS=$1 ;; --reps) REPS=$1 ;; --target) TARGET=$1 ;;
-        --dataset) DATASETS="${DATASETS:+$DATASETS }$1" ;; --profile) PROFILE=$1 ;; --feature) FEATURE=$1 ;;
+        --dataset) DATASETS="${DATASETS:+$DATASETS }$1" ;; --profile) PROFILE=$1 ;;
       esac
       shift ;;
     *) echo "serve-tax: unknown flag $flag (--model, --arms, --loads, --dataset NAME=FILE, --reps, --target, --json," \
-         "--profile NAME, --feature SCHEME, --find-load)"; exit 2 ;;
+         "--profile NAME, --feature NAME [KEY=VALUE ...], --find-load)"; exit 2 ;;
   esac
   CLIENT=${CLIENT:-vllm-bench}
 done
@@ -164,7 +170,7 @@ if [ "${1:-}" != leased ] && [ -n "${PROFILE:-}${FEATURE:-}${FIND_LOAD:-}" ]; th
   [ -n "${PROFILE:-}" ] || { echo "serve-tax: --feature and --find-load are a profile's: --profile NAME"; exit 2; }
   case "${FEATURE:+f}${FIND_LOAD:+l}" in
     f|l) ;;
-    *) echo "serve-tax: --profile $PROFILE takes --feature SCHEME or --find-load, one of them"; exit 2 ;;
+    *) echo "serve-tax: --profile $PROFILE takes --feature NAME [KEY=VALUE ...] or --find-load, one of them"; exit 2 ;;
   esac
   fixes() { echo "serve-tax: --profile $PROFILE fixes $2 (benchmarks/production.toml): drop $1"; exit 2; }
   [ -z "${ARMS:-}" ] || fixes "--arms/ARMS" "the arms: its stock and --feature's arm, or stock alone for --find-load"
@@ -263,13 +269,13 @@ if [ -n "${PROFILE:-}" ] && [ "${1:-}" != leased ]; then
   # what the profile serves (serve_tax.profile_plan): ARMS, LOADS, REPS, LIFETIMES, the changes on our side (OURS), the
   # stock arm and the model's minutes (CAP_MIN), within which the arms' passes are planned. No arm where the feature
   # cannot run and no change on our side lets the profile through: its result is written now, and no GPU is held
-  plan=$("$PY" "$here/serve_tax.py" profile plan --profile "$PROFILE" --model-id "$MODEL_ID" ${FEATURE:+--feature "$FEATURE"} \
+  plan=$("$PY" "$here/serve_tax.py" profile plan --profile "$PROFILE" --model-id "$MODEL_ID" ${FEATURE:+--feature "${FEATURE[@]}"} \
     ${FIND_LOAD:+--find-load}) || exit 2
   eval "$plan"
   { [ -n "${BUDGET_MIN:-}" ] && [ "$BUDGET_MIN" -le "$CAP_MIN" ]; } || BUDGET_MIN=$CAP_MIN
   export ARMS LOADS REPS LIFETIMES OURS STOCK CAP_MIN BUDGET_MIN
   if [ -z "$ARMS" ]; then
-    "$PY" "$here/serve_tax.py" profile result --profile "$PROFILE" --model-id "$MODEL_ID" --feature "$FEATURE" --out "$OUT"
+    "$PY" "$here/serve_tax.py" profile result --profile "$PROFILE" --model-id "$MODEL_ID" --feature "${FEATURE[@]}" --out "$OUT"
     exit $?
   fi
 fi
@@ -469,7 +475,7 @@ if [ -n "${PROFILE:-}" ]; then
   # a profile's result in place of a cost (serve_tax.profile_result): exit 1 where the feature cannot run, as for an arm
   # whose run refuses it
   "$PY" "$here/serve_tax.py" profile result "${dirs[@]}" --profile "$PROFILE" --model-id "$MODEL_ID" \
-    ${FEATURE:+--feature "$FEATURE"} ${FIND_LOAD:+--find-load} --out "$OUT" || rc=1
+    ${FEATURE:+--feature "${FEATURE[@]}"} ${FIND_LOAD:+--find-load} --out "$OUT" || rc=1
 elif [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ] \
     && [ "${ARMS##* }" != prod ] && [ "${SIDE:-}" != server ]; then
   for o in ${WITH:-}; do for d in "$o"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done; done

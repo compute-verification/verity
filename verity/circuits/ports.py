@@ -1034,7 +1034,7 @@ def _input_facts(root: Any, k: int, node: Any, runs: list, harness: bool, theta:
 
     reg = is_registered(node.fn)
     base = fact(origin=("theta",) if theta else ("registered",) if reg else ("input",))
-    B, pos = _Build(), 0
+    B, pos, q = _Build(), 0, root.body.recut.get(k, 1)
     for lo, hi, p, w in runs:
         if p.kind == "static" and not harness:
             raise PortError("E_PORT_KIND", f"{root.id} input node {k}: an input is never kind=static (only a harness's)")
@@ -1050,10 +1050,11 @@ def _input_facts(root: Any, k: int, node: Any, runs: list, harness: bool, theta:
             raise PortError("E_PORT_BOUND", f"{root.id} input node {k}: leaves [{lo}, {hi}) declare the bound [{p.bound[0]}, "
                             f"{p.bound[1]}], narrower than Value<{w}>, but an input's bound is never taken on trust (only a "
                             f"harness's): a range-check Definition narrows it")
-        B.add(lo - pos, base)
-        B.add(hi - lo, fact(p.bound, (p.kind,) if p.kind != "value" else base.origin, False, p.word))
+        B.add((lo - pos) * q, base)
+        B.add((hi - lo) * q, fact(p.bound if q == 1 else None, (p.kind,) if p.kind != "value" else base.origin, False,
+                                  p.word if q == 1 else None))
         pos = hi
-    B.add(node.out.leaves - pos, base)
+    B.add((node.out.leaves - pos) * q, base)
     return B.done()
 
 

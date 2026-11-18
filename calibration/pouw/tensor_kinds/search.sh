@@ -6,13 +6,18 @@
 #
 # One binary a (form, R), built in parallel outside the lease with its SASS dumped; the timed work runs under
 # `gpu-lease 1 --wait --max-min 15`, nvidia-smi sampling the leased GPU's clock and power every 200 ms. Clocks are read,
-# never set.
+# never set. The card's record's `arch` is the target, its architecture file nvcc's -gencode (probe.py arch, gencode);
+# search.cu's forms are sm_120a's, and another card is refused before anything is built.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 [ -x "$NVCC" ] || NVCC=$(command -v nvcc)
 CUOBJDUMP=$(dirname "$NVCC")/cuobjdump
+PROBE="$SRC/../opcode_probe/probe.py"
+ARCH=$(python3 "$PROBE" arch) || exit 2
+[ "$ARCH" = sm_120a ] || { echo "search.sh: the card's target is $ARCH, and search.cu has forms for sm_120a only: nothing built" >&2; exit 2; }
+GENCODE=$(python3 "$PROBE" gencode) || exit 2
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$OUT/sass"
@@ -23,7 +28,7 @@ for form in ImmaS8k16 ImmaS8m8k16 ImmaS8k32; do
   for r in 32 64; do
     tag=${form}_R$r
     TAGS+=("$tag")
-    "$NVCC" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -DFORM="$form" -DRR="$r" \
+    "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DFORM="$form" -DRR="$r" \
       -o "$WORK/$tag" "$SRC/search.cu" >"$OUT/build-$tag.log" 2>&1 &
   done
 done

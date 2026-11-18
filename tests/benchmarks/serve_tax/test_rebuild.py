@@ -530,6 +530,15 @@ def test_capture_takes_only_a_served_shape_only_target_s_rows(args: list[str]) -
         RB.main([*args, "--capture", "TokenSelect_v4{V=8}", "--out", "O", "--private", "P"])
 
 
+@pytest.mark.parametrize("flag", ["--kv-dir", "--mirror-out"])
+def test_a_kept_directory_inside_the_runs_output_is_refused_by_its_flag(tmp_path, flag) -> None:
+    out = tmp_path / "out"
+    args = {"--kv-dir": str(tmp_path / "kv"), "--mirror-out": None, flag: str(out / "kept")}
+    with pytest.raises(SystemExit, match=f"^{flag} .* which leaves the node"):
+        RB.main(["--arm-dir", "A", *[x for k, v in args.items() if v for x in (k, v)], "--at-step", "1", "--out",
+                 str(out), "--private", str(tmp_path / "private")])
+
+
 @pytest.mark.parametrize("given", [None, "TokenSelect_v4{V=8}"])
 def test_capture_without_a_template_takes_the_check_the_serve_committed_under(tmp_path, monkeypatch, given) -> None:
     (tmp_path / "meta.json").write_text(json.dumps({"model_id": "glm53"}))
