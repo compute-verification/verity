@@ -264,10 +264,10 @@ def test_values_boolean(window, tables):
     fn = read_of(V, NE.WIDTH)
     (u, b), = _units(window)[:1]
     args = [arguments(V, *_inputs(held, _declared(circuit, read, u), tok)) for tok in (7, 100000)]
-    got = np.asarray(evaluate_batch(fn, *(np.asarray([a[k] for a in args], np.uint8) for k in range(6)))).reshape(2, -1)
+    toks = np.asarray([[7], [100000]], dtype=object)
+    got = np.asarray(evaluate_batch(fn, toks, *(np.asarray([a[k] for a in args], np.uint8) for k in range(1, 6)))).reshape(2, -1)
     for i, tok in enumerate((7, 100000)):
-        words = [int(sum(int(got[i, 16 * k + j]) << j for j in range(16))) for k in range(NE.WIDTH)]
-        assert (words, int(got[i, -1])) == (_expected(cols, b, tok), 1)
+        assert ([int(w) for w in got[i, :NE.WIDTH]], int(got[i, -1])) == (_expected(cols, b, tok), 1)
 
 
 class _Weights:

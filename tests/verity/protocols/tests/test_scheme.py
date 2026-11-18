@@ -59,6 +59,14 @@ def test_settings_toggle() -> None:
         S.settings(s, {"refresh": 1})
 
 
+def test_a_settings_values_are_checked_by_its_declaration() -> None:
+    s = _toy(settings={"challenges": 320},
+             check_settings=lambda v: None if v["challenges"] >= 1 else f"challenges is at least 1, not {v['challenges']}")
+    assert S.settings(s, {}) == {"challenges": 320} and S.settings(s, {"challenges": 1}) == {"challenges": 1}
+    with pytest.raises(ValueError, match="toy-bandwidth: challenges is at least 1, not 0"):
+        S.settings(s, {"challenges": 0})
+
+
 def test_block_cost_and_unit() -> None:
     s = _toy()
     assert s.unit == "bits" and s.blocks[0].cost({"bytes": 4096}) == 32_768

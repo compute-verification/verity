@@ -2,6 +2,7 @@ module
 
 public import Proofs.Core.LevelsCount
 public import Proofs.Core.LevelsTwo
+public import Proofs.Core.Game.Prob
 public import Definitions.Core.LevelsProofBlocks
 
 /-!
@@ -19,6 +20,9 @@ Where `blk` places a claims partition `P`'s proof blocks as the blocks of `L`'s 
 * `Levels.countAt_eq_slots`: under both, the count at `δ` (`Levels.countAt`) is the largest set of slots `d` accepts
   with probability at least `δ`, at any number of levels; `missesAsDesign_one` reduces the miss to the level's design
   at one level (`Levels.design_one`).
+* `Levels.missesAsDesign_all`: the first instance. One level whose design draws every block, against a claims design
+  whose every rule is `all` (`classesPa_all`): both miss a set of slots with probability `1` when it is empty and `0`
+  otherwise.
 -/
 
 @[expose] public section
@@ -125,6 +129,87 @@ theorem countAt_eq_slots {d : Design} (h : L.SlotsAreBlocks P blk) (hm : L.Misse
     refine Finset.le_sup (f := Finset.card) (Finset.mem_filter.2 ⟨Finset.mem_powerset.2 (h.image_subset hB), ?_⟩)
     rw [hm.missProb_image hB]
     exact hδ
+
+/-- `window o n B` is empty exactly when `B` has no member in `[o, o + n)`. -/
+theorem window_eq_empty_iff (o n : ℕ) (B : Finset ℕ) :
+    window o n B = ∅ ↔ ∀ v ∈ B, ¬ (o ≤ v ∧ v < o + n) := by
+  unfold window
+  rw [Finset.image_eq_empty, Finset.filter_eq_empty_iff]
+
+open Classical in
+/-- **Every class sampled `all`**: the classes `cs` from slot `o` accept `B` with probability `1` when `B` has no
+member among their slots and `0` otherwise. -/
+theorem classesPa_all : ∀ (cs : List (List (List (List ℕ)))) (o : ℕ) (B : Finset ℕ),
+    classesPa (cs.map fun _ => OneStage.all) cs o B =
+      if ∀ v ∈ B, ¬ (o ≤ v ∧ v < o + cs.flatten.flatten.length) then 1 else 0
+  | [], o, B => by
+    rw [if_pos fun v _ h => by simp only [List.flatten_nil, List.length_nil, Nat.add_zero] at h; omega]
+    rfl
+  | c :: cs, o, B => by
+    have hlen : (c :: cs).flatten.flatten.length = c.flatten.length + cs.flatten.flatten.length := by
+      simp [List.flatten_cons, List.flatten_append]
+    have hE : (∀ v ∈ B, ¬ (o ≤ v ∧ v < o + (c :: cs).flatten.flatten.length)) ↔
+        (∀ v ∈ B, ¬ (o ≤ v ∧ v < o + c.flatten.length)) ∧
+          ∀ v ∈ B, ¬ (o + c.flatten.length ≤ v ∧ v < o + c.flatten.length + cs.flatten.flatten.length) := by
+      rw [hlen]
+      constructor
+      · intro h
+        exact ⟨fun v hv hc => h v hv ⟨hc.1, by omega⟩, fun v hv hc => h v hv ⟨by omega, by omega⟩⟩
+      · rintro ⟨h1, h2⟩ v hv hc
+        by_cases hm : v < o + c.flatten.length
+        · exact h1 v hv ⟨hc.1, hm⟩
+        · exact h2 v hv ⟨by omega, by omega⟩
+    simp only [List.map_cons, classesPa, OneStage.Pa]
+    rw [classesPa_all cs]
+    by_cases h1 : ∀ v ∈ B, ¬ (o ≤ v ∧ v < o + c.flatten.length)
+    · rw [if_pos ((window_eq_empty_iff _ _ _).2 h1), one_mul]
+      by_cases h2 :
+          ∀ v ∈ B, ¬ (o + c.flatten.length ≤ v ∧ v < o + c.flatten.length + cs.flatten.flatten.length)
+      · rw [if_pos h2, if_pos (hE.2 ⟨h1, h2⟩)]
+      · rw [if_neg h2, if_neg fun h => h2 (hE.1 h).2]
+    · rw [if_neg fun h => h1 ((window_eq_empty_iff _ _ _).1 h), zero_mul, if_neg fun h => h1 (hE.1 h).1]
+
+/-- **The first instance: a level that draws every block misses the slots as the claims design that samples every
+class `all`.** One level whose design at the whole circuit draws every block, with `blk` placing `P`'s proof blocks as
+its blocks, against a claims design whose rule for each class of `P` is `all`. -/
+theorem missesAsDesign_all {l : Level G} (hL : L.levels = [l]) (h : L.SlotsAreBlocks P blk)
+    (hall : ∀ ω, (l.design Finset.univ).draw ω = l.blocks.parts) {d : Design}
+    (hd : d.rules = P.classes.map fun _ => OneStage.all) : L.MissesAsDesign d P blk := by
+  classical
+  intro B hB
+  have hblocks : L.blocks = l.blocks.parts := by simp [Levels.blocks, hL]
+  have hdis : ∀ ω, Disjoint ((l.design Finset.univ).draw ω) (B.image blk) ↔ B = ∅ := fun ω => by
+    rw [hall ω]
+    constructor
+    · intro hdj
+      by_contra hB0
+      obtain ⟨v, hv⟩ := Finset.nonempty_iff_ne_empty.2 hB0
+      have hmem := h.2.1 v (Finset.mem_range.1 (hB hv))
+      rw [hblocks] at hmem
+      exact Finset.disjoint_left.1 hdj hmem (Finset.mem_image_of_mem blk hv)
+    · rintro rfl
+      simp
+  have hPa : d.Pa P B = if B = ∅ then 1 else 0 := by
+    unfold Design.Pa
+    rw [hd, classesPa_all]
+    by_cases hB0 : B = ∅
+    · rw [if_pos (fun v hv => by simp [hB0] at hv), if_pos hB0]
+    · obtain ⟨v, hv⟩ := Finset.nonempty_iff_ne_empty.2 hB0
+      have hlt : v < 0 + P.classes.flatten.flatten.length := by
+        simpa [Partition.blocks] using Finset.mem_range.1 (hB hv)
+      rw [if_neg (fun hc => hc v hv ⟨Nat.zero_le v, hlt⟩), if_neg hB0]
+  rw [hPa, L.missProb_one hL]
+  show (Game.prCoin fun ω => Disjoint ((l.design Finset.univ).draw ω) (B.image blk)).toReal = _
+  by_cases hB0 : B = ∅
+  · have h1 : ∀ ω, Disjoint ((l.design Finset.univ).draw ω) (B.image blk) := fun ω => (hdis ω).2 hB0
+    rw [if_pos hB0]
+    unfold Game.prCoin
+    simp only [h1, ite_true]
+    rw [Game.avg_const, ENNReal.toReal_one]
+  · have h0 : ∀ ω, ¬ Disjoint ((l.design Finset.univ).draw ω) (B.image blk) := fun ω hω =>
+      hB0 ((hdis ω).1 hω)
+    rw [if_neg hB0, le_antisymm ((Game.prCoin_mono fun c hc => (h0 c hc).elim).trans_eq Game.prCoin_false) zero_le,
+      ENNReal.toReal_zero]
 
 end Levels
 
