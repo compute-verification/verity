@@ -228,7 +228,7 @@ def test_a_retained_passes_end_without_a_directory_fails_at_its_first_path():
     pytest.importorskip("torch")
     cur = PPDR._Pass(None)
     with pytest.raises(TypeError, match=r"unsupported operand type\(s\) for /: 'NoneType' and 'str'"):
-        PPDR.PearlCDeviceRun._write_retained(SimpleNamespace(nb=64), cur, None, b"", b"", None, None, 0, {})
+        PPDR.PearlCDeviceRun._write_retained(SimpleNamespace(nb=64, weights={}), cur, None, b"", b"", None, None, 0, {})
     assert cur.writes == []
 
 
