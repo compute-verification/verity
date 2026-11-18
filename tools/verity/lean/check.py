@@ -500,6 +500,24 @@ def lake_env() -> dict[str, str]:
     return env
 
 
+def kept_artifacts(repo: Path) -> Path | None:
+    """`--build`: the node's Lake artifact cache (`lean_audit.LakeArtifacts`, under ``repo``'s check cache) when it indexes
+    any module, else None, as for a copy of this directory without `tools/check/common.py`."""
+    import importlib.util
+
+    path = repo / "tools" / "check" / "common.py"
+    if not path.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("check_common_for_audit", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    store = module.cache_dir() / "lean-artifacts"
+    try:
+        return store if any((store / sibling("module_keys").INDEX).iterdir()) else None
+    except OSError:
+        return None
+
+
 #: per auditing thread, the largest resident set of any process `run` has waited for since `took` last recorded it
 #: (`bytes`), and the most a process tree it sampled held at once (`tree`)
 _peak = threading.local()
@@ -7428,6 +7446,9 @@ def main(argv: list[str]) -> int:
                     "(`stage_build`). A module of the package that its build holds and the cache lacks is compiled again, so "
                     "the caller stores what the build compiled when it ends (`LakeArtifacts.put`); so is one of a package it "
                     "requires by path that this run doesn't audit, and the build of one it audits is left as it is")
+    ap.add_argument("--no-artifacts", action="store_true", help="--build compiles every module from source though the node "
+                    "keeps an artifact cache and builds in the sandbox, which it refuses otherwise (`kept_artifacts`): "
+                    "the uncached check's and a cold measurement's")
     ap.add_argument("--closure", action="store_true", help="the replay also checks every module of the import closure, the "
                     "toolchain's, Mathlib's and ArkLib's included, that has not passed it under its key (with --replay-cache, "
                     "a warm run checks only what changed; `replay_step`)")
@@ -7543,6 +7564,15 @@ def main(argv: list[str]) -> int:
     if a.ask:
         print_ask(*ask_lines({rel(p): pins(p) for p in pkgs}, steps))
         return 0
+    if a.build and not (a.artifacts or a.no_artifacts or a.fresh or a.dev_cache) and (kept := kept_artifacts(a.repo)) \
+            and sandboxed():
+        update = " --update" if a.update else ""
+        print(f"check.py: --build without --artifacts compiles every module from source, security/Proofs' included, though "
+              f"{kept} holds this node's built modules: take the records on a kept tree, which restores them,\n"
+              + "".join(f"  python3 tools/verity/lean/lean_changed.py --records {rel(p)}{update}\n"
+                        for p in pkgs if p in named)
+              + f"or pass --artifacts {kept}, or --no-artifacts to build cold on purpose", file=sys.stderr, flush=True)
+        return 2
     args = [*(f for f, on in (("--build", a.build), ("--closure", a.closure), ("--no-replay", a.no_replay),
                               ("--update", a.update)) if on), *(rel(p) for p in pkgs if p in named)]
     have = reserved() if a.facts_from is None and steps else None

@@ -45,15 +45,13 @@ the lock's sections, each naming the docstring with the detail. This is the work
   check, `check.py PKG`, runs in the merge queue's check; run it by hand only on a machine of your own.
 - **The fast path is not owed before a mark**; once `verity lean try` passes, run it for what the candidate's records run
   can't write (below) or to see a changed record early: `lean_changed.py --records PKG --update` through `research run`
-  (the README's commands have the line) regenerates PKG's records and its requirers',
+  (the README's line) regenerates PKG's records and its requirers',
   with the `--update` printout the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
   `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
   Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
   `lean-audit/record/`. No merge check accepts its result. It repairs a slot tree another run left mid-way: never
   delete or copy one. `--allow CODE:ENTRY` takes a finding ruled open, cured before the mark, as known: it stays red
   (exit 3, no pass), and its regenerated record goes to `allowed-record/`, never `record/`.
-- **A full record**: `check.py --build --update PKG` through `research run` (the README's line), unwrapped, leaves it
-  at `lean-audit/audit-TAG/lean-audit.json`.
 - **A Lean pool at 0 is closed on that machine**: a request for it is refused as it arrives, saying why, never left
   to wait. Run it where `lean_slot.py --status` lists a slot of that pool.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean

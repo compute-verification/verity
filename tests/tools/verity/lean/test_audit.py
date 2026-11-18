@@ -10199,3 +10199,58 @@ def test_a_dev_cache_setup_restores_the_packages_required_by_path_too(monkeypatc
     assert A.dev_restore(tmp_path / "Proofs", tc, 2, "x", tmp_path / "setup.log") == (2, "x") and calls == []
     monkeypatch.setattr(A, "DEV_CACHE", False)
     assert A.dev_restore(tmp_path / "Proofs", tc, 0, "", tmp_path / "setup.log") == (0, "") and calls == []
+
+
+
+class Built(Exception):
+    """What a `--build` past the artifact-cache refusal reaches first (`reserved`, stubbed)."""
+
+
+def built(*a, **k):
+    raise Built
+
+
+def cached_node(tmp_path, monkeypatch, modules=True):
+    """A sandboxed node whose artifact cache (under `CHECK_CACHE`) indexes a module unless not ``modules``, and `check.py
+    --build` of a toy package there, returning its exit or raising `Built` once past the refusal."""
+    pkg, root = toy(tmp_path), HERE.parents[3]
+    monkeypatch.setenv("CHECK_CACHE", str(cache := tmp_path / "check-cache"))
+    (index := cache / "lean-artifacts" / A.sibling("module_keys").INDEX).mkdir(parents=True)
+    if modules:
+        (index / "k").write_text("")
+    monkeypatch.setattr(A, "reserved", built)
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    return pkg, cache / "lean-artifacts", lambda *flags: A.main([str(pkg), "--build", *flags, "--out", str(tmp_path / "out"),
+                                                                  "--repo", str(root)])
+
+
+def test_a_build_that_could_restore_from_the_nodes_artifact_cache_and_does_not_is_refused(tmp_path, monkeypatch, capsys):
+    """`--build` on a sandboxed node whose artifact cache indexes modules, with none of `--artifacts`, `--no-artifacts`,
+    `--fresh` or `--dev-cache`, refuses before any build and names the records route for each package it names."""
+    pkg, store, run = cached_node(tmp_path, monkeypatch)
+    assert run("--update") == 2
+    err = capsys.readouterr().err
+    assert f"lean_changed.py --records {A.rel(pkg)} --update\n" in err and f"--artifacts {store}" in err
+    assert run() == 2 and f"--records {A.rel(pkg)}\n" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("flags", [["--artifacts", "STORE"], ["--no-artifacts"], ["--fresh"], ["--dev-cache"]],
+                         ids=["candidate-check", "uncached-check", "fresh", "dev-cache"])
+def test_a_build_with_the_cache_or_cold_on_purpose_is_not_refused(tmp_path, monkeypatch, flags):
+    """The candidate's check (`lean_audit.py` passes `--artifacts`), the uncached check (`--no-artifacts`), `--fresh` and
+    `--dev-cache` build on a node the refusal covers."""
+    _, store, run = cached_node(tmp_path, monkeypatch)
+    with pytest.raises(Built):
+        run(*(str(store) if f == "STORE" else f for f in flags), "--update")
+
+
+def test_a_build_is_not_refused_without_the_sandbox_or_without_cached_modules(tmp_path, monkeypatch):
+    """A node whose builds aren't sandboxed keeps no artifact cache a build may read, and an empty cache restores nothing:
+    `--build` there builds as before."""
+    _, _, run = cached_node(tmp_path / "empty", monkeypatch, modules=False)
+    with pytest.raises(Built):
+        run("--update")
+    _, _, run = cached_node(tmp_path / "unsandboxed", monkeypatch)
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    with pytest.raises(Built):
+        run("--update")
