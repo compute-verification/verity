@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 708 cases (600 random circuits,
-two in five broken in one way, and 108 shaped ones, most in the shape of a served class) and, on each,
+`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 711 cases (600 random circuits,
+two in five broken in one way, and 111 shaped ones, most in the shape of a served class) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -127,7 +127,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 708 cases and the reference's results, byte for byte as the record pins them."""
+    """All 711 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -1133,3 +1133,16 @@ def test_an_opening_whose_row_is_its_verdicts_output_is_refused(shaped):
         assert m["broken"] == stage
         assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == r["block_rows"] == {"error": stage}
         assert _interface(m)[0] == stage
+
+
+def test_a_template_in_two_root_nodes(shaped):
+    """One template in two root nodes (`SPLITS`): its units numbered across them, the record's count their sum, it
+    is taken with the served shape's verdict, side by side or with another template's node between; a count short of
+    the sum is refused with its templates."""
+    base = vectors.results(shaped["2x3 registered"]["case"])
+    for what, (_, short) in vectors.SPLITS.items():
+        got = vectors.results(shaped[f"2x3 {what}"]["case"])
+        if short:
+            assert got["detail"] == {"error": "templates"}, what
+        else:
+            assert got["detail"] == base["detail"] and got["chosen"] == base["chosen"], what

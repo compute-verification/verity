@@ -17,7 +17,8 @@ names them, so that the check and the statement read one definition.
   (none where it states none) and its `wires`, with no template and no order. A record's templates are not the
   text's to state: they are the Program's (`templatesOf`).
 * **The templates** (`templatesOf`): the text names the Program by its SHA-512, and its `templates`, `[id, units]`
-  each, are the root's nodes that are no input, in order; a root node of a composite keyed as an input id is
+  each, are the templates of the root's nodes that are no input, each once, in the order of its first node, its
+  units its nodes' members summed (`rangesAt`, `unitsOf`); a root node of a composite keyed as an input id is
   refused (`keyedAsInput`). Each template's input ports are its Definition's parameters, each whole 16-bit words,
   and its outputs the fields of its return type, each its bits rounded up to whole words (`tmplOf`).
 * **A unit's block** (`slot`): the text's `blocks.inference` lays each template's units out by entries, one digit of
@@ -116,10 +117,22 @@ unit's. -/
 def keyedAsInput (P : Prog) : Bool :=
   (P.defs[P.root]!).body.nodes.any fun n => !(P.defs[n.fn]!).prim && isInputId (P.defs[n.fn]!).key
 
+/-- The root's ranges `rs` of the template `tid`, in order. Unit `u` of `tid` is member `m` of its range `i` where
+`u` is the counts of its ranges before `i` plus `m`. -/
+def rangesAt (rs : Array Flock.TemplateQuery.TRange) (tid : String) : Array Flock.TemplateQuery.TRange :=
+  rs.filter fun r => r.template == tid
+
+/-- The templates of the root's ranges `rs`, each once, in the order of its first range, with its units: the counts
+of its ranges (`rangesAt`) summed. -/
+def unitsOf (rs : Array Flock.TemplateQuery.TRange) : List (String × Nat) :=
+  (rs.toList.map (·.template)).eraseDups.map fun tid => (tid, (rangesAt rs tid).foldl (fun a r => a + r.count) 0)
+
 /-- The record's templates, held to the Program: the record names the Program, and its `templates`, `[id, units]`
-each, are the root's nodes that are no input, each a call or a batch of a template of its own, in order. A root
-node is no input where its callee is no input primitive: a Program with a root node of a composite keyed as an
-input id is refused (`keyedAsInput`), listed or not. -/
+each, are the templates of the root's nodes that are no input, each a call or a batch of a template, each template
+once, in the order of its first node, with its units its nodes' members summed (`unitsOf`). A root node is no input
+where its callee is no input primitive: a Program with a root node of a composite keyed as an input id is refused
+(`keyedAsInput`), listed or not. A template's Definition is its first node's callee: a template is named by its
+callee's key, so each of its nodes calls that Definition. -/
 def templatesOf (P : Prog) (doc : Json) : Except String (List Tmpl) := do
   if stringAt doc "program" != some (Flock.hexOf P.sha512) then throw "templates"
   if keyedAsInput P then throw "templates"
@@ -134,8 +147,10 @@ def templatesOf (P : Prog) (doc : Json) : Except String (List Tmpl) := do
   let rs ← match Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids with
     | .ok rs => pure rs
     | .error _ => throw "templates"
-  if (rs.map fun r => (r.template, r.count)) != ts then throw "templates"
-  rs.toList.mapM (tmplOf P)
+  if unitsOf rs != ts.toList then throw "templates"
+  ts.toList.mapM fun (tid, n) => match rs.find? (·.template == tid) with
+    | some r => tmplOf P { r with count := n }
+    | none => throw "templates"
 
 /-- `x`, its refusal recoded as `code`. -/
 def recode {α : Type} (code : String) : Except String α → Except String α
