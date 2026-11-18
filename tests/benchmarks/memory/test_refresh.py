@@ -110,6 +110,18 @@ def test_credit_starts_where_the_rota_says(monkeypatch):
     assert math.isclose(later["written_share_byte_seconds"], (101 - 90) / 100)
 
 
+def test_the_command_prices_at_a_given_rate(tmp_path, capsys):
+    path = tmp_path / "map.jsonl"
+    path.write_text(MM.dumps(*small()))
+    out = tmp_path / "out.json"
+    assert R.main([str(path), "--step-s", "1", "--rate", "h200=deployed:1.249e10", "--json", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    assert doc["rota"] == "benchmarks.memory.refresh.uniform_rota"
+    rates = doc["maps"][str(path)]["1/map"]["rates"]
+    assert list(rates) == ["h200"] and rates["h200"]["codec"] == R.codec.DEFAULT.name
+    assert "rota: benchmarks.memory.refresh.uniform_rota" in capsys.readouterr().out
+
+
 def test_a_share_affords_a_period():
     head = MM.Header(bytes(64), 1000)
     setting = R.Refresh(1, 30.0, 1.0)
