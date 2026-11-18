@@ -20,7 +20,7 @@ spelt ``delta``), and a change to either names the other's line in its message. 
 `ports` and `requires` are read by the adapter and the runner, by no guarantee, and have no Lean field.
 
 **Declaring a scheme.** One module, ``<protocol>/scheme.py``, calls `register(Scheme(...))` and is listed in
-`verity.protocols.compose.schemes.DECLARATIONS`, which every reader loads (`load`). Its fields, with the Lean they mirror
+`MODULES` under each name it registers, one line each; `get` imports it on first use. Its fields, with the Lean they mirror
 (`Verity.Scheme`):
 
 - ``blocks``: `Block(definition, cost)`, `Block` and `cost`; ``cost`` reads public values logged before the sample's coin.
@@ -29,7 +29,9 @@ spelt ``delta``), and a change to either names the other's line in its message. 
 - ``delta_scheme``: `δscheme`, said by name, zero included; unsaid, `bound` refuses.
 - code only: ``name`` (the configuration's), ``protocol`` (`Core.Protocol.id`), ``resource`` (`Core.Account.Part`),
   ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`), ``hooks``, ``ports``,
-  ``option``, ``requires``.
+  ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
+  (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels, and
+  ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`).
 
 What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks
 the integrity profile's ``credited`` takes.
@@ -46,6 +48,7 @@ about, as `Core.Account.Part` names it.
 from __future__ import annotations
 
 import re
+from importlib import import_module
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -53,6 +56,25 @@ from types import MappingProxyType
 from typing import Any, Literal
 
 from verity.hooks import HOOKS
+
+#: each scheme's name and the module that registers it when imported: the one place a scheme's package path is written
+MODULES: Mapping[str, str] = MappingProxyType({
+    "bandwidth": "verity.protocols.resource_accounting.memory.poub.scheme",
+    "certifier": "verity.protocols.resource_accounting.network.scheme",
+    "dither": "verity.protocols.experimental.dither.scheme",
+    "pearl-plus": "verity.protocols.resource_accounting.compute.pouw.scheme",
+    "pous": "verity.protocols.resource_accounting.memory.pous.scheme",
+    "wipe": "verity.protocols.resource_accounting.memory.pous.scheme",
+})
+
+
+def _no_requests(ctx: Any) -> tuple[Any, ...]:
+    return ()
+
+
+def _attaches_nothing(exchange: Any, ctx: Any) -> None:
+    return None
+
 
 #: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`)
 RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "bits", "read": "bits",
@@ -147,6 +169,9 @@ class Scheme:
     requires: Mapping[str, str] = field(default_factory=dict)
     ports: tuple[Port, ...] = ()
     delta_scheme: Fraction | None = None
+    requests: Callable[[Any], Sequence[Any]] = _no_requests
+    attach: Callable[[Any, Any], None] = _attaches_nothing
+    processes: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -232,6 +257,8 @@ def register(scheme: Scheme) -> Scheme:
     if scheme.name in SCHEMES:
         raise KeyError(f"a scheme named {scheme.name!r} is registered already")
     SCHEMES[scheme.name] = scheme
+    for name, start in scheme.processes.items():
+        register_process(name, start)
     return scheme
 
 
@@ -268,11 +295,14 @@ def register_circuits(name: str, circuits: Circuits) -> Circuits:
 
 
 def get(name: str) -> Scheme:
-    """The scheme registered under ``name``; `KeyError` names the registered ones."""
+    """The scheme registered under ``name``, its module (`MODULES`) imported on first use; `KeyError` names the known
+    ones."""
+    if name not in SCHEMES and name in MODULES:
+        import_module(MODULES[name])
     try:
         return SCHEMES[name]
     except KeyError:
-        raise KeyError(f"no scheme {name!r}; registered: {', '.join(sorted(SCHEMES)) or 'none'}") from None
+        raise KeyError(f"no scheme {name!r}; known: {', '.join(sorted(set(SCHEMES) | set(MODULES))) or 'none'}") from None
 
 
 def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Sequence[int]]]]) -> frozenset[int]:
@@ -300,5 +330,5 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Order",
+__all__ = ["CIRCUITS", "MODULES", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Order",
            "Port", "Scheme", "bound", "credited", "get", "register", "register_circuits", "register_process", "settings"]

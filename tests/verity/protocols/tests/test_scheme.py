@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from fractions import Fraction
 from pathlib import Path
 
@@ -30,7 +31,7 @@ def _empty(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_picked_by_name() -> None:
     a, b = S.register(_toy("pearl-plus")), S.register(_toy("dither"))
     assert S.get("pearl-plus") is a and S.get("dither") is b
-    with pytest.raises(KeyError, match="registered: dither, pearl-plus"):
+    with pytest.raises(KeyError, match="no scheme 'pouw'; known: .*dither, pearl-plus"):
         S.get("pouw")
     with pytest.raises(KeyError, match="registered already"):
         S.register(_toy("dither"))
@@ -161,4 +162,22 @@ def test_every_declaration_is_on_the_one_list() -> None:
                  for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental")
                  for p in (root / d).rglob("scheme.py") if "register(" in p.read_text()}
     declaring.discard("verity.protocols.resource_accounting.scheme")
-    assert declaring == set(schemes.DECLARATIONS), "add each declaration module to compose.schemes.DECLARATIONS"
+    assert declaring == set(schemes.DECLARATIONS), "add each declaration module to scheme.MODULES under its names"
+
+
+def test_each_name_in_the_table_is_registered_by_its_module(monkeypatch) -> None:
+    monkeypatch.setattr(S, "PROCESSES", {})
+    for module in set(S.MODULES.values()):
+        monkeypatch.delitem(sys.modules, module, raising=False)
+    for name, module in S.MODULES.items():
+        assert S.get(name).name == name, f"{module} registers no scheme {name!r}"
+    assert set(S.MODULES) <= set(S.SCHEMES)
+
+
+def test_a_scheme_attaches_nothing_by_default_and_registers_its_processes(monkeypatch) -> None:
+    monkeypatch.setattr(S, "PROCESSES", {})
+    assert _toy().requests(None) == () and _toy().attach(None, None) is None
+    start = lambda **readers: readers  # noqa: E731
+    monkeypatch.setattr(S, "SCHEMES", {})
+    S.register(_toy(processes={"toy-beside": start}))
+    assert S.PROCESSES == {"toy-beside": start}
