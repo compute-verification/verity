@@ -307,14 +307,14 @@ def test_round_two_is_the_twin_held_to_the_lean_and_completeness_is_the_leans(mo
     naming the goal (`verifier.not_written`)."""
     seen = []
     check = SS.check_twin
-    monkeypatch.setattr(SS, "check_twin", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
+    monkeypatch.setattr(SS, "check_twin", lambda own, ss: seen.append((own, ss)) or check(own, ss))
     _two_stage_outcome(_stream(), lambda s, second: [s])
     (own, (s,)), = seen
     assert SS.check(own, [s], []).ok
     for lean in (["second-read"], None):
         v = SS.check(own, [s], lean)
         assert not v.ok and v.codes == (V.DISAGREE,) and v.detail[V.DISAGREE] == {"lean": lean, "python": []}
-    refused = check(True, own, None).codes
+    refused = check(own, None).codes
     assert refused and SS.check(own, None, list(refused)).codes == refused
     assert SS.check(own, None, []).codes == (V.DISAGREE,)
     assert SS.held_to_lean(None, []) == SS.held_to_lean([], None) == [V.DISAGREE]
@@ -707,7 +707,7 @@ def _registered_codes(monkeypatch):
     values itself (``filled``) or the prover registers them."""
     seen = []
     check = SS.check_twin
-    monkeypatch.setattr(SS, "check_twin", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
+    monkeypatch.setattr(SS, "check_twin", lambda own, ss: seen.append((own, ss)) or check(own, ss))
     _two_stage_outcome(_stream(), lambda s, second: [s])
     (own, (s,)), = seen
     entries = {v: {"value": v, "root": f"{i:02x}" * 64, "domain": f"{i + 1:02x}" * 64, "leaves": 8}
