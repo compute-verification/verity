@@ -65,8 +65,8 @@ command it lacks and its owner. PoUS's piece runs before the bandwidth audit's: 
 the store PoUS's piece holds, and that piece writes its answer to the bandwidth piece's ``DIR``, which ``BANDWIDTH_CMD``
 collects. Each run leaves ``DIR/piece.json`` (`RAN`: the node it ran on, its exit, its limit). A piece
 that ran but wrote no answer is its error, unless it refused to run (``DIR/refused.txt``, `REFUSED`, naming why), which
-leaves it missing; no verdict is made for a piece that didn't run. A development piece writes ``DIR/development.json``
-(`DEVELOPMENT`) in place of a core answer: its verdict is printed as a development run's, and it credits nothing. A piece
+makes it ``refused`` with that sentence (`block_record.REFUSED`: undecided, never accepted, never dropped); no verdict
+is made for a piece that didn't run. A development piece writes ``DIR/development.json`` (`DEVELOPMENT`) in place of a core answer: its verdict is printed as a development run's, and it credits nothing. A piece
 that audited another server than the node it ran on says so in ``DIR/served.json`` (`SERVED`: ``{server, source}``,
 ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its answer about
 the node it ran on. ``--only`` and ``--skip`` (a component each, repeatable) run those pieces alone, or all but those.
@@ -2160,8 +2160,10 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
     with its document as ``piece``, else ``missing`` with its document, its ``why`` `DEV_VERDICT` and the first condition
     of record it fails; any other development piece's is ``missing`` with its document when it accepts or claims no
     verdict (`UNCLAIMED`; it credits nothing, for the document's ``why``, else `DEV_WHY`), else ``reject``; a piece that
-    ran (`RAN`) and wrote neither is its ``error``, unless it refused to run (`REFUSED`); otherwise ``missing``, naming
-    why."""
+    ran (`RAN`) and wrote neither is its ``error``, unless it refused to run (`REFUSED`): then ``refused`` with its
+    sentence as ``reason``; otherwise ``missing``, naming why."""
+    from verity_e2e_demo import block_record as BR
+
     _name, comp, owner, what = PIECES.get(key, WIPE)
     d = pieces_dir / comp
     f, dev, ran = d / "answer.json", d / DEVELOPMENT, _json(d / RAN)
@@ -2187,7 +2189,7 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
     if not f.exists():
         if (d / REFUSED).exists():
             said = (d / REFUSED).read_text(errors="replace").strip()
-            return {"verdict": "missing", "owner": owner, "why": f"its piece refused to run: {said}"[:2000]}
+            return {"verdict": BR.REFUSED, "owner": owner, "reason": said[:2000]}
         if isinstance(ran, dict):
             late = f", out of time at {ran.get('limit')}" if ran.get("rc") in (124, 137) else ""
             return {"verdict": "error", "owner": owner,
@@ -2603,7 +2605,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     missing = {NAMES[k]: r.get("why") for k, r in rows.items() if r.get("verdict") == "missing"}
     elsewhere = {NAMES[k]: at[k][0] for k in rows if at[k][0] not in (None, node)}
     unserved = sorted(NAMES[k] for k, r in rows.items()
-                      if r.get("verdict") not in ("missing", "dropped") and at[k][0] is None)
+                      if r.get("verdict") not in ("missing", "dropped", BR.REFUSED) and at[k][0] is None)
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
     dev = dev if dev["development"] else {}
     answers = {NAMES[k]: r["answer_from"] for k, r in rows.items() if "answer_from" in r}
@@ -2616,7 +2618,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     if io:
         named["not_combined"] = {"the inference-only verifier": io[INFERENCE_ONLY_ROW]["verdict"]}
     bad = sorted(NAMES[k] for k, r in rows.items()
-                 if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
+                 if r.get("verdict") not in ("accept", "missing", "dropped", BR.REFUSED) and NAMES[k] not in elsewhere)
     if bad:
         composed = "reject" if (answer or {}).get("verdict") == "reject" or any(
             rows[k].get("verdict") in ("reject", "error") for k in rows if NAMES[k] in bad) else "pending"
@@ -2626,9 +2628,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                 "why": "block_record carries an accepted subprotocol's certificate only"}
         report["protocols"] = {**rows, **io}
         return report, None, line
-    extra = {subprotocols[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
-             for k, r in rows.items()
-             if k != "integrity" and k not in apart and r.get("verdict") == "accept" and at[k][0] is not None}
+    extra = {subprotocols[k]: {"row": r, "server": at[k][0] or node, "runs": r.get("runs") or [run], "source": at[k][1]}
+             for k, r in rows.items() if k != "integrity" and k not in apart
+             and (r.get("verdict") == "accept" and at[k][0] is not None or r.get("verdict") == BR.REFUSED)}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
     rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, answer=answer, extra=extra, product=product)
     verdict = WINDOW_VERDICT.get(rec["composed"]["verdict"], rec["composed"]["verdict"])
@@ -2958,7 +2960,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
         got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip, product=a.product)
-        return 0 if all(g["verdict"] in ("accept", "missing", "dropped", UNCLAIMED) for g in got.values()) else 1
+        from verity_e2e_demo import block_record as BR
+
+        return 0 if all(g["verdict"] in ("accept", "missing", "dropped", BR.REFUSED, UNCLAIMED) for g in got.values()) else 1
     if a.off_node and socket.gethostname() == a.node:
         print(f"RECORD refused: a record composed off the served node is not composed on it: this host is {a.node}",
               flush=True)

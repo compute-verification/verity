@@ -825,7 +825,7 @@ def test_a_piece_that_ran_gives_its_answer_and_one_that_wrote_none_errs(tmp_path
 def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tmp_path):
     """Each piece runs under `timeout` at ``<COMPONENT>_TIMEOUT``, else ``PIECE_TIMEOUT``: one that runs out of it (exit
     124, which the fake `timeout` gives for the limit ``0``) errs naming the limit, and one that writes ``refused.txt``
-    instead of an answer is missing with the refusal as why."""
+    instead of an answer is refused with the refusal as its reason."""
     bin_ = tmp_path / "bin"
     bin_.mkdir()
     (bin_ / "timeout").write_text(f'#!/bin/sh\necho "$3" >> {tmp_path}/limits\n[ "$3" = 0 ] && exit 124\nshift 3\nexec "$@"\n')
@@ -837,8 +837,7 @@ def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tm
     assert got["bandwidth"] == {"verdict": "error", "rc": 124,
                                 "reason": "its piece ran (exit 124, out of time at 0) and wrote no answer; "
                                           "its log is bandwidth/piece.log"}
-    assert got["pous"] == {"verdict": "missing", "rc": 3,
-                           "why": "its piece refused to run: PoUS REFUSED: the card has a compute process"}
+    assert got["pous"] == {"verdict": "refused", "rc": 3, "reason": "PoUS REFUSED: the card has a compute process"}
 
 
 def test_a_piece_that_left_a_file_that_is_not_json_errs_about_no_server_and_the_next_piece_still_runs(tmp_path):
@@ -1041,8 +1040,8 @@ WIPE_REJECT = {"protocol": W.PROTOCOL, "verdict": "reject", "reason": "a read ca
 def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_server(tmp_path, monkeypatch, capsys, case):
     """`record` takes the wipe out of ``record_missing`` only when its answer accepts and its served.json names the
     record's node: served on another server it stays missing (``elsewhere``), an accepting answer with no served.json
-    names no server and stays missing (``unserved``), a wipe that wrote no answer (served_wipe.sh refused) stays missing
-    with its issue, and one whose answer rejects makes the record reject with no block record."""
+    names no server and stays missing (``unserved``), a wipe that wrote no answer (served_wipe.sh refused) is undecided
+    by its sentence, and one whose answer rejects makes the record reject with no block record."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     wipe = tmp_path / "pieces" / "wipe"
@@ -1070,14 +1069,36 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         assert rec["legs"]["wipe"]["server"] == "vy-dc-h200" and rec["legs"]["wipe"]["quantity"]["value"] == 4096
         assert rec["legs"]["wipe"]["runs"] == ["r1"] and rec["composed"]["legs"]["wipe"] == "accept"
         return
+    if case == "refused":
+        assert line["record_missing"] == ["bandwidth", "certifier", "pous", "pouw"] and "the wipe" not in line["missing"]
+        assert rec["legs"]["wipe"]["answer"]["verdict"] == "undecided" and rec["legs"]["wipe"]["refused"] == \
+            "WIPE REFUSED: the card has a compute process"
+        return
     assert line["record_missing"] == ["bandwidth", "certifier", "pous", "pouw", "wipe"]
     if case == "elsewhere":
         assert rec["legs"]["wipe"]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == ["wipe"]
-    elif case == "unserved":
-        assert rec["legs"]["wipe"] is None and "the wipe" not in line["missing"]
     else:
-        assert rec["legs"]["wipe"] is None
-        assert line["missing"]["the wipe"] == "its piece refused to run: WIPE REFUSED: the card has a compute process"
+        assert rec["legs"]["wipe"] is None and "the wipe" not in line["missing"]
+
+
+def test_a_piece_that_refused_to_run_is_a_refused_row_by_its_sentence_and_its_line_is_not_accepted(tmp_path, monkeypatch,
+                                                                                                    capsys):
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    pous = tmp_path / "pieces" / "pous"
+    pous.mkdir(parents=True)
+    (pous / "refused.txt").write_text("PoUS REFUSED: the card has a compute process\n")
+    (tmp_path / "serve").mkdir()
+    rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
+                 "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(tmp_path / "pieces"),
+                 "--out", str(tmp_path / "record"), "--node", "vy-dc-h200"])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    row = json.loads((tmp_path / "record" / "verdicts.json").read_text())["protocols"]["space"]
+    assert (row["verdict"], row["reason"]) == ("refused", "PoUS REFUSED: the card has a compute process")
+    leg = json.loads((tmp_path / "record" / "block-record.json").read_text())["legs"]["pous"]
+    assert leg["answer"]["reason"] == "refused to run: PoUS REFUSED: the card has a compute process"
+    assert rc == 2 and line["composed"] == "pending" and line["verdicts"]["PoUS"] == "refused"
+    assert "PoUS" not in line["missing"] and "pous" not in line["record_missing"]
 
 
 #: an accepted core answer of each piece's subprotocol, its public outputs the block record's subprotocol certificate, the
@@ -3735,10 +3756,10 @@ UNREAD = "so the split network attester's chain and period check, which read it,
     ("refused", f"V3c's window commit at class {W63K4} refused (exit 2): prove_path.py window-commit: the row dir holds no "
                 f"window K, {UNREAD}"),
 ])
-def test_a_commit_out_of_time_or_refused_leaves_the_network_attesters_row_missing_saying_which(tmp_path, cut, said):
+def test_a_commit_out_of_time_or_refused_leaves_the_network_attesters_row_refused_saying_which(tmp_path, cut, said):
     """A window commit that `timeout` stops (a stub of it exiting 124) or that is refused leaves the split network
     attester nothing to read: its chain doesn't start, and its piece's refusal says which, with the limit and what to
-    set for a timeout, so the record's row is missing with that reason rather than CERTIFIER_CMD unset."""
+    set for a timeout, so the record's row is refused with that reason rather than missing for CERTIFIER_CMD unset."""
     if cut == "timeout":
         _script(tmp_path / "stops" / "timeout",
                 f'case "$*" in *window_commit.py*) exit 124 ;; esac\nexec {tmp_path}/bin/timeout "$@"')
@@ -3749,8 +3770,7 @@ def test_a_commit_out_of_time_or_refused_leaves_the_network_attesters_row_missin
     assert rc == 16 and "chain" not in order, (lines, order)
     pieces = tmp_path / "out" / "pieces"
     assert (pieces / "certifier" / "refused.txt").read_text().strip() == said
-    assert S.piece_row("communication", pieces) == {"verdict": "missing", "owner": "network-accounting",
-                                                     "why": f"its piece refused to run: {said}"}
+    assert S.piece_row("communication", pieces) == {"verdict": "refused", "owner": "network-accounting", "reason": said}
 
 
 @pytest.mark.parametrize("args, extra, line", [
