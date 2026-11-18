@@ -136,7 +136,7 @@ def max_min(a) -> int:
     # under the release side each part waits for the end of its window, about twice its prove, after a lead
     if a.release:
         oprove = 2 * oprove + RELEASE_LEAD_MIN
-    rest = sum(m * (a.repeat if s in ("icheck", "vstage", "vcap", "oreplay", "lean") else 1)
+    rest = sum(m * (a.repeat if s in RS.REPEATED else 1)
                for s, m in OTHER_MIN.items() if s in steps(a.steps))
     # 85's CPU prover built once (oprove under the ZK server, OPROVE_GPU=0), and its proofs: a minute a statement
     cpu = 25 if zk and a.oprove_gpu != "1" else 0
@@ -350,7 +350,7 @@ def main(argv: list[str] | None = None, job: tuple[str, ...] = JOB) -> int:
         p.add_argument("--N", type=int, default=2)
         p.add_argument("--steps", default=",".join(s for s in STEPS if s != "forge-after"),
                        help="default every step but forge-after, which --forge adds")
-        p.add_argument("--repeat", type=int, default=3, help="each CPU step's invocations (REPEAT_<STEP>=n via --env)")
+        p.add_argument("--repeat", type=int, default=3, help="vstage's, vcap's and lean's invocations (REPEAT_<STEP>=n via --env)")
         p.add_argument("--modes", default=RP.ZK_SERVER_MODE, help=f"oprove's prover sides, as 85's MODES names them "
                        f"({RP.ZK_SERVER_MODE}, the ZK server; host; dev); the last one's releases are the ones oreplay, lean "
                        f"and negative verify (default {RP.ZK_SERVER_MODE}: outer proofs go through the ZK server, one at a time)")
