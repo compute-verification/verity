@@ -5,8 +5,10 @@ public import InferenceOnlyVerifier.Record
 /-!
 # What the record proofs read off the root
 
-`OwnRuns` is the reading of the root the record proofs cover, and `OwnRowsRuns` the hypothesis that `Record.ownRows`
-admits only roots it holds of. This module states what it gives, by position: every part of every
+`OwnRuns` is the reading of the root the record proofs cover. `Record.ownRows` admits a root whose argument reads
+another unit's outputs (an edge, `edgeOf`); on a root with none (`EdgeFree`) it admits only roots `OwnRuns` holds of
+(`ownRuns_of_edgeFree`), and `EdgeFreeReads` is the hypothesis that every record `read` accepts is of such a root,
+false of any root with an edge. This module states what `OwnRuns` gives, by position: every part of every
 argument of a root node that is no input node is a run of leaves of one input node (`part_run`), a batch node of
 those has `dims` on every argument (`batch_dims`), and two such parts at two positions, each of some leaf, are runs
 that share none (`runs_apart`). The test sorts the runs and compares neighbours; sorted, neighbours apart are all
@@ -110,9 +112,38 @@ def OwnRuns (P : Prog) : Prop :=
         (((((unitsOf P).flatMap partsIn).filterMap (runOf P)).filter fun r => r.2.2 > 0).mergeSort runLe).tail).all
         fun (a, b) => a.1 != b.1 || a.2.1 + a.2.2 ≤ b.2.1) = true
 
-/-- **`own-rows` admits only roots the record proofs cover.** False of a root whose argument reads another unit's
-outputs, which `Record.ownRows` admits as an edge; restating the record proofs over the root's edges replaces it. -/
-def OwnRowsRuns : Prop := ∀ P : Prog, ownRows P = true → OwnRuns P
+/-- **Part `q` reads another unit's outputs**: an affine or strided part over a node of the root that is no input
+node, as `Record.ownRows` tells an edge. -/
+def edgeOf (P : Prog) : Part → Bool
+  | .affine false i _ _ | .strided false i _ _ _ _ _ =>
+    ((P.defs[P.root]!).body.nodes[i]?.map fun n => !Desc.isInputNode P n).getD false
+  | _ => false
+
+/-- **The root has no edge**: no part of an argument of a root node that is no input node reads another such node. -/
+def EdgeFree (P : Prog) : Prop := ∀ n ∈ unitsOf P, ∀ q ∈ partsIn n, edgeOf P q = false
+
+/-- **Every record `read` accepts is of a root with no edge.** False of any root with an edge; the record proofs that
+take it cover the roots with none, and restating them over `OwnRowsEdges` replaces it. -/
+def EdgeFreeReads : Prop := ∀ (j tr : Lean.Json) (c : Case), read j tr = .ok c → EdgeFree c.f.P
+
+private theorem flatMap_congr' {α β : Type} {l : List α} {f g : α → List β} (h : ∀ a ∈ l, f a = g a) :
+    l.flatMap f = l.flatMap g := by
+  induction l with
+  | nil => rfl
+  | cons x xs ih =>
+    simp only [List.flatMap_cons, h x List.mem_cons_self, ih fun a ha => h a (List.mem_cons_of_mem _ ha)]
+
+/-- **On a root with no edge, `own-rows` admits only roots the record proofs cover.** -/
+theorem ownRuns_of_edgeFree {P : Prog} (h : ownRows P = true) (hE : EdgeFree P) : OwnRuns P := by
+  have hp : ((unitsOf P).flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edgeOf P ·)) =
+      (unitsOf P).flatMap partsIn := by
+    refine flatMap_congr' fun n hn => ?_
+    rw [← List.filter_flatMap]
+    exact List.filter_eq_self.2 fun q hq => by simpa using hE n hn q hq
+  unfold ownRows at h
+  unfold OwnRuns
+  rw [← hp]
+  exact h
 
 theorem runLe_trans (a b c : Nat × Nat × Nat) (hab : runLe a b = true) (hbc : runLe b c = true) :
     runLe a c = true := by
