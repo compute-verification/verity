@@ -347,10 +347,29 @@ def hands_on(program, tid: str, port: str) -> bool:
     return False
 
 
+def offset_steps(n: int, ps: list[tuple[int, int]]) -> list[int] | None:
+    """The Lean's `offsetSteps`: the sums `Σ_k d_k · ostep_k` a wire's indices reach, `ps` its (radix, offset step)
+    pairs fastest first, each once and in the Lean's order, or None where they could be more than `n`."""
+    if not ps:
+        return [0]
+    (r, s), rest = ps[0], offset_steps(n, ps[1:])
+    if rest is None or s == 0:
+        return rest
+    if r == 0 or r > n:
+        return None
+    os: list[int] = []
+    for x in (d * s + a for d in range(r) for a in rest):
+        if x not in os:
+            os.insert(0, x)
+    return None if len(os) > n else os
+
+
 def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dict, form_only: bool = False) -> None:
-    """The Lean's `unwhole` (`leaf-widths`). The rule, restated. A wire reads the field of its writer's return
-    whose first word in the unit's output row is the wire's `offset` (`Template.firsts`); an offset that is no
-    field's first word is refused. Of every wire, that field's bits are the row's words' (so the row is that one
+    """The Lean's `unwhole` (`leaf-widths`). The rule, restated. A wire's index reads its writer from the word
+    `offset` stepped by its digits (`ostep`), one of the offsets `offset_steps` lists; a wire whose offsets could be
+    more than its writer's fields is refused. At each, a wire reads the field of its writer's return whose first word
+    in the unit's output row is that offset (`Template.firsts`); an offset that is no field's first word is
+    refused. Of every wire, that field's bits are the row's words' (so the row is that one
     field, whole). And a wire is taken where the reader's row is closed (`Template.closed`), or where the reader's
     row and the writer's field each have leaves of one width and the writer's divides the reader's. The first wire that fails either is refused, by name, with its two
     rows' bits or its two widths, and the fix. Then, unless `form_only`, what the rule stands for, leaf by leaf, of
@@ -364,8 +383,7 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
     def name(ws: tuple[int, ...]) -> str:
         return f"{ws[0]} bits" if len(set(ws)) == 1 else "more than one width"
 
-    for w in wires:
-        offset = w.get("offset", 0)
+    for w, offset in ((w, o) for w in wires for o in _offsets(w, len(by[w["writer"]].firsts))):
         wire = f"wire {w['writer']}.out at word {offset} -> {w['reader']}.{w['port']}: "
         f = by[w["writer"]].firsts.get(offset)
         if f is None:
@@ -402,6 +420,19 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
                 "field leaves of a width that divides the reader's, or make the reader's row one-bit leaves and "
                 "have its Definition return gates of its own in their place."))
         assert all(lands_whole(leaves, out) for leaves in filled)
+
+
+def _offsets(w: dict, n: int) -> list[int]:
+    """The words wire `w`'s indices read their writer from (`offset_steps`), or the Lean's refusal of a wire of more."""
+    ps = list(zip(w["radix"], w.get("ostep", [])))[::-1]
+    os = offset_steps(n, ps)
+    if os is None:
+        raise refused("leaf-widths", (
+            f"wire {w['writer']}.out at word {w.get('offset', 0)} -> {w['reader']}.{w['port']}: its offset steps "
+            f"{w.get('ostep', [])} over its radices {w['radix']} reach more words than its writer's {n} fields have "
+            "first words. A wire's every index reads one whole field of its writer's return, from that field's first "
+            "word. Fix the Program, not the record: have the root read each writer's field whole, from its first leaf."))
+    return [max(w.get("offset", 0) + d, 0) for d in os]
 
 
 def program_wires(desc: dict, tids, cuts) -> list[dict]:
