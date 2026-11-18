@@ -501,6 +501,27 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     return hit
 
 
+def proved_as(spec: str) -> str | None:
+    """The Definition on bits whose proof is a block of the word Definition ``spec``'s: its version on bits at its statics, each
+    function-valued static on bits (`versions.boolean_version`, ``opt_in`` ones weighed too: the cut units' are opt-in).  None
+    for a ``spec`` on bits, one that does not bind to itself, or one with no version on bits."""
+    from verity.circuits import boolean as BL
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.ops.boolean import versions as BB
+
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
+
+    sp = _bind(spec)
+    if sp is None or not sp.complete or descriptor_id(sp) != spec or BL.is_boolean(sp):
+        return None
+    try:
+        v = BB.boolean_version(sp, opt_in=True)
+    except BB.NoBooleanVersion:
+        return None
+    return descriptor_id(bind(v) if isinstance(v, CompositeDefinition) else v)
+
+
 def coordinate(spec: str) -> tuple[Any, int] | None:
     """The unit of one output word of a Program row's Definition (its word view's ``spec``), and the row's output field that
     word is one of: a ``PARTS`` part in ``COORDS`` returning one committed member, at the row's ``PART_STATICS`` and N = 1 (a
