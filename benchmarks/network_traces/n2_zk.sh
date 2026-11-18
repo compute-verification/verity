@@ -10,9 +10,10 @@
 #      N2_ROUNDS (n2_zk.py's --rounds, proved one after another: one ZK server
 #      session at a time)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)  N2_CACHE (the build cache,
 #      kept across runs where writable)  N2_DRY=1 (the execution phases and their references only)
-# Kept in $OUT/n2zk: n2_zk's records and logs, the public files and everything the verifier received; never a prover's
-# file (inst-*, prover-instances.bin) nor a circuit (its pin is kept). $OUT/run: what the gate publishes of the
-# run (`auditor.py publish`), never its records, heads, salts or request values.
+# Kept in $OUT/n2zk: n2_zk's summary (its public side: verdicts, counts and hiding roots) and N2's public parameters
+# (its Program and partition, stager/). What the verifier received (the registrations, certificates, syncs, the
+# delivered salts, the outcome records, the period's sample, the public files and sessions) stays in $W. $OUT/run:
+# what the gate publishes of the run (`auditor.py publish`), never its records, heads, salts or request values.
 set -uo pipefail
 export HZ_CONFIGS=n2zk HZ_MEM_GB=${N2_MEM_GB:?}
 if [ -n "${N2_CACHE:-}" ] && mkdir -p "$N2_CACHE" 2>/dev/null && [ -w "$N2_CACHE" ]; then export HZ_CACHE=$N2_CACHE; fi
@@ -41,7 +42,7 @@ log "n2zk: proving${N2_DEBUG_CLEAR:+, debug clear}${N2_DRY:+, dry}"
   ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 | tee -a "$OUT/n2zk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/n2zk"
-(cd "$W/n2zk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name prover-instances.bin -print0 \
-  | xargs -0 -r -I{} cp --parents {} "$OUT/n2zk/")
+(cd "$W/n2zk" && for f in summary.json stager/program.json stager/partition.json; do
+  [ -f "$f" ] && cp --parents "$f" "$OUT/n2zk/"; done)
 log "n2zk: done, rc $rc"
 exit "$rc"

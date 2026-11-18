@@ -82,6 +82,8 @@ def forms(rng) -> dict:
 
 
 def main() -> int:
+    from verity_bench import kit
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True, help="flock-circuit, the proving build (sha512, glue)")
     ap.add_argument("--lean", required=True, help="verity-verify-proof")
@@ -117,7 +119,7 @@ def main() -> int:
             subprocess.run([a.tmpl_unit, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(d / "unit.placed")],
                            check=True, capture_output=True)
             sd["tmpl_unit"] = d / "unit.placed"
-        record, live = a0.session(a.bin, sd, FP.N, f"subset:{FP.N}", FP.free_port(), d / "run", zk=True)
+        record, live = a0.session(a.bin, sd, FP.N, f"subset:{FP.N}", kit.free_port(), d / "run", zk=True)
         lean = a0.lean_verify(a.lean, sd, FP.N, d / "run", zk=True)
         cases[name] = {"definition": getattr(fn, "name", str(fn)), "statement": statement, "live": live, "m0": (record or {}).get("verdict"),
                        "lean": lean, "draw": (record or {}).get("unit_draw")}

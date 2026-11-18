@@ -32,8 +32,11 @@ from fractions import Fraction
 from typing import Any
 
 from verity.commitments import domains
+from verity.protocol import Channel
+from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.prover import workload
-from verity.protocols.resource_accounting.scheme import Charge, Order, Scheme, register
+from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
+from verity.protocols.resource_accounting.scheme import VERIFIER, Charge, Lacks, Order, Scheme, register
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
 #: PoUS's own term, `δscheme`: P2's ideal-model ε, `Pous.Params.εMax` = 2^-λ at λ = `Pous.Params.secParam` = 128, beside
@@ -41,6 +44,12 @@ TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
 POUS_TERM = "Pous.Params.εMax"
 #: what PoUS's help is bounded by once something bounds it: `perfect-isolation` (`schemes.p2.P2_CLAIMS`) has no Lean name
 HELP_BOUND = "perfect-isolation (a claim of schemes.p2.P2_CLAIMS; no Lean statement bounds the help yet)"
+#: the party that runs PoUS's and the wipe's challenges, on the auditor's host
+MEMORY_ATTESTER = WP.CHALLENGER
+#: the wipe's own term, unsaid, and why
+WIPE_TERM = Lacks("Pous.Guarantees.StreamedWipe's compression term k·C(N,g+1)·2^(M+E)/2^(q+(g+1)b) has no Lean constant "
+                  "of its own, and Adv_PRF (StreamedWipe.prfAdvantage) has no value; neither is a Verity.Scheme "
+                  "instance yet (its incorrect labels depend on the revealed history)")
 
 
 def _pous_requests(ctx: Any) -> Any:
@@ -56,6 +65,11 @@ def _pous_check_settings(values: Any) -> str | None:
 def _pous_attach(exchange: Any, ctx: Any) -> Any:
     from verity.protocols.resource_accounting.memory.pous.prover import served
     return served.attach(exchange, ctx, POUS.option.partition(":")[2])
+
+
+def _wipe_attach() -> Any:
+    raise LookupError("wipe attaches through no hook of a served run: it runs before the workload's engine loads, as "
+                      "its own session with the memory attester (`verifier.wipe_parties`), started by its piece")
 
 
 POUS = register(Scheme(
@@ -88,6 +102,16 @@ POUS = register(Scheme(
     under="the bits the device holds through the period, in bits",
     requests=_pous_requests,
     attach=_pous_attach,
+    parties=(*CS.MANIFEST.parties, VERIFIER),
+    channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER.name, ("SignedRun",), after=("End",))),
+    channel_schemas=CS.MANIFEST.messages,
+    colocated=(),
+    needs=frozenset({"store"}),
+    depends=(),
+    record="space",
+    symbol="S0",
+    published=("bits", Fraction(1)),
+    record_owner="memory-accounting",
 ))
 
 WIPE = register(Scheme(
@@ -108,6 +132,18 @@ WIPE = register(Scheme(
         "coins-at-rate": "the memory attester's own coins",
         "one-design": "its own: `k` indices of the fill, revealed one at a time",
     },
+    delta_scheme=WIPE_TERM,
+    attach=lambda exchange, ctx: _wipe_attach(),
+    parties=(*WP.MANIFEST.parties, VERIFIER),
+    channels=(*WP.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER.name, ("WipeReport",), after=("End",))),
+    channel_schemas=WP.MANIFEST.messages,
+    colocated=(),
+    needs=frozenset(),
+    depends=(),
+    record="wipe",
+    symbol="foreign_bits",
+    published=("bits", Fraction(1)),
+    record_owner="memory-accounting",
 ))
 
 __all__ = ["POUS", "WIPE"]
