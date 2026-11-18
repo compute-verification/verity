@@ -416,6 +416,7 @@ theorem checkDescription_tables {c : Circuit} {pub : Public} {own : Array Port}
     (h : checkDescription c pub own = .ok ()) :
     ∃ t, pub.tables = some t ∧ ∀ reg ∈ own, checkDescriptionPort c pub t reg = .ok () := by
   unfold checkDescription at h
+  obtain ⟨_, _, h⟩ := except_bind_ok h
   simp only at h
   split at h
   · obtain ⟨_, _, h⟩ := except_bind_ok h

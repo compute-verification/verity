@@ -7,14 +7,16 @@ meta import Flock.Test.RegProgram
 `HmLinks.check` reads each unit and each gate's unit from the root body's nodes (`unitAt`, `ownerAt`); on
 `Flock.Test.RegProgram`'s program (a call, batches, a scan and primitives) those lookups are the unrolled units' (`unitRef`,
 `ownerRef`) at every unit and gate, the check over the population is the reference walk's (`checkRef`), and a sample that
-proves a unit reads only its wires.
+proves a unit reads only its wires. A link row reads one whole return field of one writer unit, from the field's first
+word: unit 13 reads the first of unit 0's two fields (a `TPair`), at offset 0 and at no other; a read that runs on into a
+circuit input, and a run that is no field, are refused.
 -/
 
 @[expose] public section
 
 namespace Flock.Test.LinkUnits
 
-open Lean (Json)
+open Lean (Json toJson)
 open Flock Flock.HmLinks
 open Flock.Test.RegComplete (lane pub)
 open Flock.Test.RegProgram (plain)
@@ -51,5 +53,32 @@ def res (r : Except String Nat) : String :=
 #guard res (HmLinks.check lane (at_ [0, 13]) (some #[0]) plain) == "ok 0"
 #guard res (HmLinks.check lane (at_ [0, 13]) (some #[1]) plain) == res (HmLinks.check lane (at_ [0, 13]) none plain)
 #guard (res (HmLinks.check lane (at_ [0, 13]) (some #[2]) plain)).startsWith "links: unit 2 of the draw is outside"
+
+-- unit 13's leaf 0 is unit 0's output 0 of 2: one link row x, the writer's whole row of 4 words, its leaves [lo, hi) from
+-- word `off` (no `at` key when none)
+def inP : Flock.Port := { name := "x", words := 4, chunks := 1, nb := 0 }
+def outP : Flock.Port := { name := "out", words := 4, chunks := 1, nb := 0 }
+def lk (lo hi : Nat) (off : Option Nat) : Circuit :=
+  { (default : Circuit) with
+    ports := #[inP, outP]
+    outRowPorts := #[1]
+    metaJ := Json.mkObj [("links", Json.arr #[Json.mkObj ([("port", Json.str "x"), ("leaves", toJson [lo, hi])] ++
+      (off.map fun o => [("at", toJson o)]).getD [])])] }
+def unit13 (c : Circuit) : String := res (HmLinks.check c (at_ [0, 13]) (some #[1]) plain)
+
+#guard unit13 (lk 0 1 none) == "ok 1"
+-- the reader's own output row may be of another width than its writer's row
+#guard unit13 { lk 0 1 none with ports := #[inP, { outP with words := 64 }] } == "ok 1"
+#guard unit13 (lk 0 1 (some 0)) == "ok 1"
+#guard HmLinks.fieldSpans prog 3 == [(0, 1), (1, 1)]
+-- wrong_offset: the program's field is unit 0's first; its second is of the same words, and a run from word 2 is no field
+#guard (unit13 (lk 0 1 (some 1))).startsWith "links: unit 13's leaves [0, 1) (row x) are not unit 0's field [1, 2), in order"
+#guard (unit13 (lk 0 1 (some 2))).startsWith "links: unit 13's leaves [0, 1) (row x) read unit 0's outputs [2, 3), which are not one whole return field"
+-- a straddle: leaf 1 is a circuit input
+#guard (unit13 (lk 0 2 (some 0))).startsWith "links: unit 13's leaves [0, 2) (row x) read unit 0's outputs and other leaves"
+-- the row holds the read inside its words, and a link has no other key
+#guard (unit13 (lk 0 1 (some 4))).startsWith "META links: x is not a hm96-sha512/row/v1 row holding its 1 leaves from word 4"
+#guard (unit13 { lk 0 1 none with metaJ := Json.mkObj [("links", Json.arr #[Json.mkObj [("port", Json.str "x"),
+    ("leaves", toJson [0, 1]), ("at", toJson 0), ("len", toJson 1)]])] }).startsWith "META links: a link is exactly"
 
 end Flock.Test.LinkUnits
