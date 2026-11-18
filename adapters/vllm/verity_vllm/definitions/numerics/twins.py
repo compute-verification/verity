@@ -676,7 +676,7 @@ class AttentionTwin(Twin):
         scale = float(np.array([b1.scale_log2_bits(D)], dtype=U32).view(F32)[0])
         fa2.lib().fa2_rows(q.ctypes.data, kc.ctypes.data, vc.ctypes.data, KVH, D, kvh.ctypes.data, col.ctypes.data, nbm.ctypes.data,
                            NH, BN, ctypes.c_float(scale), tabs.ex2.ctypes.data, tabs.rcp.ctypes.data, out.ctypes.data,
-                           None, None, None, None, None, None, 0, 0, flags.ctypes.data)
+                           None, flags.ctypes.data)
         if flags.any():
             heads = np.nonzero(flags)[0].tolist()
             raise Declined(f"non-finite intermediate (S/P/rescale/O/sum) in head(s) {heads[:8]}: outside the FA2 model's measured domain")
