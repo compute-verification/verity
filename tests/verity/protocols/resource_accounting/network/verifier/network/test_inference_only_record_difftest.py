@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 727 cases (600 random circuits,
-two in five broken in one way, 102 shaped ones, most in the shape of a served class, and 25 toys of edges) and, on each,
+`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 729 cases (600 random circuits,
+two in five broken in one way, 104 shaped ones, most in the shape of a served class, and 25 toys of edges) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -112,7 +112,7 @@ ROW_ROLE = {f"2x3 {what}": stage for what, (stage, _) in vectors.ROW_ROLE.items(
 #: the cases of one template in two root nodes, each with the stage that refuses it, None where the form takes it
 SPLITS = {f"2x3 {what}": ("templates" if short else None) for what, (_, short) in vectors.SPLITS.items()}
 #: the cases of a weight its units share, each with the stage that refuses it, None where the form takes it
-SHARED = {f"2x3 {what}": stage for what, (_, _, stage) in vectors.SHARED.items()}
+SHARED = {f"2x3 {what}": stage for what, (_, _, stage) in vectors.SHARED.items()} | {vectors.UNDECIDED: "shared-unheld"}
 
 
 @pytest.fixture(scope="module")
@@ -127,7 +127,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 727 cases and the reference's results, byte for byte as the record pins them."""
+    """All 729 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -375,8 +375,9 @@ def test_a_weight_its_units_share_is_held(shaped):
     member m stretch m mod k), and reads it as it reads the accepted case, the Program aside. With the reads dropped
     it is refused (`shared-unheld`), as it is handed twice in one argument, whose rows the check does not read one by
     one; a run spelled as listed leaves, or overlapped by runs of part of it, is refused at the root (`own-rows`); a
-    grid that a strided part spells is no Program's (`program`). A row every member is handed by a batch argument
-    left unmapped stays refused at the root."""
+    grid that a strided part spells is no Program's (`program`). Each read spelled a stretch a unit, it is held; so
+    spelled over 4097 members, the check runs past its bound and refuses it `shared-unheld` saying it did not decide
+    (`SHARED_UNDECIDED`). A row every member is handed by a batch argument left unmapped stays refused at the root."""
     held = vectors.results(shaped["2x3 registered"]["case"])
     for what, stage in SHARED.items():
         m = shaped[what]
@@ -386,7 +387,8 @@ def test_a_weight_its_units_share_is_held(shaped):
             assert ref.shared_of(program, ref.row_runs(program)[1]), what
             assert r["detail"] == held["detail"] and r["public"] == held["public"], what
         else:
-            message = {"own-rows": ref.OWN_ROWS, "shared-unheld": ref.SHARED_UNHELD}.get(stage)
+            message = (ref.SHARED_UNDECIDED if what == vectors.UNDECIDED
+                       else {"own-rows": ref.OWN_ROWS, "shared-unheld": ref.SHARED_UNHELD}.get(stage))
             assert r["detail"] == r["public"] == {"error": stage, **({"message": message} if message else {})}, what
     gemm = vectors.reference.desc_program(shaped["2x3 Gemm's weights shared in turn, held"]["case"]["instance"]["program"])
     shared = ref.shared_of(gemm, ref.row_runs(gemm)[1])

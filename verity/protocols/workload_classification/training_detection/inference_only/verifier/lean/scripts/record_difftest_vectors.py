@@ -927,7 +927,12 @@ SHARED = {
     "Norm's shared weight a grid, which no Program spells": ("norm", "grid", "program"),
     "Norm's shared weight the same run twice in one argument": ("norm", "twice", "shared-unheld"),
     "Norm's shared weight overlapped by runs of part of it": ("norm", "overlap", "own-rows"),
+    "Norm's weight shared, each read a stretch a unit": ("norm", "stretched", None),
 }
+
+#: `Norm`'s shared weight over 4097 slots, each read a stretch a unit (`SHARED`'s), which takes the check past its
+#: bound: refused `shared-unheld`, not decided (`SHARED_UNDECIDED`)
+UNDECIDED = "4097x1 Norm's weight shared, each read a stretch a unit, past the check's bound"
 
 
 def shaped() -> list[dict]:
@@ -1178,6 +1183,15 @@ def shaped() -> list[dict]:
         """The record's registered reads of `p` dropped."""
         return lambda d: d["registered"].update(reads=[r for r in d["registered"]["reads"] if r["param"] != p])
 
+    def stretched(p: str):
+        """The record's registered reads of `p` each with a fastest digit of radix one more: the same sources, a
+        stretch a unit."""
+        def edit(d: dict) -> None:
+            for r in d["registered"]["reads"]:
+                if r["param"] == p:
+                    r["radix"], r["step"] = [*r["radix"], 1], [*r["step"], 5]
+        return edit
+
     def spelled(how: str):
         """The first `Norm`'s shared weight spelled another way: its leaves listed (`explicit`), a grid of a lane a
         leaf, the run as an affine part once a member's stretch (`twice`), or runs over part of it (`overlap`)."""
@@ -1195,9 +1209,14 @@ def shaped() -> list[dict]:
     for k, (what, (which, how, stage)) in enumerate(SHARED.items()):
         c = lowered(2, 3)
         c.shared = params[which]
-        more = {} if how is None else {"edit": unread(c.shared[0])} if how == "unread" else {"reroot": spelled(how)}
+        more = ({} if how is None else {"edit": unread(c.shared[0])} if how == "unread"
+                else {"edit": stretched(c.shared[0])} if how == "stretched" else {"reroot": spelled(how)})
         first(f"2x3 {what}", c, 48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS)
               + len(ROW_ROLE) + len(SPLITS) + k, broken=stage, **more)
+    c = lowered(4097, 1)
+    c.shared = params["norm"]
+    first(UNDECIDED, c, 48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE)
+          + len(SPLITS) + len(SHARED), broken="shared-unheld", edit=stretched(c.shared[0]))
     return out
 
 
@@ -2202,7 +2221,7 @@ NAMES = ("cases", "python")
 def total() -> int:
     """How many cases the audit's data has: the random ones, `shaped()`'s and `edged()`'s."""
     return (len(EDGED) + COUNT + 32 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS)
-            + len(ROW_ROLE) + 1 + len(SPLITS) + len(SHARED))
+            + len(ROW_ROLE) + 1 + len(SPLITS) + len(SHARED) + 1)
 
 
 def results(case: dict) -> dict:
