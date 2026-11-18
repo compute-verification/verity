@@ -9,6 +9,8 @@ challenger's salt coin) but attached through the harness's ``target.hooks``, so 
 One pass per engine step: ``llm_engine.step`` is wrapped to open `Stack.pass_` around each forward, which bounds a pass's
 tiles by the step's scheduled tokens, so the full sweep's long prefills fit the pass buffers that one generate's pass
 would overflow.
+It holds the device run directly, not Pearl+ attached by name, because it times and replays device internals no served
+setting exposes.
 
 Its tokens are Pearl-C's own y (Pearl's FP8 quantization), so no stock arm is a bit-exact control (``control=None``), and
 each call's noise is seeded by its index across the epoch, so no two of the engine's passes need agree either (the gate's

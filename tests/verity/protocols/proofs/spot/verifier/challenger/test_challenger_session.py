@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
@@ -50,7 +51,7 @@ class Clock:
 
 
 def _ports() -> dict:
-    part = P.partition(P.mixed_population_program([(t, COUNTS[P.template_id(t)]) for t in WINDOW]), QUERY)
+    part = P.partition(PN.mixed_population_program([(t, COUNTS[P.template_id(t)]) for t in WINDOW]), QUERY)
     n = sum(COUNTS.values())
     return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
             for p, leaves in (("x", n), ("out", 2 * n))}
@@ -59,7 +60,7 @@ def _ports() -> dict:
 def _record() -> dict:
     ports = _ports()
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
-    program = P.mixed_population_program([(t, COUNTS[P.template_id(t)]) for t in WINDOW])
+    program = PN.mixed_population_program([(t, COUNTS[P.template_id(t)]) for t in WINDOW])
     return R.record(program, QUERY, S.selection_sampling_design(RULE, sum(COUNTS.values()), D.strata_sizes(program, QUERY)), S.SCHEME, roots,
                     {"kind": "served", "run": RUN, "row": 0}, work_table=S.selection_table(RULE, program, QUERY, None))
 

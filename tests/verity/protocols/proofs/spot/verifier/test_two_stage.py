@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.cut import member_refs
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -68,7 +69,7 @@ def _values(boundary: tuple[str, ...]) -> tuple[S.Value, ...]:
 
 PUBLIC, VALUES = _public(BOUNDARY), _values(BOUNDARY)
 RULE = S.TwoStage(GRAIN, "rate:1/2", K)
-TEMPLATE, = (t for t, _ in P.strata(P.population_program(PAIR, Q * N_RHO), QUERY))
+TEMPLATE, = (t for t, _ in P.strata(PN.population_program(PAIR, Q * N_RHO), QUERY))
 #: The reference header of an honest statement in these streams, fixed before the run: PAIR's part's, its ports' schemas
 #: and the set it was staged in, none of the run's fields (`fake_challenger.reference_header`).
 REFERENCE = FC.reference_header(TEMPLATE, 0, Q * N_RHO, dict.fromkeys(INTERIOR, SCHEMA))
@@ -114,7 +115,7 @@ def _record(program: Program, query, names, n: int | Mapping[str, int], sampling
 def _boundary(n=N, row=0, previous=None, q=Q, **window) -> tuple[dict, dict]:
     """The boundary docket over `n` replay blocks: BLOCK's `x` and output, each of N_RHO rows a block, one for
     each of its PAIR instances' `x` and `o0` (`second_stage.replay_rows`); its window names `window`'s items too."""
-    program, leaves = P.population_program(BLOCK, n), dict.fromkeys(BOUNDARY, n * N_RHO)
+    program, leaves = PN.population_program(BLOCK, n), dict.fromkeys(BOUNDARY, n * N_RHO)
     return (_record(program, GRAIN, BOUNDARY, leaves, {"law": "subset", "k": q},
                     {"kind": "served", "run": RUN, "row": row, **window}, previous),
             _ports(program, GRAIN, BOUNDARY, leaves))
@@ -123,7 +124,7 @@ def _boundary(n=N, row=0, previous=None, q=Q, **window) -> tuple[dict, dict]:
 def _interior(m: int, previous: str, sample, row=0, **change) -> tuple[dict, dict]:
     """The interior docket's record over `m` proof blocks, its window naming the replay sample `sample` it lays out
     (`window.replay_sample`, the first stage's proved blocks in order where honest), and its ports."""
-    program = P.population_program(PAIR, m)
+    program = PN.population_program(PAIR, m)
     rec = _record(program, QUERY, INTERIOR, m, {"law": "subset", "k": m},
                   {"kind": "served", "run": RUN, "row": row, "interior": True, "replay_sample": sample}, previous)
     return {**rec, **change}, _ports(program, QUERY, INTERIOR, m)
@@ -215,7 +216,7 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     assert [u // N_RHO for u in second.units] == list(range(Q))
     assert stream.deliver(second, [SESSION]) is None
     statements = stream.statements(second)
-    (template, _), = P.strata(P.population_program(PAIR, Q * N_RHO), QUERY)
+    (template, _), = P.strata(PN.population_program(PAIR, Q * N_RHO), QUERY)
     assert [(s["template"], s["draw"]["units"], s["header"]["units"]["indices"]) for s in statements] == \
         [(template, D.proved(second.draw), list(range(Q * N_RHO)))]
     reads = statements[0]["registered"]["ports"]
@@ -611,7 +612,7 @@ def test_round_two_derives_the_links_from_the_replay_block(monkeypatch):
     (`second-links`); the run of record, deriving its own, then disagrees."""
     stream = _stream()
     first, _ = _stages(stream)
-    assert SS.replay_links(P.population_program(BLOCK, N), codec.descriptor_id(BLOCK), first.docket.record) == \
+    assert SS.replay_links(PN.population_program(BLOCK, N), codec.descriptor_id(BLOCK), first.docket.record) == \
         (SS.Link(TEMPLATE, "x", BX), SS.Link(TEMPLATE, "o0", BOUT))
     with pytest.raises(TypeError):
         stream.register_interiors(first, *_interior(Q * N_RHO, first.docket.digest, D.proved(first.draw)), links=[])
@@ -641,7 +642,7 @@ BARE = bind(CompositeDefinition("TwoStageTestBare", 0, (), lambda S_: ((("x", Ar
 
 
 def _returned(block) -> int | None:
-    return SS.replay_returned(P.population_program(block, N), codec.descriptor_id(block))
+    return SS.replay_returned(PN.population_program(block, N), codec.descriptor_id(block))
 
 
 def test_a_two_stage_registration_publishes_the_bits_a_replay_block_returns():
@@ -655,8 +656,8 @@ def test_a_two_stage_registration_publishes_the_bits_a_replay_block_returns():
     assert _returned(BLOCK) == 3 * 16 and _returned(MIXED) == 3 * 16
     assert _returned(WIDES) == 4 * 32 and _returned(PACKS) == 2 * 9 * 16 == 2 * 8 * 18
     assert _returned(BARE) is None
-    assert SS.replay_returned(P.population_program(BLOCK, N), codec.descriptor_id(MIXED)) is None
-    assert SS.replay_returned(P.population_program(BLOCK, 1), codec.descriptor_id(BLOCK)) == 3 * 16
+    assert SS.replay_returned(PN.population_program(BLOCK, N), codec.descriptor_id(MIXED)) is None
+    assert SS.replay_returned(PN.population_program(BLOCK, 1), codec.descriptor_id(BLOCK)) == 3 * 16
     stream = _stream()
     reg = stream.register(*_boundary())
     first = stream.select(reg)
@@ -1185,7 +1186,7 @@ def test_the_verifier_samples_both_stages():
     of the `N` replay blocks, and its second, `k` of each sampled replay block's proof blocks, as the service does."""
     assert V.EXE == "spot-verifier" and _spec().selection == RULE
     source = random.Random(1).randbytes(4096)
-    first = {"rule": RULE.to_json(), "program": codec.encode_program(P.population_program(BLOCK, N)), "query": GRAIN,
+    first = {"rule": RULE.to_json(), "program": codec.encode_program(PN.population_program(BLOCK, N)), "query": GRAIN,
              "work_table": None, "closure": None, "source": source.hex()}
     assert len(V.lean("select", first)["draw"]["units"]) == Q
     for ns, ks, cell in (((N_RHO,), (K,), lambda u: u // N_RHO), ((2, 1), (1, 1), lambda u: (u // 2, 0) if u < 4 else
@@ -1289,7 +1290,7 @@ def test_a_replay_block_reading_anothers_values_joins_its_group():
     summary counts the whole batch: here the second reads the first's result and the fourth, a batch member, the
     second's, while the last reads the batch's other member, groups {0, 1, 3}, {2} and {4, 5} walked a member at a
     time (F = 3), and the summary's joined nodes hold 5.  F is a template query's."""
-    assert P.fanout(P.population_program(BLOCK, 4), GRAIN) == _fanout_walk(P.population_program(BLOCK, 4), GRAIN) == 1
+    assert P.fanout(PN.population_program(BLOCK, 4), GRAIN) == _fanout_walk(PN.population_program(BLOCK, 4), GRAIN) == 1
     o = Array(3, Bits(8))
     calls = Program(bind(CompositeDefinition("TwoStageTestChain", 0, (),
                                              lambda S_: ((("x", Array(4, Array(3, Array(2, Bits(8))))),),
@@ -1336,7 +1337,7 @@ def _window_stream(spec=None, window=WINDOW, replay=MIXED) -> S.Stream:
 def _window_boundary(stream: S.Stream) -> S.WindowCommitmentRecord:
     """MIXED's boundary docket over N replay blocks: its `x` and its first output two rows a block, one for each
     of its PAIR instances' `x` and `o0`, and its `y` and second output one, TRIPLE's (`second_stage.replay_rows`)."""
-    boundary, leaves = P.population_program(MIXED, N), dict(zip(MIXED_BOUNDARY, (2 * N, N, 2 * N, N)))
+    boundary, leaves = PN.population_program(MIXED, N), dict(zip(MIXED_BOUNDARY, (2 * N, N, 2 * N, N)))
     return stream.register(_record(boundary, MIXED_GRAIN, MIXED_BOUNDARY, leaves, {"law": "subset", "k": Q},
                                    {"kind": "served", "run": RUN, "row": 0}, None),
                            _ports(boundary, MIXED_GRAIN, MIXED_BOUNDARY, leaves))
@@ -1373,7 +1374,7 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     assert stream.cells == (2, 1) and stream.counts == (1, 1) and stream.n_rho == 3
     reg = _window_boundary(stream)
     first = stream.select(reg)
-    interior = P.mixed_population_program([(PAIR, 2 * Q), (TRIPLE, Q)])
+    interior = PN.mixed_population_program([(PAIR, 2 * Q), (TRIPLE, Q)])
     assert stream.interior_program(Q).root.id == interior.root.id
     ireg = stream.register_interiors(first, *_window_interior(interior, reg.digest, first))
     second = stream.select(ireg)
@@ -1382,7 +1383,7 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     assert sorted(u // 2 for u in second.units if u < 4) == [0, 1] and {4, 5} <= set(second.units)
     assert stream.deliver(second, [SESSION]) is None
     (pair, triple), (x, y, o0, o1) = (codec.descriptor_id(t) for t in WINDOW), MIXED_BOUNDARY
-    assert SS.replay_links(P.population_program(MIXED, N), codec.descriptor_id(MIXED), reg.record) == (
+    assert SS.replay_links(PN.population_program(MIXED, N), codec.descriptor_id(MIXED), reg.record) == (
         SS.Link(pair, "x", x), SS.Link(triple, "x", y), SS.Link(pair, "o0", o0), SS.Link(triple, "o0", o1))
     statements = stream.statements(second)
     assert [(s["template"], {p: e["value"] for p, e in s["registered"]["ports"].items()}) for s in statements] == [
@@ -1419,14 +1420,14 @@ def test_round_two_names_what_a_replay_block_returns_and_refuses_an_interior_val
     that registers a value of one is refused by name (`second-return`, `returns_ok`), with the interior record's
     order; one that registers any other name, or a run whose return has no such name, is not."""
     for block, fields in ((BLOCK, 1), (MIXED, 2)):
-        program, key = P.population_program(block, N), codec.descriptor_id(block)
+        program, key = PN.population_program(block, N), codec.descriptor_id(block)
         assert SS.replay_returns(program, key, None) == tuple(f"o{j}" for j in range(fields))
         named = SS.replay_returns(program, key, {"roots": [{"port": f"{key}/x"}]})
         assert named == tuple(f"{key}/o{j}" for j in range(fields))
         assert {x.value for x in SS.replay_links(program, key, None) if x.port.startswith("o")} == {
             f"o{j}" for j in range(fields)}
         assert SS.replay_returns(program, "Other_v0", None) == ()
-    assert SS.replay_returns(P.population_program(MIXED, N), codec.descriptor_id(MIXED),
+    assert SS.replay_returns(PN.population_program(MIXED, N), codec.descriptor_id(MIXED),
                              {"roots": [{"port": p} for p in MIXED_BOUNDARY]}) == MIXED_BOUNDARY[2:]
 
     def own(registered, returns=(BOUT,)) -> SS.Own:
@@ -1465,7 +1466,7 @@ def test_a_replay_block_of_two_templates_fits_the_check_in_order():
     stream = _window_stream()
     reg = _window_boundary(stream)
     first = stream.select(reg)
-    blocks = P.mixed_population_program([(PAIR, 2), (TRIPLE, 1)] * Q)
+    blocks = PN.mixed_population_program([(PAIR, 2), (TRIPLE, 1)] * Q)
     assert "R2-program" in _refused(lambda: stream.register_interiors(first, *_window_interior(blocks, reg.digest, first)))
     assert not P.in_order(blocks, WINDOW_QUERY, 3 * Q)
 

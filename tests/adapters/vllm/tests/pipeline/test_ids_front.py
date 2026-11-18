@@ -226,12 +226,12 @@ class Fronted:
 
 def test_an_id_request_is_its_fields_whatever_release_headers_it_came_with():
     """`ids_protocol.id_request_fields`: the fields of an id request in its P + 9-byte cells, bare or as the network
-    attester forwards it (the release, the run and the bucket); None in other cells, cut short, or changed by a byte."""
+    attester forwards it (the release, the run and the bucket); why not, in other cells, cut short, or changed by a byte."""
     for request in (served.id_request(P), released(), REL.with_release(served.id_request(P), 0)):
         assert idp.id_request_fields(request, P) == FIELDS
-    assert idp.id_request_fields(released(), P + 1) is None and idp.id_request_fields(released()[:-1], P) is None
-    assert idp.id_request_fields(released().replace(b'"stream":true', b'"stream":True'), P) is None
-    assert idp.id_request_fields(b"", P) is None
+    for other, p in ((released(), P + 1), (released()[:-1], P), (released().replace(b'"stream":true', b'"stream":True'), P),
+                     (b"", P)):
+        assert isinstance(idp.id_request_fields(other, p), str)
 
 
 def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
@@ -414,12 +414,14 @@ def test_a_relayed_connection_whose_client_has_ended_its_sending_gets_the_server
 
 def test_a_server_that_is_not_there_closes_the_connection():
     """With nothing listening at the server's address, an id request's connection and any other's are closed with
-    nothing sent; the id request's record says a connection broke."""
+    nothing sent; the id request's record says a connection broke, and the other's break record names the server."""
     with socket.create_server(("127.0.0.1", 0)) as gone:
         address = gone.getsockname()[:2]
     with Fronted(address) as f:
         assert f.send(released()) == b"" and f.send(b"GET /v1/models HTTP/1.1\r\n\r\n") == b""
-    assert [(r["ended"], r["why"]) for r in f.log] == [(False, "a connection broke (ConnectionRefusedError)")]
+    ids, other = f.log
+    assert (ids["ended"], ids["why"]) == (False, "a connection broke (ConnectionRefusedError)")
+    assert (other["broken"], other["error"], set(other)) == ("server", "ConnectionRefusedError", {"broken", "error", "at"})
 
 
 def test_the_command_is_registered_with_the_scans_payload_as_its_default():

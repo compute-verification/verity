@@ -12,6 +12,7 @@ from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
+from verity.circuits import population as PN
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
@@ -54,7 +55,7 @@ NEGATIVES = {"coins-no-evidence": (None, ROOT), "coins-stray-evidence": ({"segme
 
 
 def _program(counts: dict = COUNTS) -> Program:
-    return P.mixed_population_program([(t, counts[P.template_id(t)]) for t in WINDOW])
+    return PN.mixed_population_program([(t, counts[P.template_id(t)]) for t in WINDOW])
 
 
 def _ports(run: str = RUN) -> dict:
