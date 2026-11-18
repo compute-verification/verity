@@ -32,7 +32,6 @@
   "calibration/machine_model/verity_machine_model/lean_headline_dc.py": 2,
   "calibration/machine_model/verity_machine_model/skip.py": 1,
   "calibration/pouw/dc/archs.py": 2,
-  "calibration/pouw/sass_census/diff_menu.py": 1,
   "calibration/pouw/sass_census/lowering.sh": 30,
   "calibration/pouw/theory/fold_min.py": 3,
   "calibration/pouw/theory/fold_routes.py": 5,
