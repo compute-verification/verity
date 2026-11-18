@@ -12,6 +12,6 @@ set -euo pipefail
 . benchmarks/harness/env.sh
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 rc=0
-"$VENV/bin/python" -m verity_bench vllm --preset "${SPEC:?SPEC names a served spec, e.g. qwen3-8b-bf16-rtx-served-arm}" --out "$OUT" "$@" || rc=$?
+"$VENV/bin/python" -m verity_bench vllm --preset "${SPEC:?SPEC names a served spec, e.g. qwen3-8b-bf16-served-arm}" --out "$OUT" "$@" || rc=$?
 [ ! -f "$OUT/result.json" ] || "$VENV/bin/python" benchmarks/served_commit/record.py "$OUT/result.json"
 exit $rc
