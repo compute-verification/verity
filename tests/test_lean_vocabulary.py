@@ -783,7 +783,7 @@ KNOWN: dict[str, str] = {
         "homonym, a Program's egress prediction: rename (network-accounting)",
     "verity/protocols/resource_accounting/network/attester/program/lean/NetworkAttester/WindowCharge.lean::NetworkAttester.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "verity/protocols/resource_accounting/network/prover/window_charge.py::Window":
+    "verity/protocols/interface/charge/window_charge.py::Window":
         "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/device.py::Sheet":
         "duplicate of the data sheet (`Verity.Site.Sheet`'s Python mirror; `Verity.Accel.Card`): becomes the one data-sheet type, in Core, which the other two read (proofs)",

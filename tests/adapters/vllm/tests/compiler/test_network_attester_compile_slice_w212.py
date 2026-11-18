@@ -15,7 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
+from verity.protocols.interface.charge import arith_encode as AE
 
 from tests.compiler.test_network_attester_compile_slice import BOOK
 from verity_vllm.compiler import compile_slice as CS
