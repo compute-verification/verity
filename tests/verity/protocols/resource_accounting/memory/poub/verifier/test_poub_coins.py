@@ -384,7 +384,7 @@ def test_a_coin_asked_for_ahead_goes_in_one_round_trip_with_the_coin_before_it(s
     with pytest.raises(C.CoinError, match="challenge coin 1 was asked for ahead after another root"):
         c.challenge(1, c.window)
     sent = (service.directory / R.RELEASES).read_bytes()
-    with c.ahead(coins.CHALLENGE, 3, root), pytest.raises(C.CoinError, match="the challenge coin asked for ahead is "
+    with c.ahead(coins.CHALLENGE, 3, root), pytest.raises(C.CoinError, match="the poub/challenge coin asked for ahead is "
                                                                              "3, not the next, 2"):
         c.openings(1, root)
     assert (service.directory / R.RELEASES).read_bytes() == sent and c.afters(coins.OPENINGS) == (root,)
