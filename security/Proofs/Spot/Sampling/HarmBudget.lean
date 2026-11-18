@@ -101,10 +101,10 @@ theorem bernoulli_design {num den : ℕ} [NeZero den] (h : num ≤ den) :
           mul_neg]
 
 /-- A uniform `k`-subset of `n` meets the design condition with `π_u = k/n`. -/
-theorem subset_design {k : ℕ} (hk : k ≤ n) (hn : 0 < n) : (subset n k hk).Design fun _ => (k : ℝ) / n := by
+theorem subset_design {k : ℕ} (hk : k ≤ n) (hn : 0 < n) : Design (Verity.SamplingDesign.subset n k hk) fun _ => (k : ℝ) / n := by
   intro B
-  show (subset n k hk).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (k : ℝ) / n))
-  calc (subset n k hk).missProb B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := subset_escape hk B
+  show (Verity.SamplingDesign.subset n k hk).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (k : ℝ) / n))
+  calc (Verity.SamplingDesign.subset n k hk).missProb B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := Verity.SamplingDesign.subset_escape hk B
     _ ≤ (((n - B.card : ℕ) : ℝ≥0∞) / (n : ℝ≥0∞)) ^ k := choose_div_le_pow' hk hn
     _ ≤ ENNReal.ofReal (Real.exp (-((B.card : ℝ) / n))) ^ k :=
         pow_le_pow_left₀ zero_le (natFrac_le_exp (by simpa using Finset.card_le_univ B) hn) _

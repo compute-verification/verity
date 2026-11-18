@@ -97,7 +97,7 @@ def test_the_device_layouts():
 
 
 def test_bound_on_cc_12_only():
-    sm, hopper, ada = (TargetProfile(compute_capability=cc) for cc in ((12, 0), (9, 0), (8, 9)))
+    sm, hopper, ada = (TargetProfile.default().with_overrides(compute_capability=cc) for cc in ((12, 0), (9, 0), (8, 9)))
     assert TG.nvfp4_gemm_spec(sm, 4096, 6144).id == bind(N4.ScaledMmNvfp4, K=4096, N=6144, DOT=DOT).id
     assert TG.nvfp4_quant_spec(sm, 4096).id == bind(N4.Nvfp4ActQuant, K=4096).id
     for tp in (hopper, ada):

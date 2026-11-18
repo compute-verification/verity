@@ -60,7 +60,7 @@ class Net:
         from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY
         hf, ff = phi.hf_config, FF.facts_for(phi.hf_config)
         self.world, self.rank = int(phi.tp["world"]), int(phi.tp.get("rank", 0))
-        self.device = phi.target.get("device_name")
+        self.device = phi.target_profile().device_name
         quant = hf.get("quantization_config")   # a checkpoint config without the block is refused below, by that name
         qc = quant if quant else {}
         try:
