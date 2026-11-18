@@ -7,15 +7,16 @@ integrator runs it at each merge sweep), ``--init`` rewrites them from the tree 
 ratchet's count, naming apart what a ruling keeps (``KEPT``). Tests (``tests/``, any ``/tests/``), ``archive/`` and ``fixtures/`` are never offenders.
 
 - ``scheme_name_tables``: a Python or shell file outside `verity/protocols/compose/schemes.py` and every ``scheme.py``
-  that compares against a scheme's name (``DECLARATIONS``' keys and the old ``pouw``, ``certifier``,
-  ``network-certifier``), keys a mapping by it, indexes by it, or reads it with ``.get``, ``.pop`` or ``.setdefault``;
+  that compares against a scheme's name (``DECLARATIONS``' keys, the old ``pouw``, ``certifier``,
+  ``network-certifier``, and the components still to declare, ``TO_DECLARE``), keys a mapping by it, indexes by it, or reads it with ``.get``, ``.pop`` or ``.setdefault``;
   a membership test counts every name in its literal. Python is read by token, so a docstring or comment never counts.
 - ``scheme_package_imports``: an import of a scheme's package under ``benchmarks/``, ``calibration/``, ``tools/`` or
   ``applications/``. The vLLM adapter's are `tests/test_boundaries.py`'s ``RESOURCE_ACCOUNTING_IMPORTERS``
   (``test_the_vllm_adapter_imports_no_resource_accounting_protocol``), not repeated here.
 - ``messages_one_sided``: a class of `verity/hooks.py`, Protocol types included, that code (an import from
   ``verity.hooks`` or an attribute of the module, read by ``ast``) names in fewer than two areas (``AREAS``).
-- ``toolkit_paths``: a tracked text file naming ``/usr/local/cuda`` outside `calibration/hardware/` and the kit (``KIT``).
+- ``toolkit_paths``: a tracked text file writing a toolkit's directory (``CUDA``: ``/usr/local/cuda``, ``/opt/cuda``, a
+  ``cuda-<version>`` directory anywhere, pip's toolkit) outside `calibration/hardware/` and the kit (``KIT``).
 - ``card_names_in_code``: a Python or shell file outside `calibration/hardware/` and every ``/cards/`` that compares
   against or keys a mapping by a card, node or architecture name, case-insensitively.
 - ``lean_reexports``: a Lean ``export Verity ...`` or ``export Hash ...``, or a one-line ``abbrev N ... := Q.N x y``
@@ -47,6 +48,8 @@ SCHEMES = "verity/protocols/compose/schemes.py"
 HOOKS = "verity/hooks.py"
 HARDWARE = "calibration/hardware/"
 OLD_SCHEMES = ("pouw", "certifier", "network-certifier")
+#: components the table does not hold yet, counted as if it did, so that declaring one moves no count
+TO_DECLARE = ("sampled-proofs", "inference-only")
 CARD_NAMES = ("H200", "H100", "B200", "RTX PRO 6000", "sm_90", "sm_100", "sm_120", "sm90", "sm100", "sm120")
 SCRIPT = (".py", ".sh")
 SCHEME_IMPORT = re.compile(r"^\s*(?:from|import)\s+verity\.protocols\.(?:resource_accounting\.(?:compute|memory|network)"
@@ -63,7 +66,11 @@ KEPT = {"scheme_name_tables": {
         "the sampled proofs' verifier files each case under its protocol id itself (`SUBPROTOCOLS`, `ids_of`): which "
         "id the composite check is told is decided on the verifier's side, never handed in by a caller, and the "
         "verifier may not load the one table; a test outside the verifier holds the two equal (soundness, 18 Nov)"}}
-CUDA = "/usr/local/cuda"
+#: a toolkit's directory written out: under `/usr/local` or `/opt`, any path to a `cuda-<version>` directory (a file
+#: named so, `cuda-13.3.sh`, is not one), and pip's toolkit under `site-packages` (kernels' pattern, 18 Nov)
+CUDA = re.compile(r"(?<![\w.-])(?:/usr/local/cuda|/opt/cuda)"
+                  r"|/[\w.-]*cuda-(?:\d|\$|root\b)(?![\w.-]*\.(?:sh|py|md|toml|json|cu|txt)\b)"
+                  r"|site-packages/nvidia/cu\d")
 #: the machine record's reader and the toolkit fetcher it points at: where a toolkit's directory is written down
 KIT = ("benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
        "benchmarks/kernels/machine.py", "verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh")
@@ -114,12 +121,13 @@ def _excluded(path: str) -> bool:
 
 
 def _scheme_names(text: str) -> tuple[str, ...]:
-    """``DECLARATIONS``' keys, read from `verity/protocols/compose/schemes.py`'s text, and the old names."""
+    """``DECLARATIONS``' keys, read from `verity/protocols/compose/schemes.py`'s text, the old names and those to declare."""
     for node in ast.walk(ast.parse(text)):
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and "DECLARATIONS" in {
                 getattr(t, "id", None) for t in (node.targets if isinstance(node, ast.Assign) else [node.target])}:
             table = next(n for n in ast.walk(node.value) if isinstance(n, ast.Dict))
-            return tuple(sorted({ast.literal_eval(k) for k in table.keys if k is not None} | set(OLD_SCHEMES)))
+            return tuple(sorted({ast.literal_eval(k) for k in table.keys if k is not None} | set(OLD_SCHEMES)
+                                | set(TO_DECLARE)))
     raise AssertionError(f"{SCHEMES} has no DECLARATIONS table")
 
 
@@ -280,7 +288,7 @@ class Scan:
 def scan(files: dict[str, str]) -> Scan:
     """Every ratchet over ``files``, {tracked path: its text}."""
     s = Scan()
-    schemes = frozenset(_scheme_names(files[SCHEMES])) if SCHEMES in files else frozenset(OLD_SCHEMES)
+    schemes = frozenset(_scheme_names(files[SCHEMES])) if SCHEMES in files else frozenset(OLD_SCHEMES + TO_DECLARE)
     cards = _card_names({p: t for p, t in files.items() if p.startswith(HARDWARE) and p.endswith(".toml")})
     scheme_pre = re.compile(rf"""["']({_quoted(schemes)})["']""")
     card_pre = re.compile(rf"""["']({_quoted(cards)})["']""")
@@ -301,8 +309,8 @@ def scan(files: dict[str, str]) -> Scan:
         if path.endswith(".py") and path.startswith(SCHEME_IMPORTERS) and "verity.protocols." in text:
             s.add("scheme_package_imports", path,
                   (i for i, line in enumerate(text.splitlines(), 1) if SCHEME_IMPORT.match(line)), text)
-        if CUDA in text and not path.startswith(HARDWARE) and path not in KIT:
-            s.add("toolkit_paths", path, (i for i, line in enumerate(text.splitlines(), 1) if CUDA in line), text)
+        if CUDA.search(text) and not path.startswith(HARDWARE) and path not in KIT:
+            s.add("toolkit_paths", path, (i for i, line in enumerate(text.splitlines(), 1) if CUDA.search(line)), text)
         if path.endswith(".py") and path != HOOKS and ("verity.hooks" in text or "import hooks" in text) \
                 and (area := _area(path)):
             for c in _hooks_names(text, path, classes):
@@ -437,6 +445,8 @@ def _flagged(ratchet: str, files: dict[str, str]) -> dict[str, int]:
     ("scheme_package_imports", "verity/a.py", "from verity.protocols.resource_accounting.compute import pouw\n", 0),
     ("toolkit_paths", "benchmarks/run.sh", "export PATH=/usr/local/cuda/bin:$PATH\n", 1),
     ("toolkit_paths", "benchmarks/run.sh", 'nvcc="$(python3 benchmarks/kernels/machine.py toolkit 13.0)/bin/nvcc"\n', 0),
+    ("toolkit_paths", "benchmarks/run.sh", "export CUDA_HOME=/workspace/jobs/cuda-12.9\nT=$ROOT/cuda-$V\n", 2),
+    ("toolkit_paths", "benchmarks/run.sh", "bash pod/cuda-13.3.sh\nP=$VENV/lib/site-packages/nvidia/cu13\n", 1),
     ("toolkit_paths", f"{HARDWARE}nodes/x.toml", 'toolkit = "/usr/local/cuda-13.0"\n', 0),
     ("toolkit_paths", "benchmarks/harness/verity_bench/kit.py", 'D = "/usr/local/cuda"\n', 0),
     ("card_names_in_code", "benchmarks/a.py", 'if card == "h200":\n    pass\nP = {\n    "SM_90A": 1,\n}\n', 2),

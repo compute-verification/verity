@@ -30,7 +30,8 @@
 #      session, so WARM=0 RUNS=1, and each CPU step once, REPEAT=1, unless set)  RELEASE_WINDOWS_S= (85's)
 #      RELEASE_BUDGET= (85's: the stream's failure budget, at least 1, which RELEASE=1 needs)
 #      and any of 85's own (LEVELS, GPU, PCPUS, GPU_PREEMPTIBLE, ...), passed through
-#      CUDA_TK, WARM_FROM: as 85 takes them (default: the rec-reprice unpack and cargo tree where present, read only)
+#      CUDA_TK, WARM_FROM: as 85 takes them (default: the machine's toolkit at 13.3, else 85's own unpack; the rec-reprice
+#      cargo tree where present, read only)
 #      SM= (85's GPU build target; default: the run's machine's card's, benchmarks/kernels/machine.py arch)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
@@ -75,7 +76,7 @@ PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --own
 # 85 moves HOME where it can't write; its Lean builds (the Lean verifier, the ZK server's Lean session loop) must find the same elan
 [ -w "$HOME" ] || { export HOME=$FLOCK_WORK/home; mkdir -p "$HOME"; }
 RR=/workspace/jobs/rec-reprice
-[ -z "${CUDA_TK:-}" ] && [ -x $RR/cuda-13.3.1/bin/nvcc ] && export CUDA_TK=$RR/cuda-13.3.1
+[ -z "${CUDA_TK:-}" ] && CUDA_TK=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> /dev/null) && export CUDA_TK
 [ -z "${WARM_FROM:-}" ] && [ -d $RR/flock-gpu-link/flock ] && export WARM_FROM=$RR/flock-gpu-link
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 REC=verity/protocols/proofs/flock/prover/pod/85-rec-reprice.sh

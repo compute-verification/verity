@@ -10,6 +10,7 @@ import tracemalloc
 
 import pytest
 
+from verity.commitments import domains as DM
 import verity.circuits.ops.scalar  # noqa: F401
 from verity.commitments import CommitmentDomain, RangeIndexedDomain, hm96
 from verity.commitments import history as HT
@@ -1360,9 +1361,9 @@ def test_r7_takes_the_verifiers_certified_entries():
     lone = _program(w=16)
     served, ports1 = _record(lone, reg)
     kw1 = {**design, "ports": ports1}
-    v1 = {**{k: x for k, x in served.items() if k != "registered"}, "format": R.FORMAT}
+    v1 = {**{k: x for k, x in served.items() if k != "registered"}, "format": DM.REGISTRATION_V1}
     only = {**served, "registered": [e]}
-    assert only["format"] == R.FORMAT_V2
+    assert only["format"] == DM.REGISTRATION
     assert R.check(only, lone, Q, **kw1, certified=CERTIFIED).ok
     assert R.check(only, lone, Q, **kw1, registered={}, certified=CERTIFIED).ok
     assert R.check(only, lone, Q, **kw1).codes == ("keys",)
