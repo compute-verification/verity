@@ -15,10 +15,12 @@
 # BUILD_ONLY=1 ends after the build, so a machine with no GPU checks that it compiles (TOOLKIT=1 assembles CUDA
 # 12.9's nvcc first, `benchmarks/pouw/harness/jobs/toolkit.sh`; CUDA_HOME names a toolkit, which goes first).
 # DEFS are session.cu's own nvcc arguments (-DSK64_PER_SM=2: the 64-row receipt kernels at 128 registers a thread).
+# BUILD_DIR keeps the build (session.so, kv.so) there for the caller instead of a directory removed at exit.
 #
 # Then each of STEPS (`rows session` unless given) under a lease of its own on CARDS, of at most LEASE_MIN minutes and
 # taken without waiting: a card whose lock is held, or with a compute process or more than a GiB in use on it, ends
-# the run (exit 75) with nothing started there. No step starts after NOT_AFTER (`date -d` syntax), so a run stays
+# the run (exit 75) with nothing started there; inside a lease of the caller's (GPU_LEASE_UUID set) each step runs in
+# that lease. No step starts after NOT_AFTER (`date -d` syntax), so a run stays
 # inside its booked hours. out/STEP.node.txt lists the compute processes on every card of the machine as the step
 # starts and as it ends: whether anything shared the node with a timed row. With them, each card's link, and this
 # cgroup's CPU counters, its pressure and the machine's load: whether the cgroup was throttled between the two.
@@ -102,7 +104,11 @@ if [ -z "${ARCH:-}" ]; then
     *) say "PREFLIGHT: ARCH (90a, 120a) is not given and the card's name does not tell it"; exit 3 ;;
   esac
 fi
-B=$(mktemp -d /tmp/rows64.XXXXXX); trap 'rm -rf "$B"' EXIT
+if [ -n "${BUILD_DIR:-}" ]; then
+  B=$BUILD_DIR; mkdir -p "$B"
+else
+  B=$(mktemp -d /tmp/rows64.XXXXXX); trap 'rm -rf "$B"' EXIT
+fi
 export B
 { id -un; hostname; git -C "$TREE" rev-parse HEAD; echo "cores ${CORES:-not pinned} ($(nproc)) cards $CARDS arch $ARCH"
   "$NVCC" --version | tail -n 2; cat /sys/fs/cgroup/cpu.max; nvidia-smi -L; command -v lake cuobjdump nvdisasm
@@ -198,8 +204,12 @@ leased() {  # step $1 under one lease of CARDS: the rest is its command, its out
     return 75
   fi
   others "$name" start
-  GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting-rows64} bash "$LEASE" "$N" --on "$CARDS" --max-min "$LEASE_MIN" \
-    --mem-gb "$LEASE_MEM_GB" -- "$@" > "$O/$name.log" 2>&1
+  if [ -n "${GPU_LEASE_UUID:-}" ]; then
+    "$@" > "$O/$name.log" 2>&1
+  else
+    GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting-rows64} bash "$LEASE" "$N" --on "$CARDS" --max-min "$LEASE_MIN" \
+      --mem-gb "$LEASE_MEM_GB" -- "$@" > "$O/$name.log" 2>&1
+  fi
   rc=$?
   others "$name" end
   tail -n 40 "$O/$name.log"
@@ -230,5 +240,6 @@ for step in $STEPS; do
   [ $rc = 0 ] || bad=$rc
   [ $rc = 75 ] || [ $rc = 11 ] && break
 done
-say "end (exit $bad); nothing is left on this machine outside the run's own directory ($B goes at exit)"
+say "end (exit $bad); nothing is left on this machine outside the run's own directory${BUILD_DIR:+ and BUILD_DIR}" \
+  "${BUILD_DIR:-($B goes at exit)}"
 exit "$bad"
