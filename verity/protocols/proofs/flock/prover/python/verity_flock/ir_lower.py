@@ -207,9 +207,8 @@ COMPOSED: dict[str, Any] = {}
 
 
 def compositions() -> dict[str, Any]:
-    """`COMPOSED`, with `topp_word`'s registered."""
-    from verity_vllm.flock import topp_word  # noqa: F401  (registers itself)
-
+    """`COMPOSED` as the loaded catalogs registered it: the top-p keep word's once `verity_vllm.flock` is loaded
+    (`boolean_export.load_catalog`)."""
     return COMPOSED
 
 
