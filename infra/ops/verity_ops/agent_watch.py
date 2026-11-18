@@ -359,6 +359,7 @@ IN_TURN = ("CREATING", "RUNNING")   # `GET /v0/agents/{id}`'s status of an agent
 STOP_S = 5 * 60             # a worker's v0 status the watch can't take as its stop's (in a turn, unread, or read within
 #                             `DROPPED_S` of its change) is read again this often
 STOPS_SWEEP = 20            # v0 statuses read a sweep: a fresh deploy reads one for each worker it watches
+SETTLE_S = 60               # a v0 status read this long after a worker's change is the stop's; one read sooner may predate a turn
 HANDIN_S = 2 * 3600         # a comment on an integrator's issue with none of the integrator's after it, this old: its lead is rung
 HANDIN_RETRY_S = 10 * 60    # an issue Linear answers for with an error (no such issue) is read again this often
 HANDIN_PAGE, HANDIN_PAGES = 100, 3  # an issue's comments are read newest first, back to the integrator's last, this far at most
@@ -2100,6 +2101,16 @@ class Watch:
             runs = [info]
         return runs + [x for x in listed if x.get("id") not in {y["id"] for y in runs}]
 
+    @staticmethod
+    def out_of_turn(w: dict, t: float) -> bool:
+        """Whether a worker v1 reads IDLE is out of a turn since its `updatedAt` last moved, by the v0 status `stopped` read:
+        out of a turn (FINISHED, EXPIRED or ERROR) at a read `SETTLE_S` or more after the change, before which a resume's
+        turn may not have begun; with v0 unread, once the IDLE has lasted `DROPPED_S`."""
+        s, updated = w.get("stop") or {}, w["updated"]
+        if s.get("at") != updated or s.get("status") in IN_TURN:
+            return False
+        return t - updated >= DROPPED_S if not s.get("status") else s["t"] - updated >= SETTLE_S
+
     def later_runs(self, a: dict, t: float) -> list[dict] | None:
         """The newest page of an agent's runs (`GET /v1/agents/{id}/runs`), newest first; None when the API won't list them."""
         try:
@@ -2124,7 +2135,8 @@ class Watch:
         s, updated = w.get("stop") or {}, w["updated"]
         new = prev == "ACTIVE" or s.get("at") != updated or w["heard"] > s.get("t", 0.0)
         open_ = s.get("status") in (*IN_TURN, "") or s.get("t", 0.0) - updated < DROPPED_S
-        if not new and not (open_ and t - s["t"] >= STOP_S):
+        early = s.get("t", 0.0) - updated < SETTLE_S <= t - updated      # read before a turn could begin: read once more
+        if not new and not early and not (open_ and t - s["t"] >= STOP_S):
             return s.get("status") == "ERROR"
         if self.stops_left <= 0:
             return False
@@ -2278,9 +2290,10 @@ class Watch:
                     w["long"] = True
                     self.record("worker_long", r, since=iso(w["since"]), hours=int((t - w["since"]) // 3600), **detail)
             elif (status == "IDLE" and w.get("idle_at") != updated
-                  and (prev == "ACTIVE" or ((moved or first) and t - updated < STALE_STOP_S))):
+                  and (prev == "ACTIVE" or ((moved or first) and t - updated < STALE_STOP_S and self.out_of_turn(w, t)))):
                 # a stop: it left ACTIVE, or its `updatedAt` moved while it read IDLE at both reads (a Task resume's turn,
-                # or a message that became none, between them), or the first read finds it stopped
+                # or a message that became none, between them), or the first read finds it stopped; either of the last two
+                # only once v0 has it out of a turn, since a resume's message moves `updatedAt` before v1 reads it ACTIVE
                 w["idle_at"] = updated
                 if self.reported_back(agent, updated):
                     print(f"{iso(t)} worker {agent} idle: its parent got its Task result, so no one is rung", file=sys.stderr,
@@ -3304,8 +3317,8 @@ def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
     its newest run that started or is CREATING, else its latest). `watch_state` is the last finding on that run (a long call
     only while it lasts), else `followed` or `ok`; `since` is when that finding began; `run_status` is the run's status when
     the watch last read it. A worker the sweep read is a row too, with no run (`run_id` "", `run_status` unknown): its
-    `watch_state` is `crashed` while the platform has it stopped with an error, `worker_idle` while idle after the watch
-    saw it ACTIVE, `worker_long` while that long spell lasts, else `ok`. A value outside the pinned enums raises, so the
+    `watch_state` is `crashed` while the platform has it stopped with an error, `worker_idle` while idle since the stop the
+        watch recorded, `worker_long` while that long spell lasts, else `ok`. A value outside the pinned enums raises, so the
     last valid file stays."""
     agents = []
     for run, a in live.items():
@@ -3325,7 +3338,7 @@ def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
     for agent, status in w.worker_status.items():
         k = w.workers.get(agent, {})
         state, since = (("crashed", iso(k["error"]["t"])) if status != "ACTIVE" and k.get("error") else
-                        ("worker_idle", iso(k["idle_at"])) if status == "IDLE" and k.get("idle_at") is not None else
+                        ("worker_idle", iso(k["idle_at"])) if status == "IDLE" and "idle_at" in k and k["idle_at"] == k.get("updated") else
                         ("worker_long", iso(k["since"])) if status == "ACTIVE" and k.get("long") else ("ok", None))
         agents.append({"agent_id": agent, "run_id": "", "agent_status": status if status in AGENT_STATUSES else "unknown",
                        "run_status": "unknown", "watch_state": state, "since": since, "restart_count": 0})

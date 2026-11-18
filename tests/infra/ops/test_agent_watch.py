@@ -4392,7 +4392,7 @@ def test_a_coordinator_is_relaunched_only_on_its_runs_read_then_and_showing_none
     def began():
         api._agents[0]["latestRunId"], api.older[co] = "run-own", ["run-e9"]
         api._runs["run-own"] = {"status": "RUNNING"}
-    after(api, 1, began if by_then == "began" else spent)
+    after(api, 2, began if by_then == "began" else spent)     # its latest run, then its runs: the sweep finds it still down
     w.sweep(lambda r: None)
     assert [r["kind"] for r in records(tmp_path)] == ["crashed"] * 3 + ["erroring", "relaunch"] and launched == []
     rec = records(tmp_path)[-1]
@@ -4817,11 +4817,12 @@ def registered(tmp_path, clock, agent=W1_, lane="circuits", by=CO, **more):
     return p
 
 
-def integrator(tmp_path, v0="ERROR", name="CIR-7 INTEGRATOR", status="IDLE", agents=(), runs=None, **kw):
+def integrator(tmp_path, v0="ERROR", name="CIR-7 INTEGRATOR", status="IDLE", agents=(), runs=None, updated=T0, **kw):
     """A swarm's integrator (W1_), a Task subagent the circuits coordinator launched and registered, named after its issue:
-    no run the API lists, IDLE on v1 since T0 however its turn ended, and `v0` what the legacy status says of it. The
-    watch, before its first sweep."""
-    api, clock, w = coordinators(tmp_path, list(agents), runs or {}, workers={W1_: worker(status, W.iso(T0), name=name)}, **kw)
+    no run the API lists, IDLE on v1 since `updated` however its turn ended, and `v0` what the legacy status says of it.
+    The watch, before its first sweep."""
+    api, clock, w = coordinators(tmp_path, list(agents), runs or {}, workers={W1_: worker(status, W.iso(updated), name=name)},
+                                 **kw)
     linear_teams(tmp_path)
     registered(tmp_path, clock)
     api.v0[W1_] = v0
@@ -4844,7 +4845,7 @@ def test_a_worker_stopped_with_an_error_is_recorded_once_for_its_lane_naming_it_
     (rec,) = records(tmp_path)
     assert {k: v for k, v in rec.items() if k not in ("t", "since")} == {
         "kind": "crashed", "agent": W1_, "name": "CIR-7 INTEGRATOR", "run": "", "role": "worker", "status": "ERROR",
-        "lane": "circuits", "handle": "circuits", "issue": "CIR-7", "action": RESUME_IT}
+        "lane": "circuits", "handle": "circuits", "issue": "CIR-7", "action": RESUME_IT, "at": W.iso(T0)}
     assert W.epoch(rec["since"]) == T0 + W.DROPPED_S, "once its last change is `DROPPED_S` old: a turn would have begun by then"
     assert status(tmp_path)[W1_]["watch_state"] == "crashed"
     assert stops(api) == 2 and api.posts == [], "read at its first read and once past `DROPPED_S`; nothing is started on it"
@@ -4909,7 +4910,8 @@ def test_workers_of_one_coordinator_stopped_in_error_together_are_one_record_nam
 
 
 def test_a_v0_status_the_api_wont_give_records_nothing_and_is_read_again(tmp_path, capsys):
-    api, clock, w = integrator(tmp_path, v0=W.urllib.error.HTTPError("/v0/agents/x", 500, "Server Error", {}, None))
+    api, clock, w = integrator(tmp_path, v0=W.urllib.error.HTTPError("/v0/agents/x", 500, "Server Error", {}, None),
+                               updated=T0 - W.STALE_STOP_S)
     sweeps(w, clock, 30, step=1)
     assert records(tmp_path) == [] and stops(api) == 30 * 60 // W.STOP_S, "every `STOP_S`, not every sweep"
     assert capsys.readouterr().err.count("v0 status went unread") == 1, "said once an hour"
@@ -5017,10 +5019,12 @@ class FakeLinear:
 
 
 def swarm(tmp_path, name="CIR-7 INTEGRATOR", linear=..., **entry):
-    """A swarm of the circuits lane: its integrator (W1_, as `integrator` makes it, its last turn ended well) registered
-    by its lead as taking hand-ins on the issue it is named after, and Linear holding that issue with no comment yet."""
+    """A swarm of the circuits lane: its integrator (W1_, as `integrator` makes it, its last turn ended well before the
+    watch's first read) registered by its lead as taking hand-ins on the issue it is named after, and Linear holding that
+    issue with no comment yet."""
     lin = FakeLinear(CIR_7={})
-    api, clock, w = integrator(tmp_path, v0="FINISHED", name=name, linear=lin if linear is ... else linear)
+    api, clock, w = integrator(tmp_path, v0="FINISHED", name=name, linear=lin if linear is ... else linear,
+                               updated=T0 - W.STALE_STOP_S)
     lin.clock = clock
     registered(tmp_path, clock).unlink()
     registered(tmp_path, clock, integrates="CIR-7", **entry)
@@ -5141,7 +5145,7 @@ def test_a_linear_read_that_fails_records_nothing_and_is_made_again_at_the_next_
     issue) is asked again far less often."""
     api, clock, w, lin = swarm(tmp_path)
     registered(tmp_path, clock, W7_, integrates="CIR-8")
-    api.workers[W7_] = worker("IDLE", W.iso(T0), name="CIR-8 MERGER")
+    api.workers[W7_] = worker("IDLE", W.iso(T0 - W.STALE_STOP_S), name="CIR-8 MERGER")
     lin.issues["CIR-8"] = {"comments": []}
     lin.said("CIR-7", T0 - 3 * 3600, "circuits/SEAT-A")
     lin.said("CIR-8", T0 - 3 * 3600, "circuits/SEAT-B")
@@ -5171,7 +5175,7 @@ def test_with_no_linear_credential_no_hand_in_is_recorded_and_the_log_says_so_on
     lin = W.Linear(env, tmp_path / "linear-token.json", http=lambda *a: asked.append(a))
     api, clock, w, _ = swarm(tmp_path, linear=lin)
     registered(tmp_path, clock, W7_, integrates="CIR-8")
-    api.workers[W7_] = worker("IDLE", W.iso(T0), name="CIR-8 MERGER")
+    api.workers[W7_] = worker("IDLE", W.iso(T0 - W.STALE_STOP_S), name="CIR-8 MERGER")
 
     def three_hours(watch):
         for _ in range(3 * 60):
