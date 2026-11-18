@@ -32,7 +32,7 @@ def sizes_of_class(cls: str, scheme: str) -> list:
             "sizes": window_cut.credited_sizes(low), "templates": len(low.circuit.templates)}
 
 
-def block(scheme: str, k: int, tm: int, tn: int, n: int) -> dict:
+def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False) -> dict:
     from verity.circuits import count as CT
     from verity.circuits import restrict as R
     from verity.circuits.codec import descriptor_chunks, descriptor_id
@@ -69,6 +69,19 @@ def block(scheme: str, k: int, tm: int, tn: int, n: int) -> dict:
                                  key=lambda r: -r["gates"])
     out["sum_of_bodies"] = sum(r["gates"] for r in out["by_primitive"])
     phase("count")
+    if bits:
+        import random
+
+        import numpy as np
+        from verity.circuits.evaluation import evaluate_words
+        from verity.circuits.ops.boolean.versions import block_circuit, boolean_table
+        fn = block_circuit(b.program.fn, boolean_table(b.program))
+        phase("lift")
+        rng = random.Random(0)
+        got = evaluate_words(fn, *(np.asarray([[rng.getrandbits(t.elem.w) for _ in range(t.n)]], dtype=np.uint64)
+                                   for _p, t in params))
+        out["bits_out"] = got.reshape(-1).tolist()[-1:]
+        phase("bits")
     out["peak_gib"] = _peak_gib()
     return out
 
@@ -78,6 +91,7 @@ def main() -> int:
     ap.add_argument("--scheme", default=SCHEME)
     ap.add_argument("--size", help="K,TM,TN,N")
     ap.add_argument("--cls", help="a window class, e.g. 4,27,2: its cut calls' credited sizes on Llama 3.2 1B")
+    ap.add_argument("--bits", action="store_true", help="also evaluate the block on bits once, on random inputs")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -88,7 +102,7 @@ def main() -> int:
         print("CREDITED-SIZES", a.cls, got["sizes"], "templates", got["templates"], flush=True)
     if a.size:
         k, tm, tn, n = map(int, a.size.split(","))
-        got = block(a.scheme, k, tm, tn, n)
+        got = block(a.scheme, k, tm, tn, n, a.bits)
         (a.out / f"block-{k}-{tm}-{tn}-{n}.json").write_text(json.dumps(got, indent=1))
         print("CREDITED-BLOCK", a.size, "gates", got["gates"], "ands", got["ands"], "sum_of_bodies", got["sum_of_bodies"],
               "inputs", [(r["port"], r["rows"], r["width"], r["binding"]) for r in got["inputs"]],
