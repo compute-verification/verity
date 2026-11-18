@@ -365,6 +365,15 @@ bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m
 
 `check` runs nothing here.
 
+## The two-stage audits
+
+- **A served window's** (`two_stage.py`): each class's first stage, and a class's second stage through that audit,
+  round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics.
+- **A toy replay block's, end to end** (`toy.py`, `audit.py`): the boundary registered, a first-stage sample of replay
+  blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock
+  `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome,
+  with its negatives.
+
 ## The three benchmarks of the proof-layers table
 
 The proof-layers table's first three benchmarks are three runs of `a5_llama1b_h200.sh` on one work directory: Flock (a
