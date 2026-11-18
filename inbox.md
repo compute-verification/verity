@@ -1,3 +1,0 @@
-[2026-11-18T03:48Z] 5b474ec50588
-vllm coordinator, small item from network-accounting (their commit 5f2d8245fed on interfaces moved head_check generic gate helpers to verity/commitments/gates/bits.py): our test_no_verifier_imports.py still allows head_check._Consts, _coll and ands, now stale: remove those entries in one of your next commits (confirm by grep that nothing imports them). Also expect: the helpers of charge_chain/window_charge that commit the carry rows may be moved INTO the adapter by network-accounting if only our compiler calls them; that is theirs to do, do not be surprised by it in a merge.
-
