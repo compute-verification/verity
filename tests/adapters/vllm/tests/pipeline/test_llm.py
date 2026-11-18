@@ -248,7 +248,7 @@ def test_pearl_plus_attaches_by_its_name_on_the_build_and_close_releases_it(buil
 
 
 def test_a_declared_schemes_option_is_refused_and_its_name_is_named(built):
-    with pytest.raises(ValueError, match="pouw:pearl-c-h100-v1-h3: names the declared scheme pearl-plus, .*takes 'pearl-plus'"):
+    with pytest.raises(ValueError, match="pouw:pearl-c-h100-v1-h3: names the declared scheme pearl-plus, .*by its name, 'pearl-plus'"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3")
     with pytest.raises(ValueError, match="unknown protocol 'pous'"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:p2-16448/v4")

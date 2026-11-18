@@ -132,4 +132,6 @@ difftest only.
 Several functions are twins only, because the Lean decides their verdict inside a whole case's (`registered_twin`,
 `opening_twin`, `pass_epoch_twin`, `draw_twin`). Others are guards a device runs before a coin opens: `window`'s
 `*_epoch_reason` and `rounds_reason`, `coins.coin_reason`, `salt.unit_reason` and `core_check.recorded_reason`. They
-only refuse to go on, never credit, and the verdict of record checks the same rules again in Lean.
+only refuse to go on, never credit. The verdict of record checks the same rules again in Lean, except `salt.unit_reason`
+and `core_check.recorded_reason`: they guard a certified execution phase, which only the prover's `served_commit.Challenger`
+class runs, and no command runs one, so no verdict of record rechecks them yet.

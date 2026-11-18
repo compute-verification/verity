@@ -1,6 +1,6 @@
 """`verity.circuits.ops.boolean.versions`'s choice of a word's Boolean version does not follow the order its candidates were registered
 in (`_load` gathers them in that order, `_find` chooses): two versions of one name give the newest in either order, and two
-names for one word are refused as ambiguous in either order."""
+names for one word are refused as ambiguous in either order.  An ``opt_in`` version is weighed only with ``opt_in=True``."""
 from __future__ import annotations
 
 import pytest
@@ -48,3 +48,12 @@ def test_two_names_for_one_word_are_refused_as_ambiguous_in_either_order(fresh, 
         B.boolean_version(WORD)
     assert e.value.missing == {WORD.id: "ambiguous: ['BooleanFindTestNotA_v2', 'BooleanFindTestNotB_v2'] all name it as "
                                         "their word"}
+
+
+def test_an_opt_in_version_is_weighed_only_when_asked_for(fresh):
+    newer = _not("BooleanFindTestNot", 3)
+    newer.opt_in = True
+    fresh(_not("BooleanFindTestNot", 2), newer)
+    assert descriptor_id(B.boolean_version(WORD)) == "BooleanFindTestNot_v2"
+    assert descriptor_id(B.boolean_version(WORD, opt_in=True)) == "BooleanFindTestNot_v3"
+    assert descriptor_id(B.boolean_version(WORD)) == "BooleanFindTestNot_v2"

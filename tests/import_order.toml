@@ -100,6 +100,9 @@ owner = "compute-accounting"
 # One form opens a trusted place's `loaded_by`: a scheme's declaration is the one file that by design names its verifier
 # and states its parties, so a scheme's `scheme.py`, and no other file of that scheme, may load two trusted places: its
 # own verifier's, and the one that holds the parties' types (`verity/protocol.py`).  That is at most two lines a scheme.
+#
+# A Python script under a Lean package's `lean/` directory is run by path and decides no verdict: it is in no place,
+# nothing loads it, and it may load the Python it holds the Lean to.
 
 # The ties against the order: for a pair of rows, the first listed before the second, each file of the first that loads a
 # file of the second.  It only shrinks: the test refuses a file not listed here (cut the tie instead: move what the
@@ -109,7 +112,6 @@ owner = "compute-accounting"
 loader = "verity/protocols/proofs/flock"
 loaded = "adapters"
 files = [
-    "verity/protocols/proofs/flock/prover/python/verity_flock/boolean_export.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py",
 ]
@@ -190,6 +192,7 @@ trusted = true
 paths = [
     "verity/channel.py",
     "verity/party.py",
+    "verity/release.py",
     "verity/runtime/__init__.py",
     "verity/runtime/framing.py",
     "verity/runtime/handshake.py",
@@ -204,6 +207,10 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/challenger_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/workload.py",
+    "verity/protocols/resource_accounting/network/prover/admission.py",
+    "verity/protocols/resource_accounting/network/prover/id_relay.py",
+    "verity/protocols/resource_accounting/network/prover/ids_protocol.py",
+    "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/workload.py",
 ]
 
@@ -378,6 +385,15 @@ loads = [
     "verity/protocols/resource_accounting/compute/pouw/prover",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/interface/charge",
+]
+loads = [
+    "verity/circuits",
+    "verity/commitments",
 ]
 
 [[place]]
@@ -854,6 +870,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/periods",
     "verity/commitments/randomness",
+    "verity/protocols/interface/charge",
     "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/scheme.py",
@@ -907,7 +924,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/response_tie.py",
     "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
-    "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
     "verity/protocols/resource_accounting/network/scheme.py",
 ]
