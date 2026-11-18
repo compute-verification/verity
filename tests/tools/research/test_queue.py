@@ -2454,7 +2454,8 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
 def test_an_eject_refuses_while_a_staged_lean_batch_carries_the_head_naming_it_unless_forced(world, monkeypatch, capsys):
     """Ejecting a head a staged Lean batch carries, as a member or under one whose commits hold it, would drop the batch, its
     records run and every candidate built on it: the eject refuses, naming the batch, and withdraws no mark; a head none
-    carries is ejected; an unreadable loop log refuses too; `--force REASON` ejects, the reason in its notice."""
+    carries is ejected; an unreadable loop log refuses too, and so does an ancestor test that cannot read its object.
+    `--force REASON` ejects without reading the log, the reason in its notice, including when that log cannot be read."""
     import research.landing as L
     import research.queue as Qm
 
@@ -2465,11 +2466,17 @@ def test_an_eject_refuses_while_a_staged_lean_batch_carries_the_head_naming_it_u
     world.gh.put(1, one)
     two = world.change({"b.txt": "2\n"}, base=one)                   # #2 is stacked on #1: its commits hold #1's head
     world.gh.put(2, two)
-    world.gh.put(3, three := world.change({"c.txt": "3\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
     _git(world.origin, "update-ref", "refs/heads/queue/" + two[:12], two)
     staged = [{"sha": two, "members": [2], "heads": [two], "staged": True}]
     read = [(staged, "")]
-    monkeypatch.setattr(Qm, "loop_staged", lambda: read[0])
+    calls = {"n": 0}
+
+    def staged_read():
+        calls["n"] += 1
+        return read[0]
+
+    monkeypatch.setattr(Qm, "loop_staged", staged_read)
     base = ["--by", "ci", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
             "--store", str(world.tmp / "queue-store")]
     for n in (1, 2):
@@ -2481,8 +2488,15 @@ def test_an_eject_refuses_while_a_staged_lean_batch_carries_the_head_naming_it_u
     read[0] = ([], "no answer in 100 s")
     assert research_main(["queue", "eject", "1", "--reason", "x", *base]) == 1
     assert "the verified queue's log can't be read (no answer in 100 s)" in capsys.readouterr().err and len(posts) == 1
-    read[0] = (staged, "")
+    missing = "ab" * 20
+    read[0] = ([{"sha": missing, "members": [9], "heads": ["not-a-head"], "staged": True}], "")
+    assert research_main(["queue", "eject", "2", "--reason", "x", *base]) == 1
+    err = capsys.readouterr().err
+    assert f"of #2's head and {missing[:12]} exited 128" in err and missing in err and len(posts) == 1, err
+    before = calls["n"]
+    read[0] = ([], "no answer in 100 s")
     assert research_main(["queue", "eject", "1", "--reason", "x", "--force", "its batch is dropped anyway", *base]) == 0
+    assert calls["n"] == before
     assert f"#1 at {one[:8]} is ejected from `next` by ci: x (forced over a staged batch carrying it: its batch is dropped " \
            "anyway)" in posts[-1], posts
 

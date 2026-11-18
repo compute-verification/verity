@@ -21,7 +21,9 @@ are built again without them in the same tick.
                                                    posted as HANDLE to `CI` and the owner in the merge thread (exit 1 if it couldn't be);
                                                    refused, naming the batch, while a staged Lean batch or a candidate put on
                                                    main's chain from one carries the head (`Queue.staged_holding`, read from the
-                                                   loop's log on the control pod), or when that log can't be read, unless --force
+                                                   loop's log on the control pod), when that log can't be read, or when the ancestor
+                                                   test fails for any reason but not being an ancestor, unless --force, which
+                                                   reads no log
     research queue ready PR (--on MACHINE | --local | --mark) [--by LANE] [--no-preflight] [--sha SHA] [--json]
                                                    the owner's word that the PR is ready at its current head (a new push needs it
                                                    again unless its own change is the marked head's;
@@ -3075,7 +3077,8 @@ class Queue:
         """The verified queue's staged Lean batches, and the candidates `Commit` put on main's chain from staging, that carry
         ``pr``'s head (`loop_staged`): each as one of its members or under one, as its commits hold it.  An eject of it would
         drop that batch and its records run with it, and every candidate built on it; ``eject --force REASON`` overrides.
-        Raises when the loop's log can't be read, so nothing is ejected blind."""
+        Raises when the loop's log can't be read, or when `git merge-base --is-ancestor` fails for any reason but not being
+        an ancestor (a missing object included), so nothing is ejected blind."""
         self._clone()
         p = next((p for p in self.github.open_prs() if p.number == pr), None)
         if p is None:
@@ -3090,8 +3093,14 @@ class Queue:
             if p.head not in (c.get("heads") or ()):
                 self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/pull/{pr}/head:refs/queue/eject/pr",
                              f"+refs/heads/queue/{sha[:12]}:refs/queue/eject/candidate", ok=None)
-                if _git(self.workdir, "merge-base", "--is-ancestor", p.head, sha, check=False).returncode:
+                checked = _git(self.workdir, "merge-base", "--is-ancestor", p.head, sha, check=False)
+                if checked.returncode == 1:
                     continue
+                if checked.returncode:
+                    detail = " ".join((checked.stderr or checked.stdout).split())[-300:]
+                    raise QueueError(f"`git merge-base --is-ancestor` of #{pr}'s head and {sha[:12]} exited "
+                                     f"{checked.returncode}" + (f" ({detail})" if detail else "") + ", so it isn't known "
+                                     "whether a staged Lean batch carries the head: eject --force REASON ejects it anyway")
             kind = "staged off main's chain" if c.get("staged") else "put on main's chain from staging"
             held.append(f"{sha[:12]} (#{', #'.join(str(m) for m in c.get('members') or ())}, {kind})")
         return held
@@ -6983,7 +6992,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--force", metavar="REASON", help="eject: eject it though a staged Lean batch of the verified queue, or a "
                     "candidate put on main's chain from one, carries its head (refused without it: the batch, its records run "
-                    "and every candidate on it would be dropped), and why, in its notice; also when the loop's log can't be read")
+                    "and every candidate on it would be dropped), and why, in its notice; also when the loop's log can't be "
+                    "read. It reads no log: that read is a call through vy-control-gate, which takes no --force")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
                     help="eject, ready, judge: who ejects it, the handle its notice is posted as (default merge-queue, which no "
                          "one holds, so the notice fails) or says it's ready (no default: the owner's lane), "
@@ -7237,11 +7247,15 @@ def main(argv: list[str]) -> int:
                           over=a.over)
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
-        if a.force is None and (held := q.staged_holding(a.pr)):
-            raise QueueError(f"#{a.pr}'s head is carried by the verified queue's {'; '.join(held)}: ejecting it drops that "
-                             "batch, its records run with it, and every candidate built on it, so nothing is ejected; eject "
-                             "--force REASON ejects it anyway")
-        reason = a.reason if a.force is None else f"{a.reason} (forced over a staged batch carrying it: {a.force})"
+        if a.force is not None:
+            # no staged_holding: its log read is a vy-control-gate call, and the gate takes no --force
+            reason = f"{a.reason} (forced over a staged batch carrying it: {a.force})"
+        else:
+            if held := q.staged_holding(a.pr):
+                raise QueueError(f"#{a.pr}'s head is carried by the verified queue's {'; '.join(held)}: ejecting it drops that "
+                                 "batch, its records run with it, and every candidate built on it, so nothing is ejected; eject "
+                                 "--force REASON ejects it anyway")
+            reason = a.reason
         told = q.tell_ejected(q.eject(a.pr, reason, a.by, sha=a.sha), reason, a.by)
         print(f"research queue: #{a.pr}'s mark is withdrawn; the verified queue leaves it out until a ready mark re-admits it, "
               "and a candidate in flight holding it still lands it as built unless the eject is ci's or not by its "
