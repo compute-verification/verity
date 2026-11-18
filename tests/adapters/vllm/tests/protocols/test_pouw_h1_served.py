@@ -35,7 +35,7 @@ from verity.circuits.ports import In, Out, Ports
 from verity.circuits.refs import Coll, coll_concat
 from verity.circuits.types import Array, RecordType, Value
 from verity.commitments import hm96
-from verity.commitments.merkle import tree_levels
+from verity.commitments.merkle import root_from_subtrees, tree_levels
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
@@ -707,7 +707,7 @@ def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
         assert list(segs) == [f"{SV.PREFIX}a/{k}@{r}" for k in KS]
         for v, got in segs.items():
             reg = served.registered[v]
-            assert CR.tree_root(reg.domain.domain_id, reg.leaves, {(lv, ix): h for lv, ix, h in got}) == reg.root
+            assert root_from_subtrees(reg.domain.domain_id, reg.leaves, {(lv, ix): h for lv, ix, h in got}) == reg.root
         assert log["a"] == {v: [[lv, ix, h.hex()] for lv, ix, h in got] for v, got in segs.items()}
         assert CR.round_root(r, bytes.fromhex(log["inner"]), segs).hex() == log["root"]
 
@@ -774,7 +774,7 @@ def test_each_calls_receipts_are_its_receipt_table_once_its_roots_are_registered
         assert list(segs) == [f"{pre}a/{k}@{r}" for k in KS] + [pre + f"receipt@{c.index}" for c in run.calls if c.step == r]
         for v, got in segs.items():
             reg = served.registered[v]
-            assert CR.tree_root(reg.domain.domain_id, reg.leaves, {(lv, ix): h for lv, ix, h in got}) == reg.root
+            assert root_from_subtrees(reg.domain.domain_id, reg.leaves, {(lv, ix): h for lv, ix, h in got}) == reg.root
         assert CR.round_root(r, bytes.fromhex(log["inner"]), segs).hex() == log["root"]
     assert CR._a_link(run.round_log, served.entries(), len(run.calls)) is None
     reg = SV.register(run)

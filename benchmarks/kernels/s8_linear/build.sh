@@ -7,11 +7,11 @@
 #   toolchain.txt (nvcc --version and the command line), source.txt (the commit), MANIFEST.sha256
 # Usage, from the tree's root on a CPU node with CUDA 13's nvcc:
 #   bash benchmarks/kernels/s8_linear/build.sh /tmp/s8-linear-ship
-# OUT (default /tmp/s8-linear-ship); CUDA names the toolkit (default /usr/local/cuda-13.0).
+# OUT (default /tmp/s8-linear-ship); CUDA names the toolkit (default the machine's toolkit at 13.0, machine.py toolkit).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../ship.sh"
-ship_cuda /usr/local/cuda-13.0
+ship_cuda 13.0
 OUT=${1:-/tmp/s8-linear-ship}
 ship_fresh
 ship_toolchain

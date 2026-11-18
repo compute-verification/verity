@@ -78,8 +78,8 @@
 #      `served_verdicts.py publish` holds on the node, with its counts in this log's lines), Pearl+'s verdict's credit,
 #      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.pearlplus_why: its
 #      passes are not the window SPOT audited, so WINDOW names nothing here).
-# With PEARLPLUS_TIE set (served_verdicts.sh's PEARLPLUS_TIE: the window itself served under serve-openai's Pearl+ arm,
-# `serve_pearl`, one Pearl+ epoch a Commit window in SERVE_DIR/pearl/w<k>/), the piece serves nothing of its own: step 1
+# With PEARLPLUS_TIE set (served_verdicts.sh's PEARLPLUS_TIE: the window itself served under serve-openai's Pearl+,
+# attached by name (`serve_openai.scheme_settings`), one Pearl+ epoch a Commit window in SERVE_DIR/pearl/w<k>/), the piece serves nothing of its own: step 1
 # takes the window serve's cubin (PEARLC_CUBIN) where it is set; step 2 takes window WINDOW's own epoch, passes/ a
 # symlink to SERVE_DIR/pearl/wWINDOW (its served.json, coins.json and owner-only pass-NNNNN/, round s the window's step
 # s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
@@ -97,7 +97,7 @@
 # the give-up padded up to H1's window grid; the exact credit is the profile's exact_work, which `publish` holds on the
 # node), and under the gate it samples only after the window serve's Pearl-C period (SERVE_DIR/pearlplus/period.json,
 # the one its RULE line reads) closed with the lane's reserves since its open the window's salt sessions alone. Its salt coin is the
-# arm's: a live salt-only session of the window's own under the gate (`serve_pearl.live`), which step 5 holds each pass
+# scheme's: a salt session of the window's own under the gate (`serve_openai.scheme_settings`), which step 5 holds each pass
 # to as above, else in-process, and the piece then claims no verdict. Step 5 gets W (`--tie W`): the piece is then the
 # window's own epoch, and why it credits nothing by itself names the Pearl-C period its salt session joined
 # (served_verdicts.pearlplus_why_tied).
@@ -247,10 +247,10 @@ print(d.get("passes_with_calls"), "passes with calls of its Commit window'\''s",
       (d.get("coins") or {}).get("source"), "->", "OK" if d.get("ok") else "FAIL, " + str(d.get("error"))[:300])
 sys.exit(0 if d.get("ok") else 1)' "$E/served.json" 2>&1)
     rc=$?
-    say "window: the window's own Pearl+ epoch $E (serve_pearl), $BF16: $(tail -1 <<< "$line" | cut -c1-400)"
+    say "window: the window's own Pearl+ epoch $E (pearl-plus), $BF16: $(tail -1 <<< "$line" | cut -c1-400)"
     [ "$rc" = 0 ] || GO=
   else
-    say "window: the window serve wrote no Pearl+ epoch $E/served.json (serve_pearl), so there are no passes to tie"
+    say "window: the window serve wrote no Pearl+ epoch $E/served.json (pearl-plus), so there are no passes to tie"
     GO=
   fi
 elif [ -n "${PEARLC_CUBIN:-}" ]; then
