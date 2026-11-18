@@ -22,7 +22,6 @@
 //                                      run the no-write control (must be rejected); X, W, C, R and meta.json to DIR. A
 //                                      mismatch is rerun with LBO and SBO exchanged and reported (lbo_sbo_swapped)
 //   dgemm bench REPS M N K             fold, no-fold and (with -DDG_CUBLASLT) cuBLASLt int8 interleaved, one JSON line
-// Build: nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a dgemm.cu -o dgemm_sm90   (or 100a; build.sh)
 #include <cuda_runtime.h>
 
 #include <algorithm>

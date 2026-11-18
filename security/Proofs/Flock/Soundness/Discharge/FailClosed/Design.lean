@@ -70,7 +70,7 @@ noncomputable def idealMiss : SampleDesign n → ℕ → ENNReal
   | @stratified _ m St _ _, K =>
     ⨅ σs : Fin n → Fin m, ⨅ _ : SamplingDesign.ExecStrata σs (fun s => (St s).k) St,
     ⨅ hks : ∀ s, (St s).k ≤ (SamplingDesign.stratum σs s).card, (SamplingDesign.stratified σs (fun s => (St s).k) hks).miss K
-  | subset kd hkd, K => (SamplingDesign.subset n kd hkd).miss K
+  | subset kd hkd, K => (Verity.SamplingDesign.subset n kd hkd).miss K
 
 /-- **Under A3 the live sample misses no more than the ideal miss**: `SamplingDesign.execOS_miss_le` at every assignment the strata
 describe, at the stratified sample, and `Tables.execOS_subset_miss_le` at the subset sample. -/

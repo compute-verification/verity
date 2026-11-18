@@ -14,8 +14,7 @@
 #    Ethernet frame, so it holds no content byte of any flow. It holds the headers of every TCP flow on the loopback
 #    meanwhile, other programs' among them, so it stays in the job's temporary directory, which is deleted.
 # 2. The run: the rehearsal, with its offline check, in the job's temporary directory, since its records and salts are
-#    the prover's. $OUT/run keeps its public files alone: the deployment, the endpoints, the cells, the certified
-#    records' heads, the check and the network attester's log.
+#    the prover's. $OUT/run keeps what the gate publishes of it (`auditor.py publish`) and nothing else.
 # 3. What is kept of the capture: $OUT/run.pcap, its packets on the run's two ports, the stand-in front's and the
 #    relay's (`endpoints.json`), headers alone. The filter reads a packet's ports in the 54 bytes kept of it: it
 #    finds IPv4's there, under at most 16 bytes of IP options, and never IPv6's, so it keeps no IPv6 packet. The
@@ -61,9 +60,7 @@ done
 "$PY" -m verity.protocols.resource_accounting.network.attester.network_attester_serve rehearse --fake --watermark --out "$W/run" ${form[@]+"${form[@]}"} "$@"
 rehearsed=$?
 mkdir -p "$OUT/run"
-for f in deployment.json endpoints.json cells.jsonl certified.jsonl check.json warden.json; do
-  [ -f "$W/run/$f" ] && cp "$W/run/$f" "$OUT/run/"
-done
+"$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$W/run" "$OUT/run" > "$OUT/run/outcome.json"
 
 # tcpdump gets its packets a little after they pass: the last are in the file only once it has stopped growing
 size=-1

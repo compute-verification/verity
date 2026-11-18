@@ -1,4 +1,4 @@
-"""serve-openai's ``--admit release-order`` (`serve_admit.ReleaseOrder`) on CPU: requests reach the engine in the network attester's
+"""serve-openai's ``--admit release-order`` (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`) on CPU: requests reach the engine in the network attester's
 release order (``x-verity-release``) whatever order the frontend reads their bodies in, a missing earlier release holds the
 later ones, and a release that never comes (the network attester dropped it) or is refused holds them only until its skip, never for
 good. The gate's skip is driven by hand (an injected ``schedule``), so nothing here waits on the clock.

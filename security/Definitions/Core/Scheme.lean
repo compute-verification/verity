@@ -5,7 +5,8 @@ public import Definitions.Core.LevelsCredited
 /-!
 # A scheme: what a resource accounting protocol supplies, and what it gets back
 
-Every resource accounting protocol states its guarantee through these, and defines none of its own:
+A resource accounting protocol is to state its guarantee through these and define none of its own. No guarantee is proved
+through an instance yet: each still stands in its own form.
 
 * `Scheme`: what a protocol supplies to the proof layers. Its blocks, the units the audit samples; each block's
   cost, the resource it stands for; its charges, the resource it can't tie to a block; the runs the verifier
@@ -18,15 +19,18 @@ Every resource accounting protocol states its guarantee through these, and defin
   work) sets `over` the credit and `under` the spend. The sides are naturals: a guarantee with a factor rescales its
   own side into the common unit, and the structure carries no factor.
 * `Scheme.missable`: the largest cost of a block set a sample misses with probability above a cutoff.
-* `AuditBound`: what the audit gives every scheme, in the form a scheme reads. At every cutoff `δ`, a run is accepted
-  while the sample misses its incorrect blocks with probability at most `δ`, with probability at most `δ + ε`, `ε`
-  the audit's own error. The incorrect blocks are those of the run's committed values, so an accepted run's committed
-  values are correct outside a set the sample would likely have hit. A scheme that bounds something other than a
+* `AuditBoundAt`: what the audit gives every scheme, in the form a scheme reads. At every cutoff `δ`, a run is
+  accepted while its design's sample misses its incorrect blocks with probability at most `δ`, with probability at
+  most `δ + ε`, `ε` the audit's own error. The design is the run's: a scheme whose design follows what the run
+  recorded before the coin (a prover's declarations) reads it from the run, and whoever proves the bound shows the
+  design was fixed before the coin. `AuditBound` is the same under one design for every run. The incorrect blocks are
+  those of the run's committed values, so an accepted run's committed values are correct outside a set the sample
+  would likely have hit. A scheme that bounds something other than a
   cost (the bits an accepted record can carry) reads this directly.
 * `Scheme.GetsBack`: what a scheme gets back from the audit, a named `Prop`. At cutoff `δ`, an accepted run whose
-  log meets the scheme's conditions has `over` above `under` by more than the missable cost plus the charges with probability at
-  most `δ` plus the audit's error plus the scheme's own term.
-* `Scheme.AccountingLayer`: the accounting layer's theorem, stated. For every scheme, `AuditBound` at its accepted
+  log meets the scheme's conditions has `over` above `under` by more than the missable cost under its own design plus
+  the charges with probability at most `δ` plus the audit's error plus the scheme's own term.
+* `Scheme.AccountingLayer`: the accounting layer's theorem, stated. For every scheme, `AuditBoundAt` at its accepted
   runs and incorrect blocks, with its break event bounded by its own term, gives `GetsBack` at every cutoff.
 * `Scheme.GetsBackPeriod`, `Scheme.PeriodLayer`: the same over a period of execution phases, by the union bound over
   the phases: the probability is `T` times one phase's, and the phases' provers may adapt to one another.
@@ -45,12 +49,17 @@ namespace Verity
 
 open scoped ENNReal
 
-/-- **What the audit gives every scheme**: under the sampling design `L` over the blocks `U` and the audit game's
-probability `pr` on runs, at every cutoff `δ` a run is accepted while the sample misses its incorrect blocks with
-probability at most `δ`, with probability at most `δ + ε`. -/
+/-- **What the audit gives every scheme**: under each run's sampling design `L r` over the blocks `U` and the audit
+game's probability `pr` on runs, at every cutoff `δ` a run is accepted while its design's sample misses its incorrect
+blocks with probability at most `δ`, with probability at most `δ + ε`. -/
+def AuditBoundAt {U Run : Type} (L : Run → SamplingDesign U) (pr : (Run → Prop) → ℝ≥0∞) (accepts : Run → Prop)
+    (incorrect : Run → Finset U) (ε : ℝ≥0∞) : Prop :=
+  ∀ δ : ℝ≥0∞, pr (fun r => accepts r ∧ (L r).missProb (incorrect r) ≤ δ) ≤ δ + ε
+
+/-- **The audit's bound under one design**: `AuditBoundAt` where every run's design is `L`. -/
 def AuditBound {U Run : Type} (L : SamplingDesign U) (pr : (Run → Prop) → ℝ≥0∞) (accepts : Run → Prop)
     (incorrect : Run → Finset U) (ε : ℝ≥0∞) : Prop :=
-  ∀ δ : ℝ≥0∞, pr (fun r => accepts r ∧ L.missProb (incorrect r) ≤ δ) ≤ δ + ε
+  AuditBoundAt (fun _ => L) pr accepts incorrect ε
 
 /-- **A scheme**: what a resource accounting protocol supplies to the proof layers. -/
 structure Scheme where
@@ -91,37 +100,38 @@ open Classical in
 noncomputable def missable (S : Scheme) (L : SamplingDesign S.Block) (δ : ℝ≥0∞) : ℕ :=
   (Finset.univ.filter fun T : Finset S.Block => δ < L.missProb T).sup fun T => ∑ b ∈ T, S.cost b
 
-/-- **What a scheme gets back**: under the sampling design `L` and the audit game's probability `pr`, at cutoff `δ`
-an accepted run whose log meets the conditions has `over` above `under` by more than the missable cost plus the
-charges with probability at most `δ + ε + δscheme`, `ε` the audit's error. -/
-def GetsBack (S : Scheme) (L : SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (δ ε : ℝ≥0∞) : Prop :=
-  pr (fun r => S.accepts r ∧ S.logOK r ∧ S.under r + S.missable L δ + S.charges < S.over r) ≤ δ + ε + S.δscheme
+/-- **What a scheme gets back**: under each run's sampling design `L r` and the audit game's probability `pr`, at
+cutoff `δ` an accepted run whose log meets the conditions has `over` above `under` by more than the missable cost under
+its own design plus the charges with probability at most `δ + ε + δscheme`, `ε` the audit's error. A scheme with one
+design takes `fun _ => L`. -/
+def GetsBack (S : Scheme) (L : S.Run → SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (δ ε : ℝ≥0∞) : Prop :=
+  pr (fun r => S.accepts r ∧ S.logOK r ∧ S.under r + S.missable (L r) δ + S.charges < S.over r) ≤ δ + ε + S.δscheme
 
-/-- **The accounting layer's theorem** (stated). For every scheme, sampling design and probability on its runs that is
-monotone and subadditive: the audit's bound at the scheme's accepted runs and incorrect blocks, and the scheme's break
-event bounded by its own term, give what the scheme gets back at every cutoff. -/
+/-- **The accounting layer's theorem** (stated). For every scheme, sampling design of each run and probability on its
+runs that is monotone and subadditive: the audit's bound at the scheme's accepted runs and incorrect blocks, and the
+scheme's break event bounded by its own term, give what the scheme gets back at every cutoff. -/
 def AccountingLayer : Prop :=
-  ∀ (S : Scheme) (L : SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (ε : ℝ≥0∞),
+  ∀ (S : Scheme) (L : S.Run → SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (ε : ℝ≥0∞),
     (∀ p q : S.Run → Prop, (∀ r, p r → q r) → pr p ≤ pr q) →
     (∀ p q : S.Run → Prop, pr (fun r => p r ∨ q r) ≤ pr p + pr q) →
-    AuditBound L pr S.accepts S.incorrect ε → pr S.breaks ≤ S.δscheme → ∀ δ, S.GetsBack L pr δ ε
+    AuditBoundAt L pr S.accepts S.incorrect ε → pr S.breaks ≤ S.δscheme → ∀ δ, S.GetsBack L pr δ ε
 
 /-- **What a scheme gets back over a period** of `T` execution phases, each a run of the scheme read from the period's
 run `r` by `phase t`: at cutoff `δ`, some phase is accepted with a log that meets the conditions and has `over` above
 `under` by more than the missable cost plus the charges with probability at most `T · (δ + ε + δscheme)`. Outside that
 event, summed over the accepted phases whose logs meet the conditions, `over` exceeds `under` by at most `T` times the
 missable cost plus the charges. -/
-def GetsBackPeriod (S : Scheme) (L : SamplingDesign S.Block) {R : Type} (T : ℕ) (phase : Fin T → R → S.Run)
+def GetsBackPeriod (S : Scheme) (L : S.Run → SamplingDesign S.Block) {R : Type} (T : ℕ) (phase : Fin T → R → S.Run)
     (pr : (R → Prop) → ℝ≥0∞) (δ ε : ℝ≥0∞) : Prop :=
   pr (fun r => ∃ t, S.accepts (phase t r) ∧ S.logOK (phase t r) ∧
-      S.under (phase t r) + S.missable L δ + S.charges < S.over (phase t r)) ≤ T * (δ + ε + S.δscheme)
+      S.under (phase t r) + S.missable (L (phase t r)) δ + S.charges < S.over (phase t r)) ≤ T * (δ + ε + S.δscheme)
 
 /-- **The accounting layer over a period** (stated). For every scheme and probability on a period's runs that is
 monotone, subadditive and zero on the empty event: what the scheme gets back at each execution phase, the probability
 read through that phase, gives what it gets back over the period. The phases' provers may adapt to one another: each
 phase's bound is over every prover, and the period's is their union bound, with no product of the phases' designs. -/
 def PeriodLayer : Prop :=
-  ∀ (S : Scheme) (L : SamplingDesign S.Block) (R : Type) (T : ℕ) (phase : Fin T → R → S.Run)
+  ∀ (S : Scheme) (L : S.Run → SamplingDesign S.Block) (R : Type) (T : ℕ) (phase : Fin T → R → S.Run)
     (pr : (R → Prop) → ℝ≥0∞) (δ ε : ℝ≥0∞),
     (∀ p q : R → Prop, (∀ r, p r → q r) → pr p ≤ pr q) →
     (∀ p q : R → Prop, pr (fun r => p r ∨ q r) ≤ pr p + pr q) →

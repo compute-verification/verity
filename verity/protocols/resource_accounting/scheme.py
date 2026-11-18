@@ -38,8 +38,9 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   ``hooks``, ``ports`` (each with its `Layout` at a public shape when an adapter's circuit reads it, `Port.layout`),
   ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
   (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels (``ctx``'s keys:
-  `verity.hooks.FRONT`), returning what the adapter reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`, a
-  `verity.hooks.Releases`, a `verity.hooks.Commits`), and
+  `verity.hooks.FRONT`), returning what the adapter reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`, or a report: any of
+  ``summary()``, the run's totals, ``record()``, what it ran with, ``release()``, called once when the workload stops,
+  and ``commitment()``, what it committed to, read after ``release``), and
   ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`), and
   ``messages``, the message types its workload writes and reads on disk (`verity.channel.Schema`s), which an adapter's
   codec reads by the scheme's name, and ``framings``, the completion framings it serves by name, each built over the
@@ -48,7 +49,9 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   ``ctx`` is a mapping: ``settings``, the scheme's own (`settings`, the application's over its defaults); ``build``,
   the key of the build it attaches to (one per exchange); ``gate``, the auditor device's challenger gate in its own
   words, ``gate(*words) -> answer`` (``open --session S --root R`` opens a reserved session on a root; a scheme forms
-  its own requests of it), or None where the launcher holds none; and what the launcher passes: ``process``, ``feed``
+  its own requests of it), or None where the launcher holds none; ``private``, the scheme's own directory
+  (``<launcher's private>/<scheme's name>``), outside every run output, where it keeps what never leaves the node across
+  a server's lives, or None where the launcher holds none; and what the launcher passes: ``process``, ``feed``
   (`verity.hooks.FRONT`), and for the network attester ``admit``, ``source``, ``submit``, ``abort``, ``take``, ``pull``,
   ``log``, ``clock`` and ``schedule``. The adapter's exchange attaches it (``Exchange.attach``), files those of
   ``requests(ctx)`` that ``attach`` did not, and declares it with its settings under its name (`verity.hooks.Declared`).
@@ -188,13 +191,15 @@ class Port:
     """An external port the scheme reads (``input``) or writes (``output``), laid out as the field ``field`` of the
     public signature of its block's Definition ``definition``: the scan's state row, the released bytes' positions.
     ``layout``, when declared, gives the port's `Layout` at a public shape (named integers, as `Block.cost` reads), which
-    an adapter's lowering reads through `layout` when it builds a circuit; no guarantee reads it."""
+    an adapter's lowering reads through `layout` when it builds a circuit; no guarantee reads it. ``value``, where the
+    port's rows are a registered value, is that value's name."""
 
     name: str
     direction: Literal["input", "output"]
     definition: str
     field: str
     layout: Callable[[Mapping[str, int]], Layout] | None = None
+    value: str = ""
 
 
 @dataclass(frozen=True)

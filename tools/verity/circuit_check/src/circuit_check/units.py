@@ -110,6 +110,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator
 
+from verity.circuits.codec import canonical_json
+
 from . import cache as CC
 from . import targets as TG
 
@@ -796,10 +798,6 @@ def _key(at: list) -> str:
     return json.dumps(at)
 
 
-def _canonical(doc: dict) -> bytes:
-    return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
-
-
 def slices(plan: Plan, owners: dict[str, str], name: Callable[[tuple[str, ...]], str], repo: Path) -> tuple[dict, dict[str, dict]]:
     """What a ``--binding`` run needs of a full plan (`plan` with every root made, ``plan.words`` taken: ``--records-only``'s),
     cut so that a run from it reads no other binding's record (`sliced`): the part every binding's run shares, and each
@@ -870,7 +868,7 @@ def write_slices(to: Path, shared: dict, per: dict[str, dict]) -> dict:
 
     with CC.internal():
         to.mkdir(parents=True, exist_ok=True)
-        body = _canonical(shared)
+        body = canonical_json(shared)
         (to / "shared.json").write_bytes(body)
         digest = "sha512:" + hashlib.sha512(body).hexdigest()
         files: dict[str, str] = {}
@@ -879,11 +877,11 @@ def write_slices(to: Path, shared: dict, per: dict[str, dict]) -> dict:
             f = f"{hashlib.sha256(b.encode()).hexdigest()[:16]}.json"
             if f in files.values():
                 raise Stale(f"{b}: its slice's file name is another binding's")
-            data = _canonical({**part, "shared": digest})
+            data = canonical_json({**part, "shared": digest})
             (to / f).write_bytes(data)
             files[b] = f
             sizes.append(len(data))
-        (to / "index.json").write_bytes(_canonical({"schema": SLICE, "shared": "shared.json", "bindings": files}))
+        (to / "index.json").write_bytes(canonical_json({"schema": SLICE, "shared": "shared.json", "bindings": files}))
     return {"bindings": len(files), "shared_bytes": len(body), "bytes": sum(sizes), "largest": max(sizes, default=0)}
 
 

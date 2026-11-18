@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
+from verity_vllm.check.match.rank_match import RECORDER_DIGESTS
 from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.errors import Refused
@@ -155,10 +156,11 @@ def _check_main(args) -> int:
     # the recorder files this check read, by digest: the provenance record below is bound to THESE rows (and
     # rank_match refuses a provenance record whose recorder digests are not those of the rows it loads itself)
     recorder_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in ranks}
+    (run / RECORDER_DIGESTS).write_text(json.dumps(recorder_sha) + "\n")
     steps = sorted({x["step"] for r in ranks for x in recs[r]})
     tok = json.loads((cap / "tokens.json").read_text())
     struct = res["structure"] = _structure(builds, recs, steps, step_rows(tok))
-    prov = res["provenance"] = _provenance(cap, ranks, recs, steps, recorder_sha)
+    prov = res["provenance"] = _provenance(cap, ranks, recs, steps)
     tk = res["tokens"] = _tokens(ctl, tok)
     res["recorder"], res["mid_module_sites_ruled_out"] = tok.get("recorder"), _ruled_out_sites(cap, ranks)
     res["pass"] = bool(struct["pass"] and prov["pass"] and prov["collectives_checked"] > 0 and tk.get("pass") is not False)
@@ -235,9 +237,9 @@ def _structure(builds: list[str], recs: dict, steps: list, sched: dict[int, tupl
     return struct
 
 
-def _provenance(capture: Path, ranks: list[int], recs: dict, steps: list, recorder_sha: dict[str, str]) -> dict[str, Any]:
-    """Part 2 of the check, on the stored steps: every stored tensor digests to its recorder row (``recorder_sha``: the recorder files'
-    own digests, which travel with the record), and every rank received the registered Definition of the ranks' partials."""
+def _provenance(capture: Path, ranks: list[int], recs: dict, steps: list) -> dict[str, Any]:
+    """Part 2 of the check, on the stored steps: every stored tensor digests to its recorder row (the recorder files' own digests
+    stay beside the record, in `RECORDER_DIGESTS`), and every rank received the registered Definition of the ranks' partials."""
     import torch
 
     world = len(ranks)
@@ -245,8 +247,8 @@ def _provenance(capture: Path, ranks: list[int], recs: dict, steps: list, record
             "mismatches": [], "received_equal_both_ranks": 0,
             # the stored tensors are BOUND to the recorder rows: sha256 of every .pt part / out (the recorder's own bytes rule:
             # contiguous, bf16 viewed as uint8) must equal the row's part_sha256 / out_sha256 at the same (rank, step, k); every mismatch or
-            # missing row is a named FAIL; the digests of the recorder files themselves travel with the record
-            "recorder_sha256": recorder_sha, "tensors_digested": 0, "digest_mismatches": [], "n_digest_mismatches": 0,
+            # missing row is a named FAIL; the digests of the recorder files themselves stay beside the record (`RECORDER_DIGESTS`)
+            "tensors_digested": 0, "digest_mismatches": [], "n_digest_mismatches": 0,
             "digest_rule": "sha256(tensor.contiguous() viewed uint8 for bf16, else raw) == coll.rank<r>.jsonl row part_sha256 / out_sha256 at (rank, step, k)"}
 
     def _sha(t) -> str:
