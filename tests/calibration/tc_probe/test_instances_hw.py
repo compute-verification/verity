@@ -96,7 +96,7 @@ def test_store_declaration_registered_and_parses_flags() -> None:
     assert "out" not in key and "procs" not in key and "instruction" not in key
     assert key["manifest"].startswith("sha256:")  # content, never the pathname
     # the remote form: a shell string
-    shell = ["bash", "-c", ('export PYTHONPATH=. PATH=/usr/local/cuda/bin:$PATH; nvidia-smi -L; /workspace/venv-ihw/bin/python '
+    shell = ["bash", "-c", ('export PYTHONPATH=. PATH=$CUDA_HOME/bin:$PATH; nvidia-smi -L; /workspace/venv-ihw/bin/python '
                             'calibration/tc_probe/instances_hw.py --instances fp8-ada-synthetic/vu-k1536-fp8 --out "$RESEARCH_RUN_DIR" --sass-check --repeat 2; echo done')]
     _, key = tool.resolve_params(shell, ROOT)
     assert key == {"instances": "fp8-ada-synthetic/vu-k1536-fp8", "repeat": 2, "sass_check": True}
@@ -262,7 +262,10 @@ def test_unknown_set_and_bad_range_are_refused() -> None:
 
 
 def _gpu_compute_capability() -> str | None:
-    if shutil.which("nvcc") is None and not Path("/usr/local/cuda/bin/nvcc").exists():
+    try:
+        if not Path(IH.P.cuda_bin("nvcc")).is_file():
+            return None
+    except SystemExit:
         return None
     if os.environ.get("CUDA_VISIBLE_DEVICES") == "":     # nvidia-smi lists the host's GPUs; this process may use none of them
         return None

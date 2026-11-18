@@ -293,10 +293,15 @@ def _provenance(tmp_path: Path, monkeypatch, write: Any) -> tuple[int, dict, dic
 
 
 def test_the_provenance_record_read_is_named_by_its_path_its_digest_and_the_recorder_rows_it_binds(tmp_path, monkeypatch):
-    text = json.dumps({"provenance": {"recorder_sha256": {"0": "aa", "1": "bb"}, "pass": True}})
-    rc, doc, _, given, path = _provenance(tmp_path, monkeypatch, lambda p: p.write_text(text))
+    text = json.dumps({"provenance": {"pass": True}})
+
+    def write(p):
+        p.write_text(text)
+        p.with_name("recorder_sha256.json").write_text(json.dumps({"0": "aa", "1": "bb"}))
+
+    rc, doc, _, given, path = _provenance(tmp_path, monkeypatch, write)
     assert rc == 0 and doc["problems"] == [] and given[0][1] == ["links", "provenance", "recorder", "recorder_sha256"]
-    assert doc["tp2_match"] == {"path": str(path), "sha256": hashlib.sha256(text.encode()).hexdigest(), "recorder_sha256": {"0": "aa", "1": "bb"}}
+    assert doc["tp2_match"] == {"path": str(path), "sha256": hashlib.sha256(text.encode()).hexdigest()}
 
 
 @pytest.mark.parametrize("text", ["{}", '{"provenance": null}', "{", FR.NESTED, *NOT_MAPPINGS,
@@ -306,7 +311,7 @@ def test_the_provenance_record_read_is_named_by_its_path_its_digest_and_the_reco
 def test_a_match_record_that_holds_no_provenance_is_named_by_its_digest_and_fails_the_cross_rank_check_by_name(tmp_path, monkeypatch, text):
     rc, doc, rank_match, given, path = _provenance(tmp_path, monkeypatch, lambda p: p.write_text(text))
     assert rc == 1 and doc["problems"] == [f"{path}: no provenance record"]
-    assert doc["tp2_match"] == {"path": str(path), "sha256": hashlib.sha256(text.encode()).hexdigest(), "recorder_sha256": None}
+    assert doc["tp2_match"] == {"path": str(path), "sha256": hashlib.sha256(text.encode()).hexdigest()}
     assert given[0][1] == ["links", "recorder", "recorder_sha256"]
     assert doc["cross_rank"]["failed"] == ["provenance_missing"] == rank_match["failed"] and doc["cross_rank"]["verdict"] == "FAIL"
 

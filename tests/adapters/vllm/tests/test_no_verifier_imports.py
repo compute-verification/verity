@@ -3,7 +3,8 @@
 The adapter is the provers' side: what it needs of a protocol is a constant, a type or a pure helper the protocol also offers
 from a module outside its trusted code. The scan reads every import with `ast`, function-local ones and literal `import_module`
 names included, and fails on one `KNOWN` doesn't list and on an entry nothing imports any more, so the list only shrinks. An
-entry is the imported name with `verity.protocols.` dropped, under the lane that owns the protocol.
+entry is the imported name with `verity.protocols.` dropped, under the lane that owns the protocol. No library file
+imports the network attester's package at all, which the adapter reaches through its scheme.
 """
 from __future__ import annotations
 
@@ -45,14 +46,10 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.challenger.remote",
         ),
         "verity_vllm/pipeline/edge.py": ("proofs.spot.verifier.one_stage.registered",),
-        "verity_vllm/pipeline/expert_rows.py": ("proofs.spot.verifier.one_stage.registered",),
-        "verity_vllm/pipeline/expert_tables.py": ("proofs.spot.verifier.one_stage.registered",),
         "verity_vllm/pipeline/interior_links.py": (
             "proofs.spot.verifier.one_stage.registered", "proofs.spot.verifier.second_stage",
         ),
-        "verity_vllm/pipeline/interior_rows.py": (
-            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.partition",
-        ),
+        "verity_vllm/pipeline/interior_rows.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/registration_log.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/serve_day.py": ("registration.verifier.registration",),
         "verity_vllm/pipeline/serve_tie.py": ("proofs.spot.verifier.one_stage.docket",),
@@ -61,7 +58,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.one_stage.registered", "proofs.spot.verifier.service",
         ),
         "verity_vllm/pipeline/window_sampling_design.py": ("proofs.spot.verifier.one_stage.draw",),
-        "verity_vllm/program/predict/node_window_values.py": ("proofs.spot.verifier.one_stage.registered",),
         "verity_vllm/program/predict/weights_tie.py": (
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.draw",
             "proofs.spot.verifier.one_stage.registered",
@@ -78,11 +74,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/protocols/pouw/h1_ranks.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
         "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
     },
-    "network-accounting": {
-        # Needs: network attestation's release and io-tie headers and ids, the replay step's
-        # reference; PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
-        "verity_vllm/program/predict/scan_state.py": ("resource_accounting.network.verifier.blocks",),
-    },
+    "network-accounting": {},
     "compute-accounting": {
         # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`).
         "verity_vllm/check/replay/pouw_circuit.py": ("resource_accounting.compute.pouw.verifier.protocol.DomainError",),
@@ -98,7 +90,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
 }
 
 
-def _imported(tree: ast.AST) -> list[str]:
+def _names(tree: ast.AST) -> list[str]:
     names = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -108,20 +100,27 @@ def _imported(tree: ast.AST) -> list[str]:
         elif (isinstance(node, ast.Call) and getattr(node.func, "attr", getattr(node.func, "id", None)) == "import_module"
               and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)):
             names.append(node.args[0].value)
-    return [n[len(PREFIX):] for n in names if n.startswith(PREFIX) and set(n.split(".")) & set(TRUSTED)]
+    return names
+
+
+def _imported(tree: ast.AST) -> list[str]:
+    return [n[len(PREFIX):] for n in _names(tree) if n.startswith(PREFIX) and set(n.split(".")) & set(TRUSTED)]
 
 
 def _lane(name: str) -> str | None:
     return next((lane for p, lane in LANES.items() if name.startswith(p)), None)
 
 
+def _library() -> list[tuple[str, ast.AST]]:
+    return [(f.relative_to(ROOT).as_posix(), ast.parse(f.read_text())) for f in sorted(ROOT.rglob("*.py"))
+            if not f.relative_to(ROOT).as_posix().startswith("tests/")
+            and not any(part.startswith(".") for part in f.relative_to(ROOT).parts)]
+
+
 def scan() -> dict[str, dict[str, set[str]]]:
     found: dict[str, dict[str, set[str]]] = {}
-    for f in sorted(ROOT.rglob("*.py")):
-        rel = f.relative_to(ROOT).as_posix()
-        if rel.startswith("tests/") or any(part.startswith(".") for part in f.relative_to(ROOT).parts):
-            continue
-        for name in _imported(ast.parse(f.read_text())):
+    for rel, tree in _library():
+        for name in _imported(tree):
             found.setdefault(_lane(name) or "(no lane)", {}).setdefault(rel, set()).add(name)
     return found
 
@@ -139,3 +138,10 @@ def test_known_lists_only_live_imports():
     stale = [f"{lane}: {f}: {n}" for lane, files in KNOWN.items() for f, names in files.items()
              for n in names if n not in found.get(lane, {}).get(f, set())]
     assert not stale, "KNOWN entries nothing imports any more: delete them:\n" + "\n".join(stale)
+
+
+def test_no_import_of_the_network_attesters_package():
+    network = PREFIX + "resource_accounting.network"
+    found = [f"{rel}: {n}" for rel, tree in _library() for n in _names(tree) if n == network or n.startswith(network + ".")]
+    assert not found, ("library files import the network attester's package: reach the network attester through its "
+                       'scheme, `compose.schemes.get("network-attester")`:\n' + "\n".join(found))

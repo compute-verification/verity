@@ -20,7 +20,7 @@ from verity_vllm.program.frontend.target_profile import (
 
 #: digests of these profiles computed by the profile before `int8_exact` existed
 EARLIER_DIGESTS = [
-    ({}, "86c255b375c6cf028a3bc3b7deeed96fd10b520956325accb8b541fbc90026b1"),
+    ({"compute_capability": (8, 9), "num_sms": 128}, "86c255b375c6cf028a3bc3b7deeed96fd10b520956325accb8b541fbc90026b1"),
     ({"compute_capability": (12, 0), "num_sms": 188}, "5b84e6c0db8d7e6dbcfdb6338b16411bd0c29e4d7dc5e500d461c8f01f177b72"),
     ({"compute_capability": (9, 0), "num_sms": 132, "fp8_block_gemm": "cutlass"}, "183084111c1b2591eb169793bda67cd5f7da6a5f7e4ad16ea64ff8069867fcbb"),
     ({"compute_capability": (12, 0), "num_sms": 188, "moe_backend": "triton", "ir": "boolean"},
@@ -53,11 +53,11 @@ def test_a_declared_scope_round_trips_and_applies_its_parts(scope):
 def test_refused_declarations():
     for v in ("plain", "dither", "LINEARS", "", True, 1):
         with pytest.raises(ValueError, match="int8_exact must be"):
-            TargetProfile(int8_exact=v)
+            TargetProfile.default().with_overrides(int8_exact=v)
     for scope in ("attention", "all"):
         with pytest.raises(ValueError, match="selects the attention backend"):
-            TargetProfile(int8_exact=scope, attention_backend="FLASH_ATTN")
-    assert TargetProfile(int8_exact="linears", attention_backend="FLASH_ATTN").engine_args()["attention_backend"] == "FLASH_ATTN"
+            TargetProfile.default().with_overrides(int8_exact=scope, attention_backend="FLASH_ATTN")
+    assert TargetProfile.default().with_overrides(int8_exact="linears", attention_backend="FLASH_ATTN").engine_args()["attention_backend"] == "FLASH_ATTN"
 
 
 @pytest.mark.parametrize("scope", ["linears", "attention", "all"])
