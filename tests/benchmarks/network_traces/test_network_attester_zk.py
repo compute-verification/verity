@@ -28,6 +28,8 @@ from verity.protocols.resource_accounting.network.verifier.link_frame import DAT
 from verity.protocols.resource_accounting.network.verifier.network_attester import END
 from tests.verity.protocols.resource_accounting.network.attester import relay_runs as tws
 from verity.protocols.resource_accounting.network.prover import network_attester_zk as wz
+from verity.protocols.resource_accounting.network.attester import network_attester_serve as NS
+from verity.protocols.compose.verifier.live_challenger import auditor as G
 from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()
@@ -72,6 +74,44 @@ def at(tmp_path_factory):
     requests = [tws.ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 30)]
     tws._run(out, key, requests, [tws._response([" word"] * 40), tws._response([" a"])])
     return wz.attestation(out, UNITS)
+
+
+#: what no published file of a network attester run holds: a record's head (its frames' root, ``root`` there, and
+#: counts) and the attester's salt over it, a cells' registration's wiring and a line's cost
+NOT_PUBLISHED = ("head", "salt_c", "frames_root", "counts", "wiring", "cost")
+
+
+def keys_of(doc) -> set[str]:
+    if isinstance(doc, dict):
+        return set(doc) | {k for v in doc.values() for k in keys_of(v)}
+    return {k for v in doc for k in keys_of(v)} if isinstance(doc, list) else set()
+
+
+def test_the_one_publisher_publishes_the_gates_lines_and_no_head_salt_wiring_or_cost(tmp_path, capsys):
+    """`auditor.py publish`, the gate's publisher and every runner's, on a rehearsed run once its check accepts:
+    the deployment's public keys, the certificates and the cells' registrations, and no key or value of a head, its
+    salt, a wiring or a cost."""
+    witness = tmp_path / "run"
+    witness.mkdir()
+    requests = [tws.ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 30)]
+    tws._run(witness, tmp_path / "key", requests, [tws._response([" word"] * 40), tws._response([" a"])])
+    assert NS.main(["check", "--run", str(witness)]) == 0
+    capsys.readouterr()
+    assert G.main(["publish", str(witness), str(tmp_path / "out")]) == 0
+    outcome = json.loads(capsys.readouterr().out)
+    assert outcome["verdict"]["accepted"] and "unruled" not in outcome
+    out = tmp_path / "out"
+    assert sorted(p.name for p in out.iterdir()) == ["cells-certificates.jsonl", "cells-registrations.jsonl",
+                                                    "certificates.jsonl", "deployment.json"]
+    certified = [json.loads(x) for x in (witness / "certified.jsonl").read_text().splitlines()]
+    cells = [json.loads(x) for x in (witness / "cells.jsonl").read_text().splitlines()]
+    private = {c["salt_c"] for c in certified} | {c["head"]["root"] for c in certified} | \
+        {json.dumps(c["registration"]["wiring"]) for c in cells}
+    for p in out.iterdir():
+        text = p.read_text()
+        docs = [json.loads(x) for x in text.splitlines()] if p.suffix == ".jsonl" else [json.loads(text)]
+        assert not keys_of(docs) & set(NOT_PUBLISHED), p.name
+        assert not any(v.strip('"') in text for v in private), p.name
 
 
 def test_the_programs_units_read_the_egress_cells_after_the_delay(at):
