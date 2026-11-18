@@ -273,10 +273,6 @@ def cut_reads(tp: PO.TemplatePartition, units: Sequence[int]) -> list[list[tuple
     return out
 
 
-#: META ``links``' key of a link's offset: the first of the writer's outputs its leaves read, written only where it is not 0
-LINK_AT = "at"
-
-
 def _writer_run(reads: Sequence[tuple[int, int] | None], n_out) -> tuple[int, int] | None:
     """``(v, at)`` where ``reads`` are writer ``v``'s outputs ``at``, ``at + 1``, … in order (``n_out(v)``: its output
     count); None when every read is an Input gate; else a ValueError."""
@@ -333,17 +329,17 @@ def _link_frame(uc: ProofBlockCircuit, group: list[int], at: int) -> tuple[int, 
 
 
 def _link(port: str, lo: int, hi: int, at: int) -> dict:
-    return {"port": port, "leaves": [lo, hi], **({LINK_AT: at} if at else {})}
+    return {"port": port, "leaves": [lo, hi], **({FC.LINK_AT: at} if at else {})}
 
 
 def link_triples(meta: dict, reads: list[list], indices: Sequence[int], n_out) -> list[tuple[int, str, int]]:
     """Every link the circuit's META ``links`` declares, as (reader instance, port, writer instance), from the units' reads
     (`cut_reads` of the statement's units ``indices``): a link port's leaves are, in the reader, circuit inputs (no link) or one
-    writer's outputs from the link's offset (`LINK_AT`, 0 without it), the writer one of the statement's instances. Refuses a
+    writer's outputs from the link's offset (`FC.LINK_AT`, 0 without it), the writer one of the statement's instances. Refuses a
     cut wire (a leaf reading another unit's output) that no link port carries."""
     links = meta.get("links") or []
     pos = {u: i for i, u in enumerate(indices)}
-    covered = [(x["port"], *x["leaves"], x.get(LINK_AT, 0)) for x in links]
+    covered = [(x["port"], *x["leaves"], x.get(FC.LINK_AT, 0)) for x in links]
     out = []
     for i, r in enumerate(reads):
         for t, x in enumerate(r):

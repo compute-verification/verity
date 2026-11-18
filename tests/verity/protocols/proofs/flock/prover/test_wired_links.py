@@ -33,6 +33,7 @@ from verity.circuits.private_circuits import universal as U
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.commitments import registered_value as RV
 
+from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
 
@@ -257,7 +258,7 @@ def test_a_read_of_part_of_a_writers_outputs_links_its_whole_row_from_its_offset
     d, (_fn, _p, _q, tp, _st) = partial
     [link] = _meta(d / "honest")["links"]
     x0 = len(tp.inputs(0)) - N_IN
-    assert link == {"port": link["port"], "leaves": [x0 + N_IN - 1, x0 + N_IN], CS.LINK_AT: 1}
+    assert link == {"port": link["port"], "leaves": [x0 + N_IN - 1, x0 + N_IN], FC.LINK_AT: 1}
     assert json.loads((d / "links.json").read_text())["links"] == [[N + t, link["port"], t] for t in range(N)]
     bc = {k: _bc(d / k, N) for k in ("writers", "honest", "own", "made_up")}
     assert all(bc[k](t, link["port"]) == bc["writers"](t, "out") for k in ("honest", "own") for t in range(N))
