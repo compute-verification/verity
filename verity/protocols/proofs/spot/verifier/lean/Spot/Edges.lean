@@ -44,7 +44,7 @@ nothing per unit or per block beyond the description.
 
 namespace Spot.Edges
 
-open Flock.Program (Prog Node Arg Part Ref Ty Defn fieldsOf isInputId)
+open Flock.Program (Prog Node Arg Part Ref Ty Defn Lane fieldsOf isInputId)
 open Flock.TemplateQuery (TRange)
 open Spot.Bits (bitsOf)
 
