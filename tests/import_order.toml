@@ -387,6 +387,15 @@ loads = [
 
 [[place]]
 paths = [
+    "verity/protocols/interface/charge",
+]
+loads = [
+    "verity/circuits",
+    "verity/commitments",
+]
+
+[[place]]
+paths = [
     "verity/protocols/proofs/flock/verifier/sigma",
 ]
 trusted = true
@@ -859,6 +868,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/periods",
     "verity/commitments/randomness",
+    "verity/protocols/interface/charge",
     "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/scheme.py",
