@@ -65,5 +65,6 @@ public import Spot.TwoStageCheck
 public import Spot.Ranks
 public import Spot.SecondWindow
 public import Spot.BlockFront
+public import Spot.BlockFile
 
 @[expose] public section
