@@ -43,6 +43,17 @@ def _bits(t) -> int:
     return sum(_bits(f) for _, f in t[1])
 
 
+def _words(t) -> int:
+    k = t[0]
+    if k == "Value":
+        return -(-t[1] // 16)
+    if k == "Array":
+        return t[1] * _words(t[2])
+    if k == "Tuple":
+        return sum(_words(f) for f in t[1])
+    return sum(_words(f) for _, f in t[1])
+
+
 def _fields(t) -> list:
     if t[0] == "Tuple":
         return list(t[1])
@@ -120,17 +131,16 @@ def _run_at(t, o: int, ln: int):
 
 
 def _field_word(t, f: int) -> int:
-    """The first u16 word of field `f` of `t` in the unit's output row ``out``, the fields before it whole words."""
-    return sum(_bits(ty) // 16 for ty in _fields(t)[:f])
+    """The first u16 word of field `f` of `t` in the unit's output row ``out``: a leaf of w bits is ceil(w/16) words."""
+    return sum(_words(ty) for ty in _fields(t)[:f])
 
 
 def _field_at(t, ln: int, bits: int, p: int):
-    """`Spot.Edges.fieldAt`: field `f` of `t` at leaf `p`, `ln` leaves and `bits` bits, the earlier fields whole words."""
+    """`Spot.Edges.fieldAt`: field `f` of `t` at leaf `p`, `ln` leaves and `bits` bits."""
     if p < 0:
         return None
     f = _run_at(t, p, ln)
-    fs = _fields(t)
-    return f if f is not None and _bits(fs[f]) == bits and all(_bits(x) % 16 == 0 for x in fs[:f]) else None
+    return f if f is not None and _bits(_fields(t)[f]) == bits else None
 
 
 def _word_steps(t, ln: int, bits: int, p0: int, lv) -> list | None:
@@ -340,7 +350,7 @@ def _wire_of(R: _Root, fu: dict, templates: Mapping, k: int, rt: str, port: str,
     f = _run_at(wn["ret"], l0 % lw, ln)
     if f is None:
         raise Refusal("edge-run")
-    if _bits(_fields(wn["ret"])[f]) != _bits(ty) // cuts or any(_bits(x) % 16 for x in _fields(wn["ret"])[:f]):
+    if _bits(_fields(wn["ret"])[f]) != _bits(ty) // cuts:
         raise Refusal("edge-width")
     ws = _word_steps(wn["ret"], ln, _bits(ty) // cuts, l0 % lw, list(zip(radix, [d - _tdiv(d, lw) * lw for d in steps])))
     if ws is None:

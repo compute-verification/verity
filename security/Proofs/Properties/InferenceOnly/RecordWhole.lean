@@ -5,8 +5,8 @@ public import Proofs.Properties.InferenceOnly.RecordBlocks
 /-!
 # What the record check tests of a wire's two rows
 
-`Record.unwhole` refuses a record with a wire whose offset is no first leaf of a field of its writer's return of a
-leaf or more, whose field is not the bits of the row it fills, or whose two rows' leaves do not line up. This module
+`Record.unwhole` refuses a record with a wire whose offset is no first word of a field of its writer's return of a
+word or more, whose field is not the bits of the row it fills, or whose two rows' leaves do not line up. This module
 states what a record it accepts has, of each wire, in the terms of the two templates' Definitions (`whole_spec`): the
 wire's field is the row's words, whole; and either the reader's parameter has leaves of one bit and is none of what
 its Definition passes on, or each side's leaves are of one width and the writer's divides the reader's.
@@ -73,14 +73,57 @@ theorem widths_divide {a b : Option Nat}
   | none, _, h => simp at h
   | some _, none, h => simp at h
 
-/-- **What `unwhole` tests of one wire**, with the words `Spot.Wires.check` gives its row: the writer is a template,
-and the wire's offset is the first leaf of a field of its Definition's return of a leaf or more; that field's bits,
-where its leaves are found, are the row's words'; and the reader's row is closed, or each side has a leaf width and
-the writer's divides the reader's. -/
+/-- A member of a list, or of the list it is inserted into, is in the insertions. -/
+theorem mem_foldl_insert {x : Int} : ∀ (l t : List Int), (x ∈ t ∨ x ∈ l) → x ∈ l.foldl (fun t y => t.insert y) t
+  | [], _, h => by simpa using h
+  | y :: l, t, h => by
+    rw [List.foldl_cons]
+    refine mem_foldl_insert l (t.insert y) ?_
+    rcases h with h | h
+    · exact Or.inl (List.mem_insert_iff.2 (Or.inr h))
+    · rcases List.mem_cons.1 h with rfl | h
+      · exact Or.inl (List.mem_insert_iff.2 (Or.inl rfl))
+      · exact Or.inr h
+
+/-- **Every offset step a wire's index takes is listed** by `offsetSteps`, where it lists them. -/
+theorem accum_mem (m : Nat) : ∀ (ps : List (Nat × Int)) (x : Nat) {os : List Int},
+    offsetSteps m ps = some os → Circuits.Wire.accum ps x ∈ os
+  | [], _, os, h => by
+    simp only [offsetSteps, Option.some.injEq] at h
+    subst h
+    simp [Circuits.Wire.accum]
+  | (r, st) :: ps, x, os, h => by
+    simp only [offsetSteps] at h
+    obtain ⟨rest, hr, h⟩ := Option.bind_eq_some_iff.1 h
+    have ih := accum_mem m ps (x / r) hr
+    simp only [Circuits.Wire.accum]
+    split at h
+    · rename_i hs
+      obtain rfl := Option.some.inj h
+      rw [beq_iff_eq.1 hs, Int.mul_zero, Int.zero_add]
+      exact ih
+    · split at h
+      · cases h
+      · rename_i hr0
+        simp only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq, not_or] at hr0
+        dsimp only at h
+        split at h
+        · cases h
+        · obtain rfl := Option.some.inj h
+          refine mem_foldl_insert _ _ (Or.inr (List.mem_flatMap.2 ⟨x % r, ?_, List.mem_map.2 ⟨_, ih, rfl⟩⟩))
+          exact List.mem_range.2 (Nat.mod_lt _ (Nat.pos_of_ne_zero hr0.1))
+
+/-- **What `unwhole` tests of one wire**, with the words `Spot.Wires.check` gives its row: its offset steps are listed
+(`offsetSteps`), and at each, the writer is a template, and the offset is the first word of a field of its
+Definition's return of a word or more; that field's bits, where its leaves are found, are the row's words'; and the
+reader's row is closed, or each side has a leaf width and the writer's divides the reader's. -/
 theorem unwhole_none {P : Prog} {ts : List Tmpl} {ls : List Leaves} {s : Spot.Wires.Summary}
     (h : unwhole P ts ls s = none) {w : Spot.Wires.Wire} {n : Nat} (hw : (w, n) ∈ s.wires.zip s.rowWords) :
+    ∃ os, offsetSteps (((ts.find? (·.tid == w.writer)).map fun t => (fieldsOf (P.defs[t.defn]!).ret).length).getD 0)
+        (Circuits.Wire.opairs w) = some os ∧ ∀ d ∈ os,
     ∃ t j, ts.find? (·.tid == w.writer) = some t ∧ j < (fieldsOf (P.defs[t.defn]!).ret).length ∧
-      Spot.Edges.fieldOffset (P.defs[t.defn]!).ret j = w.offset ∧ 0 < ((fieldsOf (P.defs[t.defn]!).ret)[j]!).leaves ∧
+      Spot.Edges.fieldWord (P.defs[t.defn]!).ret j = ((w.offset : ℤ) + d).toNat ∧
+      0 < Spot.Edges.wordsOf (fieldsOf (P.defs[t.defn]!).ret)[j]! ∧
       (∀ b, ((ls.find? (·.tid == w.writer)).bind fun l => l.bits.lookup ("o" ++ toString j)) = some b →
         b = 16 * n) ∧
       (((ls.find? (·.tid == w.reader)).map fun l => l.closed.contains w.port).getD false = true ∨
@@ -88,7 +131,13 @@ theorem unwhole_none {P : Prog} {ts : List Tmpl} {ls : List Leaves} {s : Spot.Wi
           ((ls.find? (·.tid == w.writer)).bind fun l => l.leaf.lookup ("o" ++ toString j)).join = some o ∧
           o ≠ 0 ∧ r % o = 0) := by
   unfold unwhole at h
-  have h0 := List.findSome?_eq_none_iff.1 h (w, n) hw
+  have h0' := List.findSome?_eq_none_iff.1 h (w, n) hw
+  dsimp only at h0'
+  split at h0'
+  · cases h0'
+  rename_i os hos
+  refine ⟨os, hos, fun d hd => ?_⟩
+  have h0 := List.findSome?_eq_none_iff.1 h0' d hd
   dsimp only at h0
   split at h0
   · cases h0
@@ -244,22 +293,23 @@ theorem closed_spec (passed : Array (List Nat)) {i : Nat} (hi : i < (P.defs[t.de
 end Shaped
 
 /-- **What the record check tests of a wire**, in the terms of its two templates' Definitions and the words
-`Spot.Wires.check` gives its row: the wire's offset is the first leaf of a field of the writer's return of a leaf
-or more, and that field is the row's words, whole; and either the reader's parameter has leaves of one bit and is none
+`Spot.Wires.check` gives its row: the word each index `x` of the wire reads from (`Wire.offsetAt`) is the first word of
+a field of the writer's return of a word or more, and that field is the row's words, whole; and either the reader's parameter has leaves of one bit and is none
 of what its Definition hands on, or each side's leaves are of one width and the writer's divides the reader's. -/
 theorem whole_spec {P : Prog} {passed : Array (List Nat)} {ts : List Tmpl} (hd : (ts.map (·.tid)).Nodup)
     (hs : ∀ t ∈ ts, Shaped P t) {s : Spot.Wires.Summary}
     (h : unwhole P ts (ts.map (leavesOf P passed)) s = none) {w : Spot.Wires.Wire} {n : Nat}
     (hw : (w, n) ∈ s.wires.zip s.rowWords)
     {tr tw : Tmpl} (htr : tr ∈ ts) (htw : tw ∈ ts) (hr : tr.tid = w.reader) (hwt : tw.tid = w.writer)
-    {i : Nat} (hi : i < (P.defs[tr.defn]!).params.size) (hp : (P.defs[tr.defn]!).params[i].1 = w.port) :
-    ∃ j, j < (fieldsOf (P.defs[tw.defn]!).ret).length ∧ Spot.Edges.fieldOffset (P.defs[tw.defn]!).ret j = w.offset ∧
-      0 < ((fieldsOf (P.defs[tw.defn]!).ret)[j]!).leaves ∧ bits (fieldsOf (P.defs[tw.defn]!).ret)[j]! = 16 * n ∧
+    {i : Nat} (hi : i < (P.defs[tr.defn]!).params.size) (hp : (P.defs[tr.defn]!).params[i].1 = w.port) (x : Nat) :
+    ∃ j, j < (fieldsOf (P.defs[tw.defn]!).ret).length ∧ Spot.Edges.fieldWord (P.defs[tw.defn]!).ret j = w.offsetAt x ∧
+      0 < Spot.Edges.wordsOf (fieldsOf (P.defs[tw.defn]!).ret)[j]! ∧ bits (fieldsOf (P.defs[tw.defn]!).ret)[j]! = 16 * n ∧
       ((Widths.homo (P.defs[tr.defn]!).params[i].2 = some 1 ∧
           i ∉ passed[tr.defn]?.getD (List.range (P.defs[tr.defn]!).params.size)) ∨
         ∃ r o, Widths.homo (P.defs[tr.defn]!).params[i].2 = some r ∧
           Widths.homo (fieldsOf (P.defs[tw.defn]!).ret)[j]! = some o ∧ o ≠ 0 ∧ r % o = 0) := by
-  obtain ⟨t, j, hft, hj, hfw, hb, h1, h2⟩ := unwhole_none h hw
+  obtain ⟨os, hos, hall⟩ := unwhole_none h hw
+  obtain ⟨t, j, hft, hj, hfw, hb, h1, h2⟩ := hall _ (accum_mem _ _ x hos)
   have hfw' := find_of_nodup (·.tid) ts hd tw htw
   rw [hwt] at hfw'
   rw [hfw'] at hft
