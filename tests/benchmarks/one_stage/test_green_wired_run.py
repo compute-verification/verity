@@ -93,15 +93,20 @@ def test_each_member_statement_through_the_lean_verifiers_setup(tmp_path):
         got = FI.flock_input_files(d, k, st.text, sd, write=("pub",))
         header = json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])
         fv = header["frame_v3"]["roots"]
-        own = REG.bind_ports(reads[m.key], fv, {p: {"root": roots[bw.tree(m, p)]["root"],
-                                                    "domain": want[bw.tree(m, p)]["domain"]} for p in fv})
-        (sd / "registered.json").write_text(json.dumps(own, sort_keys=True))
-        print(f"M{k}-REGISTERED", json.dumps({p: {f: v for f, v in e.items() if f not in ("root", "domain")}
-                                              for p, e in own["ports"].items()}, sort_keys=True))
+        reg = []
+        if m.key in reads:
+            own = REG.bind_ports(reads[m.key], fv, {p: {"root": roots[bw.tree(m, p)]["root"],
+                                                        "domain": want[bw.tree(m, p)]["domain"]} for p in fv})
+            (sd / "registered.json").write_text(json.dumps(own, sort_keys=True))
+            reg = ["--registered", str(sd / "registered.json")]
+            print(f"M{k}-REGISTERED", json.dumps({p: {f: v for f, v in e.items() if f not in ("root", "domain")}
+                                                  for p, e in own["ports"].items()}, sort_keys=True))
+        else:
+            print(f"M{k}-REGISTERED none (own_reads gives this member no file, as a5 then writes none)")
         print(f"M{k}-META-LINKS", "links" in st.text.split("\n", 3)[1] if st.text.startswith("flock-circuit") else "?")
         p = subprocess.run([str(LEAN / "verity-verify-proof"), "statement", "--circuit", str(sd / "circuit.txt"),
                             "--public", str(got["pub"]), "--partition", str(tmp_path / "partition.json"),
-                            "--program", str(tmp_path / "program.json"), "--registered", str(sd / "registered.json")],
+                            "--program", str(tmp_path / "program.json"), *reg],
                            capture_output=True, text=True)
         print(f"M{k}-LEAN rc={p.returncode}\n{p.stdout[-3000:]}\n{p.stderr[-3000:]}")
 
