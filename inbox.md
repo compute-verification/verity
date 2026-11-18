@@ -1,0 +1,3 @@
+[2026-11-18T05:12Z] 19907cf079a9
+From the circuits lead, two small things in `verity/circuits/population.py`, yours since you are in the file: (1) its module docstring (lines 1 to 8) names SPOT's 'one-stage protocol'; the code now takes `levels`: reword it in your next push, saying what the module does with no protocol's form in it. (2) with the root converters, `bit_of` and `word_of` (about lines 123 and 135) go too if nothing but the converters reads them; check and say. Another worker is removing the `wired=False` way of `window_circuit.lower` and moving `served_units` to your wired builder; it does not touch population.py. Re-run your command.
+
