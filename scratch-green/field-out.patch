@@ -1,0 +1,13 @@
+diff --git a/verity/commitments/periods/rows.py b/verity/commitments/periods/rows.py
+index 95a55161dd1..8440807042a 100644
+--- a/verity/commitments/periods/rows.py
++++ b/verity/commitments/periods/rows.py
+@@ -1505,7 +1505,7 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
+             ports[p] = {"value": own_value(port), "root": e["root"], "leaves": int(e["leaves"]), "words": words[p],
+                         "word_bits": RV.WORD_BITS, "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
+                         **({"reads": w.reads(m, p).tolist(), RV.READS_FROM: m.base} if wire is None else
+-                           {"tree": {"template": wire.writer, "field": wire.out}, "reads": []})}
++                           {"tree": {"template": wire.writer, "field": "out"}, "reads": []})}
+         out[m.key] = {**f, "ports": dict(sorted(ports.items()))}
+     return out
+ 

@@ -1,0 +1,22 @@
+diff --git a/verity/commitments/periods/interface.py b/verity/commitments/periods/interface.py
+index ab3b93e70b8..aaa8ceb4e6d 100644
+--- a/verity/commitments/periods/interface.py
++++ b/verity/commitments/periods/interface.py
+@@ -1691,7 +1691,7 @@ class Circuit:
+     def program(self) -> tuple[Any, dict[str, Any]]:
+         """The circuit the period registers and its template query: its wired Program (`wired_population_program`), each
+         range of its order one batch and each wire an edge of it."""
+-        return wired_population_program(list(self.templates), {**self.description(), "external": list(self.external)})
++        return CS.population_program(list(self.templates), values=program_values(self.registered))
+ 
+     def template(self, tid: str) -> Any:
+         """The template of descriptor id ``tid``."""
+@@ -2558,7 +2558,7 @@ def program_of_record(doc: Mapping[str, Any], resolve: Callable[[str], Any]) ->
+     """The wired Program and template query a period's ``circuit.json`` registers (`Circuit.program`; a record that lists
+     its members, `listed_program`), each template's Definition by ``resolve``."""
+     defs = _templates_of(doc, resolve)
+-    return wired_population_program(defs, doc) if "cap" in doc else listed_program(defs, doc["external"])
++    return CS.population_program(defs, values=())
+ 
+ 
+ def listed_program(templates: Sequence[tuple[Any, int]], external: Sequence[str]) -> tuple[Any, dict[str, Any]]:
