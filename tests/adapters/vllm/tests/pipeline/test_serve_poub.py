@@ -11,7 +11,6 @@ import pytest
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
-from verity_vllm import llm as L
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
@@ -97,14 +96,15 @@ def test_the_remote_options_parse_into_their_group_and_are_refused_before_the_mo
     assert SR.refusal(parse(*VERIFIER, "--remote-kv-lib", "kv.so", "--protocols", "pouw:eps1-sm120-h1fx1")) is None
 
 
-def test_the_engine_is_built_synchronous_on_its_own_kv_pool_with_the_store_binder_installed(tmp_path, monkeypatch):
+def test_the_engine_arguments_are_the_servers_with_the_sessions_requests_and_binder_installed(tmp_path, monkeypatch):
+    """The session asks its engine through the exchange (`CommitSession.requests`, which the build answers), so the
+    server's arguments go to the build as they are: synchronous and without prefix caching by the server's defaults."""
     installed: list[bool] = []
     monkeypatch.setattr(remote.CommitSession, "install", lambda self: installed.append(True))
     opts = parse(*VERIFIER)
     kw = SR.ServeSession(opts, tmp_path).engine_args(so.engine_options(opts))
-    assert kw["async_scheduling"] is False and kw["enable_prefix_caching"] is False and "num_gpu_blocks_override" not in kw
-    assert installed == [True] and {**so.engine_options(opts), "async_scheduling": False, "enable_prefix_caching": False} == kw
-    assert L.resolve_options(kw)["async_scheduling"] is False and "async_scheduling" in L.ENGINE_ARGS
+    assert installed == [True] and kw == so.engine_options(opts)
+    assert kw["async_scheduling"] is False and not kw.get("enable_prefix_caching") and "num_gpu_blocks_override" not in kw
 
 
 def test_the_server_steps_in_lockstep_with_its_session_from_its_first_step_and_unaudited_after(tmp_path, monkeypatch):

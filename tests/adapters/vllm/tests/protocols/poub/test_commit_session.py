@@ -37,19 +37,29 @@ from tests.verity.protocols.resource_accounting.memory.poub.test_poub_session im
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, memory_map
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier, wire
 
+from verity import hooks as H
+from verity.channel import Refused
+from verity_vllm import messages
 from verity_vllm.protocols.poub import remote
 
 VLLM_TESTS = Path(__file__).resolve().parents[3]  # tests/adapters/vllm, where the adapter's tests import as `tests`
 
 
-def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest():
+def test_the_commits_session_requests_the_engine_it_serves_and_refuses_the_rest():
+    """The session requires one GPU, synchronous steps and no prefix caching, and fixes the KV pool at ``kv_pages``;
+    a build declaring otherwise is refused under the session's name."""
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8)
-    assert cs.engine_args({"max_model_len": 128}) == {"max_model_len": 128, "async_scheduling": False,
-                                                       "enable_prefix_caching": False, "num_gpu_blocks_override": 8}
-    for bad, why in [({"tensor_parallel_size": 2}, "parallelism"), ({"async_scheduling": True}, "async"),
-                     ({"enable_prefix_caching": True}, "prefix caching")]:
-        with pytest.raises(SystemExit, match=why):
-            cs.engine_args(bad)
+    assert {(r.property, r.value) for r in cs.requests() if isinstance(r, H.RequireProperty)} == {
+        ("world", 1), ("async_steps", False), ("prefix_cache", False)}
+    assert H.FixRanges(8) in cs.requests() and not any(isinstance(r, H.FixRanges)
+                                                       for r in remote.CommitSession("127.0.0.1:7781", kv_pages=None).requests())
+    good = {"world": 1, "async_steps": False, "prefix_cache": False}
+    for bad in ({"world": 2}, {"async_steps": True}, {"async_steps": None}, {"prefix_cache": True}):
+        ex = messages.Exchange()
+        for r in cs.requests():
+            ex.request("poub-session", r)
+        with pytest.raises(Refused, match="poub-session"):
+            ex.answer(H.Declared("", {**good, **bad}))
     cs.target(type("T", (), {"async_scheduling": False})())
     for t in (None, type("T", (), {"async_scheduling": None})()):
         with pytest.raises(SystemExit, match="declare \"async_scheduling\": false"):
@@ -83,9 +93,10 @@ class Binding:
 
 
 def test_the_commits_session_installs_a_binder_of_its_store_before_the_build(monkeypatch):
-    """`CommitSession.install` makes the store's binder with no passes of its own and the KV outside the store, over
-    the session's store and its ``weight_blocks``, and keeps what its `install` returns; `before_build` sets the engine
-    arguments, checks the target and installs, in that order, and installs nothing for a target it refuses."""
+    """`CommitSession.install` files the session's requests and makes the store's binder with no passes of its own and
+    the KV outside the store, over the session's store and its ``weight_blocks``, and keeps what its `install` returns;
+    `before_build` checks the target and installs, leaving the engine arguments as they are, and installs nothing for a
+    target it refuses."""
     monkeypatch.setattr(remote, "Binder", Binding)
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8, weight_blocks=5)
     assert cs.binder is None
@@ -93,10 +104,13 @@ def test_the_commits_session_installs_a_binder_of_its_store_before_the_build(mon
     assert isinstance(cs.binder, Binding) and cs.binder.calls == ["install"]
     assert cs.binder.made == ((cs.store,), {"passes": False, "weight_blocks": 5, "kv": False})
 
+    messages.close()
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=None)
     ekw = {"engine_args": {"max_model_len": 128}, "target": type("T", (), {"async_scheduling": False})()}
     cs.before_build(ekw)
-    assert ekw["engine_args"] == {"max_model_len": 128, "async_scheduling": False, "enable_prefix_caching": False}
+    assert ekw["engine_args"] == {"max_model_len": 128}
+    assert [r for _, r in messages.current().requests] == cs.requests()
+    messages.close()
     assert isinstance(cs.binder, Binding) and cs.binder.made == ((cs.store,), {"passes": False, "weight_blocks": None, "kv": False})
 
     cs = remote.CommitSession("127.0.0.1:7781")
