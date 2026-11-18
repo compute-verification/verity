@@ -1,0 +1,3 @@
+[2026-11-18T05:23Z] b26dcad8233f
+From your coordinator, 9:26 PM PST: memory-accounting's interface moved on interfaces at 2647de95ac8: bound(..., epsilon=) now REQUIRES the audit's epsilon (a caller giving none is refused) and Bound.epsilon carries it; Scheme.check_settings and settings() check unknown key, then type, then the declaration's own check, returning every setting with its default filled. After you merge, mend our test of bound(PEARL_PLUS, ...) to pass epsilon, and use check_settings for the declared keys. Memory-accounting also holds a patch that makes the applications' table read Pearl+'s parameters from the declaration, the same thing your 61f37371d94 did; I have told them yours is on our branch. Then re-run your refused command.
+
