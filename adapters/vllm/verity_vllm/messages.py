@@ -7,7 +7,7 @@ time; a request changes what is served: one on what the workload declares (a pro
 before the build's answer, and any other before serving begins, at the first step.  The exchange names no scheme; the adapter's hooks translate vLLM's engine,
 requests, tokens and KV blocks into the circuit's words.
 
-On disk, by their protocols' declarations (each protocol's `prover/workload.py`): a body is checked against its declared
+On disk, by the types the proof layer and each declared scheme declare (`types`, `Scheme.messages`): a body is checked against its declared
 type as it is written and as it is read, and its bytes are left as they are. `tests/workload_messages.toml` lists each
 message's writers and readers.
 """
@@ -24,12 +24,10 @@ from typing import Any
 from verity import hooks as H
 from verity.channel import Message, MessageTypes, Refused
 from verity.protocols.proofs.spot.prover import workload as spot
+from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
-from verity.protocols.resource_accounting.compute.pouw.prover import workload as pouw
-from verity.protocols.resource_accounting.memory.pous.prover import workload as pous
-from verity.protocols.resource_accounting.network.prover import workload as certifier
 
-__all__ = ["TYPES", "Exchange", "append", "body", "build", "close", "current", "line", "lines", "read", "write"]
+__all__ = ["Exchange", "append", "body", "build", "close", "current", "line", "lines", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
 
@@ -252,14 +250,25 @@ def close() -> None:
     _CURRENT = None
 
 
-TYPES = MessageTypes((*spot.MESSAGES, *pouw.MESSAGES, *pous.MESSAGES, *certifier.MESSAGES))
+_TYPES: tuple[int, MessageTypes] | None = None
+
+
+def types() -> MessageTypes:
+    """The message types on disk: the proof layer's and every declared scheme's (`Scheme.messages`, by the scheme's name
+    in `verity.protocols.compose.schemes`)."""
+    global _TYPES
+    registry = declarations.load()
+    if _TYPES is None or _TYPES[0] != len(registry):
+        declared = {id(m): m for s in registry.values() for m in s.messages}
+        _TYPES = (len(registry), MessageTypes((*spot.MESSAGES, *declared.values())))
+    return _TYPES[1]
 
 
 def body(type_: str, data: bytes) -> bytes:
     """``data`` as the body of a ``type_`` message, unchanged; `verity.channel.Refused` when its declaration refuses
     it."""
     msg = Message(type_, body=data)
-    if (why := TYPES.schema(msg.type, msg.version).why(msg.head(), msg.body)) is not None:
+    if (why := types().schema(msg.type, msg.version).why(msg.head(), msg.body)) is not None:
         raise Refused(*why)
     return data
 

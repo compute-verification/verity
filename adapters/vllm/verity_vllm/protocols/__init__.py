@@ -436,13 +436,13 @@ def weights_view(comp: Composition | None, model: Any) -> Any:
     return WeightsView(model, plain) if plain else model
 
 
-def register_weights(comp: Composition | None, com: Any) -> Any:
-    """``com.register_weights()`` over the weights of record: through `weights_view` while an option holds them released."""
+def register_weights(comp: Composition | None, com: Any, replay: bool = False) -> Any:
+    """``com.register_weights(replay)`` over the weights of record: through `weights_view` while an option holds them released."""
     view = weights_view(comp, com.model)
     if view is com.model:
-        return com.register_weights()
+        return com.register_weights(replay=replay)
     with hooks.patched(com, "model", view):
-        return com.register_weights()
+        return com.register_weights(replay=replay)
 
 
 def undeclared(enabled: tuple[str, ...] = ()) -> tuple[str, ...]:

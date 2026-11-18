@@ -20,9 +20,10 @@ samples theirs, and the rest carry the public seed rule's. A named ``--sampling`
 and nothing is seeded, so with no greedy or seeded row in a batch vLLM samples with FlashInfer's sampler and the CUDA
 generator. Each edge writes under ``--scratch``, because its blocks are tens of GB and stay out of the run's record; the
 first ``--dump`` edges write their blocks, the rest only their digests and state. OUT
-gets each ``edge.json`` and the client's records; ``--private``, a directory outside every run's, holds what holds
-request values, on the node (its meta.json names it, `serve_tax.private_of`): the step trace and the step outputs
-from the first edge to the last, under server/.
+gets each edge's summary (meta.json) and the client's records less their served ids; ``--private``, a directory outside
+every run's, holds what holds request values, on the node (its meta.json names it, `serve_tax.private_of`): the plan,
+the client's records whole (client/load/), each ``edge.json`` with its block ids and generator states, and the step
+trace and the step outputs from the first edge to the last, under server/.
 Once the last edge is written the server stops, unless ``--run-out``: nothing after it is compared, and the requests in
 flight then are recorded with the tokens they streamed.
 
@@ -146,13 +147,15 @@ def edge_site(site: Path, arm: S.Arm) -> Path:
 
 
 def drive(port: int, served: str, plan: list[dict], rate: float, span_s: float, d: Path, drain_s: float,
-          sampling: str, requests: int | None = None, unseeded_share: float = 0.0) -> dict:
+          sampling: str, requests: int | None = None, unseeded_share: float = 0.0, *, kept: Path) -> dict:
     """`serve_tax.drive_load` under ``sampling`` (one of the corpus's, or ``production``), or with `OWN` each request's
-    own (`own_body`); each request's class goes to ``classes.json``."""
+    own (`own_body`), its records whole in ``kept`` (`serve_tax.kept_client`); each request's class goes to
+    ``classes.json``."""
     C = S.corpus()
     for name, body in SAMPLING.items():
         C.SAMPLING.setdefault(name, body)
     d.mkdir(parents=True, exist_ok=True)
+    kept.mkdir(mode=0o700, parents=True, exist_ok=True)
     arr = C.traffic.arrivals(plan, rate)
     k = requests or max(1, sum(1 for a in arr if a <= span_s))
     reqs, arr = plan[:k], arr[:k]
@@ -165,9 +168,10 @@ def drive(port: int, served: str, plan: list[dict], rate: float, span_s: float, 
     C.request_body = own_body(real, unseeded_share, sampling)
     t = time.monotonic()
     try:
-        got = asyncio.run(C.drive(port, served, reqs, arr, ids, d / "client.jsonl", drain_s, sampling))
+        got = asyncio.run(C.drive(port, served, reqs, arr, ids, kept / S.CLIENT_FILE, drain_s, sampling))
     finally:
         C.request_body = real
+    S.kept_client(kept / S.CLIENT_FILE, d)
     counts: dict[str, int] = {}
     for c in classes.values():
         counts[c] = counts.get(c, 0) + 1
@@ -239,12 +243,12 @@ def serve(a: argparse.Namespace) -> int:
         if len(plan) < need:
             raise SystemExit(f"{base} holds {len(plan)} requests, fewer than {need} for {a.rate} req/s over {a.span_s:g} s")
     else:
-        base = Path(a.plan) if a.plan else out / "plan.base.jsonl"
+        base = Path(a.plan) if a.plan else private / "plan.base.jsonl"
         plan = S.plan_of(base, Path(a.c4), checkpoint, need, a.docs, a.seed)
         if a.long_share:
             lo, hi = a.long_tokens
             plan = lengthen(plan, a.long_share, lo, hi, a.seed)
-    plan_file = out / "plan.jsonl"
+    plan_file = private / "plan.jsonl"
     plan_file.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in plan))
     arm = S.ARMS["record"]
     site = edge_site(scratch / ".site", arm)
@@ -283,7 +287,7 @@ def serve(a: argparse.Namespace) -> int:
         if not a.run_out:
             watcher.start()
         meta["load"] = drive(port, model.served, plan, a.rate, a.span_s, out / "load", a.drain_s, a.sampling, a.requests,
-                             a.unseeded_share)
+                             a.unseeded_share, kept=private / "client" / "load")
     except Exception as e:  # noqa: BLE001 -- the record says why the run stopped
         meta["error"] = f"{type(e).__name__}: {e}"
         rc = 1
@@ -292,7 +296,7 @@ def serve(a: argparse.Namespace) -> int:
         if watcher.is_alive():
             watcher.join()
         meta["server_stop"] = S.stop(server)
-        meta["edges"] = copy_edges(scratch / "edges", out / "edges", private / "server" / "edges")
+        meta["edges"] = copy_edges(scratch / "edges", private / "server" / "edges")
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
     if len(meta["edges"]) < 2:
         print(f"[tp-restore] serve: {len(meta['edges'])} edge(s) taken, 2 needed (edges at {a.edges_at} s)"
@@ -301,17 +305,17 @@ def serve(a: argparse.Namespace) -> int:
     return rc
 
 
-def copy_edges(src: Path, dst: Path, kept: Path) -> list[dict]:
-    """Each edge's ``edge.json`` from the scratch directory into the run's record, and the step outputs, which hold
-    request values, into ``kept`` on the node, and a summary of each edge with its KV root and its files' bytes."""
+def copy_edges(src: Path, kept: Path) -> list[dict]:
+    """Each edge's ``edge.json`` (its block ids and generator states) and the step outputs, which hold request values,
+    from the scratch directory into ``kept`` on the node, and a summary of each edge with its KV root and its files'
+    bytes."""
     got = []
-    dst.mkdir(parents=True, exist_ok=True)
+    kept.mkdir(mode=0o700, parents=True, exist_ok=True)
     if (src / "outputs.jsonl").exists():
-        kept.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src / "outputs.jsonl", kept / "outputs.jsonl")
     for e in sorted(src.glob("edge-*/edge.json")):
-        (dst / e.parent.name).mkdir(parents=True, exist_ok=True)
-        shutil.copy2(e, dst / e.parent.name / "edge.json")
+        (kept / e.parent.name).mkdir(parents=True, exist_ok=True)
+        shutil.copy2(e, kept / e.parent.name / "edge.json")
         rec = json.loads(e.read_text())
         got.append({k: rec.get(k) for k in ("edge", "current_step", "trace_step", "running", "in_flight", "waiting", "pool",
                                             "check", "seconds")}
@@ -616,7 +620,7 @@ def restore(a: argparse.Namespace) -> int:
                               "PYTHONPATH": os.pathsep.join(dict.fromkeys([str(HERE), *filter(None, sys.path)]))})
     recs = served_trace(served)
     header = recs[0]
-    client = {c["id"]: c for c in (json.loads(x) for x in (served / "load" / "client.jsonl").read_text().splitlines() if x)}
+    client = {c["id"]: c for c in (json.loads(x) for x in S.client_kept(served, served / "load").read_text().splitlines() if x)}
     plan_file = Path(meta["plan"])
     plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
     s1, s2 = rec1["trace_step"], rec2["trace_step"]

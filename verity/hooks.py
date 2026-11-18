@@ -14,6 +14,13 @@ from typing import Any, ClassVar, Protocol
 #: the hooks a served run offers every scheme alike, each the ``hook`` of its events (`EVENTS`)
 HOOKS = ("declared", "steps", "values", "blocks", "memory")
 
+#: ``ctx["process"]`` of a scheme's ``attach(exchange, ctx)`` where the workload's front and its engine run in two
+#: processes, each with its own exchange: FRONT takes the workload's inputs (`InputArrived`, `ServeRoute`, `RefuseInput`),
+#: ENGINE steps it (the gates and every other hook). Without the key one process does both. ``ctx["feed"]`` is then
+#: a directory, one for the two, whose files a scheme's front appends to and its engine reads; ``ctx["settings"]`` are the
+#: scheme's settings (`Declared.settings`).
+FRONT, ENGINE = "front", "engine"
+
 type Handle = object
 """A device buffer as the serving system holds it: opaque here, read only by the scheme's own prover code."""
 
@@ -276,14 +283,19 @@ class Reports(Protocol):
     def record(self) -> Mapping[str, Any]: ...
 
 
-class Commits(Reports, Protocol):
-    """`Reports` from a scheme that commits while the workload runs: ``commitment``, what it commits to, the run's
-    record hashes under its scheme's name (``summary`` is kept beside it, unhashed); ``close`` releases what it holds
-    once the last step ended, and is idempotent. Both stay readable after ``close``."""
+class Releases(Protocol):
+    """What a scheme's ``attach`` returns where it holds something until the workload stops: ``release`` is called once,
+    when it stops, and closes what the scheme holds (its run's commitment, its sessions)."""
+
+    def release(self) -> None: ...
+
+
+class Commits(Reports, Releases, Protocol):
+    """`Reports` and `Releases` from a scheme that commits while the workload runs: ``commitment``, what it commits to,
+    which the run's record hashes under its scheme's name (``summary`` is kept beside it, unhashed), readable after
+    ``release``."""
 
     def commitment(self) -> Mapping[str, Any]: ...
-
-    def close(self) -> None: ...
 
 
 class Front(Protocol):
@@ -382,7 +394,7 @@ type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBou
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldResident",
-           "Broken", "Commits", "FixRanges", "Front", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+           "Broken", "Commits", "ENGINE", "FRONT", "FixRanges", "Front", "Releases", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "Route", "RunBegan", "RunEnded", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]
