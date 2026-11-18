@@ -690,6 +690,9 @@ PARTS = {"witness": lambda x: x.get("witness_s") or 0.0, "proving": lambda x: x[
 
 def overhead(a) -> int:
     from verity.device import load_card, rate
+    if a.card is None:
+        raise SystemExit("overhead: --card SKU, the run's GPU's card file (rtx-pro-6000-server, h200-sxm-141gb, ...), or "
+                         "--card none for a CPU node's sessions")
     out = Path(a.out)
     # --card none: a CPU node's sessions, which no GPU's peak divides
     card = None if a.card == "none" else load_card(a.card, directory=CARD_FILES)
@@ -822,8 +825,9 @@ def main() -> int:
     ap.add_argument("--ks", default="4096,14336")
     ap.add_argument("--units", default="", help="stage: served types (stage.py's TYPE[:S=V,...]), space-separated, instead of --ks")
     ap.add_argument("--sizes", default=None, help="stage: staged units a statement (default 1,8,64,512; with --units half,full)")
-    ap.add_argument("--card", default="rtx-pro-6000-server",
-                    help="overhead: the card whose datasheet peak divides (verity.device.load_card); none: a CPU node's sessions")
+    ap.add_argument("--card", default=None,
+                    help="overhead: the card whose datasheet peak divides (verity.device.load_card), no default; none: a CPU "
+                    "node's sessions")
     ap.add_argument("--draws", default="1,8,64,c", help="stage: the sample sizes a statement is proved at, c meaning all its units")
     ap.add_argument("--points", default=None, help="prove: only these indices of plan.json (one GPU lease a point)")
     ap.add_argument("--arms", default="fw,nofw", help="fw: the ZK server's send check on (the design's path); nofw: off; "

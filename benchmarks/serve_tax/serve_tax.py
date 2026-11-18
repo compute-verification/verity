@@ -292,6 +292,9 @@ class Arm:
     #: the application's component the arm serves and the settings it serves it at, as ``--feature`` names them
     #: (`feature_of`): what a profile's job finds the arm by
     feature: Feature | None = None
+    #: the schemes its server turns on by name inside vLLM's own server (`scheme_plugin.register`), each at the job's
+    #: settings for it (``--scheme-settings``, `scheme_config`)
+    schemes: tuple[str, ...] = ()
 
 
 BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
@@ -385,6 +388,11 @@ ARMS = {
                               plugin=("record", "ids"), env={**TOPK_ENV, "VERITY_DSA_TOPK": "canonical-bisect"},
                               general=TOPK, published=True),
 }
+#: Pearl+ on every linear block inside vLLM's own server, eager, as its scheme requests
+PEARL_PLUS = Feature("pearl-plus", (("tie-uniform", False),))
+ARMS["pearl-plus"] = Arm("compiled", "+ Pearl+ on every linear block, turned on by name inside vLLM's own server, eager",
+                         ("--enforce-eager",), schemes=("pearl-plus",), feature=PEARL_PLUS)
+ARMS["prod-pearl-plus"] = replace(ARMS["pearl-plus"], parent="prod", published=True)
 ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
 ARMS["tick-certifier"] = replace(ARMS["tick"], parent="tick", what="+ the network certifier in front: every request "
                                  "released by it and every answer paced by its schedule, sent by vLLM's client",
@@ -401,6 +409,7 @@ CHANGES: dict[str, Callable[[Arm], bool]] = {
     "the history tables": lambda a: bool(a.rows.get("tables")),
     "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK", "").startswith("canonical"),
     "admission on the certified tick": lambda a: a.tick,
+    "Pearl+ on every linear block": lambda a: "pearl-plus" in a.schemes,
     "the edge snapshot": lambda a: a.edges,
     "the network certifier in front": lambda a: a.attester,
 }
@@ -655,7 +664,7 @@ def entry_points(arm: Arm) -> list[str]:
     it (the tick's scheduler wrapper is then outside the step trace's, so the trace sees a request when the gate adds
     it), then the arm's others (`Arm.general`)."""
     return [*(["verity_serve_tax = servetax_plugin:register"] if arm.plugin or arm.tick else []),
-            *(["verity_schemes = verity_vllm.pipeline.scheme_plugin:register"] if arm.tick else []),
+            *(["verity_schemes = verity_vllm.pipeline.scheme_plugin:register"] if arm.tick or arm.schemes else []),
             *(entry for entry, _ in arm.general)]
 
 
@@ -694,7 +703,8 @@ def keeps_private(arm: Arm) -> bool:
     """Whether an arm keeps files on the node: it records (`records`), it has a boundary commitment, whose classes'
     directories hold their requests' tokens and their salts, it turns schemes on by name (the tick), each keeping its
     own under the private directory, or its environment or its boundary commitment's object names `PRIVATE`."""
-    return records(arm) or "boundary_rows" in arm.plugin or arm.tick or PRIVATE in json.dumps([arm.env, arm.rows])
+    return (records(arm) or "boundary_rows" in arm.plugin or arm.tick or bool(arm.schemes)
+            or PRIVATE in json.dumps([arm.env, arm.rows]))
 
 
 def private_of(d: Path) -> Path | None:
@@ -821,7 +831,7 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
 
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
                edges: dict | None = None, boundary_rows: dict | None = None, check: str | None = None,
-               private: Path | None = None, front: str = PYTHON) -> dict[str, str]:
+               private: Path | None = None, front: str = PYTHON, schemes: dict | None = None) -> dict[str, str]:
     """The server's environment: the job's, with on its path only what the arm's plugins need (`entry_points`): the
     plugin site, this tree for a change of `servetax_plugin`'s or the tick, and each other plugin's directory, so a
     stock arm's processes import nothing of ours; ``VLLM_PLUGINS``, which would let a job's environment drop one of
@@ -830,9 +840,10 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     ``boundary_rows`` gets its object: the arm's (`Arm.rows`), or ``boundary_rows`` in its place, with ``check`` (the
     model's check template) where it names none, at ``window_s``; its classes' directories, which hold values, go
     under ``private`` and never under ``d``. `PRIVATE` in the arm's data is ``private``. An arm on the canonical top-k
-    keeps its counters at each step's end in ``d`` (`topk_steps`)."""
+    keeps its counters at each step's end in ``d`` (`topk_steps`). An arm that turns schemes on by name gets them,
+    the tick's and its own (`Arm.schemes`, at ``schemes``, `scheme_config`), in ``VERITY_PROTOCOLS``."""
     ours = [*([str(site)] if entry_points(arm) else []),
-            *([str(HERE), str(ROOT / "adapters/vllm"), str(ROOT)] if arm.plugin or arm.tick else []),
+            *([str(HERE), str(ROOT / "adapters/vllm"), str(ROOT)] if arm.plugin or arm.tick or arm.schemes else []),
             *(str(ROOT / path) for _, path in arm.general)]
     env = dict(os.environ, VLLM_SERVER_DEV_MODE="1", VLLM_BATCH_INVARIANT="0",
                PYTHONPATH=os.pathsep.join([*ours, *SHARED.PYTHONPATH]))
@@ -855,14 +866,44 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
                                       **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {}),
                                       **({"private": str(private)} if private else {}),
                                       **({"boundary_rows": rows} if rows else {})})
+    names, cfg = list(arm.schemes), {"feed": str(d), "out": str(d), "private": str(private), **scheme_config(arm, schemes)}
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
         from verity.protocols.resource_accounting.network.prover.admission import scheme_name
-        env["VERITY_PROTOCOLS"] = scheme_name()
-        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps({"feed": str(d), "out": str(d), "private": str(private), scheme_name(): {
-            k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | tick.get("rule", {}) | {"hold_ms": 5000, "log": str(d)}})
+        names.insert(0, scheme_name())
+        cfg[scheme_name()] = ({k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | tick.get("rule", {})
+                              | {"hold_ms": 5000, "log": str(d)})
+    if names:
+        env["VERITY_PROTOCOLS"] = ",".join(names)
+        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps(cfg)
     return env
+
+
+#: what the job states for each scheme an arm turns on by name, beyond its declared settings' defaults: Pearl+'s kernel
+#: directory and the auditor device's challenger with the session its gate reserved
+SCHEME_NEEDS = {"pearl-plus": ("kernel", "challenger", "session")}
+
+
+def scheme_config(arm: Arm, given: dict | None) -> dict:
+    """The job's ``--scheme-settings`` for the arm's schemes (`Arm.schemes`): ``gate``, infra's challenger gate
+    command, and each scheme's settings under its name, checked by the scheme's own check; refused by name where a
+    scheme lacks what `SCHEME_NEEDS` lists or the gate is missing."""
+    if not arm.schemes:
+        return {}
+    given = dict(given or {})
+    lacking = [f"{n}.{k}" for n in arm.schemes for k in SCHEME_NEEDS.get(n, ()) if not (given.get(n) or {}).get(k)]
+    lacking += [] if given.get("gate") else ["gate"]
+    if lacking:
+        raise SystemExit(f"the arm's schemes need {', '.join(lacking)}: --scheme-settings '{{\"gate\": CMD, "
+                         f"\"pearl-plus\": {{\"kernel\": DIR, \"challenger\": HOST:PORT, \"session\": RESERVED}}}}'")
+    from verity.protocols.compose import schemes
+    from verity.protocols.resource_accounting.scheme import settings
+
+    try:
+        return {"gate": given["gate"], **{n: settings(schemes.get(n), given[n]) for n in arm.schemes}}
+    except ValueError as e:
+        raise SystemExit(f"--scheme-settings: {e}") from None
 
 
 def tick_feed(d: Path) -> Path:
@@ -1999,7 +2040,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     edges = edge_config(arm, model, a, rates, load_tag(next(iter(passes)), 1, True) if bench else None)
     try:
         env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges, a.boundary_rows, model.check, private,
-                         front)
+                         front, getattr(a, "scheme_settings", None))
         check_plugins(env, arm)
     except SystemExit:
         shutil.rmtree(out / ".site", ignore_errors=True)
@@ -4932,6 +4973,10 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
+    r.add_argument("--scheme-settings", type=json.loads, metavar="JSON",
+                   help="an arm that turns schemes on by name inside vLLM's server (pearl-plus): gate, infra's challenger "
+                        "gate command, and each scheme's settings under its name (pearl-plus: kernel DIR, challenger "
+                        "HOST:PORT, session, the gate's reserve answer); ignored by the other arms")
     r.add_argument("--tick-rule", metavar="JSON", help="the tick arms: a rule other than the registered one, "
                    "the network attester's token_ns and catch_up")
     r.add_argument("--side", choices=(SERVER, CLIENT),
