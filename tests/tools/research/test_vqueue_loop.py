@@ -1964,6 +1964,7 @@ class Slim:
         return {"ids": [f"run-{len(self.started)}"], "tip": sha, "base": base, "gate": "check"}
 
     shard_count = staticmethod(vqueue_slim.shard_count)
+    preferred = staticmethod(vqueue_slim.preferred)
 
     @staticmethod
     def replaced(lines, members, now, of=()) -> dict:
