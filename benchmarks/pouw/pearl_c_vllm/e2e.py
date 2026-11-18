@@ -309,10 +309,33 @@ def arm_of(mode: str, run, args):
                                                       run_id=settings.RESEARCH_RUN_ID))
 
 
+def under_salt(run, ended: dict) -> dict:
+    """An ended pass as the call check compares it: its transcript root and its tiles' unsalted digests, the leaves the
+    tree salts (`run.leaves`, read before the next pass poisons them; a pass ended without `lag`)."""
+    return {"transcript_root": ended["transcript_root"],
+            "digests": run.leaves[:run.nb * ended["tiles"]].cpu().numpy().tobytes()}
+
+
+def call_verdict(commits: list[dict], err: float) -> dict:
+    """The call check's verdict on `under_salt` of the same call twice and then with its tile leaves omitted.  Every leaf's
+    salt is fresh operating-system bytes, so the two calls' roots differ and what repeats is under the salt: their tile
+    digests are equal (the call is deterministic), their roots are not (the salts are fresh), and the omitted call's
+    digests are not the first's (the leaves are the call's own, not what the poison left). One commitment (no hashing)
+    checks y alone."""
+    if len(commits) == 1:
+        return {"rel_rms": err, "digests_repeat": True, "salts_fresh": True, "omitted_leaves_rejected": True, "ok": err < ERR}
+    a, b, omitted = commits
+    same, fresh = a["digests"] == b["digests"], a["transcript_root"] != b["transcript_root"]
+    control = omitted["digests"] != a["digests"]
+    return {"rel_rms": err, "digests_repeat": same, "salts_fresh": fresh, "omitted_leaves_rejected": control,
+            "ok": err < ERR and same and fresh and control}
+
+
 def gate(run, weights: dict, whole: bool = False) -> list[dict]:
-    """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control, at every
-    distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too.  The checks that compare passes repeat
-    one pass's call indices (`PearlCDeviceRun.begin`'s ``at``), since the execution phase numbers calls across passes."""
+    """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control (`call_verdict`),
+    at every distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too.  The checks that compare passes
+    repeat one pass's call indices (`PearlCDeviceRun.begin`'s ``at``), since the execution phase numbers calls across
+    passes."""
     import torch
     out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
@@ -329,14 +352,13 @@ def gate(run, weights: dict, whole: bool = False) -> list[dict]:
                 run.omit = frozenset(omit)
                 y = run.gemm(w, x, W, None)
                 served = y if served is None else served
-                commits.append({k: v for k, v in run.end().items() if k in ("transcript_root", "activation_roots")})
+                ended = run.end()
+                commits.append(under_salt(run, ended) if run.hashing else ended)
             run.omit = frozenset()
             ref = x.float() @ W.float().T
             err = float(((served.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
-            same = len(commits) == 1 or commits[0] == commits[1]
-            control = len(commits) == 1 or commits[2]["transcript_root"] != commits[0]["transcript_root"]
-            out.append({"check": "call", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": m, "hashing": run.hashing, "rel_rms": err,
-                        "commitment_repeats": same, "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
+            out.append({"check": "call", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": m, "hashing": run.hashing,
+                        **call_verdict(commits, err)})
     if run.hashing:
         out.append(screen_check(run, weights))
     if run.hashing and run.schedule.side:
