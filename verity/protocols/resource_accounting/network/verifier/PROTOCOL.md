@@ -354,9 +354,10 @@ attester"), and it charges a `format` failure the same.
      record, and would make the network attester parse the server's JSON.
    - With one fixed byte grammar (`IoTieCell`'s reference), the network attester stays a relay of one cell form. The gate is one
      `parse_cell` check in `network_attester.NetworkAttester._egress`, where it cuts a `DATA` or `END` cell.
-2. **In the audit.** The I/O tie holds every released cell to the map: its kind, its stream, and an `END` or `PAD` at its
-   slot. It holds each `DATA` cell's id to the Commit's sampled id at the map's port entry ("The I/O tie"). That is the
-   egress half of explanation: y's ids are the circuit's outputs.
+2. **In the audit.** Designed, with a prototype on a fake upstream ("The I/O tie"): the I/O tie holds every released
+   cell to the map: its kind, its stream, and an `END` or `PAD` at its slot. It holds each `DATA` cell's id to the
+   Commit's sampled id at the map's port entry ("The I/O tie"). That is the egress half of explanation: y's ids are the
+   circuit's outputs.
    - Whether the Commit's id is the one the circuit computes is SPOT's sampled audit of the served blocks. A wrong id
      from an unsampled block is a wrong block, and is charged.
 
@@ -484,7 +485,8 @@ vLLM's UTF-8 holdback rule and the base64, and the grouping of tokens into chunk
 of up to F − 1 bits a response that no template fixes.
 
 **(b) Decision: every cell, with the advice's map.** The map is a function of the advice: for each slot, the cell
-the network attester must have released there (`window_map`). Advice request i's stream is q = order[i] + 1, its ingress
+the network attester must have released there (`window_map`, the prototype's map, which a verifier of the design would
+compute; no verifier computes it today, and no real path runs the map or the tie's check). Advice request i's stream is q = order[i] + 1, its ingress
 ordinal on the wire: order[i] is its arrival order from 0 (advice v1's order permutation, (c)), and the wire numbers
 from 1, as the network attester numbers its connections. It was admitted at bucket
 s = admitted[i], which the network attester's FIFO makes non-decreasing in arrival order, and its output k must be released at
@@ -503,7 +505,7 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   the advice before the sample, as rows of `verity.commitments.advice` (fixed-width bit rows under
   `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Committed`), here 4 KiB rows: an execution phase's 8N
   bytes of records and 4S a bucket of steps, at a place aligned to execution phases in a link-day's map. The compile slice's proof block holds the
-  map's rows to the advice's outputs and release buckets, as `window_map` does in the clear. The execution phase reads its rows
+  map's rows to the advice's outputs and release buckets, as the prototype's `window_map` does in the clear. The execution phase reads its rows
   by a range read (each row's digest, hm96 leaf and `FrameV3Leaf`, the subtree's nodes once and the path above it): 12
   rows at depth 15, 3.07 × 10^7, at the rehearsal, and 1,980 rows at depth 22, 4.77 × 10^9, served. That is about half
   of v3's table (9.86 × 10^9), at 8 bytes a cell over N cells against 16 bytes a slot over M. The steps then come from
@@ -771,7 +773,7 @@ So each `release[k]` is output k's frame bucket in the network attester's attest
 this by position: a cell's bucket is its row in the network attester's registered tree,
 and the map puts output k's cell in row `release[k]` − w·T and nowhere else.
 
-`window_map` computes the map and the steps. The Commit sets the port's layout and its binding to
+The prototype's `window_map` computes the map and the steps. The Commit sets the port's layout and its binding to
 `c00.input/ids` and `sampled_token_ids`, in zero knowledge what `adapters/vllm/verity_vllm/check/commit_tokens.py` does in the clear. The tie
 reads the Commit's root as public.
 
@@ -822,8 +824,8 @@ are a function of the map and the port, so the prover rebuilds them, and it comp
   (`trusted-device`). It isn't the head's frames root, which is an unsalted tree that can't be opened outside a
   proof. The head's counts and the cells come from one grid of the network attester's: bucket t holds n_t data cells. The tie
   doesn't read the head; tying the cells' root into it (a record v3 field) is open.
-- **The map** is the advice's, charged as `A_c`. In v4 the verifier computes it from the opened advice v0, the named
-  gap. At the target it is registered with the advice before the sample and read in the proof, and the compile slice's
+- **The map** is the advice's, charged as `A_c`. In v4 the prototype computes it from the opened advice v0, as a verifier of the
+  design would; no verifier computes it today, and no real path runs the map or the tie's check. At the target it is registered with the advice before the sample and read in the proof, and the compile slice's
   proof block holds it to the advice. **The port** is the Commit's root, and its layout and its binding to the run root
   are the Commit's.
 
@@ -1222,7 +1224,7 @@ and checking state row u + 1. Steps past the execution phase's executed count ar
   left or past A, and decisions read past what is left or past A.
 - **The carry.** Execution phase w's state row 0 is execution phase w − 1's last state row, and its execution-phase
   row 0 is execution phase w − 1's execution-phase row 1, each under the same salt (`commit_window(carry=…)`), so their
-  openings b‖c are equal for the honest prover; the check of it (`check_chain`, `C-carry`) is called by no verifier. Decisions an execution phase leaves unread carry: the load writes its own after the last
+  openings b‖c are equal for the honest prover; nothing checks it. Decisions an execution phase leaves unread carry: the load writes its own after the last
   execution-phase row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a
   decision to the earlier of its step's execution phase and its arrival's ingress execution phase, up to two before
   its step's: at T = 20, 5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries
@@ -1370,8 +1372,9 @@ against 100 at 160). The same string under another registered pool decodes to an
 
 *The order's tie.* `v1.decode_full` returns `Decoded(advice, streams, arrival)`. `streams[q]` is the network attester's ordinal of
 I1 request q's connection: the order permutation (`walk.order`) through the arrival order, a stable named field.
-The I/O tie's egress tie checks each cell's stream against its request q through it. That replaces v4's stream == q, which
-refuses honest traffic wherever the engine's order isn't the network attester's.
+Designed, with a prototype on a fake upstream: the I/O tie's egress tie checks each cell's stream against its request
+q through it. That replaces v4's stream == q, which refuses honest traffic wherever the engine's order isn't the
+network attester's.
 
 *The windows* (A5). Step s's execution phase is the earliest that releases an output at step s or later (the last
 when none follows): the first whose rows a value read at step s can change. Arrival i's ingress execution phase is the

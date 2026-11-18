@@ -94,13 +94,17 @@
 # From a clone of the tree, with 64 GB of memory, the outputs in $OUT (default $RESEARCH_RUN_DIR/out, outside a research run
 # out/prove_path under the clone); $OUT/ran_with.txt is the line naming the run's coins and parameters (prove_path.py ran-with):
 #   PP_LLAMA=DIR bash benchmarks/prove_path/run.sh
-# Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
+# Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records) of a records audit, an
+# audit's summaries in their public form (public_log.py summaries), the binaries' sha256; never the
 # advice or its opening (the prover's, private: the verifier is handed the opening, the named gap), a prover's file (inst-*,
 # *-private.bin: the rows and their salts), a circuit (its pin is), a request value (the stand-in's workload.json, its prompts)
 # nor a serve's own records (serve.json, windows.jsonl: only vLLM's mirror publishes them, through serve_mirror.PUBLIC).
-# The rest goes to PP_KEEP=DIR (0700, refused under $OUT or the run dir; without it, scratch removed at exit): a window's
-# partition and the files beside it, the advice's length, the tools' logs and error output, the machine's shape, and the
-# commit's and audits' logs whole: $OUT and stdout get their lines as public_log.py lets them go.
+# The rest goes to PP_KEEP=DIR (0700, refused under $OUT or the run dir and named in its private-paths.json; without it,
+# scratch removed at exit): a window's
+# registration, commit.json, partition and the files beside them, an audit's own records whole (its summaries with the
+# advice's length and what is counted from it, its copy of the registration, its sessions), the tools' logs and error output,
+# the machine's shape, and the commit's and audits' logs whole: $OUT and stdout get their lines as public_log.py lets
+# them go.
 set -uxo pipefail
 PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../one_stage/public_files.py
 PL=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_log.py  # a log as it may leave: the fields its reader reads, errors by their class
@@ -139,6 +143,14 @@ for p in "$O" "${RESEARCH_RUN_DIR:-}"; do
     echo "PP_KEEP=$K is under $p, which custody publishes: give a directory outside it"; exit 2;; esac
 done
 (umask 077 && mkdir -p "$K") && chmod 700 "$K" || exit 2
+if [ -n "${PP_KEEP:-}" ] && [ -d "${RESEARCH_RUN_DIR:-}" ]; then   # the keep named for a reader on this node (`prove layers`)
+  python3 - "$RESEARCH_RUN_DIR/private-paths.json" "$(realpath -m "$K")" <<'EOF' || exit 2
+import json, pathlib, sys
+f, k = pathlib.Path(sys.argv[1]), sys.argv[2]
+doc = json.loads(f.read_text()) if f.is_file() else {}
+f.write_text(json.dumps({**doc, "schema": "private-paths/v1", "private": sorted({*doc.get("private", []), k})}, indent=1) + "\n")
+EOF
+fi
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 { nproc; free -g | head -2; } > $K/machine.txt
@@ -201,20 +213,23 @@ export RUST_MIN_STACK=$((64 << 20))
 TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
 PP="$PY benchmarks/prove_path/prove_path.py"
 
-keep() {  # NAME: $W/NAME's records into $O/NAME, among them the circuit each drawn member was proved on (window/m<k>/circuit.txt)
-  mkdir -p $O/$1
+keep() {  # NAME [public]: $W/NAME's records into $O/NAME, among them the circuit each drawn member was proved on
+          # (window/m<k>/circuit.txt); with public, into $K/NAME, and $O/NAME gets only their summaries' public form
+  local to=$O/$1; [ "${2:-}" = public ] && to=$K/$1
+  mkdir -p $to
   (cd $W/$1 && find . -type f \( ! -name circuit.txt -o -path './window/m*/circuit.txt' \) ! -name 'inst-*' ! -name 'm*-inst-*' ! -path './*/archive/*' \
     ! -path './builds/*' ! -path './proof-edits/*/sessions/*' ! -path './proof-edits/mutants/*/*' ! -path './proof-edits/*/member/*' -print0 \
-    | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} $O/$1/)
+    | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} $to/)
   # a case's blobs name its files in $W, which the EXIT trap removes: name the kept copies instead
-  (cd $O/$1 && find . -name '*.json' -print0 | xargs -0 -r grep -lZ '"blobs"' \
+  (cd $to && find . -name '*.json' -print0 | xargs -0 -r grep -lZ '"blobs"' \
     | xargs -0 -r $PY -c 'import json,sys
 w, o = sys.argv[1:3]
 for f in sys.argv[3:]:
     c = json.load(open(f))
     if isinstance(c, dict) and isinstance(c.get("blobs"), list):
         c["blobs"] = [o + b[len(w):] if isinstance(b, str) and b.startswith(w) else b for b in c["blobs"]]
-        open(f, "w").write(json.dumps(c, sort_keys=True))' "$W/$1/" "$(cd $O/$1 && pwd)/")
+        open(f, "w").write(json.dumps(c, sort_keys=True))' "$W/$1/" "$(cd $to && pwd)/")
+  [ "${2:-}" != public ] || python3 "$PL" summaries $to $O/$1
 }
 run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, then the verifier's audit; RUN is the committed
          # run's arguments (--tp-commit DIR --build-root DIR, --bundle DIR --row-dir DIR --workload F, or --serve-run DIR
@@ -233,12 +248,13 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   local crc=$?
   python3 "$PL" $K/$name/commit.log > $O/$name/commit.log
   [ $crc = 0 ] || { tail -30 $O/$name/commit.log; return 1; }
-  for d in $W/$name-windows/rank*; do   # its registration public; its partition and the files beside it kept
-    mkdir -p $O/$name/windows/$(basename $d) $K/$name/windows/$(basename $d) && cp $d/registration.json $O/$name/windows/$(basename $d)/ \
-      && cp $d/{window,partition,index}.json $d/m*-public.bin $K/$name/windows/$(basename $d)/
-    [ ! -e $d/circuit.json ] || cp $d/circuit.json $O/$name/windows/$(basename $d)/
+  # its circuit public; its registration and commit.json (each a binding made from the advice's true length), its partition
+  # and the files beside them kept
+  for d in $W/$name-windows/rank*; do
+    mkdir -p $K/$name/windows/$(basename $d) && cp $d/{registration,window,partition,index}.json $d/m*-public.bin $K/$name/windows/$(basename $d)/
+    [ ! -e $d/circuit.json ] || { mkdir -p $O/$name/windows/$(basename $d) && cp $d/circuit.json $O/$name/windows/$(basename $d)/; }
   done
-  cp $W/$name-windows/commit.json $O/$name/windows/
+  cp $W/$name-windows/commit.json $K/$name/windows/
   if [ -n "${PP_KEEP_WINDOWS:-}" ]; then   # the windows whole, the prover's files included, for a later job on this node
     mkdir -p "$PP_KEEP_WINDOWS" && rm -rf "$PP_KEEP_WINDOWS/$name-windows" && cp -a $W/$name-windows "$PP_KEEP_WINDOWS/" || return 1
     R keep "$PP_KEEP_WINDOWS" --owner @proofs --expires 7d --priority low \
@@ -247,7 +263,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
     records $name $part $forged
     local rc=$?
-    keep $name
+    keep $name public   # served_verdicts.sh reads the served arm's records audit in the keep
     return $rc
   fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
@@ -256,7 +272,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   local rc=$?
   python3 "$PL" $K/$name/audit.log > $O/$name/audit.log
   grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; python3 "$PL" $K/$name/audit.err | tail -25
-  keep $name
+  keep $name public
   return $rc
 }
 records() {  # NAME PARTITION [--forged]: records_audit.py on the served window REC_RUN's window REC_K, the registered compiler

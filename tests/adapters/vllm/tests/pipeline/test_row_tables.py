@@ -31,6 +31,7 @@ from verity.commitments import registered_value as RV
 
 from verity_vllm.commit import index as IX
 from verity_vllm.commit import row_tables as RTB
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import serving_rows as SRW
 
 DOT = '{"fn":"BlackwellS8ImmaDot32_v1"}'
@@ -112,6 +113,8 @@ def window(row_tables: bool = True, sampling_design=None, work_table=None) -> tu
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
+    else:
+        ms = CH.shared_tables(ms)
     w = CS.Binding(*IF.listed_program([(DEFN, UNITS)], ()), sampling_design or RND.parse_design("stratified:2"), RUN, tuple(ms),
                    tables, CTX.hex() if row_tables else "", work_table)
     return w, s, ms
@@ -121,7 +124,7 @@ def committed(monkeypatch, row_tables: bool = True, sampling_design=None, work_t
     w, s, ms = window(row_tables, sampling_design, work_table)
     monkeypatch.setattr(SRW, "_operand", s.operand)
     got = SRW._read_s8(ms, s.rows, s, None, ARRIVALS)
-    return CS.commit(w, [g[0] for g in got], **kw), s, got
+    return CS.commit(w, CH.held_rows(w, [g[0] for g in got]), **kw), s, got
 
 
 def test_one_table_per_engine_step_and_linear_in_the_canonical_order_and_each_chunk_links_the_token_rows_it_reads():
@@ -202,7 +205,7 @@ def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_an
         assert o.roots == (served[step].root,) and RT.verify_roots(c.roots[CS.TABLE_PORT], w.tables_domain.domain_id, len(w.segments), o)
     # the window's commit holds its steps to the roots serving recorded before their coins
     recorded = {step: sr.root for step, sr in served.items()}
-    assert committed(monkeypatch, table_salts=ys, segment_roots=recorded)[0].roots == c.roots
+    assert committed(monkeypatch, table_salts=ys, segment_roots=recorded)[0].roots[CS.TABLE_PORT] == c.roots[CS.TABLE_PORT]
     with pytest.raises(ValueError, match=r"segments \[1\]: the period's segment roots are not the ones recorded"):
         committed(monkeypatch, table_salts=ys, segment_roots={**recorded, 1: bytes(64)})
     with pytest.raises(ValueError, match=r"segments \[0, 1\]: the period's segment roots are not the ones recorded"):

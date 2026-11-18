@@ -2754,7 +2754,7 @@ def _challenger_sample(rng: random.Random, s: Setup, sampling_design: dict, rec:
 
 
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
-    """v2 (`Spot.OneStageZk`, `one_stage.proofs.check_v2`) is v1 with the verdicts its own run of the verifier
+    """v2 (`Spot.OneStageZk`, `one_stage.proofs.verdicts_v2`) is v1 with the verdicts its own run of the verifier
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
     for naming verdicts; refused, before any tree is read, with them replaced by proofs naming no session or two (the
     sampled proof blocks are proved in one session, `oneSession`); rejected by the session's own verdict when its files are not

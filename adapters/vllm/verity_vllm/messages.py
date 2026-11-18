@@ -14,13 +14,15 @@ message's writers and readers.
 
 from __future__ import annotations
 
+import inspect
 import itertools
+import typing
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, NamedTuple
 
 from verity import hooks as H
 from verity.channel import Message, MessageTypes, Refused
@@ -42,12 +44,23 @@ def _pins(entries: Any) -> tuple[Mapping[str, str], ...]:
 _KEYS = itertools.count()
 
 
+def _taken(fn: Subscriber) -> tuple[type, ...] | None:
+    """The events of `H.EVENTS` ``fn``'s first parameter is annotated with; None where it names none."""
+    try:
+        first = next(iter(inspect.signature(fn).parameters))
+        hint = typing.get_type_hints(fn).get(first)
+    except (StopIteration, TypeError, ValueError, NameError):
+        return None
+    named = tuple(t for t in (typing.get_args(hint) or (hint,)) if t in H.EVENTS)
+    return named or None
+
+
 class Exchange:
     """One process's exchange: subscribers by hook, requests by scheme (filed until `answer`, fixed after it), and the
     workload's step, as the last `StepBegan` emitted it."""
 
     def __init__(self) -> None:
-        self.subscribers: dict[str, list[tuple[str, Subscriber]]] = {h: [] for h in H.HOOKS}
+        self.subscribers: dict[str, list[tuple[str, Subscriber, tuple[type, ...] | None]]] = {h: [] for h in H.HOOKS}
         self.requests: list[tuple[str, H.Request]] = []
         self.declared: H.Declared | None = None
         self.fixed = False
@@ -60,6 +73,9 @@ class Exchange:
         self.attached: dict[str, Mapping[str, Any]] = {}
         #: the schemes `attach` attached, by name: what `weight_copy_refusals` reads of the next one's
         self.schemes: dict[str, schemes.Scheme] = {}
+        #: the pairs `weight_copy` allowed among the attached schemes, each with what it does not show: serve.json's
+        #: ``weight_copy_allowed``
+        self.allowed: list[WeightCopyNote] = []
         #: what each attached scheme's ``attach`` returned, by its name, read by `scheme_plugin.write_reports`
         self.reports: dict[str, Any] = {}
         #: this build's key, unique in the process: a scheme's ``ctx["build"]``
@@ -81,8 +97,8 @@ class Exchange:
         else as it was given them (``VERITY_PINS``), ``()`` for an application that pins nothing and None where neither
         is given; ``ctx["configuration"]`` the committed configuration's hash likewise (``configuration``,
         ``VERITY_CONFIGURATION``); a keyword and a setting that differ are refused (`ValueError`).
-        A scheme that `weight_copy_refusals` refuses beside those already attached, in either order, is refused by
-        name (`Refused`) before its attach runs, and the exchange is left as it was.
+        A scheme that `weight_copy` refuses beside those already attached, in either order, is refused by name
+        (`Refused`) before its attach runs, and the exchange is left as it was; the pairs it allows are `allowed`.
         Attached before the build is answered, it is declared (`H.Declared`); after, its requests are refused as
         `request` refuses them.
 
@@ -95,7 +111,8 @@ class Exchange:
         if self.registered and launcher.get("process") == H.ENGINE:
             raise RuntimeError(f"{scheme.name} attached after the model's weights were registered: an attach in the "
                                "engine runs before the load")
-        if bad := weight_copy_refusals([*self.schemes.values(), scheme]):
+        bad, allowed = weight_copy([*self.schemes.values(), scheme])
+        if bad:
             raise Refused(scheme.name, "; ".join(bad))
         for key, name, read in (("pins", "VERITY_PINS", _pins), ("configuration", "VERITY_CONFIGURATION", str)):
             handed, held = launcher.get(key), settings.get(name)
@@ -115,6 +132,7 @@ class Exchange:
                 self.request(scheme.name, r)
         self.attached[scheme.name] = ctx["settings"]
         self.schemes[scheme.name] = scheme
+        self.allowed = allowed
         if got is not None:
             self.reports[scheme.name] = got
         return got
@@ -133,12 +151,16 @@ class Exchange:
     def step(self, value: int) -> None:
         self._step = value
 
-    def subscribe(self, name: str, hook: str, fn: Subscriber) -> Callable[[], None]:
-        """``name`` receives every event of ``hook`` from now on, in the order the adapter emits them; returns its
-        removal."""
+    def subscribe(self, name: str, hook: str, fn: Subscriber, takes: tuple[type, ...] | None = None) -> Callable[[], None]:
+        """``name`` receives the events of ``hook`` it takes from now on, in the order the adapter emits them; returns
+        its removal. It takes ``takes``, else the events of `H.EVENTS` its first parameter is annotated with (one, or a
+        union), else every event of ``hook``; one that rides another hook is refused."""
         if hook not in H.HOOKS:
             raise Refused(name, f"{hook!r} is not a hook of a served run {H.HOOKS}")
-        entry = (name, fn)
+        takes = _taken(fn) if takes is None else takes
+        if takes is not None and (other := [t.__name__ for t in takes if getattr(t, "hook", None) != hook]):
+            raise Refused(name, f"subscribes to {hook!r} for {', '.join(other)}, which {hook!r} does not carry")
+        entry = (name, fn, takes)
         self.subscribers[hook].append(entry)
         return lambda: self.subscribers[hook].remove(entry) if entry in self.subscribers[hook] else None
 
@@ -190,8 +212,9 @@ class Exchange:
             self.step = event.step
         elif isinstance(event, H.RegisteredValues):
             self.registered = True
-        for _, fn in tuple(self.subscribers[event.hook]):
-            fn(event)
+        for _, fn, takes in tuple(self.subscribers[event.hook]):
+            if takes is None or isinstance(event, takes):
+                fn(event)
 
     def compute(self, due: H.BlockDue, original: Callable[[Mapping[str, H.Handle] | None], H.Handle]) -> H.Handle:
         """A due block's output: emitted to ``blocks``' subscribers, then computed by the filed kernels, the workload's
@@ -288,24 +311,49 @@ def storage(s: Any) -> bool:
     return getattr(s, "resource", None) == STORAGE[0] and not isinstance(needs, schemes.Lacks) and STORAGE[1] in needs
 
 
-def weight_copy_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
-    """A storage scheme (`storage`) beside one that keeps a weight-derived copy (``keeps_weight_copy``), or beside one
-    that has not declared whether it does, in any order; sorted by name, so the order listed or attached changes none.
-    A scheme keeps a weight-derived copy when, across forwards, it holds or keeps alive resident bytes from which the
-    weights can be had without decoding storage's store; whether a product reads them does not enter."""
-    out = []
+class WeightCopyNote(NamedTuple):
+    """Storage ``storage`` attached beside ``keeps``, which declares it keeps a weight-derived copy and the ruling of
+    that copy beside storage, with what the ruling does not show."""
+
+    storage: str
+    keeps: str
+    ruling: str
+    not_shown: tuple[str, ...]
+
+    def record(self) -> dict[str, Any]:
+        """Both declared facts, by the fields that declare them: serve.json's ``weight_copy_allowed`` entry."""
+        return {"storage": self.storage, "keeps_weight_copy": self.keeps,
+                schemes.BESIDE_STORAGE: {"ruling": self.ruling, "not_shown": list(self.not_shown)}}
+
+
+def weight_copy(listed: Sequence[schemes.Scheme]) -> tuple[list[str], list[WeightCopyNote]]:
+    """Storage (`storage`) beside a scheme that keeps a weight-derived copy (``keeps_weight_copy``) is refused by name
+    unless that scheme's declaration rules its copy beside storage (`schemes.BESIDE_STORAGE`, a non-empty sentence),
+    and then the pair is allowed and noted with the ruling and what a ruling does not show
+    (`schemes.BESIDE_STORAGE_NOT_SHOWN`); beside one that has not declared whether it keeps one, refused.
+    In any order, sorted by name, so the order listed or attached changes neither. A scheme keeps a weight-derived
+    copy when, across forwards, it holds or keeps alive resident bytes from which the weights can be had without
+    decoding storage's store; whether a product reads them does not enter."""
+    refused, noted = [], []
     for st in sorted({s.name: s for s in listed if storage(s)}.values(), key=lambda s: s.name):
         for o in sorted({s.name: s for s in listed if s.name != st.name}.values(), key=lambda s: s.name):
             keeps = getattr(o, "keeps_weight_copy", schemes.UNDECLARED)
-            if keeps is True:
-                out.append(f"{st.name} is storage (it needs the workload's store) and {o.name} keeps a weight-derived copy "
-                           f"(keeps_weight_copy), so the weights would be resident outside {st.name}'s store: "
-                           "the two are not attached in one process while the pairing awaits a decision")
+            ruled = getattr(o, schemes.BESIDE_STORAGE, schemes.UNDECLARED)
+            if keeps is True and isinstance(ruled, str) and ruled.strip():
+                noted.append(WeightCopyNote(st.name, o.name, ruled, schemes.BESIDE_STORAGE_NOT_SHOWN))
+            elif keeps is True:
+                refused.append(f"{st.name} is storage (it needs the workload's store) and {o.name} keeps a weight-derived copy "
+                               f"(keeps_weight_copy), and {o.name}'s declaration does not say that its copy beside storage has "
+                               f"been ruled ({schemes.BESIDE_STORAGE} is undeclared or empty), so the two are not attached in one process")
             elif isinstance(keeps, schemes.Lacks):
-                out.append(f"{st.name} is storage (it needs the workload's store) and {o.name}'s declaration does not say whether it keeps a "
-                           f"weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it "
-                           "until it declares that, and a scheme that keeps one beside storage awaits a decision")
-    return out
+                refused.append(f"{st.name} is storage (it needs the workload's store) and {o.name}'s declaration does not say whether it keeps a "
+                               f"weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it "
+                               "until it declares that, and a scheme that keeps one beside storage is refused until its copy beside storage is ruled")
+    return refused, noted
+
+
+def weight_copy_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
+    return weight_copy(listed)[0]
 
 
 def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
@@ -319,9 +367,13 @@ def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
 def attach_listed(exchange: Exchange, listed: Sequence[tuple[schemes.Scheme, Mapping[str, Any]]], **ctx: Any) -> list[Any]:
     """Each scheme of ``listed`` (a configuration's list, each with its settings) attached on ``exchange`` with ``ctx``
     (`Exchange.attach`) in list order, once `listed_refusals` refuses none: the order `schemes.order_refusals` holds,
-    in which the scheme listed earlier is the outer (`Exchange.request`); what each attach returned."""
+    in which the scheme listed earlier is the outer (`Exchange.request`); what each attach returned. Where one runs
+    kernels on the card (`Scheme.kernels`), the workload's device code is handed in first (`verity_torch.pouw.hand_in`)."""
     if bad := listed_refusals([s for s, _ in listed]):
         raise Refused("listed schemes", "; ".join(bad))
+    if any(not isinstance(s.kernels, schemes.Lacks) for s, _ in listed):
+        from verity_torch.pouw import hand_in
+        hand_in()
     return [exchange.attach(s, given, **ctx) for s, given in listed]
 
 

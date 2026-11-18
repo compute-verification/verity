@@ -135,7 +135,8 @@ trap 'rm -rf "$S"' EXIT
 export TMPDIR=$S PYTHONDONTWRITEBYTECODE=1
 PROBE=(env "PYTHONPATH=$D/../..:$D/../../benchmarks/harness:$D/../../tools/config" python3 "$D/../pouw/opcode_probe/probe.py")
 ARCH=$("${PROBE[@]}" arch) || exit 2
-[ "$ARCH" = sm_90a ] || { echo "tensor_duty: the card's target is $ARCH, and duty.cu has forms for sm_90a only: nothing built" >&2; exit 2; }
+WANT=$("${PROBE[@]}" arch --sku h200-sxm-141gb) || exit 2
+[ "$ARCH" = "$WANT" ] || { echo "tensor_duty: the card's target is $ARCH, and duty.cu has forms for $WANT only: nothing built" >&2; exit 2; }
 GENCODE=$("${PROBE[@]}" gencode) || exit 2
 nvcc --version > "$O/nvcc.txt" 2>&1
 nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -I"$D" -o "$S/duty" \
