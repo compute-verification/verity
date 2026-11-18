@@ -48,10 +48,20 @@ namespace Vocab
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 
 /-- The committed file's labels, which the registration's check is to define: a reader's input gate's row
-`(template, unit, port, row)` and a writer's output gate's leaf `(template, field, leaf)`. -/
+`(template, unit, port, row)` and a writer's output gate's leaf `(template, field, leaf)`, the leaf a position in that
+template's tree of the field over all its units. -/
 structure Labels where
   row : (θ : ByteArray) → (F : Array ByteArray) → Fin (V.circuitOf θ F).N → Option (String × ℕ × String × ℕ)
   leaf : (θ : ByteArray) → (F : Array ByteArray) → Fin (V.circuitOf θ F).N → Option (String × String × ℕ)
+
+/-- Every input gate of a unit has its row label, so no wired reader row escapes `Carries` by going unlabelled. -/
+def Labels.Total (L : Labels V) : Prop :=
+  ∀ θ F (g : Fin (V.circuitOf θ F).N), (V.circuitOf θ F).isInput g = true → ((V.partsOf θ F).unit g).isSome →
+    (L.row θ F g).isSome
+
+/-- A leaf label names at most one gate. -/
+def Labels.Injective (L : Labels V) : Prop :=
+  ∀ θ F (h h' : Fin (V.circuitOf θ F).N) x, L.leaf θ F h = some x → L.leaf θ F h' = some x → h = h'
 
 /-- Unit `u` carries its inputs in `X`: at each committed gate it reads, the position `posOf` names for its row is the
 leaf of a writer unit's output gate that is committed to a value, and every value it is committed to is the input's,
@@ -73,10 +83,11 @@ noncomputable def uncarried (L : Labels V) (posOf : ByteArray → Array ByteArra
 
 /-- **The positions carry** (`SpotSound`'s form over the positions `posOf`, the ones `CutIsRegistered` reads): on a
 play the sampled proofs accept, all but at most an `ε` share of the units are bound and carry their inputs, but for
-the sampled proofs' error. -/
+the sampled proofs' error. It requires `L` total and injective (`Labels.Total`, `Labels.Injective`): else a labelling
+that labels no gate makes every unit carry. -/
 def PositionsCarry (k : Verity.Registration.Composite) (L : Labels V)
     (posOf : ByteArray → Array ByteArray → Positions) : Prop :=
-  ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
+  L.Total → L.Injective → ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => V.Verdict k .sampled o ∧
         ¬ ((V.uncarried L posOf θ F c (V.extract θ F c σ)).card : ℝ) ≤ (V.certOf θ).ε * V.units θ F)
       (V.game θ F c) σ ≤ V.error .sampled θ F c σ
