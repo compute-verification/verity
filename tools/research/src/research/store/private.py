@@ -7,6 +7,7 @@ import fnmatch
 import json
 import os
 import stat
+import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
@@ -138,9 +139,13 @@ def check_payload(files: list[Path]) -> None:
 
 def listed(run_dir: Path) -> list[dict[str, Any]]:
     """The refusals the run dir's REFUSED_FILE lists (none when it is absent or unreadable)."""
+    p = Path(run_dir) / REFUSED_FILE
+    if not p.is_file():
+        return []
     try:
-        doc = json.loads((Path(run_dir) / REFUSED_FILE).read_text())
-    except (OSError, ValueError):
+        doc = json.loads(p.read_text())
+    except (OSError, ValueError) as e:
+        print(f"research: {p} unread ({type(e).__name__}: {e}), so the private files custody refused are not shown", file=sys.stderr)
         return []
     got = doc.get("refused") if isinstance(doc, dict) and doc.get("schema") == REFUSED_SCHEMA else None
     return [r for r in got if isinstance(r, dict)] if isinstance(got, list) else []
