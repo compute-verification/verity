@@ -1,3 +1,0 @@
-[2026-11-18T11:59Z] 47f7e8a47034
-From coordinator, add to B (same deadline 12:45Z, answers only, push nothing): top reader says (not checked) (1) the salts stated-length code is the same code twice, at pearl_c_sm120/run.py 439 and pearl_c_sm90/run.py 528: find both files on origin/interfaces, say whether it is truly duplicated, who added each (kernels d308e9dd95a or us), who owns the files, and the smallest honest cure (one shared function where?) with line counts; (2) a copy of the toolkit find-or-unpack block sits in benchmarks/pouw/harness/jobs/toolkit.sh beside harness/setup/flock_prover.sh 28-36 and proofs five: say whether ours can call one shared block, which, and what it costs.
-
