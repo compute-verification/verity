@@ -13,7 +13,7 @@ from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
 REG = R.registry()
-APPLICATIONS = ("onsite_compute", "onsite_full", "onsite_network", "remote")
+APPLICATIONS = ("onsite_compute", "onsite_full", "onsite_network", "onsite_network_front", "remote")
 
 
 def _raw(name: str) -> dict:

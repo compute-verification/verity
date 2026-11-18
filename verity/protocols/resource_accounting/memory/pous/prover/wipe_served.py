@@ -32,6 +32,9 @@ the facts:
   key; the pins still decide the premise, so a key they don't give reads rehearsal (`wipe_party.placement`);
 - ``node``: the wiped server's id (this host's name by default);
 - ``judge``: the Lean ``wipe-protocol`` executable. Without it the Python's accept decides nothing (`wipe_period.NO_JUDGE`);
+- ``wipe_stream``: the native streamer (``wipe_stream.c``) its launcher built where programs run, `period.json`'s
+  ``tools.wipe-stream``, which the memory attester on this node gates and runs in place of building one beside its key
+  (whose scratch, under the serve dir, may be mounted noexec); refused beside a bound host, which builds its own;
 - ``ready``: called with the judge's path before the judge answers (`wipe_run.subprotocol`'s ``ready``); `built` by
   default, which waits for a judge its launcher still builds beside the wipe (`served_wipe.sh`).
 
@@ -70,7 +73,7 @@ FACTS = {k: wipe_run.CONFIG[k] for k in ("device", "links", "foreign_bytes")} | 
 DEVELOPMENT = ("run_keys", "simulated", "foreign_bytes", "foreign_past_bound")
 BINDING = ("host", "address", "command")
 #: what a launcher hands the wipe in ``ctx``, beside ``settings``, ``private`` and ``process``
-LAUNCHER = ("side_of", "pins", "configuration", "trusted", "node", "judge", "ready")
+LAUNCHER = ("side_of", "pins", "configuration", "trusted", "node", "judge", "wipe_stream", "ready")
 
 
 def period_wipe(settings: Mapping[str, Any]) -> dict[str, Any]:
@@ -183,6 +186,9 @@ def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
         out.append("no private directory was handed to it, where its case goes")
     if "party" not in ctx:
         out.append("no party was handed to it (ctx['party'], the memory challenger's, which the scheme hands)")
+    if ctx.get("wipe_stream") and s["host"]:
+        out.append("wipe_stream is the streamer of a memory attester on this node; one on its own host (host, address, "
+                   "command) builds its own")
     if not s["run_keys"]:
         if ctx.get("pins") is None:
             out.append("no pin was handed to it (ctx['pins'], the application's [[pin]] entries)")
@@ -228,7 +234,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
     key = None if s["run_keys"] else ctx.get("trusted") or pin_of(pins, ctx["party"])
     node = ctx.get("node") or socket.gethostname()
     doc: dict[str, Any] = {
-        "tools": {} if ctx.get("judge") is None else {"wipe-protocol": str(ctx["judge"])},
+        "tools": {t: str(ctx[k]) for t, k in (("wipe-protocol", "judge"), ("wipe-stream", "wipe_stream")) if ctx.get(k)},
         NAME: period_wipe(s) | {"trusted_sha512": key},
         "deployment": {"configuration": ctx.get("configuration"), "pins": pins}}
     if s["host"]:
