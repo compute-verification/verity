@@ -119,13 +119,18 @@ def parse(inst) -> dict:
             "pins": inst["pins"]}
 
 
-def closure_digest(desc: dict, key: str) -> str:
-    """The closure digest of Definition `key` of the Program whose descriptor is `desc`, which a pin names
-    (`DefinitionDigest.closureDigest`), by its one Python mirror, the network suite's
-    `period_case.slot_entry_digest`, read from the checkout `verity.circuits` comes from."""
+def period_case():
+    """The network suite's `period_case`, read from the checkout `verity.circuits` comes from; it registers its Boolean
+    lookup as it loads."""
     if "period_case" not in sys.modules:
         _load("period_case", Path(codec.__file__).resolve().parents[2] / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "network")
-    return sys.modules["period_case"].slot_entry_digest(desc, key)
+    return sys.modules["period_case"]
+
+
+def closure_digest(desc: dict, key: str) -> str:
+    """The closure digest of Definition `key` of the Program whose descriptor is `desc`, which a pin names
+    (`DefinitionDigest.closureDigest`), by its one Python mirror, the network suite's `period_case.slot_entry_digest`."""
+    return period_case().slot_entry_digest(desc, key)
 
 
 def fields_of(ret) -> tuple:

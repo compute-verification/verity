@@ -119,12 +119,14 @@ def _load(name: str):
     return module
 
 
-# the toy primitives (`prim`, the cases' templates) get stand-in Boolean bodies, which a Program needs
-_STAND_IN = importlib.util.spec_from_file_location("stand_in", HERE.parents[7] / "tests/verity/circuits/stand_in.py")
-_STAND_IN.loader.exec_module(importlib.util.module_from_spec(_STAND_IN))
-
 ref = _load("inference_only_record_reference")
 reference = ref.reference
+
+# the toy primitives (`prim`, the cases' templates) get stand-in Boolean bodies, which a Program needs; their lookup is
+# registered after `period_case`'s, which would replace it, and falls back on it
+ref.period_case()
+_STAND_IN = importlib.util.spec_from_file_location("stand_in", HERE.parents[7] / "tests/verity/circuits/stand_in.py")
+_STAND_IN.loader.exec_module(importlib.util.module_from_spec(_STAND_IN))
 
 COUNT = 600
 BIG = 10 ** 15

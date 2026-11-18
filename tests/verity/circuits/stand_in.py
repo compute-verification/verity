@@ -1,5 +1,5 @@
 """The stand-in Boolean bodies the suite's test primitives get (`stand_in_body`), registered with `verity.circuits.program` as
-this module loads: the catalog's body where it has one, a stand-in for a primitive a test defines, and a refusal for a
+this module loads: the body of the lookup registered before it (else the catalog's) where it has one, a stand-in for a primitive a test defines, and a refusal for a
 primitive of `verity` or an adapter with none, or one a test defines under such a primitive's id. Another suite's conftest,
 or a script that writes difftest vectors, loads it by file, the file among the inputs of every suite that runs it."""
 from __future__ import annotations
@@ -44,10 +44,13 @@ def _of_catalog(p: PrimitiveDefinition) -> bool:
     return getattr(p.evaluate, "__module__", "").split(".")[0] in CATALOG
 
 
+_BEFORE = PG._BODY_LOOKUP[0] if PG._BODY_LOOKUP else V.boolean_version
+
+
 def _lookup(p: PrimitiveDefinition):
     try:
-        return V.boolean_version(p)
-    except V.NoBooleanVersion:
+        return _BEFORE(p)
+    except LookupError:
         if _of_catalog(p) or (p.id in REGISTRY and _of_catalog(REGISTRY[p.id])):
             raise
         return stand_in_body(p)
