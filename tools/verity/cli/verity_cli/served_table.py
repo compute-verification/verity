@@ -1,6 +1,6 @@
 """The served window's table for `verity run` (`verity_cli.run.Registry`): onsite's and remote's components as a
 configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each application's subprotocols and the
-configuration its file holds (`DEMOS`, `configuration`), each party's piece (`PARTIES`), and the run of the pieces placed
+configuration its file holds (`listed`, `configuration`), each party's piece (`PARTIES`), and the run of the pieces placed
 on a machine (`live`).
 
 A piece is what one party does in the run (`Piece`), in one of four ways (``runs``):
@@ -200,15 +200,6 @@ SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receip
                   (Role(WORKERS, "developer", needs=("serve",)),), _served,
                   {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800",
                    "precision": "verity_int8", "slots": 4, "window-steps": 16, "load": "varied"})
-#: onsite's subprotocols, the seven `Core.Composites.composites` holds for it
-ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
-PROTOCOLS = ONSITE_COMPONENTS
-#: each application's subprotocols, the file `applications/NAME.toml` that `verity run NAME` runs: onsite's seven, its two smaller
-#: sets (`verity.config.UNACCEPTED`) and remote's
-DEMOS = {"onsite_full": ONSITE_COMPONENTS,
-         "onsite_compute": ("sampled-proofs", "pouw", "inference-only", "certifier", "wipe"),
-         "onsite_network": ("sampled-proofs", "certifier", "wipe"),
-         "remote": ("sampled-proofs", "pearl-plus", "inference-only")}
 PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host"
 #: remote's auditor parties' machine, which isn't at the site: remote puts no auditor's device there
 AUDITOR_REMOTE = "auditor-remote"
@@ -216,8 +207,9 @@ AUDITOR_REMOTE = "auditor-remote"
 PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_ATTESTER: GATE_HOST, MEMORY_ATTESTER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
+APPLICATIONS = ROOT / "applications"
 #: the configuration this table's application runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
-CONFIG = ROOT / "applications" / "onsite_full.toml"
+CONFIG = APPLICATIONS / "onsite_full.toml"
 _UNDECIDED = ("`verity run` records each period's verdict under that id, undecided unless the line says who",
               "combined it: no composite takes it.")
 #: the header of each application's file
@@ -243,13 +235,18 @@ HEADERS = {
 HEADER = HEADERS["onsite_full"]
 
 
+def listed(demo: str) -> tuple[str, ...]:
+    """The subprotocols `applications/<demo>.toml` lists, in its order (its ``protocols``)."""
+    return tuple(tomllib.loads((APPLICATIONS / f"{demo}.toml").read_text())["protocols"])
+
+
 def configuration(commit: str, demo: str = "onsite_full",
                   pins: Sequence[Mapping[str, str]] | None = None) -> dict[str, Any]:
     """The configuration `applications/<demo>.toml` holds, at program ``commit``: `config new`'s over the application's subprotocols
-    (`DEMOS`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
+    (`listed`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
     parameters stated, and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
     entries for the subprotocols the application lists: no code states a key)."""
-    protocols = DEMOS[demo]
+    protocols = listed(demo)
     cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
     if "pous" in protocols:
@@ -971,7 +968,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     return Result(out)
 
 
-__all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL", "SERVED",
-           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "live", "onsite_check", "pending", "pieces",
+__all__ = ["HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "REGISTRATION_GOAL", "SERVED",
+           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "listed", "live", "onsite_check", "pending", "pieces",
            "placement", "prepare", "registration", "remote_check", "request_bound", "served_window", "unbound",
            "variables"]

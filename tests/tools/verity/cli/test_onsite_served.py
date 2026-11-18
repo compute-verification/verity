@@ -36,8 +36,9 @@ ROOT = Path(R.ROOT)
 CONFIG = ROOT / "applications" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
-#: onsite's components by their rows in the record
-NAMES = {T.ROWS[c]: c for c in T.PROTOCOLS}
+#: onsite's components, as its file lists them, and by their rows in the record
+PROTOCOLS = T.listed("onsite_full")
+NAMES = {T.ROWS[c]: c for c in PROTOCOLS}
 KEY = "0" * 128
 PIN = {p["protocol"]: p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"]}
 WIPE_PIN = PIN["wipe"]
@@ -126,7 +127,7 @@ def test_the_configuration_is_the_tables_byte_for_byte():
     assert R.load(CONFIG, REG)["params"]["verity/pous/p2/v4/run"] == {"challenges": 320}
 
 
-@pytest.mark.parametrize("demo", sorted(set(T.DEMOS) - {"onsite_full"}))
+@pytest.mark.parametrize("demo", sorted(set(T.HEADERS) - {"onsite_full"}))
 def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(demo):
     """Each other application's file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
     (or onsite's smaller set) is its own id; only the subprotocols it lists have parameters and pins."""
@@ -135,7 +136,7 @@ def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(dem
     assert K.render(cfg, T.HEADERS[demo]) == path.read_text()
     assert K.composite(cfg["protocols"], REG.components) in {**K.COMPOSITES, **K.UNACCEPTED}
     assert K.composite(cfg["protocols"], REG.components) != T.ONSITE
-    assert {p["protocol"] for p in cfg["pin"]} == {"pous", "wipe"} & set(T.DEMOS[demo])
+    assert {p["protocol"] for p in cfg["pin"]} == {"pous", "wipe"} & set(T.listed(demo))
 
 
 def test_the_configuration_states_no_host_or_address():
@@ -216,12 +217,11 @@ def test_the_registration_writes_the_logs_configuration_item_of_the_runs_hash(tm
 
 def test_the_parties_are_the_manifests_names_and_onsite_is_the_product():
     cfg = R.load(CONFIG, REG)
-    assert cfg["protocols"] == list(T.PROTOCOLS)
     assert {p["name"] for p in cfg["party"]} == {"workers", "firewall", "prover", "challenger", "network-certifier",
                                                  "memory-challenger", "bandwidth-verifier", "verifier"}
-    assert all(REG.components[c].product for c in T.PROTOCOLS)
+    assert all(REG.components[c].product for c in PROTOCOLS)
     assert K.composite(cfg["protocols"], REG.components) == T.ONSITE
-    assert sorted(T.PROTOCOLS) == sorted(K.COMPOSITES[T.ONSITE])
+    assert sorted(PROTOCOLS) == sorted(K.COMPOSITES[T.ONSITE])
 
 
 def test_the_attester_and_the_policy_are_declared_from_their_manifests_whole():
@@ -245,7 +245,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert len(got["channel"]) == len(cfg["channel"]) == 13
     assert got["dry"] == [{"configuration": K.digest(cfg), "parties": 8, "channels": 13, "entries": 21, "unbound": []}]
     pieces = {(x["party"], e["component"]) for x in got["plan"] for e in x["entries"]}
-    assert {c for _, c in pieces} == {*T.PROTOCOLS, T.SERVED_WINDOW}
+    assert {c for _, c in pieces} == {*PROTOCOLS, T.SERVED_WINDOW}
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
     assert all(hooks[k] == VARIABLES[k] for k in ("WIPE_CMD", "POUS_CMD", "BANDWIDTH_CMD"))
     assert " ".join(e["hooks"]["POUS_ARGS"] for x in got["plan"] for e in x["entries"]
@@ -705,7 +705,7 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
     assert {x["party"]: x["refused"] for x in said(out, "PARTY")} == {"verifier": None}
     (line,) = said(out, "VERDICT")
     assert line["verdict"] == verdict and line["block"] == SEAL and line["product"] == T.ONSITE
-    assert line["components"] == undecided({**{c: "accept" for c in T.PROTOCOLS}, "bandwidth": "absent",
+    assert line["components"] == undecided({**{c: "accept" for c in PROTOCOLS}, "bandwidth": "absent",
                                             "inference-only": "absent",
                                             **{NAMES[k]: v for k, v in rows.items()}})
     assert line["coins"] == "simulated" and line["reason"] == reason
@@ -723,7 +723,7 @@ def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp
     published(state, {"bandwidth": "accept", "inference-only": "accept"}, source=source)
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
     (line,) = said(capsys.readouterr().out, "VERDICT")
-    assert (line["verdict"], line["reason"]) == ("undecided", written(*T.PROTOCOLS, composed=True))
+    assert (line["verdict"], line["reason"]) == ("undecided", written(*PROTOCOLS, composed=True))
     assert set(line["components"].values()) == {"undecided"} and set(line["answer_from"].values()) == {source}
 
 
