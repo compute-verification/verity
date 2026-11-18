@@ -28,6 +28,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("GreedyChunk_v2", lambda: bind(G.GreedyChunk, N=16, OFF=48)),
         ("GreedyChunk_v2-carry", lambda: bind(G.GreedyChunk, N=24, OFF=65520)),
         ("GreedyCombine_v2", lambda: bind(G.GreedyCombine, V=320, N=16)),
+        ("GreedyCombineToken_v1", lambda: bind(G.GreedyCombineToken, V=320, N=16)),
         ("GreedySelect_v1", lambda: G.select(32, 4)),
         ("GreedySelect_v1-served", lambda: G.select(154880)),
     ]
