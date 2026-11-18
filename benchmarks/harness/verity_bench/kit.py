@@ -11,8 +11,8 @@
   with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
 - `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set and not another, else the run's machine's
   `[properties]`'; `card_sku(name)` and `card_arch(name)`: the `sku` and `arch` of the card `card_short` finds, and
-  `machine_arch()` the run's machine's card's.
-  `benchmarks/kernels/machine.py` prints both for a shell script.
+  `machine_arch()` the run's machine's card's; `run_card_sku()` the `sku` of the card the run is on (its host stamp's).
+  `benchmarks/kernels/machine.py` prints them for a shell script.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
@@ -256,6 +256,15 @@ def card_named_short(short: str, *, directory: Path | None = None) -> dict:
 def card_sku(name: str, *, directory: Path | None = None) -> str:
     """The ``sku`` of `card_record`'s record for ``name``: its file's name in ``directory``."""
     return card_record(name, directory=directory)["sku"]
+
+
+def run_card_sku(*, directory: Path | None = None) -> str:
+    """The ``sku`` of the card the run is on: `card_sku` of `host_stamp`'s card, the lease's GPUs' name, else the host's;
+    refused by name on a host with no GPU."""
+    stamp = host_stamp()
+    if stamp["card"] == "none":
+        raise SystemExit(f"no GPU here ({stamp.get('why')}), so no card the run is on: run it on its GPU, or name the card's sku")
+    return card_sku(stamp["card"], directory=directory)
 
 
 def card_arch(name: str | None = None, *, sku: str | None = None, directory: Path | None = None) -> str:

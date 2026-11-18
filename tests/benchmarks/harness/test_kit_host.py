@@ -67,6 +67,15 @@ def test_the_host_stamp_names_the_card_each_gpus_uuid_and_clocks_the_driver_and_
                      ["nvidia-smi"]]
 
 
+def test_the_runs_card_sku_is_its_host_stamps_cards_and_a_host_with_no_gpu_is_refused_by_name(monkeypatch, no_gpu):
+    """`run_card_sku` is what `build_engine(card=...)` and vLLM's CARD_SKU take: the card file of the GPUs the stamp
+    names; on a host with none it says so, rather than asking for a card file that holds the name "none"."""
+    with pytest.raises(SystemExit, match=r"^no GPU here \(.+\), so no card the run is on"):
+        kit.run_card_sku()
+    _host(monkeypatch, {"query": (0, _row(GPU0)), "header": (0, HEADER)})
+    assert kit.run_card_sku() == kit.card_record(CARD)["sku"] == "rtx-pro-6000-server"
+
+
 def test_the_host_stamp_is_of_the_leases_gpus(monkeypatch):
     asked = _host(monkeypatch, {"query": (0, _row(GPU1)), "header": (1, "")})
     monkeypatch.setenv("GPU_LEASE_UUID", GPU1)
