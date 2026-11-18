@@ -8,7 +8,7 @@ lane instructions, lane-chain steps if the filler ran any, and served MMAs, at f
 With --lfill it reads dcap's lfill lines instead: each one's window beside the pump alone and
 beside the pump and the lane filler (lines from a -DPF_LANE build, now retired, carry its lane
 instructions a pump MMA as pf_lane). With --dfill, dcap's dfill lines: the step beside the pump on a
-split, or co-scheduled on every SM. With --fstep, dcap's fstep lines (capfill_fstep_probe.sh): the step through flin
+split, or co-scheduled on every SM. With --fstep, dcap's fstep lines: the step through flin
 beside the pump, co-scheduled on every SM.
 
   python3 benchmarks/pouw/filler/capacity_of.py RUN_OUT_DIR [--fold duo] [--lane-per-mma X] [--served-fold none] [--json]
@@ -151,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("out", type=Path, nargs="?", help="a scored run's arm dir (its score.json)")
     ap.add_argument("--lfill", type=Path, help="dcap lfill lines")
     ap.add_argument("--dfill", type=Path, help="dcap dfill lines, split or co")
-    ap.add_argument("--fstep", type=Path, help="dcap fstep lines (capfill_fstep_probe.sh's fstep.jsonl)")
+    ap.add_argument("--fstep", type=Path, help="dcap fstep lines")
     ap.add_argument("--fold", default="duo")
     ap.add_argument("--served-fold", default="none")
     ap.add_argument("--lane-per-mma", type=float, default=0.0, help="lane-chain warp instructions a filler MMA")

@@ -12,7 +12,7 @@
 # file, named without `.sh`.
 set -uo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-JOBS="capfill_fstep_probe|dcap|dfill|fill|flin|pfill_probe|psched|psched_probe|tile_probe"
+JOBS="dcap|dfill|fill|flin|pfill_probe|psched|psched_probe|tile_probe"
 job=${1:-}
 case "$job" in
   score) shift; exec python3 "$HERE/score.py" "$@" ;;
