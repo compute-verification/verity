@@ -4,11 +4,13 @@ thresholds the protocol states, and a grinding try's compressions against the re
 
 from __future__ import annotations
 
+import json
 import functools
 import hashlib
 import itertools
 import math
 import random
+from pathlib import Path
 from fractions import Fraction
 
 import pytest
@@ -16,6 +18,8 @@ import pytest
 from verity.commitments import MerkleTree, scheme
 from verity.commitments.randomness import derive
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, ledger, receipts, timing
+
+FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[7] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
 
 PRIME = 1_000_003
 
@@ -130,7 +134,7 @@ def test_the_readings_and_thresholds_the_protocol_states() -> None:
             gap = math.floor(Fraction(1, 2 ** bits) / f) - c
             assert gap == 0 if rows == 16 else 0 < gap < c >> 100, "64 rows: the 512-bit keys' birthday moves c by a hair"
     assert timing.sketch_rate(16, 11) == Fraction(1, 2 ** 88) + 128 * timing.sign_rank_at_most(16, 10)
-    node_day, passes = round(timing.SHA512_PER_S * 86400), 86400 * 50
+    node_day, passes = round(FIGURES.sha512_per_s * 86400), 86400 * 50
     assert (timing.sketch_failure(passes, queries=node_day)
             == timing.sketch_failure(passes, r=12, queries=node_day))
     assert lg(timing.sketch_failure(passes, queries=node_day)) == -43.02
@@ -176,7 +180,7 @@ def test_the_sketch_charges_the_provers_budget() -> None:
     assert parts["hiding"] == pytest.approx(
         2 * 2.0 ** receipts.HM96.statistical_distance_log2(p, key_failure_log2=keys), rel=1e-12)
     total = sum(parts.values(), Fraction(0))
-    assert [x.delta for x in ledger.memory(record, ledger.Node.stated(timing.RTX_PRO_6000_NODE))] == [total] * 3
+    assert [x.delta for x in ledger.memory(record, ledger.Node.stated(FIGURES))] == [total] * 3
     assert round(math.log2(total), 2) == -15.12, "the ledger's, typed to check it"
     for bad in (0, -1, 1.5, 2.0 ** 80):
         with pytest.raises(ValueError, match="budget Q"):
