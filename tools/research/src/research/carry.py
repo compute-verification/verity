@@ -15,8 +15,10 @@ and each commit of that line is one of:
   generated content;
 - a commit that changes only generated content;
 - given a landed `tools/move/restack.py` (``restack``), a restack's commit across a move, whose `Restack-move:` trailer names
-  a landed move, and whose tree is that move's script rerun on its parent (`moved_tree`) but in generated content; the merge
-  above it is the queue's merge of its parents with the move for their merge base, as the restack's own merge is.  A move's
+  a landed move, and whose tree is that move's script rerun on its parent (`moved_tree`), with the map the move adds lent to
+  the script as restack.py lends it, or is what restack.py brings onto its rerun of the change the move made beside its
+  script, its `hand` paths and the map it adds (`hand_tree`), but in generated content; the merge above it is the queue's
+  merge of its parents with the move for their merge base, as the restack's own merge is.  A move's
   script runs a tree's own code, so it reruns only once every other commit of the line passed, on trees they vouch for.
 
 Generated content is each pin of the pins tool (`queue.pins_at` at ``new``), which `pins.py --stale` holds to the tree, and
@@ -38,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import re
 import subprocess
@@ -54,15 +57,21 @@ CARRIES = ("merge-only",)
 KINDS = CARRIES + ("missing", "rebased", "authored", "untrusted-parent", "hand-resolved", "edited-merge", "octopus")
 #: a restack's commit across a move (`tools/move/restack.py`): the move it reran on its parent
 RESTACK_MOVE_RE = re.compile(r"^Restack-move: ([0-9a-f]{40,64})$", re.M)
-#: `moved_tree`'s program: with `tools/move/restack.py` from the directory argv[1], runs the move argv[3] on commit argv[2] as a
-#: restack runs one on a branch (`run_script`: its move line's script and arguments, its parent's `tools/move/`, in a scratch
-#: worktree), and prints the tree it leaves (`MOVED_RE`)
+#: `moved_tree`'s program: with `tools/move/restack.py` from the directory argv[1], runs the move argv[3] on commit argv[2] (on
+#: the move's base where it is empty) as a restack runs one on a branch (`run_script`: its move line's script and arguments,
+#: its parent's `tools/move/`, and the map the move adds where its base lacks it, `own_map`, in a scratch worktree), and
+#: prints the tree it leaves (`MOVED_RE`)
 _MOVED = ("import sys; sys.path.insert(0, sys.argv[1]); import restack as R\n"
           "R.SCRIPT, R.SCRIPT_ARGS = R.move_line(sys.argv[3], None) or sys.exit(f'{sys.argv[3][:12]} has no move line')\n"
-          "print('moved', R.run_script(sys.argv[2], R.move_base(sys.argv[3], None), sys.executable, None)[0])\n")
+          "base = R.move_base(sys.argv[3], None)\n"
+          "own = R.own_map(sys.argv[3], base, R.SCRIPT_ARGS, None) if hasattr(R, 'own_map') else None\n"
+          "print('moved', R.run_script(sys.argv[2] or base, base, sys.executable, None,\n"
+          "                            *([(sys.argv[3], own)] if own else []))[0])\n")
 MOVED_RE = re.compile(r"^moved ([0-9a-f]{40,64})$", re.M)
 #: how long one move's script runs at most on one commit (`moved_tree`): a layout map on the whole tree, `uv lock` with it
 MOVED_TIMEOUT_S = 1800.0
+#: what a move's script writes on the move's base (`hand_tree`), by the clone, the move and the `restack.py` that ran it
+_ON_BASE: dict[tuple[str, str, str], tuple[str | None, str]] = {}
 
 
 @dataclass(frozen=True)
@@ -143,8 +152,8 @@ def _judged(repo: Path, want: str, got: str, files: list[str], pins: set[str]) -
 
 
 def moved_tree(repo: Path, commit: str, move: str, restack: Path, timeout: float = MOVED_TIMEOUT_S) -> tuple[str | None, str]:
-    """(the tree ``commit`` becomes once the move ``move`` runs on it as `tools/move/restack.py`, from the directory ``restack``,
-    runs it on a branch (`_MOVED`), ''), or (None, why it couldn't).  It runs in a process group of its own, killed whole once
+    """(the tree ``commit`` (the move's base where it is '') becomes once the move ``move`` runs on it as
+    `tools/move/restack.py`, from the directory ``restack``, runs it on a branch (`_MOVED`), ''), or (None, why it couldn't).  It runs in a process group of its own, killed whole once
     ``timeout`` seconds pass (`queue.run_group`), with its scratch worktree in a temporary directory, which goes once it has
     run, and with it the clone's record of a worktree a killed run left, forgotten under restack.py's lock
     (`queue.WORKTREES_LOCK`).  The tree's own code runs there but needs neither the queue's credentials nor the store's keys,
@@ -162,6 +171,26 @@ def moved_tree(repo: Path, commit: str, move: str, restack: Path, timeout: float
         return None, f"ran over {timeout:.0f} s"
     got = MOVED_RE.findall(out)
     return (got[-1], "") if rc == 0 and got else (None, f"exit {rc}: {' | '.join(out.strip().splitlines()[-3:])}")
+
+
+def hand_tree(repo: Path, commit: str, move: str, restack: Path) -> tuple[str | None, str]:
+    """(the tree `tools/move/restack.py` leaves once it brings onto ``commit`` (its rerun of ``move``) the change ``move`` made
+    beside its script, its `hand` paths and the map it adds: the queue's merge of ``commit`` and ``move`` over what the
+    script writes on the move's base (`moved_tree`, run once a move and `restack.py`), as restack.py merges them, ''), or
+    (None, why it couldn't)."""
+    key = (str(repo), move, hashlib.sha256((restack / "restack.py").read_bytes()).hexdigest())
+    if key not in _ON_BASE:
+        _ON_BASE[key] = moved_tree(repo, "", move, restack)
+    tree, why = _ON_BASE[key]
+    if tree is None:
+        return None, why
+    if tree == Q._out(repo, "rev-parse", f"{move}^{{tree}}"):
+        return None, f"{move[:12]} made nothing beside its script"
+    base = Q._out(repo, "-c", "user.name=research.carry", "-c", "user.email=carry@localhost", "commit-tree", tree, "-m",
+                  f"what {move[:12]}'s script writes on its base")
+    merged, conflicted, r = Q.merged_tree(repo, commit, move, merge_base=base)
+    return (merged, "") if merged else (None, f"it conflicts with the move in {_some(conflicted)}" if conflicted
+                                       else f"git merge-tree exited {r.returncode}")
 
 
 def _reruns(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], bool]) -> dict[str, str]:
@@ -236,13 +265,18 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
             for c, p in reversed(moved):
                 tree, why = moved_tree(repo, p, reruns[c], tools)
                 mine, gen = _judged(repo, tree, c, _differ(repo, tree, c), pins) if tree else (_differ(repo, p, c), [])
+                beside = bool(mine and tree and (hand := hand_tree(repo, p, reruns[c], tools)[0]))
+                if beside:
+                    mine, gen = _judged(repo, hand, c, _differ(repo, hand, c), pins)
                 if mine:
                     own["authored"].update(mine)
-                    first["authored"] = (f"{c[:12]} changes {_some(mine)} beyond the move {reruns[c][:12]}'s script" if tree
+                    first["authored"] = (f"{c[:12]} changes {_some(mine)} beyond the move {reruns[c][:12]}'s script"
+                                         + (" and what it made beside it" if beside else "") if tree
                                          else f"{c[:12]} names the move {reruns[c][:12]}, whose script didn't rerun: {why}")
                     break
                 left.update(gen)
-                moves.append(reruns[c])
+                if reruns[c] not in moves:
+                    moves.append(reruns[c])
     parents = tuple(dict.fromkeys(merged))
     done = dict(commits=len(rows), generated=tuple(sorted(left)), parents=parents, moves=tuple(moves))
     if kind := next((k for k in own if own[k]), None):
