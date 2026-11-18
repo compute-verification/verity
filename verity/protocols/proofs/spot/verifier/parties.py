@@ -148,8 +148,9 @@ COMPONENT = "sampled-proofs"
 #: store, and both compose SPOT as `COMPOSED`
 SUBPROTOCOLS = {
     ONSITE_PROTOCOL: {"bandwidth": POUB_P2, "network-attester": CERTIFIER_PROTOCOL,
-                      "inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
-                      "pous": POUS_P2_RUN, COMPONENT: COMPOSED, "wipe": WIPE_PROTOCOL},
+                         "inference-only": "verity/inference-only/v0", "pous": POUS_P2_RUN,
+                         "pearl-plus": "verity/pouw/pearl-plus/v1", COMPONENT: COMPOSED,
+                         "wipe": WIPE_PROTOCOL},
     "verity/remote/v1": {"inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
                          COMPONENT: COMPOSED},
 }

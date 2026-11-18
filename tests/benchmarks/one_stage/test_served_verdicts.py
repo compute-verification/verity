@@ -7201,14 +7201,14 @@ def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks
 
 
 @pytest.mark.parametrize("extra, first, rc", [
-    ({}, "COMPOSITE ON-NODE: composed on the served node {host}, which the prover controls", 1),
+    ({}, "COMPOSITE ON-NODE: composed on the served node (SERVED_NODE), which the prover controls", 1),
     ({"COMPOSE_ON_NODE": "composed by a follow-on here"}, "COMPOSITE ON-NODE: composed by a follow-on here", 1),
-    ({"PRODUCT": "remote"}, "COMPOSITE ON-NODE: composed on the served node {host}, which the prover controls", 1),
+    ({"PRODUCT": "remote"}, "COMPOSITE ON-NODE: composed on the served node (SERVED_NODE), which the prover controls", 1),
     ({"VERITY_HOLD_PLACEMENT": "1", "COMPOSE_OFF_NODE": "0"},
-     "COMPOSITE DEVELOPMENT: composed on the served node {host}, which the prover controls: a development check, no "
+     "COMPOSITE DEVELOPMENT: composed on the served node, which the prover controls: a development check, no "
      "claim of record (COMPOSE_OFF_NODE=0)", 1),
     ({"VERITY_HOLD_PLACEMENT": "1"},
-     "COMPOSITE refused: this is the served node {host}, which the prover controls, so a composite here claims no "
+     "COMPOSITE refused: this is the served node (SERVED_NODE), which the prover controls, so a composite here claims no "
      "record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it here "
      "as a development check, VERITY_HOLD_PLACEMENT unset composes it here)", 1),
 ])
