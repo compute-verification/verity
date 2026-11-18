@@ -17,7 +17,8 @@ which `research pods stopped` writes; `lane`, the lane whose budget line pays fo
 unset) plus who registered it and when, and last its `[properties]` table, what a job may do there, each with the command that
 read it (`verity_bench.kit.machine_properties`), which a re-registration of the same binding and fleet.py's marks keep.  A machine marked `stopped_since`, or `unreachable_since` for UNREACHABLE_OUT_MIN, is out
 of placement (`left_out`): `research run --on auto` asks it nothing and `research deploy` writes it into no list of machines, and
-it is still reached by name.  Two
+it is still reached by name.  A `provider = "slurm"` machine, a node of a cluster that is not ours, is reached only through
+batch jobs its `via` machine submits, and its file holds no address (research.pods.slurm says what it holds).  Two
 agents registering two pods write two files, so nothing is ever hand-merged; in the notes repo, `research notes sync` carries
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
 
@@ -115,8 +116,13 @@ def validate(name: str, entry: Any) -> str | None:
             return f"port {entry['port']!r} is not a TCP port"
         if "user" in entry and not (isinstance(entry["user"], str) and NAME_RE.fullmatch(entry["user"])):
             return f"user {entry['user']!r} is not a user name"
+    elif entry.get("provider") == "slurm":
+        from .slurm import problem
+
+        if why := problem(entry):
+            return why
     elif entry.get("provider") != "runpod":
-        return f"provider {entry.get('provider')!r} (runpod or ssh)"
+        return f"provider {entry.get('provider')!r} (runpod, ssh or slurm)"
     elif not isinstance(entry.get("pod_id"), str) or not POD_ID_RE.fullmatch(entry["pod_id"]):
         return f"pod_id {entry.get('pod_id')!r} is not a pod id"
     if entry.get("lane") is not None and not (isinstance(entry["lane"], str) and NAME_RE.fullmatch(entry["lane"])):
@@ -144,12 +150,12 @@ def left_out(entry: dict, now: float) -> str | None:
 
 
 def binding(entry: dict) -> str | None:
-    """What a name is bound to: a runpod pod id, or an ssh machine's host."""
-    return entry.get("pod_id") or entry.get("host")
+    """What a name is bound to: a runpod pod id, an ssh machine's host, or the machine a slurm one's jobs go through."""
+    return entry.get("pod_id") or entry.get("host") or (f"slurm via {entry['via']}" if entry.get("provider") == "slurm" else None)
 
 
 def _bound(entry: dict) -> str:
-    return f"pod {entry['pod_id']}" if entry.get("pod_id") else f"host {entry.get('host')}"
+    return f"pod {entry['pod_id']}" if entry.get("pod_id") else f"host {entry['host']}" if entry.get("host") else str(binding(entry))
 
 
 def host_var(name: str) -> str:
@@ -342,6 +348,28 @@ def properties_copy(name: str, entry: dict) -> str | None:
         return None
     return (f"# machine {name}'s [properties], copied from its record by `research run`\nmachine = {_toml_value(name)}\n\n"
             "[properties]\n" + "".join(f"{_toml_key(k)} = {_toml_value(v)}\n" for k, v in props.items()))
+
+
+def recorded(name: str, machines_toml: Path) -> dict | None:
+    """Machine `name`'s record as the register here holds it now, read from its one file: nothing is cloned or synced and no
+    other record is read. None where the register is off, holds no record of it, or the record doesn't parse."""
+    d = registry_dir(machines_toml)
+    entry = d / f"{name}.toml" if d else None
+    if not (entry and entry.is_file()):
+        return None
+    try:
+        return tomllib.loads(entry.read_text())
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        print(f"research: {entry} was not read ({type(e).__name__}), so the register here is taken to hold no record of {name}",
+              file=sys.stderr)
+        return None
+
+
+def recorded_properties(name: str, machines_toml: Path) -> str | None:
+    """`properties_copy` of machine `name` as the register here holds it; None where it holds no record of it (`recorded`) or
+    the record has no `[properties]`."""
+    entry = recorded(name, machines_toml)
+    return properties_copy(name, entry) if entry is not None else None
 
 
 def write_entry(d: Path, name: str, entry: dict) -> Path:
