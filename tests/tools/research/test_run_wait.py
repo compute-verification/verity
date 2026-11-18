@@ -87,6 +87,32 @@ def test_wait_prints_each_line_the_slot_adds_while_the_run_waits_for_a_place(tmp
                                                                  "limit, and retrying every 5 s (S)")], "each line once, as it appears"
 
 
+def test_slot_lines_gives_the_slots_lines_and_nothing_when_the_machine_is_not_read(tmp_path, monkeypatch, capsys):
+    """Rule: `--wait` relays what the slot says and never ends on a machine it could not read; weakening: an ssh that fails to
+    start ends the wait with a traceback."""
+    import subprocess
+
+    assert remote.slot_lines(tmp_path) == [], "a run launched on no machine has none"
+    (tmp_path / "remote.json").write_text(json.dumps({"remote_run_dir": "/w/runs/r1", "host": "h", "port": 22}))
+    monkeypatch.setattr(remote, "ssh_argv", lambda host, port, user="root": ["ssh", host])
+    out = b"slot: waiting for r0\nlean-slot: build-0 held by lean 3 min\n"
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout: subprocess.CompletedProcess(ssh, 0, out, b""))
+    assert remote.slot_lines(tmp_path) == ["slot: waiting for r0", "lean-slot: build-0 held by lean 3 min"]
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout: subprocess.CompletedProcess(ssh, 1, b"", b""))
+    assert remote.slot_lines(tmp_path) == [], "grep found none"
+
+    def fails(error):
+        def run(ssh, argv, timeout):
+            raise error
+        return run
+
+    for error, said in ((subprocess.TimeoutExpired("ssh", 30), "was not read in 30 s"), (OSError("no ssh here"), "was not read (no ssh here)")):
+        monkeypatch.setattr(remote, "ssh_run", fails(error))
+        assert remote.slot_lines(tmp_path) == []
+        assert said in capsys.readouterr().err
+
+
+
 @pytest.mark.parametrize("max_s, fetch_s", [(waitcap.WAIT_LIMIT_S, 0.0), (waitcap.WAIT_LIMIT_S, 45.0), (300.0, 0.0)],
                          ids=["limit", "slow-fetches", "wait-max"])
 def test_wait_stops_at_its_limit_with_the_run_still_going_and_says_how_to_check_back(tmp_path, capsys, max_s, fetch_s):

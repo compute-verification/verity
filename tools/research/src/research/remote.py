@@ -2749,12 +2749,13 @@ def slot_lines(local_dir: Path, *, timeout: float = 30) -> list[str]:
     rec = _read_json(local_dir / "remote.json") or {}
     if not rec.get("remote_run_dir"):
         return []
-    ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
     log = shlex.quote(f"{rec['remote_run_dir']}/stderr.log")
     try:
+        ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
         r = ssh_run(ssh, ["sh", "-c", f"head -c {SLOT_HEAD} {log} 2>/dev/null | grep -E '^(lean-)?slot:'"], timeout=timeout)
-    except subprocess.TimeoutExpired as e:
-        print(f"research: its stderr.log was not read in {e.timeout:.0f} s, so what its slot says is not known", file=sys.stderr)
+    except (subprocess.TimeoutExpired, OSError, KeyError) as e:
+        why = f"in {e.timeout:.0f} s" if isinstance(e, subprocess.TimeoutExpired) else f"({e})"
+        print(f"research: its stderr.log was not read {why}, so what its slot says is not known", file=sys.stderr)
         return []
     return r.stdout.decode(errors="replace").splitlines() if r.returncode == 0 else []
 

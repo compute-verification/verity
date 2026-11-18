@@ -218,12 +218,7 @@ def lean_package(command: list[str], source: Path | None, env: list[str] = ()) -
     def deepest(f: str) -> str | None:
         return max((p for p in pkgs if f.startswith(p + "/")), key=len, default=None)
 
-    if file:
-        pkg = deepest(file.removeprefix("./"))
-    else:
-        name = name.rstrip("/")
-        match = [p for p in pkgs if p == name] or [p for p in pkgs if _lake_name(Path(source) / p) == name] or [p for p in pkgs if name in p]
-        pkg = match[0] if len(match) == 1 else None
+    pkg = deepest(file.removeprefix("./")) if file else _named(pkgs, Path(source), name)
     if pkg is None:
         return None
     return LeanNeeds(pkg, pool, sum(f.endswith(".lean") and deepest(f) == pkg for f in listed))
@@ -248,14 +243,13 @@ def below_floor(source: Path, command: list[str], env: list[str], mem_gb: float)
         return None
     name = words[words.index("--records", at) + 1].rstrip("/")
     listed = subprocess.run([GIT, "-C", str(source), "ls-files", "--", "*/lean-audit.json"], capture_output=True, text=True)
-    pkgs = sorted(f.rsplit("/", 1)[0] for f in listed.stdout.splitlines() if not f.startswith(LEAN_FIXTURES))
-    match = [p for p in pkgs if p == name] or [p for p in pkgs if _lake_name(source / p) == name] or [p for p in pkgs if name in p]
-    if len(match) != 1 or not (source / LEAN_RESERVE_PY).is_file():
+    pkg = _named(sorted(f.rsplit("/", 1)[0] for f in listed.stdout.splitlines() if not f.startswith(LEAN_FIXTURES)), source, name)
+    if pkg is None or not (source / LEAN_RESERVE_PY).is_file():
         return None
     spec = importlib.util.spec_from_file_location("auto_lean_reserve", source / LEAN_RESERVE_PY)
     reserve = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(reserve)
-    manifest = source / match[0] / "lake-manifest.json"
+    manifest = source / pkg / "lake-manifest.json"
     pins = {p.get("name") for p in json.loads(manifest.read_text()).get("packages", [])} & HEAVY_DEPS if manifest.is_file() else set()
     named = dict(kv.split("=", 1) for kv in (*env, *words) if "=" in kv and not kv.startswith("-"))
     floor = named.get("VERITY_LEAN_MEM_FLOOR_GIB", str(reserve.floor("build", pins)))
@@ -264,15 +258,23 @@ def below_floor(source: Path, command: list[str], env: list[str], mem_gb: float)
     floor = float(floor)
     if floor <= 0 or reserve.gib(mem_gb) >= floor:
         return None
-    gb = reserve.ask({match[0]: pins}, ("build",))[0]
+    gb = reserve.ask({pkg: pins}, ("build",))[0]
     tree = ast.parse((source / LEAN_CHECK_PY).read_text())
     run = next((n.value.value for n in tree.body if isinstance(n, ast.Assign)
                 and any(getattr(t, "id", None) == "BELOW_FLOOR_RUN" for t in n.targets)), None)
     if not isinstance(run, str):
         return None
     run = run.format(gb=gb, pkg=name) + " --update" * ("--update" in words[at:])
-    return (f"the build of {match[0]} needs at least {floor:g} GiB, and --mem-gb {mem_gb:g} is {reserve.gib(mem_gb):.1f} GiB, "
+    return (f"the build of {pkg} needs at least {floor:g} GiB, and --mem-gb {mem_gb:g} is {reserve.gib(mem_gb):.1f} GiB, "
             f"so its node would refuse it once it took a slot: run it where it asks {gb} GB,\n  {run}")
+
+
+def _named(pkgs: list[str], source: Path, name: str) -> str | None:
+    """The one of ``source``'s packages `--records NAME` names: its path, else its lakefile's `name`, else the one path NAME
+    is part of. None when none or several match."""
+    name = name.rstrip("/")
+    match = [p for p in pkgs if p == name] or [p for p in pkgs if _lake_name(source / p) == name] or [p for p in pkgs if name in p]
+    return match[0] if len(match) == 1 else None
 
 
 def _lake_name(pkg: Path) -> str | None:
