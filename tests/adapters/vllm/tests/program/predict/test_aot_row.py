@@ -31,6 +31,22 @@ def _tiny(tmp_path, monkeypatch, n: int) -> None:
 COMPILER = {"name": "verity/prove-path/capped-compiler/v0", "digest": "c" * 128}
 
 
+def test_the_records_compiler_digest_moves_with_an_adapter_file_of_the_tree_it_is_written_from(tmp_path, monkeypatch):
+    """`_compiler` reads the work tree: two trees that differ only in a file under ``adapters/vllm`` give two digests, so a
+    record written from one is refused by the other."""
+    import subprocess
+
+    from verity_vllm.pipeline import source_identity as SI
+
+    (f := tmp_path / "adapters" / "vllm" / "a.py").parent.mkdir(parents=True)
+    f.write_text("x = 1\n")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.setattr(SI, "TREE", tmp_path)
+    before = A._compiler()
+    f.write_text("x = 2\n")
+    assert A._compiler()["name"] == before["name"] and A._compiler()["digest"] != before["digest"]
+
+
 @pytest.mark.parametrize("n", [1, 2])
 def test_predict_row_binds_the_compiler_and_its_programs_and_writes_no_manifest(tmp_path, monkeypatch, n):
     """`predicted.json` names the registered compiler and each request Program's and the workload's digest, which the Build dirs

@@ -22,8 +22,10 @@ Program with the names its trace gives it (`naming.write_build`, `build_request_
 (`write_workload`, `build_workload/`: its artifact `workload_program.json`, with the `lag` and `applicability.engine.async_scheduling`
 the declared target resolves, and its `descriptor.json.gz`, which GM-01 holds the digest and the lag to), and `predicted.json`
 (`records.predicted_row`): the registered compiler (`pipeline.advice.registered_compiler`) and those Programs' digests, nothing of
-any window, whose circuit each window's registration binds. That is the row's Build of record, the ahead-of-time compiler's,
-which a traced Build only cross-checks. `compare --predicted DIR` holds it to a traced Build of the same row: every Program digest.
+any window, whose circuit each window's registration binds. The compiler's digest covers every file of the integration's import
+closure in the work tree, the adapter's included, so the record is written from the tree that serves: `serve_row.row_refusal`
+refuses one from any other. That is the row's Build of record, the ahead-of-time compiler's, which a traced Build only
+cross-checks. `compare --predicted DIR` holds it to a traced Build of the same row: every Program digest.
 
     verity-vllm predict emit --row ROW --rank R --config CONFIG_JSON --trace DIR --out DIR (--wrapper step --M N --pos0 N |
                              --wrapper request --LP N --T N) [--aot JSON]
