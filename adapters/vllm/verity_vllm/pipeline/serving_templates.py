@@ -212,9 +212,10 @@ class Template:
     ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"chain"`` for a ``CHAINS`` unit family,
     ``"stage"`` for a ``STAGES`` stage family, ``"expert"``, ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's
     block GEMMs, fused blocks, table reads and router slots (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``), ``"history"`` for a
-    ``HISTORY`` row's history reads (`history_read`); ``"bits"`` for a row template that is a Boolean Definition with no word
-    Definition (DSA's long row's units: the mask's cut and the index), whose ports are bits and no words: each port is committed
-    as a bit row, its bits low first (`interface.unit_rows`, which holds each to whole u16 words); else ``"row"``).
+    ``HISTORY`` row's history reads (`history_read`); ``"bits"`` for a row template with a port of bits and no word
+    Definition (DSA's long row's units: the mask's cut and the index), whose ports are bits but a word a read takes (a slot's
+    position): each port is committed as a bit row, its bits low first, or as its words (`interface.unit_rows`, which holds
+    each to whole u16 words); else ``"row"``).
     ``packed``: a row, coordinate, column block, slice, part, K-chunk, chain, stage, expert or slots template with a port that is not 16-bit
     elements, each port's element bits (its parameters', then its return fields'); its ports are committed as their elements'
     bytes. A read's (a history read's too) and a fused block's ports are bits (a key, digests, salt and path, and a fused block's operands' bytes),
@@ -233,7 +234,7 @@ def template(t: str) -> Template:
     """Template ``t`` through its word link: the registered Definition it names, bound to exactly ``t``; the word Definition it computes
     (`trace.word_of` for a Boolean Definition), whose signature is the template's word view; refused by name when ``t`` names no
     Definition or a port of its word view is not 16-bit words (a row or coordinate template's: not whole u16 words of one ``PACKED``
-    width; a Boolean row template with no word Definition is laid out as its bits, ``"bits"``)."""
+    width; a row template with a port of bits and no word Definition is laid out as its bits, ``"bits"``)."""
     hit = _TEMPLATES.get(t)
     if hit is not None:
         return hit
@@ -279,7 +280,7 @@ def template(t: str) -> Template:
               else "kchunk" if spec_base(word) in KCHUNKS.values()
               else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_OF
               else "history" if history_read(word) else LAYOUTS.get(spec_base(word), "row"))
-    if layout == "row" and w is fn and widths == {1}:
+    if layout == "row" and w is fn and 1 in widths:
         layout = "bits"
     packed = None
     if widths != {16} and layout not in ("s8", "read", "fused", "history", "bits"):
