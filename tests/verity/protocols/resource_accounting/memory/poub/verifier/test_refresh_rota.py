@@ -2,99 +2,55 @@ import itertools
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.poub.prover.rota import REGISTRATION, REKEY_MAX, Rota
+from verity.protocols.resource_accounting.memory.poub.prover.rota import Schedule
 
-SHAPES = [(n, life, w) for n, life, w in itertools.product((1, 3, 7, 64), (1, 2, 3, 5), (1, 4, 13))]
-
-
-def chunks(rota: Rota, appends: int):
-    """Every chunk of the rota: each registered block, and `appends` fresh appends born in windows 0, 1, …"""
-    for j in range(rota.blocks):
-        yield 0, rota.registered_class(j), True
-    for k in range(appends):
-        yield k % rota.windows, rota.append_class(k), False
+SHAPES = [(n, life, w, f) for n, life, w, f in itertools.product((1, 3, 7, 64), (1, 2, 3, 5), (1, 4, 13), (0, 1, 4))]
 
 
-@pytest.mark.parametrize("n, life, w", SHAPES)
-def test_every_chunk_is_rekeyed_exactly_once_a_period_after_its_base(n, life, w):
-    rota = Rota(n, life, w)
-    for base, c, _ in chunks(rota, 9):
-        got = set(rota.rekeys(base, c))
-        for start in range(base + 1, w - life + 1, life):
-            assert len(got & set(range(start, start + life))) == 1, (base, c, start)
-        assert all(base < r < w for r in got)
-        assert rota.first(base, c) <= base + life
+def test_the_schedule_of_64_blocks_at_period_2_over_6_windows_with_4_fresh_slots_has_53_slots():
+    s = Schedule(64, 2, 6, 4)
+    assert [s.window_size(w) for w in range(6)] == [4, 5, 9, 9, 13, 13]
+    assert s.total == 53
+    assert [s.slot_in(1, m) for m in range(5)] == [("registered", 32, 32), *[("fresh",)] * 4]
+    assert [s.slot_in(2, m) for m in range(9)] == [
+        ("registered", 0, 32), ("rekey", 0), ("rekey", 1), ("rekey", 2), ("rekey", 3), *[("fresh",)] * 4]
+    assert s.slot_in(4, 1) == ("rekey", 0) and s.slot_in(4, 5) == ("rekey", 14)
+    assert s.slot_at(52) == (5, ("fresh",)) and s.slot_at(53) is None
 
 
-@pytest.mark.parametrize("n, life, w", SHAPES)
-def test_no_chunk_is_planned_outside_its_keys_window_or_before_its_probation_ends(n, life, w):
-    rota = Rota(n, life, w)
-    for base, c, registered in chunks(rota, 9):
-        rekeys = set(rota.rekeys(base, c))
-        for t in range(w):
-            joined = rota.key(base, c, t, registered=registered)
-            if not registered and t < base + life:
-                assert joined is None
-                continue
-            assert joined is not None, (base, c, t)
-            assert joined <= t < joined + life
-            assert joined in rekeys or (registered and joined == REGISTRATION)
+@pytest.mark.parametrize("n, life, w, f", SHAPES)
+def test_every_fresh_slot_is_rekeyed_once_in_each_later_window_of_its_class(n, life, w, f):
+    s = Schedule(n, life, w, f)
+    rekeys = [kind[1] for k in range(s.total) if (kind := s.slot_at(k)[1])[0] == "rekey"]
+    for b in range(w):
+        for i in range(f):
+            k = s.fresh_slot(b, i)
+            assert s.slot_at(k) == (b, ("fresh",))
+            at = [s.slot_at(r)[0] for r in range(s.total) if s.slot_at(r)[1] == ("rekey", k)]
+            assert at == list(range(b + life, w, life))
+    assert len(rekeys) == sum(len(range(b + life, w, life)) for b in range(w)) * f
 
 
-@pytest.mark.parametrize("n, life, w", SHAPES)
-def test_a_registered_block_is_plannable_in_every_window_and_a_fresh_one_from_the_end_of_its_probation(n, life, w):
-    rota = Rota(n, life, w)
+@pytest.mark.parametrize("n, life, w, f", SHAPES)
+def test_a_window_holds_at_most_one_registered_slot_its_class_s_run_and_the_runs_cover_the_store_once(n, life, w, f):
+    s = Schedule(n, life, w, f)
+    runs = [s.class_run(c) for c in range(life)]
+    assert [j for lo, hi in runs for j in range(lo, hi)] == list(range(n))
     for t in range(w):
-        assert all(rota.key(0, rota.registered_class(j), t, registered=True) is not None for j in range(n))
-        for k in range(9):
-            base = k % w
-            assert (rota.key(base, rota.append_class(k), t, registered=False) is not None) == (t >= base + life)
+        regs = [s.slot_in(t, m) for m in range(s.window_size(t)) if s.slot_in(t, m)[0] == "registered"]
+        lo, hi = runs[t % life]
+        assert regs == ([("registered", lo, hi - lo)] if t >= 1 and lo < hi else [])
 
 
-@pytest.mark.parametrize("n, life, w", SHAPES)
-def test_the_due_lists_name_each_rekey_once(n, life, w):
-    """Fresh appends are 2k + 1 among the session's appends (re-keys between them), so the class is the fresh ordinal
-    k mod L, not the append's index."""
-    rota = Rota(n, life, w)
-    fresh = [(2 * k + 1, k % w, 1 + 300 * k) for k in range(9)]
-    due_reg = {r: rota.registered_due(r) for r in range(w + 2)}
-    for j in range(n):
-        want = set(rota.rekeys(0, rota.registered_class(j)))
-        assert want == {r for r, runs in due_reg.items() for a, count in runs if a <= j < a + count}
-        assert all(sum(a <= j < a + count for a, count in runs) <= 1 for runs in due_reg.values())
-    for f, (k, b, count) in enumerate(fresh):
-        want = set(rota.rekeys(b, f % life))
-        for r in range(w + 2):
-            pieces = [(o, m) for kk, o, m in rota.appends_due(r, fresh) if kk == k]
-            assert bool(pieces) == (r in want)
-            if pieces:
-                assert [j for o, m in pieces for j in range(o, o + m)] == list(range(count))
-                assert all(m <= REKEY_MAX for _, m in pieces)
-    for r in range(w + 2):
-        assert rota.due(r, fresh) == (*((("registered", a), m) for a, m in due_reg[r]),
-                                      *((("append", k, o), m) for k, o, m in rota.appends_due(r, fresh)))
+@pytest.mark.parametrize("n, life, w, f", SHAPES)
+def test_slots_are_laid_out_window_by_window(n, life, w, f):
+    s = Schedule(n, life, w, f)
+    assert [k for t in range(w) for k in s.slots(t)] == list(range(s.total))
+    assert all(s.slot_at(k)[0] == t for t in range(w) for k in s.slots(t))
 
 
-def test_a_registered_class_is_rekeyed_in_appends_of_at_most_rekey_max_blocks():
-    rota = Rota(3 * REKEY_MAX + 7, 2, 4)
-    runs = rota.registered_due(2)
-    assert runs == ((0, REKEY_MAX), (REKEY_MAX, 260))
-    assert rota.registered_due(1) == ((772, REKEY_MAX), (772 + REKEY_MAX, 259))
-
-
-@pytest.mark.parametrize("n, life", [(7, 3), (64, 5), (3, 5)])
-def test_the_registered_classes_are_runs_covering_the_store_once(n, life):
-    rota = Rota(n, life, 4)
-    runs = [rota.class_runs(c) for c in range(life)]
-    assert sum(count for _, count in runs) == n
-    assert [j for f, count in runs for j in range(f, f + count)] == list(range(n))
-    assert all(rota.registered_class(j) == c for c, (f, count) in enumerate(runs) for j in range(f, f + count))
-
-
-def test_the_rota_reads_public_parameters_alone():
-    assert Rota(64, 3, 10) == Rota(64, 3, 10)
-    assert [Rota(64, 3, 10).registered_due(r) for r in range(10)] == [
-        (), ((22, 21),), ((43, 21),), ((0, 22),), ((22, 21),), ((43, 21),), ((0, 22),), ((22, 21),), ((43, 21),),
-        ((0, 22),)]
-    with pytest.raises(ValueError):
-        Rota(64, 0, 10)
+def test_the_schedule_reads_public_parameters_alone():
+    assert Schedule(64, 3, 10, 2) == Schedule(64, 3, 10, 2)
+    for bad in ((64, 0, 10, 2), (0, 2, 10, 2), (64, 2, 10, -1), (64, 2, 10, 1.5)):
+        with pytest.raises(ValueError):
+            Schedule(*bad)
