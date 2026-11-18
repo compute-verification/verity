@@ -1,39 +1,33 @@
 """``--admit tick`` (`serve_admit.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
 physical time, so that the batches can be compared across wall-clock jitter and against the rule in logical time alone;
 what isn't certified (unnumbered, late, missing, aborted, a new run, a stalled or broken watermark); the watermark's
-lines, as the network attester's own code writes them (`line`), and the releases they name lost; `tick_plugin` under
-vLLM's own server (`TickFeed`, `FeedReader` and the plugin's hold on the engine core's admission hook); and serve-openai's
+lines, as the network attester's own code writes them (`line`), and the releases they name lost; and serve-openai's
 ``--admit tick`` over HTTP. The gate is a hold of the adapter's admission hook (`verity_vllm.engine.admission`), which
 these tests put on the stand-in scheduler."""
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import heapq
 import json
-import queue
 import random
 import socket
 import threading
 from collections import deque
 from collections.abc import Iterator, Sequence
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from verity.protocols.resource_accounting.network.verifier import release as REL
 
-from tests import fake_vllm
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm import messages
-from verity_vllm.engine import admission, core_gate, hooks
+from verity_vllm.engine import admission, hooks
 from verity_vllm.pipeline import cli
 from verity.protocols.resource_accounting.network.prover import admission as na
 from verity_vllm.pipeline import serve_admit as sa
 from verity.protocols.resource_accounting.network.prover import serve_head as hd
 from verity_vllm.pipeline import serve_openai as so
-from verity_vllm.pipeline import tick_plugin as tp
 
 TICK = na.Tick(bucket_us=100_000, sat_us=30_000, free_us=40_000)
 RUN = "ab"
@@ -324,20 +318,23 @@ def test_a_rule_gates_token_term_counts_non_draft_tokens_on_a_clock_of_nanosecon
     assert g.gate.summary()["rule"] == {"token_ns": 600, "catch_up": "quiet", "tokens": {"non_draft": 2}}
 
 
-def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_another_it_does_not_know(tmp_path):
-    env = config(tmp_path)
-    assert {k: tp.tick_config(env)[k] for k in ("token_ns", "catch_up")} == {"token_ns": 0, "catch_up": "quiet"}
+SETTINGS = {"bucket_us": 100_000, "sat_us": 30_000, "free_us": 40_000, "hold_ms": 2000}
+
+
+def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_another_it_does_not_know():
+    assert {k: na.tick_config(SETTINGS, "s", feed=False)[k] for k in ("token_ns", "catch_up")} == {
+        "token_ns": 0, "catch_up": "quiet"}
     for bad in ({"token_ns": -1}, {"token_ns": 1.5}, {"catch_up": "wall"}):
         with pytest.raises(ValueError, match="token_ns a non-negative integer"):
-            tp.tick_config({tp.TICK_ENV: json.dumps(json.loads(env[tp.TICK_ENV]) | bad)})
+            na.tick_config(SETTINGS | bad, "s", feed=False)
 
 
-def test_the_tick_config_refuses_the_open_gate_unless_a_benchmark_arm_names_it(tmp_path):
-    cfg = json.loads(config(tmp_path)[tp.TICK_ENV]) | {"catch_up": "open"}
+def test_the_tick_config_refuses_the_open_gate_unless_a_benchmark_arm_names_it():
+    cfg = SETTINGS | {"catch_up": "open"}
     for unnamed in (cfg, cfg | {"arm": ""}):
         with pytest.raises(ValueError, match="catch_up 'open' opens the gate"):
-            tp.tick_config({tp.TICK_ENV: json.dumps(unnamed)})
-    assert tp.tick_config({tp.TICK_ENV: json.dumps(cfg | {"arm": "prod-tick"})})["catch_up"] == "open"
+            na.tick_config(unnamed, "s", feed=False)
+    assert na.tick_config(cfg | {"arm": "prod-tick"}, "s", feed=False)["catch_up"] == "open"
 
 
 def test_a_missing_release_no_line_names_lost_holds_the_later_ones_until_its_skip_and_comes_late():
@@ -600,482 +597,6 @@ def test_a_line_whose_lost_releases_are_not_its_buckets_is_refused_and_breaks_th
     assert g.gate.counts["watermark_errors"] == 1 and g.gate.lost == set() and g.sched.added == ["r0"]
     assert g.gate.opened == "the watermark broke: watermark (1, 3) after (0, 1): its lost releases [0] rise from 1 below n"
     assert not g.watermark.feed(line(1, 3))          # the stream is closed: nothing after the refused line is read
-
-
-# ---------------------------------------------------------------------------------------------------------------- vLLM's server
-
-
-def config(tmp_path: Path) -> dict[str, str]:
-    return {tp.TICK_ENV: json.dumps({"bucket_us": 100_000, "sat_us": 30_000, "free_us": 40_000, "hold_ms": 2000,
-                                     "feed": str(tmp_path / "feed.jsonl"), "log": str(tmp_path)})}
-
-
-async def request_of(app: Any, scope: dict, body: list[bytes]) -> list[dict]:
-    """One ASGI request through ``app``: ``body`` its parts, then a disconnect; returns what it sent."""
-    sent: list[dict] = []
-    parts = [{"type": "http.request", "body": b, "more_body": i < len(body) - 1} for i, b in enumerate(body)]
-
-    async def receive() -> dict:
-        return parts.pop(0) if parts else {"type": "http.disconnect"}
-
-    async def send(m: dict) -> None:
-        sent.append(m)
-
-    await app(scope, receive, send)
-    return sent
-
-
-def asgi(app: Any, scope: dict, body: list[bytes]) -> list[dict]:
-    """`request_of` in a loop of its own."""
-    return asyncio.run(request_of(app, scope, body))
-
-
-def scope_of(path: str, headers: dict[str, str]) -> dict:
-    return {"type": "http", "method": "POST", "path": path, "headers": [(k.encode(), v.encode()) for k, v in headers.items()]}
-
-
-GREEDY = b'{"prompt": [1], "temperature": 0}'
-
-
-class App:
-    def __init__(self, status: int = 200) -> None:
-        self.status = status
-        self.seen: list[dict] = []
-
-    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
-        self.seen.append(dict(scope["headers"]))
-        await send({"type": "http.response.start", "status": self.status, "headers": []})
-        await send({"type": "http.response.body", "body": b""})
-
-
-def test_tick_feed_writes_the_releases_and_the_watermark_the_gate_reads(tmp_path, monkeypatch):
-    for k, v in config(tmp_path).items():
-        monkeypatch.setenv(k, v)
-    ok, refused = App(), App(400)
-    feed, read = tp.TickFeed(ok), tp.FeedReader(tmp_path / "feed.jsonl")
-    assert read() == []
-    asgi(feed, scope_of("/v1/completions", {"x-verity-release": "0", "x-verity-release-run": "ab",
-                                            "x-verity-release-bucket": "0", "x-request-id": "c0"}), [GREEDY])
-    asgi(feed, scope_of("/v1/completions", {"x-verity-release": "1", "x-verity-release-run": "ab"}), [GREEDY])
-    assert ok.seen[1][b"x-request-id"] == b"verity-ab-1"
-    dup = asgi(feed, scope_of("/v1/completions", {"x-verity-release": "1", "x-verity-release-run": "ab"}), [GREEDY])
-    assert dup[0]["status"] == 400 and len(ok.seen) == 2
-    asgi(tp.TickFeed(refused), scope_of("/v1/completions", {"x-verity-release": "2", "x-verity-release-run": "ab"}), [GREEDY])
-    plain = asgi(feed, scope_of("/v1/completions", {}), [GREEDY])
-    assert plain[0]["status"] == 200
-    wm = asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": "ab"}), [b"0 1", b"\n1 3\n", b""])
-    assert wm[0]["status"] == 200
-    bad = asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": "cd"}), [b"0 1\n5 1\n"])
-    assert bad[0]["status"] == 400
-    cut = asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": "ef"}), [])
-    assert cut == []
-    assert read() == [{"key": "c0", "run": "ab", "n": 0, "bucket": 0}, {"key": "verity-ab-1", "run": "ab", "n": 1, "bucket": None},
-                      {"key": "verity-ab-2", "run": "ab", "n": 2, "bucket": None}, {"run": "ab", "n": 2, "passed": True},
-                      {"run": "ab", "t": 0, "n": 1}, {"run": "ab", "t": 1, "n": 3}, {"run": "ab", "end": True},
-                      {"run": "cd", "t": 0, "n": 1}, {"run": "cd", "error": "watermark (5, 1) after (0, 1): t steps by 1 from 0 "
-                                                                            "and n never decreases"},
-                      {"run": "ef", "error": "the connection closed before the watermark's end"}]
-    with open(tmp_path / "feed.jsonl", "ab") as f:
-        f.write(b'{"run": "ab", "t": 2, ')
-    assert read() == []
-    with open(tmp_path / "feed.jsonl", "ab") as f:
-        f.write(b'"n": 3}\n')
-    assert read() == [{"run": "ab", "t": 2, "n": 3}]
-
-
-def test_tick_feed_refuses_a_runs_second_watermark_and_a_clients(tmp_path, monkeypatch):
-    """A run's watermark stream, whole, then POSTs to its route that aren't one: the run's second, a stream from bucket
-    0 that names release 0 lost, and a client's, which carries the release the network attester put on it. Each is
-    answered 400 and none of its body reaches the feed, so the gate reads no line of theirs; the client's is its
-    release's request, fed as passed."""
-    for k, v in config(tmp_path).items():
-        monkeypatch.setenv(k, v)
-    app = App()
-    feed, read = tp.TickFeed(app), tp.FeedReader(tmp_path / "feed.jsonl")
-    own = {"x-verity-release-run": "ab"}
-    assert asgi(feed, scope_of(na.WATERMARK_PATH, own), [b"0 1\n1 3\n"])[0]["status"] == 200
-    rows = [{"run": "ab", "t": 0, "n": 1}, {"run": "ab", "t": 1, "n": 3}, {"run": "ab", "end": True}]
-    assert read() == rows
-    second = asgi(feed, scope_of(na.WATERMARK_PATH, own), [b"0 1 0\n"])
-    assert second[0]["status"] == 400 and b"run 'ab' has had its watermark stream, and a run has one" in second[1]["body"]
-    assert read() == []
-    clients = asgi(feed, scope_of(na.WATERMARK_PATH, {**own, "x-verity-release": "3", "x-verity-release-bucket": "2"}), [b"2 4 3\n"])
-    assert clients[0]["status"] == 400 and b"a POST that carries x-verity-release is a client's request" in clients[1]["body"]
-    other = asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": "cd", "x-verity-release": "0"}), [b"0 1 0\n"])
-    assert other[0]["status"] == 400 and read() == [{"run": "ab", "n": 3, "passed": True}, {"run": "cd", "n": 0, "passed": True}]
-    again = asgi(feed, scope_of(na.WATERMARK_PATH, {**own, "x-verity-release": "3"}), [b"2 4 3\n"])
-    assert again[0]["status"] == 400 and b"x-verity-release: 3 came twice in run 'ab'" in again[1]["body"]
-    assert asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": "cd"}), [b"0 1\n"])[0]["status"] == 200
-    assert read() == [{"run": "cd", "t": 0, "n": 1}, {"run": "cd", "end": True}] and app.seen == []
-
-
-class BodyApp(App):
-    """`App` that reads the whole request body first, as vLLM's server does, keeping each request's."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.bodies: list[bytes] = []
-
-    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
-        body, more = b"", True
-        while more:
-            m = await receive()
-            body, more = body + m.get("body", b""), m.get("more_body", False)
-        self.bodies.append(body)
-        await super().__call__(scope, receive, send)
-
-
-def test_tick_feed_refuses_a_stochastic_request_without_a_seed(tmp_path, monkeypatch):
-    for k, v in config(tmp_path).items():
-        monkeypatch.setenv(k, v)
-    app = BodyApp()
-    feed, read = tp.TickFeed(app), tp.FeedReader(tmp_path / "feed.jsonl")
-    numbered = {"x-verity-release": "0", "x-verity-release-run": "ab"}
-    for path in sorted(tp.SAMPLED_PATHS):
-        for body in ({"prompt": [1], "temperature": 0.8}, {"prompt": [1]}, {"temperature": 0.8, "seed": None},
-                     {"temperature": 0.8, "seed": "7"}, {"temperature": "0", "seed": 1.0}):
-            sent = asgi(feed, scope_of(path, {}), [json.dumps(body).encode()])
-            assert sent[0]["status"] == 400 and b"needs an integer seed" in sent[1]["body"], (path, body)
-    refused = asgi(feed, scope_of("/v1/completions", numbered), [b'{"temperature": 1', b".0}"])
-    assert b"temperature 1.0 needs an integer seed, not null" in refused[1]["body"]
-    assert app.bodies == [] and read() == [{"run": "ab", "n": 0, "passed": True}]
-    assert asgi(feed, scope_of("/v1/completions", numbered), [GREEDY])[0]["status"] == 400
-
-    passing = [b'{"prompt": [1], "temperature": 0.8, "seed": 7}', b'{"prompt": [1], "temperature": 0}',
-               b'{"temperature": 0.0, "seed": null}', b"not json", b"[1, 2]", b""]
-    for whole in passing:
-        assert asgi(feed, scope_of("/v1/chat/completions", {}), [whole[:5], whole[5:]])[0]["status"] == 200
-    assert asgi(feed, scope_of("/v1/models", {}), [b"{}"])[0]["status"] == 200
-    assert app.bodies == [*passing, b"{}"]
-
-
-def test_tick_feed_serves_only_its_allow_list_under_any_root_path(tmp_path, monkeypatch):
-    for k, v in config(tmp_path).items():
-        monkeypatch.setenv(k, v)
-    app = BodyApp()
-    feed, read = tp.TickFeed(app), tp.FeedReader(tmp_path / "feed.jsonl")
-    numbered = {"x-verity-release": "0", "x-verity-release-run": "ab"}
-    responses = asgi(feed, scope_of("/v1/responses", numbered), [b'{"input": "hi", "temperature": 0}'])
-    assert responses[0]["status"] == 400 and b"not '/v1/responses'" in responses[1]["body"]
-    assert read() == [{"run": "ab", "n": 0, "passed": True}]
-    for path in ("/v1/completions/render", "/v1/audio/transcriptions", "/pooling", "/invocations", "/v1/completions/",
-                 "//v1/completions", "/"):
-        assert asgi(feed, scope_of(path, {}), [GREEDY])[0]["status"] == 400, path
-    assert app.bodies == []
-
-    health = asgi(feed, {**scope_of("/health", {}), "method": "GET"}, [b""])
-    assert health[0]["status"] == 200 and app.bodies == [b""]
-    mounted = {"root_path": "/api"}
-    assert tp.route_of({"path": "/api/v1/completions", **mounted}) == "/v1/completions"
-    assert tp.route_of({"path": "/apiv1/completions", **mounted}) == "/apiv1/completions"
-    assert tp.route_of({"path": "/v1/completions", "root_path": "/api/"}) == "/v1/completions"
-    unseeded = asgi(feed, {**scope_of("/api/v1/completions", {}), **mounted}, [b'{"temperature": 0.8}'])
-    assert unseeded[0]["status"] == 400 and b"needs an integer seed" in unseeded[1]["body"]
-    assert asgi(feed, {**scope_of("/api/v1/responses", {}), **mounted}, [GREEDY])[0]["status"] == 400
-    assert asgi(feed, {**scope_of("/api/v1/chat/completions", {}), **mounted}, [GREEDY])[0]["status"] == 200
-    assert app.bodies == [b"", GREEDY]
-
-    sent: list[dict] = []
-
-    async def connect() -> dict:
-        return {"type": "websocket.connect"}
-
-    async def send(m: dict) -> None:
-        sent.append(m)
-
-    asyncio.run(feed({"type": "websocket", "path": "/v1/realtime", "headers": []}, connect, send))
-    assert sent == [{"type": "websocket.close", "code": 1008}] and len(app.seen) == 2
-
-
-def test_without_its_variable_the_feed_passes_everything(monkeypatch):
-    monkeypatch.delenv(tp.TICK_ENV, raising=False)
-    app = App()
-    sent = asgi(tp.TickFeed(app), scope_of("/v1/completions", {"x-verity-release": "x"}), [b"{}"])
-    assert sent[0]["status"] == 200 and len(app.seen) == 1 and tp.tick_config({}) is None
-    with pytest.raises(ValueError, match="feed"):
-        tp.tick_config({tp.TICK_ENV: json.dumps({"bucket_us": 1, "sat_us": 1, "free_us": 1})})
-    with pytest.raises(ValueError, match="VERITY_TICK="):
-        tp.tick_config({tp.TICK_ENV: "{not json"})
-
-
-class EngineCoreProc:
-    """vLLM's ``EngineCoreProc`` as `register`'s hooks drive it."""
-
-    def __init__(self, sched: Any) -> None:
-        self.scheduler = sched
-        self.input_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
-        self.aborts_queue: queue.Queue[Any] = queue.Queue()
-        self.running, self.idle_calls = True, 0
-
-    def _process_input_queue(self) -> None:
-        raise AssertionError("the seam's input loop replaces it")
-
-    def has_work(self) -> bool:
-        return self.scheduler.has_requests()
-
-    def is_running(self) -> bool:
-        return self.running
-
-    def _notify_idle_state_callbacks(self) -> None:
-        self.idle_calls += 1
-
-    def _handle_client_request(self, kind: str, req: Any) -> None:
-        if kind == "add":
-            self.scheduler.add_request(req)
-
-
-@pytest.fixture
-def plugin(tmp_path, monkeypatch):
-    """`register` over stand-ins of vLLM's scheduler and engine core modules; its hooks come off afterwards."""
-    for k, v in config(tmp_path).items():
-        monkeypatch.setenv(k, v)
-
-    class Scheduler(Sched):
-        pass
-
-    fake = fake_vllm.install(monkeypatch)
-    fake.set("vllm.v1.engine.core:EngineCoreProc", EngineCoreProc)
-    fake.set("vllm.v1.engine.core:EngineCore", type("EngineCore", (), {"step": lambda self: None,
-                                                                         "step_with_batch_queue": lambda self: None}))
-    tp.register()
-    tp.register()
-    try:
-        yield Scheduler
-    finally:
-        tp._PLUGIN.clear()
-        core_gate.SEAM.uninstall()
-        messages.close()
-
-
-def made(core: EngineCoreProc) -> tuple[admission.Hook, na.TickGate]:
-    """The admission hook the seam makes for ``core``, and the plugin's gate it filed on the exchange."""
-    (hook,) = core_gate.SEAM._state(core).gates
-    ((_, request),) = hook.ex.requests
-    return hook, request.gate
-
-
-def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
-    assert len(tp._PLUGIN) == 1
-    sched = plugin()
-    core = EngineCoreProc(sched)
-    write = tp.TickFeed(App()).write
-    write({"key": "c0", "run": "ab", "n": 0, "bucket": 0})
-    core.input_queue.put(("add", Req("cmpl-c0-0-0123abcd")))
-    core.input_queue.put(("add", Req("cmpl-probe-0-0123abcd")))
-    released = threading.Event()
-
-    def watermark() -> None:
-        released.wait()
-        write({"run": "ab", "t": 0, "n": 1})
-
-    feeder = threading.Thread(target=watermark)
-    feeder.start()
-    _, gate = made(core)
-    poll = gate.ready
-
-    def due(event: Any) -> bool:
-        ok = poll(event)
-        if not ok:
-            released.set()
-        return ok
-
-    gate.ready = due
-    core._process_input_queue()
-    assert sched.added == ["cmpl-probe-0-0123abcd"]      # the probe at once; c0 waits for bucket 0's line
-    sched.schedule()
-    sched.update()
-    core._process_input_queue()                          # at once: the step that frees the probe comes first
-    assert not released.is_set()
-    sched.schedule()
-    sched.update()
-    core._process_input_queue()                          # waits until the feeder writes bucket 0's line
-    feeder.join()
-    assert sched.added == ["cmpl-probe-0-0123abcd", "cmpl-c0-0-0123abcd"]
-    assert gate.summary()["unordered"] == 1 and TICK.close(0) == gate.T
-    logged = [json.loads(x) for x in next(tmp_path.glob("tick.*.jsonl")).read_text().splitlines()]
-    assert logged[0]["event"] == "unordered" and logged[-1]["admitted"] == [0, 1]
-    write({"key": "c9", "run": "ab", "n": 1, "bucket": 5})
-    sched.add_request(Req("cmpl-c9-0-0123abcd"))
-    assert sched.added[-1] == "cmpl-c0-0-0123abcd"
-    core.running = False
-    core._process_input_queue()
-    assert gate.opened == "the engine core is shutting down" and sched.added[-1] == "cmpl-c9-0-0123abcd"
-
-
-def test_under_vllms_server_the_lost_releases_reach_the_gate_through_the_feed(plugin, tmp_path):
-    """The watermark as the network attester writes it, through the middleware and the feed file to the engine core's
-    gate. Release 0's request is in the engine core before its line names it lost and release 2's comes after it:
-    neither reaches the scheduler, and the abort vLLM sends when such a request's connection closes finds nothing."""
-    sched = plugin()
-    hook, gate = made(EngineCoreProc(sched))
-    feed = tp.TickFeed(App())
-    ids = [f"cmpl-c{n}-0-0123abcd" for n in range(4)]
-    for n in range(4):
-        asgi(feed, scope_of("/v1/completions", {"x-verity-release": str(n), "x-verity-release-run": RUN, "x-request-id": f"c{n}"}),
-             [GREEDY])
-    sched.add_request(Req(ids[0]))
-    sched.add_request(Req(ids[1]))
-    data = line(0, 3, [0, 2]) + line(1, 4)
-    assert asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": RUN}), [data[:5], data[5:], b""])[0]["status"] == 200
-    assert tp.FeedReader(tmp_path / "feed.jsonl")()[4:] == [{"run": RUN, "t": 0, "n": 3, "lost": [0, 2]}, {"run": RUN, "t": 1, "n": 4},
-                                                            {"run": RUN, "end": True}]
-    assert hook.ready() and (sched.added, gate.T) == ([ids[1]], TICK.close(0))
-    sched.add_request(Req(ids[2]))
-    sched.add_request(Req(ids[3]))
-    assert sched.added == [ids[1]] and sorted(gate.held) == [3]
-    sched.schedule()
-    sched.update()
-    assert hook.ready()                                  # the step that frees release 1 comes first
-    sched.schedule()
-    assert hook.ready() and (sched.added, gate.T) == ([ids[1], ids[3]], TICK.close(1))
-    assert sched.finish_requests([ids[0], ids[2]], "aborted") == []
-    s = gate.summary()
-    assert (s["admitted"], s["lost"], s["dropped"], s["aborted"], s["skipped"], s["late"], s["opened"]) == (2, 2, 2, 0, 0, 0, None)
-    logged = [json.loads(x) for x in next(tmp_path.glob("tick.*.jsonl")).read_text().splitlines()]
-    assert [(x["event"], x["n"], x.get("dropped")) for x in logged if "event" in x] == [
-        ("lost", 0, True), ("lost", 2, False), ("dropped", 2, None)]
-
-
-HEAD = {"type": "http.response.start", "status": 200, "headers": [(b"content-type", b"text/event-stream")]}
-SIZED = {"type": "http.response.start", "status": 200, "headers": [(b"Content-Length", b"4")]}
-NULL = {"type": "http.response.body", "body": b"null"}
-LOST_SAID = "x-verity-release: {n} of run 'ab' was lost on the way to the server, as the watermark says"
-
-
-class Held:
-    """vLLM's server with a request it waits on. It reads the body and sends ``head`` at once, if it has one: a stream's
-    200 head, which vLLM sends before any token, or a whole answer's with its length. From there it waits on the
-    request's disconnect alone, as vLLM's listener beside each handler does, and once it has it sends ``late``: what a
-    handler still sends as it ends."""
-
-    def __init__(self, head: dict | None, late: Sequence[dict] = ()) -> None:
-        self.head, self.late, self.waits, self.ended = head, list(late), 0, 0
-
-    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
-        more = True
-        while more:
-            more = (await receive()).get("more_body", False)
-        if self.head is not None:
-            await send(self.head)
-        self.waits += 1
-        while (await receive())["type"] != "http.disconnect":
-            pass
-        for m in self.late:
-            await send(m)
-        self.ended += 1
-
-
-async def turns(k: int = 16) -> None:
-    """Let the loop run what is ready, k times over. No clock is read: a task that still waits after them waits on
-    something that hasn't come."""
-    loop = asyncio.get_running_loop()
-    for _ in range(k):
-        turn = loop.create_future()
-        loop.call_soon(turn.set_result, None)
-        await turn
-
-
-def numbered(n: int) -> dict:
-    return scope_of("/v1/completions", {"x-verity-release": str(n), "x-verity-release-run": RUN, "x-request-id": f"c{n}"})
-
-
-@pytest.mark.parametrize("head", [None, HEAD, SIZED], ids=["no response begun", "a stream's head gone", "a whole answer's head gone"])
-def test_under_vllms_server_a_lost_releases_request_is_given_its_disconnect_and_answered(tmp_path, monkeypatch, head):
-    """Release 0's request is in vLLM's server, its client's connection open, when a watermark line names it lost, and
-    the middleware ends it: the server gets the request's disconnect. Where the server had begun no response, what it
-    sends after that goes nowhere (a cancelled handler's 200) and the client gets 400 and the sentence serve-openai's
-    frontend says. Where a stream's 200 head had gone, the client gets the stream's end, with no later chunk and no
-    event. Where a whole answer's head had gone with its length, which takes an open gate, its body goes on, and the
-    middleware adds nothing. A client's own close stays the server's to end, and the middleware adds nothing to it."""
-    for k, v in config(tmp_path).items():
-        monkeypatch.setenv(k, v)
-    late: list[dict] = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else
-            [{"type": "http.response.body", "body": b"data: late\n\n", "more_body": True}])
-    app = Held(head, late)
-    feed, sent = tp.TickFeed(app), []
-
-    async def run() -> tuple[bool, bool]:
-        body = [{"type": "http.request", "body": GREEDY, "more_body": False}]
-        never = asyncio.Event()
-
-        async def receive() -> dict:                     # the body, then a connection that stays open
-            if not body:
-                await never.wait()
-            return body.pop(0)
-
-        async def send(m: dict) -> None:
-            sent.append(m)
-
-        call = asyncio.ensure_future(feed(numbered(0), receive, send))
-        await turns()
-        held = app.waits == 1 and not app.ended and not call.done()
-        mark = await request_of(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": RUN}), [line(0, 2, [0]), b""])
-        await turns()
-        done = call.done()
-        call.cancel()
-        await asyncio.wait({call})
-        return held and mark[0]["status"] == 200, done
-
-    held, done = asyncio.run(run())
-    assert held and done and app.ended == 1
-    if head is None:
-        assert [m.get("status") for m in sent] == [400, None] and sent[1]["body"] == LOST_SAID.format(n=0).encode()
-    else:
-        assert sent == [head, NULL if head is SIZED else {"type": "http.response.body", "body": b""}]
-    assert tp.FeedReader(tmp_path / "feed.jsonl")() == [
-        {"key": "c0", "run": RUN, "n": 0, "bucket": None}, {"run": RUN, "t": 0, "n": 2, "lost": [0]}, {"run": RUN, "end": True},
-        *([{"run": RUN, "n": 0, "passed": True}] if head is None else [])]
-    assert feed.served == {}
-    app.late = []
-    assert asgi(feed, numbered(1), [GREEDY]) == ([head] if head else []) and app.ended == 2
-
-
-def test_under_vllms_server_a_request_after_its_lost_line_is_refused_until_the_watermark_breaks(tmp_path, monkeypatch):
-    """The network attester's stream stays open. Its line names releases 0 and 1 lost while release 1's request is
-    still sending its body, and before release 0's comes. Each is refused with the sentence serve-openai's frontend
-    says, release 0's each time it comes, and reaches neither the server nor the feed. Then a line the reader refuses
-    breaks the stream: the gate is open and adds every request at once, so the middleware forgets the run's lost
-    releases, and release 1's request comes in."""
-    for k, v in config(tmp_path).items():
-        monkeypatch.setenv(k, v)
-    app = App()
-    feed, read = tp.TickFeed(app), tp.FeedReader(tmp_path / "feed.jsonl")
-
-    def into(sent: list[dict]) -> Any:
-        async def send(m: dict) -> None:
-            sent.append(m)
-        return send
-
-    async def run() -> tuple[list[list[dict]], list[dict], int, list[dict], list[dict]]:
-        lines: asyncio.Queue[dict] = asyncio.Queue()
-        parts: asyncio.Queue[dict] = asyncio.Queue()
-        answer: list[dict] = []
-        refused: list[list[dict]] = [[]]
-        stream = asyncio.ensure_future(feed(scope_of(na.WATERMARK_PATH, {"x-verity-release-run": RUN}), lines.get, into(answer)))
-        slow = asyncio.ensure_future(feed(numbered(1), parts.get, into(refused[0])))
-        parts.put_nowait({"type": "http.request", "body": GREEDY[:9], "more_body": True})
-        await turns()
-        lines.put_nowait({"type": "http.request", "body": line(0, 2, [0, 1]), "more_body": True})
-        await turns()
-        parts.put_nowait({"type": "http.request", "body": GREEDY[9:], "more_body": False})
-        await turns()
-        refused += [await request_of(feed, numbered(0), [GREEDY]) for _ in range(2)]
-        fed, reached = read(), len(app.seen)
-        lines.put_nowait({"type": "http.request", "body": line(1, 3, [1]), "more_body": True})
-        await turns()
-        after = await request_of(feed, numbered(1), [GREEDY])
-        for task in (stream, slow):
-            task.cancel()
-        await asyncio.wait({stream, slow})
-        return refused, fed, reached, answer, after
-
-    refused, fed, reached, answer, after = asyncio.run(run())
-    assert [[m.get("status") for m in r] for r in refused] == [[400, None]] * 3
-    assert [r[1]["body"] for r in refused] == [LOST_SAID.format(n=n).encode() for n in (1, 0, 0)]
-    assert fed == [{"run": RUN, "t": 0, "n": 2, "lost": [0, 1]}] and reached == 0
-    assert answer[0]["status"] == 400 and after[0]["status"] == 200 and len(app.seen) == 1     # release 1 is bucket 0's
-    assert read() == [{"run": RUN, "error": "watermark (1, 3) after (0, 2): its lost releases [1] rise from 2 below n"},
-                      {"key": "c1", "run": RUN, "n": 1, "bucket": None}]
 
 
 # ---------------------------------------------------------------------------------------------------------------- serve-openai

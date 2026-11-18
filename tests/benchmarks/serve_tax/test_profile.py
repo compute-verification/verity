@@ -17,8 +17,8 @@ import serve_tax as S
 S.profiles()
 from verity_bench import profiles as P  # noqa: E402 (benchmarks/harness, put on sys.path by S.profiles)
 
-#: what a request without a seed gets under the certified tick (`verity_vllm.pipeline.tick_plugin.unseeded`)
-UNSEEDED = ("under the certified tick a request sampled at the server's default temperature needs an integer seed, "
+#: what a request without a seed gets under the certified tick (`verity_vllm.pipeline.scheme_plugin.unseeded`)
+UNSEEDED = ("under a scheme a request sampled at the server's default temperature needs an integer seed, "
             "not null: send one, or temperature 0")
 SOURCE_COMMIT = S.source_commit
 FEATURE = S.feature
@@ -227,7 +227,7 @@ def test_a_refusal_has_the_refusing_codes_words_and_the_change_on_our_side_that_
                                  ours="prefix-cache-off"))
     assert (run["ours"], run["args"], run["seeded"]) == (["prefix cache off for ours"], ["--no-enable-prefix-caching"],
                                                          False)
-    with pytest.raises(SystemExit, match=r"cannot run under --profile coding-agent: under the certified tick .* "
+    with pytest.raises(SystemExit, match=r"cannot run under --profile coding-agent: under a scheme .* "
                                          r"\(--ours seeded: seeded for ours\)"):
         S.profile_run(run_args(profile="coding-agent", model_id="glm53", arm="tick-unseeded", loads="agentic-256k=4"))
 

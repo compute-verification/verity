@@ -60,7 +60,9 @@ Here each is the `Claims.Pr` that a model sample misses `B`:
   `OneStage.strata_le`.
 * `classesPa_eq_prod`, `classesPa_eq_Pr`, `Design.Pa_eq_Pr`: **the classes' product**: `P_a` on the partition is the
   product over its classes of each rule's `P_a` on the class's window (`classPa`), the probability that independent
-  samples of the classes all miss; `classesPa_strata`, `Design.Pa_strata`: classes sampled as strata are one strata sample.
+  samples of the classes all miss; `classesPa_strata`, `Design.Pa_strata`: classes sampled as strata are one strata sample;
+  `Design.Pa_subset_prod`: a design of subset rules is the product (`Verity.SamplingDesign.prod`) of core's uniform
+  subsets.
 
 `Live.lean` proves these distributions of the executable sample on uniform bytes, and `Select` of the deployed sampled
 verifier's (`sampleMisses`, and `SampleDesign` from it, `sampleDesign_of_slots`).
@@ -421,5 +423,30 @@ theorem Design.Pa_strata (d : Design) (P : Partition) (sss : List (List (ℕ × 
       ∀ B' ⊆ range p.1.2.flatten.length, p.1.1.Pa (strataSizes p.1.2) B' = strataPa p.2 0 B')
     (B : Finset ℕ) : d.Pa P B = strataPa sss.flatten 0 B :=
   classesPa_strata d.rules P.classes sss 0 B hl hs h
+
+/-- **A design of subset rules is a product of uniform subsets**: when class `i`'s rule is the uniform `K i`-subset,
+`P_a` on the partition is the miss probability of the product, by class, of core's uniform subsets
+(`Verity.SamplingDesign.prod` of `Verity.SamplingDesign.subset`), each over its class's proof blocks and missing the
+members of `B` in its window. -/
+theorem Design.Pa_subset_prod (d : Design) (P : Partition) (B : Finset ℕ) (hl : d.rules.length = P.classes.length)
+    (K : Fin d.rules.length → ℕ) (hr : ∀ i : Fin d.rules.length, d.rules.getD i .all = .subset (K i))
+    (hK : ∀ i : Fin d.rules.length, K i ≤ (strataSizes (P.classes.getD i [])).sum) :
+    d.Pa P B = ((Verity.SamplingDesign.prod fun i => Verity.SamplingDesign.subset _ (K i) (hK i)).missProb
+      (univ.sigma fun i => finOf _ (window (classOff P.classes i) (P.classes.getD i []).flatten.length B))).toReal := by
+  classical
+  have hw : ∀ i : Fin d.rules.length, window (classOff P.classes i) (P.classes.getD i []).flatten.length B ⊆
+      range (strataSizes (P.classes.getD i [])).sum := fun i => by
+    simpa [strataSizes, List.length_flatten] using window_subset (classOff P.classes i) _ B
+  have hE : ∀ i : Fin d.rules.length, classPa d.rules P.classes 0 B i =
+      Pr (fun S : (Verity.SamplingDesign.subset _ (K i) (hK i)).Ω =>
+        Disjoint S.1 (finOf _ (window (classOff P.classes i) (P.classes.getD i []).flatten.length B))) := by
+    intro i
+    rw [classPa, hr i, zero_add, OneStage.Pa_subset _ (hK i) (hw i)]
+    exact Pr_congr fun S => disjoint_image_val_iff S.1 (hw i)
+  rw [Design.Pa_eq_Pr d P B hl _ hE, Verity.SamplingDesign.missProb_prod, ENNReal.toReal_prod]
+  refine (Pr_congr fun _ => by simp; rfl).trans ((Pr_pi_forall (Ω := fun i => (Verity.SamplingDesign.subset _ (K i) (hK i)).Ω) univ
+    fun i S => Disjoint ((Verity.SamplingDesign.subset _ (K i) (hK i)).draw S)
+      (finOf _ (window (classOff P.classes i) (P.classes.getD i []).flatten.length B))).trans ?_)
+  exact prod_congr rfl fun i _ => Pr_miss_eq (Verity.SamplingDesign.subset _ (K i) (hK i)) _
 
 end Claims.Sampling

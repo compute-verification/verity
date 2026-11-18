@@ -12,6 +12,8 @@ from types import SimpleNamespace as NS
 import pytest
 import serve_tax as S
 
+from verity.protocols.resource_accounting.network.prover import admission as NA
+
 
 def rec(i: int, send: float, ttft: float, gap: float, n: int, status: int = 200) -> dict:
     chunks = [[round(ttft + k * gap, 6), 1] for k in range(n)]
@@ -94,10 +96,14 @@ def site_entries(d: Path, arm: str) -> list[str]:
     return (S.plugin_site(d / arm, S.ARMS[arm]) / "verity_serve_tax-0.0.dist-info" / "entry_points.txt").read_text().splitlines()
 
 
+def tick_settings(env: dict[str, str]) -> dict:
+    return json.loads(env["VERITY_PROTOCOLS_CONFIG"])[NA.scheme_name()]
+
+
 def test_plugin_site_declares_the_arms_plugins_the_tick_after_this_one(tmp_path: Path):
     ep = site_entries(tmp_path, "tick")
     assert ep[0] == "[vllm.general_plugins]"
-    assert ep[1].endswith("servetax_plugin:register") and ep[2].endswith("tick_plugin:register")
+    assert ep[1].endswith("servetax_plugin:register") and ep[2].endswith("scheme_plugin:register")
     assert site_entries(tmp_path, "record") == ep[:2] and site_entries(tmp_path, "compiled") == ep[:1]
     # the canonical top-k's own arm loads its plugin alone; the two-stage arm loads it after this module's
     topk = "verity_dsa_topk = dsa_topk:register"
@@ -274,7 +280,7 @@ def test_server_env_names_the_changes(tmp_path: Path):
                        600.0, 30.0, private=tmp_path / "p")
     cfg = json.loads(env[S.PLUGIN_ENV])
     assert cfg["record"] and cfg["tokens"] and not cfg.get("release_order") and cfg["kv_window_s"] == 30.0
-    assert json.loads(env["VERITY_TICK"])["sat_us"] == 9000
+    assert tick_settings(env)["sat_us"] == 9000
     assert S.PLUGIN_ENV not in S.server_env(S.ARMS["compiled"], tmp_path, tmp_path, None, 600.0, 600.0)
     with pytest.raises(SystemExit, match="the tick arms need"):
         S.server_env(S.ARMS["tick"], tmp_path, tmp_path, None, 600.0, 600.0, private=tmp_path / "p")
@@ -316,8 +322,9 @@ def test_the_two_stage_tick_arm_is_the_launch_line_with_the_tick_on(tmp_path: Pa
     tau, private = {"bucket_us": 100000, "sat_us": 9000, "free_us": 11000}, tmp_path / "private"
     env = S.server_env(tick, tmp_path, tmp_path / "site", tau, 600.0, 600.0, check=glm.check, private=private)
     plain = S.server_env(two, tmp_path, tmp_path / "site", None, 600.0, 600.0, check=glm.check, private=private)
-    assert {k: v for k, v in env.items() if k != "VERITY_TICK"} == plain
-    assert {k: json.loads(env["VERITY_TICK"])[k] for k in tau} == tau
+    assert {k: v for k, v in env.items() if k not in ("VERITY_PROTOCOLS", "VERITY_PROTOCOLS_CONFIG")} == plain
+    assert env["VERITY_PROTOCOLS"] == NA.scheme_name() and json.loads(env["VERITY_PROTOCOLS_CONFIG"])["feed"] == str(tmp_path)
+    assert {k: tick_settings(env)[k] for k in tau} == tau
     with pytest.raises(SystemExit, match="the tick arms need τ"):
         S.server_env(tick, tmp_path, tmp_path / "site", None, 600.0, 600.0, check=glm.check, private=private)
     assert S.changes_of("two-stage-tick") == [*S.changes_of("two-stage"), "admission on the certified tick"]
@@ -350,32 +357,30 @@ def test_prod_all_on_is_prod_record_with_the_tick_and_the_edge_snapshot_and_says
     for m in (glm, S.MODELS["glm53-standin"]):
         line = [S.server_argv(S.ARMS[a], m, Path("/ck"), 8000, max_model_len=m.published_context)
                 for a in ("prod-record", "prod-all-on")]
-        assert line[1] == [*line[0], "--middleware", "verity_vllm.pipeline.tick_plugin.TickFeed"]
+        assert line[1] == [*line[0], "--middleware", "verity_vllm.pipeline.scheme_plugin.Front"]
     with pytest.raises(SystemExit, match="--arms: tick needs the corpus client, not vLLM's: .*plugin idle_reset"):
         S.main(["passes", "--loads", "chat", "--arms", "tick", "--model-id", "glm53"])
 
 
 def test_prod_tick_is_prod_all_ons_tick_alone_and_takes_a_rule_other_than_the_registered_one(tmp_path):
     """``prod-tick`` serves the tick of ``prod-all-on`` on ``prod``, recording nothing; a rule named apart from τ reaches
-    the gate through VERITY_TICK, and none leaves the registered rule's keys out of it."""
+    the gate through the network attester's settings, and none leaves the registered rule's keys out of it."""
     glm = S.MODELS["glm53"]
     assert S.changes_of("prod-tick") == ["admission on the certified tick"] and S.corpus_only(S.ARMS["prod-tick"]) is None
     assert S.sends_seed(S.ARMS["prod-tick"])
     assert "refuses a sampled request without a seed" in S.corpus_only(replace(S.ARMS["prod-tick"], seeds=False))
     line = [S.server_argv(S.ARMS[a], glm, Path("/ck"), 8000, max_model_len=glm.published_context)
             for a in ("prod", "prod-tick")]
-    assert line[1] == [*line[0], "--middleware", "verity_vllm.pipeline.tick_plugin.TickFeed"]
+    assert line[1] == [*line[0], "--middleware", "verity_vllm.pipeline.scheme_plugin.Front"]
     tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485}
-    plain = json.loads(S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0)["VERITY_TICK"])
+    plain = tick_settings(S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0))
     assert "token_ns" not in plain and "catch_up" not in plain
     ruled = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick | {"rule": {"token_ns": 18_500, "catch_up": "marks"}},
                          1.0, 1.0)
-    assert json.loads(ruled["VERITY_TICK"]) == plain | {"token_ns": 18_500, "catch_up": "marks"}
+    assert tick_settings(ruled) == plain | {"token_ns": 18_500, "catch_up": "marks"}
 
 
 def test_only_an_arm_that_names_the_open_gate_takes_it_and_its_server_hears_which(tmp_path: Path):
-    from verity_vllm.pipeline import tick_plugin
-
     assert S.tick_rule("prod-all-on", '{"token_ns": 5, "catch_up": "marks"}') == {"token_ns": 5, "catch_up": "marks"}
     for name in ("prod-all-on", "tick-certifier"):
         with pytest.raises(SystemExit, match="catch_up 'open'"):
@@ -384,7 +389,7 @@ def test_only_an_arm_that_names_the_open_gate_takes_it_and_its_server_hears_whic
     assert rule == {"catch_up": "open", "arm": "prod-tick"}
     tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485, "rule": rule}
     env = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0)
-    assert tick_plugin.tick_config(env)["catch_up"] == "open"
+    assert NA.tick_config(tick_settings(env), "the settings", feed=False)["catch_up"] == "open"
 
 
 def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_its_object(tmp_path: Path):
