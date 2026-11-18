@@ -4,12 +4,15 @@ import ast
 import dataclasses
 import hashlib
 import sys
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 from verity_config import Admission, ConfigError, dumps, gpus, load, sha256
+
+CARDS = Path(__file__).resolve().parents[3] / "calibration" / "hardware" / "cards"
 
 
 @dataclass(frozen=True)
@@ -58,6 +61,14 @@ def test_gpu_registry_keeps_namespaces_distinct():
     gpu = gpus()["rtx-pro-6000"]
     assert gpu.id != gpu.census_id
     assert gpus()["h200"].nebius_platforms == ("gpu-h200-sxm",)
+
+
+def test_a_gpus_card_is_a_gpu_card_file_no_other_entry_names():
+    named = [gpu.card for gpu in gpus().values() if gpu.card]
+    assert len(named) == len(set(named)), named
+    for card in named:
+        doc = tomllib.loads((CARDS / f"{card}.toml").read_text())
+        assert (doc["kind"], doc["sku"]) == ("gpu", card), card
 
 
 def test_package_imports_the_standard_library_and_the_settings_machinery_alone():

@@ -1,5 +1,6 @@
 """Canonical GPU names; naming systems remain distinct fields.  A card's figures (memory, bandwidth, SMs, clocks) and
-the names nvidia-smi gives it (`driver`) are the card files', not this registry's."""
+the names nvidia-smi gives it (`driver`) are the card files', not this registry's: `card` names that file
+(`calibration/hardware/cards/<card>.toml`), empty for a GPU with none."""
 
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ class Gpu:
     nebius_preset: str
     runpod_type_id: str
     count_per_node: int
+    card: str = ""
 
 
 @dataclass(frozen=True)
