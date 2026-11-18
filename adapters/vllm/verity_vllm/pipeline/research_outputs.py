@@ -34,7 +34,8 @@ No entry holds a private file (`private`), wherever it sits, and these stay on t
   served tokens, and opened weights;
 - the requests' prompt and served token ids: the Match's token records (`tokens.json`), the Commit's token record
   (`tokens_p<pair>.json`), the sampler value check's rows (`match_stoch.json`) and the C2 replay's executed-prefix facts
-  (`sampled_replay*.json`), and the diagnostic digests of a Commit's retained tensors (`tensor_digests_pair*.json`);
+  (`sampled_replay*.json`), the diagnostic digests of a Commit's retained tensors (`tensor_digests_pair*.json`) and the TP
+  Match's recorder files' digests (`recorder_sha256.json`);
 - a served run's requests (`requests.jsonl`), its step traces (`step_trace.*`, `advice_trace.jsonl`: each request's prompt
   length, sampling parameters, rows a step and emitted ids), its served ids (`ids.*jsonl*`), its step outputs
   (`outputs.*jsonl*`: sampled ids and logprob bits), a replay's tokens and logprobs (`replay_tokens.jsonl*`,
@@ -67,6 +68,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from verity_vllm.check.match.rank_match import RECORDER_DIGESTS
 from verity_vllm.config import option, row_batch
 from verity_vllm.pipeline.cli import write
 from verity_vllm.query.manifest.format import tp_ranks_fold_digest
@@ -87,7 +89,7 @@ TOKENS_DIGESTS = "tokens_digests.jsonl"
 #: `pipeline.commit --tensor-digests`' unsalted digest of every retained tensor a step, compared across pairs on the node
 TENSOR_DIGESTS = "tensor_digests_pair*.json"
 #: nor these files, wherever they sit: request values, where each rank ran and when each process ran
-PRIVATE = ("tokens.json", "tokens_p*.json", TOKENS_DIGESTS, TENSOR_DIGESTS, "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.*",
+PRIVATE = ("tokens.json", "tokens_p*.json", TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS, "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.*",
            "ids.*jsonl*", "outputs.*jsonl*", "replay_tokens.jsonl*", "replay_logprobs.jsonl*", "alone_tokens.jsonl*",
            "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json")
 
