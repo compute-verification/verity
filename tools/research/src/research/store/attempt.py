@@ -30,7 +30,7 @@ from ..telemetry.events import utc_now_ms
 from ..telemetry.job import write_json_atomic
 from . import canon
 from . import derivation as D
-from .private import PrivateFiles, rule_for
+from .private import RULES, PrivateFiles, Rule, rule_for, run_rules
 from .tool import Tool
 
 ATTEMPT_SCHEMA = "research/attempt/v0.1"
@@ -193,9 +193,9 @@ def build(run_dir: Path | str, *, tool: Tool | dict[str, Any] | str | None = Non
 
 # ---- publish --------------------------------------------------------------------------------------------------------------------------------
 
-def _stage_run_files(run_dir: Path, rels: list[str], into: Path) -> tuple[int, list[str]]:
-    """Copy each listed path (file or directory, recursively) under `into` preserving the relative path, but a private file
-    (store.private), which the run record lists as refused.  Returns (files, missing)."""
+def _stage_run_files(run_dir: Path, rels: list[str], into: Path, rules: tuple[Rule, ...] = RULES) -> tuple[int, list[str]]:
+    """Copy each listed path (file or directory, recursively) under `into` preserving the relative path, but a file `rules` make
+    private (store.private), which the run record lists as refused.  Returns (files, missing)."""
     n, missing = 0, []
     for rel in rels:
         p = Path(rel)
@@ -205,7 +205,7 @@ def _stage_run_files(run_dir: Path, rels: list[str], into: Path) -> tuple[int, l
         src = run_dir / p
         if src.is_file():
             dst = into / p
-            if rule_for(p.as_posix(), src, follow=True):
+            if rule_for(p.as_posix(), src, follow=True, rules=rules):
                 continue
             dst.parent.mkdir(parents=True, exist_ok=True)
             if not dst.exists():
@@ -213,7 +213,7 @@ def _stage_run_files(run_dir: Path, rels: list[str], into: Path) -> tuple[int, l
                 n += 1
         elif src.is_dir():
             for f in sorted(x for x in src.rglob("*") if x.is_file()):
-                if rule_for(f.relative_to(run_dir).as_posix(), f, follow=True):
+                if rule_for(f.relative_to(run_dir).as_posix(), f, follow=True, rules=rules):
                     continue
                 dst = into / f.relative_to(run_dir)
                 dst.parent.mkdir(parents=True, exist_ok=True)
@@ -377,9 +377,10 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
     if state not in TERMINAL and not force:
         raise RuntimeError(f"run {run_id} is {state or 'without status.json'}: the store only sees completed or failed attempts (--force to override)")
     tool = _resolve_tool(tool, job.get("store") or {})
+    rules = run_rules(run_dir)                                        # PathsUnread before anything of the run is stored
     outputs: dict[str, str | None] = {"result": None, "run_files": None}
     res = result.check(run_dir, run_id)
-    if res.valid and res.doc is not None and (rule := rule_for("result.json", run_dir / "result.json")):
+    if res.valid and res.doc is not None and (rule := rule_for("result.json", run_dir / "result.json", rules=rules)):
         print(f"research: result.json not stored as the run's result: it is private ({rule.what}, {rule.owner}); the run record lists it "
               "as refused", file=sys.stderr)
     elif res.valid and res.doc is not None:
@@ -387,7 +388,7 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
         rels = _dedupe(list(doc.get("artifacts") or []) + list(doc.get("measurement_files") or []))
         if rels:
             with tempfile.TemporaryDirectory(prefix="research-run-files-") as tmp:
-                n, missing = _stage_run_files(run_dir, rels, Path(tmp))
+                n, missing = _stage_run_files(run_dir, rels, Path(tmp), rules)
                 if n:
                     outputs["run_files"] = st.put_artifact("run-files/v1", {"run_id": run_id, "files": n, "listed": rels, "missing": missing}, tree=Path(tmp))
         meta, spilled = fit_meta({k: v for k, v in doc.items() if k not in ("artifacts", "measurement_files")})

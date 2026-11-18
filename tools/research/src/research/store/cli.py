@@ -238,10 +238,13 @@ def cmd_put(argv: list[str]) -> int:
                   "artifacts on purpose (`research data withdraw`); delete them from the tree and from every other local copy, "
                   "then put the rest", file=sys.stderr)
             return 1
-    from .private import PrivateFiles
+    from .private import PathsUnread, PrivateFiles
 
     try:
         art = st.put_artifact(ns.kind, meta, _refs(ns.ref), file=Path(ns.file) if ns.file else None, tree=Path(ns.tree) if ns.tree else None)
+    except PathsUnread as e:
+        print(f"research data put: REFUSED, nothing stored: {e}", file=sys.stderr)
+        return 1
     except PrivateFiles as e:
         for r in e.refused:
             print(f"research data put: {r['path']}: private ({r['rule']}, {r['owner']})", file=sys.stderr)

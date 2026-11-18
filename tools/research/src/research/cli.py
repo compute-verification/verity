@@ -1782,6 +1782,11 @@ def cmd_fetch(argv: list[str]) -> int:
         print(f"research fetch: {s['run_id']}: it ended without recording it: {gone['why']}", file=sys.stderr)
     print(f"research: {s['run_id']} observed {rec['observed_utc']}: {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
           + (f"  preserved={'yes' if rec.get('preserved') else 'NO: ' + json.dumps(rec.get('preserve_error'))}" if ns.all else ""))
+    if ns.all and rec.get("refused"):
+        from .store.private import summary
+
+        print(f"research fetch --all: {s['run_id']}: {len(rec['refused'])} private file(s) refused, not copied and left on the machine: "
+              f"{summary(rec['refused'])}", file=sys.stderr)
     marker = rec.get("fetched_marker") if ns.all else None
     if marker and not marker.get("written"):
         print(f"research: {s['run_id']}: .fetched NOT written on the machine ({marker.get('reason')}); a pod guard keeps refusing to terminate",

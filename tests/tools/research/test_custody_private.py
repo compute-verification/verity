@@ -28,8 +28,8 @@ PRIVATE = [
     ("out/a/salts", "name salts"),
     ("out/a/salts_t", "name salts_t"),
     ("out/y/7.salts", "name *.salts"),
-    ("out/registration.salts/index.json", "under *.salts/"),
-    ("out/registration.salts/3.bin", "under *.salts/"),
+    ("out/registration.salts/index.json", "under <R>.salts/ beside <R>.json"),
+    ("out/registration.salts/3.bin", "under <R>.salts/ beside <R>.json"),
     ("out/retain/pass-00004/calls/0.tree", "under pass-[0-9][0-9][0-9][0-9][0-9]*/"),
     ("out/retain/pass-00004/manifest.json", "under pass-[0-9][0-9][0-9][0-9][0-9]*/"),
     ("out/b/manifest.json", "manifest.json beside salts or salts_t"),
@@ -59,6 +59,7 @@ def _private_run(runs: Path) -> Path:
     for rel, _ in PRIVATE:
         _write(d, rel, OLD_MANIFEST if rel == "out/old/manifest.json" else b"s" * 64)
     _write(d, "out/b/salts_t", b"t" * 64)
+    _write(d, "out/registration.json", '{"root": "public"}\n')
     for rel in UNDECIDED:
         _write(d, rel, '{"challenger": "public"}\n' if rel.endswith(".json") else "kept\n")
     return d
@@ -78,11 +79,14 @@ def test_each_name_and_place_is_private(tmp_path, rel, rule):
     assert got is not None and got.what == rule
 
 
-@pytest.mark.parametrize("rel", [*UNDECIDED, "out/c/manifest.json", "out/note.txt", "out/big.json"])
+@pytest.mark.parametrize("rel", [*UNDECIDED, "out/c/manifest.json", "out/note.txt", "out/big.json", "out/tiny.salts/index.json",
+                                 "out/registration.json"])
 def test_no_false_refusal(tmp_path, rel):
-    """A manifest with no salts beside it, the key's name in a file that is not JSON, and a JSON file over the scan's
-    4 MiB limit (never read) stay uploadable, with the three names nobody has ruled on yet."""
+    """A manifest with no salts beside it, the key's name in a file that is not JSON, a JSON file over the scan's 4 MiB limit
+    (never read), and a salt directory with no registration beside it (a committed fixture's shape) stay uploadable, with the
+    three names nobody has ruled on yet."""
     d = _private_run(tmp_path / "runs")
+    _write(d, "out/tiny.salts/index.json", "{}\n")
     _write(d, "out/c/manifest.json", '{"leaves": "leaves"}\n')
     _write(d, "out/note.txt", "hm96_salt_key\n")
     _write(d, "out/big.json", '{"hm96_salt_key": "' + "0" * P.SCAN_MAX_BYTES + '"}')
@@ -194,3 +198,70 @@ def test_run_preserve_refuses_a_private_file_before_it_reads_the_key(tmp_path):
     with pytest.raises(RP.Refusal, match=r"out/old/manifest.json is private \(\*\.json holding hm96_salt_key"):
         RP._preserve(d, tmp_path / "no-custody-dir", {"path": str(p), "kind": RP.KIND, "meta": {}})
     assert os.path.exists(p)
+
+
+def _paths(d: Path, rules: list[dict]) -> None:
+    (d / P.PATHS_FILE).write_text(json.dumps({"schema": P.PATHS_SCHEMA, "rules": rules}))
+
+
+def test_a_runs_private_paths_are_refused_like_the_list_and_the_file_itself_is_stored(tmp_path, capsys):
+    vault = tmp_path / "vault"
+    runs = tmp_path / "root" / "runs"
+    d = _fixture_run(runs)
+    _write(d, "out/model/w.npy", b"w")
+    _write(d, "out/model/w.json", b"{}")
+    _write(d, "out/scratch/deep/k.bin", b"k")
+    _paths(d, [{"path": "out/model/*.npy", "reason": "the job's own weights", "owner": "@vllm"},
+               {"under": "scratch", "reason": "the job's key scratch", "owner": "@vllm"}])
+    rep = CU.runner_publish(d, _custody_dir(tmp_path, FIXTURE_RID, vault), sleep=lambda s: None, tries=1)
+    assert rep["preserved"], rep.get("error")
+    assert ("custody REFUSED 2 private file(s), not uploaded and left on this machine: out/model/w.npy (private-paths.json: path "
+            "out/model/*.npy, @vllm), out/scratch/deep/k.bin (private-paths.json: under scratch/, @vllm)") in capsys.readouterr().err
+    assert [r["path"] for r in json.loads((d / CU.MARKER).read_text())["refused"]] == ["out/model/w.npy", "out/scratch/deep/k.bin"]
+    kept, _, _ = CU.choose(d)
+    assert P.PATHS_FILE in kept and "out/model/w.json" in kept
+    assert (d / "out/model/w.npy").read_bytes() == b"w"
+
+
+@pytest.mark.parametrize("doc", ['{"schema": "research/private-paths/v1", "rules": [{"path": "out/*"}]}', "not json",
+                                 '{"schema": "research/private-paths/v1", "rules": [{"path": "a", "name": "b", "reason": "r", "owner": "@x"}]}'])
+def test_an_unreadable_private_paths_file_stores_nothing_of_the_run(tmp_path, capsys, doc):
+    vault = tmp_path / "vault"
+    d = _fixture_run(tmp_path / "root" / "runs")
+    (d / P.PATHS_FILE).write_text(doc)
+    rep = CU.runner_publish(d, _custody_dir(tmp_path, FIXTURE_RID, vault), sleep=lambda s: None, tries=1)
+    assert not rep["preserved"] and "private-paths.json" in rep["error"]
+    assert "custody stores nothing of this run while its own private paths aren't known" in capsys.readouterr().err
+    assert not [p for p in vault.rglob("*") if p.is_file()], "nothing of the run reached the remote"
+    assert data_main(["put", "--store", str(tmp_path / "s"), "--kind", "x/v1", "--tree", str(d / "out")]) == 1
+
+
+def test_a_put_under_a_run_dir_obeys_its_private_paths(tmp_path, capsys):
+    d = _fixture_run(tmp_path / "runs")
+    _write(d, "out/model/w.npy", b"w")
+    _paths(d, [{"path": "out/model/*.npy", "reason": "the job's own weights", "owner": "@vllm"}])
+    assert data_main(["put", "--store", str(tmp_path / "s"), "--kind", "x/v1", "--tree", str(d / "out" / "model")]) == 1
+    assert "w.npy: private (private-paths.json: path out/model/*.npy, @vllm)" in capsys.readouterr().err
+
+
+def test_fetch_all_copies_no_private_file_and_preserves_the_rest(tmp_path, monkeypatch):
+    from research import remote
+
+    d = _private_run(tmp_path / "machine" / "runs")
+    _paths(d, [{"path": "out/model/*.npy", "reason": "the job's own weights", "owner": "@vllm"}])
+    _write(d, "out/model/w.npy", b"w")
+    here = tmp_path / "here" / FIXTURE_RID
+    here.mkdir(parents=True)
+    (here / "remote.json").write_text(json.dumps({"remote_run_dir": str(d), "host": "h", "port": 22, "run_id": FIXTURE_RID}))
+    monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **kw: ["sh", "-c"])
+    rec = remote.fetch(here, everything=True)
+    refused = sorted([*(r for r, _ in PRIVATE), "out/b/salts_t", "out/model/w.npy"])
+    assert [r["path"] for r in rec["refused"]] == refused and rec["preserved"], rec.get("preserve_error")
+    assert not any((here / r).exists() for r in refused), "no private file reached the launcher"
+    assert (here / "out/proof.bin").exists() and (here / P.PATHS_FILE).exists() and (here / UNDECIDED[0]).exists()
+    assert [r["path"] for r in json.loads((here / "preserved.json").read_text())["refused"]] == refused
+    assert all((d / r).exists() for r in refused), "each stays on the machine"
+
+    (d / P.PATHS_FILE).write_text("[")
+    with pytest.raises(remote.Refused, match="could not list the run's private files, so nothing was copied"):
+        remote.fetch(tmp_path / "here" / FIXTURE_RID, everything=True)

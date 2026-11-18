@@ -547,9 +547,13 @@ not launcher.log, so nothing it prints makes the run dir differ from its record.
 `error`. `--no-custody-r2` leaves attempts with no `run_record`.
 
 - **Private files are never stored.** `private.py` lists them, one rule a line with its reason and owning lane: by name
-  (`keys.bin`, `weights.key`, `salts`, `salts_t`, `*.salts`), by place (anything under a `*.salts/` or a Pearl+ pass's
-  `pass-NNNNN/` retain directory; a `manifest.json` beside `salts` or `salts_t`), and by text (a `*.json` of at most 4 MiB
-  holding `hm96_salt_key`). A lane adds one by a line there, in a reviewed change; nothing overrides it at run time. Custody
+  (`keys.bin`, `weights.key`, `salts`, `salts_t`, `*.salts`), by place (anything under a Pearl+ pass's `pass-NNNNN/` retain
+  directory or a `<R>.salts/` beside its registration `<R>.json`; a `manifest.json` beside `salts` or `salts_t`), and by text
+  (a `*.json` of at most 4 MiB holding `hm96_salt_key`). A bare name is a rule only where no public file shares it. A lane
+  adds one by a line there, in a reviewed change. A run adds its own in its run dir's `private-paths.json`
+  (`{"schema": "research/private-paths/v1", "rules": [{"path"|"name"|"under": GLOB, "reason", "owner"}]}`, paths relative
+  to the run dir), which custody, a put under the run dir and `research fetch --all` read with the list; an unreadable one
+  stores and copies nothing of the run (`private.PathsUnread`). Nothing removes a rule at run time. Custody
   stores the rest of the record without them and refuses loudly: `custody REFUSED N private file(s)` on launcher.log and on
   custody's output, each path with its rule in `custody-refused.json` (in the run dir and the record), the record's
   `meta.refused_files` and `meta.refused`, and `.custody`'s `refused`; `research status RUN` and `research data preserved RUN`
@@ -557,7 +561,8 @@ not launcher.log, so nothing it prints makes the run dir differ from its record.
   `--declared-output` glob, run-file name or typed output (`outputs.json`) brings one in. A symlink is never followed or
   uploaded; one whose name or target is private is listed as refused too. `research data put --file|--tree` and `research
   run-preserve` refuse a payload holding one and store nothing (`private.PrivateFiles`, exit 1); a put's symlink is judged by
-  its target, whose bytes it would store.
+  its target, whose bytes it would store. `research fetch --all` judges the run dir on the machine and copies none: its
+  `remote.json` and `preserved.json` list each as `refused`.
 - The workload's `research run-preserve PATH` has the runner put one file of `$OUT` before the run ends: a `run-file/v1`
   artifact with the run id, verified the same way, whose art id it prints, or why not (`run_preserve.py`). The key stays the
   runner's.

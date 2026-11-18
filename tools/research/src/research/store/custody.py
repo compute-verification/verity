@@ -119,7 +119,8 @@ REFUSED_FILE = P.REFUSED_FILE                 # written into the run dir and its
 #: The runner's own files, always uploaded; everything else is kept only when it matches a declared output (`declared_globs`).
 #: DIRTY_CAPTURE is a dirty source's bytes (env.py): never trimmed, so the record, not the machine's tree, is their durable copy.
 RUN_FILES = frozenset({"stdout.log", "stderr.log", "launcher.log", "sampler.log", "job.json", "status.json", "events.jsonl", "failure.json",
-                       "result.json", "launch.json", "remote.json", "refused.json", "slot.json", DIRTY_CAPTURE, REFUSED_FILE})
+                       "result.json", "launch.json", "remote.json", "refused.json", "slot.json", DIRTY_CAPTURE, REFUSED_FILE,
+                       P.PATHS_FILE})
 #: The runner's own files under stamped names (fnmatch on the run-dir-relative path): the stall watch's py-spy dumps (telemetry.run),
 #: and the runner's answers to `research run-preserve` (run_preserve.ANSWERS).
 RUN_FILE_GLOBS = ("logs/stall-*.txt", "control/preserve/answers/*")
@@ -160,9 +161,10 @@ def choose(run_dir: Path, limit: int | None = None) -> tuple[list[str], list[dic
     limit = UNDECLARED_LIMIT_BYTES if limit is None else limit
     globs = declared_globs(d)
     kept, trimmed, used = [], [], 0
-    refused = P.scan(d, links_only=True)
+    rules = P.run_rules(d)
+    refused = P.scan(d, links_only=True, rules=rules)
     for rel in run_files(d):
-        if rel != REFUSED_FILE and (rule := P.rule_for(rel, d / rel)):
+        if rel not in (REFUSED_FILE, P.PATHS_FILE) and (rule := P.rule_for(rel, d / rel, rules=rules)):
             refused.append(P.refusal(rel, rule))
             continue
         size = (d / rel).stat().st_size
@@ -572,6 +574,10 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
     d = Path(run_dir)
     try:
         refused = choose(d)[2]
+    except P.PathsUnread as e:
+        refused = []
+        print(f"research: custody: {e}; custody stores nothing of this run while its own private paths aren't known: fix the file, then "
+              f"`research data custody {d.name} --publish`", file=sys.stderr)
     except OSError as e:
         refused = []
         print(f"research: custody: the run dir's private files were not listed before its record ({e}); its record refuses them all "
