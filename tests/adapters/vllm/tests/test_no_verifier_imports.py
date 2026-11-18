@@ -42,9 +42,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         ),
         "verity_vllm/pipeline/interior_links.py": ("proofs.spot.verifier.second_stage",),
         "verity_vllm/pipeline/interior_rows.py": ("proofs.spot.verifier.one_stage.docket",),
-        "verity_vllm/pipeline/registration_log.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/serve_day.py": ("registration.verifier.registration",),
-        "verity_vllm/pipeline/serve_tie.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/serving_rows.py": (
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.service",
         ),
@@ -55,14 +53,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
     },
     "network-accounting": {},
-    "memory-accounting": {
-        # `protocols/pous.py` reads the schemes for its refusals, setup's salt draw, and the period's certificate and gaps
-        # for its details; the store, its encode and decode and the period are pous's prover's (`weight_store`).
-        "verity_vllm/protocols/pous.py": (
-            "resource_accounting.memory.pous.verifier.period", "resource_accounting.memory.pous.verifier.schemes",
-            "resource_accounting.memory.pous.verifier.schemes.p2", "resource_accounting.memory.pous.verifier.setup",
-        ),
-    },
+    "memory-accounting": {},
 }
 
 

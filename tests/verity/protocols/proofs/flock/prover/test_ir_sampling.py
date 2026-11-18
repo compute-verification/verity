@@ -8,15 +8,14 @@ import random
 import numpy as np
 import pytest
 
+from verity.circuits.ops import fp32 as F
+from verity.circuits.ops import mufu as P
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
 from verity_flock import ir_sampling as S
-
-P = pytest.importorskip("verity_vllm.definitions.registry.prims")
-from verity.circuits.ops import fp32 as F  # noqa: E402
-from verity_flock import lowerings  # noqa: E402
-from verity_flock import subcircuit_templates as TM  # noqa: E402
-from verity_vllm.definitions.registry import ref_prims as RP  # noqa: E402
+from verity_flock import lowerings
+from verity_flock import subcircuit_templates as TM
+from verity_vllm.definitions.registry import ref_prims as RP
 
 REG = lowerings.registry("C-Flock")
 SPECIAL = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7FC00123, 0x7F800001, 0xFFC00000, 0xFF800007, 1, 0x80000001,
