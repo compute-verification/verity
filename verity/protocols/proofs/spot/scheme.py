@@ -32,6 +32,7 @@ S.register(S.Scheme(
                                 starts=("loopback", "main-file"), starts_optional=("loopback", "main-file"))},
     answers=S.Lacks("has no piece that answers outside an exchange"),
     record="integrity",
+    sampling_design="rate:1/3481648",
     symbol=CHARGES_NOTHING,
     published=CHARGES_NOTHING,
     check=S.Lacks("the sampled proofs' verifier of record is their party's, which the one table does not load"),
