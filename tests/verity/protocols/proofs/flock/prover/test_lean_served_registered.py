@@ -31,7 +31,7 @@ import pytest
 
 from verity.circuits.codec import canonical_json, encode_program
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage.served import register_served
+from verity.protocols.proofs.spot.prover.served import register_served
 
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"

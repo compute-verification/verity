@@ -5449,6 +5449,11 @@
         "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sample.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/sample.py",
         "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/names.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/names.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/one_stage/served.py": "verity/protocols/proofs/spot/prover/served.py"
+      }
     }
   ]
 }
