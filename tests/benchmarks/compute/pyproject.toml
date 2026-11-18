@@ -24,7 +24,7 @@ inputs = ["tools/config/verity_config", "verity/__init__.py", "tools/config/veri
           "tests/verity/tests/test_channel.py", "benchmarks/compute",
           # useful_work refuses a name no scheme is declared under by loading every declaration (compose.schemes.load),
           # so test_compute.py reads every declared scheme's package and what it imports
-          "verity/protocols", "verity/protocol.py", "verity/circuits", "verity/commitments"]
+          "verity/protocols", "verity/protocol.py", "verity/config.py", "verity/circuits", "verity/commitments"]
 
 [tool.verity.interface]
 core = "verity bench compute"
