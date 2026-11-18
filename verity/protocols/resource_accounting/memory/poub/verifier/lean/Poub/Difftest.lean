@@ -224,7 +224,8 @@ def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArr
   if coins.size ≠ params.windows + (params.windows + g - 1) / g || coins.any (·.size ≠ Codec.COIN_BYTES) then
     throw "W + ⌈W/g⌉ coins of 32 bytes"
   let appendCoins ← hexes j "append_coins"
-  if appendCoins.any (·.size ≠ Codec.COIN_BYTES) then throw "append coins are 32 bytes"
+  if appendCoins.any fun c => c.size != Codec.COIN_BYTES && !c.isEmpty then
+    throw "append coins are 32 bytes, or empty for a slot whose coin was never released"
   pure (params, coins, appendCoins, ← nat j "not_before_ns")
 
 /-- The record of a session at `inFlight` windows in flight and `perCoin` windows a coin: `summaryJ`'s, naming

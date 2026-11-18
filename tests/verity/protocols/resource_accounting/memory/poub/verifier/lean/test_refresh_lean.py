@@ -47,6 +47,7 @@ class Refresh(M.Run):
         self.refresh, self.fresh_slots = refresh, fresh_slots
         self.by_slot: dict[int, audit_prover.Append] = {}
         self.origins: dict[int, tuple[int, audit_prover.Append | None]] = {}
+        self.slot_coins: dict[int, bytes] = {}
 
     @property
     def digest(self) -> bytes:
@@ -60,6 +61,8 @@ class Refresh(M.Run):
         if isinstance(out, tuple):
             first, coin = out
             self.append_coins.append(coin)
+            if slot is not None:
+                self.slot_coins[slot] = coin
             self.head = M.audit.append_head(self.head, first, count, root)
             if first in self.store.pending:
                 self.store.encode(first, coin)
@@ -118,9 +121,13 @@ class Refresh(M.Run):
             self.events.append({"kind": "verify", "t": t, "openings": edit(t, opened) if edit else opened})
 
     def case(self) -> dict:
+        """The case, with refresh its append coins by slot: each slot's the coin the Python books gave the append sent
+        in it, empty for a slot nothing was sent in."""
         out = super().case()
         if self.refresh:
             out["params"] |= {"refresh": True, "fresh_slots": self.fresh_slots}
+            n = max(self.slot_coins, default=-1) + 1
+            out["append_coins"] = [self.slot_coins[k].hex() if k in self.slot_coins else "" for k in range(n)]
         return out
 
 
@@ -368,3 +375,13 @@ def test_refresh_off_named_or_not_gives_the_same_session_and_names_nothing(serve
     assert PORT.lean(server, named) == plain and plain[0] == "output"
     rec = json.loads(plain[1])["record"]
     assert "refresh" not in rec and all("probation" not in w for w in rec["windows"])
+
+
+@pytest.mark.parametrize("name", ["honest-refresh", "refresh-skipped-rekey", "refresh-coin-of-empty-slot"])
+def test_an_empty_slots_coin_is_never_released_and_a_later_append_takes_its_own_slots(server, name) -> None:
+    """Both sides on a refresh session whose slots 2 and 5 (and 6, skipped) stay empty: each later append takes its own
+    slot's coin, and R2, in slot 3, encoded under empty slot 2's coin, is refused `codec`."""
+    case, outcome = M.recorded(name)
+    kind, lean = D.replay(PORT, copy.deepcopy(case), server)
+    assert kind == "output" and json.loads(lean)["outcome"] == outcome == M.REFRESH_SCENARIOS[name][3]
+

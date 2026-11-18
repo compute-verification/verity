@@ -1146,14 +1146,16 @@ class Verifier:
         self.calibration = ready["calibration"]
         return self.registration, self.calibration
 
-    def appends_of(self, refresh: bool = False) -> int:
-        """A session's append coins (`coins.families`): `appends` if given, else `coins.APPENDS`, or none, and no append
-        family, when the hello said the prover's sessions append nothing (`prover.BANDWIDTH`) and the session does
-        not refresh, whose re-keys are appends.  That says only what the prover will forgo: an append it sends then
-        has no coin and refuses the session."""
+    def appends_of(self, params: audit.Params | None = None) -> int:
+        """A session's append coins (`coins.families`): with refresh, one a slot of its schedule (T, whose re-keys are
+        appends); else `appends` if given, else `coins.APPENDS`, or none, and no append family, when the hello said the
+        prover's sessions append nothing (`prover.BANDWIDTH`).  That says only what the prover will forgo: an append it
+        sends then has no coin and refuses the session."""
+        if params is not None and params.refresh:
+            return params.schedule.total
         if self.appends is not None:
             return self.appends
-        return coins.APPENDS if self.appending or refresh else 0
+        return coins.APPENDS if self.appending else 0
 
     def ping(self, n: int) -> dict:
         rtts = []
@@ -1212,7 +1214,7 @@ class Verifier:
             params = dataclasses.replace(params, pace=dataclasses.replace(params.pace, **one))
         g = params.groups_per_coin
         shared, per = ({}, {}) if g == 1 else ({"groups_per_coin": g}, {"per_coin": g})
-        appends = self.appends_of(bool(refresh))
+        appends = self.appends_of(params)
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
                                       challenger=lambda e: self.challenger.open(reg.digest, e, W, appends, **per))
         case = None if self.transcript is None else lv.DifftestCase(

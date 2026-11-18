@@ -252,11 +252,10 @@ def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: fl
 def released_coins(c: coins.SessionCoins) -> tuple[list[bytes], list[bytes]]:
     """The session's coins as the Lean's session takes them: its W + ⌈W/g⌉ committed coins (window t's challenge at t,
     flip d's openings coin at W + d, g windows a sample), each one the challenger never released 32 zero bytes, which no
-    event reads, and the append coins in the order released."""
+    event reads, and the append coins by slot (`coins.by_slot`)."""
     zero, w, d = bytes(coins.COIN_BYTES), c.windows, coins.openings_coins(c.windows, c.per_coin)
     out = [coins.coin(o) for o in c.opened(coins.CHALLENGE)], [coins.coin(o) for o in c.opened(coins.OPENINGS)]
-    return ([*out[0], *[zero] * (w - len(out[0])), *out[1], *[zero] * (d - len(out[1]))],
-            [coins.coin(o) for o in c.opened(coins.APPEND)])
+    return ([*out[0], *[zero] * (w - len(out[0])), *out[1], *[zero] * (d - len(out[1]))], coins.by_slot(c))
 
 
 class DifftestCase:

@@ -1052,7 +1052,7 @@ class AuditRun:
         if self.params.refresh and (slot is None or not self._slot_ok(slot, count, o)):
             return self._fail(self.filling, "origin")
         if (root in self._roots or (len(self.windows) == self.params.windows and self.windows[-1].final)
-                or self.coins.appends == (self.coins.commitment.family(coins.APPEND) or 0)):
+                or (len(self._slots) if slot is None else slot) >= (self.coins.commitment.family(coins.APPEND) or 0)):
             return self._fail(self.filling, "coin")
         first, coin = self.extent, self._append_coin(root, slot)
         self._appends.append((first, append_domain(self.registration.digest, first, count), Commitment(root, count),
@@ -1101,9 +1101,9 @@ class AuditRun:
         return self._appends[k][0] if k < len(self._appends) else self.extent
 
     def _append_coin(self, root: bytes, slot: int | None) -> bytes:
-        """The coin `c_a` of the append whose root is `root`, in `slot`: the session's next append coin, in the order
-        the appends are received, so an empty slot takes none."""
-        return coins.coin(self.coins.append(root))
+        """The coin `c_a` of the append whose root is `root`: append coin `slot`, or without refresh the appends before
+        it, so an empty slot's coin is never released. It keys only this append's blocks (`_committed`)."""
+        return coins.coin(self.coins.append(root, len(self._slots) if slot is None else slot))
 
     def _slot_window(self, slot: int, default: int | None = None) -> int | None:
         """The window slot `slot` of the schedule joins, used or empty, `default` past it (`State.slotWindow`)."""

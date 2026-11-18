@@ -98,12 +98,23 @@ def test_each_rejection_is_the_last_event_and_names_what_drew_it() -> None:
 
 
 def test_an_empty_slot_takes_no_coin_and_shifts_nothing() -> None:
-    """With window 3's registered re-key (slot 6) skipped, window 4's appends keep slots 9 and 10, and the append coins
-    are the appends received, in order."""
+    """With window 3's registered re-key (slot 6) skipped, window 4's appends keep slots 9 and 10, each append takes its
+    slot's coin, and the case's append coins are by slot, empty for each slot never released."""
     r = run("refresh-skipped-rekey")
     slots = [e["slot"] for e in r.events if e["kind"] == "append"]
     assert slots == [0, 1, 3, 4, 9, 10] and r.s.outcome == "accepted"
     assert r.s.coins.appends == len(slots) == len(r.append_coins)
+    assert [o.index for o in r.s.coins.opened(coins.APPEND)] == slots
+    by_slot = r.case()["append_coins"]
+    assert [k for k, c in enumerate(by_slot) if c] == slots
+    assert [by_slot[k] for k in slots] == [c.hex() for c in r.append_coins]
+
+
+def test_an_append_encoded_under_the_coin_of_the_empty_slot_before_it_is_refused_codec() -> None:
+    """R2, in slot 3 after the empty slot 2, encoded under slot 2's coin (its coin by the count of appends) is refused
+    `codec`, and under its own slot's coin accepted (`honest-refresh`)."""
+    assert M.recorded("refresh-coin-of-empty-slot")[1] == "codec" and M.recorded("honest-refresh")[1] == "accepted"
+    assert M.recorded("honest-refresh")[0]["append_coins"][2] == ""
 
 
 def test_refresh_off_names_neither_refresh_nor_probation_anywhere() -> None:
