@@ -18,7 +18,7 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 The command refuses an input that isn't labelled, one that is superseded and a slot two unsuperseded targets claim, and
 says which and how to label it. A steady-state run or art that is superseded, a run that holds neither `RATES` nor a
 report and an art that names no run are left out and listed under "Refused", as is a row that names no staged Definition (one that
-failed or was skipped).
+failed or was skipped), and a trial run of any slot (`kit.trial_why`).
 
 A row is a steady-state measurement when it passes six checks of the proof server's steady-state rules
 (`verity_bench.steady`) and holds what prices it (`unpriced`). The six are `CHECKS`, the rules' own `accepted`,

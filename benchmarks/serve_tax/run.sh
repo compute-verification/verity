@@ -2,7 +2,7 @@
 # The serve tax on one node (README.md), from the shipped tree's root under `research run`, the C4 shard sent with
 # --send (or C4=PATH) unless a ready plan is:
 #   ARMS="compiled eager ..." RATES=light=R,medium=R,saturated=R [MODEL_ID=moonlight] [REPS=3] [SPAN_S=60]
-#     [REQUESTS=N] [DRAIN_S=600] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR]
+#     [REQUESTS=N] [DRAIN_S=600] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR] [TICK_RULE=JSON]
 #     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"] [REPLAY_LOGPROBS=1]] [MAX_MIN=240]
 #     bash benchmarks/serve_tax/run.sh
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
@@ -259,6 +259,7 @@ if [ "${1:-}" = leased ]; then
   fi
   rc=0
   if [ -n "${TICK_MS:-}" ]; then tick=(--tick-ms "$TICK_MS"); else tick=(--tick-from "${TICK_FROM:-$OUT/record}"); fi
+  [ -n "${TICK_RULE:-}" ] && tick+=(--tick-rule "$TICK_RULE")
   count=(); [ -n "${REQUESTS:-}" ] && count=(--requests "$REQUESTS")
   [ -n "${NUM_GPU_BLOCKS:-}" ] && count+=(--num-gpu-blocks "$NUM_GPU_BLOCKS")
   [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")

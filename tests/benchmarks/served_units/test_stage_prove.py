@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -172,20 +173,20 @@ def test_reads_the_leases_among_its_cards_alone_and_goes_on_when_they_are_free(j
     assert calls[0] == "4,5" and rc == 4 and "flock-read-tmpl BUILD FAILED" in steps
 
 
-def test_stages_nowhere_in_ram(job):
+def test_stages_nowhere_in_ram(job, shm: Path):
     """FLOCK_WORK holds flock-tmpl-unit, which a noexec /dev/shm can't run: without RAM_WORK=1 a WORK_ROOT there is refused
     before staging."""
-    rc, steps, _ = job(LAKE_OK="1", WORK_ROOT="/dev/shm/stage-prove-test")
-    assert rc == 4 and "REFUSED: WORK_ROOT /dev/shm/stage-prove-test is in RAM" in steps, steps
-    assert "window.py stage" not in steps and not Path("/dev/shm/stage-prove-test").exists()
-    rc, steps, _ = job(LAKE_OK="1", STEPS="stage", FLOCK_WORK="/dev/shm/stage-prove-test")
-    assert rc == 4 and "REFUSED: FLOCK_WORK /dev/shm/stage-prove-test is in RAM" in steps, steps
+    rc, steps, _ = job(LAKE_OK="1", WORK_ROOT=str(shm))
+    assert rc == 4 and f"REFUSED: WORK_ROOT {shm} is in RAM" in steps, steps
+    assert "window.py stage" not in steps and not shm.exists()
+    rc, steps, _ = job(LAKE_OK="1", STEPS="stage", FLOCK_WORK=str(shm))
+    assert rc == 4 and f"REFUSED: FLOCK_WORK {shm} is in RAM" in steps, steps
 
 
 @pytest.fixture
-def shm(tmp_path):
-    d = Path("/dev/shm") / f"stage-prove-test-{tmp_path.name}"
-    yield d
+def shm():
+    d = Path(tempfile.mkdtemp(prefix="stage-prove-test-", dir="/dev/shm"))
+    yield d / "work"
     shutil.rmtree(d, ignore_errors=True)
 
 

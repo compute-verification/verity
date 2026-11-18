@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import exfiltration as E
+from verity_bench import kit
 from verity_bench import lean_verify as L
 from verity_bench import overhead as O
 from verity_bench import overhead_records
@@ -97,6 +98,8 @@ def rates(store: Any, run: str) -> tuple[list[PF.Steady], list[str]]:
     attempt = store.get_attempt(run)
     if attempt is None:
         return [], ["not in the store or on its remote"]
+    if why := kit.trial_why(run, attempt):
+        return [], [why]
     out = attempt.get("outputs") or {}
     files = out.get("run_files") or out.get("run_record")
     if not files:
@@ -183,7 +186,10 @@ def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, 
     if len(runs) != 1:
         return {target: ([], [(f"holds `{ART_RATES}` and names {len(runs)} runs ({', '.join(runs)}): an art's rows are "
                                "one run's, so each run's go in an art of their own")])}
-    verdict = own_verdict(store, runs[0], store.get_attempt(runs[0]))
+    attempt = store.get_attempt(runs[0])
+    if attempt is not None and (why := kit.trial_why(runs[0], attempt)):
+        return {target: ([], [why])}
+    verdict = own_verdict(store, runs[0], attempt)
     found, whys = _rows(_read(store, target, ART_RATES), runs[0], target, refused=verdict)
     return {target: (found, [verdict, *whys] if verdict else whys)}
 
@@ -267,6 +273,8 @@ def lean_run(store: Any, run: str) -> PF.LeanVerify | str:
     attempt = store.get_attempt(run)
     if attempt is None:
         return "not in the store or on its remote"
+    if why := kit.trial_why(run, attempt):
+        return why
     out = attempt.get("outputs") or {}
     files = out.get("run_files") or out.get("run_record")
     if not files:
@@ -342,6 +350,8 @@ def warm_run(store: Any, run: str) -> list[PF.Warm | str]:
     attempt = store.get_attempt(run) if not run.startswith("art:") else None
     if attempt is None:
         return ["not a run in the store or on its remote"]
+    if why := kit.trial_why(run, attempt):
+        return [why]
     out = attempt.get("outputs") or {}
     files = out.get("run_files") or out.get("run_record")
     if not files:

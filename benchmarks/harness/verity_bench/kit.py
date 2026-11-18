@@ -9,6 +9,9 @@
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
   Inside pytest it writes nothing into the research run the process started under (`refuse_the_started_run`).
+  A trial run (`VERITY_BENCH_TRIAL` set to anything but 0, `is_trial`) writes each measurement to
+  `out/trial-measurements.json` instead, and its result says ``trial: true``: a trial's numbers reach no metric's line,
+  and every record step refuses a labelled trial with `trial_why`.
   `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once, and
   `writer(out, kind)` writes a result of that `kind`, the artifact kind `research` stores it as.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
@@ -55,6 +58,7 @@ kernel's runner imports it without vLLM or torch.
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import csv
 import fcntl
@@ -64,12 +68,13 @@ import numbers
 import os
 import platform
 import re
+import shlex
 import shutil
 import statistics
 import subprocess
 import sys
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -104,6 +109,9 @@ OVER = ("world", "datacenter")
 LEADING_WORD = re.compile(r"^([a-z]+)\b")
 #: a result's `kind`, as `research` stores an artifact's: a name and a version
 KIND = re.compile(r"[a-z0-9][a-z0-9-]*/v[0-9]+")
+#: the variable that makes a run a trial, and the file a trial's measurements go to in place of its result
+TRIAL, TRIAL_FILE = "VERITY_BENCH_TRIAL", "trial-measurements.json"
+TRIAL_LINE = "a trial run ({var}): its {n} measurements are in {path}, and none reaches a metric's line"
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
@@ -284,6 +292,41 @@ def _inside(rel: Any) -> bool:
     return isinstance(rel, str) and bool(rel) and not Path(rel).is_absolute() and ".." not in Path(rel).parts
 
 
+def is_trial(environ: Mapping[str, str] | None = None) -> bool:
+    """Whether a run is a trial: `TRIAL` set to anything but ``0`` in `environ` (an attempt's ``params.env``), else in
+    this process's environment."""
+
+    return (settings.get(TRIAL, environ) or "0") != "0"
+
+
+def trial_attempt(attempt: Mapping[str, Any]) -> bool:
+    """Whether `research run` started the attempt as a trial (`--env VERITY_BENCH_TRIAL=1`, its ``params.env``)."""
+
+    return is_trial((attempt.get("params") or {}).get("env") or {})
+
+
+def trial_why(run: str, attempt: Mapping[str, Any], result: Mapping[str, Any] | None = None) -> str | None:
+    """Why a labelled `run` is never of record, where it is a trial: its `result` says ``trial`` (passed where the
+    record step reads it) or its attempt set `TRIAL`; with the launch that makes it of record, the same command and
+    `--env` without the variable. None where it is no trial."""
+
+    if not ((result or {}).get("trial") is True or trial_attempt(attempt)):
+        return None
+    params = attempt.get("params") or {}
+    env = "".join(f" --env {shlex.quote(f'{k}={v}')}" for k, v in sorted((params.get("env") or {}).items()) if k != TRIAL)
+    argv = shlex.join(str(word) for word in params.get("argv") or ())
+    return (f"{run} is a trial run ({TRIAL}), and a trial is never of record: to make one of record, launch the same "
+            f"command without {TRIAL}: `research run ...{env} -- {argv or 'COMMAND'}`")
+
+
+_TRIALS_SAID: set[Path] = set()
+
+
+def _say_trial(place: Path) -> None:
+    n = len(json.loads(place.read_text(encoding="utf-8"))) if place.is_file() else 0
+    print(TRIAL_LINE.format(var=TRIAL, n=n, path=place), file=sys.stderr)
+
+
 @contextlib.contextmanager
 def _locked(directory: Path) -> Iterator[None]:
     """One appender at a time in `directory`: two processes of a job each keep their measurement."""
@@ -302,13 +345,22 @@ class Writer:
     directory the result is in: under a research run the run's own, whatever `writer` was given. `kind`, where given,
     is the result's `kind`, the artifact kind `research` stores it as (`bench-result/v1` where it has none): the
     writer writes it into the result and refuses a result of another kind. `command`, where given, is the command the
-    run was launched as (`run_command`), which each measurement holds."""
+    run was launched as (`run_command`), which each measurement holds. `trial` (`is_trial` when the writer is made): a
+    trial run's result holds ``trial: true`` and no measurement, each of which goes, as it would have been, to
+    `trial_file` instead, and the process says so on stderr once, at its exit (`TRIAL_LINE`)."""
 
     out: Path
     run: str
     stamp: Mapping
     kind: str | None = None
     command: Sequence[str] | None = None
+    trial: bool = field(default_factory=is_trial)
+
+    def trial_file(self) -> Path:
+        """Where a trial's measurements go: the research run's ``out/`` under one (where `report` writes), else beside
+        the result."""
+
+        return (Path(settings.RESEARCH_RUN_DIR) / "out" if settings.is_set("RESEARCH_RUN_DIR") else self.out) / TRIAL_FILE
 
     def measurement(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
@@ -321,14 +373,37 @@ class Writer:
 
         entry = self._entry(name, value, unit, interval, target, verdict, inputs, why, mark=mark, period=period, over=over,
                            member=member, extra=extra)
+        self._append([entry], (name, period, over, member))
+        return entry
+
+    def keep(self, entries: Sequence[Mapping[str, Any]]) -> None:
+        """Appends measurements a caller wrote whole, as given and unchecked, where `measurement` appends: serving cost's
+        (`overhead_node.write_result`), until it writes them through `measurement`."""
+
+        self._append([dict(e) for e in entries])
+
+    def _append(self, entries: list[dict], key: tuple | None = None) -> None:
         with self._open() as (path, doc):
-            key = (name, period, over, member)
-            if any((m.get("name"), m.get("period"), m.get("over"), m.get("member")) == key for m in doc["measurements"]):
-                raise ValueError(f"{path} already holds a measurement named {name} at period={period!r}, over={over!r} and "
+            place = self.trial_file() if self.trial else path
+            if not self.trial:
+                held = doc["measurements"]
+            else:
+                held = json.loads(place.read_text(encoding="utf-8")) if place.is_file() else []
+            if key is not None and any((m.get("name"), m.get("period"), m.get("over"), m.get("member")) == key
+                                       for m in held):
+                name, period, over, member = key
+                raise ValueError(f"{place} already holds a measurement named {name} at period={period!r}, over={over!r} and "
                                  f"member={member!r}: a result holds one a name, period, over and member (a rerun writes a "
                                  "fresh directory)")
-            doc["measurements"].append(entry)
-        return entry
+            held += entries
+            if self.trial:
+                place.parent.mkdir(parents=True, exist_ok=True)
+                tmp = place.with_name(f"{TRIAL_FILE}.tmp.{os.getpid()}")
+                tmp.write_text(json.dumps(held, indent=1, allow_nan=False) + "\n", encoding="utf-8")
+                os.replace(tmp, place)
+                if place not in _TRIALS_SAID:
+                    _TRIALS_SAID.add(place)
+                    atexit.register(_say_trial, place)
 
     def _entry(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
@@ -502,6 +577,8 @@ class Writer:
         path = self.out / RESULT
         with _locked(self.out):
             doc = self._read(path)
+            if self.trial:
+                doc["trial"] = True
             yield path, doc
             tmp = path.with_name(f"{RESULT}.tmp.{os.getpid()}")
             tmp.write_text(json.dumps(doc, indent=1, allow_nan=False) + "\n", encoding="utf-8")

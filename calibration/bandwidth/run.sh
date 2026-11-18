@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `verity bench bandwidth NAME [ARGS]`: this directory's one runner (cwd = the source tree). It hands ARGS to NAME's own
+# `verity calibrate bandwidth NAME [ARGS]`: this directory's one runner (cwd = the source tree). It hands ARGS to NAME's own
 # script, unchanged. Each script is one Attempt, the command of a `research run`, as its header says.
 #
 #   chip          run_chip.sh: what one card holds on chip (chip.cu, bwchip)
