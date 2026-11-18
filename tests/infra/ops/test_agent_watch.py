@@ -1729,21 +1729,18 @@ def test_a_note_in_a_lanes_subdirectory_is_its_agents_activity_and_its_lanes(tmp
     assert heard[W1_] == T0 - 60 and lanes == {"ci": T0 - 60}
 
 
-def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_lane(tmp_path):
-    """A pool reviewer is a worker the list doesn't show: read by id, it is IDLE and moved 12 min after its latest run
-    FINISHED, its conversation ending on the message. Its lane's handle is rung, once per `updatedAt`."""
+def test_a_worker_first_read_idle_soon_after_it_stopped_is_rung_for_its_lane(tmp_path):
+    """A pool reviewer is a worker the list doesn't show: read by id for the first time IDLE, 15 min after it stopped, with no
+    report back to a parent. It is one stop, rung to its lane's handle once, whatever its conversation ends on."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits reviewer ({W1_})")
     idle = {**worker("IDLE", "2026-10-18T19:45:00Z", name="Reviewer review-2"), "latestRunId": "run-w"}
     api, clock, w = coordinators(tmp_path, [], {"run-w": {"status": "FINISHED", "updatedAt": "2026-10-18T19:32:53Z"}},
                                  workers={W1_: idle}, notes=notes)
     api.convs[W1_] = [*ASKED, ("user_message", "Review the second change.")]
-    w.sweep(lambda r: None)
-    clock.t += 60
-    w.sweep(lambda r: None)
-    assert [(r["kind"], r["agent"], r["run"], r["since"], r["ended"], r.get("owner"), r.get("role")) for r in records(tmp_path)
-            if r["kind"] == "dropped"] == [
-        ("dropped", W1_, "run-w", "2026-10-18T19:45:00Z", "2026-10-18T19:32:53Z", "circuits", "worker")]
+    sweeps(w, clock, 10, step=1)
+    assert [(r["at"], r["lane"]) for r in idles(tmp_path, W1_)] == [("2026-10-18T19:45:00Z", "circuits")]
+    assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == []
 
 
 def test_a_task_worker_whose_latest_run_id_never_moves_is_never_called_dropped(tmp_path):
@@ -1762,9 +1759,9 @@ def test_a_task_worker_whose_latest_run_id_never_moves_is_never_called_dropped(t
     assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == []
 
 
-def test_a_worker_with_api_runs_seen_active_then_idle_is_a_run_that_ended_and_a_later_message_is_dropped(tmp_path):
-    """A pool reviewer's runs are the API's: its IDLE right after an ACTIVE read is the run it was doing ending; a message
-    that moves it later, with no run, is dropped."""
+def test_a_worker_seen_active_then_idle_and_moved_again_is_one_stop_each(tmp_path):
+    """A pool reviewer's IDLE right after an ACTIVE read is one stop; a later message that moves it and leaves it idle is
+    another, rung at its own `updatedAt`."""
     notes = tmp_path / "notes"
     note(notes, "ci", "a.md", f"ci reviewer ({W1_})")
     st = {**worker("ACTIVE", "2026-10-18T19:40:00Z", name="review-1"), "latestRunId": "run-w"}
@@ -1772,15 +1769,14 @@ def test_a_worker_with_api_runs_seen_active_then_idle_is_a_run_that_ended_and_a_
     api, clock, w = coordinators(tmp_path, [], runs, workers={W1_: st}, notes=notes)
     w.sweep(lambda r: None)
     runs["run-w"].update(status="FINISHED", updatedAt="2026-10-18T19:44:00Z")
-    st.update(status="IDLE", updatedAt="2026-10-18T19:50:00Z")
-    clock.t += 60
-    w.sweep(lambda r: None)
-    assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == [], "it ran and stopped: nothing was dropped"
+    st.update(status="IDLE", updatedAt="2026-10-18T19:59:00Z")
+    sweeps(w, clock, 5, step=1)
     st.update(updatedAt="2026-10-18T20:05:00Z")
     api.convs[W1_] = [*ASKED, ("user_message", "Review the second change.")]
-    clock.t = W.epoch("2026-10-18T20:11:00Z")
-    w.sweep(lambda r: None)
-    assert [r["since"] for r in records(tmp_path) if r["kind"] == "dropped"] == ["2026-10-18T20:05:00Z"]
+    clock.t = W.epoch("2026-10-18T20:06:00Z")
+    sweeps(w, clock, 10, step=1)
+    assert [r["at"] for r in idles(tmp_path, W1_)] == ["2026-10-18T19:59:00Z", "2026-10-18T20:05:00Z"]
+    assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == []
 
 
 def drops(tmp_path):
@@ -1811,12 +1807,11 @@ def seat(tmp_path, launched_by=CO, listed=False):
 @pytest.mark.parametrize(("resumed", "turn"), [(242, 136), (1461, 447)], ids=["a-short-turn", "a-long-turn"])
 @pytest.mark.parametrize("seen", [True, False], ids=["its-coordinators-call-seen", "a-workers-call-never-seen"])
 @pytest.mark.parametrize("listed", [False, True], ids=["read-by-id", "on-the-list"])
-def test_a_turn_a_task_resume_ran_to_its_end_is_no_dropped_message(tmp_path, resumed, turn, seen, listed):
-    """A seat resumed with Task ran a turn the API lists no run for: it ended more than `DROPPED_S` after the seat's one
-    listed run, moved its `updatedAt`, and no read of the seat fell inside it, so the seat, IDLE and with its report back,
-    was rung as a message that never became a run. Its conversation ends with its own text. That holds whoever resumed
-    it (its coordinator, whose Task call the watch saw, or a worker, whose Task calls the watch never sees) and however
-    the watch reads it (by id, or on the agent list, where no read of it ACTIVE would have told either)."""
+def test_a_turn_a_task_resume_ran_is_rung_unless_its_parent_got_the_result(tmp_path, resumed, turn, seen, listed):
+    """A seat resumed with Task ran a turn the API lists no run for and moved its `updatedAt`, read IDLE before and after.
+    Read by id it is a worker: its coordinator's Task call completing as it stopped is the report back, and nothing is
+    rung; a worker's Task calls the watch never sees, so that stop is rung, once. On the agent list with a run it is the
+    sweep's, whose conversation shows a turn ran: nothing is dropped."""
     api, clock, w, st = seat(tmp_path, launched_by=CO if seen else W2_, listed=listed)
     clock.t = T0 + resumed
     if seen:
@@ -1828,62 +1823,22 @@ def test_a_turn_a_task_resume_ran_to_its_end_is_no_dropped_message(tmp_path, res
     if seen:
         w.child(CO, {"args": {"agentId": W1_, "description": "SEAT-A"}, "status": "completed"}, clock.t)
     sweeps(w, clock, 20, step=1)
-    if not listed:
-        assert w.workers[W1_]["updated"] == T0 + resumed + turn and not w.workers[W1_].get("no_runs"), "read IDLE, never ACTIVE"
+    assert [r["at"] for r in idles(tmp_path, W1_)] == ([] if seen or listed else [W.iso(T0 + resumed + turn)])
     assert drops(tmp_path) == []
-    assert conv_reads(api, W1_) == 1, "asked once for the change, and not again"
 
 
 @pytest.mark.parametrize("listed", [False, True], ids=["read-by-id", "on-the-list"])
-def test_a_message_nothing_answered_is_still_dropped_once_for_its_owner(tmp_path, listed):
-    """The fault the ring is for: a message reached an idle seat and became no run and no turn. Its `updatedAt` moved past
-    its one run's end and nothing of its own follows the message in its conversation."""
+def test_a_message_nothing_answered_is_one_stop_rung_once_for_its_owner(tmp_path, listed):
+    """A message reached an idle seat and became no run and no turn: its `updatedAt` moved and it is idle with no report
+    back. Read by id it is a worker's stop like any other; on the agent list with a run, the sweep's `dropped`."""
     api, clock, w, st = seat(tmp_path, listed=listed)
     clock.t = T0 + 600
     api.convs[W1_] += [("user_message", "Check the second table against the first.")]
     st["updatedAt"] = W.iso(clock.t)
     sweeps(w, clock, 20, step=1)
-    assert [(r["agent"], r["run"], r["since"], r["ended"], r["owner"], r["status"]) for r in drops(tmp_path)] == [
-        (W1_, "run-w", W.iso(T0 + 600), W.iso(T0), "circuits", "IDLE")]
-
-
-def test_a_dropped_message_is_judged_once_it_has_sat_and_by_one_read_of_the_conversation(tmp_path):
-    """The conversation is the sign, so it is read only for an agent about to be recorded, once per change: not while the
-    change is younger than `DROPPED_S` (a turn just starting has written nothing yet), and not again once judged. The
-    record says what the read showed."""
-    api, clock, w, st = seat(tmp_path)
-    assert conv_reads(api, W1_) == 0, "idle since its run ended: never asked"
-    clock.t = T0 + 600
-    api.convs[W1_] += [("user_message", "Check the second table against the first.")]
-    st["updatedAt"] = W.iso(clock.t)
-    sweeps(w, clock, W.DROPPED_S // 60 - 1, step=1)
-    assert drops(tmp_path) == [] and conv_reads(api, W1_) == 0, "four minutes on: not yet a message nothing answered"
-    sweeps(w, clock, 1, step=1)
-    assert [(r["status"], r.get("unanswered"), r.get("unread_minutes")) for r in drops(tmp_path)] == [("IDLE", True, None)]
-    sweeps(w, clock, 30, step=1)
-    assert len(drops(tmp_path)) == 1 and conv_reads(api, W1_) == 1
-
-
-def test_a_conversation_the_api_wont_read_neither_drops_by_itself_nor_hides_a_dropped_message(tmp_path):
-    """With the conversation unread the times alone are no dropped message: nothing is recorded, and it is read again
-    every `DROPPED_RETRY_S`. One unread at every try for `DROPPED_UNREAD_S` is recorded all the same, saying for how long
-    it went unread in place of what it showed, so a conversation the API never gives hides no one; one that reads in
-    time is judged by what it shows."""
-    api, clock, w, st = seat(tmp_path)
-    clock.t = T0 + 600
-    del api.convs[W1_]
-    st["updatedAt"] = W.iso(clock.t)
-    sweeps(w, clock, W.DROPPED_S // 60 + W.DROPPED_UNREAD_S // 60 - 1, step=1)
-    assert drops(tmp_path) == [] and conv_reads(api, W1_) == W.DROPPED_UNREAD_S // W.DROPPED_RETRY_S
-    sweeps(w, clock, 30, step=1)
-    assert [(r["since"], r.get("unanswered"), r["unread_minutes"]) for r in drops(tmp_path)] == [
-        (W.iso(T0 + 600), None, W.DROPPED_UNREAD_S // 60)]
-    assert conv_reads(api, W1_) == W.DROPPED_UNREAD_S // W.DROPPED_RETRY_S + 1
-    st["updatedAt"] = W.iso(clock.t)
-    sweeps(w, clock, W.DROPPED_S // 60 + 2 * W.DROPPED_RETRY_S // 60, step=1)
-    api.convs[W1_] = [("user_message", "Check the second table."), ("assistant_message", "Checked: they agree.")]
-    sweeps(w, clock, 2 * W.DROPPED_UNREAD_S // 60, step=1)
-    assert len(drops(tmp_path)) == 1, "read at a later try, it ends with the seat's own text: a turn ran"
+    stops = drops(tmp_path) if listed else idles(tmp_path, W1_)
+    assert [(r["agent"], r["since"], r.get("owner") or r["lane"]) for r in stops] == [(W1_, W.iso(T0 + 600), "circuits")]
+    assert len(drops(tmp_path) + idles(tmp_path, W1_)) == 1
 
 
 def test_a_conversation_is_unanswered_when_nothing_of_its_agents_follows_its_last_message():
@@ -1895,9 +1850,9 @@ def test_a_conversation_is_unanswered_when_nothing_of_its_agents_follows_its_las
         "an assistant message with no text is nothing of its own"
 
 
-def test_an_agent_the_platform_reports_in_error_is_crashed_and_never_dropped(tmp_path):
-    """One fact, one record: an agent in error stopped mid-work, which `crashed` says, and is no message that never became
-    a turn, whatever its conversation ends on. Its own status ERROR, should v1 give one, needs no further read."""
+def test_an_agent_the_platform_reports_in_error_is_crashed_and_never_idle(tmp_path):
+    """One fact, one record: an agent in error stopped mid-work, which `crashed` says, and is no idle stop too. Its own
+    status ERROR, should v1 give one, needs no further read."""
     api, clock, w, st = seat(tmp_path)
     api.workers[W2_] = {**worker("IDLE", W.iso(T0), name="SEAT-B"), "latestRunId": "run-w"}
     w.workers[W2_] = {"heard": T0, "lane": "circuits", "handle": "circuits"}
@@ -1908,8 +1863,8 @@ def test_an_agent_the_platform_reports_in_error_is_crashed_and_never_dropped(tmp
     st["status"] = "ERROR"
     before = len(api.gets)
     sweeps(w, clock, 15, step=1)
-    assert {r["agent"]: (r["kind"], r["status"]) for r in records(tmp_path)} == {W1_: ("crashed", "ERROR"), W2_: ("dropped", "IDLE")}
-    assert f"/v0/agents/{W1_}" not in api.gets[before:] and conv_reads(api, W1_) == 0
+    assert {r["agent"]: r["kind"] for r in records(tmp_path)} == {W1_: "crashed", W2_: "worker_idle"}
+    assert f"/v0/agents/{W1_}" not in api.gets[before:]
 
 
 def test_the_workers_heard_most_recently_are_read_first_when_more_are_new_than_a_sweep_reads(tmp_path, monkeypatch):
