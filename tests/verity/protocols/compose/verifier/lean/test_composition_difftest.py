@@ -773,7 +773,7 @@ def reusing(made: list[dict]):
     CC = R.POUW_PERIOD_CASES.credit_cases
 
     def commit(true: dict[str, dict], _steps: int, circuit: str, open_root: str) -> str:
-        w = OS._json({"format": DM.REGISTRATION, "previous": None, "program": circuit, "protocol": OS.R.PROTOCOL,
+        w = OS._json({"format": DM.REGISTRATION, "previous": None, "program": circuit, "protocol": DM.ONE_STAGE_PROTOCOL,
                       "registered": [true[v] for v in sorted(true)],
                       "window": {"entry": len(made), "kind": "served", "open_root": open_root, "refused": []}})
         named = sorted((n, v) for v, n in CC.commit_names(true).items())
