@@ -97,6 +97,7 @@ from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.refs import Coll, array_of, broadcast, concat
 from verity.circuits.types import Array, Type
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import mhc as MHC
 

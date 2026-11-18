@@ -531,7 +531,7 @@ def identity() -> dict:
             "watched": sorted({c for n in nodes for c in numa_cpus(n)}),
             "versions": versions, "python": sys.version.split()[0],
             "env": {k: os.environ.get(k) for k in ("CUDA_VISIBLE_DEVICES", "GPU_LEASE_UUID", "RESEARCH_RUN_ID",
-                                                   "GPU_LEASE_WHO", "VLLM_BATCH_INVARIANT")}}
+                                                   "GPU_LEASE_WHO", "VLLM_BATCH_INVARIANT", "FLASHINFER_CUDA_ARCH_LIST")}}
 
 
 def free_port() -> int:
@@ -593,6 +593,7 @@ def run(args: argparse.Namespace) -> int:
                          "workloads": {name: MIXES[name] for name, _, _ in mix}, "minutes": args.minutes,
                          "warmup_s": args.warmup_s, "grid": {"bucket_ms": BUCKET_MS, "window_buckets": WINDOW_BUCKETS,
                                                              "frame_bytes": FRAME_BYTES}}
+    meta["member"] = member(args.model, meta["gpu"]["name"], args.mode)
     port, served, server, offline = free_port(), "served", None, args.mode in OFFLINE
     model = local_model(args.model, Path(os.environ.get("HF_HOME", Path.home() / ".cache/huggingface")))
     server_argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", model,
@@ -827,14 +828,23 @@ def convert(out: Path, **rules) -> dict:
     return summary
 
 
+def member(model: str, card: str, mode: str) -> str:
+    """The measurement's member: the model's name, the card's `short` in its card record (`kit.card_short`, refused
+    unless one record names the card) and the mode, so `llama-3.2-1b-h200-plaintext`."""
+    from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
+
+    return f"{model.rsplit('/', 1)[-1].lower()}-{kit.card_short(card, directory=CARD_FILES)}-{mode}"
+
+
 def record_metric(out: Path, summary: dict, meta: dict) -> dict:
-    """`METRIC` of `summary`, in ms, written with the model, the mode and the traced card as the measurement's fields
-    and printed as one line; with no value where no completed request streamed two chunks."""
+    """`METRIC` of `summary`, in ms, under meta's `member`, written with the model, the mode and the traced card as the
+    measurement's fields and printed as one line; with no value where no completed request streamed two chunks."""
     from verity_bench import kit
 
     gap = (summary.get("inter_chunk_ms") or {}).get("p99.9")
     why = None if gap is not None else summary.get("error") or "no completed request streamed two chunks"
-    m = kit.writer(out).measurement(METRIC, gap, "ms", why=why, mark="measured",
+    m = kit.writer(out).measurement(METRIC, gap, "ms", why=why, mark="measured", member=meta["member"],
                                     extra={"model": meta["model"], "mode": meta["mode"], "card": meta["gpu"]["name"]})
     print(f"{METRIC}: {gap} ms" if gap is not None else f"{METRIC}: no number: {why}", flush=True)
     return m

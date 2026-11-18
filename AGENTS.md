@@ -64,7 +64,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   end to end, GPU probes, and `calibration/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command (`cli/`), `circuit_check/`, `graph/` (the check as a graph of tasks) and `lean/`
   (the Lean check); `tools/check/`: the one check.
-- `artifacts.json`: every replicated fixture by `art:` id (no root `fixtures/`: each file sits beside
+- `artifacts.json`: the fixture registry, every replicated fixture by `art:` id (no root `fixtures/`: each file sits beside
   its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
   deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
   deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
@@ -119,9 +119,26 @@ The team's agents run these remotely (the team skill).
 
 The rules in force, each stated as itself; the friction skill has the standing rulings stated nowhere else.
 
+- **One circuit, one commitment, SPOT with levels.** This is the shape every protocol and integration is to have. An
+  integration hands Verity one circuit C per workload, registered by digest before any coin, with its partition into
+  blocks and its public layout, which gates are the system's external inputs and outputs. C's wires are its edges, and
+  no dataflow lives in side text. One public, deterministic registered compiler builds C and fixes its partition and
+  wiring, not the prover; what is registered is C's compact description (templates, batches, scans), which the verifier
+  reads and never unrolls. The prover commits a trace (Circuits and values). SPOT has one form, with levels: the auditor
+  fixes a list of levels before any coin, each a partition with its sampling design; live coins sample blocks level by
+  level, and each block sampled at the last level gets a zero-knowledge proof that its committed outputs are the block
+  applied to its committed inputs. One level is the basic form, and two are the default unless the audit is composed
+  with useful work. An author supplies the workload, the design and δ; an accept reports ε at δ. The other protocols
+  stand on the same C and commitment: PoUW credits blocks of C, the exfiltration, infiltration and inference-only limits
+  are corollaries of SPOT's guarantee computed from C's description, the memory and network audits tie C's registered
+  inputs and external gates to the machine, and compose's one verdict reads every protocol's. Where `main` differs (an
+  optional wiring check between blocks, one-stage and two-stage forms side by side with no two-level audit accepted in Lean,
+  guarantees proved on their own) is ARCHITECTURE.md's section 7.
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
-  every output, is a value, touched only inside a zero-knowledge proof. Only a proof block's inputs and outputs are
-  committed, each under a hiding leaf; the values inside a proof block never are.
+  every output, is a value, touched only inside a zero-knowledge proof. Only the values on wires that cross a block
+  boundary are committed, each under a hiding leaf; the values inside a block never are. Each such wire is to have one
+  commitment that every block reading or writing it shares, so there is no wire check to switch on; today each
+  block commits its own rows, and a wiring check (`HmLinks`) ties them only where an audit's case names a wiring.
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
   reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
@@ -129,12 +146,15 @@ The rules in force, each stated as itself; the friction skill has the standing r
   16-bit limit). A plain path, Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and
   `verity verify proof` refuses a plain session past what the plain theorem covers (one table today).
-- **One proof system** for PoUW, PoUS and network attestation: the workers behind the ZK server, the challenger and the
-  verifier. A protocol states what is committed, which proof blocks need proofs, the public Program each must pass and what it
-  does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
-  integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
-  model's size is public. These core protocols wrap SPOT[Flock], the sampled proof system, in the recursion layer and the
-  ZK server. SPOT[Flock] on its own (the research release and its post) has none of that: an inference server serves and
+- **One proof system, in layers,** for PoUW, PoUS and network attestation: the workers behind the ZK server, the
+  challenger and the verifier. Flock, the argument system, proves one statement; the sampling layer (SPOT) samples
+  blocks on live coins and owns the selection and the integrity profile; the recursion layer's outer proofs stand for
+  the developer's proofs; the ZK layer (the ZK server) is the only exit to the auditor. A protocol states what is
+  committed, which blocks need proofs, the public Program each must pass and what it does with the outcome; the layers
+  and `verity.commitments` own commitments, live coins, the record, the selection, proving and verifying. A protocol
+  carries no policy parameter: it surfaces what its sample established (ε at δ), and the model's size is public. These
+  core protocols wrap SPOT[Flock], the sampled proof system, in the recursion layer and the ZK server. SPOT[Flock] on
+  its own (the research release and its post) has none of that: an inference server serves and
   commits its values, a proof server replays the sampled requests and proves them, and the verifier (the challenger and
   the Lean verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not
   exfiltration. The demonstration adds the network attester as a separate layer: it stamps each request's release order
@@ -149,10 +169,13 @@ The rules in force, each stated as itself; the friction skill has the standing r
   party's sessions only, its key always XORed with a SHA-512 one (never below hash-only) and never on pair links
   (`ind-cca/ml-kem-1024`).
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
-  inside an execution phase, from its live challenge and the previous pass's root; and PoUW's
-  per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the execution
-  phase's live salt (`pouw.salt`) and the operands' committed roots, which a sampled proof block's proof derives. Grinding is a term
-  of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
+  inside an execution phase, from its live challenge and the previous pass's root; and PoUW's noise seeds, which hash
+  the execution phase's live salt (`pouw.salt`) and commitments fixed before the noise is used. Under Pearl+, a fixed
+  operand's seed is s512("seed-B", salt ‖ root_B), once per fixed operand and execution phase, and an activation row's is
+  s512("seed-A", salt ‖ its row digest ‖ root_B ‖ call index, row). Grinding is priced where the developer picks after
+  the salt: Pearl+'s guarantee charges it as oracle queries in TT_OUT's game, with no μ^m term. H1's
+  seed is one per matmul, seed_j = SHA-512(tag ‖ salt ‖ position ‖ root(A_j) ‖ root(B_j)), which a sampled proof block's
+  proof derives, and its guarantee prices grinding at μ^m a try for a steer that needs m noised coordinates. No
   retries: a failed proof is a visible failure, and nothing resamples. In the core protocols, outer proofs go through the ZK server as independent
   sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
   coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and
@@ -203,8 +226,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   checks, and defines every other layer's circuit from it.
 - **Integrations are frontends, and Verity is agnostic to them.** Verity's vocabulary is circuits, values,
   commitments, coins, proofs and verdicts; models, checkpoints, requests, batches and schedulers stay out of `verity/`, and
-  those still in it (network attestation's advice format) move out to the adapter. An integration hands Verity only: a
-  circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
+  those still in it (network attestation's advice format) move out to the adapter. An integration hands Verity only: one
+  circuit per workload, whose wires are its edges, partitioned into blocks, with its public layout of external I/O,
+  registered by digest before any coin; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.commitments` scheme and registered
   before any coin (under a two-stage sampling design, a sampled replay block's interior between its two stages); and on a
@@ -294,13 +318,16 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   this is a requirement, not a claim that `main` proves it. The verifier refuses any form the proof doesn't cover and
   gains none ahead of its proof. Circuit inputs and outputs use one canonical format, proved in general, so a new
   workload needs no verifier or proof change.
-- **The math is modular.** Each layer is proved once over the guarantee of the layer below: the knowledge soundness of
-  one run's verifier for sampling, sampling's for an audit, an audit's for an accounting bound. Each configuration
-  (zero-knowledge, plain, recursive) and each protocol instantiates those theorems, and a proof that redoes a layer is
-  refactored onto the shared one.
+- **The math is modular.** Soundness and zero knowledge are each one theorem in layers, each layer proved once over the
+  guarantee of the layer below: one session's knowledge soundness for sampling, sampling's for recursion and for an
+  audit, an audit's for an accounting bound, and every protocol's for compose's verdict. Each configuration
+  (zero-knowledge, plain, recursive) and each protocol instantiates those theorems: each deployed guarantee is to be an
+  instance of a layer theorem, not a proof of its own (today most are proved on their own), and a proof that redoes a
+  layer is refactored onto the shared one. The ZK, sampling and recursion layers are each to be one generic compiler,
+  generic in the argument system and the circuit type; Flock over Boolean circuits is one instance, today the only one.
 - **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and samples,
-  probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
-  area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
+  probability, partitions, levels and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`,
+  which every area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
   executable verifier and the ZK server (`verity/protocols/proofs/flock/verifier/`, with the release side in
@@ -359,6 +386,10 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   later review. Another owner's tool gets the PR all the same, and its owner is told.
 - **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
   delete dead and superseded code, and move data and logs to the evidence store.
+- **Consolidate onto the shared interface.** When you touch code or Lean near the one circuit, the one commitment, the
+  levels or a layer theorem, move it onto the shared one in the same change, without asking. Add no second definition,
+  serve path, audit path, id, record field or proof of a layer; where the shared one lacks what you need, extend it and
+  tell its owner, never copy it. A reader holds a change that adds a duplicate.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
   procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md, the
   skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc

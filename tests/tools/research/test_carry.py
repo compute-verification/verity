@@ -259,6 +259,42 @@ def test_merging_another_prs_head_carries_only_once_that_head_is_trusted(repo: P
     assert carry.delta(repo, old, new, landed(repo, newer)).kind == "untrusted-parent"
 
 
+def test_merging_a_head_with_a_land_verdict_of_its_own_carries_even_once_its_pr_moved_on(repo: Path):
+    """A merged head that is neither landed nor another PR's current marked head is trusted when ``lands`` says it has its own
+    PR's land verdict at it: a reader passed it, so merging it changes nothing unread."""
+    branch(repo, "other")
+    theirs = commit(repo, {"b.py": "other\n"}, "another PR")
+    commit(repo, {"b.py": "other, re-headed\n"}, "the other PR moves on, with no verdict yet")
+    branch(repo, "pr", "main")
+    old = commit(repo, {"a.py": "a2\n"}, "the PR")
+    new = merge(repo, theirs)
+    main = git(repo, "rev-parse", "main")
+    asked = []
+    assert carry.delta(repo, old, new, carry.trust(repo, [main], (), lambda c: asked.append(c) or False)).kind == \
+        "untrusted-parent" and asked == [theirs]
+    d = carry.delta(repo, old, new, carry.trust(repo, [main], (), lambda c: c == theirs))
+    assert d.kind == "merge-only" and d.parents == (theirs,)
+    assert carry.delta(repo, old, new, carry.trust(repo, [main], ())).kind == "untrusted-parent", "nothing trusts it unasked"
+
+
+def test_a_head_with_its_own_land_verdict_vouches_for_no_hand_resolution_and_no_commit_of_the_prs_own(repo: Path):
+    """Trusting a merged head for its own land verdict loosens only `untrusted-parent`: a merge of it resolved by hand, or a
+    commit of the PR's own beside it, still needs a reader."""
+    branch(repo, "other")
+    theirs = commit(repo, {"a.py": "other\n"}, "another PR, in the PR's file")
+    branch(repo, "pr", "main")
+    old = commit(repo, {"a.py": "pr\n"}, "the PR")
+    lands = carry.trust(repo, [git(repo, "rev-parse", "main")], (), lambda c: c == theirs)
+    hand = merge(repo, theirs, {"a.py": "both\n"})
+    assert carry.delta(repo, old, hand, lands).kind == "hand-resolved"
+    git(repo, "checkout", "-q", "-B", "pr2", "main")
+    old = commit(repo, {"c.py": "pr\n"}, "a PR in another file")
+    clean = merge(repo, theirs)
+    assert carry.delta(repo, old, clean, lands).kind == "merge-only"
+    authored = commit(repo, {"c.py": "pr, more\n"}, "the PR's own commit after the merge")
+    assert carry.delta(repo, old, authored, lands).kind == "authored"
+
+
 def test_a_reviewed_pr_built_on_the_old_head_and_merged_back_carries(repo: Path):
     branch(repo, "pr")
     old = commit(repo, {"a.py": "a2\n"}, "the PR")
@@ -339,6 +375,59 @@ def test_a_restack_commit_that_changes_more_than_the_moves_script_is_the_prs_own
     new = git(moved, "commit-tree", tree, "-p", sneaked, "-p", main, "-m", "Merge main (the layout move), restacked")
     d = carry.delta(moved, old, new, landed(moved), restack=main)
     assert (d.kind, d.moves) == ("authored", ()) and d.why == f"{sneaked[:12]} changes b.py beyond the move {move[:12]}'s script"
+
+
+@pytest.fixture
+def owned(tmp_path: Path) -> Path:
+    """`moved`, but the move adds the map it runs by, which its base lacks, as a move's pull request bringing its own map
+    lands: restack.py lends the map to the script it reruns, and brings it onto that rerun in a commit of its own, as the
+    change the move made beside its script."""
+    repo = tmp_path / "owned"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    commit(repo, {**{p: (ROOT / p).read_text() for p in MOVE_SCRIPTS}, "tools/check/pins.py": "PINS = ()\n",
+                  "tools/research/src/research/store/moves.json": '{"moves": []}\n',
+                  "old_proto/__init__.py": "", "old_proto/a.py": "def f():\n    return 1\n", "b.py": PROTO, "c.py": "c\n"},
+           "base")
+    branch(repo, "pr")
+    commit(repo, {"b.py": PROTO + "Y = old_proto.a.f()\n"}, "the PR")
+    git(repo, "checkout", "-q", "main")
+    (repo / MAP).write_text('[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
+                            '[words]\n"old_proto" = "new_proto"\n')
+    script(repo, "tools/move/rename.py", "--map", MAP, "--allow-dirty")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", f"Move old_proto to new_proto, with its map\n\nMove: {MAP}\n")
+    commit(repo, {"c.py": "c2\n"}, "landed after the move")
+    return repo
+
+
+def test_a_crossing_over_a_move_that_adds_its_map_carries_when_it_changes_nothing_else(owned: Path):
+    """A crossing over a move that adds its own map is restack.py's rerun of the script with the map lent to it, then the map
+    brought onto that rerun (`hand_tree`), then the merge of the moved `main`: the PR's own change, carried across the move,
+    is the one reviewed, so the land carries. A rerun without the map fails, and the commit bringing the map, judged as one
+    more rerun, changes the map beyond the script."""
+    old, move, main = (git(owned, "rev-parse", r) for r in ("pr", "main~1", "main"))
+    new = cross(owned)
+    assert git(owned, "log", "-1", "--format=%s", f"{new}^1").startswith(f"restack: the hand changes {move[:12]}")
+    d = carry.delta(owned, old, new, landed(owned), restack=main)
+    assert (d.kind, d.parents, d.moves) == ("merge-only", (main,), (move,)), d
+    assert d.why == (f"its 3 commit(s) since only merge {main[:12]} as the queue would and rerun the move {move[:12]} as a "
+                     "restack does")
+
+
+def test_a_crossing_over_a_move_that_adds_its_map_and_edits_a_line_beside_it_is_the_prs_own(owned: Path):
+    """The commit that brings the move's map onto the rerun, with one more line of the PR's beside it, is the PR's own: the
+    line is no part of the move."""
+    old, move, main = (git(owned, "rev-parse", r) for r in ("pr", "main~1", "main"))
+    git(owned, "checkout", "-q", f"{cross(owned)}^1")
+    (owned / "b.py").write_text((owned / "b.py").read_text() + "Z = 'sneaked'\n")
+    git(owned, "commit", "-q", "-a", "--amend", "--no-edit")
+    sneaked = git(owned, "rev-parse", "HEAD")
+    tree = git(owned, "merge-tree", "--write-tree", f"--merge-base={move}", sneaked, main)
+    new = git(owned, "commit-tree", tree, "-p", sneaked, "-p", main, "-m", "Merge main (the layout move), restacked")
+    d = carry.delta(owned, old, new, landed(owned), restack=main)
+    assert d.kind == "authored" and d.why == (f"{sneaked[:12]} changes b.py beyond the move {move[:12]}'s script and what it "
+                                              "made beside it")
 
 
 def test_a_crossing_over_a_corrected_move_carries_by_the_restack_py_whose_commit_has_the_table_and_not_by_one_without(

@@ -93,6 +93,11 @@ placed = {**{k: v for k, v in node.items() if not isinstance(v, dict)}, **r.get(
 # PRODUCT is the configuration's, and a launch parameter with no default the launch's
 env = {k: fill(str(v), k) for k, v in placed.items()
        if k not in given and not (run == "settings" and (k == "PRODUCT" or unset(str(v))))}
+# where an application's record is composed is the runner's default, by its product and VERITY_HOLD_PLACEMENT
+if run == "settings":
+    env.pop("COMPOSE_OFF_NODE", None)
+elif held.get("VERITY_HOLD_PLACEMENT") == "1" and "VERITY_HOLD_PLACEMENT" not in given:
+    env["VERITY_HOLD_PLACEMENT"] = "1"
 send = [fill(s, f"{run} run's send") for s in r.get("send", [])]
 for name in send:
     if not Path(name).is_file():
@@ -158,6 +163,9 @@ if [ "$RUN" = settings ] || [ "$RUN" = bindings ]; then
   for kv in "${ARGV[@]}"; do export "${kv?}"; done
   log() { echo "run.sh settings: $*" >&2; }
   . adapters/vllm/tools/served_run/workload_env.sh || exit 2
+  if [ -n "${CARD:-}" ]; then
+    . adapters/vllm/tools/served_run/pin_card.sh "$(mktemp -d "${RESEARCH_RUN_DIR:-${TMPDIR:-/tmp}}/card-$CARD.XXXXXX")" || exit 2
+  fi
   mkdir -p "$SERVE_ROOT" && chmod 700 "$SERVE_ROOT"
   "$@"
   exit
