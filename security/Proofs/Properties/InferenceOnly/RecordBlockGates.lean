@@ -20,8 +20,9 @@ In every circuit a record the check reads lays out, a block has the gates the su
 A block is a slot's units (`Divides`), and a unit's gates are its Definition's. The units' gate ranges are apart
 (`units_apart`); every gate of a unit is a computed gate of the circuit, since it is computed (`unitsComputed`) and
 no wire covers it, a wired gate being an input gate (`OwnRows`); and every computed gate of the circuit lies in a
-unit. So a block's size is the gates of its slot's units (`block_size`): range by range of the root, the range's
-units in the slot times its Definition's gates (`block_ranges`).
+unit. So a block's size is the gates of its slot's units (`block_size`): template by template, the template's
+units in the slot times its Definition's gates (`block_ranges`), a unit of a template being one scope
+(`unitAt_unique`) whose Definition is the template's (`unit_tmpl`).
 
 A template's grids are whole periods of the slots and tile its units (`tmpl_grids`), so each of the `S` slots holds
 the template's units over `S` (`tmpl_slot_card`), and the block of such a slot has the summary's gates. A unit's slot
@@ -73,18 +74,6 @@ private theorem sum_fin_map {α : Type} (g : α → ℕ) : ∀ (l : List α) (n 
     rw [List.map_cons, List.sum_cons, ← ih, ← h0]
     show ∑ i : Fin (l.length + 1), f i.val = _
     exact (Fin.sum_univ_succ fun i : Fin (l.length + 1) => f i.val).trans rfl
-
-/-- The text's template at a range's place has the range's template and its count for units. -/
-private theorem tmpl_of_range {ts : List Tmpl} {rs : Array TRange}
-    (hmap : ts.map (fun t => (t.tid, t.units)) = rs.toList.map (fun r => (r.template, r.count))) {i : ℕ}
-    (hi : i < rs.size) : ∃ t, ts[i]? = some t ∧ t.tid = rs[i]!.template ∧ t.units = rs[i]!.count := by
-  have hlen : ts.length = rs.size := by simpa using congrArg List.length hmap
-  have hi' : i < ts.length := by omega
-  have h : (ts.map fun t => (t.tid, t.units))[i]? = (rs.toList.map fun r => (r.template, r.count))[i]? := by
-    rw [hmap]
-  refine ⟨ts[i], List.getElem?_eq_getElem hi', ?_⟩
-  rw [getElem!_pos rs i hi]
-  simpa [hi, hi'] using h
 
 /-! ## A template's grids -/
 
@@ -152,9 +141,9 @@ theorem tmpl_slot_card {ts : List Tmpl} {doc : Json} {S : ℕ} {per : List (Stri
 
 /-! ## A block's size, range by range -/
 
-/-- **A block's gates, range by range.** Where the computed gates of a circuit lie in units, unit `v` of range `i`
+/-- **A block's gates, part by part.** Where the computed gates of a circuit lie in units, unit `v` of part `i`
 the gates `[off i v, off i v + G i)`, the units' gates apart, all of them computed and all of block `slot i v`, and
-range `i` has `cnt i` units in block `u`: block `u` has, range by range, `cnt i` times `G i` gates. -/
+part `i` has `cnt i` units in block `u`: block `u` has, part by part, `cnt i` times `G i` gates. -/
 theorem block_ranges (D : Verity.Circuit) {n : ℕ} (U : Verity.Partition D n) (at_ : Fin D.N → ℕ)
     (hinj : Function.Injective at_) {m : ℕ} (units G cnt : Fin m → ℕ)
     (off slot : (i : Fin m) → Fin (units i) → ℕ)
@@ -194,7 +183,6 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs)
     (hO : OwnRows P rs W) (hL : LaysOut P rs W Sw D at_) (hDiv : Divides P rs (slotIn S per) at_ U) (u : Fin n) :
     D.size (U.gates u) = (ts.map fun t => t.units / S * (P.defs[t.defn]!).gates).sum ∨ U.gates u = ∅ := by
-  obtain ⟨-, hmap⟩ := templatesOf_ranges hts hrs
   have hnd : (ts.map (·.tid)).Nodup := (tmpls_named hts).1
   have hr : P.root < P.defs.size := (read_bodies hP).1
   have hcomp := unitsComputed hP hrs
@@ -206,51 +194,76 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
     exact tmpl_slot_lt hgr hnd ht hlt
   by_cases hu : u.val < S
   · left
-    have hlen : ts.length = rs.size := by simpa using congrArg List.length hmap
-    have hsum : ∑ i : Fin rs.size, rs[i.val]!.count / S *
-          (P.defs[((P.defs[P.root]!).body.nodes[rs[i.val]!.node]!).fn]!).gates =
+    have hex : ∀ (j : Fin ts.length) (w : Fin ts[j.val].units), ∃ sc, UnitAt P rs ts[j.val].tid w.val sc :=
+      fun j w => (unitAt_iff hts hrs _ _).2 ⟨ts[j.val], List.getElem_mem _, rfl, w.isLt⟩
+    have hdefn : ∀ (j : Fin ts.length) {w : ℕ} {sc : Scope}, UnitAt P rs ts[j.val].tid w sc →
+        sc.d = ts[j.val].defn := by
+      intro j w sc hunit
+      obtain ⟨t, ht, htid, -, hd, -⟩ := unit_tmpl hP hts hrs hunit
+      have he : t = ts[j.val] := eq_of_nodup_map (·.tid) ts hnd t ht ts[j.val] (List.getElem_mem _) htid
+      rw [← hd, he]
+    have hsum : ∑ j : Fin ts.length, ts[j.val].units / S * (P.defs[ts[j.val].defn]!).gates =
         (ts.map fun t => t.units / S * (P.defs[t.defn]!).gates).sum := by
-      refine sum_fin_map (fun t : Tmpl => t.units / S * (P.defs[t.defn]!).gates) ts rs.size
-        (fun i => rs[i]!.count / S * (P.defs[((P.defs[P.root]!).body.nodes[rs[i]!.node]!).fn]!).gates) hlen ?_
-      intro i hi
-      have hir : i < rs.size := by omega
-      obtain ⟨t, hget, htt, htu⟩ := tmpl_of_range hmap hir
-      have hti : ts[i] = t := Option.some.inj ((List.getElem?_eq_getElem hi).symm.trans hget)
-      show rs[i]!.count / S * (P.defs[((P.defs[P.root]!).body.nodes[rs[i]!.node]!).fn]!).gates =
-        ts[i].units / S * (P.defs[ts[i].defn]!).gates
-      rw [hti, htu]
-      rcases Nat.eq_zero_or_pos rs[i]!.count with h0 | hpos
-      · rw [h0, Nat.zero_div, Nat.zero_mul, Nat.zero_mul]
-      · have hunit : UnitAt P rs rs[i]!.template 0 (P.child P.rootScope rs[i]!.node 0) :=
-          (unitAt_iff hts hrs _ _ _).2
-            ⟨i, t, hir, rfl, hget, htt, htu, Nat.lt_of_lt_of_eq hpos htu.symm, rfl⟩
-        obtain ⟨t', ht', htid', -, hdefn, -⟩ := unit_tmpl hP hts hrs hunit
-        have : t' = t :=
-          eq_of_nodup_map (·.tid) ts hnd t' ht' t (List.mem_of_getElem? hget) (htid'.trans htt.symm)
-        subst this
-        rw [hdefn, (child_root P _ _).1]
+      rw [← sum_fin_map (fun t : Tmpl => t.units / S * (P.defs[t.defn]!).gates) ts ts.length
+        (fun j => (ts[j]?.map fun t => t.units / S * (P.defs[t.defn]!).gates).getD 0) rfl
+        (fun j hj => by simp [List.getElem?_eq_getElem hj])]
+      exact Finset.sum_congr rfl fun j _ => by simp [List.getElem?_eq_getElem j.isLt]
     rw [← hsum]
-    refine block_ranges D U at_ hL.1 (fun i : Fin rs.size => rs[i.val]!.count)
-      (fun i => (P.defs[((P.defs[P.root]!).body.nodes[rs[i.val]!.node]!).fn]!).gates)
-      (fun i => rs[i.val]!.count / S)
-      (fun i v => (P.child P.rootScope rs[i.val]!.node v.val).off)
-      (fun i v => (slotIn S per rs[i.val]!.template v.val).getD 0) ?_ ?_ ?_ u ?_
-    · intro i i' v v' hne
-      exact units_apart hP hrs i.isLt i'.isLt v.isLt v'.isLt hne
+    refine block_ranges D U at_ hL.1 (fun j : Fin ts.length => ts[j.val].units)
+      (fun j => (P.defs[ts[j.val].defn]!).gates) (fun j => ts[j.val].units / S)
+      (fun j w => (Classical.choose (hex j w)).off)
+      (fun j w => (slotIn S per ts[j.val].tid w.val).getD 0) ?_ ?_ ?_ u ?_
+    · intro j j' w w' hne
+      beta_reduce
+      have h1 := Classical.choose_spec (hex j w)
+      have h2 := Classical.choose_spec (hex j' w')
+      rw [← hdefn j h1, ← hdefn j' h2]
+      generalize Classical.choose (hex j w) = sc at h1 ⊢
+      generalize Classical.choose (hex j' w') = sc' at h2 ⊢
+      unfold UnitAt at h1 h2
+      obtain ⟨i, m, hi, hti, hm, hw, rfl⟩ := h1
+      obtain ⟨i', m', hi', hti', hm', hw', rfl⟩ := h2
+      refine units_apart hP hrs hi hi' hm hm' ?_
+      refine Classical.not_not.1 fun hc => ?_
+      have hii : i = i' := Classical.not_not.1 fun h => hc (Or.inl h)
+      have hmm : m = m' := Classical.not_not.1 fun h => hc (Or.inr h)
+      subst hii hmm
+      have hjj : j.val = j'.val :=
+        (hnd.getElem_inj_iff (hi := by simpa using j.isLt) (hj := by simpa using j'.isLt)).1
+          (by simpa using hti.symm.trans hti')
+      have hjj' : j = j' := Fin.ext hjj
+      subst hjj'
+      rcases hne with h | h
+      · exact h rfl
+      · exact h (hw.trans hw'.symm)
     · intro x hx
       obtain ⟨tid, v, sc, s, hunit, h1, h2, hs, hmapu⟩ := hDiv x hx
-      obtain ⟨i, t, hi, hti, -, -, htu, hvt, rfl⟩ := (unitAt_iff hts hrs tid v sc).1 hunit
-      refine ⟨⟨i, hi⟩, ⟨v, Nat.lt_of_lt_of_eq hvt htu⟩, h1, h2, ?_⟩
-      show (U.unit x).map Fin.val = some ((slotIn S per rs[i]!.template v).getD 0)
-      rw [hti, hs]
-      exact hmapu
-    · intro i v g h1 h2
-      obtain ⟨hk, hcnt⟩ := range_node hr hP.2.2.2.2.2.2 (readProg_inputs hP) hrs i.isLt
-      obtain ⟨t, hget, htt, htu⟩ := tmpl_of_range hmap i.isLt
-      have hunit : UnitAt P rs rs[i.val]!.template v.val (P.child P.rootScope rs[i.val]!.node v.val) :=
-        (unitAt_iff hts hrs _ _ _).2
-          ⟨i.val, t, i.isLt, rfl, hget, htt, htu, Nat.lt_of_lt_of_eq v.isLt htu.symm, rfl⟩
-      have hlt : g < gates P := unit_gate_lt hP hk (Nat.lt_of_lt_of_eq v.isLt hcnt) h2
+      obtain ⟨t, ht, htid, hvt⟩ := (unitAt_iff hts hrs tid v).1 ⟨sc, hunit⟩
+      obtain ⟨j, hjl, rfl⟩ := List.getElem_of_mem ht
+      subst htid
+      have he : Classical.choose (hex ⟨j, hjl⟩ ⟨v, hvt⟩) = sc :=
+        unitAt_unique (Classical.choose_spec (hex ⟨j, hjl⟩ ⟨v, hvt⟩)) hunit
+      have hd := hdefn ⟨j, hjl⟩ hunit
+      refine ⟨⟨j, hjl⟩, ⟨v, hvt⟩, ?_, ?_, ?_⟩
+      · show (Classical.choose (hex ⟨j, hjl⟩ ⟨v, hvt⟩)).off ≤ at_ x
+        rw [he]
+        exact h1
+      · show at_ x < (Classical.choose (hex ⟨j, hjl⟩ ⟨v, hvt⟩)).off + (P.defs[ts[j].defn]!).gates
+        rw [he, ← hd]
+        exact h2
+      · show (U.unit x).map Fin.val = some ((slotIn S per ts[j].tid v).getD 0)
+        rw [hs]
+        exact hmapu
+    · intro j w g h1 h2
+      have hunit := Classical.choose_spec (hex j w)
+      beta_reduce at h1 h2
+      rw [← hdefn j hunit] at h2
+      generalize Classical.choose (hex j w) = sc at hunit h1 h2
+      have hu2 := hunit
+      unfold UnitAt at hu2
+      obtain ⟨i, m, hi, -, hm, -, rfl⟩ := hu2
+      obtain ⟨hk, hcnt⟩ := range_node hr hP.2.2.2.2.2.2 (readProg_inputs hP) hrs hi
+      have hlt : g < gates P := unit_gate_lt hP hk (Nat.lt_of_lt_of_eq hm hcnt) h2
       have hnw : ¬ Wired P rs W Sw g := by
         rintro ⟨r, l, lo, up, -, hrl⟩
         obtain ⟨p, ops, sc', hgate, hinp⟩ := hO.1 r l g lo up hrl
@@ -263,9 +276,8 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
       refine ⟨x, hx, ?_⟩
       rw [hinp]
       exact hcomp _ _ _ g p ops sc' hunit h1 h2 hgate
-    · intro i
-      obtain ⟨t, hget, htt, htu⟩ := tmpl_of_range hmap i.isLt
-      exact tmpl_slot_card hgr hnd (List.mem_of_getElem? hget) hu htt htu
+    · intro j
+      exact tmpl_slot_card hgr hnd (List.getElem_mem _) hu rfl rfl
   · right
     by_contra hne
     obtain ⟨x, hx⟩ := Finset.nonempty_iff_ne_empty.2 hne

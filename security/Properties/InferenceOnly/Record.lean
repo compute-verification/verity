@@ -291,8 +291,8 @@ Not tied to the text: that the check holds every row the text declares (one that
 fresh); an opening's pin and its reader's roles, which are the check's (`Good`); which leaves of its parameter a
 declared read takes; and that the rows and outputs of the templates the two readers lay the units out by
 (`Spot.RecordText.templatesOf`) are this wiring's (`Templates`), two definitions held to one Program with no
-lemma between them. The two number a template's units alike: where the text's reader gives its templates, a template
-has one root node, its units are that node's, and its unit `u` is the node's member `u` (`unitAt_iff`,
+lemma between them. The two number a template's units alike: where the text's reader gives its templates, a
+template's units are the members of its root nodes, in the nodes' order, as many as the text gives it (`unitAt_iff`,
 `Proofs.Properties.InferenceOnly.Record`). SPOT's audit reads neither reader. -/
 def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
   ∃ (P : Prog) (doc : Json) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array TRange)

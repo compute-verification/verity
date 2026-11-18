@@ -11,9 +11,10 @@ public import Proofs.Properties.InferenceOnly.RecordProgram
 wiring's templates are the Program's (`Templates`): a template of the wiring has the units the root has of it, and is
 the template of their Definition (`TemplateOf`).
 
-The record's text gives its templates from the root's ranges, one a range (`templatesOf_spec`, `templatesOf_tmplOf`),
-with distinct ids and distinct port names (`tmpls_named`). A unit of a template is a member of that template's one
-range, and the text's template of that range is read off the unit's own Definition (`unit_tmpl`). `finish` takes the
+The record's text gives its templates from the root's ranges, one a template, each read off its first range
+(`templatesOf_spec`, `templatesOf_tmplOf`), with distinct ids and distinct port names (`tmpls_named`). A unit of a
+template is a member of one of that template's ranges, all of which call one Definition (`range_fn`), and the text's
+template is read off it (`unit_tmpl`). `finish` takes the
 wiring's templates from the text's (`finish_wiring`), so their ids are the ranges' templates; the template query reads
 the ids it is asked for as a set (`evaluate_congr`), so it accepts the wiring's ids with the same ranges
 (`evaluate_wiring`). A template read off a Definition is that Definition's template (`templateOf_of`), which gives
@@ -69,7 +70,7 @@ open Flock.TemplateQuery (TRange)
 open Flock.Sigma (bits)
 open Spot.Bits (bitsOf)
 open Spot.RecordText (Tmpl tmplOf templatesOf outerOf)
-open InferenceOnlyVerifier.Record.SecurityProofs (bitsOf_eq tmplOf_spec tmplOf_names piece_templates eq_of_nodup_map read_front
+open InferenceOnlyVerifier.Record.SecurityProofs (ranges_spec bitsOf_eq tmplOf_spec tmplOf_names piece_templates eq_of_nodup_map read_front
   finish_text front_text finish_wiring)
 open InferenceOnlyVerifier.Record.SecurityProofs.Json (bind_ok mapM_ok)
 
@@ -134,94 +135,45 @@ theorem evaluate_congr {d : Flock.TemplateQuery.Desc} {a b : Array String} {rs :
           rw [ite_eq_right (by rw [← hab]; exact hc)]
           exact hx
 
-/-! ## The text's templates, one a range -/
-
-/-- Where a map that may refuse gives a list, each of its members is the map of the member at its place. -/
-theorem mapM_getElem? {α β : Type} (f : α → Except String β) :
-    ∀ (l : List α) (l' : List β), l.mapM f = .ok l' → ∀ (i : ℕ) (y : β), l'[i]? = some y →
-      ∃ x, l[i]? = some x ∧ f x = .ok y
-  | [], l', h, i, y, hy => by
-    rw [List.mapM_nil] at h
-    cases h
-    simp at hy
-  | x :: l, l', h, i, y, hy => by
-    rw [List.mapM_cons] at h
-    obtain ⟨y0, hy0, h⟩ := bind_ok h
-    obtain ⟨ys, hys, h⟩ := bind_ok h
-    cases h
-    cases i with
-    | zero =>
-      rw [List.getElem?_cons_zero] at hy
-      cases hy
-      exact ⟨x, List.getElem?_cons_zero, hy0⟩
-    | succ i =>
-      rw [List.getElem?_cons_succ] at hy
-      obtain ⟨x', hx', hf⟩ := mapM_getElem? f l ys hys i y hy
-      exact ⟨x', by rw [List.getElem?_cons_succ]; exact hx', hf⟩
-
-/-- **The text's templates are read off the root's ranges**: where the text's reader gives the templates `ts`, the
-template query accepts the text's template ids, which are its ranges' templates in order, and `ts` are the ranges'
-templates, one each. The same content as `Record`'s private `templatesOf_ok`, read the same way; one of the two goes
-when that one is public. -/
-theorem templatesOf_spec {P : Prog} {doc : Json} {ts : List Tmpl} (h : templatesOf P doc = .ok ts) :
-    ∃ (tids : Array String) (rs : Array TRange),
-      Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs ∧
-        tids = rs.map (·.template) ∧ rs.toList.mapM (tmplOf P) = .ok ts := by
-  unfold templatesOf at h
-  simp (config := { iota := false }) only [bind, Except.bind, pure, Except.pure, throw, throwThe,
-    MonadExceptOf.throw] at h
-  repeat (split at h <;> try cases h)
-  rename_i tsp _ hdup _ rs₀ hev _ rs hrs hne
-  have hrs' : rs₀ = rs := Except.ok.inj hrs
-  have hmap : rs.map (fun r => (r.template, r.count)) = tsp := Classical.not_not.1 fun hc => hne (bne_iff_ne.2 hc)
-  refine ⟨tsp.map (·.1), rs, by rw [← hrs']; exact hev, ?_, h⟩
-  rw [← hmap, Array.map_map]
-  rfl
+/-! ## The text's templates, one a template -/
 
 /-- Each of the text's templates is the text's reading of a range. -/
 theorem templatesOf_tmplOf {P : Prog} {doc : Json} {ts : List Tmpl} (h : templatesOf P doc = .ok ts) :
     ∀ t ∈ ts, ∃ r, tmplOf P r = .ok t := by
-  obtain ⟨tids, rs, -, -, hmapM⟩ := templatesOf_spec h
+  obtain ⟨tids, rs, -, -, -, hmapM⟩ := templatesOf_spec h
   intro t ht
-  obtain ⟨r, -, hr⟩ := (mapM_ok _ _ _ hmapM t).1 ht
-  exact ⟨r, hr⟩
-
-private theorem tids_eq {ts : List Tmpl} {rs : Array TRange}
-    (hmap : ts.map (fun t => (t.tid, t.units)) = rs.toList.map (fun r => (r.template, r.count))) :
-    ts.map (·.tid) = rs.toList.map (·.template) := by
-  have h := congrArg (List.map (·.1)) hmap
-  rw [List.map_map, List.map_map] at h
-  exact h
+  obtain ⟨x, -, hx⟩ := (mapM_ok _ _ _ hmapM t).1 ht
+  obtain ⟨-, -, r, -, -, hr⟩ := tmplAt_ok hx
+  exact ⟨_, hr⟩
 
 /-- **The text's templates have distinct ids, and each distinct port names.** -/
 theorem tmpls_named {P : Prog} {doc : Json} {ts : List Tmpl} (hts : templatesOf P doc = .ok ts) :
     (ts.map (·.tid)).Nodup ∧ ∀ t ∈ ts, (t.rows.map (·.1) ++ t.outs.map (·.1)).Nodup := by
-  obtain ⟨tids, rs, hev, -, -⟩ := templatesOf_spec hts
-  obtain ⟨hnd, hmap⟩ := templatesOf_ranges hts hev
-  refine ⟨by rw [tids_eq hmap]; exact hnd, fun t ht => ?_⟩
+  obtain ⟨tids, rs, hev, -, -, -⟩ := templatesOf_spec hts
+  refine ⟨(templatesOf_ranges hts hev).1, fun t ht => ?_⟩
   obtain ⟨r, hr⟩ := templatesOf_tmplOf hts t ht
   exact tmplOf_names hr
 
-private theorem range_at {ts : List Tmpl} {rs : Array TRange}
-    (hmap : ts.map (fun t => (t.tid, t.units)) = rs.toList.map (fun r => (r.template, r.count))) {i : ℕ} {t : Tmpl}
-    (ht : ts[i]? = some t) : i < rs.size ∧ rs[i]!.template = t.tid ∧ rs[i]!.count = t.units := by
-  have hlen : ts.length = rs.size := by simpa using congrArg List.length hmap
-  obtain ⟨hlt, -⟩ := List.getElem?_eq_some_iff.1 ht
-  have hi : i < rs.size := by rw [← hlen]; exact hlt
-  have hi' : i < rs.toList.length := by rw [Array.length_toList]; exact hi
-  have h := congrArg (fun l => l[i]?) hmap
-  simp only [List.getElem?_map, ht, Option.map_some] at h
-  rw [List.getElem?_eq_getElem hi'] at h
-  simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq, Array.getElem_toList] at h
-  rw [getElem!_pos rs i hi]
-  exact ⟨hi, h.1.symm, h.2.symm⟩
-
-private theorem get_of_toList {rs : Array TRange} {i : ℕ} {r : TRange} (hi : i < rs.size)
-    (hr : rs.toList[i]? = some r) : rs[i]! = r := by
-  have hi' : i < rs.toList.length := by rw [Array.length_toList]; exact hi
-  rw [getElem!_pos rs i hi]
-  rw [List.getElem?_eq_getElem hi', Option.some.injEq, Array.getElem_toList] at hr
-  exact hr
+/-- **The ranges of one template call one Definition**, of a Program the record check reads: a range's template is
+its callee's key, and the decoder indexes each Definition under its own key. -/
+theorem range_fn {P : Prog} {tids : Array String} {rs : Array TRange} (hP : ReadProg P)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) {r r' : TRange}
+    (hr : r ∈ rs.toList) (hr' : r' ∈ rs.toList) (h : r.template = r'.template) :
+    ((P.defs[P.root]!).body.nodes[r.node]!).fn = ((P.defs[P.root]!).body.nodes[r'.node]!).fn := by
+  obtain ⟨-, hall⟩ := ranges_spec (read_bodies hP).1 hP.2.2.2.2.2.2 (readProg_inputs hP) hrs
+  obtain ⟨hk, ht, -⟩ := hall r hr
+  obtain ⟨hk', ht', -⟩ := hall r' hr'
+  obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
+  obtain ⟨hroot, -, -⟩ := SecurityProofs.BodiesOk.decode_root bytes P hdec
+  obtain ⟨st, hPd, hinv, -⟩ := SecurityProofs.BodiesOk.decode_spec bytes P hdec
+  have hok : ∀ i < P.defs.size, SecurityProofs.BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hPd]; exact hinv.1
+  have hfn : ∀ k < (P.defs[P.root]!).body.nodes.size, ((P.defs[P.root]!).body.nodes[k]!).fn < P.defs.size :=
+    fun k hk => Nat.lt_trans ((hok P.root hroot).2.1 k hk).1 hroot
+  obtain ⟨-, huniq⟩ := SecurityProofs.DecodeKeys.decode_keys bytes P hdec
+  have h1 := huniq _ (hfn _ hk)
+  have h2 := huniq _ (hfn _ hk')
+  rw [← ht, h, ht', h2] at h1
+  exact (Option.some.inj h1).symm
 
 /-- **A unit's template is read off its own Definition.** Where the text's reader gives the templates `ts`: a unit
 `u` of the template `tid` (`UnitAt`) has a template of `ts` with that id and more units than `u`, which is the
@@ -231,17 +183,25 @@ theorem unit_tmpl {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) :
     ∃ t ∈ ts, t.tid = tid ∧ u < t.units ∧ t.defn = sc.d ∧ ∃ r, tmplOf P r = .ok t := by
-  obtain ⟨i, t, hi, -, hti, htid, -, hlt, rfl⟩ := (unitAt_iff hts hrs tid u sc).1 hu
-  obtain ⟨tids₀, rs₀, hev, -, hmapM⟩ := templatesOf_spec hts
+  obtain ⟨t, ht, htid, hlt⟩ := (unitAt_iff hts hrs tid u).1 ⟨sc, hu⟩
+  have hu' := hu
+  unfold UnitAt at hu'
+  obtain ⟨i, m, hi, hti, -, -, rfl⟩ := hu'
+  obtain ⟨tids₀, rs₀, hev, -, -, hmapM⟩ := templatesOf_spec hts
   rw [evaluate_ranges hev hrs] at hmapM
-  obtain ⟨r, hr, htm⟩ := mapM_getElem? (tmplOf P) _ _ hmapM i t hti
-  have hri := get_of_toList hi hr
-  subst hri
-  have hk := (range_node (read_bodies hP).1 hP.2.2.2.2.2.2 (readProg_inputs hP) hrs hi).1
-  refine ⟨t, List.mem_of_getElem? hti, htid, hlt, ?_, _, htm⟩
-  rw [(tmplOf_spec htm).1, (child_root P _ _).1, Array.getElem?_eq_getElem hk,
-    getElem!_pos (P.defs[P.root]!).body.nodes _ hk]
-  rfl
+  obtain ⟨x, -, hx⟩ := (mapM_ok _ _ _ hmapM t).1 ht
+  obtain ⟨hxt, -, r, hr, hrt, htm⟩ := tmplAt_ok hx
+  refine ⟨t, ht, htid, hlt, ?_, _, htm⟩
+  obtain ⟨-, hall⟩ := ranges_spec (read_bodies hP).1 hP.2.2.2.2.2.2 (readProg_inputs hP) hrs
+  have hrl : r ∈ rs.toList := Array.mem_toList_iff.2 hr
+  have hil : rs[i]! ∈ rs.toList := by
+    rw [getElem!_pos rs i hi]
+    simp
+  have hk := (hall r hrl).1
+  rw [(tmplOf_spec htm).1, (child_root P _ _).1]
+  show (((P.defs[P.root]!).body.nodes[r.node]?).map (·.fn)).getD 0 = _
+  rw [Array.getElem?_eq_getElem hk, Option.map_some, Option.getD_some, ← getElem!_pos _ _ hk]
+  exact range_fn hP hrs hrl hil (hrt.trans (hxt.symm.trans (htid.trans hti.symm)))
 
 /-! ## The wiring's templates -/
 
@@ -251,18 +211,19 @@ theorem evaluate_wiring {P : Prog} {doc : Json} {ts : List Tmpl} (hts : template
     {W : List (String × Spot.Wires.Template)} (hp1 : ∀ tid t', (tid, t') ∈ W → ∃ t ∈ ts, t.tid = tid)
     (hp2 : ∀ t ∈ ts, ∃ t', (t.tid, t') ∈ W) :
     ∃ rs, Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.map (·.1)).toArray = .ok rs := by
-  obtain ⟨tids, rs, hev, htids, -⟩ := templatesOf_spec hts
+  obtain ⟨tids, rs, hev, -, htids, -⟩ := templatesOf_spec hts
   obtain ⟨-, hmap⟩ := templatesOf_ranges hts hev
+  have hmem : ∀ t, t ∈ tids ↔ t ∈ ts.map (·.tid) := fun t => by
+    have he : ts.map (·.tid) = tids.toList := by
+      rw [htids, ← hmap, List.map_map]
+      rfl
+    rw [he, Array.mem_toList_iff]
   refine ⟨rs, evaluate_congr (fun t => ?_) hev⟩
   apply Bool.eq_iff_iff.2
-  rw [Array.contains_iff_mem, Array.contains_iff_mem, htids]
+  rw [Array.contains_iff_mem, Array.contains_iff_mem, hmem]
   constructor
   · intro ht
-    have h1 : t ∈ ts.map (·.tid) := by
-      rw [tids_eq hmap]
-      obtain ⟨r, hr, he⟩ := Array.mem_map.1 ht
-      exact List.mem_map.2 ⟨r, Array.mem_toList_iff.2 hr, he⟩
-    obtain ⟨tm, htm, rfl⟩ := List.mem_map.1 h1
+    obtain ⟨tm, htm, rfl⟩ := List.mem_map.1 ht
     obtain ⟨t', ht'⟩ := hp2 tm htm
     exact List.mem_toArray.2 (List.mem_map.2 ⟨(tm.tid, t'), ht', rfl⟩)
   · intro ht
@@ -270,10 +231,7 @@ theorem evaluate_wiring {P : Prog} {doc : Json} {ts : List Tmpl} (hts : template
     have he0' : tid = t := he0
     subst he0'
     obtain ⟨tm, htm, he⟩ := hp1 tid t' hm
-    have h1 : tid ∈ ts.map (·.tid) := List.mem_map.2 ⟨tm, htm, he⟩
-    rw [tids_eq hmap] at h1
-    obtain ⟨r, hr, he'⟩ := List.mem_map.1 h1
-    exact Array.mem_map.2 ⟨r, Array.mem_toList_iff.1 hr, he'⟩
+    exact List.mem_map.2 ⟨tm, htm, he⟩
 
 private theorem names_inj {α : Type} [Inhabited α] (ps : Array (String × α)) (hnd : (ps.toList.map (·.1)).Nodup)
     (i i' : ℕ) (hi : i < ps.size) (hi' : i' < ps.size) (h : ps[i]!.1 = ps[i']!.1) : i = i' := by
@@ -346,18 +304,13 @@ theorem templates_of {P : Prog} {doc : Json} {ts : List Tmpl} (hP : ReadProg P) 
           ∃ words outer, (p, words, outer) ∈ t.rows ∧ q.words = words ∧ q.outer = outer) ∧
         ∀ o n, (o, n) ∈ t'.outs ↔ (o, n) ∈ t.outs) : Templates P rs W := by
   obtain ⟨hd, -⟩ := tmpls_named hts
-  obtain ⟨-, hmap⟩ := templatesOf_ranges hts hrs
   intro tid t' hmem
   obtain ⟨t, ht, htid, hunits, hrows, houts⟩ := hp1 tid t' hmem
   refine ⟨fun u => ⟨fun hu => ?_, ?_⟩, fun u sc hu => ?_⟩
-  · obtain ⟨i, hi⟩ := List.getElem?_of_mem ht
-    obtain ⟨hilt, htmpl, hcount⟩ := range_at hmap hi
-    exact ⟨P.child P.rootScope rs[i]!.node u, (unitAt_iff hts hrs tid u _).2
-      ⟨i, t, hilt, htmpl.trans htid, hi, htid, hcount.symm, by rw [← hunits]; exact hu, rfl⟩⟩
-  · rintro ⟨sc, hu⟩
-    obtain ⟨i, t₂, -, -, hi₂, htid₂, -, hlt, -⟩ := (unitAt_iff hts hrs tid u sc).1 hu
-    have he : t₂ = t :=
-      eq_of_nodup_map (·.tid) ts hd t₂ (List.mem_of_getElem? hi₂) t ht (htid₂.trans htid.symm)
+  · exact (unitAt_iff hts hrs tid u).2 ⟨t, ht, htid, by rw [← hunits]; exact hu⟩
+  · intro hu
+    obtain ⟨t₂, ht₂, htid₂, hlt⟩ := (unitAt_iff hts hrs tid u).1 hu
+    have he : t₂ = t := eq_of_nodup_map (·.tid) ts hd t₂ ht₂ t ht (htid₂.trans htid.symm)
     rw [hunits, ← he]
     exact hlt
   · obtain ⟨t₂, ht₂, htid₂, -, hdefn, r, hr⟩ := unit_tmpl hP hts hrs hu

@@ -321,6 +321,37 @@ theorem unitAt_lt_iff (P : Prog) (rs : Array TRange) (tid : String) (u : ℕ) :
   · rintro ⟨i, m, hi, hti, hm, hu⟩
     exact ⟨_, i, m, hi, hti, hm, hu, rfl⟩
 
+private theorem before_mono (rs : Array TRange) (tid : String) (a : ℕ) : ∀ b, a ≤ b → b ≤ rs.size →
+    ((rs.extract 0 a).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 ≤ ((rs.extract 0 b).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0
+  | 0, hab, _ => by rw [Nat.le_zero.1 hab]
+  | b + 1, hab, hb => by
+    rcases Nat.lt_or_ge a (b + 1) with h | h
+    · have := before_mono rs tid a b (by omega) (by omega)
+      rw [before_succ rs tid (by omega : b < rs.size)]
+      omega
+    · rw [Nat.le_antisymm hab h]
+
+/-- **A unit of a template is one scope**: member `m` of one range, the template's units before it and `m` being
+`u`. -/
+theorem unitAt_unique {P : Prog} {rs : Array TRange} {tid : String} {u : ℕ} {sc sc' : Scope}
+    (h : UnitAt P rs tid u sc) (h' : UnitAt P rs tid u sc') : sc = sc' := by
+  unfold UnitAt at h h'
+  obtain ⟨i, m, hi, hti, hm, hu, rfl⟩ := h
+  obtain ⟨i', m', hi', hti', hm', hu', rfl⟩ := h'
+  have key : ∀ {a b ma mb : ℕ}, a < b → b < rs.size → rs[a]!.template = tid → ma < rs[a]!.count →
+      ((rs.extract 0 a).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 + ma ≠ ((rs.extract 0 b).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 + mb := by
+    intro a b ma mb hab hb hta hma
+    have h1 := before_succ rs tid (by omega : a < rs.size)
+    rw [if_pos hta] at h1
+    have h2 := before_mono rs tid (a + 1) b hab hb.le
+    omega
+  rcases Nat.lt_trichotomy i i' with hlt | rfl | hgt
+  · exact absurd (hu.symm.trans hu') (key hlt hi' hti hm)
+  · have hmm : m = m' := by omega
+    subst hmm
+    rfl
+  · exact absurd (hu'.symm.trans hu) (key hgt hi hti' hm')
+
 /-- **The two numberings of a template's units agree.** Where the text's reader gives the templates `ts` and the
 template query gives the ranges `rs`, whatever templates it is asked for: some scope is unit `u` of the template
 `tid` (`UnitAt`) exactly when the text's template of that id has more units than `u`. -/
