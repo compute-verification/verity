@@ -21,7 +21,6 @@ from verity.circuits.kernels import tc as CK
 from verity.circuits.ops import mufu as MU
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
-from verity_vllm.config import target_num_sms
 
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics.kernel_registry import Declined, register
@@ -42,8 +41,8 @@ LOG2F_POLY = (0x3DC6B27F, 0xBE2C7F30, 0x3E2FCF2A, 0xBE374E43, 0x3E520BF4, 0xBE76
               0xBF38AA3B)
 #: FlashMLA's `LOG_2_E` (api/common.h:31)
 LOG_2_E = 1.44269504
-#: the sm_90 decode's tile (`TOPK_BLOCK_SIZE`), the scheduler's fixed overhead per request, and the H200's SMs
-BLOCK, FIXED_OVERHEAD, H200_SMS = 64, 5, target_num_sms("h200")
+#: the sm_90 decode's tile (`TOPK_BLOCK_SIZE`) and the scheduler's fixed overhead per request
+BLOCK, FIXED_OVERHEAD = 64, 5
 
 
 def scale_log2(scale: float) -> int:
@@ -337,12 +336,12 @@ class SchedMeta:
                 self.is_first_req_splitted, self.is_last_req_splitted)
 
 
-def num_sm_parts(h_q: int, s_q: int = 1, num_sms: int = H200_SMS) -> int:
-    """`Decode_Sm90_Impl::get_meta` (api/sparse_decode.h:62-68)."""
+def num_sm_parts(h_q: int, s_q: int, num_sms: int) -> int:
+    """`Decode_Sm90_Impl::get_meta` (api/sparse_decode.h:62-68), on the target's ``num_sms``."""
     return max(num_sms // s_q // (h_q // 64), 1)
 
 
-def sched_meta(topk_length, extra_topk_length=None, *, topk: int, extra_topk: int = 0, parts: int = H200_SMS,
+def sched_meta(topk_length, extra_topk_length=None, *, topk: int, extra_topk: int = 0, parts: int,
                block_size_n: int = BLOCK, fixed_overhead: int = FIXED_OVERHEAD) -> tuple[list[SchedMeta], list[int]]:
     """`get_mla_metadata_kernel` for the sparse model: (the ``parts`` metadata, num_splits [b + 1]).  The kernel's shared array is
     one array here as well: past the last request, `first_block_idx_shared[b]` reads `last_block_idx_shared[0]`."""

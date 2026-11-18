@@ -200,7 +200,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     core = eng.engine_core.engine_core
     sched, _kvm, pool, runner = B.parts(core)
     trace = StepTrace().install(eng)
-    kv = B.KvPool(runner.kv_caches, len(pool.blocks))
+    kv = B.KvPool(runner.kv_caches, len(pool.blocks)).salted(kv_dir / B.SALTS)
     if kv.layout() != st0["kv_layout"]:
         raise SystemExit("the fresh engine's KV pool is laid out unlike the served one's")
     if a.warm:

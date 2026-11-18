@@ -15,7 +15,7 @@ import sys
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import manifest as PM
@@ -25,7 +25,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.serving import S
 from verity_torch.pouw.pearl_c import graphs as PG
 from verity_torch.pouw.pearl_c import lanes_device as L
 from verity_torch.pouw.pearl_c import run_device as PPDR
-from verity_torch.pouw.pearl_c.host import joined
 from verity_torch.pouw.pearl_c.whole import WholeStep
 
 from verity_vllm import protocols as PO
@@ -119,14 +118,15 @@ class Uploads:
 
 def test_lane_graphs_without_a_driver_upload_the_slot_and_fail_at_the_first_launch():
     """`_replay_lanes` hands the run's driver on unchecked.  With none, the slot's upload is asked of none, and the main
-    graph's launch is where it fails."""
-    uploads = Uploads()
+    graph's launch is where it fails, after the set's A salts are written fresh."""
+    torch = pytest.importorskip("torch")
+    uploads, salts = Uploads(), torch.zeros(192, dtype=torch.uint8)
     lane = SimpleNamespace(raw=9, event=object(), tree_event=object())
     graph = SimpleNamespace(slot_ptr=7, execs=("main", None, "side"), ev_tree=object())
     with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'launch'"):
-        L.LaneCalls._replay_lanes(SimpleNamespace(driver=None, uploads=uploads), graph, SimpleNamespace(done=[None]), 0, lane,
-                                  lane, 5, None, b"slot")
-    assert uploads.put == [(7, b"slot", 5, None)]
+        L.LaneCalls._replay_lanes(SimpleNamespace(driver=None, uploads=uploads, salts_a=lambda sh, pipe: salts), graph,
+                                  SimpleNamespace(done=[None], m16=1), 0, lane, lane, 5, None, b"slot")
+    assert uploads.put == [(7, b"slot", 5, None)] and salts.any()
 
 
 def test_forked_steps_without_a_driver_are_built_and_fail_when_the_first_runs(monkeypatch):
@@ -233,21 +233,8 @@ def test_a_retained_passes_end_without_a_directory_fails_at_its_first_path():
     pytest.importorskip("torch")
     cur = PPDR._Pass(None)
     with pytest.raises(TypeError, match=r"unsupported operand type\(s\) for /: 'NoneType' and 'str'"):
-        PPDR.PearlCDeviceRun._write_retained(SimpleNamespace(nb=64), cur, None, b"", b"", None, 0, {})
+        PPDR.PearlCDeviceRun._write_retained(SimpleNamespace(nb=64), cur, None, b"", b"", None, None, 0, {})
     assert cur.writes == []
-
-
-def test_a_retained_passes_end_waits_on_the_tiles_salts_before_it_writes_a_file(tmp_path):
-    """`_write_retained` keeps the tiles' fresh salts beside the leaves (``salts_t``), which the leaf kernel must take as
-    data: until it does, the pass's end refuses by naming that, with only the weights' directory made and no file, leaf,
-    tile tree or manifest written."""
-    torch = pytest.importorskip("torch")
-    d = tmp_path / "pass"
-    cur, tree = PPDR._Pass(d, run="a run"), torch.arange(64, dtype=torch.uint8)
-    run = SimpleNamespace(nb=64, leaves=torch.ones(128, dtype=torch.uint8), weights={}, _weight_files={})
-    with pytest.raises(NotImplementedError, match="salts_t"):
-        PPDR.PearlCDeviceRun._write_retained(run, cur, None, b"", bytes(64), tree, 1, {})
-    assert cur.writes == [] and sorted(p.name for p in d.iterdir()) == ["weights"] and not list((d / "weights").iterdir())
 
 
 def test_whole_calls_kept_without_stages_fail_at_the_first_calls_stage():
@@ -290,7 +277,7 @@ def test_a_graphed_call_of_a_retained_capture_without_stages_fails_where_it_read
         launched.append(a)
         return "y", True
     run = SimpleNamespace(_whole=[], _whole_retained=True, _stages=None, _tree_joined=lambda: launched.append("joined"),
-                          _into=into)
+                          _into=into, salts_a=lambda sh, pipe: None)
     monkeypatch.setattr(PG, "_capturing", lambda: True)
     with pytest.raises(TypeError, match=NO_STAGES):
         PG.GraphCalls._graph_call(run, 7, sh, None, 5, 64, 32, 3, None)
@@ -387,7 +374,7 @@ def test_a_pearl_c_scheme_whose_settings_name_no_kernel_hands_the_kernels_load_n
         raise Refused
 
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(load))
-    monkeypatch.setattr(P, "_SALT_KEYS", {})
+    monkeypatch.setattr(P, "_WEIGHT_SALTS", {})
     monkeypatch.setattr(P, "_layers",
                         lambda scheme, target: (pearl_c_scheme(scheme), [SimpleNamespace(weight=None)], {0: (128, 1024)}))
     committed = {entry: {"weight_roots": {"0": "05" * 64}, "shapes": {"0": [128, 1024]}}}

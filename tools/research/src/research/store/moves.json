@@ -5372,6 +5372,11 @@
     },
     {
       "paths": {
+        "adapters/vllm/verity_vllm/check/replay/pouw_circuit.py": "adapters/vllm/verity_vllm/protocols/pouw/pouw_circuit.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-r6.toml": "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-reps6.toml",
         "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served-h200.toml": "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served.toml"
       }
@@ -5406,6 +5411,13 @@
     {
       "paths": {
         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/README.md": "benchmarks/pouw/served_zk/README.md"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/prover/pod/gemm_hill.py": "benchmarks/proof_throughput/gemm_hill.py",
+        "verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py": "benchmarks/proof_throughput/gemm_slowdown.py",
+        "tests/verity/protocols/proofs/flock/prover/test_gemm_hill.py": "tests/benchmarks/proof_throughput/test_gemm_hill.py"
       }
     }
   ]
