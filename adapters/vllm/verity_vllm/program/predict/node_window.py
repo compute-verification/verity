@@ -577,8 +577,9 @@ class NodeWindow:
         if bad := [f"{tid} {port} {k}" for (tid, port), (k, _) in self.row_fed.items() if b.cuts.get(tid, {}).get(port) != k]:
             raise Unexpressible(f"{self.name}: {len(bad)} row-fed ports' cuts changed after `feed_rows`: " + "; ".join(bad))
         roots, openings = b.merged()
+        wide = {r.param for r in b.reads if dict(b.fns[r.reader].signature()[0])[r.port].homogeneous_width() == 32}
         reg = IF.Registered(dict(sorted(b.params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)),
-                            tuple(roots), tuple(openings))
+                            tuple(roots), tuple(openings), formats={p: {"row_schema": IF.SEG, "word_bits": 32} for p in sorted(wide)})
         wires = tuple(IF.coalesce(b.wires))
         starts = {tid: [at for at, _n, _slot, _step in spans] for tid, spans in b.spans.items()}
         circuit = IF.Circuit(self.name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()), wires=wires, cuts=b.cuts,
