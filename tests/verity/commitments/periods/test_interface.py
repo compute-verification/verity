@@ -35,7 +35,7 @@ from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import cast as BC, gemm as BG
 from verity.circuits.types import Array, Tuple, Value
-from verity.commitments import history as HT, row_table as RT
+from verity.commitments import domains as DM, history as HT, registered_value as RV, row_table as RT
 from verity.commitments.gates import embedding as E
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.indexed import RangeIndexedDomain
@@ -1287,8 +1287,8 @@ def test_a_history_is_declared_by_its_writers_output_and_runs_and_read_as_a_tabl
     assert [(r.port, r.param) for r in I.committed_reads(reg)] == [
         ("root", "latent/root"), ("domain", "latent/domain"), ("o1", "latent/opened")]
     table = HT.HistoryTable("program", "latent", 16, 4)
-    got = I.supplied(reg, {"latent": table.entry()}, "p", module=REG)
-    assert {v: x.rows.tolist() for v, x in got.items()} == {
+    got = I.supplied(reg, {"latent": table.entry()}, "p")
+    assert {v: [list(r) for r in x.rows] for v, x in got.items()} == {
         "latent/root": [I.digest_words(table.root)], "latent/domain": [I.digest_words(table.domain.domain_id)],
         "latent/opened": [[1]]}
     words = dict(I.layout(EMB).rows)
@@ -1575,7 +1575,7 @@ def test_coalesce_merges_runs_of_like_patterns():
 
 
 class Held:
-    """A registered value as the committer reads core's ``one_stage.registered.Registered``: its rows of ``words`` leaves of
+    """A registered value as the committer reads ``registered_value.Registered``: its rows of ``words`` leaves of
     ``word_bits``, one salt a row, a root and each row's path (a stand-in's), and a statement's table of the rows at some
     positions."""
 
@@ -1610,31 +1610,8 @@ class Bound(Held):
                     for r, s in zip(rows, self.salts)]
 
 
-class Supplied(Held):
-    """A supplied value as core's ``Registered.commit`` makes it for `interface.supplied`: its rows under the salts given,
-    its entry's root and domain digests of what it was committed from."""
-
-    @classmethod
-    def commit(cls, program, value, rows, salts, schema):
-        v = cls(value, np.array(rows, dtype=np.uint16))
-        v.salts, v.program, v.schema = list(salts), program, schema
-        inner = CS._inner(schema, CS.value_words(v))
-        v.bcs = [CS.INST.commit_string(CS.INST.default_key, inner(np.ascontiguousarray(r, dtype="<u2").tobytes()), y)
-                 for r, y in zip(v.rows, v.salts)]
-        return v
-
-    def entry(self):
-        return {"value": self.name, "leaves": self.leaves, "words": self.words,
-                "root": hashlib.sha512(repr((self.program, self.rows.tolist(), self.salts, self.schema)).encode()).hexdigest(),
-                "domain": hashlib.sha512(f"{self.program} {self.name}".encode()).hexdigest()}
-
-
-#: core's ``one_stage.registered`` names `interface.registered_reads` and `interface.supplied` read, as the caller passes
-#: the module
-REG = type("REG", (), {"WORD_BITS": 16, "SCHEMA_KEY": "row_schema", "READS_FROM": "reads_from",
-                       "READS_V1": "verity/registered-reads/v1", "Registered": Supplied,
-                       "supplied_salts": staticmethod(lambda program, value, n: [
-                           hashlib.shake_256(f"{program} {value} {i}".encode()).digest(CS.SALT_BYTES) for i in range(n)])})
+#: core's ``one_stage.registered`` names `interface.registered_reads` reads, as the caller passes the module
+REG = type("REG", (), {"SCHEMA_KEY": "row_schema", "READS_V1": "verity/registered-reads/v1"})
 #: 12 units, unit u reading row u // 2 of six weight rows
 READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
 
@@ -1739,14 +1716,14 @@ def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_t
         got.update(k)
         return {"leaf_layer": "l"}
 
-    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f1", "FORMAT_V2": "f2", "record": staticmethod(record),
+    reg = type("R", (), {"KINDS": ("served",), "record": staticmethod(record),
                          "digest": staticmethod(lambda rec: "d")})
     win, w = registered(held=("w",))
     doc = win.write(win.close(salts_of=fixed(win)), tmp_path / "v2", {"by": "test"}, registrar=reg, previous="ab" * 64)
-    assert (got["registered"], got["previous"], doc["registration"]) == ([w.entry()], "ab" * 64, "f2")
+    assert (got["registered"], got["previous"], doc["registration"]) == ([w.entry()], "ab" * 64, DM.REGISTRATION)
     plain, _ = registered()
     doc = plain.write(plain.close(salts_of=fixed(plain)), tmp_path / "v1", {"by": "test"}, registrar=reg)
-    assert (got["registered"], got["previous"], doc["registration"]) == ([], None, "f1")
+    assert (got["registered"], got["previous"], doc["registration"]) == ([], None, DM.REGISTRATION_V1)
     unheld, _ = registered(params={"v": 8}, held=("v",))
     c = unheld.close(salts_of=fixed(unheld))
     with pytest.raises(ValueError, match=r"values \['v'\] have no committed value"):
@@ -2646,12 +2623,12 @@ def test_a_tables_reads_and_verdicts_take_its_supplied_values():
     c, table = embedding(), Table()
     assert [(r.port, r.param, r.at, r.reader_units, r.base, r.step) for r in I.committed_reads(c.registered)] == [
         ("root", "embed/root", 0, 3, 0, (0,)), ("domain", "embed/domain", 0, 3, 0, (0,)), ("o1", "embed/opened", 0, 3, 0, (0,))]
-    got = I.supplied(c.registered, {"embed": table.entry()}, "p", module=REG)
-    assert {v: (x.rows.tolist(), x.salts, x.program) for v, x in got.items()} == {
-        "embed/root": ([I.digest_words(table.tree.root)], REG.supplied_salts("p", "embed/root", 1), "p"),
-        "embed/domain": ([I.digest_words(table.dom.domain_id)], REG.supplied_salts("p", "embed/domain", 1), "p"),
-        "embed/opened": ([[1]], REG.supplied_salts("p", "embed/opened", 1), "p")}
-    assert I.supplied(c.registered, {}, "p", module=REG) == {}
+    got = I.supplied(c.registered, {"embed": table.entry()}, "p")
+    assert {v: ([list(r) for r in x.rows], list(x.salts), x.program) for v, x in got.items()} == {
+        "embed/root": ([I.digest_words(table.tree.root)], RV.supplied_salts("p", "embed/root", 1), "p"),
+        "embed/domain": ([I.digest_words(table.dom.domain_id)], RV.supplied_salts("p", "embed/domain", 1), "p"),
+        "embed/opened": ([[1]], RV.supplied_salts("p", "embed/opened", 1), "p")}
+    assert I.supplied(c.registered, {}, "p") == {}
     words = I.digest_words(bytes(range(64)))
     assert len(words) == 32 and words[:4] == [0x0607, 0x0405, 0x0203, 0x0001]
     with pytest.raises(ValueError, match="a registered parameter of its own"):
@@ -2761,14 +2738,14 @@ def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
     win, table = embedding_window()
     with pytest.raises(ValueError, match="Window.supply"):
         win.close(salts_of=fixed(win))
-    win.supply(REG)
+    win.supply()
     c = win.close(salts_of=fixed(win))
     m0, m1 = win.window.members
     assert [(m.base, m.n, m.tables) for m in (m0, m1)] == [
         (0, 2, (("tok", 2), ("root", 1), ("domain", 1), ("row", 2), ("salt", 2), ("path", 2))),
         (2, 1, (("tok", 1), ("root", 1), ("domain", 1), ("row", 1), ("salt", 1), ("path", 1)))]
     root, opened = win.registered["embed/root"], win.registered["embed/opened"]
-    assert root.rows.tolist() == [I.digest_words(table.tree.root)] and opened.rows.tolist() == [[1]]
+    assert [list(r) for r in root.rows] == [I.digest_words(table.tree.root)] and [list(r) for r in opened.rows] == [[1]]
     assert np.array_equal(c.rows[m0.port("root")], root.rows) and c.salts[m0.port("root")] == root.salts[0]
     assert c.salts[m0.port("o1")] == opened.salts[0] * 2 and c.salts[m1.port("o1")] == opened.salts[0]
     assert table.salts[3] not in c.salts[m0.port("row")]

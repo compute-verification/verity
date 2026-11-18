@@ -36,8 +36,8 @@ open FlockDeploy (Coin)
 
 /-- **The deployed compiled verifier accepts only dense statements**: a run accepts only where a step does
 (`stepWith_acc`), which parses `x` at a dense form (`acc_dense`). -/
-theorem run_acc_denseAt (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
-    (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {ω : Ω}
+theorem run_acc_denseAt (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings)
+    (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {Ω : Type} {P : Claims.Prover Ω} {ω : Ω}
     {r : Fin ((deployRec IV ivScope b).V.k x) → Coin}
     (h : (Claims.run H P (deployRec IV ivScope b).V x ω r).out = .acc) : DenseAt x := by
   obtain ⟨as', ha⟩ := stepWith_acc H P x ω _ _ _ _ _ h

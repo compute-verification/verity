@@ -25,7 +25,7 @@ That an accepted play is one whose logs the cut reads does not follow from the f
 
 The interior session's read exists on every accepted play (`second_reads`): the form's per-member check read its coin
 trees (`members_trees`) and every statement's session's record on the blobs (`members_records`), and the second
-stage's sample read its log's pairs (`oneStageZk_reads`, `Sampled.releasedRootsOf_pairsOk`), which is what the read
+stage's sample read its log's pairs (`oneStageZk_reads`, `Sampled.releasedLogOf_ok`), which is what the read
 needs (`Sampled.readLog_isSome`).
 
 So an accepted play is one whose logs the cut reads, or one of its two records carries a break (`reads_or_break`), and
@@ -92,15 +92,23 @@ theorem first_reads {dev : History} {key : ChallengerKey} {p : VStar.Recursive.S
     (hξ : sampleCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ) {log : List Release}
     (hP : PrintsOn dev d.window log) :
     (∃ out, firstRead key p c e ξ = some out) ∨ Break dev d.key d.label (firstCoins e) := by
-  rcases Drawn.sampled_log (dev := dev) hξ with ⟨s, hs, ho, -, hcr, ls, hls, hlog⟩ | b
+  rcases Drawn.sampled_log (dev := dev) hξ with ⟨s, hs, ho, -, -, ls, hls, hlog⟩ | b
   · obtain ⟨-, ⟨ts, hts⟩, -⟩ := hP d.key.pub s hs ho
-    obtain ⟨cm, roots, -, hroots⟩ := hcr
+    obtain ⟨cm, roots, htsn, hcm, -⟩ := Verity.Sampled.drawCoins_ok hξ
+    obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok htsn
+    obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
+    obtain ⟨ls', lines, hlog', hls', hroots⟩ := Verity.Sampled.challengePhaseOf_ok hso
+    rw [hls] at hlog'
+    cases hlog'
+    rw [hlog] at hls'
+    have hl' : lines = s.log := ((List.map_injective_iff.2 fun _ _ h => Json.str.inj h) hls').symm
+    subst hl'
     have hl : firstLines e = .ok s.log := firstLines_eq hls hlog
     have hT : (Verity.Sampled.treeFold [] [] s.log).isSome := by
       rw [Verity.Sampled.coinTreesOf_fold [] hts]
       rfl
     obtain ⟨out, hout⟩ := Option.isSome_iff_exists.1
-      (Verity.Sampled.readLog_isSome d.label d.after [] ξ hT (Verity.Sampled.releasedRootsOf_pairsOk hroots))
+      (Verity.Sampled.readLog_isSome d.label d.after [] ξ hT (Verity.Sampled.releasedLogOf_ok hroots hcm).1)
     have he : firstRead key p c e ξ = Verity.Sampled.readLog d.label d.after [] ξ s.log := by
       simp [firstRead, hd, hl, Except.toOption]
     exact .inl ⟨out, he.trans hout⟩
@@ -158,7 +166,7 @@ theorem members_records {ts : Array LoggedTree} {L : List String}
 /-- **The interior session's read exists** where the second stage's sample read its coins, the form read the
 challenger's trees from the interior's coin evidence (`treesOf`), and every statement's session's record is on the
 blobs: its lines read as coin trees (`Binding.trees_of`, `Sampled.coinTreesOf_fold`) and as its coin commitment's
-pairs (`Sampled.releasedRootsOf_pairsOk`). -/
+pairs (`Sampled.releasedLogOf_ok`). -/
 theorem second_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {bs : _root_.Core.Blobs} {c₂ : Spot.OneStage.Commitment} {d : Draws}
     (hd' : oneStageZkSource p.audit c₂ = some d) (hd : secondSamples p e = some d) {ξ : ByteArray}
@@ -167,7 +175,7 @@ theorem second_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursiv
     (hrec : ∀ rf ∈ e.statements.toList.flatMap (·.sessions.toList), (Verity.Sampled.recordOn bs rf).isSome) :
     ∃ out, secondRead p e bs ξ = some out := by
   obtain ⟨raw, hraw, -⟩ := oneStageZk_reads p.audit c₂ d hd' e.interior ξ hξ
-  obtain ⟨cm, roots, htsn, -⟩ := Verity.Sampled.drawCoins_ok hraw
+  obtain ⟨cm, roots, htsn, hcm, -⟩ := Verity.Sampled.drawCoins_ok hraw
   obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok htsn
   obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
   obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.challengePhaseOf_ok hso
@@ -179,7 +187,7 @@ theorem second_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursiv
     rw [Verity.Sampled.coinTreesOf_fold recs hct]
     rfl
   obtain ⟨out, hout⟩ := Option.isSome_iff_exists.1
-    (Verity.Sampled.readLog_isSome d.label d.after recs ξ hT (Verity.Sampled.releasedRootsOf_pairsOk hrr))
+    (Verity.Sampled.readLog_isSome d.label d.after recs ξ hT (Verity.Sampled.releasedLogOf_ok hrr hcm).1)
   have he : secondRead p e bs ξ = Verity.Sampled.readLog d.label d.after recs ξ lines := by
     simp [secondRead, hd, hr, hl, Except.toOption]
   exact ⟨out, he.trans hout⟩

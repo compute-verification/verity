@@ -28,16 +28,31 @@ def test_every_block_is_a_registered_definition() -> None:
         assert isinstance(d, CompositeDefinition) and REGISTRY.defs[tid] is d
 
 
-def test_its_own_term_is_sha512s_collision_bound_at_the_phases_calls() -> None:
+def test_bound_refuses_the_charges_no_lean_term_holds() -> None:
     from fractions import Fraction
 
     from verity.protocols.resource_accounting import scheme as S
 
     names = {c.name: 0 for c in NS.NETWORK_ATTESTER.charges}
-    got = S.bound(NS.NETWORK_ATTESTER, Fraction(1, 100), 0, names, {"q": 2**40}, epsilon=Fraction(0))
+    with pytest.raises(ValueError, match=r"nothing bounds yet: start \(.*\), tied-entries \(scans\[\]\.faulty_entries"):
+        S.bound(NS.NETWORK_ATTESTER, Fraction(1, 100), 0, names, {"q": 2**40}, epsilon=Fraction(0))
+
+
+def test_its_own_term_is_sha512s_collision_bound_at_the_phases_calls() -> None:
+    import dataclasses
+    from fractions import Fraction
+
+    from verity.protocols.resource_accounting import scheme as S
+
+    covered = dataclasses.replace(NS.NETWORK_ATTESTER,
+                                  charges=tuple(c for c in NS.NETWORK_ATTESTER.charges if c.bounded))
+    names = {c.name: 0 for c in covered.charges}
+    assert sorted(names) == ["advice", "cells", "jitter", "schedules"]
+    got = S.bound(covered, Fraction(1, 100), 0, names, {"q": 2**40}, epsilon=Fraction(0))
     assert got.term == "Claims.ecrBound" and got.delta_scheme == Fraction(2**40, 2**256)
+    assert got.premises == ("NetTiming.Attester.Phase.ChargeHolds", "NetTiming.Attester.RowsCommitted")
     with pytest.raises(ValueError, match="were not given"):
-        S.bound(NS.NETWORK_ATTESTER, Fraction(1, 100), 0, names, {}, epsilon=Fraction(0))
+        S.bound(covered, Fraction(1, 100), 0, names, {}, epsilon=Fraction(0))
     assert NS.NETWORK_ATTESTER.over.startswith("bits: ") and NS.NETWORK_ATTESTER.under == "bits: zero; the attester credits nothing"
 
 

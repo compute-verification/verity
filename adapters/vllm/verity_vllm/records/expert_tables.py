@@ -1,5 +1,5 @@
 """The committer's registration of a TP rank's per-expert tables (`verity-vllm/expert-tables/v2`): each table's entry (core's
-`registered.Registered.entry()` of a ``hm96-sha512/row-seg/v1`` value, ``weights/<label>@<H>/b<block>/table``,
+`registered_value.Registered.entry()` of a ``hm96-sha512/row-seg/v1`` value, ``weights/<label>@<H>/b<block>/table``,
 `pipeline.expert_rows.table_param`) at the rank's ``program``, its rows committed under fresh salts before the first window's
 coins.  The verifier pins its ``program`` and ``values`` (``records_audit.py audit --registered``), and a window's committer
 commits the tables it serves at the same program under the same salts (`pipeline.expert_rows.committer`).  It names no salt:
@@ -16,7 +16,7 @@ from verity_vllm.records.fields import RecordError, only, required
 __all__ = ["ExpertTables", "SCHEMA"]
 
 SCHEMA = "verity-vllm/expert-tables/v2"
-#: an entry's fields: core's `registered.Registered.entry()` (``word_bits`` where its words are not 16-bit)
+#: an entry's fields: core's `registered_value.Registered.entry()` (``word_bits`` where its words are not 16-bit)
 ENTRY = ("value", "root", "leaves", "words", "word_bits", "domain")
 ROOT = re.compile(r"[0-9a-f]{128}")
 

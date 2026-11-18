@@ -20,6 +20,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.lowering import li
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import live_reads as LR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 T, S, PREFIX = 4, 2, "h1/"
 PROGRAM, WINDOW, SESSION = "ab" * 64, "cd" * 64, "session-1"
@@ -38,9 +39,9 @@ def dump(out: Path, T: int = T, S: int = S, HEADERS: list = HEADERS, MAX_TOKENS:
          SLOTS: list = SLOTS) -> dict:
     """A served window's live dump, as `pouw_h1_live.dump` writes it."""
     heads = HEADERS + [(0,) * LR.HEADER] * (T - len(HEADERS))
-    req = G.Registered.commit(PROGRAM, LR.table(PREFIX, LR.REQUESTS), LR.header_words(heads), salts(T), G.WORD_BITS,
+    req = RV.Registered.commit(PROGRAM, LR.table(PREFIX, LR.REQUESTS), LR.header_words(heads), salts(T), RV.WORD_BITS,
                               LR.REQUEST_SCHEMA, session=SESSION)
-    slots = [G.Registered.commit(PROGRAM, LR.table(PREFIX, LR.SLOTS, s), LR.slot_words(SLOTS[s]), salts(T), G.WORD_BITS,
+    slots = [RV.Registered.commit(PROGRAM, LR.table(PREFIX, LR.SLOTS, s), LR.slot_words(SLOTS[s]), salts(T), RV.WORD_BITS,
                                  G.SCHEMA_V2, window=WINDOW) for s in range(S)]
     served = [sum(1 for x in r if x) for r in SLOTS]
     pub = {"T": T, "S": S, "prefix": PREFIX, "program": PROGRAM, "window": WINDOW, "session": SESSION,

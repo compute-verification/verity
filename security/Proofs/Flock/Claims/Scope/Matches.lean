@@ -54,21 +54,21 @@ namespace Flock.Readable
 
 /-- What the verifier parses of a statement's bytes: `decode` reads what the verifier reads (`Read`), and the verifier's
 setup accepts it (`Read.parse`). -/
-def parseBytes (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Parsed := (decode x).bind Read.parse
+def parseBytes (decode : Hash.Msg → Option Read) (x : Hash.Msg) : Option Parsed := (decode x).bind Read.parse
 
 /-- **The deployed parser**: the verifier's parsed statement, readable. -/
-def parseOf (rel : Parsed → Relation) (decode : Claims.Msg → Option Read) (x : Claims.Msg) :
+def parseOf (rel : Parsed → Relation) (decode : Hash.Msg → Option Read) (x : Hash.Msg) :
     Option Claims.Flock.Stmt :=
   (parseBytes decode x).map (toReadable rel)
 
 /-- **Table `j`'s own statement at the deployed parser**: table `j` of the verifier's parsed statement, alone
 (`Parsed.only`), readable. -/
-def tableOf (rel : Parsed → Relation) (decode : Claims.Msg → Option Read) (x : Claims.Msg) (j : ℕ) :
+def tableOf (rel : Parsed → Relation) (decode : Hash.Msg → Option Read) (x : Hash.Msg) (j : ℕ) :
     Option Claims.Flock.Stmt :=
   (parseBytes decode x).map fun p => toReadable rel (p.only j)
 
 /-- **The deployed scope check**: the verifier parses the statement and its scope refusal (`Parsed.scope`) passes. -/
-def scopeCheckOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Bool :=
+def scopeCheckOf (decode : Hash.Msg → Option Read) (x : Hash.Msg) : Bool :=
   match parseBytes decode x with
   | some p => p.scope.isOk
   | none => false
@@ -85,8 +85,8 @@ variable {Coin Col T : Type}
 
 /-- **The readable scope at the verifier's parser**: the verifier parses the statement and `Parsed.scope` passes. -/
 theorem scope_iff (D : Claims.Flock.Deploy Coin Col T) (rel : Parsed → Relation)
-    (decode : Claims.Msg → Option Read) (hparse : D.parse = parseOf rel decode)
-    (hzk : ∀ x r, decode x = some r → r.zk = D.zk) (x : Claims.Msg) :
+    (decode : Hash.Msg → Option Read) (hparse : D.parse = parseOf rel decode)
+    (hzk : ∀ x r, decode x = some r → r.zk = D.zk) (x : Hash.Msg) :
     Claims.Flock.Scope D x ↔ ∃ p, parseBytes decode x = some p ∧ p.scope = .ok () := by
   unfold Claims.Flock.Scope
   rw [hparse]
@@ -106,7 +106,7 @@ theorem scope_iff (D : Claims.Flock.Deploy Coin Col T) (rel : Parsed → Relatio
 
 /-- **`ScopeMatches` at the verifier's parser and scope check**, with `--zk` and without. -/
 theorem scopeMatches (D : Claims.Flock.Deploy Coin Col T) (rel : Parsed → Relation)
-    (decode : Claims.Msg → Option Read) (hparse : D.parse = parseOf rel decode)
+    (decode : Hash.Msg → Option Read) (hparse : D.parse = parseOf rel decode)
     (hcheck : D.scopeCheck = scopeCheckOf decode) (hzk : ∀ x r, decode x = some r → r.zk = D.zk) :
     Claims.Flock.ScopeMatches D := by
   unfold Claims.Flock.ScopeMatches Claims.ScopeMatches

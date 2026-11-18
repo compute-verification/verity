@@ -45,6 +45,7 @@
 #include <vector>
 
 #include "../row_commit.cuh"
+#include "salts_check.h"
 
 using u64 = uint64_t;
 using u32 = uint32_t;
@@ -815,9 +816,16 @@ struct Committer {
   // through L1, which spreads few leaves over the SMs and takes no shared memory.
   // salts: the caller's device buffer of y, 192 bytes a leaf in leaf order, 16-byte aligned; on the small path one slot's
   // n after another for slots s0 .. s0 + ns - 1 (default all). F and the pads come with slot 0, which runs first.
-  void salts(const uint8_t* salts, cudaStream_t st, int s0 = 0, int ns = -1) {
+  // bytes: the buffer's length, which the caller that owns it states; one that is not exactly the launch's leaves' is
+  // refused here, before a kernel has its address (salts_check.h).
+  void salts(const uint8_t* salts, u64 bytes, cudaStream_t st, int s0 = 0, int ns = -1) {
+    if (ns < 0) ns = small ? slots - s0 : 1;
+    char why[160];
+    if (commit_gpu::salts_refused((uint64_t)salts, bytes, n, small, slots, s0, ns, why, sizeof why)) {
+      fprintf(stderr, "%s\n", why);
+      exit(2);
+    }
     if (small) {
-      if (ns < 0) ns = slots - s0;
       const dim3 g((unsigned)((width + SMALL_THREADS - 1) / SMALL_THREADS), (unsigned)ns);
       salt_small<<<g, SMALL_THREADS, 0, st>>>(dom, salts, Tn, n, width, S, F, levels, s0);
     } else if (n > (1u << 16)) {

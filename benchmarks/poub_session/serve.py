@@ -117,7 +117,7 @@ def fit(steps: int | None, pass_ms: int, windows: int | None = None, window_ms: 
 def row_steps(path: Path) -> int:
     """The engine steps of the row file ``path``'s run, its ``expected_engine_steps``; `Refused` for a file that
     states none, or whose target does not declare synchronous scheduling, which a Commit's session refuses once its
-    engine is about to be built (`verity_vllm.protocols.poub.remote.CommitSession.target`)."""
+    engine is about to be built (`verity.protocols.resource_accounting.memory.poub.prover.commit_session.CommitSession.target`)."""
     try:
         row = json.loads(Path(path).read_text())
     except (OSError, ValueError) as e:
@@ -409,11 +409,11 @@ def main(argv: list[str] | None = None) -> int:
 
     from verity_vllm import messages
     from verity_vllm.engine.build import hooked
-    from verity.protocols.resource_accounting.memory.poub.prover.binder import Binder
+    from verity.protocols.compose import schemes
 
     serving, NodeMemory = provers()
     store = NodeMemory()
-    binder = Binder(store, passes=False).install(messages.current())
+    binder = messages.current().attach(schemes.get("poub"), None, store=store, binder={"passes": False})
     with tempfile.TemporaryDirectory() as work:
         built, _, detach = hooked(lambda: engine(Path(work)))
         trace = Trace(built)

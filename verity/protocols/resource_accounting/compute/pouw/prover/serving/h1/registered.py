@@ -1,4 +1,4 @@
-"""H1's served tables registered at serving scale: `registered.Registered.commit` of rows of 16-bit words as
+"""H1's served tables registered at serving scale: `registered_value.Registered.commit` of rows of 16-bit words as
 ``hm96-sha512/row/v2`` bit rows, row j salted `audit.hm96_salt` of the run's key at the value's nonce, with the same
 salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words instead of Python ints.
 
@@ -25,7 +25,7 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
   only when it needs it. The NumPy path above is the reference the device is held to
   (``tests/protocols/test_pouw_h1_registered_device.py``) and the fallback everywhere else.
 
-`commit` returns a `registered.Registered` whose ``rows`` and ``salts`` are those sequences; everything `Served`,
+`commit` returns a `registered_value.Registered` whose ``rows`` and ``salts`` are those sequences; everything `Served`,
 `ServedTree.of`, `registered.verify_read` and the record read of it (``root``, ``levels``, ``bcs``, ``entry()``,
 ``path``) is what `Registered.commit` gives over the same rows and salts (``tests/protocols/
 test_pouw_h1_registered.py`` holds it to core's on small windows).
@@ -54,6 +54,7 @@ from verity.commitments.rowleaf import (
 )
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import dtype_name, h1_device, tensors
 
@@ -93,7 +94,7 @@ def _seg_digests(rows: np.ndarray, lo: int, hi: int, heads: list[Any], outer: An
 
 
 def row_digests(words: np.ndarray, schema: str = G.SCHEMA_V2) -> np.ndarray:
-    """Each row's ``x``, ``(n, 64)`` u8: `registered.row_digest(row, 16, schema)` of ``words`` ``(n, W)`` u16, ``schema``
+    """Each row's ``x``, ``(n, 64)`` u8: `registered_value.row_digest(row, 16, schema)` of ``words`` ``(n, W)`` u16, ``schema``
     ``SCHEMA_V2`` or ``SCHEMA_SEG``."""
     words = np.ascontiguousarray(words, "<u2")
     n, w = words.shape
@@ -262,15 +263,15 @@ def _host(words: Any) -> np.ndarray:
 
 class Later:
     """A `commit` whose hash runs on the GPU meanwhile (its ``later``): ``ready()`` without blocking, ``result()`` its
-    `registered.Registered`, waited for."""
+    `registered_value.Registered`, waited for."""
 
-    def __init__(self, hashing: Any, made: Callable[..., G.Registered]) -> None:
+    def __init__(self, hashing: Any, made: Callable[..., RV.Registered]) -> None:
         self.hashing, self.made = hashing, made
 
     def ready(self) -> bool:
         return self.hashing.ready()
 
-    def result(self) -> G.Registered:
+    def result(self) -> RV.Registered:
         return self.made(*self.hashing.result())
 
     def also(self) -> bytes:
@@ -280,8 +281,8 @@ class Later:
 
 def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_rows: bool = False,
            row_salts: bytes | PublicSalts | None = None, schema: str = G.SCHEMA_V2, later: bool = False,
-           rows: Sequence | None = None, also: tuple[bytes, int] | None = None, **binding: Any) -> G.Registered | Later:
-    """`registered.Registered.commit(program, value, rows, salts, schema=schema, **binding)` of ``words`` ``(n, W)``
+           rows: Sequence | None = None, also: tuple[bytes, int] | None = None, **binding: Any) -> RV.Registered | Later:
+    """`registered_value.Registered.commit(program, value, rows, salts, schema=schema, **binding)` of ``words`` ``(n, W)``
     u16, ``rows`` their rows and ``salts`` row j's `audit.hm96_salt(key, nonce, j)`, or with ``row_salts`` (n salts
     concatenated, each used once, or a public table's `PublicSalts`, which the GPU path derives where it hashes) those,
     ``key`` and ``nonce`` unread. ``schema``: ``SCHEMA_V2``, or ``SCHEMA_SEG`` (an
@@ -304,7 +305,7 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
     if len(words.shape) != 2 or not words.shape[0] or not words.shape[1] or dtype_name(words) != "uint16":
         raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
     n, w = (int(d) for d in words.shape)
-    dom = G.domain(program, value, w, n, G.WORD_BITS, **binding)
+    dom = RV.domain(program, value, w, n, RV.WORD_BITS, **binding)
     public = row_salts if isinstance(row_salts, PublicSalts) else None
     given = None if row_salts is None or public is not None else bytes(row_salts)
     fixed = None if given is None else tuple(given[192 * j:192 * (j + 1)] for j in range(n))
@@ -314,10 +315,10 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
     if rows is not None and len(rows) != n:
         raise ValueError(f"{len(rows)} rows held for a value of {n}")
 
-    def made(bcs: Sequence[bytes], levels: Sequence[Sequence[bytes]]) -> G.Registered:
+    def made(bcs: Sequence[bytes], levels: Sequence[Sequence[bytes]]) -> RV.Registered:
         held = rows if rows is not None else Rows(np.ascontiguousarray(_host(words)) if keep_rows else None, n)
         salts = public if public is not None else Salts(key, nonce, n) if fixed is None else fixed
-        return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS, rows=held, salts=salts,
+        return RV.Registered(program=program, value=value, words=int(w), word_bits=RV.WORD_BITS, rows=held, salts=salts,
                             bcs=bcs, levels=levels, schema=schema, **binding)
     if gpu:
         hashing = h1_device().device_hash(words, key, nonce, given, dom.domain_id,

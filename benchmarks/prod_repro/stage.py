@@ -60,8 +60,8 @@ def capture_gaps(out: Path, reference: str = "prod-trace", stock: str = "prod",
                     not any(k in (counters.get(d.name) or {}) for k in priced.REMEDY):
                 gaps.append(f"{d.name} kept no top-k counts (no server/dsa_topk_steps.*.jsonl, none in {kept.name})")
     for d in [*refs, *(d for ds in served.values() for d in ds)]:
-        if not any((d / "server").glob("step_trace.*.jsonl.gz")):
-            gaps.append(f"{d.name} kept no step trace")
+        if not any((d / "server").glob(S.STEPS.format("*"))):
+            gaps.append(f"{d.name} kept no public steps")
         bare = [m for m in d.glob("*/rep-*/meta.json") if not PASS.issubset(json.loads(m.read_text()))]
         if bare:
             gaps.append(f"{d.name}: {len(bare)} pass records lack {', '.join(sorted(PASS))}")
@@ -91,8 +91,9 @@ def member_parts(out: Path, model: str) -> tuple[dict, list[str]]:
     if len(names) != 1:
         gaps.append(f"{GPUS} names {len(names)} kinds of card, not the one the job was leased")
     else:
+        from verity_bench import kit
         try:
-            fields["card"] = S.card_record(names.pop())["short"]
+            fields["card"] = kit.card_short(names.pop())
         except SystemExit as e:
             gaps.append(str(e))
     return fields, gaps
