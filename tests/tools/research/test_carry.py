@@ -136,6 +136,29 @@ def corrected(tmp_path: Path) -> Path:
     return repo
 
 
+@pytest.fixture
+def adds_map(tmp_path: Path) -> Path:
+    """A `main` whose move adds the map it runs by (`MAP`, which its base lacks), after the PR `pr` branched; the PR changes
+    only `d.py`, which the move's map renames nothing in."""
+    repo = tmp_path / "adds-map"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    commit(repo, {**{p: (ROOT / p).read_text() for p in MOVE_SCRIPTS}, "tools/check/pins.py": "PINS = ()\n",
+                  "tools/research/src/research/store/moves.json": '{"moves": []}\n',
+                  "old_proto/__init__.py": "", "old_proto/a.py": "def f():\n    return 1\n", "b.py": PROTO, "d.py": "d\n"},
+           "base")
+    branch(repo, "pr")
+    commit(repo, {"d.py": "d\nmine\n"}, "the PR")
+    git(repo, "checkout", "-q", "main")
+    commit(repo, {MAP: '[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
+                       '[words]\n"old_proto" = "new_proto"\n'}, "the map, to be squashed into the move")
+    script(repo, "tools/move/rename.py", "--map", MAP)
+    git(repo, "reset", "-q", "--soft", "main~1")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", f"Move old_proto to new_proto\n\nMove: {MAP}\n")
+    return repo
+
+
 def cross(repo: Path) -> str:
     """`pr` crossed to `main` across its move by this checkout's `restack.py`: the crossing's head."""
     [r] = json.loads(script(repo, "tools/move/restack.py", "pr", "--move-commit", git(repo, "rev-parse", "main~1"), "--onto",
@@ -375,6 +398,38 @@ def test_a_restack_commit_that_changes_more_than_the_moves_script_is_the_prs_own
     new = git(moved, "commit-tree", tree, "-p", sneaked, "-p", main, "-m", "Merge main (the layout move), restacked")
     d = carry.delta(moved, old, new, landed(moved), restack=main)
     assert (d.kind, d.moves) == ("authored", ()) and d.why == f"{sneaked[:12]} changes b.py beyond the move {move[:12]}'s script"
+
+
+def test_a_crossing_that_changes_nothing_of_the_prs_own_change_carries_though_it_adds_the_moves_map(adds_map: Path):
+    """A head whose only commits since are `restack.py`'s crossing of a landed move that adds its own map: the script's rerun
+    and the commit adding the map, which `main`'s merge then holds as the move has them, so neither head's own change against
+    `main` has a line of them.  Judged commit by commit, the map's commit was the PR's own, and a rerun without that map fails."""
+    old, move = git(adds_map, "rev-parse", "pr"), git(adds_map, "rev-parse", "main")
+    [r] = json.loads(script(adds_map, "tools/move/restack.py", "pr", "--main", "main", "--json", "--no-pins"))
+    assert r["status"] == "clean" and [s["step"] for s in r["steps"]] == ["script", "hand", "moved"], r
+    new = r["result"]
+    for restack in (None, move):
+        d = carry.delta(adds_map, old, new, landed(adds_map), restack=restack)
+        assert (d.kind, d.parents, d.moves, d.crossed) == ("merge-only", (move,), (), (move,)), d
+        assert d.why == (f"its 3 commit(s) since only merge {move[:12]} as the queue would and cross the move {move[:12]} "
+                         "as a restack does, outside both heads' own change")
+
+
+def test_a_crossing_that_changes_a_line_of_the_prs_own_change_is_the_prs_own(adds_map: Path):
+    """The same crossing with one more line in `d.py`, the PR's own change, in its commit adding the map: that commit is the
+    PR's own, whole, though the script's rerun below it changes nothing of that change."""
+    old, move = git(adds_map, "rev-parse", "pr"), git(adds_map, "rev-parse", "main")
+    [r] = json.loads(script(adds_map, "tools/move/restack.py", "pr", "--main", "main", "--json", "--no-pins"))
+    git(adds_map, "checkout", "-q", r["result"] + "^1")
+    commit(adds_map, {"d.py": "d\nmine\nsneaked\n"}, "unused")
+    git(adds_map, "reset", "-q", "--soft", "HEAD~2")
+    hand = git(adds_map, "commit-tree", git(adds_map, "write-tree"), "-p", "HEAD", "-m",
+               git(adds_map, "log", "-1", "--format=%B", r["result"] + "^1"))
+    tree = git(adds_map, "merge-tree", "--write-tree", f"--merge-base={move}", hand, move)
+    new = git(adds_map, "commit-tree", tree, "-p", hand, "-p", move, "-m", "Merge main (the layout move), restacked")
+    d = carry.delta(adds_map, old, new, landed(adds_map))
+    assert (d.kind, d.crossed, d.why) == ("authored", (move,), f"{hand[:12]} changes d.py, {MAP}"), d
+    assert carry.delta(adds_map, old, new, landed(adds_map), restack=move).kind == "authored"
 
 
 @pytest.fixture
