@@ -123,7 +123,7 @@ class GraphCalls(WholeCalls, _RunState):
             self.statement.prepare(w, sh)
         if self.hashing:
             self._slot(w, index, sh.m16, m, caller)
-            fresh_into(self.salts_a(sh, pipe), sh.m16)
+            fresh_into(self.salts_a(sh, pipe), sh.m16, salts=self.cur.salts)
         return self._replay(w, sh, pipe, raw, tiles, m)
 
     @staticmethod

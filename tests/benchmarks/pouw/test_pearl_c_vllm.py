@@ -405,25 +405,37 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
 
 
-def test_a_passs_salts_are_its_keys_stream_in_fill_order_and_the_next_pass_has_a_new_key(device_run, tmp_path, monkeypatch):
-    """A's salts and the tiles' (`host.fresh_into`) are the leaves of the pass's keyed stream from leaf 0, in the order they
-    were filled, under a key `derive` made from fresh bytes at the pass's begin; the next pass's key is another."""
+def test_a_passs_salts_are_its_keys_stream_in_fill_order_and_its_end_drops_the_key(device_run, tmp_path, monkeypatch):
+    """A's salts and the tiles' (`host.fresh_into`) are the leaves of the pass's own keyed stream from leaf 0, in the order
+    they were filled, under a key `derive` made from fresh bytes at its first fill; its end drops the key, so no object
+    holds it after, a fill then is refused by name, and the next pass draws another."""
+    import gc
     make, _, weights, _, _ = device_run
     keys, derive = [], PH.derive
     monkeypatch.setattr(PH, "derive", lambda *a: keys.append(derive(*a)) or keys[-1])
     run = make()
     run.begin(retain=str(tmp_path / "first"))
-    (key,) = keys[-1:]
-    assert PH._salt_stream(run.device).key is key
+    ended = run.cur
+    assert ended.salts.key is None and not keys, "a pass draws its key at its first fill"
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    key = ended.salts.key
     run.gemm(1, torch.randn(32, 1024).to(torch.bfloat16), weights[1], None)
-    man = json.loads(Path(run.end()["manifest"]).read_text())
+    out = run.end()
+    man = json.loads(Path(out["manifest"]).read_text())
     files = [u["salts"]["path"] for u in man["matmuls"]] + [man["salts_t"]["path"]]
     got = b"".join((tmp_path / "first" / f).read_bytes() for f in files)
-    assert len(got) == HM96_SALT * (32 + 32 + 6)
-    assert got == b"".join(key.block(PH.SALT_INDEX, c) for c in range(3 * (32 + 32 + 6)))
+    assert len(got) == HM96_SALT * (32 + 32 + 6) and len(keys) == 1
+    assert got == b"".join([key.block(PH.SALT_INDEX, c) for c in range(3 * (32 + 32 + 6))])  # inlined: no cell holds key
+    del out
+    gc.collect()
+    holders = [r for r in gc.get_referrers(key) if r is not keys and not isinstance(r, types.FrameType)]
+    assert ended.ended and ended.salts.key is None and not holders, "an ended pass's key is held by no object"
+    with pytest.raises(PH.SaltsRefused, match="NO_OPEN_PASS") as refused:
+        run.gemm(0, torch.randn(16, 1024).to(torch.bfloat16), weights[0], None)
+    assert refused.value.name == "NO_OPEN_PASS"
     run.begin()
-    assert keys[-1] is not key and keys[-1].value != key.value and PH._salt_stream(run.device).next == 0
+    run.gemm(0, torch.randn(16, 1024).to(torch.bfloat16), weights[0], None)
+    assert len(keys) == 2 and run.cur.salts.key is keys[1] and keys[1].value != key.value and run.cur.salts.next == 16
 
 
 def test_a_retained_pass_refuses_a_weight_tree_whose_root_moved_after_the_build(device_run, tmp_path):
@@ -662,7 +674,7 @@ def seeded_device_salts(monkeypatch, seed=11):
 
     rng, ys = random.Random(f"{seed} fresh_into"), random.Random(f"{seed} y")
 
-    def fresh_into(dst, n, raw=None):
+    def fresh_into(dst, n, raw=None, *, salts):
         dst[:HM96_SALT * n].copy_(torch.frombuffer(bytearray(rng.randbytes(HM96_SALT * n)), dtype=torch.uint8))
     for name in ("ends", "graphs", "grouped", "host", "lanes_device", "run_device", "whole_calls"):
         mod = sys.modules.get(f"verity_torch.pouw.pearl_c.{name}")
@@ -1012,8 +1024,8 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     kernel.dev.log.clear()
     drawn, fresh = [], ENDS.fresh_into
 
-    def recorded(dst, n, raw=None):
-        fresh(dst, n, raw)
+    def recorded(dst, n, raw=None, *, salts):
+        fresh(dst, n, raw, salts=salts)
         drawn.append(PPDR._bytes(dst[:HM96_SALT * n]))
     monkeypatch.setattr(ENDS, "fresh_into", recorded)
     out = run.end()
@@ -4768,7 +4780,7 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
 
     monkeypatch.setattr(PPH, "_event", lambda: "slot")
     monkeypatch.setattr(PPL, "_event", lambda: "done0")
-    monkeypatch.setattr(PPL, "fresh_into", lambda dst, n, raw=None: calls.append(("fresh", dst, n, raw)))
+    monkeypatch.setattr(PPL, "fresh_into", lambda dst, n, raw=None, *, salts: calls.append(("fresh", dst, n, raw)))
     monkeypatch.setattr(run, "salts_a", lambda sh, pipe: "salts")
     run.driver = Driver()
     side0, side1 = (types.SimpleNamespace(raw=raw, event=f"side{raw // 2}", tree_event=f"tree{raw // 2}") for raw in (1, 3))

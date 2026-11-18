@@ -1,6 +1,6 @@
 """The Pearl-C device path's host helpers (`pouw_pearl_c_device`): the epoch of the challenger's salt coin, held in this
 process or a live session's (`epoch_of`), device byte buffers and their uploads, the hm96 salts of a pass (`fresh_into`,
-`renew_salts`), the current stream's
+`PassSalts`), the current stream's
 handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the keys
 kept on the device by call (`_KeyTable`), the streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on
 their handles (`_Driver`), and a retained pass's files (`_write`, `write_behind`, `write_manifest`) and its
@@ -16,7 +16,7 @@ import threading
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
-from functools import partial
+from functools import cache, partial
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -59,7 +59,6 @@ ARENA_RINGS = 4
 _writers: tuple[int, ThreadPoolExecutor] | None = None     # the pool and the process it was made in
 _finisher: tuple[int, ThreadPoolExecutor] | None = None    # the thread `behind` runs on, and its process
 _copiers: dict[tuple[int, int | None], Any] = {}           # each (process, device)'s `_Copies`
-_salt_streams: dict[tuple[int, int | None], Any] = {}      # each (process, device)'s `_SaltStream`
 #: the domain the pass's salt stream's key is derived under (`verity.commitments.randomness.derive`), and the stream's index
 SALT_STREAM, SALT_INDEX = "verity/pearl-c/hm96-salts/v1", "s"
 #: where the card's salt fill (`sha512_stream`) is built
@@ -89,59 +88,72 @@ def _put(t: Any, data: bytes) -> None:
     t[:len(data)].copy_(host.pin_memory() if t.is_cuda else host, non_blocking=t.is_cuda)
 
 
-class _SaltStream:
-    """The hm96 salts of one device's passes in this process: `Key.stream` at `SALT_INDEX` under a key `derive` makes from
-    fresh operating-system bytes, replaced at each pass's begin (`renew_salts`); each fill takes the leaves after the last
-    fill's, so no two leaves under a key share a counter.  The key is never written, sent or kept past its pass."""
+class SaltsRefused(RuntimeError):
+    """A fill of a pass's salts refused by name: ``NO_OPEN_PASS`` (no pass named, or its pass has ended and dropped its
+    key) or ``OTHER_PROCESS`` (a pass a forked process inherited, whose counters its parent goes on using)."""
+
+    def __init__(self, name: str, why: str) -> None:
+        self.name = name
+        super().__init__(f"{name}: {why}")
+
+
+class PassSalts:
+    """One pass's hm96 salts: `Key.stream` at `SALT_INDEX` under a key `derive` makes from 32 fresh operating-system bytes
+    at the pass's first fill, each fill the leaves after the last's, so no two leaves share a counter.  `drop`, at the
+    pass's end or the begin that replaces it, clears the key, and every fill after it is refused (`SaltsRefused`).  The
+    key is never written or sent."""
 
     def __init__(self) -> None:
-        self.lock = threading.Lock()
-        self.key, self.next = derive(os.urandom(32), SALT_STREAM, {}), 0
-
-    def renew(self) -> None:
-        with self.lock:
-            self.key, self.next = derive(os.urandom(32), SALT_STREAM, {}), 0
+        self.lock, self.pid = threading.Lock(), os.getpid()
+        self.key: Key | None = None
+        self.next, self.open = 0, True
 
     def take(self, n: int) -> tuple[Key, int]:
         with self.lock:
+            if not self.open:
+                raise SaltsRefused("NO_OPEN_PASS", "the pass has ended and dropped its key: begin a pass")
+            if self.pid != os.getpid():
+                raise SaltsRefused("OTHER_PROCESS", "a forked process fills no salts of its parent's pass: begin a pass")
+            if self.key is None:
+                self.key = derive(os.urandom(32), SALT_STREAM, {})
             first = self.next
             if first + n > SX.LEAVES_MAX:
                 raise RuntimeError("a pass's salts are past its key's stream: begin a pass for a new key")
             self.next = first + n
             return self.key, first
 
-
-def _salt_stream(device: Any) -> _SaltStream:
-    at = (os.getpid(), device.index if device.type == "cuda" else None)
-    if at not in _salt_streams:
-        _salt_streams[at] = _SaltStream()
-    return _salt_streams[at]
+    def drop(self) -> None:
+        with self.lock:
+            self.key, self.open = None, False
 
 
-def _fill_lib(device: Any) -> ctypes.CDLL:
+@cache
+def _fill_lib_at(index: int) -> ctypes.CDLL:
     import torch
     from verity_torch.pouw.row_table_device import arch
-    return SX.device_lib(FILL_BUILD, arch(torch.cuda.get_device_name(device)), pouw_device.nvcc())
+    return SX.device_lib(FILL_BUILD, arch(torch.cuda.get_device_name(index)), pouw_device.nvcc())
 
 
-def renew_salts(device: Any) -> None:
-    """A new key for the salts of the pass beginning on `device` (and, on CUDA, the fill's library loaded)."""
-    _salt_stream(device).renew()
-    if device.type == "cuda":
-        _fill_lib(device)
+def fill_lib(device: Any) -> ctypes.CDLL:
+    """The card's salt fill (`sha512_stream`) for CUDA device `device`, built at the first call, loaded once a process."""
+    import torch
+    return _fill_lib_at(device.index if device.index is not None else torch.cuda.current_device())
 
 
-def fresh_into(dst: Any, n: int, raw: int | None = None) -> None:
+def fresh_into(dst: Any, n: int, raw: int | None = None, *, salts: PassSalts | None) -> None:
     """`n` leaves' hm96 salts into device bytes `dst`, `HM96_SALT` bytes a leaf in leaf order: the next `n` leaves of the
-    pass's keyed stream (`_SaltStream`), filled on the card on raw stream `raw` where given (a lane's or a replay's), else
-    the current stream; off the GPU, `Key.block`'s bytes.  A stream capturing a graph is refused (`SX.Refused`)."""
-    key, first = _salt_stream(dst.device).take(n)
+    open pass's keyed stream (`salts`, its `PassSalts`), filled on the card on raw stream `raw` where given (a lane's or a
+    replay's), else the current stream; off the GPU, `Key.block`'s bytes.  No open pass, an ended one or a stream
+    capturing a graph is refused (`SaltsRefused`, `SX.Refused`)."""
+    if salts is None:
+        raise SaltsRefused("NO_OPEN_PASS", "a fill names the open pass's salts (`_Pass.salts`)")
+    key, first = salts.take(n)
     if not dst.is_cuda:
         import torch
         data = b"".join(key.block(SALT_INDEX, c) for c in range(3 * first, 3 * (first + n)))
         dst[:len(data)].copy_(torch.frombuffer(bytearray(data), dtype=torch.uint8))
         return
-    SX.fill(_fill_lib(dst.device), dst[:HM96_SALT * n].view(n, HM96_SALT), key, SALT_INDEX, first,
+    SX.fill(fill_lib(dst.device), dst[:HM96_SALT * n].view(n, HM96_SALT), key, SALT_INDEX, first,
             stream=raw if raw is not None else _stream(dst.device))
 
 
