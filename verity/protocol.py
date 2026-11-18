@@ -86,6 +86,10 @@ class Role:
             raise ValueError(f"{self.name}: a principal is one of {PRINCIPALS} and per one of {PER}")
 
 
+#: the party every scheme's answer goes to: the auditor's verifier, which combines the schemes' verdicts
+VERIFIER = Role("verifier", "auditor", needs=("audit", "component", "product"))
+
+
 @dataclass(frozen=True)
 class Channel:
     """Messages `sender` may send `receiver`, in a link whose latency is at most `latency_ms`, after the messages
@@ -462,6 +466,6 @@ class MonitoringPeriod:
         return cls.of(span, execution, [_ticks(bs, "monitoring period.sampling") for bs in o["sampling"]])
 
 
-__all__ = ["DELTAS", "MONITORING_PERIODS", "NO_BOUND", "Channel", "Cut", "Manifest", "MonitoringPeriod", "PeriodError",
+__all__ = ["DELTAS", "MONITORING_PERIODS", "NO_BOUND", "Channel", "Cut", "Manifest", "MonitoringPeriod", "PeriodError", "VERIFIER",
            "PlaceResult", "ProtocolDef", "Role", "Start", "Starter", "TickSpan", "Topology", "block_count", "no_bound",
            "place", "site_of", "summed"]

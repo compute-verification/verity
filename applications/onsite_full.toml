@@ -3,7 +3,7 @@
 # FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.
 # `verity run THIS --dry-run` resolves it all.
 format = "verity/config/v0"
-protocols = ["sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe"]
+protocols = ["sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "network-attester", "wipe"]
 
 [workload]
 name = "served-window"
@@ -24,6 +24,15 @@ commit = "b041d20d6f80892ab43dc88994e41c9f4b3a4002"
 
 [params."verity/pous/p2/v4/run"]
 challenges = 320
+
+[params."verity/certifier/v0"]
+order = "arrival"
+hold_ms = 5000
+bucket_us = 100000
+sat_us = 0
+free_us = 0
+token_ns = 0
+log = ""
 
 [[party]]
 name = "workers"
@@ -61,7 +70,7 @@ machine = "auditor-host"
 principal = "auditor"
 
 [[party]]
-name = "network-certifier"
+name = "network-attester"
 machine = "gate-host"
 principal = "auditor"
 
@@ -142,11 +151,11 @@ messages = ["BandwidthAnswer"]
 after = ["Openings"]
 
 [[channel]]
-from = "network-certifier"
+from = "network-attester"
 to = "workers"
 messages = ["out-opening", "records", "cells-salts"]
 
 [[channel]]
-from = "network-certifier"
+from = "network-attester"
 to = "verifier"
 messages = ["out-record", "certificate", "registration", "deployment", "groups"]

@@ -29,6 +29,7 @@ import tempfile
 import time
 from fractions import Fraction
 from pathlib import Path
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -45,6 +46,16 @@ def held(slots: int, k: int, gamma: int, refused: type[Exception]) -> dict:
     return {"alpha": [alpha.numerator, alpha.denominator], "gamma": gamma // slots}
 
 
+def class_circuit_of(registered: Any, cls: Any, tables: Any = None) -> Any:
+    """The class's circuit (`window_circuit.class_circuit`), refused by name (`Unexpressible`) where a template's unit is
+    one no proof block takes (`window_builder.check_provable`), as ``prove_path.py class-circuit`` refuses it."""
+    from verity_vllm.program.predict.window_circuit import check_provable, class_circuit
+
+    circuit = class_circuit(registered, cls, tables=tables)
+    check_provable(circuit)
+    return circuit
+
+
 def main(argv: list[str]) -> int:
     phi, cls_arg, scheme, policy, out = argv[:5]
     rejects = "--rejects" in argv[5:]
@@ -53,7 +64,6 @@ def main(argv: list[str]) -> int:
     import served_cases as SC
     from verity.circuits import codec
     from verity.circuits.types import type_from_json
-    from verity_vllm.program.predict.window_circuit import class_circuit
     from v1_case import v1_case
     from verity_vllm.program.predict.window_class import PearlTables
 
@@ -69,8 +79,8 @@ def main(argv: list[str]) -> int:
         Path(out).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 
     registered = PP.registered_of_serve(json.loads(Path(phi).read_text()), None, None, PP.CAP_BITS)
-    circuit = timed("circuit", lambda: class_circuit(registered, PP.window_class_of(cls_arg),
-                                                     tables=PearlTables(scheme) if scheme else None))
+    circuit = timed("circuit", lambda: class_circuit_of(registered, PP.window_class_of(cls_arg),
+                                                        PearlTables(scheme) if scheme else None))
     program, query = timed("program", circuit.program)
     v1 = timed("v1", lambda: v1_case(program, query))
     # a window's case carries its program function's parameters where values are registered (replay.py)

@@ -73,15 +73,15 @@ AUDITOR = "auditor"
 LOCAL = "local"
 #: the composites, by id: the subprotocols each composes, by name (`Core.Composites.ofIds`): onsite and remote (v1,
 #: Pearl+'s run verdict its work), the only two protocol soundness covers
-COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs",
-                                    "wipe"),
+COMPOSITES = {"verity/onsite/v0": ("bandwidth", "inference-only", "network-attester", "pous", "pouw",
+                                    "sampled-proofs", "wipe"),
               "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs")}
 #: onsite's two smaller sets, by id (`applications/onsite_network.toml`, `applications/onsite_compute.toml`): each a deployment of its
 #: own with its own claim, so that an accepted one is never read as onsite. No composite `Core.Composites.ofIds` accepts
 #: is one, so `check` reads and hashes them and `verity run` records each one's verdict under its id as undecided
 #: unless the table says who combined it
-UNACCEPTED = {"verity/onsite-network/v0": ("certifier", "sampled-proofs", "wipe"),
-              "verity/onsite-compute/v0": ("certifier", "inference-only", "pouw", "sampled-proofs", "wipe")}
+UNACCEPTED = {"verity/onsite-network/v0": ("network-attester", "sampled-proofs", "wipe"),
+              "verity/onsite-compute/v0": ("inference-only", "network-attester", "pouw", "sampled-proofs", "wipe")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 _SHA512 = re.compile(r"[0-9a-f]{128}")
