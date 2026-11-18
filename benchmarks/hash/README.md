@@ -6,7 +6,7 @@ trees, "One hash" in AGENTS.md); nothing here changes a committed format, and no
 
 | Directory | What it holds |
 |---|---|
-| `dither/` | PoUW's H1 receipts served in compiled vLLM: the one-stream linear (`verity/protocols/experimental/dither/prover/kernels/h1o.cu`) whose noised MMAs serve y, with the peel z = A Bᵀ from the receipted words (H1V3); the A tables (`verity/protocols/experimental/dither/prover/kernels/h1c.cu`); J10-R's per-call-noise proof blocks (`verity/protocols/experimental/dither/prover/kernels/h1u.cu`, `j10r*.py`); each kernel gated against the credit's H1V3 reference (`h1ogate.py`), and the served overhead against stock vLLM int8, paired rep by rep (`sbench.py`, run on a leased GPU by `sbench.sh`) |
+| `dither/` | PoUW's H1 receipts served in compiled vLLM: the one-stream linear (`verity/protocols/experimental/dither/prover/kernels/h1o.cu`) whose noised MMAs serve y, with the peel z = A Bᵀ from the receipted words (H1V3); the A tables (`verity/protocols/experimental/dither/prover/kernels/h1c.cu`); J10-R's per-call-noise proof blocks (`verity/protocols/experimental/dither/prover/kernels/h1u.cu`, `j10r*.py`) |
 
 Each script's header says how to run it, from the source tree's root, and on what hardware. They share one layout: a
 run writes its results to `$RESEARCH_RUN_DIR/out` (`OUT` where a header names it) and reads the files it is given, a
@@ -17,6 +17,3 @@ work runs under a GPU lease (`gpu-lease`, owned by `GPU_LEASE_WHO`).
 
 Nothing here is an interface: any file may change or go without a word to another directory. The vLLM integration loads
 nothing from here.
-
-Tests of `benchmarks/pouw` import `dither/dither_one.py`, `dither_a.py`, `j10r_units.py` and `forms.py` by name, and its
-suite declares them and what they import as inputs. A test's import fixes a file's path, nothing more.

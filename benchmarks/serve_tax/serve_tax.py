@@ -535,9 +535,10 @@ MODELS = {
                        Part("the certified tick", 1.63, ("admission on the certified tick",),
                             "the queue-dependent tick's throughput, simulated on traces", "simulated"),
                        Part("the canonical top-k", 8.37, ("the canonical top-k",),
-                            "the old pass's cost, which bisects every wrong fast selection by one program: prod-record "
-                            "over prod-trace on the agentic load at 4 users; right for main today and an upper bound "
-                            "once the new select lands, until prod-record-bisect measures the new one", "measured"),
+                            "the cost of the pass that bisects every wrong fast selection by one program: prod-record "
+                            "over prod-trace on the agentic load at 4 users; an upper bound for main's pass, which "
+                            "refines it instead and which a run of the same arms on the same workload put at +2.11 "
+                            "points [0.82, 3.41], until prod-record-bisect measures it", "measured"),
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on"),
