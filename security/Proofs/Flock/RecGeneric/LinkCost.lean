@@ -48,28 +48,29 @@ theorem linkLoop_exec (j : ℕ) (first : RunExp) : ∀ (N i : ℕ),
       simp only [Fin.tail, Fin.val_succ]
       congr 1
       omega
+    have h0 : ((0 : Fin (N + 1)) : ℕ) = 0 := rfl
     obtain ⟨h1, h2, h3⟩ := linkLoop_exec j first N (i + 1)
     by_cases ha : m.acc ω (forkOf m us j (us i))
     · have hex : (linkLoop (Coin := Coin) j first (N + 1) i).exec m ω us =
           ([.fork j (.fresh 0) (.fresh i)], [], [first, .fork j (.fresh 0) (.fresh i)]) := by
-        simp only [linkLoop, Plan.exec, hn, decide_eq_true_eq, ha, ↓reduceIte]
+        simp only [linkLoop, Plan.exec, hn, decide_eq_true_eq, decide_true, decide_false, Bool.false_eq_true, ha, ↓reduceIte]
       rw [hex]
       refine ⟨rfl, fun e he => ?_, ?_⟩
       · simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he ⊢
         exact he
-      · simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero, hn, loopCost,
-          Fin.val_zero, ha, ↓reduceIte]
+      · simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero, hn, loopCost, h0,
+          ha, ↓reduceIte]
     · have hex : (linkLoop (Coin := Coin) j first (N + 1) i).exec m ω us =
           (.fork j (.fresh 0) (.fresh i) :: ((linkLoop (Coin := Coin) j first N (i + 1)).exec m ω us).1,
             ((linkLoop (Coin := Coin) j first N (i + 1)).exec m ω us).2.1,
             ((linkLoop (Coin := Coin) j first N (i + 1)).exec m ω us).2.2) := by
-        simp only [linkLoop, Plan.exec, hn, decide_eq_true_eq, ha, ↓reduceIte]
+        simp only [linkLoop, Plan.exec, hn, decide_eq_true_eq, decide_true, decide_false, Bool.false_eq_true, ha, ↓reduceIte]
       rw [hex]
       refine ⟨h1, fun e he => ?_, ?_⟩
       · rcases h2 e he with h | h
         · exact Or.inl h
         · exact Or.inr (List.mem_cons_of_mem _ h)
-      · simp only [List.map_cons, List.sum_cons, hn, h3, loopCost, Fin.val_zero, Nat.add_zero, ha, ↓reduceIte, ht]
+      · simp only [List.map_cons, List.sum_cons, hn, h3, loopCost, h0, Nat.add_zero, ha, ↓reduceIte, ht]
 
 /-- A sum over a list without repeats is at most the sum over a list holding all its entries. -/
 theorem sum_dedup_le {α : Type} [DecidableEq α] (f : α → ℕ) (l l' : List α) (h : ∀ e ∈ l, e ∈ l') :
@@ -80,6 +81,7 @@ theorem sum_dedup_le {α : Type} [DecidableEq α] (f : α → ℕ) (l l' : List 
           rw [List.mem_toFinset, List.mem_dedup] at he
           exact List.mem_toFinset.2 (h e he)
     _ ≤ (l'.map f).sum := by
+        clear h
         induction l' with
         | nil => simp
         | cons a l' ih =>
@@ -109,17 +111,17 @@ theorem linkPlan_cost_le (k : Msg → ℕ) (M : ℕ) (m : RunModel Coin Ω n C) 
   have hn : m.named (slotRuns sl) (.fork j.val (.fresh 0) (.fresh 1)) = forkOf m (slotRuns sl) j.val (slotRuns sl 1) :=
     rfl
   obtain ⟨h1, h2, h3⟩ := linkLoop_exec m ω (slotRuns sl) j.val (.fork j.val (.fresh 0) (.fresh 1)) M 2
-  show ((((linkPlan (Coin := Coin) k M).plan x j).exec m ω (slotRuns sl)).1 ++
-      (((linkPlan (Coin := Coin) k M).plan x j).exec m ω (slotRuns sl)).2.1 ++
-      (((linkPlan (Coin := Coin) k M).plan x j).exec m ω (slotRuns sl)).2.2).dedup.map
-        (fun e => m.cost ω (m.named (slotRuns sl) e)) |>.sum ≤ _
+  show (List.map (fun e => m.cost ω (m.named (slotRuns sl) e))
+      ((((linkPlan (Coin := Coin) k M).plan x j).exec m ω (slotRuns sl)).1 ++
+        (((linkPlan (Coin := Coin) k M).plan x j).exec m ω (slotRuns sl)).2.1 ++
+        (((linkPlan (Coin := Coin) k M).plan x j).exec m ω (slotRuns sl)).2.2).dedup).sum ≤ _
   by_cases ha : m.acc ω (forkOf m (slotRuns sl) j.val (slotRuns sl 1))
   · have hex : ((linkPlan (Coin := Coin) k M).plan x j).exec m ω (slotRuns sl) =
         (.fork j.val (.fresh 0) (.fresh 1) ::
             ((linkLoop (Coin := Coin) j.val (.fork j.val (.fresh 0) (.fresh 1)) M 2).exec m ω (slotRuns sl)).1,
           ((linkLoop (Coin := Coin) j.val (.fork j.val (.fresh 0) (.fresh 1)) M 2).exec m ω (slotRuns sl)).2.1,
           ((linkLoop (Coin := Coin) j.val (.fork j.val (.fresh 0) (.fresh 1)) M 2).exec m ω (slotRuns sl)).2.2) := by
-      simp only [linkPlan, Plan.exec, hn, decide_eq_true_eq, ha, ↓reduceIte]
+      simp only [linkPlan, Plan.exec, hn, decide_eq_true_eq, decide_true, decide_false, Bool.false_eq_true, ha, ↓reduceIte]
     rw [hex]
     refine (sum_dedup_le _ _ (.fork j.val (.fresh 0) (.fresh 1) ::
       ((linkLoop (Coin := Coin) j.val (.fork j.val (.fresh 0) (.fresh 1)) M 2).exec m ω (slotRuns sl)).1)
@@ -136,7 +138,7 @@ theorem linkPlan_cost_le (k : Msg → ℕ) (M : ℕ) (m : RunModel Coin Ω n C) 
     · simp only [List.map_cons, List.sum_cons, hn, h3, linkCost, ha, ↓reduceIte]
   · have hex : ((linkPlan (Coin := Coin) k M).plan x j).exec m ω (slotRuns sl) =
         ([.fork j.val (.fresh 0) (.fresh 1)], [], []) := by
-      simp only [linkPlan, Plan.exec, hn, decide_eq_true_eq, ha, ↓reduceIte]
+      simp only [linkPlan, Plan.exec, hn, decide_eq_true_eq, decide_true, decide_false, Bool.false_eq_true, ha, ↓reduceIte]
     rw [hex]
     refine (sum_dedup_le _ _ [.fork j.val (.fresh 0) (.fresh 1)] fun e he => by simpa using he).trans (le_of_eq ?_)
     simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero, hn, linkCost, ha, ↓reduceIte]
@@ -157,18 +159,14 @@ theorem slotRuns_cons {M : ℕ} (a b : (Fin n → Coin) × C) (vs : Fin M → (F
         vs t := by
   refine ⟨?_, ?_, fun t => ?_⟩
   · have : (⟨min 0 (M + 1), Nat.lt_succ_of_le (Nat.min_le_right 0 (M + 1))⟩ : Fin (M + 1 + 1)) = 0 := by
-      ext
-      simp only [Fin.val_zero] <;> omega
+      ext; simp
     simp only [slotRuns, this, Fin.cons_zero]
   · have : (⟨min 1 (M + 1), Nat.lt_succ_of_le (Nat.min_le_right 1 (M + 1))⟩ : Fin (M + 1 + 1)) = Fin.succ 0 := by
-      ext
-      simp only [Fin.val_succ, Fin.val_zero] <;> omega
+      ext; simp
     simp only [slotRuns, this, Fin.cons_succ, Fin.cons_zero]
-  · have := t.isLt
-    have : (⟨min (2 + t.val) (M + 1), Nat.lt_succ_of_le (Nat.min_le_right _ (M + 1))⟩ : Fin (M + 1 + 1)) =
+  · have : (⟨min (2 + t.val) (M + 1), Nat.lt_succ_of_le (Nat.min_le_right _ (M + 1))⟩ : Fin (M + 1 + 1)) =
         Fin.succ (Fin.succ t) := by
-      ext
-      simp only [Fin.val_succ] <;> omega
+      ext; simp only [Fin.val_succ]; omega
     simp only [slotRuns, this, Fin.cons_succ]
 
 /-- **The link names at most two runs in expectation**, in every model: `E[cost] ≤ 2·E_{ω,u}[cost ω u]`. -/
@@ -207,7 +205,8 @@ theorem linkPlan_ExCost_le (k : Msg → ℕ) (M : ℕ) (m : RunModel Coin Ω n C
       _ = Ex fun a : (Fin n → Coin) × C => Ex fun p : ((Fin n → Coin) × C) × (Fin M → (Fin n → Coin) × C) =>
             (linkCost (fun v => m.acc ω (fork (m.cut j.val) a.1 v.1, v.2))
               (fun v => m.cost ω (fork (m.cut j.val) a.1 v.1, v.2)) M p : ℝ) := by
-          refine (Claims.Ex_prod _).trans (congrArg Ex (funext fun a => congrArg Ex (funext fun p => ?_)))
+          rw [Claims.Ex_prod]
+          refine congrArg Ex (funext fun a => congrArg Ex (funext fun p => ?_))
           obtain ⟨h0, h1, h2⟩ := slotRuns_cons a p.1 p.2
           simp only [forkOf, h0, h1, h2]
       _ ≤ Ex fun a : (Fin n → Coin) × C =>
