@@ -49,7 +49,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import session_head
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.served_record import SCHEMA as SERVED_SCHEMA
@@ -113,7 +113,7 @@ def b_value(w: int) -> str:
 
 
 def _hm96(man: Mapping[str, Any], s: int) -> None:
-    hashing = PPD.scheme_of(man["scheme"]).commitment_hash
+    hashing = pouw_schemes.get(man["scheme"]).commitment_hash
     if hashing != HM96:
         raise ValueError(f"round {s}'s pass commits {hashing} rows, and W registers {HM96} rows")
 

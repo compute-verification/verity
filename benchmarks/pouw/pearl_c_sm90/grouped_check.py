@@ -2,7 +2,7 @@
 (4096, 6144) and w2 (6144, 2048)), with decode's and prefill's routed counts (`COUNTS`), under each schedule.
 
   python benchmarks/pouw/pearl_c_sm90/grouped_check.py --out DIR --passes SCRATCH [--cubin C] [--reps 10] [--schedule S ...]
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --out SCRATCH/NxK      # on CPUs, after, a shape each
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --retain SCRATCH/NxK --out SCRATCH/NxK  # on CPUs, after, a shape each
 
 A shape is one install (`glm53_timing.device_run`) of `EXPERTS` experts, ``pearl-c-h100-v1-h3``.  At each count pattern P,
 retained passes from outputs poisoned 0xA5, in SCRATCH/NxK: ``dense-P``, each unit's rows (`grouped.units`: an expert's rows in
