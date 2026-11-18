@@ -81,6 +81,7 @@ from verity_flock.circuit import PARTITION_RULE as PARTITION_COVER
 from verity_flock.circuit import PARTITION_V1, meta_of, partition_digest
 
 from verity_bench import settings
+from verity_bench.checked_by import LEAN
 
 SCHEMA = "verity-bench/lean-verify/v1"
 #: the record's name in the directory the command writes
@@ -356,7 +357,7 @@ def measure(a: Any, out: Path, *, run: Callable[[Sequence[str], Path], tuple[int
         "proof": {"files": [_sized(p) for p in proofs], "bytes": sum(p.stat().st_size for p in proofs),
                   "record_bytes": (f.session / "session.json").stat().st_size},
         "verifier": {"command": [Path(a.lean).name, *cmd[1:]], "archive_put_s": round(put_s, 3), "repeat": a.repeat, "runs": runs},
-        "accepted": accepted, "label": label(to, not a.plain) if accepted else None,
+        "accepted": accepted, "checked_by": LEAN, "label": label(to, not a.plain) if accepted else None,
         "host": stamp(),
     }
 
@@ -388,7 +389,7 @@ def run(a: Any) -> int:
     doc = measure(a, out)
     (out / RECORD).write_text(json.dumps(doc, indent=1) + "\n")
     runs = doc["verifier"]["runs"]
-    print("LEAN-VERIFY " + json.dumps({"accepted": doc["accepted"], "block": doc["block"], "proof_bytes": doc["proof"]["bytes"],
+    print("LEAN-VERIFY " + json.dumps({"accepted": doc["accepted"], "checked_by": doc["checked_by"], "block": doc["block"], "proof_bytes": doc["proof"]["bytes"],
                                        "wall_s": [r["wall_s"] for r in runs], "maxrss_gib": [r["maxrss_gib"] for r in runs],
                                        "why": runs[-1]["why"], "host": doc["host"]}))
     if not doc["accepted"]:
