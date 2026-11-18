@@ -13,7 +13,7 @@ from typing import Sequence
 from verity.protocols.resource_accounting.network.prover import egress as EG, ingress_scan as IS
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT, network_attester as W
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
-from verity.protocols.resource_accounting.network.verifier.grid import Certifier, BlockGrid
+from verity.protocols.resource_accounting.network.verifier.grid import Attester, BlockGrid
 
 
 @dataclass(frozen=True)
@@ -50,7 +50,7 @@ def serve(params: W.NetworkAttesterParams, requests: Sequence[bytes], arrivals: 
     `_egress` until its own `END` or `FAIL`, its lane free the bucket after."""
     B, P = params.cell_bytes, params.payload
     fails: list[bytes] = []
-    failed = Certifier("fails", params.fails_grid)
+    failed = Attester("fails", params.fails_grid)
 
     def fail(frame: bytes) -> None:
         fails.append(frame)
@@ -65,7 +65,7 @@ def serve(params: W.NetworkAttesterParams, requests: Sequence[bytes], arrivals: 
             c.egress_ended = True
         conns.append(c)
     queue, active = deque(conns), []
-    grids = (Certifier("requests", params.grid), Certifier("responses", params.grid), failed)
+    grids = (Attester("requests", params.grid), Attester("responses", params.grid), failed)
     records: tuple[list[BlockGrid], list[BlockGrid], list[BlockGrid]] = ([], [], [])
     for t in range(windows * params.window):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:

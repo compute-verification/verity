@@ -3,7 +3,7 @@ spatial unit, and the ingress links' status check."""
 
 from verity.protocols.resource_accounting.network.verifier.audit import Audit
 from verity.protocols.resource_accounting.network.verifier.commitment import commit
-from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Certifier
+from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Attester
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 
 P = GridParams(buckets=4, allocation=2, frame_bytes=1)
@@ -19,7 +19,7 @@ def honest_ready():
 
 
 def test_honest_run_is_accepted():
-    records = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    records = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     assert [r.grid for r in records] == expected_grids(FRAMES, SYNCS, P)
     audit = Audit()
     audit.check_link("responses", records, FRAMES, SYNCS, SYNC_SET, P)
@@ -30,7 +30,7 @@ def test_record_and_reject_without_halting():
     """A late frame in window 1 is a violation. It is recorded, the run is rejected, and window 2 is still checked."""
     ready = honest_ready()
     ready[3] = 7  # frame 3's logical bucket is 5 + 1 = 6
-    records = run_shaper(FRAMES, ready, SYNCS, Certifier("responses", P))
+    records = run_shaper(FRAMES, ready, SYNCS, Attester("responses", P))
     audit = Audit()
     verdicts = audit.check_link("responses", records, FRAMES, SYNCS, SYNC_SET, P)
     assert [v.violation for v in verdicts] == [None, "mismatch", None]
@@ -38,7 +38,7 @@ def test_record_and_reject_without_halting():
 
 
 def test_exact_slot_equality():
-    records = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    records = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     grid = [list(row) for row in records[0].grid]
     grid[0][0] = b"\xff"
     tampered = records[0].__class__(records[0].link, 0, tuple(tuple(r) for r in grid), records[0].status)
@@ -47,7 +47,7 @@ def test_exact_slot_equality():
 
 
 def test_status_advice_and_missing_record_are_violations():
-    w = Certifier("responses", P)
+    w = Attester("responses", P)
     records = run_shaper(FRAMES, honest_ready(), SYNCS[:1], w)
     w.fault(Reason.MONITOR_UNAVAILABLE)
     for _ in range(P.buckets):
@@ -64,7 +64,7 @@ def test_status_advice_and_missing_record_are_violations():
 def test_more_than_one_record_for_a_window_is_a_violation():
     """A second record for window 1 makes it a duplicate, whichever comes first and even if the two agree. Another
     link's record for the same window is not a duplicate."""
-    records = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    records = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     bad = BlockGrid("responses", 1, records[0].grid, records[1].status)
     for recs in ([bad] + records, records + [bad], records + [records[1]]):
         verdicts = Audit().check_link("responses", recs, FRAMES, SYNCS, SYNC_SET, P)
@@ -81,7 +81,7 @@ def test_an_out_of_set_sync_flags_only_its_own_window():
     assert declared[1] not in SYNC_SET
     expected = expected_grids(FRAMES, declared, P)
     assert expected[0] == expected_grids(FRAMES, SYNCS, P)[0] and expected[1] != expected_grids(FRAMES, SYNCS, P)[1]
-    records = run_shaper(FRAMES, honest_ready(), declared, Certifier("responses", P))
+    records = run_shaper(FRAMES, honest_ready(), declared, Attester("responses", P))
     assert [r.grid for r in records] == expected
     verdicts = Audit().check_link("responses", records, FRAMES, declared, SYNC_SET, P)
     assert [v.violation for v in verdicts] == [None, "advice", None]
@@ -96,7 +96,7 @@ def test_egress_links_with_the_same_syncs_are_accepted():
     """The spatial unit's clock is each window's sync, which every egress link declares alike."""
     audit = Audit()
     for link in ("responses", "tokens"):
-        audit.check_link(link, run_shaper(FRAMES, honest_ready(), SYNCS, Certifier(link, P)), FRAMES, SYNCS, SYNC_SET, P)
+        audit.check_link(link, run_shaper(FRAMES, honest_ready(), SYNCS, Attester(link, P)), FRAMES, SYNCS, SYNC_SET, P)
     assert audit.accepted and len(audit.verdicts) == 6
     assert audit.syncs == dict(enumerate(SYNCS))
 
@@ -107,8 +107,8 @@ def test_a_link_with_another_sync_is_advice_in_that_window_only():
     violation, its other windows are accepted, and the first link checked sets the clock. The same holds committed."""
     other = [SYNCS[0], ClockSync(2, 1), SYNCS[2]]
     assert other[1] in SYNC_SET and other[1] != SYNCS[1]
-    responses = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
-    tokens = run_shaper(FRAMES, honest_ready(), other, Certifier("tokens", P))
+    responses = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
+    tokens = run_shaper(FRAMES, honest_ready(), other, Attester("tokens", P))
     assert all(v.accepted for v in Audit().check_link("tokens", tokens, FRAMES, other, SYNC_SET, P))
     for committed in (False, True):
         resp, tok = ([commit(r, P) for r in recs] if committed else recs for recs in (responses, tokens))
@@ -125,7 +125,7 @@ def test_a_link_with_another_sync_is_advice_in_that_window_only():
 def ingress_run(arrivals, faults=None):
     """An ingress network attester's network attestations: `arrivals[w][t]` frames reach it in bucket t of window w, when the outside chooses,
     and window w faults with `faults[w]` from its start when given."""
-    attester = Certifier("requests", P)
+    attester = Attester("requests", P)
     records = []
     for w, counts in enumerate(arrivals):
         if faults and w in faults:
@@ -162,7 +162,7 @@ def test_ingress_status_duplicate_and_missing_record_are_violations():
 def test_a_run_is_accepted_only_if_every_link_is():
     """Lean's `StatusComplete` needs every boundary link's status complete: with honest egress, the run is accepted when
     the ingress statuses are complete, and rejected, on the ingress window alone, when one is not."""
-    egress = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    egress = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     faulted = [("requests", 2, "status:monitor-unavailable")]
     for faults, violations in ((None, []), ({2: Reason.MONITOR_UNAVAILABLE}, faulted)):
         audit = Audit()

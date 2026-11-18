@@ -67,7 +67,7 @@ from verity.protocols.resource_accounting.network.verifier import head_check as 
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
-from verity.protocols.resource_accounting.network.verifier.grid import Certifier
+from verity.protocols.resource_accounting.network.verifier.grid import Attester
 from verity.protocols.resource_accounting.network.verifier.id_form import (ID_BODY_AT, ID_DIGITS, ID_FIELD_BYTES, ID_NAME_BYTES, ID_REQUEST_HEAD,
                                                     MAX_TOKENS_KEY, u32_field)
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
@@ -374,7 +374,7 @@ def serve(params: W.NetworkAttesterParams, requests: Sequence[bytes], arrivals: 
     network_attester = SimpleNamespace(params=params, requests_released=0, run_id=None)
     conns = [W._Connection(ordinal=k + 1, reader=None, writer=None, done=None, arrived=a)
              for k, a in enumerate(arrivals)]
-    queue, active, grid, rows, records = list(conns), [], Certifier("requests", params.grid), [], []
+    queue, active, grid, rows, records = list(conns), [], Attester("requests", params.grid), [], []
     got: dict[int, list[int]] = {}
     for t in range(buckets):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:

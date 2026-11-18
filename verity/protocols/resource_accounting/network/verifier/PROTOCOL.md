@@ -114,7 +114,7 @@ v1 stays as it is, and readable: `CommittedRecord` and `record_digest` are uncha
 ## Network attestations (`certificate`)
 
 **The trust change.** The **network attester**, the device on a node's uplink that shapes each link into the grid
-(`grid.Certifier`), is auditor-trusted: the auditor trusts it to run the grid and to sign what it ran. A raw or
+(`grid.Attester`), is auditor-trusted: the auditor trusts it to run the grid and to sign what it ran. A raw or
 committed record reaches the auditor as published. Instead, once per execution phase whose status is complete, the
 network attester signs a **network attestation**: a signature over a hiding digest of the execution phase's record, salted by the
 network attester (`certificate.Issuer`). Any other execution phase gets none (`Issuer.refused`) and fails closed (W6).

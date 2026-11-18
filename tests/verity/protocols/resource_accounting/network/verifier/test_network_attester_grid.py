@@ -9,7 +9,7 @@ import random
 import pytest
 
 from verity.protocols.resource_accounting.network.verifier.grid import (
-    COMPLETE, GridParams, Reason, Status, Certifier, fill, left_packed, occupancy, released, row_left_packed,
+    COMPLETE, GridParams, Reason, Status, Attester, fill, left_packed, occupancy, released, row_left_packed,
 )
 
 SMALL = [(1, 1), (2, 1), (2, 2), (3, 2), (2, 3)]
@@ -83,7 +83,7 @@ def test_encard_fifoGrids(T, r):
 def test_attester_constant_rate_left_packed_fifo():
     rng = random.Random(4)
     p = GridParams(buckets=5, allocation=3, frame_bytes=2)
-    w = Certifier("responses", p)
+    w = Attester("responses", p)
     sent, out = [], []
     for _ in range(3):
         for _ in range(p.buckets):
@@ -103,7 +103,7 @@ def test_attester_fail_closed_untimed_status():
     p = GridParams(buckets=4, allocation=2, frame_bytes=1, queue_capacity=3)
     statuses = set()
     for fault_at in range(p.buckets):
-        w = Certifier("responses", p)
+        w = Attester("responses", p)
         for t in range(p.buckets):
             n = 5 if t == fault_at else 1  # 5 frames overflow Q = 3
             for _ in range(n):
@@ -123,7 +123,7 @@ def test_attester_fail_closed_untimed_status():
 
 
 def test_attester_malformed_frame_is_a_fault():
-    w = Certifier("responses", GridParams(buckets=2, allocation=1, frame_bytes=4))
+    w = Attester("responses", GridParams(buckets=2, allocation=1, frame_bytes=4))
     w.enqueue(b"abc")
     w.tick()
     w.tick()

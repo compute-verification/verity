@@ -256,6 +256,8 @@ def test_write_is_the_document_and_the_runs_result(run_dir, capsys):
         "sessions": 54, "staging": 2.0, "to Register": 8, "Register to the repetitions": 16, "level 0": 8,
         "the repetitions": 18, "the tail": 4, "Lean verifier CPU": 18, "Lean verifier wall": 22,
         "Lean verifier wall: inputs": 4.0, "Lean verifier wall: setup": 8.0, "Lean verifier wall: checks": 2.6}
+    assert {m["name"]: m.get("member") for m in result["measurements"] if "member" in m} == {
+        R.PROVING: doc["identity"]["class"], R.VERIFIER: doc["identity"]["class"]}
     by = {m["name"]: m["inputs"] for m in result["measurements"]}
     assert by[R.VERIFIER] == ["measured", "Lean verifier CPU", "execution phases"]
     names = {m["name"] for m in result["measurements"]}

@@ -53,7 +53,7 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
 - **Timing (RP6).** Every frame is re-cut into whole cells of B bytes (`recut`). Its head is padded with spaces, which
   JSON reads as nothing, so a frame's cells are a function of its head alone. Cells to the prover leave on the `coins`
   grid, at r_coin cells a bucket of τ. Cells to the challenger leave on `coin-requests`, at its own r. Each grid is a
-  `grid.Certifier`: constant-rate, left-packed and FIFO.
+  `grid.Attester`: constant-rate, left-packed and FIFO.
 
   A cell leaves only at its bucket's tick, and so do a direction's end and a connection's close. What either side sees
   of the other's timing is therefore the grid's occupancy, T·log2(r + 1) bits an execution phase. Arrival jitter within

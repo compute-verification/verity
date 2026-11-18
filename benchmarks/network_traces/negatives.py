@@ -134,7 +134,7 @@ def cell_reads(WR, cells, k: int, row: bytes) -> bool:
 
 
 def network_attester_frame(run: Path, at: int | None = None) -> dict:
-    """`frame` on a network-certifier-serve run's own cells (`network_attester_rows`: `cells.jsonl`'s registrations and the
+    """`frame` on a network-attester-serve run's own cells (`network_attester_rows`: `cells.jsonl`'s registrations and the
     prover's `cells.salts`, the rows' salts and the wiring's): the first egress execution phase with a data cell, its
     registration (v2) checked under the network attester's key and the schedule, and its record's bucket rows and
     wiring committed under their salts to the registered head; then byte `at` of that cell (its first payload byte by
@@ -509,14 +509,14 @@ NEGATIVES = {n.name: n for n in [
              "N2's head check (the signed digest)", f"{HEAD}.signed", also=("audit.signature",)),
     Negative("token", "io", "plan", "the shim writes every token of window 0's responses with other bytes than the "
              "endpoint sent: certified, its counts honest's", "the I/O tie (a data cell's id against its port entry's)",
-             f"{TIE}.content", waits=("the I/O tie", "the network certifier's cells")),
+             f"{TIE}.content", waits=("the I/O tie", "the network attester's cells")),
     Negative("frame", "io", "frames", "one byte of a certified cell changed, the cells' root kept",
-             "the I/O tie (the network certifier's cells under their root)", f"{TIE}.cells_root",
-             waits=("the I/O tie", "the network certifier's cells")),
+             "the I/O tie (the network attester's cells under their root)", f"{TIE}.cells_root",
+             waits=("the I/O tie", "the network attester's cells")),
     Negative("advice-length", "advice", "advice", "a request's output length one more than its certified frames, "
              "its next row keeping the sample", "the I/O tie (a kept output's data cell against the certified cells)",
              f"{TIE}.content", output_length,
-             waits=("the advice module", "the I/O tie", "the network certifier's cells")),
+             waits=("the advice module", "the I/O tie", "the network attester's cells")),
     Negative("advice-missing", "advice", "advice", "a certified request missing from the advice, with its rows",
              "IoTieRequest (each certified request against the advice's)", REQUEST_TIE, missing_request,
              waits=("the advice module", "the I/O tie"), also=(f"{TIE}.content",)),
@@ -528,8 +528,8 @@ NEGATIVES = {n.name: n for n in [
              "IoTieRequest (each request's prompt length against the certified ingress cells)", REQUEST_TIE,
              prompt_split, waits=("the advice module", "the I/O tie")),
     Negative("advice-release", "advice", "advice", "a kept output released one bucket later than certified",
-             "the I/O tie (the verifier's map of the advice's outputs against the network certifier's schedule)", f"{TIE}.map",
-             release_moved, waits=("the advice module", "the I/O tie", "the network certifier's cells")),
+             "the I/O tie (the verifier's map of the advice's outputs against the network attester's schedule)", f"{TIE}.map",
+             release_moved, waits=("the advice module", "the I/O tie", "the network attester's cells")),
     Negative("advice-start", "advice", "advice", "a request's first row starting one position later, claiming a "
              "prefix-cache hit on another request's KV, its end kept: N2 accepts it",
              "the step unit (committed values against the compiled Program)", "StepUnit.values",
@@ -1059,7 +1059,7 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="command", required=True)
     t = sub.add_parser("table", help="the negatives, their checks and codes")
     t.add_argument("--markdown", action="store_true")
-    w = sub.add_parser("warden", help="frame on a network-certifier-serve run's own cells, by the verifier's registered read")
+    w = sub.add_parser("warden", help="frame on a network-attester-serve run's own cells, by the verifier's registered read")
     w.add_argument("--run", required=True, type=Path)
     a = sub.add_parser("advice", help="every advice negative of a run's advice, and the ingress tie's codes on it")
     a.add_argument("--advice", required=True, type=Path, help="the run's advice (I1's encode bytes)")

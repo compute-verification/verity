@@ -31,7 +31,7 @@ def checked(*registrations: object, under: tuple[object, object] = UNDER) -> str
 def names_under(*runs: str, under: tuple[str, str] = UNDER) -> str:
     """The answer's line on what the registrations' files of `runs` say they were checked under."""
     return (f"`out/registrations.jsonl` of {', '.join(runs)} says its registrations were checked under the network "
-            f"certifier's key whose SHA-512 is {under[0]}, in the session {under[1]}: the reader holds neither, and "
+            f"attester's key whose SHA-512 is {under[0]}, in the session {under[1]}: the reader holds neither, and "
             "compares them with nothing")
 
 

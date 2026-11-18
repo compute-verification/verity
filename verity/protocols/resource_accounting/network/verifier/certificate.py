@@ -1,7 +1,7 @@
 """Network attestations: the network attester's signed record of each execution phase, on SHA-512 (record v2).
 
 The network attester is the auditor-trusted device on a node's uplink that shapes each link into the grid
-(`grid.Certifier`). Once per execution phase whose record is complete it signs one **network attestation**: a signature
+(`grid.Attester`). Once per execution phase whose record is complete it signs one **network attestation**: a signature
 over a hiding digest of the window's record, salted by the attester. An execution phase whose record isn't complete gets
 none (`Issuer`), so it fails closed. The record head and the salt are witness: they enter proofs and never reach
 the auditor in the clear, so the record's own hashes are unsalted, and what the attestation signs is the salted digest.
@@ -821,7 +821,7 @@ class CertifiedMark:
 
 @dataclass
 class Issuer:
-    """The network attester's signing step, beside its grid (`grid.Certifier`): one attestation per closed execution
+    """The network attester's signing step, beside its grid (`grid.Attester`): one attestation per closed execution
     phase, in attester session `session`. Before its first signature it starts the session on its signer, which refuses
     a session its state has already started. A refusal, of the start or of a leaf, leaves the execution phase without an
     attestation (fail-closed) and is listed in `refused`; a refused start is asked again at the next execution phase, and

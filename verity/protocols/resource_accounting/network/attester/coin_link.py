@@ -12,7 +12,7 @@ both ways, one connection at a time, in the challenger's order:
   frame's cells are a function of its head alone, never of how its bytes arrived.
 - **Grids.** The challenger's frames go to the prover on the `coins` grid, the coin link's ingress, at r_coin =
   `coin_cells` cells a bucket of τ = `bucket_ms`; the prover's frames go to the challenger on `coin-requests`, egress, at
-  `request_cells`. Each is a `grid.Certifier`: constant-rate, left-packed and FIFO. A cell leaves the link only at its
+  `request_cells`. Each is a `grid.Attester`: constant-rate, left-packed and FIFO. A cell leaves the link only at its
   bucket's tick, and so do a direction's end and a connection's close, so what either side sees of the other's timing is
   the grid's occupancy, T·log2(r + 1) bits an execution phase (the K charge's unit). Nothing the prover does moves a
   tick or slows the link: a prover that doesn't take what a tick releases fails the link closed, so there is no flow
@@ -48,7 +48,7 @@ from dataclasses import asdict, dataclass, field
 from functools import cached_property
 from typing import Any
 
-from verity.protocols.resource_accounting.network.verifier.grid import Certifier, GridParams, Reason, BlockGrid, row_count
+from verity.protocols.resource_accounting.network.verifier.grid import Attester, GridParams, Reason, BlockGrid, row_count
 from verity.protocols.resource_accounting.network.verifier.pacer import raw_clock
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.protocols.proofs.spot.verifier.challenger.remote import HEADER, MAX_HEAD
@@ -244,8 +244,8 @@ class CoinLink:
         self.params, self.connect = params, connect
         self.origin, self.clock, self.sleep, self.slack, self.buckets = origin, clock, sleep, slack, buckets
         self.backlog, self.publish = backlog, publish
-        self.coins = Certifier(COINS, params.coins_grid)
-        self.requests = Certifier(REQUESTS, params.requests_grid)
+        self.coins = Attester(COINS, params.coins_grid)
+        self.requests = Attester(REQUESTS, params.requests_grid)
         self.classifier = Classifier(commitment)
         self.windows: list[dict] = []
         self.log: list[dict] = []
@@ -384,7 +384,7 @@ class CoinLink:
             self.windows.append({"window": records[0].window, COINS: _status(records[0]),
                                  REQUESTS: _status(records[1])})
 
-    def _send(self, writer: Any, data: bytes, grid: Certifier) -> None:
+    def _send(self, writer: Any, data: bytes, grid: Attester) -> None:
         if writer.is_closing() or writer.transport.get_write_buffer_size() > self.backlog:
             grid.fault(Reason.DELIVERY_REFUSED)
             return
