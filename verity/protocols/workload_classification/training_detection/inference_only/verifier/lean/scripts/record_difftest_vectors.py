@@ -19,8 +19,7 @@ reading some of its parameters' leaves (directly, through a call and through a b
 of a parameter's one-bit leaves on (`PASSES`: itself, through a call, a callee inside a callee, a batch member or a
 scan, some only through its carry or only as its outputs, or handed to a callee that returns none of them), their units laid out by one or two inference entries each with the slot digit anywhere
 among the digits; wires from earlier templates that keep to the reader's slot, cross slots or do either unit by unit,
-each from an output of the row's bits whose leaves' width divides the reader's (the same width, or bits under a
-word) or, into a closed row, from any output of the row's bits, written unit by unit and merged into runs
+each from an output of the row's bits and its leaves' width, written unit by unit and merged into runs
 (`verity.commitments.periods.interface.coalesce`, as a lowering states them); registered reads, a table with its table reads and
 opening, and ingress; a registration log in R6's chain whose first record registers some of the parameters, under the
 root the run's own record commits or another; row formats (`formats`): 32-bit leaves, of either schema, of
@@ -37,8 +36,7 @@ record; and the negative vectors of a pinned reader's layout (the form's `layout
 among the opening's ports, another row named the key, the root or the domain id read in another row, an opened row
 left out or out of order, another output named the verdict, and a pinned reader whose rows are in no layout's order
 or that has one output, with the same records under no pin. Then a wire's leaves: the served shape with its token a
-word into a key of 32 one-bit leaves that only gates of its reader read, a closed row, and 32 one-bit leaves into a
-key of one word, both taken; a template that passes on one bit of each of sixteen 16-bit gates, read as one 16-bit
+32-bit word on both sides of its wires, taken; a template that passes on one bit of each of sixteen 16-bit gates, read as one 16-bit
 leaf by a unit of another slot (`passed_on`), refused however it passes them on (itself, with no gate of its own at
 all, through a call, a callee inside a callee, a batch member or a scan, or to an output no wire reads), refused
 where it passes on one of them alone through a scan's carry or the other fifteen as a scan's outputs, refused too
@@ -525,7 +523,7 @@ def random_circuit(rng, seed: int) -> Circuit:
     """A random circuit (the module docstring)."""
     S = rng.choice([1, 2, 2, 3, 4])
     c = Circuit(f"record{seed}", S, 2)
-    specs, shut = [], {}
+    specs = []
     for j in range(rng.randint(1, 4)):
         if rng.random() < 0.2:
             params = [("tok", Value(16)), ("root", DIGEST), ("domain", DIGEST), ("row", Array(2, Value(16))),
@@ -542,7 +540,6 @@ def random_circuit(rng, seed: int) -> Circuit:
             params, outs = list(fn.params), [fn.ret]
         tid = c.add(fn, _layout(rng, S))
         specs.append((tid, params, outs))
-        shut[tid] = closed(fn)
         for p, t in params:
             ks = [k for k in range(2, 7) if isinstance(t, Array) and t.n % k == 0 and _words(t) % k == 0]
             if ks and rng.random() < 0.5:
@@ -556,7 +553,7 @@ def random_circuit(rng, seed: int) -> Circuit:
             k = c.cuts.get(tid, {}).get(p, 1)
             row = _words(t) // k
             writers = [(wt, f"o{x}") for wt, _, outs in specs[:j] for x, o in enumerate(outs)
-                       if _bits(o) == 16 * row and (p in shut[tid] or _leaf(t) % _leaf(o) == 0)]
+                       if _bits(o) == 16 * row and _leaf(t) == _leaf(o)]
             if opening and p != "tok" or not writers or rng.random() < 0.3:
                 continue
             wt, out = rng.choice(writers)
@@ -621,7 +618,7 @@ READER = ("tok", "root", "domain", "row", "salt", "path")
 
 
 def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forged: bool = False,
-            key_wired: bool = True, rows: tuple[str, ...] = READER, verdict: bool = True, bits: str | None = None) -> Circuit:
+            key_wired: bool = True, rows: tuple[str, ...] = READER, verdict: bool = True, word: bool = False) -> Circuit:
     """A circuit in the shape of a served class of `S` slots and `T` positions (the module docstring), E = 2 words a
     hidden row: `Scan` (one unit a slot, its state a registered read of `scan-state`, the phase's own input), `Embed`
     (a table opening at the token), `Norm`, `Gemm` (per position and slot, two rows of the query weights then four of
@@ -631,14 +628,11 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forg
     `root_read`, no table read of the root; with `forged`, `Embed` is another Definition under the same name, its
     verdict a constant 1 that reads no port. Without `key_wired`, no wire fills `Embed`'s token. `rows` is the order of
     `Embed`'s parameters, a layout's by default; without `verdict`, `Embed` has the one output, the row, which its
-    opening names as its verdict. `bits` makes the token 32 bits, a word on one side of its wires and 32 one-bit
-    leaves on the other: `"reader"`, `Embed`'s key the bits and `Scan`'s and `Feed`'s token the word; `"writer"`,
-    their token the bits and `Embed`'s key the word."""
+    opening names as its verdict. `word` makes the token a 32-bit word, `Scan`'s and `Feed`'s and `Embed`'s key alike."""
     c = Circuit(f"lowered{S}x{T}", S, T)
     E, v16 = 2, Value(16)
-    row, word = Array(E, v16), {None: (v16, v16), "reader": (Array(32, Value(1)), Value(32)),
-                                "writer": (Value(32), Array(32, Value(1)))}[bits]
-    key, tok = word
+    row = Array(E, v16)
+    key = tok = Value(32) if word else v16
 
     def make(name: str, params: list, outs: list, used: dict[int, list[int]], constant: tuple[int, ...] = ()):
         """A template whose gates, one an output leaf, read between them the leaves `used` names (parameter: leaves);
@@ -1054,9 +1048,8 @@ def shaped() -> list[dict]:
 
     def units(nodes: list) -> list:
         return [n for n in nodes if n["args"]]
-    for seed, side in ((23, "reader"), (24, "writer")):
-        pin = [ref.closure_digest(json.loads(lowered(2, 3, bits=side).program()[0]), EMBED)]
-        first(f"2x3 the key's {side} bits, the other side a word", lowered(2, 3, bits=side), seed, pins=pin, policy={})
+    pin = [ref.closure_digest(json.loads(lowered(2, 3, word=True).program()[0]), EMBED)]
+    first("2x3 the key a 32-bit word, its writers' too", lowered(2, 3, word=True), 23, pins=pin, policy={})
     def twice(nodes: list, _desc: dict) -> None:
         """`Norm`'s weights' row handed the input gates its `x` has."""
         norm = units(nodes)[2]
