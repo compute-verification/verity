@@ -316,12 +316,15 @@ def test_the_registrations_roots_are_each_one_members_and_none_a_row_tables(tmp_
     assert refused({"port": A}).startswith(f"roots: the registration's root {A} is no member's")
     assert refused({"root": "00" * 64}) == "roots: a root of the registration names no port"
     ms = w.params["proofs"]["members"]
-    nested = w.params | {"proofs": {"members": {A: ms[A], f"{A}/x": ms[B]}}}
-    statements = [w.evidence["proofs"]["statements"][0], w.evidence["proofs"]["statements"][1] | {"member": f"{A}/x"}]
-    run, why = w.run(record=RECORD | {"roots": [{"port": f"{A}/x/out"}]}, params=nested,
-                     evidence=w.evidence | {"proofs": {"statements": statements}})
-    assert run is None and why == (f"roots: the registration's root {A}/x/out is two members': a member's roots are "
-                                   "named <member>/<port>, and a root is one member's")
+    sts = w.evidence["proofs"]["statements"]
+    for top in (A, "a"):
+        nested = w.params | {"proofs": {"members": {top: ms[A], f"{A}/x": ms[B]}}}
+        statements = [sts[0] | {"member": top}, sts[1] | {"member": f"{A}/x"}]
+        run, why = w.run(record=RECORD | {"roots": [{"port": f"{A}/x/out"}]}, params=nested,
+                         evidence=w.evidence | {"proofs": {"statements": statements}})
+        assert run is None and why == (DK.name_template(A) if top == A else
+                                       f"roots: the registration's root {A}/x/out is two members': a member's roots "
+                                       "are named <member>/<port>, and a root is one member's")
     assert w.run(record=RECORD | {"roots": {}}) == (None, "roots: the registration's roots are not a list")
     assert w.run(record={"scheme": SCHEME, "roots": roots}) == (None, "the record names no population")
 
