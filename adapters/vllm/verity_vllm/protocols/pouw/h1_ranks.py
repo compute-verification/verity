@@ -7,13 +7,13 @@ rank r holds the contiguous range [lo_r, lo_r + L_r) of the window's L. A rank's
 one (qkv, gate_up) its rows of W, n/TP × K; a row-parallel one (o, down) its K slice, n × K/TP, whose z is the rank's
 partial sums before vLLM's all-reduce (`engine.int8_vllm`). Call (s, w) is index s·L + w at position s·U + off(w), so the
 window has one static order over every rank, with each rank's A and z tables committed where its rows are, under the
-window's salt and hm96 key. At TP 1 × PP M the window's linears and layout are PP = 1's.
+window's salt and the rank's own fresh salts, which it ships with each call for the holder to keep (`ingest`). At TP 1 × PP M the window's linears and layout are PP = 1's.
 
 Admission stays with the scheduler: the holder wraps the executor's ``execute_model``, and before each step with
 scheduled tokens it pulls every rank's calls so far (`RankExtension.h1rank_rows`, an RPC queued behind the earlier steps,
 so it returns once they have run on every rank), takes them in index order, closing each round whose last linear is in,
 then admits the step (`H1Run.admit`): one round a step, its root over every rank's calls before its coin, which only the
-holder samples. The salt and key reach the ranks before the first forward (`Holder._push`). The pull blocks the engine
+holder samples. The salt reaches the ranks before the first forward (`Holder._push`). The pull blocks the engine
 core until the previous step has run everywhere, so steps don't overlap in a pipeline under H1.
 
 With ``served`` (`pouw_h1_served.Served`) the window's registered tables are the holder's: step s's A table of K holds
@@ -34,13 +34,13 @@ step that differ are refused."""
 from __future__ import annotations
 
 import importlib
-import os
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import numpy as np
 from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveRecord
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     COIN_DRAW,
     H1_CHALLENGER,
@@ -89,8 +89,8 @@ class RankRun(H1Run):
     its weight and scales when the call's weight is not the one last shipped for its linear."""
 
     def __init__(self, entry: str, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]], rows: int, steps: int,
-                 lo: int, hi: int, key: bytes, ship: bool = False) -> None:
-        super().__init__(entry, None, modules, shapes, rows, steps, key=key, opener=self._unpushed)
+                 lo: int, hi: int, ship: bool = False) -> None:
+        super().__init__(entry, None, modules, shapes, rows, steps, opener=self._unpushed)
         self.lo, self.hi, self.ship = int(lo), int(hi), bool(ship)
         self.shipped: dict[int, dict[str, Any]] = {}
         self._held: dict[int, Any] = {}
@@ -116,11 +116,16 @@ class RankRun(H1Run):
         return call
 
     def rows_since(self, sent: int) -> list[dict[str, Any]]:
-        """The calls from the `sent`-th on, each with its tables, its credit verdict, what its listeners bound and, with
-        ``ship``, its rows (``served``)."""
-        return [{"call": asdict(c), "tables": self.tables.get(c.index), "verdict": self.verdicts.get(c.index),
-                 "bound": self.bound.get(c.index), **({"served": self.shipped.pop(c.index, None)} if self.ship else {})}
+        """The calls from the `sent`-th on, each with its tables and their salts (by nonce, `pouw_h1_prover.RunSalts`), its
+        credit verdict, what its listeners bound and, with ``ship``, its rows (``served``)."""
+        return [{"call": asdict(c), "tables": self.tables.get(c.index), "salts": self._table_salts(c.index),
+                 "verdict": self.verdicts.get(c.index), "bound": self.bound.get(c.index),
+                 **({"served": self.shipped.pop(c.index, None)} if self.ship else {})}
                 for c in self.calls[sent:]]
+
+    def _table_salts(self, index: int) -> dict[int, bytes]:
+        nonces = (RQ.TABLES_NONCE + 3 * index + RQ.TABLE_NONCES[name] for name in RQ.TABLE_NONCES)
+        return {u: got for u in nonces if (got := self._salts.held(u))}
 
 
 @dataclass
@@ -206,12 +211,12 @@ class RankExtension:
                 "decode_query_len": int(self.model_runner.decode_query_len)}
 
     def h1rank_install(self, entry: str, los: Mapping[tuple[int, int], int], shapes: Sequence[Sequence[int]],
-                       modules: Mapping[int, str], rows: int, steps: int, key: bytes, ship: bool = False) -> dict[str, Any]:
+                       modules: Mapping[int, str], rows: int, steps: int, ship: bool = False) -> dict[str, Any]:
         """This rank's `RankRun` from linear ``los[(pp, tp)]`` on, its hooks wired (``ship``: its calls' rows go to the
         holder's `Served`); returns its weights' roots by global index (`pouw_h1_hooks.weight_roots`, as `pouw.commit_weights`)."""
         _, layers = self._h1rank_layers()
         lo = int(los[self._h1rank_rank()])
-        run = RankRun(entry, modules, [(int(n), int(k)) for n, k in shapes], rows, steps, lo, lo + len(layers), key, ship=ship)
+        run = RankRun(entry, modules, [(int(n), int(k)) for n, k in shapes], rows, steps, lo, lo + len(layers), ship=ship)
         hooks = Hooks(tag=f"{entry}/rank{lo}")
         wire_rank(run, hooks, layers, rows)
         self._h1rank = {"run": run, "hooks": hooks, "sent": 0}
@@ -351,6 +356,7 @@ def ingest(run: H1Run, rows: Sequence[Mapping[str, Any]]) -> None:
         for into, key in ((run.tables, "tables"), (run.verdicts, "verdict"), (run.bound, "bound")):
             if r.get(key):
                 into[c.index] = dict(r[key])
+        run._salts.adopt(r.get("salts") or {})
         if run.served is not None and run.commit:
             got = r.get("served")
             if got is None:
@@ -365,7 +371,7 @@ def ingest(run: H1Run, rows: Sequence[Mapping[str, Any]]) -> None:
 
 
 def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any = None, opener: Any = None,
-            admission: str = ROUND0, transcript_dir: str | None = None, key: bytes | None = None,
+            admission: str = ROUND0, transcript_dir: str | None = None,
             entry: str = ENTRY, executor: Any = None, served: Any = None,
             commit: Mapping[str, Any] | None = None) -> Holder:
     """H1 on an engine built with ``worker_extension_cls`` = `EXTENSION`: the ranks' layout gathered, each rank's `RankRun`
@@ -401,10 +407,9 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
         modules |= {lo + int(w): name + (f"@tp{o['tp']}" if tp > 1 else "") for w, name in o["names"].items()}
         shapes += [(int(n), int(k)) for n, k in o["shapes"]]
     modules = {w: f"linear {w}" for w in range(len(shapes))} | modules
-    key = key if key is not None else os.urandom(32)
     roots: dict[int, bytes] = {}
     for o in executor.collective_rpc("h1rank_install", kwargs={"entry": entry, "los": los, "shapes": shapes,
-                                                               "modules": modules, "rows": rows, "steps": steps, "key": key,
+                                                               "modules": modules, "rows": rows, "steps": steps,
                                                                "ship": served is not None}):
         roots |= {int(w): bytes.fromhex(r) for w, r in o["roots"].items()}
     if sorted(roots) != list(range(len(shapes))):
@@ -419,7 +424,7 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
         commits = {"coins": commitment.to_json(), "salt_opening": opening.to_json(),
                    **({"round_coins": rounds.challenger.commitment.to_json()} if rounds is not None else {})}
     source = H1_CHALLENGER if opener is not None else "in-process"
-    run = H1Run(entry, salt, modules, shapes, rows, steps, transcript_dir=transcript_dir, rounds=rounds, key=key,
+    run = H1Run(entry, salt, modules, shapes, rows, steps, transcript_dir=transcript_dir, rounds=rounds,
                    draw=draw, admission=admission, coins_from=source, opener=opener, served=served)
     if commit is not None:
         ports = {o["port"] for o in executor.collective_rpc("h1rank_commit", kwargs=dict(commit))}

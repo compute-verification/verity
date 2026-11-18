@@ -62,9 +62,6 @@ from verity_vllm.definitions.registry.prims import A16, BF16, F32
 
 #: float(M_LOG2E)
 LOG2E = 0x3FB8AA3B
-#: the SMs of the capture's GPU, which torch divides by B * H for the dQ buffers under deterministic algorithms
-SMS = 188
-
 #: torch's flash attention backward at each (B, H, T, D) the capture covers: (BM, BN) of the head-dim-64 kernel
 TRAIN_SDPA_BWD = {(2, 8, 1024, 64): (64, 128), (2, 12, 1024, 64): (64, 128), (2, 16, 1024, 64): (64, 128),
                   (2, 24, 1024, 64): (64, 128)}
@@ -275,16 +272,17 @@ def Fa2TrainBwdHead(B, S, do, q, k, v, o, lse):
     return tuple_of(_Coll(rows_t, concat(dq)), _Coll(rows_t, concat(dk)), _Coll(rows_t, concat(dv)))
 
 
-def train_sdpa_backward(B: int, H: int, T: int, D: int):
+def train_sdpa_backward(B: int, H: int, T: int, D: int, sms: int):
     """The head Definition of torch's flash attention backward at (B, H, T, D) on cc 12.0 under deterministic algorithms, bound
-    (`TRAIN_SDPA_BWD`, the dQ buffers ceil(`SMS` / (B H)), at most the T / BN a row's parts can fill: more buffers are the same
-    circuit); ValueError at a shape the capture doesn't cover."""
+    (`TRAIN_SDPA_BWD`, the dQ buffers ceil(``sms`` / (B H)), ``sms`` the SMs of the card it runs on, which torch divides by B * H
+    under deterministic algorithms, at most the T / BN a row's parts can fill: more buffers are the same circuit); ValueError at a
+    shape the capture doesn't cover."""
     blocks = TRAIN_SDPA_BWD.get((B, H, T, D))
     if blocks is None:
         raise ValueError(f"(B, H, T, D) = {(B, H, T, D)} is not captured: torch's flash attention backward is fitted at "
                          f"{sorted(TRAIN_SDPA_BWD)}")
-    return bind(Fa2TrainBwdHead, T=T, D=D, BM=blocks[0], BN=blocks[1], NS=min(-(-SMS // (B * H)), T // blocks[1]))
+    return bind(Fa2TrainBwdHead, T=T, D=D, BM=blocks[0], BN=blocks[1], NS=min(-(-sms // (B * H)), T // blocks[1]))
 
 
 __all__ = ["CONFORMANCE", "Fa2TrainBwdDkDv", "Fa2TrainBwdDq", "Fa2TrainBwdHead", "Fa2TrainBwdKey", "Fa2TrainBwdKeyFirst",
-           "Fa2TrainBwdPre", "Fa2TrainBwdRow", "LOG2E", "SMS", "TRAIN_SDPA_BWD", "train_sdpa_backward"]
+           "Fa2TrainBwdPre", "Fa2TrainBwdRow", "LOG2E", "TRAIN_SDPA_BWD", "train_sdpa_backward"]

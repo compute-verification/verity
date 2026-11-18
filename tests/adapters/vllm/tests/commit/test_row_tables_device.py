@@ -160,8 +160,8 @@ def test_the_device_build_is_called_as_its_source_declares_it(monkeypatch):
 
     monkeypatch.setattr(K.PD, "nvcc", lambda: "an-nvcc")
     monkeypatch.setattr(K, "_build", build)
-    assert K.device_lib.__wrapped__("90") is lib
-    assert handed == [("an-nvcc", K.DEVICE_SOURCES, (*K.NVCC_FLAGS, "-gencode=arch=compute_90,code=sm_90"), "librow_table_cuda.so")]
+    assert K.device_lib.__wrapped__("90a") is lib
+    assert handed == [("an-nvcc", K.DEVICE_SOURCES, (*K.NVCC_FLAGS, "-gencode=arch=compute_90a,code=sm_90a"), "librow_table_cuda.so")]
     for name in ("rt_midstates", "rt_step"):
         kernel = getattr(lib, name)
         assert list(kernel.argtypes) == _declared(name) and kernel.restype is ctypes.c_int
