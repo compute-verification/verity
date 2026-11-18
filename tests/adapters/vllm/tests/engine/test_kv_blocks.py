@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.hooks import (HoldResident, RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues,
+from verity.hooks import (HoldResident, RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, ReleaseValue,
                           ReuseOldestFreed, StepBegan, StepEnded)
 
 from tests import fake_vllm
@@ -278,18 +278,26 @@ def test_a_block_held_resident_is_freed_at_the_first_step_it_no_longer_is(monkey
 
 
 def test_a_runner_emits_its_registered_values_after_load_and_its_ranges_after_the_real_kv_cache(monkeypatch, subscribe):
-    """After vLLM's own `load_model`, the loaded model's parameters, each by name; after vLLM's own
-    `initialize_kv_cache`, unless profiling (its flag by position or by name), the pool's ranges with each layer's
-    cache a store."""
+    """After vLLM's own `load_model`, the loaded model's parameters, each by name, a linear layer's weight marked
+    linear; after vLLM's own `initialize_kv_cache`, unless profiling (its flag by position or by name), the pool's
+    ranges with each layer's cache a store."""
+    class LinearBase:
+        pass
+
+    class RowLinear(LinearBase):
+        pass
+
     caches = [SimpleNamespace(numel=lambda: 2 * PAGES * SLOTS * 64, element_size=lambda: 2)] * 2
     w = SimpleNamespace(numel=lambda: 4, data_ptr=lambda: 1, data="w")
-    model = SimpleNamespace(named_parameters=lambda: [("w", w)])
+    pw = SimpleNamespace(numel=lambda: 4, data_ptr=lambda: 2, data="pw")
+    model = SimpleNamespace(named_parameters=lambda: [("w", w), ("proj.weight", pw)],
+                            named_modules=lambda: [("", model), ("proj", RowLinear())])
     v = kv_classes(fake_vllm.install(monkeypatch), held=lambda: {
         "model": model, "kv_caches": caches, "cache_config": SimpleNamespace(block_size=SLOTS),
         "kernel_block_sizes": [SLOTS]})
     heard = subscribe()
     r, config = v.runners[0](), SimpleNamespace(num_blocks=PAGES)
-    assert r.load_model("x") == "loaded" and heard == [RegisteredValues((("w", "w"),))]
+    assert r.load_model("x") == "loaded" and heard == [RegisteredValues((("w", "w"), ("proj.weight", "pw")), linear=frozenset({"proj.weight"}))]
     assert r.initialize_kv_cache(config, True) == r.initialize_kv_cache(config, is_profiling=True) == "kv"
     assert len(heard) == 1 and r.initialize_kv_cache(config) == "kv"
     assert heard[1:] == [RangesDeclared(PAGES, SLOTS, 2 * 64 * 2, 1, tuple(caches))]
@@ -311,3 +319,35 @@ def test_a_built_engine_has_one_step_emitter(monkeypatch, subscribe):
     assert [e for e in heard if isinstance(e, StepBegan | StepEnded)] == [StepBegan(0, (), 1), StepEnded(0)]
     off()
     assert "schedule" not in vars(sched) and len(hooks.live(kv_blocks.TAG)) == len(v.sites)
+
+
+def test_a_released_value_is_empty_from_its_load_and_restored_at_the_last_detach(monkeypatch):
+    """A `ReleaseValue` empties every parameter on the value's storage (a tied one too) once vLLM's own `load_model`
+    has run, and the last detach sets each to what ``restore()`` gives; a value the model has no parameter of is
+    refused by name."""
+    import torch
+    model = torch.nn.Module()
+    model.proj = torch.nn.Linear(4, 2, bias=False)
+    model.head = torch.nn.Linear(4, 2, bias=False)
+    model.head.weight = model.proj.weight
+    model.other = torch.nn.Linear(4, 2, bias=False)
+    v = kv_classes(fake_vllm.install(monkeypatch), held=lambda: {"model": model})
+    messages.close()
+    back = torch.arange(8.0).view(2, 4)
+    messages.current().request("test", ReleaseValue("proj.weight", lambda: back))
+    off = kv_blocks.attach()
+    try:
+        v.runners[0]().load_model()
+        assert model.proj.weight.numel() == model.head.weight.numel() == 0 and model.other.weight.numel() == 8
+    finally:
+        off()
+    assert torch.equal(model.proj.weight, back) and model.head.weight is model.proj.weight
+    messages.close()
+    messages.current().request("test", ReleaseValue("nope", lambda: back))
+    off = kv_blocks.attach()
+    try:
+        with pytest.raises(RuntimeError, match="registered value nope released"):
+            v.runners[0]().load_model()
+    finally:
+        off()
+        messages.close()

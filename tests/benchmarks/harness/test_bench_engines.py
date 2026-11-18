@@ -27,7 +27,7 @@ from verity_bench.vllm.engine import (
 from verity_bench.vllm.presets import (
     SweepPoint,
     expand_sweep,
-    load_spec,
+    resolve_spec,
     local_checkpoint,
 )
 from verity_bench.vllm.result import (
@@ -147,12 +147,12 @@ def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error(
 def test_local_checkpoint_is_content_bound(tmp_path):
     (tmp_path / "config.json").write_bytes(b"config")
     (tmp_path / "weights.safetensors").write_bytes(b"weights")
-    preset = local_checkpoint(load_spec("llama31-8b-fp8-1gpu").preset, tmp_path)
+    preset = local_checkpoint(resolve_spec("llama31-8b-fp8-1gpu").preset, tmp_path)
     assert preset.model == str(tmp_path)
     assert preset.revision is preset.case is None
     assert len(preset.model_digest) == 64
     (tmp_path / "weights.safetensors").write_bytes(b"changed")
-    assert local_checkpoint(load_spec("llama31-8b-fp8-1gpu").preset, tmp_path).model_digest != preset.model_digest
+    assert local_checkpoint(resolve_spec("llama31-8b-fp8-1gpu").preset, tmp_path).model_digest != preset.model_digest
 
 
 def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():
@@ -353,12 +353,12 @@ def test_equal_kv_pools_pass_and_are_recorded_in_the_identity():
 
 
 def test_blocks_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
-    settings = load_spec("llama31-8b-fp8-1gpu").preset.engine_settings
+    settings = resolve_spec("llama31-8b-fp8-1gpu").preset.engine_settings
     assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
 
 
 def _serving_defaults_preset():
-    preset = load_spec("llama32-1b-bf16-rtx-served-arm").preset
+    preset = resolve_spec("llama32-1b-bf16-served-arm@rtx-pro-6000").preset
     return replace(preset, engine_settings={**preset.engine_settings, "serving_defaults": True})
 
 
@@ -369,7 +369,7 @@ def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_comp
         assert args["kv_cache_memory_bytes"] == 4 * 2**30
         assert "compilation_config" not in args and args["enforce_eager"] is False and args["execution"] == "compiled"
     assert engine_args(served_preset, "bfloat16", resident=True, eager=True)["execution"] == "eager"
-    pinned = load_spec("llama31-8b-fp8-1gpu").preset
+    pinned = resolve_spec("llama31-8b-fp8-1gpu").preset
     resident = engine_args(pinned, "fp8", resident=True, eager=False)
     assert "kv_cache_memory_bytes" not in resident and resident["quantization"] == "fp8"
     assert resident["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",

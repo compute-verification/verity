@@ -5,7 +5,7 @@ docket and to the second sample's cells. Its verdict of record is the Lean's (`S
 Lean's run gave (`DISAGREE` where they differ), `complete` raises (`verifier.not_written`), and `check_twin` and
 `complete_twin` are the Python twins, the difftest's references. `service.Stream` adds the twin's check to the
 interior docket's audit record as `checks.statements` (`attach`), the Python side `Run.run` is held to, and the
-outcome is `Run.run`'s. The parts and their cells, a statement, its codes and the form's switch are the Lean's
+outcome is `Run.run`'s. The parts and their cells, a statement and its codes are the Lean's
 (its module docstring).
 
 A statement is one second-stage session's: ``{"template", "header", "draw", "registered"}``, the template its circuit is
@@ -91,12 +91,7 @@ a table of V rows, where the params were made; round 2 runs no template check. W
 whose root and domain id the verifier fills, a table of V leaves in round 1's record, and which row its key. A design
 whose key is the prover's after the sample, whose root and domain are not one table's of round 1's record, or whose
 table has another leaf count than the read's rows, is refused here. The code is reported beside the others, in every
-branch of `check`, so a run that has it still reaches its other stops.
-
-`FORM` is `SecondStage.FORM`, which the run of record reads: on, a two-stage run whose every check passes is accepted,
-ahead of its form's soundness proof; off, every two-stage run is refused last (``two-stage-form``), and the Python
-flipped alone disagrees with the run of record. `complete_twin` is what a two-stage outcome may say of itself: nothing
-while `FORM` is off or its replay block is a stand-in for the request Definition."""
+branch of `check`, so a run that has it still reaches its other stops."""
 
 from __future__ import annotations
 
@@ -115,15 +110,6 @@ from .one_stage import verifier as V
 from .one_stage.verdict import Verdict, _Collect
 from .schedule import failure as schedule_failure
 
-#: `SecondStage.FORM`, on: the verifier accepts the two-stage form ahead of its proof, and the accept's record says what
-#: is not covered; nothing quotes a guarantee for such a run. Three things stand between the form and its proof:
-#: SPOT[Flock]'s two-stage guarantee takes as a premise that each gate's value has one address fixed before the run,
-#: which nothing proves from round 2's check; no theorem says a run the verifier accepts is one the verifier that
-#: guarantee is stated about accepts; and the composite's sampled component has no two-stage form, nor a subprotocol
-#: for one, under the one soundness theorem.
-FORM = True
-FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
-            "soundness proof does not cover")
 CELLS_WHY = "the interior program's strata are not one range each, of a positive multiple of the replay sample's size"
 STATEMENTS_WHY = ("a two-stage outcome names its second-stage sessions' statements: each one's template, header, draw and "
                   "registered reads")
@@ -192,14 +178,13 @@ RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame
               ("registered",))
 
 
-def complete_twin(form: bool, request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
+def complete_twin(request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
     """Whether a two-stage outcome is complete, in the sense one-stage's accept publishes (`one_stage.audit.COMPLETE`:
-    every verdict ran). It is only when all three hold. The two-stage form is allowed (`form`: `FORM` in a run of
-    record). The replay block is the registered request Definition
+    every verdict ran). It is only when both hold. The replay block is the registered request Definition
     (`request_definition`): a sample of a stand-in audits the stand-in, never the request. Each stage's audit record
     (`records`, at least one, none missing) accepted and is itself complete. So it is false of every two-stage outcome
-    while `FORM` is off, and of every one whose replay block is a stand-in, whatever its audit records say."""
-    return (form is True and request_definition is True and len(records) > 0
+    whose replay block is a stand-in, whatever its audit records say."""
+    return (request_definition is True and len(records) > 0
             and all(r is not None and r.get("accepted") is True and r.get("complete") is True for r in records))
 
 
@@ -1606,7 +1591,7 @@ def _pos_of(ps: Sequence[Part], t: str) -> int:
     return next((k for k, p in enumerate(ps) if p.template == t), len(ps))
 
 
-def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> list[tuple[str, Any]]:
+def _failures(own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> list[tuple[str, Any]]:
     named = _by_template(own.interior)
     found = _interior_failures(own)
     for i, j in enumerate(ss):
@@ -1627,7 +1612,7 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
     if not _same_dict(own.reported or {}, statement_reads(ss)):
         found.append(("second-reported", REPORTED_WHY))
     found += table_rows_failures(own, ss)
-    return found if found or allow else [("two-stage-form", FORM_WHY)]
+    return found
 
 
 def table_rows_why(own: Own, t: str, port: str, e: Any) -> str | None:
@@ -1653,9 +1638,8 @@ def table_rows_failures(own: Own, ss: Sequence[Any]) -> list[tuple[str, Any]]:
     return out
 
 
-def check_twin(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
-    """Round 2's statement check of `statements`, the two-stage form allowed when `allow` (`FORM` in a run): each code
-    once, with the detail it first failed with, the interior record's order first (`SecondStage.checkAny`:
+def check_twin(own: Own, statements: Sequence[Any] | None) -> Verdict:
+    """Round 2's statement check of `statements`: each code once, with the detail it first failed with, the interior record's order first (`SecondStage.checkAny`:
     `SecondStage.check` where every statement is of every slot of its part, and a statement of only its part's sampled
     proof blocks held to `_sampled_codes`)."""
     if own.parts is None:
@@ -1666,7 +1650,7 @@ def check_twin(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdi
     elif statements is None:
         found = [*_interior_failures(own), ("second-statements", STATEMENTS_WHY)]
     else:
-        found = _failures(allow, own, own.parts, list(statements))
+        found = _failures(own, own.parts, list(statements))
     c = _Collect()
     for code, what in found:
         c.fail(code, what)
@@ -1681,10 +1665,10 @@ def held_to_lean(python: Sequence[str] | None, lean: Sequence[str] | None) -> li
     return list(lean) if same and lean is not None else [V.DISAGREE]
 
 
-def check(allow: bool, own: Own, statements: Sequence[Any] | None, lean: Sequence[str] | None) -> Verdict:
+def check(own: Own, statements: Sequence[Any] | None, lean: Sequence[str] | None) -> Verdict:
     """Round 2's verdict of record on `statements`: `check_twin`'s held to `lean`, the codes the Lean `Run.run` gave
     its `SecondStage.checkAny` of the same run, failing with `DISAGREE` alone where they differ."""
-    v = check_twin(allow, own, statements)
+    v = check_twin(own, statements)
     if held_to_lean(v.codes, lean) == list(v.codes):
         return v
     c = _Collect()
@@ -1692,7 +1676,7 @@ def check(allow: bool, own: Own, statements: Sequence[Any] | None, lean: Sequenc
     return c.verdict()
 
 
-def complete(form: bool, request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
+def complete(request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
     """Whether a two-stage outcome is complete, of record: no Lean says it yet, so this raises
     (`verifier.not_written`); `complete_twin` is its Python twin."""
     return V.not_written("complete", "Spot.SecondStage.complete")
@@ -1708,7 +1692,7 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "WIRED_KEY", "Checked", "Link", "Own", "Part",
+__all__ = ["READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "WIRED_KEY", "Checked", "Link", "Own", "Part",
            "Rows", "Run", "Width", "Wire",
            "at_run", "attach", "blank_reads", "blank_run", "check", "check_twin", "complete", "complete_twin", "held_to_lean",
            "inputs_failure", "interior_order_ok",

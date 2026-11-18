@@ -12,14 +12,14 @@ RangeFreed                          kv_free of the pages (with kv=False, none); 
                                     allows
 RangeAllocated reused               refused: a prefix-cache hit would bring a page back with its KV (run without it)
 RangeWritten                        the step's writes, kept for its StepBegan (with kv=False, none)
-StepBegan                           a verifier's message since the last pass ends the window, the next challenge begins
-                                    one; then kv_append of the step's writes, which closes the last step's memory-map
+StepBegan                           every step, one with no slots too: a verifier's message since the last pass ends
+                                    the window, the next challenge begins one; then kv_append of the step's writes, which closes the last step's memory-map
                                     line (with its re-keys for the window just begun), and begin_pass over the
                                     allocated pages, tagged with the step (a pass still open from an earlier step is
                                     ended first)
 StepEnded                           end_pass, with the device reader's roots, and end_step (the step's KV is written by
                                     now, so a memory map takes its digests; the pages vLLM frees in the step, before
-                                    or after this, are freed at this step); again for a step that began none, nothing
+                                    or after this, are freed at this step)
 ~~~
 
 The step's own device work (a codec's ``encode_slots_`` in attention's KV write, a fused GEMM's receipts) is the

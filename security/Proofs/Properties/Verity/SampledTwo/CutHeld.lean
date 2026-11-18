@@ -205,7 +205,7 @@ theorem interiorHeld_of_accepts {s : Verity.Sent} (ha : Accepts s) : InteriorHel
   have hpce := Except.ok.inj h1'
   simp only [Prod.mk.injEq] at hpce
   obtain ⟨rfl, rfl, rfl⟩ := hpce
-  obtain ⟨-, c₂, ξ₂, r, i, _run, hin, -, -, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
+  obtain ⟨c₂, ξ₂, r, i, _run, hin, -, -, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
   obtain ⟨-, -, hrun, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   obtain ⟨held, ts₀, L, hheld, hts₀, hM⟩ := members_trees hrun
   obtain ⟨ls, hls, hl⟩ := linesOf_arr hlines

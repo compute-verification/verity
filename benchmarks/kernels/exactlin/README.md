@@ -70,7 +70,7 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32:
     `CONFIGS` row, with each buffer poisoned first. It covers the statement's edge rows, a CUDA graph's replay, zero
     allocation and `ptx_check`, and also measures where stock vLLM int8's kernels differ from the statement. `gate()`
     is what the benches call first, and `--dump` writes the outputs `replay.py` reads.
-  - `replay.py`: `Int8RowQuant_v1` and `ScaledMmS8_v1`'s replay evaluators on `kgate.py --dump`'s outputs, on the CPU.
+  - `replay.py`: `Int8RowQuant_v1` and `ScaledMmS8_v3`'s replay evaluators on `kgate.py --dump`'s outputs, on the CPU.
 - Kernel-level benches, run by `kbench.sh` (`KSCRIPT` picks the script):
   - `kbench.py`: the exact, stock and fused arms, interleaved rep by rep, each in a CUDA graph over enough weight
     copies to stream from DRAM. `--arms` also takes single kernels.

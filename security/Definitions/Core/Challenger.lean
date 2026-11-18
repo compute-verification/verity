@@ -17,8 +17,11 @@ verifier reads coins only from a challenger's log, and uses no randomness of its
 * `Log.RecordedBefore l r i`, `Log.ReleasedBefore l c i`: the log records commitment `r`, or releases coin `c`, before
   its coin `i`. Coins are counted in the one order the log releases them, whatever their families, so the order between
   families is the log's;
-* `Log.Cut l fixed coins`: the cut, every commitment `fixed` picks out recorded before every coin `coins` picks out,
-  whichever scheme commits or draws it;
+* `Log.Cut l fixed coins`: the cut, every recorded commitment `fixed` picks out recorded before every coin `coins`
+  picks out, whichever scheme commits or draws it;
+* `Log.KeyedBySlot l member fam root`: member `s` of family `λ` is released after slot `s`'s root is recorded, once;
+* `Log.RecordsInOrder l root`, `Log.JoinsAt l root j`: the roots `root t` recorded in the order of `t`, and the coin
+  `j t` each joins at, which then never decreases in `t` (`Proofs.Core.Challenger`);
 * `Family`: a family of coins, a label and a count, its coins `(label, j)` for `j < count` (`Family.Holds`);
 * `DerivedBefore log v i`: a value derived from the log's prefix, a function of the log before coin `i` on every run.
 
@@ -81,11 +84,26 @@ def RecordedBefore (l : Log R C) (r : R) (i : Nat) : Prop :=
 def ReleasedBefore (l : Log R C) (c : C) (i : Nat) : Prop :=
   Entry.released c ∈ l.before i
 
-/-- **The cut**: every commitment `fixed` picks out is recorded before every coin `coins` picks out, whichever scheme
-commits or draws it. Every credited payload committed before every credited key is drawn is the cut at the credited
-payloads and the credited keys' coins. -/
+/-- **The cut**: every commitment `fixed` picks out that the log records is recorded before every coin `coins` picks
+out, whichever scheme commits or draws it. Every credited payload committed before every credited key is drawn is the
+cut at the credited payloads and the credited keys' coins. -/
 def Cut (l : Log R C) (fixed : R → Prop) (coins : Nat → Prop) : Prop :=
-  ∀ i, coins i → ∀ r, fixed r → l.RecordedBefore r i
+  ∀ i, coins i → ∀ r, fixed r → Entry.recorded r ∈ l → l.RecordedBefore r i
+
+/-- **Coins keyed by slot**: the log's coin `i` is member `(member i).2` of family `(member i).1`; every member `s` of
+family `fam` is released after the log records slot `s`'s root `root s`, and the log releases member `s` once. -/
+def KeyedBySlot {Λ : Type} (l : Log R C) (member : Nat → Λ × Nat) (fam : Λ) (root : Nat → R) : Prop :=
+  (∀ i, (member i).1 = fam → l.RecordedBefore (root (member i).2) i) ∧
+    ∀ i j, i < l.coins.length → j < l.coins.length → (member i).1 = fam → member i = member j → i = j
+
+/-- **Recorded in order**: the log records `root t` before every coin it records `root t'` before, for `t ≤ t'`. -/
+def RecordsInOrder (l : Log R C) (root : Nat → R) : Prop :=
+  ∀ t t', t ≤ t' → ∀ i, l.RecordedBefore (root t') i → l.RecordedBefore (root t) i
+
+/-- **The coin each root joins at**: `j t` is the first coin the log releases after recording `root t`, the number of
+coins released before it is recorded. -/
+def JoinsAt (l : Log R C) (root : Nat → R) (j : Nat → Nat) : Prop :=
+  ∀ t i, l.RecordedBefore (root t) i ↔ j t ≤ i
 
 end Log
 

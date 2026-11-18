@@ -427,7 +427,7 @@ class Recording:
 def _trees(dev):
     import torch
     s, cpu = pouw_schemes.get(OA.SERVED), torch.device("cpu")
-    const = PPDR._constants(s, cpu, SALT_KEY)
+    const = PPDR._constants(cpu)
     run = SimpleNamespace(kernel=SimpleNamespace(run=OA.kernels(), dev=dev), variant=s.device.name, const=const,
                           const_keys=PPDR._constant_keys(const), device=cpu, salt=SALT, salt_key=SALT_KEY, cur=None)
     return SYD.DeviceTrees(run)
@@ -471,7 +471,12 @@ def test_the_torch_call_probe_sees_torch_s_python_and_c_calls():
     assert _torch_calls(lambda: t.data_ptr()) and _torch_calls(lambda: torch.zeros(1)) and not _torch_calls(lambda: len([t]))
 
 
+#: why a y tree's test is expected to stop: the served call's supplier of y's salts is not written
+Y_SALTS = "compute-accounting's goal: Pearl+ hands the leaf kernels their salts (DeviceTrees.salts, and commit_y over them)"
+
+
 @pytest.mark.slow
+@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason=Y_SALTS)
 @pytest.mark.parametrize("m, n", Y_SHAPES)
 def test_the_arm_s_y_tree_is_commit_rows_s_on_the_host_twin(twin_trees, m, n):
     """The arm's y commitment, `_YTree`'s launches from its buffers made beforehand over y's BF16 rows, writes
@@ -490,6 +495,7 @@ def test_the_arm_s_y_tree_is_commit_rows_s_on_the_host_twin(twin_trees, m, n):
     assert dev.launched[at:].count("widen_a") == -(-m // SY.chunk_rows(m, n))
 
 
+@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason=Y_SALTS)
 def test_a_y_tree_whose_rows_were_never_widened_is_not_commit_y_s(host):
     """The control on the widening: the same launches with widen_a writing nothing leave the digests over the poison the
     words buffer held, and the tree is not `commit_y`'s."""
@@ -510,11 +516,15 @@ def test_a_y_tree_whose_rows_were_never_widened_is_not_commit_y_s(host):
 def test_the_arm_s_y_launches_are_the_served_call_s_from_its_own_buffers(m, n):
     """On a recording stand-in, the arm's y launches are the served `DeviceTrees`'s for the same y, the same kernels with
     the same ints, but for its widen_a launches: one a chunk, from y's rows into the words buffer its row digests read
-    next; every pointer is into a buffer made before the launch, and the launch allocates nothing and calls no torch."""
+    next; its leaves read the salts `DeviceTrees.salts` gave for the call's rows; every pointer is into a buffer made before the launch, and the launch allocates nothing and calls no torch."""
     import torch
     dev = Recording()
     trees = _trees(dev)
     trees.pipes[n] = trees._pipe(n)
+    with pytest.raises(NotImplementedError, match="fresh 192-byte hm96 salts"):
+        OA._YTree(trees, m, n, OA.INDEX)
+    salts = torch.zeros(192 * m, dtype=torch.uint8)
+    trees.salts = lambda rows, call: salts.data_ptr() if (rows, call) == (m, OA.INDEX) else 0
     yt = OA._YTree(trees, m, n, OA.INDEX)
     y = torch.zeros((m, n), dtype=torch.bfloat16)
     allocs, ptr, dev.log = dev.allocs, y.data_ptr(), []
@@ -529,7 +539,8 @@ def test_the_arm_s_y_launches_are_the_served_call_s_from_its_own_buffers(m, n):
     assert [(p, i) for _, p, i in widens] == [((ptr + 2 * n * r, 0, words), (min(rows, m - r), n, min(rows, m - r)))
                                               for r in range(0, m, rows)]
     assert all(arm[j + 1][1][0] == words for j, _, _ in widens)
-    spans = [(ptr, 2 * m * n)] + [(t.data_ptr(), t.numel()) for t in [*yt.bufs, trees.dom, trees.run.const]]
+    assert [p[2] for name, p, _ in arm if name == "hm_leaves"] == [salts.data_ptr()]
+    spans = [(ptr, 2 * m * n)] + [(t.data_ptr(), t.numel()) for t in [*yt.bufs, trees.dom, trees.run.const, salts]]
     held = set(trees.pipes[n].b.values())
     for name, p, _ in arm:
         for q in p:
@@ -540,6 +551,7 @@ def test_a_cubin_without_the_wide_row_digests_is_refused_where_y_s_rows_need_the
     """y's rows past 128 segments (gate_up's 57,344 words, the LM head's 128,256) take the wide row-digest kernels: on a
     cubin that lacks them the call is refused at prepare, naming them, and narrower widths still commit y."""
     trees = _trees(Recording(wide=False))
+    trees.salts = lambda rows, call: 1 << 20
     trees.pipes[8192] = trees._pipe(8192)
     assert OA._YTree(trees, 16, 8192, OA.INDEX).tree.numel()
     for n in (57344, 128256):

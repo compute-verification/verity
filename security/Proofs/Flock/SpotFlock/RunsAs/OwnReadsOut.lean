@@ -127,8 +127,8 @@ theorem statementReads_reads (l : List Json) : ReadsOf l (Spot.SecondStage.state
 `(v, r)` the verifiers report either has a root that prints as null (a value reported under two roots is
 reported so), or is the value and root of a registered read `e`, at a port `port`, of one of the statements, which
 `SecondStage.readOk` passed against its template's part. -/
-theorem reported_stated {allow : Bool} {own : Spot.SecondStage.Own} {ss : Array Json}
-    (h : (Spot.SecondStage.check allow own (some ss)).codes = #[]) {v : String} {r : Json}
+theorem reported_stated {own : Spot.SecondStage.Own} {ss : Array Json}
+    (h : (Spot.SecondStage.check own (some ss)).codes = #[]) {v : String} {r : Json}
     (hv : (v, r) ∈ own.reported.getD #[]) :
     Spot.jeq r .null = true ∨
       ∃ ps, own.parts = some ps ∧ ∃ k < ss.size, ∃ s p port e,
@@ -260,7 +260,7 @@ the check with the form allowed reports no code at an `Own` whose interior recor
 is `i`'s, and one of its statements states a registered read `e` of the value `v` at the root `r`, at a port `port`
 of its template's part `p`, which `SecondStage.readOk` passed. -/
 def HeldRead (i : Spot.Run.Input) (it : Spot.Run.Interior) (v : String) (r : Json) : Prop :=
-  ∃ own ss ps, it.statements = some ss ∧ (Spot.SecondStage.check true own (some ss)).codes = #[] ∧
+  ∃ own ss ps, it.statements = some ss ∧ (Spot.SecondStage.check own (some ss)).codes = #[] ∧
     own.interior = it.record ∧ own.boundary = i.record ∧ own.parts = some ps ∧
     ∃ k < ss.size, ∃ s p port e, Spot.SecondStage.Stmt.ofJson? (ss.toList.getD k .null) = some s ∧
       ps.find? (·.template == s.template) = some p ∧

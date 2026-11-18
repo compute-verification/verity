@@ -13,7 +13,7 @@ the read finder's SHA-512 collision plus the forger's forgery of the challenger'
 
 * **The case** (`caseOf`): the sampled component's parameters, registration and evidence in what the prover sent, each
   read by the two-stage form's decoders (`VStar.Recursive.SampledTwo.paramsOfJson`, `evidenceOf`).
-* **What the form accepts** (`Accepts`): the form's check with its switch on (`checkBlobsAtWith true`) at the first
+* **What the form accepts** (`Accepts`): the form's check with its switch on (`checkBlobsAtInner true`) at the first
   stage's bytes the evidence carries. The form's check refuses while `FORM` is off (`checkBlobsAt_refuses`), so a cut
   at the check itself would hold because the check accepts nothing.
 * **The two sessions** (`records`): the play has two challenger sessions, the first stage's (the boundary
@@ -83,11 +83,11 @@ def caseOf (s : Verity.Sent) : Flock.V (VStar.Recursive.SampledTwo.Params × Spo
   let ce ← caseIn s
   pure (p, ce.1, ce.2)
 
-/-- **The form accepts, with its switch on**: the form's check at the switch on (`checkBlobsAtWith true`) accepts the
+/-- **The form accepts, with its switch on**: the form's check at the switch on (`checkBlobsAtInner true`) accepts the
 case at the first stage's bytes the evidence carries, as `Reading.AcceptsOn` reads a case. -/
 def Accepts (s : Verity.Sent) : Prop :=
   ∃ p c e pub prof, caseOf s = .ok (p, c, e) ∧
-    VStar.Recursive.SampledTwo.checkBlobsAtWith true p c e.source e (_root_.Core.Blobs.ofArray s.blobs) =
+    VStar.Recursive.SampledTwo.checkBlobsAtInner p c e.source e (_root_.Core.Blobs.ofArray s.blobs) =
       .accept pub prof
 
 /-! ## The two sessions -/
