@@ -6,7 +6,7 @@ id = "llama32-1b-flock-steady-small-h200"
 workload = "llama32-1b"
 card = "h200"
 cores = 10
-sessions = 24
+sessions = 120
 ahead = 2
 driver = "595.91.07"
 cuda_toolkit = "13.3.73"
@@ -25,6 +25,7 @@ n = 4096
 pin = "cddc228960b50d110d33b7d34cc6e124c8e66e09f1c6af04dd531de7c498a247cfff5ed22660dcc5d85f232ed1de77341de2d4cd1e6405543c3aeb52315ef5ca"
 provers = [1]
 warm = 3
+period = 2
 
 [[row]]
 type = 'census:ScaledMmS8Coordinate_v1{K=8192,DOT={"fn":"BlackwellS8ImmaDot32_v1"}}'
@@ -32,6 +33,7 @@ n = 2048
 pin = "6d64749a9fb3732f3320b6146b987dc33c66ceab45f12d45c526f7a773484975ccd2377d4fd1e2ca65e39e1db055f9b324a03773ceeb4c6e8834e74db9bd323b"
 provers = [1]
 warm = 3
+period = 2
 
 [[row]]
 type = 'census:Gemm_v2{K=2048,N=1,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
@@ -39,6 +41,7 @@ n = 2048
 pin = "1a68fdf783308c6299b9429345a3004495b5107440086f0f6b767a1941ae92eca867e37c64df830ba1ad52253ade56e1ca5c8f6658fad8d8d21f4c9cf23d79b3"
 provers = [1]
 warm = 3
+period = 2
 
 [[row]]
 type = 'census:RMSNormFusedCuda_v2{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}'
@@ -46,6 +49,7 @@ n = 1
 pin = "dee3186875c7d2ac20137f6369399646bc2b90e9e63b497d71bbfa00cbc01b1801608f23684a69975f370385ccaf53f152bdad9837c4b962a5bc2c1ddce6d7d6"
 provers = [1]
 warm = 3
+period = 2
 
 [[row]]
 type = 'census:Int8RowQuant_v1{K=8192}'
@@ -53,6 +57,7 @@ n = 1
 pin = "7ab902cca387bb8a3f2beaa3728e2b773fce47744138ecec3787544eb8d9214e6dcd7907332d7d73a0d9f7c3c6effdfb853bd1b601c2caeb7896b8053c99d011"
 provers = [1]
 warm = 3
+period = 2
 
 [[row]]
 type = 'census:Int8RowQuant_v1{K=2048}'
@@ -60,6 +65,7 @@ n = 2048
 pin = "43178ddf1d4ae1c4c6b1bd41b322fbfed25aac95b4b12caec344671dbfb1d4a9a2e822754e85fa6d4f39e83c04286965b1c1f9a6589abb6802e44c76a94b79ae"
 provers = [1]
 warm = 3
+period = 2
 
 [[row]]
 type = 'census:SiluMul_v2{I=8192}'
@@ -67,6 +73,7 @@ n = 1
 pin = "76a0b64772d8b557523180a4e079de6d1004dca457f7809b7b0a64f037be10e4ec5c6c4ed4e2e6e664ca3b015770b86574359919766fde624aea34eb5079591a"
 provers = [1]
 warm = 3
+period = 2
 
 [[row]]
 type = 'census:RoPE_v1{NHEADS=32,D=64}'
@@ -74,6 +81,7 @@ n = 2048
 pin = "6e8c6a86b2cae93f9430bb6cd995c93ee43ea6da524f01415513f9cf36886ec0763a87522a9bd6040d9621e3557746889b41c22df4a994f57f6ae645dbcc5608"
 provers = [1]
 warm = 3
+period = 2
 
 [[row]]
 type = 'census:RoPE_v1{NHEADS=8,D=64}'
@@ -81,6 +89,7 @@ n = 4096
 pin = "b2ed13fcf63247e9f9b7c2867999aef0be141defd29a1ba8a8e406f32687d93cb0394a59329128ba945a527639bc02247abc20859171a3a6bb11d6f54122e0dc"
 provers = [1]
 warm = 3
+period = 2
 
 [[row]]
 type = 'census:RMSNormTriton_v5{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}'
@@ -88,3 +97,4 @@ n = 1
 pin = "b3587c68feb28795d22bc55e3097368179489974b791dbf2bcc6bb129271310cce38173933253197b2a9607ce420758fc8c0a76b25a814d62cd501d4131ca68b"
 provers = [1]
 warm = 3
+period = 2
