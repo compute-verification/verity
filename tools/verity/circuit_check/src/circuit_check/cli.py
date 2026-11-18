@@ -118,10 +118,12 @@ def _where_time_went(r: dict) -> str:
     return f"{r['seconds']:.1f}s" + (": " + ", ".join(f"{k} {v:.1f}" for k, v in by) if by else "")
 
 
-def _status(r: dict) -> str:
-    """A target's word in its log line: ``FAIL`` on a failure, else ``unchecked`` while it has a warning (a property no check
+def _status(r: dict, holds: dict[str, tuple[str, str]] | None = None) -> str:
+    """A target's word in its log line: ``FAIL`` on a failure the verdict counts (`checks.counted`), else ``held`` when
+    ``holds`` (`block_held.held`) holds it past the block, else ``unchecked`` while it has a warning (a property no check
     held it to), else ``ok``."""
-    return "FAIL     " if r["failures"] else "unchecked" if r["warnings"] else "ok       "
+    failures, held = CK.counted(r, holds or {})
+    return "FAIL     " if failures else "held     " if held is not None else "unchecked" if r["warnings"] else "ok       "
 
 
 def _errored(r: dict) -> bool:
@@ -1077,6 +1079,18 @@ def progress_row(r: dict, holds: dict[str, tuple[str, str]]) -> dict:
             **({"held": held} if held is not None else {}), **({"killed": True} if r.get("killed") else {})}
 
 
+def target_line(r: dict, holds: dict[str, tuple[str, str]]) -> str:
+    """Target ``r``'s line in the log: its word (`_status`), and its ``failures`` those the verdict counts (`checks.counted`)."""
+    across = (r.get("partition") or {}).get("recomputed_across")
+    qc = (r.get("partition") or {}).get("q_call") or {}
+    call = (f" q_call={qc['units']}u/{qc['committed_bits']}b" if "units" in qc else
+            f" q_call=refused:{qc['inapplicable'].get('why')}" if "inapplicable" in qc else "")
+    if r.get("mode") == BC.CHECK:
+        call += f" by-calls: {len((r.get('by_calls') or {}).get('callees', []))} callees, not lowered whole"
+    return (f"{_status(r, holds)} {r['kind']:10s} {r['target'][:90]}  failures={CK.counted(r, holds)[0]} "
+            f"unchecked={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({_where_time_went(r)})")
+
+
 def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, log, jobs: int,
                  cache: Path | None, mem_gb: int | None, progress: Path | None, isolated: bool, tracing: bool,
                  zygote: list[Zygote] | None, mem_file: Path | None = None, keys: list[dict] | None = None,
@@ -1087,7 +1101,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
     out: list[dict | None] = [None] * len(tasks)
     keys = keys if keys is not None else []
     stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
-    holds = BH.held() if progress is not None else {}
+    holds = BH.held() if progress is not None or log else {}
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
         out[i] = r
@@ -1106,14 +1120,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
                 elif len(CC.LOST) == lost:
                     stats["changed"].append(r["target"])
         if log:
-            across = (r.get("partition") or {}).get("recomputed_across")
-            qc = (r.get("partition") or {}).get("q_call") or {}
-            call = (f" q_call={qc['units']}u/{qc['committed_bits']}b" if "units" in qc else
-                    f" q_call=refused:{qc['inapplicable'].get('why')}" if "inapplicable" in qc else "")
-            if r.get("mode") == BC.CHECK:
-                call += f" by-calls: {len((r.get('by_calls') or {}).get('callees', []))} callees, not lowered whole"
-            log(f"{_status(r)} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
-                f"unchecked={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({_where_time_went(r)})")
+            log(target_line(r, holds))
 
     todo = list(range(len(tasks))) if only is None else list(only)
     if tracing:
@@ -1123,7 +1130,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
                 out[i] = {**hit[0], "cache": {"hit": hit[1]}}
                 stats["hits"] += 1
                 if log and not everything:
-                    log(f"{_status(hit[0])} {tasks[i][0]:10s} {tasks[i][1][:90]}  reused: every input "
+                    log(f"{_status(hit[0], holds)} {tasks[i][0]:10s} {tasks[i][1][:90]}  reused: every input "
                         f"its check read is unchanged (it took {hit[0].get('seconds', 0):.1f}s)")
             else:
                 todo.append(i)

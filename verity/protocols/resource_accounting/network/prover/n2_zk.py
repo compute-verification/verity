@@ -78,7 +78,7 @@ from verity.protocols.resource_accounting.network.verifier.certificate import Ce
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync
 from verity.protocols.resource_accounting.network.verifier.service import TransferBlocks
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R, partition as P
 from verity.ports import free_port
 
 ENDS = ("egress", "ingress")
@@ -398,6 +398,15 @@ def _certificate(c) -> dict:
     return {k: (v.hex() if isinstance(v, bytes) else getattr(v, "code", v)) for k, v in asdict(c).items()}
 
 
+def registration(lw: TransferBlocks, opening: SVC.Hidden, previous: str | None = None) -> dict:
+    """One-stage's record of the execution phase: its salted root and nothing of the attestations. `previous`: the
+    digest of the stream's previous registration."""
+    w = opening.window
+    roots = [{"port": SVC.VALUE, "root": lw.root(opening), **lw.ports(w)[SVC.VALUE]}]
+    return R.record(lw._program, lw.query, {"law": "subset", "k": 1}, S.SCHEME, roots, lw.provenance(w),
+                    previous=previous)
+
+
 def other_subset(sampled: dict) -> list[int]:
     """A K-subset of the period's windows that isn't the sample's: the first K the sample didn't hold, then sampled ones
     from the start where it left fewer than K (none other at K = n)."""
@@ -448,7 +457,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     previous, rows = None, []
     for j, x in enumerate(windows):
         wdir, pre = out / f"w{x.window:03d}", f"w{x.window:03d}-"
-        reg = lw.register(stream, lw.registration(x.opening, previous), sampled)
+        reg = lw.register(stream, registration(lw, x.opening, previous), sampled)
         previous = reg.digest
         if reg.record["roots"][0]["root"] != x.root.hex():
             raise SystemExit(f"{name} window {x.window}: the registered root is not the statement's")
