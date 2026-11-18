@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 
 CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+ARCHITECTURE_FILES = CARD_FILES.parent / "architectures"
 
 #: what `bench.py`, `characterize.py`, `native.py` and the tests read
 __all__ = ["IdentityError", "check", "check_card", "expected_for", "parse_server_md", "resolve_gpu", "uuid_string"]
@@ -86,30 +87,33 @@ def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_
             "cuda_visible_devices": cvd, "cuda_device_order": env["CUDA_DEVICE_ORDER"]}
 
 
-#: what the card must be (the pods' bootstrap check), by its name within the device's: its compute capability, its card
-#: file (calibration/hardware/cards/), whose `sm.count` is the SMs it must have, its oldest driver and its build target. An RTX PRO
-#: 6000 Blackwell, sm_120, driver 575 or later; or an H200 (`verity bench overhead`'s card), sm_90, driver 550 or later
-CARDS = {"RTX PRO 6000": ("12.0", "rtx-pro-6000-server", 575, "sm_120a"),
-         "H200": ("9.0", "h200-sxm-141gb", 550, "sm_90a")}
+def _version(text: str) -> tuple[int, ...] | None:
+    parts = text.strip().split(".")
+    return tuple(map(int, parts)) if all(p.isdecimal() for p in parts) else None
 
 
 def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
-    known = next((c for c in CARDS if c in name), None)
-    if known is None:
-        raise IdentityError(f"not the card: name {name!r} is none of {', '.join(map(repr, CARDS))}")
-    from verity.device import load_card, number  # here: loading the harness needs the standard library alone
+    """What the card must be (the pods' bootstrap check): the one card file (calibration/hardware/cards/) whose `driver`
+    holds `name`, the device's name, exactly; the SMs its `sm.count` states; and its `arch`'s architecture file
+    (calibration/hardware/architectures/): that file's compute capability, and a driver no older than the oldest its
+    toolkit gates require."""
+    from verity.device import card_for_driver, load_architecture, number  # here: loading the harness needs the standard library alone
 
-    want_capability, sku, min_driver, arch = CARDS[known]
-    want_sms = int(number(load_card(sku, directory=CARD_FILES)["sm"]["count"]))
+    try:
+        card = card_for_driver(name, directory=CARD_FILES)
+    except KeyError as e:
+        raise IdentityError(f"not the card: {e.args[0]}") from None
+    arch = load_architecture(card["arch"], directory=ARCHITECTURE_FILES)
+    want_sms = int(number(card["sm"]["count"]))
+    min_driver = min((g["driver_min"] for g in arch["toolkit"]), key=_version)
     problems = []
-    if capability != want_capability:
-        problems.append(f"compute capability {capability}, not {want_capability}")
+    if capability != arch["capability"]:
+        problems.append(f"compute capability {capability}, not {arch['capability']} ({card['arch']})")
     if sms != want_sms:
         problems.append(f"{sms} SMs, not {want_sms}")
-    head = driver.split(".")[0]
-    major = int(head) if head.isdecimal() else -1
-    if major < min_driver:
-        problems.append(f"driver {driver!r}, need {min_driver} or later")
+    have = _version(driver)
+    if have is None or have < _version(min_driver):
+        problems.append(f"driver {driver!r}, need {min_driver} or later ({card['arch']})")
     if problems:
         raise IdentityError("not the card: " + "; ".join(problems))
-    return {"name": name, "capability": capability, "sms": sms, "driver": driver, "arch": arch}
+    return {"name": name, "capability": capability, "sms": sms, "driver": driver, "arch": card["arch"]}

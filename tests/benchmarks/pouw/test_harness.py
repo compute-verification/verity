@@ -715,10 +715,28 @@ def test_the_card_must_be_an_rtx_pro_6000_sm120_with_188_sms_or_an_h200_sm90_wit
     assert I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")["arch"] == "sm_120a"
     assert I.check_card("NVIDIA H200", "9.0", 132, "570.133.20")["arch"] == "sm_90a"
     for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86"),
-                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "9.0", 132, "570.1"),
+                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H200", "10.0", 132, "570.1"),
+                ("NVIDIA H200", "9.0", 132, "525.60.12"),
                 ("NVIDIA H200", "9.0", 132, "unknown"), ("NVIDIA H200", "9.0", 132, "")):
         with pytest.raises(I.IdentityError, match="not the card"):
             I.check_card(*bad)
+
+
+def test_the_h100_is_its_card_files_sm90a_with_132_sms_and_its_gates_oldest_driver():
+    assert I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "580.173.02")["arch"] == "sm_90a"
+    assert I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "525.60.13")["arch"] == "sm_90a"
+    with pytest.raises(I.IdentityError, match=r"driver '525\.60\.12', need 525\.60\.13 or later \(sm_90a\)"):
+        I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "525.60.12")
+    with pytest.raises(I.IdentityError, match=r"compute capability 12\.0, not 9\.0 \(sm_90a\)"):
+        I.check_card("NVIDIA H100 80GB HBM3", "12.0", 132, "580.173.02")
+    with pytest.raises(I.IdentityError, match="114 SMs, not 132"):
+        I.check_card("NVIDIA H100 80GB HBM3", "9.0", 114, "580.173.02")
+
+
+def test_a_name_no_card_file_holds_is_refused_by_that_name():
+    for name in ("NVIDIA H100 PCIe", "NVIDIA RTX PRO 6000", "H200", ""):
+        with pytest.raises(I.IdentityError, match=f"not the card: 0 card records under .* have {re.escape(repr(name))}"):
+            I.check_card(name, "9.0", 132, "580.173.02")
 
 
 # ---- operands, shapes, sets -----------------------------------------------------------------------------------------------------
