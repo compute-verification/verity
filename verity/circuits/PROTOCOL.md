@@ -257,7 +257,7 @@ node 12 is `{"concat": [{"alias": [11, 0]}, ...]}`.
 Writers fill `callees` and `types` in first-seen order of a post-order walk from the root. A composite first visits its nodes'
 callees, in node order, then the functions its binding record names, in record order. It is then encoded, adding per node
 its callee, each argument's type and its output type. A primitive adds nothing when visited. The walk then visits the
-functions `program_fn`'s record names. Writers' tables hold distinct entries, types compared by canonical JSON. Readers accept
+functions `program_fn`'s record names, then the Boolean map's bodies in key order (§4.9). Writers' tables hold distinct entries, types compared by canonical JSON. Readers accept
 any tables whose entries are valid; the order matters only to reproduce a writer's bytes.
 
 `decode_program` refuses, with `ValueError` (`KeyError` for an id without a definition, or a primitive the registry does not
@@ -341,13 +341,22 @@ names one body: the map is part of the program digest (§1), and no reader looks
 "boolean": {"AmpereBF16TcDot16_v2": "AmpereBF16TcDot16_v3", "F2fpBf16_v1": "F2fpBf16_v2", ...}
 ~~~
 
-The map's keys are exactly the word primitives among `definitions`; each value is the key of a Boolean Definition (§9: every
-primitive it reaches a gate, a constant bit or a 1-bit input) whose signature is its word's with each `Value<w>` an
-`Array<w, Value<1>>` (`Value<1>` stays a bit). `decode_program` refuses:
+By id, with no registry: the gates are `And<n>_v1` and `Xor<n>_v1` for n ≥ 2 (`^(And|Xor)([2-9]|[1-9][0-9]+)_v1$`) and
+`Not_v1`, the constant bits `Const1[0x0]_v1` and `Const1[0x1]_v1`, and the 1-bit inputs `Input1_v1` and `RegisteredInput1_v1`;
+every other primitive that is no input (§5.2) is a word primitive.
 
-- `E_BODY_KEY`: `boolean` is not an object of strings, or it names an id that is no word primitive among `definitions`;
+The map's keys are exactly the word primitives among `definitions`; each value is the key of a Boolean Definition (§9: every
+leaf of its signature one bit wide, and every primitive it reaches a gate, a constant bit or a 1-bit input) whose signature is
+its word's with each `Value<w>` an `Array<w, Value<1>>` (`Value<1>` stays a bit). `decode_program` refuses, in this order:
+
+- `E_BODY_KEY`: `boolean` is not an object of strings;
 - `E_BODY_MISSING`: a word primitive among `definitions` has no entry;
-- `E_BODY_NOT_BOOLEAN`: an entry names no definition, or one that is not Boolean or not of its word's bit signature.
+- `E_BODY_KEY`: it names an id that is no word primitive among `definitions`;
+- `E_BODY_NOT_BOOLEAN`: taking the keys in order, an entry names no definition, or one that is not Boolean or not of its
+  word's bit signature.
+
+A writer walks the bodies last (§4.6), after the root and `program_fn`'s functions, in key order, so what only they call
+enters `callees` and `types` after the rest. A key named twice keeps its last value, in either parser.
 
 A writer takes the map from the Program (`program.Program.boolean`), computed once at its build by the lookup the catalog
 registers (`program.register_boolean_bodies`); a Program with a word primitive that has no Boolean Definition, or several, is
