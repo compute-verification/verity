@@ -47,6 +47,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
@@ -106,12 +107,14 @@ def digest(case: Mapping[str, Any]) -> str:
     return hashlib.sha512(bytes.fromhex(case["commitment"])).hexdigest()
 
 
-def _check(protocol: str) -> Callable[..., dict[str, Any]]:
-    """The verifier of record (`Scheme.check`) of the declared scheme whose protocol is ``protocol``."""
-    for scheme in registry.load().values():
-        if scheme.protocol == protocol:
+def _check(verifier: ModuleType) -> Callable[..., dict[str, Any]]:
+    """The verifier of record (`Scheme.check`) of the scheme declared in ``verifier``'s own protocol package whose
+    protocol is ``verifier``'s ``PROTOCOL``; only that package's declarations are loaded."""
+    package = verifier.__name__.rsplit(".verifier.", 1)[0] + "."
+    for name, module in registry.DECLARATIONS.items():
+        if module.startswith(package) and (scheme := registry.get(name)).protocol == verifier.PROTOCOL:
             return S.declared(scheme, "check")
-    raise Refused(f"no declared scheme's protocol is {protocol}")
+    raise Refused(f"no scheme declared in {package[:-1]} has the protocol {verifier.PROTOCOL}")
 
 
 def pous_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
@@ -126,7 +129,7 @@ def pous_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = m
         inputs = period.setup_inputs(ev["setup"])
     except (KeyError, TypeError, ValueError) as e:
         raise Refused(f"the PoUS case doesn't decode: {type(e).__name__}: {e}") from None
-    return _check(period.PROTOCOL)(point, schemes, trusted, published, digests, session, sid, protocol,
+    return _check(period)(point, schemes, trusted, published, digests, session, sid, protocol,
                                    setup_inputs=inputs)
 
 
@@ -147,7 +150,7 @@ def wipe_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = m
     _need(egress is None or type(egress) is int, "the wipe's evidence gives its egress as null or an integer of MiB")
     _need(wipe_period.case(server, session, trusted, c, signed, egress) == dict(case),
           "the wipe's case is not the one its decoded commitment, session, egress and params make")
-    return _check(wipe_period.PROTOCOL)(server, session, trusted, c, signed, schemes, protocol, egress_mib=egress)
+    return _check(wipe_period)(server, session, trusted, c, signed, schemes, protocol, egress_mib=egress)
 
 
 def judged(case: Mapping[str, Any], answer: dict[str, Any], exe: str | os.PathLike | None) -> dict[str, Any]:
