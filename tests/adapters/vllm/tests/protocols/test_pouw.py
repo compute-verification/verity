@@ -140,7 +140,7 @@ def test_pearl_c_sm120_refuses_linears_outside_the_kernels():
                                       ({"settings": {"pouw": {"salt": "x"}}}, "unknown pouw settings"),
                                       ({"settings": {"pouw": {"weight_operands": "resident"}}}, "unknown pouw settings")])
 def test_a_run_the_adapter_cannot_serve_is_refused(kw, match):
-    assert any(match in r for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", **kw)))
+    assert any(match in r for r in PO.refusals(_serve("pouw:ncp-v1", **kw)))
 
 
 def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_spot():

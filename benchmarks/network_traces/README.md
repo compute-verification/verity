@@ -33,11 +33,11 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   checked under and then each registration it held, and `cost`, which measures a close); `network_attester_chain.py` is
   the chain's reads of a relay run, and network attestation's `prover/network_attester_zk.py` reads the relay's bucket rows
   in the proof system.
-- **Proofs in zero knowledge.** Each driver, in network attestation's `prover/` but for `compile_slice_zk.py` here, proves its
+- **Proofs in zero knowledge.** Each driver, in network attestation's `prover/`, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
   `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of record), `n2_tie_zk.py`
   (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
-  scan's answers held by `NetworkCheck.Period`) and `compile_slice_zk.py` (the compile slice). `leak_scan.py`, in
+  scan's answers held by `NetworkCheck.Period`). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with
   the vLLM adapter's `verity_vllm.pipeline.window_chain` (a served endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network
