@@ -24,8 +24,7 @@ weights (`at_commit`), and after its warm-ups, so every ``apply`` an executor se
 **Refused** (`refusals`): an unknown protocol; a scheme its package does not register, or an adapter not on this tree;
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
 not wired); two executors at one site; beside SPOT, an executor whose protocol package has no circuit for its
-scheme (`circuit_registry`, `traced_as`: every PoUW scheme but ``ncp-v2``), unless the window's circuit is cut at its sites (`CUT`,
-below); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (`keeps_weight_copy`); and
+scheme (`circuit_registry`, `traced_as`: every PoUW scheme but ``ncp-v2``); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (`keeps_weight_copy`); and
 whatever an adapter refuses for its context (SPOT outside the Commit stage, for one).
 
 **Weights of record.**  An option that releases weights from the model (POUS) returns their plaintext from
@@ -42,11 +41,7 @@ protocol package has a circuit for its scheme (``traced_as``).
 **Circuits.**  What SPOT traces an executor's computation as is what its protocol package registers under the
 protocol's name (`scheme.register_circuits`: ``schemes``, those with a circuit, and ``traced_as(scheme, m, k, n)``, the
 circuit of one executed call; PoUW registers ``pouw``).  The selector admits an executor beside SPOT only for a scheme with a circuit, and `traced_as`
-gives the Commit the circuit of each executed call.  An executor with none whose calls commit tables a window's circuit
-can be cut at (`cuts`: Pearl-C's, whose calls commit their A rows and y) is admitted only when the
-SPOT setting ``cut`` (`CUT`) names it: serve-openai's Commit windows under Pearl+ (`serve_pearl`), whose
-window-commit cuts each window's circuit at its linears and reads Pearl+'s tables there (`window_class.PearlTables`).  A
-row's Commit (`commit_context`) replays the row's request Programs, which are never cut, and refuses ``cut``.
+gives the Commit the circuit of each executed call.
 """
 from __future__ import annotations
 
@@ -74,7 +69,7 @@ __all__ = ["RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Opt
            "WeightsView", "at_capture", "at_commit", "capture_context", "commit_context", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
            "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view",
-           "CUT", "circuit_registry", "has_circuit", "traced_as"]
+           "circuit_registry", "has_circuit", "traced_as"]
 
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
@@ -82,8 +77,6 @@ __all__ = ["RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Opt
 #: module boundary, outside every site, and its replay evaluates Definitions, never an executor.  `config.PROTOCOLS`, the
 #: install order, is innermost first at every site.
 SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
-#: the SPOT setting naming the executor whose sites the window's circuit is cut at (`refusals`)
-CUT = "cut"
 RECORD_SCHEMA = PROTOCOL_COMPOSITION_SCHEMA
 
 parse = config.parse_protocols
@@ -227,7 +220,6 @@ def refusals(ctx: Context) -> tuple[str, ...]:
         out.append(f"the protocols config names {stray}, which this run does not enable")
     executors: dict[str, str] = {}
     sampled = ctx.scheme("sampled-proofs") is not None
-    cut, cut_at = ctx.settings_of("sampled-proofs").get(CUT) if sampled else None, None
     for entry, name in zip(ctx.enabled, names):
         scheme = entry.partition(":")[2]
         try:
@@ -250,28 +242,16 @@ def refusals(ctx: Context) -> tuple[str, ...]:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
             executors.setdefault(site, entry)
         if sites and sampled and not has_circuit(entry):
-            if not _asks(mod, "cuts", scheme):
-                out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
-                           f"so SPOT would trace it as the stock computation (refused until the option names one: "
-                           f"traced_as)")
-            elif cut == entry:
-                cut_at = entry
-            else:
-                out.append(f"{entry}: executes {', '.join(sites)}, and no Definition computes what it does there: SPOT "
-                           f"takes it only in a window whose circuit is cut at its sites and reads the tables its calls commit "
-                           f"(window_class.PearlTables), which the sampled-proofs setting '{CUT}' names ({{\"sampled-proofs\": "
-                           f"{{\"{CUT}\": \"{entry}\"}}}})")
+            out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
+                       f"so SPOT would trace it as the stock computation (refused until the option names one: traced_as)")
         if ctx.scheme("pous") is not None and _asks(mod, "keeps_weight_copy", scheme):
             out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
                        f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")
-    if cut is not None and cut != cut_at:
-        out.append(f"the sampled-proofs setting '{CUT}' names {cut!r}, and a window's circuit is cut only at the sites of an "
-                   f"enabled executor with no circuit of its own whose calls commit the tables the cut reads (cuts)")
     return tuple(out)
 
 
 def _asks(mod: ModuleType, question: str, scheme: str) -> bool:
-    """A protocol adapter's answer for ``scheme`` (its ``cuts`` or ``keeps_weight_copy``); False where it has none."""
+    """A protocol adapter's answer for ``scheme`` (its ``keeps_weight_copy``); False where it has none."""
     answer = getattr(mod, question, None)
     return bool(answer(scheme)) if callable(answer) else False
 
@@ -435,18 +415,13 @@ def undeclared(enabled: tuple[str, ...] = ()) -> tuple[str, ...]:
 def commit_context(profile: Any, *, world: int = 1, settings: Any = None, commit_scheme: str | None = None) -> Context | None:
     """The Commit's composition context from its declared target, the one check of a Commit's set (a row runs it before
     any stage).  None when the target declares no protocols (SPOT alone): the Commit runs as it always has, and no adapter
-    is imported.  `Refused` names every refusal, the Commit's own among them: a cut (a row's Commit replays the row's
-    request Programs, which are never cut) and SPOT declared under another scheme than ``commit_scheme``, the
-    committer's (``--commit-scheme``)."""
+    is imported.  `Refused` names every refusal, the Commit's own among them: SPOT declared under another scheme than
+    ``commit_scheme``, the committer's (``--commit-scheme``)."""
     if profile is None or getattr(profile, "protocols", None) is None:
         return None
     ctx = Context(stage="commit", enabled=tuple(profile.protocols), world=int(world),
                   enforce_eager=getattr(profile, "compilation", None) is None, settings=load_settings(settings))
     bad = list(refusals(ctx))
-    if ctx.settings_of("sampled-proofs").get(CUT) is not None:
-        bad.append(f"the sampled-proofs setting '{CUT}': a row's Commit replays the row's request Programs, which are never cut "
-                   f"at an executor's sites; a window's circuit is cut at them in serve-openai's Commit windows (serve_pearl), "
-                   f"whose window-commit reads the executor's tables there")
     declared = ctx.scheme("sampled-proofs")
     if commit_scheme is not None and declared is not None and declared != commit_scheme:
         bad.append(f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "

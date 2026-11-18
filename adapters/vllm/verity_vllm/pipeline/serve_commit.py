@@ -43,7 +43,7 @@ also commits the step rows the window ran
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
 binding, root, count and row width, with the statics and the slice) goes into the window's ``windows.jsonl`` line, beside
 its run root, written at the close and so before sampling over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
-With ``no_slice`` (`NO_TICK_SLICE`, under ``--admit tick``) the record names no slice: its ``slice`` is null and its
+With ``no_slice`` (`NO_TICK_SLICE`, under order ``tick``) the record names no slice: its ``slice`` is null and its
 ``no_slice`` says why. The rows are committed all the same, under the same statics.
 """
 from __future__ import annotations
@@ -75,7 +75,7 @@ from verity_vllm.pipeline.spans import commit_s_of, end_lap, gc_of, phases_of
 #: rows and schedule, charging the window's decisions and each certified arrival's output length. The serve path commits
 #: only the rows v1 and v7 share, ``srv`` (the served rows); the rest of v7's are the prover's.
 SERVED_SLICE = "CompileSlice_v7"
-#: Why a window the certified tick admitted (``--admit tick``) names no slice: its served rows record's ``no_slice``, and
+#: Why a window the certified tick admitted (order ``tick``) names no slice: its served rows record's ``no_slice``, and
 #: ``serve.json``'s ``served_rows_no_slice``.
 NO_TICK_SLICE = (f"no compile slice replays the certified tick's admission: {SERVED_SLICE} replays vLLM's own admission "
                  "from the decisions the advice sends, and under the tick the advice sends none")
@@ -200,7 +200,7 @@ class LiveRequest:
     prompt_ids: list[int]
     ingress: dict[str, Any] = field(default_factory=dict)
     user: str | None = None                      # the body's `user`, the id the advice names the request by
-    release: Any = None                          # (the network attester's run, its place in the release order), under --admit release-order
+    release: Any = None                          # (the network attester's run, its place in the release order), under order release-order
     admitted: int = -1                           # its place in the order requests were added to the engine
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None
@@ -243,7 +243,7 @@ class CommitWindows:
     the committer off the engine and the next one installs it again; one closed off the loop leaves it installed, its view
     detached, for the next window, which opens before the next engine step (`before_step`), so every step the hooks see is
     in an open window and an off-loop window costs no install (`serve_openai.main` closes the committer at the end). ``arm``
-    (`serve_h1.H1Windows`, `serve_pearl.PearlWindows`) opens on each window once its committer is installed and closes first
+    (`serve_h1.H1Windows`) opens on each window once its committer is installed and closes first
     at its close, before the committer comes off or its window is detached, its hooks being on top of the committer's; what
     its ``close`` returns is the window line's ``pouw_h1`` (the arm's ``outcome_key`` where it has one), and when that is a
     `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm with

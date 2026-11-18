@@ -82,13 +82,13 @@ def capture(a) -> int:
     gen = torch.Generator(device=dev).manual_seed(20261023)
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
     kernel = PPD.Kernel.load(str(KERNEL), a.cubin)
-    salt_key = PPD.no_salt_key(a.scheme)
-    roots = PPDR.weight_roots(kernel, weights, a.scheme, salt_key=salt_key)
+    weight_salts = PPDR.fresh_weight_salts(weights)
+    roots = PPDR.weight_roots(kernel, weights, a.scheme, weight_salts=weight_salts)
     coins = BA._Coins(EPOCH)
     opening = coins.open("salt", weights_root(roots))
     (out / "coins.json").write_text(json.dumps(coins.commitment.to_json()) + "\n")
     run = PPDR.PearlCDeviceRun(pouw_schemes.get(a.scheme), f"pouw:{a.scheme}", kernel, weights, roots, coins.commitment, opening,
-                              salt_key=salt_key, schedule=a.schedule, graphs=a.graphs)
+                              weight_salts=weight_salts, schedule=a.schedule, graphs=a.graphs)
     arm = BA.PearlCArm()
     arm.run, arm.weights = run, weights
     log = {"model": a.model, "scheme": a.scheme, "schedule": a.schedule, "graphs": run.graphs, "cubin_sha256": kernel.cubin_sha256, "kernel_source_sha256": kernel.source_sha256,

@@ -2172,12 +2172,33 @@ def test_the_longest_tests_are_read_from_the_newest_kept_passes(tmp_path, monkey
     monkeypatch.setattr(S, "CACHE", tmp_path / "cache")
     d = tmp_path / "cache" / "per-test" / "pkg"
     d.mkdir(parents=True)
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "t").write_text("")
     (d / "a--old.json").write_text(json.dumps({"when": "2026-09-29 10:00", "passed": {"t::a": 90.0, "t::b": 1.0}}))
     (d / "a--new.json").write_text(json.dumps({"when": "2026-09-30 10:00", "passed": {"t::a": 3.0}}))
     (d / "b--one.json").write_text(json.dumps({"when": "2026-09-30 09:00", "passed": {"t::c": 5.0, "t::d": 5.0}}))
     suite = S.Suite("pkg", "pkg", ("pkg",), ())
     assert S.longest(suite, 3) == ["t::c", "t::d", "t::a"]
     assert S.longest(S.Suite("other", "other", ("other",), ()), 3) == []
+
+
+def test_the_longest_tests_leave_out_the_kept_passes_of_a_module_the_tree_no_longer_holds(tmp_path, monkeypatch):
+    import json
+
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "CACHE", tmp_path / "cache")
+    suite = S.Suite("pkg", "pkg", ("pkg",), ())
+    (tmp_path / "pkg" / "tests").mkdir(parents=True)
+    (tmp_path / "pkg" / "tests" / "test_a.py").write_text("")
+    d = S.per_test_dir(suite)
+    d.mkdir(parents=True)
+    (d / "old.json").write_text(json.dumps({"when": "2026-11-01 10:00", "passed": {
+        "tests/tests/test_a.py::t": 900.0, "tests/test_gone.py::t": 800.0}}))
+    (d / "new.json").write_text(json.dumps({"when": "2026-11-15 10:00", "passed": {"tests/test_a.py::t": 600.0}}))
+    got = S.longest(suite, S.HEAVY_CANDIDATES)
+    assert got == ["tests/test_a.py::t"], (
+        f"{got}: a heavy-first name matches no test module of the tree; `longest` reads only the kept passes of the modules "
+        "the tree holds, and a fresh run of the suite (`uv run tools/check/suites.py NAME --fresh`) keeps them again")
 
 
 def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path):
