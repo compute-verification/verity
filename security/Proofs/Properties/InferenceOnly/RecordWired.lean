@@ -168,8 +168,9 @@ private theorem lands_inside {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiri
 input gate, or through a wire on a gate of the writer's unit, which ranks below the row's, or on where a read of
 a leaf of one of the writer's own rows lands. -/
 private theorem lands_rank {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
-    (hO : OwnRows P rs W) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs) {ρ : String × ℤ → ℕ}
-    (hρ : Ranked S ρ) {o a : ℕ} (hl : Lands P rs W S o a) :
+    (hO : OwnRows P rs W) (hSh : ∀ r l g lo hi, SharedLeaf P g → RowLeaf P rs W r l g lo hi →
+      S.writerOf r.tid r.unit r.port r.row = none)
+    (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs) {ρ : String × ℤ → ℕ} (hρ : Ranked S ρ) {o a : ℕ} (hl : Lands P rs W S o a) :
     ∀ (r : Row) (l lo hi : ℕ), RowLeaf P rs W r l o lo hi →
       gateRank P rs ρ a ≤ ρ (r.tid, (r.unit : ℤ)) := by
   induction hl with
@@ -181,8 +182,11 @@ private theorem lands_rank {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring
   | wire o g a hf hl ih =>
     intro r l lo hi hr
     obtain ⟨r₁, l₁, l', lo₁, hi₁, lo', hi', hr₁, hw, -, -⟩ := hf
-    obtain ⟨rfl, -⟩ := hO.2 r l lo hi r₁ l₁ lo₁ hi₁ o hr hr₁
     obtain ⟨wt, wu, out, sc', hwr, h0, hu, hout⟩ := hw
+    obtain ⟨rfl, -⟩ | hs := hO.2 r l lo hi r₁ l₁ lo₁ hi₁ o hr hr₁
+    swap
+    · rw [hSh r₁ l₁ o lo₁ hi₁ hs hr₁] at hwr
+      cases hwr
     have hlt := hρ r wt wu out hwr
     have hwu : ((wu.toNat : ℕ) : ℤ) = wu := Int.toNat_of_nonneg h0
     rcases hR wt wu.toNat sc' out l' g lo' hi' hu hout with ⟨h1, h2⟩ | ⟨r', l'', lo'', hi'', ht, hun, hr'⟩
@@ -203,7 +207,9 @@ gate lies in a unit, the Program's gates that no wire covers are the gates of a 
 gates first, then the least rank of a unit holding the gate, then the gate's index, every gate reads only earlier
 gates. -/
 theorem laysOut_exists (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
-    (hO : OwnRows P rs W) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs) (hOp : OperandsOwn P rs W)
+    (hO : OwnRows P rs W) (hSh : ∀ r l g lo hi, SharedLeaf P g → RowLeaf P rs W r l g lo hi →
+      S.writerOf r.tid r.unit r.port r.row = none)
+    (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs) (hOp : OperandsOwn P rs W)
     (hG : GatesOwn P rs) (ρ : String × ℤ → ℕ) (hρ : Ranked S ρ) :
     ∃ (D : Verity.Circuit) (at_ : Fin D.N → ℕ), LaysOut P rs W S D at_ := by
   classical
@@ -239,7 +245,7 @@ theorem laysOut_exists (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S
         have hle := gateRank_le ρ hu ho1 ho3
         rw [hao]
         omega
-      · have hle := lands_rank hO hR hU hρ hl r l lo hi' hr
+      · have hle := lands_rank hO hSh hR hU hρ hl r l lo hi' hr
         rw [ht, hun] at hle
         omega
   obtain ⟨D, at_, hinj, hon, hD⟩ :=
