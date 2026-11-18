@@ -6556,13 +6556,13 @@
    "Proofs.Pouw.TS.Session": "the named premises and the statement of the proof layer read through its C-Flock sessions read RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Certifier.JointBridge.Guarantees.IntegrityOfIntegrityMonitoringPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityPooled, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Certifier.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlockCarried, its CarriedBlocks, SamplingBlock and CarriedBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
-   "Proofs.Spot.Sampling.Closure": "the sampling layer's audit model, moved from Proofs.Flock.Soundness, which C-Flock's exception covered; C-Flock is excepted until its spec is extracted",
-   "Proofs.Spot.Sampling.HarmBudget": "the sampling layer's audit model, moved from Proofs.Flock.Soundness, which C-Flock's exception covered; C-Flock is excepted until its spec is extracted",
-   "Proofs.Spot.Sampling.HarmBudgetLife": "the sampling layer's audit model, moved from Proofs.Flock.Soundness, which C-Flock's exception covered; C-Flock is excepted until its spec is extracted",
-   "Proofs.Spot.Sampling.Influence": "the sampling layer's audit model, moved from Proofs.Flock.Soundness, which C-Flock's exception covered; C-Flock is excepted until its spec is extracted",
-   "Proofs.Spot.Sampling.OneStage": "the sampling layer's audit model, moved from Proofs.Flock.Soundness, which C-Flock's exception covered; C-Flock is excepted until its spec is extracted",
-   "Proofs.Spot.Sampling.Window": "the sampling layer's audit model, moved from Proofs.Flock.Soundness, which C-Flock's exception covered; C-Flock is excepted until its spec is extracted",
-   "Proofs.Spot.Sampling.Work": "the sampling layer's audit model, moved from Proofs.Flock.Soundness, which C-Flock's exception covered; C-Flock is excepted until its spec is extracted"
+   "Proofs.Spot.Sampling.Closure": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.Closure renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.HarmBudget": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.HarmBudget renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.HarmBudgetLife": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.HarmBudgetLife renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.Influence": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.Influence renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.OneStage": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.OneStage renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.Window": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.Window renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.Work": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.Work renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted"
   }
  },
  "four_names": [
