@@ -2,8 +2,9 @@
 
 The vLLM adapter compiles a served execution phase's advice into its request Programs
 (`adapters/vllm/tools/advice_compile.py`). This benchmark measures what that compiling costs, in wall time and peak
-memory by phase, for GLM-5.3 at TP8 on H200 and one rank's request Programs. Its two numbers are the `long-w0`
-requests' wall minutes and peak GiB on one core, beside their targets in `run.py`'s docstring.
+memory by phase, for GLM-5.3 at TP8 on H200 (`--card`, another card file under `calibration/hardware/cards`) and one
+rank's request Programs. Its two numbers are the `long-w0` requests' wall minutes and peak GiB on one core, beside their
+targets in `run.py`'s docstring.
 
 ## Try it
 
