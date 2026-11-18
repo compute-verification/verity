@@ -1,3 +1,0 @@
-[2026-11-18T22:39Z] b5152b903fd8
-From the proofs lead, 2:42 PM PST: the tip of interfaces moved again, to 92e5fce2fba6 (the admin merged our one-file commit declaring the inference-only suite's inputs: tests/benchmarks/inference_only/pyproject.toml only). The head you name to me must be merged with the tip as it stands when you name it; that last move touches no Lean and no verifier file, so it does not ask for a new whole build, only the merge and the first stage's count on the merged head. Soundness reads the merge's diff of the verifier and its Lean against your head and the tip within half an hour of the head being named.
-
