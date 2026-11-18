@@ -17,9 +17,9 @@ registered circuit `P` (`Flock.Program.decode`) and the block's units:
   S, in increasing C index, each once, with its width;
 * **the output ports**: the gates the units' return leaves name (`Flock.Program.resolve` in the member's activation) that
   are inside S, in increasing C index, each once, with its width;
-* **the lift**: every primitive the units' Definitions reach, each Definition once; a primitive with a one-bit return and
-  one-bit parameters is a Boolean gate and stays, and every other one is a word primitive and is replaced by the Boolean
-  Definition C's Boolean map names for it (PROTOCOL.md 4.9), or refused by name.
+* **the lift**: every primitive the units' Definitions reach, each Definition once; a gate, a constant bit or an input
+  stays, and every other one is a word primitive (`isWordPrim`) and is replaced by the Boolean Definition C's Boolean map
+  (`Prog.boolean`, PROTOCOL.md 4.9) names for it.
 
 The ports are the leaves the block's Definitions are bound to, so they contain Core's `Circuit.into S` and
 `Circuit.exits S`; they equal them when every parameter leaf is read inside S and every return leaf is read outside S or is
@@ -29,7 +29,7 @@ Its cost is the block's parameter and return leaves, each resolved down the call
 each once: the descriptor and the block's boundary, never a gate of the block's interior.
 
 `program` is the block's Program on bits, the value `Flock.Lower.lower` takes: each word composite the units reach lifted
-as circuits' `versions.lift` lifts it (`bitTy`, `bitAt`, `liftSeq`), each word primitive's node a node of its Boolean
+as circuits' `versions.lift` lifts it (`Ty.bitType`, `bitAt`, `liftSeq`), each word primitive's node a node of its Boolean
 Definition, and the block Definition, whose parameters are the input ports and whose return is the output ports, each a
 port's bits. Its references are equal to the lift's leaf by leaf, not yet part by part; the encoder that writes them as the
 codec does follows circuits' written rule for the block's root, whose key `BLOCK` stands in for until then.
@@ -82,13 +82,9 @@ def inside (S : Array (Nat × Nat)) (g : Nat) : Bool := S.any fun (lo, hi) => lo
 def sortDedup (xs : Array Nat) : Array Nat :=
   (xs.qsort (· < ·)).foldl (fun acc x => if acc.back? == some x then acc else acc.push x) #[]
 
-/-- A primitive with a one-bit return and one-bit parameters: a gate of the Boolean circuit, which the lift keeps. -/
-def isBit (d : Defn) : Bool :=
-  d.ret.widths == #[1] && d.params.all fun (_, t) => t.widths.all (· == 1)
-
 /-- The lift (the module docstring): from the Definitions `start`, every Definition they reach once, each word primitive
-paired with its Boolean Definition's key by `boolean`. -/
-def lift (P : Prog) (start : Array Nat) (boolean : Std.HashMap String String) : V (Array (String × String)) := do
+paired with its Boolean Definition's key in C's Boolean map. -/
+def lift (P : Prog) (start : Array Nat) : V (Array (String × String)) := do
   let bound := start.size + P.defs.foldl (fun n d => n + d.body.nodes.size) 0
   let mut seen : Std.HashSet Nat := {}
   let mut todo := start
@@ -102,8 +98,8 @@ def lift (P : Prog) (start : Array Nat) (boolean : Std.HashMap String String) : 
       seen := seen.insert d
       let defn := P.defs[d]!
       if defn.prim then
-        if isInputId defn.key || isBit defn then continue
-        match boolean[defn.key]? with
+        if !isWordPrim defn.prim defn.key then continue
+        match P.boolean[defn.key]? with
         | some b => out := out.push (defn.key, b)
         | none => throw s!"the lift to bits: word primitive '{defn.key}' has no Boolean Definition in C's Boolean map"
       else
@@ -125,7 +121,7 @@ def members (P : Prog) (units : Array Nat) : V (Array (Nat × Nat × Scope) × A
   return (ms, S)
 
 /-- **The front of block `units`'s circuit** (the module docstring), the units in any order and each once. -/
-def front (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String) : V Front := do
+def front (P : Prog) (units : Array Nat) : V Front := do
   let root := P.defs[P.root]!
   let (members, S) ← members P units
   let mut ins := #[]
@@ -143,35 +139,11 @@ def front (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String) :
         if inside S g then outs := outs.push g
   let port := fun g => do return ({ gate := g, width := ← width P g } : Port)
   return { ranges := S.qsort (·.1 < ·.1), ins := ← (sortDedup ins).mapM port, outs := ← (sortDedup outs).mapM port,
-           lift := ← lift P (members.map fun (k, _, _) => (root.body.nodes[k]!).fn) boolean }
+           lift := ← lift P (members.map fun (k, _, _) => (root.body.nodes[k]!).fn) }
 
 /-! ### The block's Program on bits -/
 
-private theorem sizeOf_lt_mem {fs : Array Ty} {t : Ty} (h : t ∈ fs) : sizeOf t < 1 + sizeOf fs := by
-  have := Array.sizeOf_lt_of_mem h
-  omega
-
-private theorem sizeOf_snd_lt_mem {fs : Array (String × Ty)} {f : String × Ty} (h : f ∈ fs) :
-    sizeOf f.2 < 1 + sizeOf fs := by
-  have := Array.sizeOf_lt_of_mem h
-  obtain ⟨k, t⟩ := f
-  simp only [Prod.mk.sizeOf_spec] at this ⊢
-  omega
-
-/-- `bit_type`: the Boolean type whose word view is `t`, each `Value<w>` as `Array<w, Value<1>>` and `Value<1>` a bit. -/
-def bitTy : Ty → Ty
-  | .value w => if w == 1 then .value 1 else .array w (.value 1)
-  | .array n e => .array n (bitTy e)
-  | .tuple fs => .tuple (fs.attach.map fun f => bitTy f.1)
-  | .record fs => .record (fs.attach.map fun f => (f.1.1, bitTy f.1.2))
-termination_by t => t
-decreasing_by
-  all_goals simp only [Ty.array.sizeOf_spec, Ty.tuple.sizeOf_spec, Ty.record.sizeOf_spec]
-  · omega
-  · exact sizeOf_lt_mem f.2
-  · exact sizeOf_snd_lt_mem f.2
-
-/-- `bit_offsets`: word leaf `j` of `t` as its first bit in `bitTy t` and its width, each leaf `w` consecutive bits in leaf
+/-- `bit_offsets`: word leaf `j` of `t` as its first bit in `Ty.bitType t` and its width, each leaf `w` consecutive bits in leaf
 order. -/
 def bitAt (t : Ty) : Nat → Nat × Nat :=
   match Widths.homo t with
@@ -213,7 +185,7 @@ def runs (rs : Array Ref) : Seq := Id.run do
 def liftedKey (key : String) : String :=
   if key.endsWith "}" then String.mk key.toList.dropLast ++ ",IR=\"boolean\"}" else key ++ "{IR=\"boolean\"}"
 
-/-- Word composite `d` on bits (`versions.lift_body`): every type `bitTy`, every reference `liftSeq`, each node calling
+/-- Word composite `d` on bits (`versions.lift_body`): every type `Ty.bitType`, every reference `liftSeq`, each node calling
 `fnOf` of its Definition, a word primitive's node a Call of its Boolean Definition, and the offsets and gate count from
 the callees' `gatesOf`. -/
 def liftDef (d : Defn) (fnOf : Nat → Nat) (primOf : Nat → Bool) (gatesOf : Nat → Nat) : Defn :=
@@ -228,7 +200,7 @@ def liftDef (d : Defn) (fnOf : Nat → Nat) (primOf : Nat → Bool) (gatesOf : N
   let nodes := b.nodes.map fun x =>
     let f := fnOf x.fn
     let args := x.args.mapIdx fun i a =>
-      let ty := bitTy a.ty
+      let ty := Ty.bitType a.ty
       let dims := match x.form with
         | .batch => match x.axes[i]? with
           | some (some ax) => ty.axisDims ax
@@ -236,10 +208,10 @@ def liftDef (d : Defn) (fnOf : Nat → Nat) (primOf : Nat → Bool) (gatesOf : N
         | .scan => if 1 ≤ i && i ≤ x.nxs then (match ty with | .array ln e => some (ln, e.leaves) | _ => none) else none
         | _ => none
       ({ ty, seq := lseq a.seq, dims } : Arg)
-    { x with fn := f, args, out := bitTy x.out, form := if x.form == .prim && !primOf f then .call else x.form }
+    { x with fn := f, args, out := Ty.bitType x.out, form := if x.form == .prim && !primOf f then .call else x.form }
   let offsets := nodes.foldl (fun o x => o.push (o.back! + (if x.form == .prim then 1 else x.members * gatesOf x.fn))) #[0]
-  let params := d.params.map fun (n, t) => (n, bitTy t)
-  let ret := bitTy d.ret
+  let params := d.params.map fun (n, t) => (n, Ty.bitType t)
+  let ret := Ty.bitType d.ret
   { d with key := liftedKey d.key, params, ret, gates := offsets.back!,
            paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := ret.leaves,
            body := { params, retType := ret, nodes, ret := lseq b.ret, offsets } }
@@ -251,13 +223,13 @@ def BLOCK : String := "Block_v1"
 the units reach lifted to bits (`liftDef`) and the block Definition last, whose index is the result's `root`. Its
 parameters are the input ports and its return the output ports, each port its bits, in increasing C index; its nodes are
 the units, in increasing C index, each a Call of its lifted Definition, reading a port's bits or an earlier unit's return
-bits. `boolean` is C's Boolean map: a word primitive's key to its Boolean Definition's, which is a gate or a composite with
-one-bit parameters and return that reaches no word primitive, or is refused. -/
-def program (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String) : V Prog := do
+bits. Each word primitive is replaced by its Boolean Definition in C's Boolean map (`Prog.boolean`), which is a gate or a
+composite with one-bit parameters and return that reaches no word primitive, or is refused. -/
+def program (P : Prog) (units : Array Nat) : V Prog := do
   let units := units.qsort (· < ·)
   let (ms, S) ← members P units
   let root := P.defs[P.root]!
-  let isWordPrim := fun (d : Defn) => d.prim && !isInputId d.key && !isBit d
+  let word := fun (d : Defn) => isWordPrim d.prim d.key
   let bound := P.defs.foldl (fun n d => n + d.body.nodes.size + 1) 1
   let mut seen : Std.HashSet Nat := {}
   let mut todo := ms.map fun (k, _, _) => (root.body.nodes[k]!).fn
@@ -270,12 +242,12 @@ def program (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String)
       if seen.contains d then continue
       seen := seen.insert d
       let defn := P.defs[d]!
-      if isWordPrim defn then
-        let some bk := boolean[defn.key]?
+      if word defn then
+        let some bk := P.boolean[defn.key]?
           | throw s!"the lift to bits: word primitive '{defn.key}' has no Boolean Definition in C's Boolean map"
         let some bi := P.index[bk]? | throw s!"the lift to bits: '{defn.key}''s Boolean Definition '{bk}' is not in C"
         let bd := P.defs[bi]!
-        if !(bd.ret.widths.all (· == 1) && bd.params.all fun (_, t) => t.widths.all (· == 1)) || (bd.prim && !isBit bd) then
+        if !(bd.ret.bits && bd.params.all fun (_, t) => t.bits) || (bd.prim && !isBooleanPrim bd.key) then
           throw s!"the lift to bits: '{defn.key}''s Boolean Definition '{bk}' is neither a gate nor a composite on bits"
         toB := toB.insert d bi
         todo := todo.push bi
@@ -287,7 +259,7 @@ def program (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String)
   let mut wordy : Std.HashMap Nat Bool := {}
   for d in order do
     let defn := P.defs[d]!
-    if defn.prim then wordy := wordy.insert d (isWordPrim defn)
+    if defn.prim then wordy := wordy.insert d (word defn)
     else
       let mut w := false
       for x in defn.body.nodes do
@@ -335,10 +307,10 @@ def program (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String)
         | none => match made[g]? with
           | some (u, o) => rs := rs ++ (Array.range w).map fun b => ({ p := false, i := u, j := o + b } : Ref)
           | none => throw s!"unit {units[t]!} reads gate {g} of the block that no earlier unit returns"
-      args := args.push { ty := bitTy pt, seq := runs rs }
+      args := args.push { ty := Ty.bitType pt, seq := runs rs }
     let f := fnOf x.fn
     let lc := defs[f]!
-    nodes := nodes.push { form := if lc.prim then .prim else .call, fn := f, args, out := bitTy c.ret }
+    nodes := nodes.push { form := if lc.prim then .prim else .call, fn := f, args, out := Ty.bitType c.ret }
     if c.prim then
       if !made.contains sc.off then made := made.insert sc.off (t, 0)
       outs := outs.push sc.off
@@ -354,8 +326,8 @@ def program (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String)
   for (g, w) in outPorts do
     let (u, o) := made[g]!
     ret := ret ++ (Array.range w).map fun b => ({ p := false, i := u, j := o + b } : Ref)
-  let params := ins.map fun (g, w) => (s!"g{g}", bitTy (.value w))
-  let retType := Ty.tuple (outPorts.map fun (_, w) => bitTy (.value w))
+  let params := ins.map fun (g, w) => (s!"g{g}", Ty.bitType (.value w))
+  let retType := Ty.tuple (outPorts.map fun (_, w) => Ty.bitType (.value w))
   let ds := defs
   let offsets := nodes.foldl (fun o x => o.push (o.back! + (if x.form == .prim then 1 else (ds[x.fn]!).gates))) #[0]
   let blk : Defn := { key := BLOCK, id := BLOCK, prim := false, params, ret := retType, gates := offsets.back!,
@@ -375,18 +347,13 @@ def defJson (P : Prog) (d : Defn) : Json :=
       ("args", .arr (x.args.map fun a => Json.mkObj [("ty", a.ty.toJson), ("refs", refs a.seq),
         ("dims", match a.dims with | some (d, l) => Json.arr #[toJson d, toJson l] | none => .null)]))]))]
 
-/-- The `block_program` piece: `{descriptor, units, boolean}`, `boolean` a word primitive's key to its Boolean Definition's
-key, to `{block, lifted}`: the block Definition and each lifted Definition by key (`defJson`). -/
+/-- The `block_program` piece: `{descriptor, units}` to `{block, lifted}`: the block Definition and each lifted Definition
+by key (`defJson`). -/
 def programPiece (j : Json) : Except String Json := do
   let some d := (j.getObjValAs? String "descriptor").toOption | throw "descriptor is not a string"
   let some us := (j.getObjValAs? (Array Nat) "units").toOption | throw "units is not a list of naturals"
-  let .ok (.obj bo) := j.getObjVal? "boolean" | throw "boolean is not an object"
-  let mut boolean : Std.HashMap String String := {}
-  for (k, v) in bo.toArray do
-    let Json.str s := v | throw s!"boolean['{k}'] is not a string"
-    boolean := boolean.insert k s
   let P ← decode d.toUTF8
-  let Q ← program P us boolean
+  let Q ← program P us
   let lifted := (Q.defs.extract 0 P.defs.size).toList.filter (·.key.endsWith "IR=\"boolean\"}")
   return Json.mkObj [("block", defJson Q Q.defs[Q.root]!),
     ("lifted", Json.mkObj (lifted.map fun x => (x.key, defJson Q x)))]
@@ -399,18 +366,13 @@ def definitionPiece (j : Json) : Except String Json := do
   let some i := P.index[k]? | throw s!"no Definition '{k}'"
   return defJson P P.defs[i]!
 
-/-- The `block_front` piece: `{descriptor, units, boolean}` (the descriptor's text, the block's units, C's Boolean map as an
-object from a word primitive's key to its Boolean Definition's) to `{ranges, ins, outs, lift}`, each port `[gate, width]`. -/
+/-- The `block_front` piece: `{descriptor, units}` (the descriptor's text and the block's units) to
+`{ranges, ins, outs, lift}`, each port `[gate, width]`. -/
 def piece (j : Json) : Except String Json := do
   let some d := (j.getObjValAs? String "descriptor").toOption | throw "descriptor is not a string"
   let some us := (j.getObjValAs? (Array Nat) "units").toOption | throw "units is not a list of naturals"
-  let .ok (.obj bo) := j.getObjVal? "boolean" | throw "boolean is not an object"
-  let mut boolean : Std.HashMap String String := {}
-  for (k, v) in bo.toArray do
-    let Json.str s := v | throw s!"boolean['{k}'] is not a string"
-    boolean := boolean.insert k s
   let P ← decode d.toUTF8
-  let f ← front P us boolean
+  let f ← front P us
   let ports := fun (ps : Array Port) => Json.arr (ps.map fun p => Json.arr #[toJson p.gate, toJson p.width])
   return Json.mkObj [("ranges", .arr (f.ranges.map fun (lo, hi) => Json.arr #[toJson lo, toJson hi])),
     ("ins", ports f.ins), ("outs", ports f.outs),

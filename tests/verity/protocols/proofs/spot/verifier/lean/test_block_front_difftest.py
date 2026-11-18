@@ -74,7 +74,7 @@ def reference(j) -> dict:
     program, text = chain()
     if j.get("descriptor") != text:
         raise D.Reject("not the chain's descriptor")
-    units, boolean = j["units"], j["boolean"]
+    units, boolean = j["units"], json.loads(text)["boolean"]
     if not units or len(set(units)) != len(units):
         raise D.Reject("a block names each of its units, at least one, once")
     ranges = unit_ranges(program)
@@ -92,20 +92,12 @@ def reference(j) -> dict:
     calls = [k for k, _ in PO.calls(program)]
     members = [k for k in calls for _ in range(program.root.body.nodes[k].n if program.root.body.nodes[k].form == "batch" else 1)]
     words = word_primitives(program, sorted({members[u] for u in units}))
-    if any(w not in boolean for w in words):
-        raise D.Reject("a word primitive without a Boolean Definition")
     return {"ranges": [list(r) for r in S], "ins": [[g, width[g]] for g in into], "outs": [[g, width[g]] for g in exits],
             "lift": [[w, boolean[w]] for w in words]}
 
 
 FRONT = D.Port(PIECES, "block_front", reference, None, package=PACKAGE, of_record="lean")
 pieces = D.server_fixture(FRONT)
-
-#: C's Boolean map stands in for schema v2's (PROTOCOL.md 4.9), which the decoder does not read yet: each word primitive
-#: the chain reaches, named by its descriptor key, to a Boolean Definition's key
-BOOLEAN = {"AmpereBF16TcDot16_v2": "AmpereBF16TcDot16_v2:boolean", "Const32[0x00000000]_v1": "Const32[0x00000000]_v1:boolean",
-           "F2fpBf16_v1": "F2fpBf16_v1:boolean"}
-
 
 def blocks() -> list[list[int]]:
     """The chain's eight units, each a block; its four members of two (the window's cap); and the whole chain."""
@@ -115,21 +107,20 @@ def blocks() -> list[list[int]]:
 @pytest.mark.parametrize("units", blocks(), ids=lambda us: "units-" + "-".join(map(str, us)))
 def test_the_chain_block_fronts_agree(pieces, units):
     _program, text = chain()
-    j = {"descriptor": text, "units": units, "boolean": BOOLEAN}
+    j = {"descriptor": text, "units": units}
     want = reference(j)
     assert want["ins"] and want["outs"], want
     assert pieces.call("block_front", j) == ("output", D.canonical(want))
 
 
 @pytest.mark.parametrize("name, change", [
-    ("a word primitive missing from the Boolean map", lambda j: {**j, "boolean": {k: v for k, v in BOOLEAN.items() if k != "F2fpBf16_v1"}}),
     ("no unit", lambda j: {**j, "units": []}),
     ("a unit twice", lambda j: {**j, "units": [3, 3]}),
     ("a unit past C's", lambda j: {**j, "units": [8]}),
 ], ids=lambda x: x if isinstance(x, str) else "")
 def test_the_front_refuses(pieces, name, change):
     _program, text = chain()
-    j = change({"descriptor": text, "units": [0], "boolean": BOOLEAN})
+    j = change({"descriptor": text, "units": [0]})
     with pytest.raises(D.Reject):
         reference(j)
     assert pieces.call("block_front", j)[0] == "reject", name
@@ -139,7 +130,7 @@ def test_the_order_is_increasing_c_index_and_the_inputs_precede_every_unit(piece
     """MERGE's `Partition.pos` and the file's numbering agree on the chain: every input gate precedes every unit's."""
     program, text = chain()
     first = min(lo for lo, _ in unit_ranges(program))
-    out = json.loads(pieces.call("block_front", {"descriptor": text, "units": [5, 2], "boolean": BOOLEAN})[1])
+    out = json.loads(pieces.call("block_front", {"descriptor": text, "units": [5, 2]})[1])
     gates = [g for g, _ in out["ins"]]
     assert gates == sorted(gates)
     assert any(g < first for g in gates) and out["ranges"] == sorted(out["ranges"])
