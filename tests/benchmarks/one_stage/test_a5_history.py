@@ -20,6 +20,7 @@ import pytest
 from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
@@ -74,7 +75,7 @@ def _window(d: Path, n: int = 4):
     win = I.Window(circuit, RUN, RND.parse_design(SAMPLING_DESIGN), 2, registered={"latent": table})
     win.record(G8, [x, w], [y])
     c = win.close(salts_of=fixed(win))
-    win.write(c, d, {"label": "test"}, registrar=R)
+    win.write(c, d, {"label": "test"}, registrar=DK)
     doc, rec = (json.loads((d / f).read_text()) for f in ("circuit.json", "registration.json"))
     return win.window, doc, rec, {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}, table
 

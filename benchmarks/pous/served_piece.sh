@@ -29,7 +29,7 @@
 # answered: PoUS's case is held by the Python and written as its
 # line, four times C*, to the Lean, which works in a few times that line), all three at once: PoUB-P2's case
 # answered by poub-p2-protocol, its answer to DIR's sibling bandwidth, which BANDWIDTH_CMD collects
-# (served_bandwidth.py collect), and its case to SERVE_DIR/private/bandwidth; and PoUS's case answered by the Python
+# (served_piece.py collect-bandwidth), and its case to SERVE_DIR/private/bandwidth; and PoUS's case answered by the Python
 # and by pous-run-protocol, which must agree with it. This part starts only when the sessions' part exits 0 and
 # those two programs are built. A run that ended in it, or whose Lean
 # didn't answer or agree (the window is then undecided), keeps what the sessions left and can be answered again by

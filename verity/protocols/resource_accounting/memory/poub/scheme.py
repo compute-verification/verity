@@ -85,10 +85,6 @@ _SKETCH = ("ResourceAccounting.Assumptions.SketchHashRandom",
            "ResourceAccounting.Remote.Sketch.Assumptions.Present",
            "ResourceAccounting.Remote.Sketch.Assumptions.Receipted")
 _OUTSIDE = "the opening unit (BlockOpeningCheck_v2) is proved outside the workload's circuit: "
-#: why neither is attached by name on a served run of its own
-_P2_ATTACH = ("bandwidth attaches through no hook of a served run: its prover reads PoUS's store and the receipts PoUS's "
-              "decode computed, inside PoUS's piece (benchmarks/pous/served_piece.py), and its verifier is its own "
-              "session (`verifier.p2_parties`)")
 
 
 def _named(role: str) -> str:
@@ -96,7 +92,16 @@ def _named(role: str) -> str:
 
 
 def _bandwidth_attach(exchange: Any, ctx: Any) -> Any:
-    raise LookupError(_P2_ATTACH)
+    """``bandwidth`` on a served run (`Scheme.attach`): P2's prover over the store PoUS holds on ``exchange``
+    (`prover.p2_stage.bandwidth.Attached`), PoUS attached before it (``depends``); refused by name where it is not."""
+    from verity.protocols.resource_accounting.memory.pous.prover import served
+
+    storage = served.of(exchange)
+    if storage is None:
+        raise LookupError("bandwidth reads the store pous holds on the same exchange, and no pous is attached on it: "
+                          "attach pous before bandwidth (its depends)")
+    return import_module("verity.protocols.resource_accounting.memory.poub.prover.p2_stage.bandwidth").Attached(
+        storage, ctx)
 
 
 #: `POUB`'s settings, each what its binder holds: ``refresh``; ``passes``, the binder runs the passes itself (off for a
@@ -176,6 +181,7 @@ BANDWIDTH = S.register(S.Scheme(
     needs=frozenset({"receipts"}),
     depends=("pous",),
     pieces={"prover": S.Launch(optional=("host", "command"), development="host")},
+    answers="verity.protocols.resource_accounting.memory.poub.prover.p2_stage.bandwidth:ANSWERS",
     record="bandwidth",
     symbol="Q_cert",
     published=("bytes", Fraction(1, 8)),
@@ -236,6 +242,7 @@ POUB = S.register(S.Scheme(
     keeps_weight_copy=True,
     **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
                     S.Lacks("not a kernel scheme")),
+    answers=S.Lacks("its verifier answers the session live, an event a line; no piece keeps a session to answer later"),
 ))
 
 #: a freed range is reused as late as the workload allows, so one freed inside a window is not written again in it

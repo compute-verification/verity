@@ -18,6 +18,7 @@ from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
@@ -73,7 +74,7 @@ def _record() -> dict:
     ports = _ports()
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
     sampling_design = S.selection_sampling_design(RULE, sum(COUNTS.values()), D.strata_sizes(_program(), QUERY))
-    return R.record(_program(), QUERY, sampling_design, S.SCHEME, roots,
+    return DK.record(_program(), QUERY, sampling_design, S.SCHEME, roots,
                     {"kind": "served", "run": RUN, "row": 0}, work_table=_table())
 
 

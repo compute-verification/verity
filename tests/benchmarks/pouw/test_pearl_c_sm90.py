@@ -492,6 +492,19 @@ def test_sass_gate_allows_local_memory_only_in_the_reference_row_digest(monkeypa
     assert S.gate(PTXAS_OK.replace("0 bytes spill stores", "4 bytes spill stores") + rows, sass)[1]
 
 
+def test_the_build_says_its_one_target_with_no_toolkit():
+    """`build.sh --arch` prints the target the tree's kernels are built for, one word that names an architecture file, with
+    no toolkit and no GENCODE: `benchmarks/kernels/smoke_h100.sh` asks it before any step and holds the machine's record
+    and the held card's to it, so a build.sh that stops answering fails here rather than on a card.  (The smoke script
+    is no input of this suite, so the test reads the build's side alone.)"""
+    env = {k: v for k, v in os.environ.items() if k not in ("CUDA_HOME", "GENCODE")}
+    r = subprocess.run(["bash", str(HERE / "build.sh"), "--arch"], capture_output=True, text=True, env=env)
+    assert r.returncode == 0 and r.stderr == "", r.stderr
+    assert re.fullmatch(r"[a-z]+_[0-9]+[a-z]?\n", r.stdout), r.stdout
+    arch = r.stdout.strip()
+    assert (HERE.parents[7] / "calibration" / "hardware" / "architectures" / f"{arch}.toml").is_file()
+
+
 @pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
 def test_the_sm90a_build_passes_the_gate(tmp_path):
     cuda = Path(of(__file__).VERITY_POUW_NVCC)

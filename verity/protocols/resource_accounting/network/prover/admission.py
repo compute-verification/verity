@@ -1,5 +1,5 @@
 """The network attester's admission on the served node: its release order (`ReleaseOrder`) and the certified tick
-(`TickGate`), the readers of its release headers and its watermark (`release_of`, `Watermark`), and the
+(`TickGate`), the readers of its release headers and its watermark (`verity.release.release_fields`, `Watermark`), and the
 frontends that feed them: a front that hands its engine each input (`TickAdmit`) and a front in another process than
 its engine (`FrontFeed`). The adapter hands in what is its own: its submit and abort of an input, the configuration it
 read, and the exchange of `verity.hooks` events and requests the gate and the frontend attach to, both built and
@@ -67,6 +67,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity import hooks as H
+from verity.release import release_fields
 
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = "x-verity-release", "x-verity-release-run", "x-verity-release-bucket"
 WATERMARK_PATH = "/verity/watermark"
@@ -99,13 +100,12 @@ class ReleaseOrder:
 
     def key(self, headers: Mapping[str, str]) -> tuple[str, int] | None:
         """The request's (run, ordinal) from its lower-cased headers, None without one; `ValueError` on a malformed or
-        repeated ordinal. A new run starts here, forwarding what the old one still holds."""
-        raw = headers.get(RELEASE_HEADER)
-        if raw is None:
+        repeated ordinal (`verity.release.release_fields`'s names). A new run starts here, forwarding what the old one
+        still holds."""
+        rel = release_fields(headers)
+        if rel is None:
             return None
-        if not raw.strip().isdecimal():
-            raise ValueError(f"{RELEASE_HEADER}: a non-negative integer, not {raw!r}")
-        run, n = headers.get(RUN_HEADER, ""), int(raw)
+        n, run = rel[0], rel[1] or ""
         if run != self.run:
             if run in self.runs:
                 self.counts["stale"] += 1
@@ -195,20 +195,6 @@ def watermark_line(line: bytes, last: tuple[int, ...] | None = None) -> tuple[in
         read_watermark,
     )
     return read_watermark(line, last)
-
-
-def release_of(headers: Mapping[str, str]) -> tuple[str, int, int | None] | None:
-    """(run, N, bucket) of a request's lower-cased headers, None without ``x-verity-release``; `ValueError` on a malformed
-    N or bucket. The run is ``x-verity-release-run`` (empty without it), the bucket None without its header."""
-    raw = headers.get(RELEASE_HEADER)
-    if raw is None:
-        return None
-    if not raw.strip().isdecimal():
-        raise ValueError(f"{RELEASE_HEADER}: a non-negative integer, not {raw!r}")
-    bucket = headers.get(BUCKET_HEADER)
-    if bucket is not None and not bucket.strip().isdecimal():
-        raise ValueError(f"{BUCKET_HEADER}: a non-negative integer, not {bucket!r}")
-    return headers.get(RUN_HEADER, "").strip(), int(raw), None if bucket is None else int(bucket)
 
 
 @dataclass(frozen=True)
@@ -638,10 +624,10 @@ class TickAdmit:
         return (200, "") if w.error is None else (400, w.error)
 
     def key(self, headers: Mapping[str, str]) -> tuple[str, int] | None:
-        rel = release_of(headers)
+        rel = release_fields(headers)
         if rel is None:
             return None
-        run, n, bucket = rel
+        n, run, bucket = rel[0], rel[1] or "", rel[2]
         if n in self.lost.get(run, ()):
             raise ValueError(LOST.format(n=n, run=run))
         seen = self.seen.setdefault(run, set())

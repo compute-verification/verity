@@ -426,26 +426,28 @@ def parsePartsIn (fuel : Nat) (j : Json) (leaves : Bool → Nat → Option Nat) 
   | .ok g => parseGrid j g leaves
   | .error _ => throw s!"references {j.compress}: not affine, strided, explicit, grid, concat or alias"
 
-/-- The name a grid `g` is refused by over collections of `n` leaves, or `ok` (`test_grid.py` holds the same table). -/
-private def gridRefusal (g : String) (n : Nat) : String :=
-  match Lean.Json.parse ("{\"grid\":" ++ g ++ "}") with
-  | .ok j => match parsePartsIn 4 j (fun _ _ => some n) (fun _ _ => none) with
-    | .ok _ => "ok"
-    | .error e => (e.splitOn ":")[0]!
-  | .error _ => "json"
+private def lane (s : String) (i b l : Nat) (axes : List (Nat × Nat)) : Json :=
+  .arr #[.str s, i, b, l, .arr (axes.map fun (c, d) => Json.arr #[c, d]).toArray]
 
-#guard gridRefusal "[64,[[\"n\",2091,0,1,[[4,0],[32,64]]]]]" 2048 == "ok"
-#guard gridRefusal "[64,[[\"n\",2091,0,1,[[4,0],[32,64]]]]]" 2047 == "grid-overrun"
-#guard gridRefusal "[0,[[\"n\",1,0,1,[]]]]" 4096 == "grid-shape"
-#guard gridRefusal "[2,[]]" 4096 == "grid-shape"
-#guard gridRefusal "[2,[[\"n\",1,0,1,[[1,4]]]]]" 4096 == "grid-shape"
-#guard gridRefusal "[2,[[\"n\",1,0,1,[[2,4]]],[\"n\",2,0,1,[[3,4]]]]]" 4096 == "grid-shape"
-#guard gridRefusal "[2,[[\"q\",1,0,1,[]],[\"n\",2,0,1,[]]]]" 4096 == "grid-shape"
-#guard gridRefusal "[2,[[\"n\",1,0,1,[[3,10]]]]]" 4096 == "grid-spelled"
-#guard gridRefusal "[1,[[\"n\",1,0,1,[]],[\"n\",2,0,1,[]]]]" 4096 == "grid-spelled"
-#guard gridRefusal "[2,[[\"n\",1,0,1,[[3,10]]],[\"n\",1,2,1,[[3,10]]]]]" 4096 == "grid-spelled"
-#guard gridRefusal "[2048,[[\"n\",108,0,1,[[192,0],[4,2048]]]]]" 8192 == "ok"
-#guard gridRefusal "[2048,[[\"n\",108,0,1,[[192,0],[4,2048]]]]]" 8191 == "grid-overrun"
+/-- The name the grid `[len, lanes]` is refused by over collections of `n` leaves, or `ok` (`test_grid.py` holds the
+same table). -/
+private def gridRefusal (len : Nat) (lanes : List Json) (n : Nat) : String :=
+  match parsePartsIn 4 (Json.mkObj [("grid", .arr #[len, .arr lanes.toArray])]) (fun _ _ => some n) (fun _ _ => none) with
+  | .ok _ => "ok"
+  | .error e => (e.splitOn ":")[0]!
+
+#guard gridRefusal 64 [lane "n" 2091 0 1 [(4, 0), (32, 64)]] 2048 == "ok"
+#guard gridRefusal 64 [lane "n" 2091 0 1 [(4, 0), (32, 64)]] 2047 == "grid-overrun"
+#guard gridRefusal 0 [lane "n" 1 0 1 []] 4096 == "grid-shape"
+#guard gridRefusal 2 [] 4096 == "grid-shape"
+#guard gridRefusal 2 [lane "n" 1 0 1 [(1, 4)]] 4096 == "grid-shape"
+#guard gridRefusal 2 [lane "n" 1 0 1 [(2, 4)], lane "n" 2 0 1 [(3, 4)]] 4096 == "grid-shape"
+#guard gridRefusal 2 [lane "q" 1 0 1 [], lane "n" 2 0 1 []] 4096 == "grid-shape"
+#guard gridRefusal 2 [lane "n" 1 0 1 [(3, 10)]] 4096 == "grid-spelled"
+#guard gridRefusal 1 [lane "n" 1 0 1 [], lane "n" 2 0 1 []] 4096 == "grid-spelled"
+#guard gridRefusal 2 [lane "n" 1 0 1 [(3, 10)], lane "n" 1 2 1 [(3, 10)]] 4096 == "grid-spelled"
+#guard gridRefusal 2048 [lane "n" 108 0 1 [(192, 0), (4, 2048)]] 8192 == "ok"
+#guard gridRefusal 2048 [lane "n" 108 0 1 [(192, 0), (4, 2048)]] 8191 == "grid-overrun"
 
 def parseParts (j : Json) (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq) : V (Array Part) :=
   parsePartsIn Steps.FUEL j leaves args

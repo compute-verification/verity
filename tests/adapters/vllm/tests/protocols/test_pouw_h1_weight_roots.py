@@ -57,12 +57,14 @@ def test_other_salts_compute_every_root_again(computed, monkeypatch):
     assert computed == [0, 1, 0, 1] and after == _fresh(layers) and all(after[w] != before[w] for w in after)
 
 
-def test_two_weight_sets_roots_differ_and_none_is_recomputed_without_the_salts():
+def test_two_weight_sets_roots_differ_and_none_is_recomputed_without_the_salts(monkeypatch):
     """A root is core's hiding tree over the rows (``audit.commit_rows(weight_binding(w), -2, rows, HM96, salts)``) under
     this process's fresh weight salts at ``HM96_WEIGHTS + w``: another weight set's root differs, and the same rows under
-    any other salts, or in the unsalted tree, give another root."""
+    any other salts, or in the unsalted tree, give another root. The process's salts are this test's own: another test
+    that drew more rows at the same nonce would leave them held there."""
     first, second = (m.weight.detach().numpy() for m in _layers(7, n=2, shape=(16, 32)))
-    salts = PH.WEIGHT_SALTS
+    salts = PV.RunSalts()
+    monkeypatch.setattr(PH, "WEIGHT_SALTS", salts)
     root = PH.weight_root(3, first)
     ys = salts.held(HM96_WEIGHTS + 3)
     assert len(ys) == 192 * len(first) and root == PH.weight_root(3, first, salts) == commit_rows(

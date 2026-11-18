@@ -32,7 +32,7 @@ headers onto it (`release_of`, `release_head`)."""
 from __future__ import annotations
 
 import re
-from typing import Sequence
+from typing import Mapping, Sequence
 
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = b"x-verity-release", b"x-verity-release-run", b"x-verity-release-bucket"
 #: the bytes of a network attester's run id, which it samples at its construction
@@ -40,7 +40,8 @@ RUN_ID_BYTES = 32
 WATERMARK_PATH = b"/verity/watermark"
 WATERMARK_END = b"0\r\n\r\n"
 _REQUEST_LINE = re.compile(rb"[!#$%&'*+.^_`|~0-9A-Za-z-]+ [^\s]+ HTTP/1\.[01]")
-_HEX = re.compile(rb"(?:[0-9A-Fa-f]{2})+")
+_HEX = re.compile(r"(?:[0-9A-Fa-f]{2})+")
+_DECIMAL = re.compile(r"[0-9]+")
 _LINE = re.compile(rb"(0|[1-9][0-9]*) (0|[1-9][0-9]*)((?: (?:0|[1-9][0-9]*))*)\n")
 
 
@@ -87,29 +88,40 @@ def with_release(request: bytes, n: int, run: bytes | None = None, bucket: int |
     return line + b"\r\n" + lines + kept + b"\r\n" + body
 
 
+def release_fields(fields: Mapping[str, str]) -> tuple[int, str | None, int | None] | None:
+    """(N, the run id's hex, bucket) of a request's header fields by lower-cased name, each value less the spaces and
+    tabs around it, the run and bucket None without theirs; None without `x-verity-release`. `ValueError`, its message
+    starting with the header's name, where an N that isn't a decimal count, a run that isn't hex or a bucket that isn't
+    a decimal count comes with an `x-verity-release`."""
+    raw = fields.get(RELEASE_HEADER.decode())
+    if raw is None:
+        return None
+    values = {h: None if v is None else v.strip(" \t") for h in (RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER)
+              for v in [fields.get(h.decode())]}
+    n, run, bucket = values[RELEASE_HEADER], values[RUN_HEADER], values[BUCKET_HEADER]
+    if not _DECIMAL.fullmatch(n):
+        raise ValueError(f"{RELEASE_HEADER.decode()}: a decimal count, not {n[:40]!r}")
+    if run is not None and not _HEX.fullmatch(run):
+        raise ValueError(f"{RUN_HEADER.decode()}: a run id in hex, not {run[:40]!r}")
+    if bucket is not None and not _DECIMAL.fullmatch(bucket):
+        raise ValueError(f"{BUCKET_HEADER.decode()}: a decimal count, not {bucket[:40]!r}")
+    return int(n), run, None if bucket is None else int(bucket)
+
+
 def release_of(head: bytes) -> tuple[int, bytes | None, int | None] | None:
-    """(N, run id, bucket) of a request's head (through its blank line), each its first header, the run and bucket None
-    without theirs; None for a head with no `x-verity-release`, or bytes that aren't an HTTP/1 request's whole head.
-    `ValueError`, its message starting with the header's name, where an N that isn't a decimal count, a run that isn't
-    hex or a bucket that isn't a decimal count comes with an `x-verity-release`."""
+    """(N, run id, bucket) of a request's head (through its blank line), each its first header (`release_fields`);
+    None for bytes that aren't an HTTP/1 request's whole head."""
     parts = _split(head)
     if parts is None:
         return None
-    values: dict[bytes, bytes] = {}
+    values: dict[str, str] = {}
     for f in parts[1]:
-        values.setdefault(_name(f), f.partition(b":")[2].strip())
-    raw = values.get(RELEASE_HEADER)
-    if raw is None:
+        values.setdefault(_name(f).decode("latin-1"), f.partition(b":")[2].strip().decode("latin-1"))
+    rel = release_fields(values)
+    if rel is None:
         return None
-    if not raw.isdigit():
-        raise ValueError(f"{RELEASE_HEADER.decode()}: a decimal count, not {raw[:40]!r}")
-    run = values.get(RUN_HEADER)
-    if run is not None and not _HEX.fullmatch(run):
-        raise ValueError(f"{RUN_HEADER.decode()}: a run id in hex, not {run[:40]!r}")
-    bucket = values.get(BUCKET_HEADER)
-    if bucket is not None and not bucket.isdigit():
-        raise ValueError(f"{BUCKET_HEADER.decode()}: a decimal count, not {bucket[:40]!r}")
-    return int(raw), None if run is None else bytes.fromhex(run.decode()), None if bucket is None else int(bucket)
+    n, run, bucket = rel
+    return n, None if run is None else bytes.fromhex(run), bucket
 
 
 def watermark_head(run: bytes) -> bytes:

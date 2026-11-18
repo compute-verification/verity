@@ -52,6 +52,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -95,7 +96,7 @@ def audited_v1_case(program, query, accepted: bool = True) -> dict:
                  "leaves": leaves}
              for p, schema, leaves in (("out", "u16", 2 * population), ("x", "hm96-sha512/row/v1", population))}
     roots = {"out": "cd" * 64, "x": "ab" * 64}
-    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
+    rec = DK.record(program, query, sampling_design, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
                    {"kind": "served", "row": 101, "run": "r-test"}, leaf_layer=leaf)
     drawn = DR.derive(program, query, sampling_design)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
@@ -259,7 +260,7 @@ def tied_v1_case(w: dict) -> dict:
     query = P.template_instances_query(templates)
     sampling_design, ports = {"law": "stratified", "k": 1}, {"x": {"leaves": 8, "domain": "02" * 64}}
     reused = {e["value"]: e for e in w["registered"]}
-    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+    rec = DK.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=DD.digest(w),
                    registered=[{**reused[value], "value": name} for name, value, _ in TABLES])
     params = RP.params(program, query, sampling_design, ports, None, "1/100", partition=P.partition(program, query), log=[w],
@@ -787,6 +788,42 @@ def test_the_parameters_are_the_population_programs_and_no_other_programs():
     rec = {"format": DM.REGISTRATION, "previous": None, "program": codec.program_digest(desc)}
     with pytest.raises(SC.Refused, match="isn't the population program over its root's templates"):
         SC.inference_only_case({"commitment": codec.canonical_json(rec).hex(), "params": {"program": desc}}, 1, 1)
+
+
+def _wired_pair() -> tuple[dict, tuple, tuple]:
+    """A circuit record of `PAIR`'s units, unit 1's first row wired from unit 0, its wired Program and that Program with no
+    wires, each with its query."""
+    tid = codec.descriptor_id(PAIR)
+    record = {"templates": [[tid, SLOTS]], "cuts": {tid: {"x": 2}}, "external": [], "order": [[tid, 0, 1], [tid, 1, SLOTS - 1]],
+              "wires": [{"reader": tid, "port": "x", "writer": tid, "out": "o0", "at": 1, "cut": [0, 1], "radix": [1],
+                         "base": 0, "step": [1]}]}
+    return (record, PN.wired_population_program([(PAIR, SLOTS)], record),
+            PN.wired_population_program([(PAIR, SLOTS)], {**record, "wires": []}))
+
+
+def _naming(v1: dict, program) -> dict:
+    rec = json.loads(bytes.fromhex(v1["commitment"]))
+    return {**v1, "commitment": codec.canonical_json({**rec, "program": codec.program_digest(program)}).hex()}
+
+
+def test_the_case_takes_the_program_its_record_names_wired_or_with_no_wires():
+    """With the window's circuit record, a record naming its wired Program, or that Program with no wires, takes its
+    parameters from that Program rebuilt; a record naming the wired Program over v1's Program with no wires carries
+    the wired one. With no circuit record a wired Program is refused, the population program being no other's."""
+    record, (whole, wq), (bare, bq) = _wired_pair()
+    sig = [[n, t.to_json()] for n, t in whole.fn.signature()[0]]
+    for program, query in ((whole, wq), (bare, bq)):
+        case = SC.inference_only_case(v1_case(program, query), 1, 1, circuit=record)
+        assert case["params"]["parameters"] == sig
+        assert codec.program_digest(json.loads(case["params"]["program"])) == codec.program_digest(program)
+    case = SC.inference_only_case(_naming(v1_case(bare, bq), whole), 1, 1, circuit=record)
+    assert codec.program_digest(json.loads(case["params"]["program"])) == codec.program_digest(whole)
+    with pytest.raises(SC.Refused, match=r"nor the wired Program of a circuit record \(none is beside the audit\)"):
+        SC.inference_only_case(v1_case(whole, wq), 1, 1)
+    with pytest.raises(SC.Refused, match="another Program than v1's params, and no Program of the window's circuit record"):
+        SC.inference_only_case(_naming(v1_case(whole, wq), bare), 1, 1, circuit=record)
+    with pytest.raises(SC.Refused, match="the circuit record's templates aren't the root's"):
+        SC.inference_only_case(v1_case(whole, wq), 1, 1, circuit={**record, "templates": [["Other_v1", SLOTS]]})
 
 
 def test_a_log_that_chains_to_the_record_is_the_cases_log(tmp_path):
@@ -1387,13 +1424,14 @@ def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(
     reg = Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target=H200), default_seed=7)
     circuit = class_circuit(reg, WindowClass(4, 32, 4), None, Grain(gemm_words=1024, rows=256, select=64))
     program, query = circuit.program()
+    record = {**circuit.description(), "external": list(circuit.external)}
     v1 = v1_case(program, query)
-    alpha, gates = SC.division_policy(v1, [], inference_only_exe, tmp_path / "s")
+    alpha, gates = SC.division_policy(v1, [], inference_only_exe, tmp_path / "s", record)
     bits = alpha * gates
     assert bits.denominator == 1, (alpha, gates)
     bits = bits.numerator
     for gamma, verdict in ((gates, "accept"), (gates - 1, "reject")):
-        got, _ = SC.lean_answer(inference_only_exe, SC.inference_only_case(v1, alpha, gamma), tmp_path / "s")
+        got, _ = SC.lean_answer(inference_only_exe, SC.inference_only_case(v1, alpha, gamma, circuit=record), tmp_path / "s")
         assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), verdict), got
     print(json.dumps({"class": "4,32,4", "templates": len(circuit.templates), "gates": gates, "input_bits": bits,
                       "program_bytes": len(codec.canonical_json(v1["params"]["program"]))}, sort_keys=True))

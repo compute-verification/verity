@@ -51,6 +51,7 @@ from verity import hooks as H
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_served as WS
+from verity.protocols.resource_accounting.memory.pous.scheme import MEMORY_ATTESTER
 from verity.runtime.stream import Side
 from verity_vllm.messages import Exchange
 
@@ -83,11 +84,13 @@ if unknown := sorted(set(doc) - set(wipe.settings) - set(WS.FACTS)):
             f"{sorted(WS.FACTS)}")
 given = {k: v for k, v in doc.items() if k in wipe.settings}
 facts = json.loads(json.dumps(WS.FACTS | {k: v for k, v in doc.items() if k in WS.FACTS}))
-ctx = {"process": H.ENGINE, "side_of": Side.of, "private": f"{serve_dir}/private", "trusted": trusted or None,
+ctx = {"process": H.PIECE, "side_of": Side.of, "private": f"{serve_dir}/private", "trusted": trusted or None,
        "node": node, "judge": judge or None, **facts}
 try:
     settings = S.settings(wipe, given)
-    if why := WS.refusals(ctx | {"settings": settings, "pins": json.loads(pins) if pins else None}):
+    # the scheme's attach hands the party in (below); this check runs before it, so it hands the scheme's own
+    if why := WS.refusals(ctx | {"settings": settings, "pins": json.loads(pins) if pins else None,
+                                 "party": MEMORY_ATTESTER}):
         raise ValueError(f"wipe: {'; '.join(why)}")
 except ValueError as e:
     refused(str(e).removeprefix("wipe: "))

@@ -11,6 +11,7 @@ from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.partition_object import calls
 from verity.circuits.types import Array, Value, field_starts, field_types
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.commitments import registered_value as RV
 
@@ -62,10 +63,10 @@ def two():
     own0, own1 = _own_ports(w0, OPEN[0]), _own_ports(w1, OPEN[1])
     com = E.commit(w0.program, _served(w0, [[1, 2, 3, 4], [10, 11, 12], [20, 21, 22], [30, 31, 32]]), WORDS, OPEN[0])
     ports0 = {**own0, **E.out_ports(w0.program, PORTS, WORDS, OPEN[0])}
-    rec0 = R.record(w0.program, _query(w0), DESIGN, SCHEME, [{"port": p, "root": "ab" * 64, **own0[p]} for p in own0] + E.roots(com),
+    rec0 = DK.record(w0.program, _query(w0), DESIGN, SCHEME, [{"port": p, "root": "ab" * 64, **own0[p]} for p in own0] + E.roots(com),
                     {**SERVED, "row": 0})
     roots1 = [{"port": p, "root": "cd" * 64, **own1[p]} for p in own1]
-    rec1 = R.record(w1.program, _query(w1), DESIGN, SCHEME, roots1, {**SERVED, "row": 1}, previous=DD.digest(rec0), registered=E.entries(com))
+    rec1 = DK.record(w1.program, _query(w1), DESIGN, SCHEME, roots1, {**SERVED, "row": 1}, previous=DD.digest(rec0), registered=E.entries(com))
     kw = {"sampling_design": DESIGN, "scheme": SCHEME, "ports": own1, "window_root": OPEN[1], **E.history(w1.ports, WORDS)}
     return {"w0": w0, "w1": w1, "com": com, "ports0": ports0, "rec0": rec0, "rec1": rec1, "roots1": roots1, "kw": kw}
 

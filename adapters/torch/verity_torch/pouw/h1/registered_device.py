@@ -328,8 +328,7 @@ def _zy(torch: Any) -> tuple[ctypes.CDLL, Any, int]:
     index = torch.cuda.current_device()
     if index not in _ZY_LIBS:
         d = _device(torch)
-        major, minor = torch.cuda.get_device_capability(index)
-        lib = zy_device_lib(f"{major}{minor}")
+        lib = zy_device_lib(RTL.arch(torch.cuda.get_device_name(index)))
         key, tab = np.frombuffer(HM_KEY, np.uint8).copy(), np.empty(1 << 13, np.uint8)
         lib.zy_nibbles(key.ctypes.data, tab.ctypes.data)
         with torch.cuda.stream(d.stream):

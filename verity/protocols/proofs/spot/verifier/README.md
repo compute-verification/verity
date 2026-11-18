@@ -411,7 +411,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
 ### The docket
 
 A docket fixes everything a sampled proof block's statement can depend on before the verifier samples. Its record,
-`verity/registration/v1` (`one_stage.docket.record`), names the program, query and partition digests, the
+`verity/registration/v1` (`prover.docket.record`), names the program, query and partition digests, the
 population, the sampling design expanded over the verifier's program and query, the commitment scheme, each port's root
 with its leaf count and domain, the leaf layer, the anchors, the run (`window`: its provenance, `served` or `stand-in`, the
 stream and prover it is bound to, and its seed salt) and `previous`, the digest of this prover's last record. A record

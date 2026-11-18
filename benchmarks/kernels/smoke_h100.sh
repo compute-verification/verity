@@ -32,7 +32,11 @@
 #     zy.device          the z/y commit's device tests, `test_pouw_h1_registered_device.py`; its one strict xfail (a window
 #                        served on the device, which waits for compute-accounting's switch) is named in the reason
 #     zy.h1_zy_gpu       `h1_zy_gpu.py` at one repetition: each call's device records equal to the two kernels apart
-#     device_libs.gate   the harness's gate on every device library those tests built
+#     device_libs.gate   the harness's gate on every device library the four steps above loaded, a build reused from the
+#                        cache included, as the dynamic loader recorded it (LD_DEBUG) in a directory made fresh for the
+#                        run: a library an earlier run left in the scratch that nothing loaded is not gated, a shared
+#                        object with no device code (Triton's host modules) is named and passed over, and the reason
+#                        says which libraries are pinned and which unpinned (`device_libs_gate.py`)
 #     commit_gpu.selftest, commit_gpu.check, commit_gpu.check_small
 #                        the binary's selftest, then `reference.py check` of it on the cases, with and without
 #                        COMMIT_GPU_SMALL=1
@@ -96,7 +100,10 @@ ZY_T=$ROOT/tests/adapters/vllm
 ZY_FILE=tests/protocols/test_pouw_h1_registered_device.py
 ROWS=$SCRATCH/rows.txt
 SKIPPED=77
-CUDA="" GENCODE="" NVCC_VERSION="" GPU="" CARD_OK=0
+CUDA="" GENCODE="" NVCC_VERSION="" GPU="" CARD_OK=0 LOADED=""
+# the target the smoke's builds are for: Pearl-C's tree says its own (build.sh --arch; it refuses another's GENCODE)
+TARGET=$(bash "$PEARL/build.sh" --arch) && [[ "$TARGET" =~ ^[a-z]+_[0-9]+[a-z]?$ ]] || {
+  echo "smoke_h100.sh: $PEARL/build.sh --arch names no one target its kernels are built for (it said: ${TARGET:-nothing})" >&2; exit 2; }
 : > "$ROWS"
 
 sha() { sha256sum "$1" | cut -d' ' -f1; }
@@ -175,8 +182,8 @@ p_toolkit() {
     REASON="machine.py toolkit 13.0 names no toolkit with nvcc: set CUDA_HOME to the node's CUDA 13.0"
     [ "$DRY" = 1 ] && return "$SKIPPED"; return 1; }
   if arch=$(python3 "$ROOT/benchmarks/kernels/machine.py" arch); then said="the machine's record states $arch"
-  else arch=sm_90a; said="the machine's record is unread here, so sm_90a is taken and the card step holds the card to it"; fi
-  [ "$arch" = sm_90a ] || { REASON="the machine's card is $arch: this smoke is sm_90a's"; return 1; }
+  else arch=$TARGET; said="the machine's record is unread here, so $TARGET is taken, Pearl-C's build's, and the card step holds the card to it"; fi
+  [ "$arch" = "$TARGET" ] || { REASON="the machine's card is $arch: this smoke's builds are $TARGET's"; return 1; }
   GENCODE=$(python3 "$ROOT/benchmarks/kernels/machine.py" gencode "$arch") || { REASON="no -gencode for $arch"; return 1; }
   CUDA=$kit
   NVCC_VERSION=$("$CUDA/bin/nvcc" --version | grep -oE 'V[0-9]+\.[0-9]+\.[0-9]+' | head -1)
@@ -300,7 +307,9 @@ p_card_sku() {
   case $said in "CARD_SKU is not set"*) ;; *) REASON="verity_vllm.settings no longer refuses an unset CARD_SKU by that name (it said: $said), so what the card step exports is not what it reads"; return 1 ;; esac
   if sku=$(python3 "$ROOT/benchmarks/kernels/machine.py" sku 2> "$SCRATCH/card_sku.err") && [ -n "$sku" ]; then
     arch=$(vllm_arch "$sku")
-    [ "$arch" = 9.0a ] || { REASON="under CARD_SKU=$sku, this host's card's record, vLLM's settings build for '$arch', not 9.0a (sm_90a)"; return 1; }
+    [ -n "$GENCODE" ] || { REASON="no -gencode to hold vLLM's arch under CARD_SKU=$sku to (step toolkit)"; [ "$DRY" = 1 ] && return "$SKIPPED"; return 1; }
+    # vLLM writes the arch as torch does (9.0a); the toolkit step's -gencode ends with the same target without the dot
+    [ "${arch/./}" = "${GENCODE##*_}" ] || { REASON="under CARD_SKU=$sku, this host's card's record, vLLM's settings build for '$arch', not for -gencode $GENCODE"; return 1; }
     REASON="vLLM's settings refuse an unset CARD_SKU, and under CARD_SKU=$sku, this host's card's record, build for $arch; the card step sets it"
   elif [ "$DRY" = 1 ]; then
     REASON="vLLM's settings refuse an unset CARD_SKU by that name; no card here names its record ($(head -c 200 "$SCRATCH/card_sku.err" | tr '\n' ' ')), so the name is first read on the card, where the card step sets it"
@@ -358,10 +367,11 @@ c_card() {
   uuid=${uuid# } name=${name# }
   printf '%s\n' "$row" > "$O/gpu.txt"
   arch=$(python3 "$ROOT/benchmarks/kernels/machine.py" arch "$name") || { REASON="no card record names $name"; return 1; }
-  [ "$arch" = sm_90a ] || { REASON="$name's record states $arch, and the builds are sm_90a's"; return 1; }
+  [ "$arch" = "$TARGET" ] || { REASON="$name's record states $arch, and the builds are $TARGET's"; return 1; }
   sku=$(python3 "$ROOT/benchmarks/kernels/machine.py" sku "$name") && [ -n "$sku" ] || { REASON="no card record names $name, so there is no CARD_SKU to set"; return 1; }
   [ -z "${CARD_SKU:-}" ] || [ "$CARD_SKU" = "$sku" ] || { REASON="CARD_SKU is $CARD_SKU here, and $name's record is $sku"; return 1; }
   export CUDA_VISIBLE_DEVICES=$index PEARLC_EXPECT_UUID=$uuid CARD_SKU=$sku
+  LOADED=$(mktemp -d "$SCRATCH/loaded.XXXXXX") || { REASON="no directory for the loader's record"; return 1; }
   GPU=$name CARD_OK=1
   REASON="$name, index $index, its record states $arch; CARD_SKU=$sku set for the card's steps"
 }
@@ -389,11 +399,12 @@ c_pearl_check() {
 }
 
 # device_tests DIR NAME FILE: a suite's device tests, their libraries built under the scratch (the builds' cache is in
-# the home directory)
+# the home directory), every process's loads recorded under LOADED
 device_tests() {
   held || return 1
   mkdir -p "$SCRATCH/home"
-  HOME=$SCRATCH/home PATH=$CUDA/bin:$PATH LD_LIBRARY_PATH=$CUDA/lib64:${LD_LIBRARY_PATH:-} tests "$1" "$O/logs/$2.xml" card "$3"
+  HOME=$SCRATCH/home PATH=$CUDA/bin:$PATH LD_LIBRARY_PATH=$CUDA/lib64:${LD_LIBRARY_PATH:-} LD_DEBUG=files LD_DEBUG_OUTPUT=$LOADED/ld \
+    tests "$1" "$O/logs/$2.xml" card "$3"
 }
 c_rows() { device_tests "$ROWS_T" rows.device test_engine.py; }
 c_slots() { device_tests "$SLOTS_T" slots.device test_gpu.py; }
@@ -403,7 +414,7 @@ c_zy_gpu() {
   held || return 1
   mkdir -p "$SCRATCH/home" "$SCRATCH/zy"
   (cd "$ZY_T" && HOME=$SCRATCH/home PATH=$CUDA/bin:$PATH LD_LIBRARY_PATH=$CUDA/lib64:${LD_LIBRARY_PATH:-} \
-    "$PY" tests/protocols/h1_zy_gpu.py --out "$SCRATCH/zy" --reps 1 > "$SCRATCH/zy/h1_zy_gpu.log" 2>&1)
+    LD_DEBUG=files LD_DEBUG_OUTPUT=$LOADED/ld "$PY" tests/protocols/h1_zy_gpu.py --out "$SCRATCH/zy" --reps 1 > "$SCRATCH/zy/h1_zy_gpu.log" 2>&1)
   local rc=$?
   # the verdicts without the script's timings, which one repetition does not measure
   sed -E 's/  kernels .*//; /^step \(/d' "$SCRATCH/zy/h1_zy_gpu.log"
@@ -413,15 +424,15 @@ c_zy_gpu() {
 
 c_libs_gate() {
   held || return 1
-  local libs=() names="" sums=""
-  mapfile -t libs < <(find "$SCRATCH/home" -name '*cuda*.so' 2> /dev/null | sort)
-  [ ${#libs[@]} -gt 0 ] || { REASON="the device tests built no library under the scratch"; return 1; }
-  for lib in "${libs[@]}"; do
-    names="$names${names:+, }$(basename "$lib")"; sums="$sums${sums:+,}$(basename "$lib")=$(sha "$lib")"
-  done
-  SHA=$sums
-  gate "$O/device_libs_gate.json" "${libs[@]}" || { REASON="the harness's gate flags an instruction in one of: $names"; return 1; }
-  REASON="${#libs[@]} libraries pass the harness's gate: $names"
+  local said rc
+  said=$(python3 "$ROOT/benchmarks/kernels/device_libs_gate.py" --home "$SCRATCH/home" --record "$LOADED" \
+    --cuda-bin "$CUDA/bin" --json "$O/device_libs_gate.json")
+  rc=$?
+  printf '%s\n' "$said"
+  REASON=${said##*$'\n'}
+  SHA=$(sed -n 's/^loaded: //p' <<< "$said" | while read -r lib; do printf '%s=%s,' "$(basename "$(dirname "$lib")")/$(basename "$lib")" "$(sha "$lib")"; done)
+  SHA=${SHA%,}
+  return $rc
 }
 
 cg_bin() {

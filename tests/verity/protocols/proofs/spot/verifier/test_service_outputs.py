@@ -20,6 +20,7 @@ from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
 
 import fake_challenger as FC
 
@@ -88,7 +89,7 @@ def _record(program: Program, query, sizes: Mapping[str, int], sampling_design, 
     ports = {v: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), v, SCHEMA, n, RUN)}
              for v, n in sizes.items()}
     roots = [{"port": v, "root": f"{row:02x}{i + 1:02x}" * 32, **ports[v]} for i, v in enumerate(sizes)]
-    return R.record(program, query, sampling_design, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row, **window},
+    return DK.record(program, query, sampling_design, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row, **window},
                     previous=previous, registered=list(registered)), ports
 
 

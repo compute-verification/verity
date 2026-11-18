@@ -19,6 +19,7 @@ from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C, coins as T
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
 
 import fake_challenger as FC
 
@@ -83,7 +84,7 @@ def _ports(n: int) -> dict:
 def _record(n: int = 6, sampling_design=None, row: int = 0, previous: str | None = None, work_table=None, **change) -> dict:
     ports = _ports(n)
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
-    rec = R.record(PN.population_program(PAIR, n), QUERY, sampling_design or {"law": "subset", "k": 2}, S.SCHEME, roots,
+    rec = DK.record(PN.population_program(PAIR, n), QUERY, sampling_design or {"law": "subset", "k": 2}, S.SCHEME, roots,
                    {"kind": "served", "run": RUN, "row": row}, previous=previous, work_table=work_table)
     return {**rec, **change}
 

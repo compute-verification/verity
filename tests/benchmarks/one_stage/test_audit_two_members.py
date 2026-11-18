@@ -56,7 +56,8 @@ import pytest
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import members as M, proofs as PF, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import members as M, proofs as PF
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.commitments import registered_value as RV
@@ -134,7 +135,7 @@ def _window(d: Path, flipped: bool = False, own: str | None = None) -> Path:
         if flipped and k == KS[-1]:
             out.reshape(-1)[0] ^= 1
         win.record(t, ins, [out])
-    win.write(win.close(salts_of=fixed(win)), d, {"label": "test"}, registrar=R)
+    win.write(win.close(salts_of=fixed(win)), d, {"label": "test"}, registrar=DK)
     return d
 
 

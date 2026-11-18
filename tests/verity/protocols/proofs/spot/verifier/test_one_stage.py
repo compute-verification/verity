@@ -29,6 +29,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     docket as R,
     caller as C,
 )
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -52,7 +53,7 @@ def _registration(n: int = 6, window=SERVED, version: int = 1):
     q = P.template_instance_query(PAIR.id)
     ports = _ports(prog, q, n)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
-    return prog, q, R.record(prog, q, SAMPLING_DESIGN, SCHEME, roots, window, leaf_layer="ee" * 64)
+    return prog, q, DK.record(prog, q, SAMPLING_DESIGN, SCHEME, roots, window, leaf_layer="ee" * 64)
 
 
 def _check(rec, prog, q, **kw):
@@ -528,7 +529,7 @@ def test_a_record_over_an_explicit_partition_object():
     old = {"program": P.program_digest(prog), "query": {"name": q["name"], "version": 0, "template": PAIR.id, "width_rule": None}}
     ports = _ports(prog, q, 6)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
-    rec = R.record(prog, q, SAMPLING_DESIGN, SCHEME, roots, SERVED, leaf_layer="ee" * 64, partition=old)
+    rec = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, roots, SERVED, leaf_layer="ee" * 64, partition=old)
     assert rec["partition"] == P.digest(old) != P.digest(P.partition(prog, q))
     assert "R2-partition" in _check(rec, prog, q).codes
     assert R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64, partition=old).ok
@@ -591,7 +592,7 @@ def _stratified_docket():
     ports = _ports(prog, q, 6)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
     rule = RND.parse_design("stratified:4")
-    return prog, q, rule, R.record(prog, q, rule, SCHEME, roots, SERVED, leaf_layer="ee" * 64)
+    return prog, q, rule, DK.record(prog, q, rule, SCHEME, roots, SERVED, leaf_layer="ee" * 64)
 
 
 def test_r1_holds_the_registered_strata_to_the_verifiers_own():
@@ -826,7 +827,7 @@ def test_r8_publishes_the_fan_out_and_refuses_a_run_input_two_proof_blocks_read(
         inputs = [k for k, node in enumerate(shared.root.body.nodes) if is_input(node.fn)]
         assert P.fanout(shared, q) == 1 and P.shared_inputs(shared, q) == inputs
         ports = _ports(shared, q, n)
-        rec = R.record(shared, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+        rec = DK.record(shared, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
                        leaf_layer="ee" * 64)
         v = _check(rec, shared, q)
         assert v.codes == ("R8-shared-input",) and v.detail["R8-shared-input"]["inputs"] == inputs and v.fanout == 1
@@ -849,7 +850,7 @@ def test_r8_lets_a_tied_run_input_through_and_publishes_it():
     for shared in _two_programs():
         n = P.units(shared, q)
         ports = _ports(shared, q, n)
-        rec = R.record(shared, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+        rec = DK.record(shared, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
                        leaf_layer="ee" * 64)
         v = _check(rec, shared, q, tied=["t"])
         assert v.ok and v.rests_on_period_check == ("t",) and v.fanout == 1
@@ -946,7 +947,7 @@ def _work_docket():
     ports = _ports(prog, q, 6)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
     rule, table = RND.parse_design("work:4"), {PAIR.id: 10, XOR3.id: 0}
-    return prog, q, rule, table, R.record(prog, q, rule, SCHEME, roots, SERVED, leaf_layer="ee" * 64, work_table=table)
+    return prog, q, rule, table, DK.record(prog, q, rule, SCHEME, roots, SERVED, leaf_layer="ee" * 64, work_table=table)
 
 
 def test_r1_holds_a_work_sampling_design_to_the_verifiers_own_table():

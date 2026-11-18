@@ -60,13 +60,14 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     verdict = node.read(N.VERDICT_FILE)
     assert (verdict["identity"], verdict["point"], verdict["passed"], verdict["why"]) == (node.identity, POINT, True, None)
     assert list(verdict["verdict"]["checks"]) == list(S.CHECKS)
+    assert verdict["checked_by"] == "piece", "this job judges the row on the node, and the sessions' verifiers ran there"
     result = node.read("result.json")
     assert result["kind"] == N.KIND and result["validation"]["status"] == "passed" and result["run_id"] == RUN
     assert result["workload_fingerprint"]["identity"] == node.identity
     assert result["schema"] == kit.RESULT_SCHEMA
     assert result["measurements"] == [{
         "name": "benchmarks/flock-steady.statements-per-s", "value": row["statements_per_s"], "unit": "1/s", "mark": "measured",
-        "commit": STAMP["commit"], "run": RUN, "ci95": None, "target": None, "verdict": None,
+        "version": 1, "commit": STAMP["commit"], "run": RUN, "ci95": None, "target": None, "verdict": None,
         "inputs": ["measured", "spec steady", f"identity {node.identity}"], "member": POINT, "host": STAMP}], (
         "the kit's writer's: the point's own, by its id, from its spec at its identity")
 

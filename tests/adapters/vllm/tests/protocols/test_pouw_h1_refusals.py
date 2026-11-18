@@ -2068,7 +2068,7 @@ def test_h1_hashes_with_numpy_and_says_why_where_cuda_is_there_and_its_kernels_d
     built: list[tuple] = []
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
-    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device: (12, 0))
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda device: "NVIDIA RTX PRO 6000 Blackwell Server Edition")
     monkeypatch.setattr(RGD, "nvcc", lambda: None)
     with pytest.warns(RuntimeWarning) as said:
         assert RGD.available.__wrapped__() is False
@@ -2123,7 +2123,8 @@ def test_a_rank_call_with_no_rows_or_off_the_programs_order_refuses_the_windows_
 
     def row(index, step, layer, **shipped):
         n, k = TS.SHAPES[layer]
-        return {"call": dataclasses.asdict(PH.Call(index, step, layer, TS.MODULES[layer], 0, k, n, 0, TS.T)), **shipped}
+        return {"call": dataclasses.asdict(PH.Call(index, step, layer, TS.MODULES[layer], 0, k, n, 0, TS.T)), "salts": {},
+                **shipped}
     past = TS.STEPS * linears
     for shipped, said in ((row(0, 0, 0), "call 0: its rank shipped no rows for the window's registered tables"),
                           (row(1, 0, 0, served={}), "call 1 (step 0, linear 0) is off the declared Program's order"),
@@ -2578,7 +2579,7 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     monkeypatch.setattr("verity.protocols.resource_accounting.compute.pouw.prover.serving.device.nvcc", lambda: None)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
-    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device: (12, 0))
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda device: "NVIDIA RTX PRO 6000 Blackwell Server Edition")
     with pytest.warns(RuntimeWarning) as said:
         assert TBD.available.__wrapped__() is False
     assert [str(w.message) for w in said] == [("H1's call tables hash with hiding_rows: the GPU path doesn't build here "
@@ -2598,14 +2599,14 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
         raise OSError("the stand-in builds nothing")
 
     monkeypatch.setattr(RGD.RTD, "_build", builds_nothing)
-    monkeypatch.setattr(torch.cuda, "get_device_capability", {0: (12, 0)}.__getitem__)
+    monkeypatch.setattr(torch.cuda, "get_device_name", {0: "NVIDIA RTX PRO 6000 Blackwell Server Edition"}.__getitem__)
     with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(RuntimeError: no nvcc "):
         assert RGD.zy_available.__wrapped__() is False
     monkeypatch.setattr("verity.protocols.resource_accounting.compute.pouw.prover.serving.device.nvcc", lambda: "/a/toolchain/nvcc")
     with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(OSError: the stand-in builds nothing\)"):
         assert RGD.zy_available.__wrapped__() is False
     assert built[1:] == [(0, RGD.device_lib, "rr_midstates")] * 2
-    assert asked == [("/a/toolchain/nvcc", tuple(RGD.ZY_DEVICE_SOURCES), "-gencode=arch=compute_120,code=sm_120",
+    assert asked == [("/a/toolchain/nvcc", tuple(RGD.ZY_DEVICE_SOURCES), "-gencode=arch=compute_120a,code=sm_120a",
                       "libzy_commit_cuda.so")]
     held = (object(), object(), 9)
     monkeypatch.setitem(RGD._ZY_LIBS, 0, held)

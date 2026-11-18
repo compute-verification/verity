@@ -19,6 +19,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import 
     H1Run,
     registered,
 )
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.challenger import (
     drawn_of,
 )
@@ -211,10 +212,11 @@ def test_commitments_that_name_no_session_give_a_window_with_no_key_of_its_own_n
 def test_a_window_that_holds_no_program_digest_commits_a_tree_whose_domain_names_no_program():
     """`Served._tree` hands `registered.commit` the Program digest as the window holds it: None until `Served.declare`,
     which the tree's domain then names as its program, as it names any digest."""
-    words, key = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], np.uint16), bytes(range(32))
-    tree = Served()._tree(SimpleNamespace(_key=key), "t/x", words, 0, ROOT)
-    assert tree.program is None and tree.root == registered.commit(None, "t/x", words, key, 0, window=ROOT).root
-    assert tree.root != registered.commit("p", "t/x", words, key, 0, window=ROOT).root
+    words, run = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], np.uint16), SimpleNamespace(_salts=PV.RunSalts())
+    tree = Served()._tree(run, "t/x", words, 0, ROOT)
+    salts = run._salts.at(0, 2)
+    assert tree.program is None and tree.root == registered.commit(None, "t/x", words, salts, window=ROOT).root
+    assert tree.root != registered.commit("p", "t/x", words, salts, window=ROOT).root
 
 
 @pytest.mark.parametrize("row", [{}, {"tables": None}, {"tables": {}}, {"tables": 0}, {"tables": {"z": ROOT}}],

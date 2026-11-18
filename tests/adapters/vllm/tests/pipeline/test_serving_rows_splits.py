@@ -54,6 +54,7 @@ from verity_vllm.definitions.registry import sparse_mla_split as W
 from verity_vllm.query.program_view import spec_statics
 
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
@@ -512,7 +513,7 @@ def test_readers_whose_key_rows_are_trees_of_their_own_are_refused_at_registrati
 
     def codes(win: CS.Binding, data: list[dict]) -> tuple[str, ...]:
         c = CS.commit(win, data)
-        rec = CS.registration(c, {"by": "test"}, None, registrar=R)
+        rec = CS.registration(c, {"by": "test"}, None, registrar=DK)
         return tuple(R.check(rec, w.program, w.query, design, CS.SCHEME, CS.expected_ports(w),
                              leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(win.members)})).codes)
 

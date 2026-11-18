@@ -12,7 +12,8 @@ clean tree, wrote an `overhead.json` of `RUN_SCHEMA` the
 node side found nothing against, was timed at the points of an art of record that nothing supersedes, ran its arm's cubin
 from the `art:` it was sent (`run --cubin ART`; the art's bytes a binary the run's SASS gate passed, `cubin_why`; a cubin
 built in the run is development only), and its own point passed the door's rules (`overhead.point_whys`: every linear timed, at least 20 paired reps, an
-interval within ±5%, the cross-check, the arm's reference verifier accepting every row). `table` refuses every other
+interval within ±5%, the cross-check, the arm's reference verifier accepting every row: run by the node job on its own
+transcript, so the developer's side's word, its `checked_by` `piece`, `not recorded` for a run that predates the field). `table` refuses every other
 figure and says why; a reader of γ outside this package (the protocol table, the one-pager, a goal) takes it from
 `verity bench overhead table --json`, whose rows carry `of_record` and `why`.
 
@@ -34,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs, kit, settings
+from verity_bench.kit_report import NOT_RECORDED, PIECE
 from verity_bench import overhead as O
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, records
 
@@ -56,6 +58,11 @@ DATACENTER, WORLD = "dc-12500-machines-600s", "world-inference-2027"
 GATES = Path("benchmarks/slowdown/data/hardware.toml")
 #: the table a research run of `table` keeps beside its result, relative to the run's directory (`record`)
 TABLE = "out/overhead-table.json"
+#: the line under each γ table: who ran the check a γ of record needs, and under what coins
+REFERENCE_VERIFIER = (f"A γ of record needs its arm's reference verifier to accept every row; `checked by` `{PIECE}`: the "
+                      "node job runs it (`verify.py --every-row`) on the node's own transcript, a replay that recomputes "
+                      "the scheme in the clear, so its accept is the developer's side's word, not an audit. `overhead.json` "
+                      "records no coins of it: the arm's verifier writes what it drew under the run's `verdicts/`.")
 #: the unit of every γ `record` writes
 GAMMA_UNIT = "busy SM-seconds over stock's, less one: a fraction, not a percent"
 #: each model as the words that open its member, `MODEL-CARD` (`measurements`)
@@ -262,7 +269,8 @@ def gamma_rows(store: Any) -> list[dict]:
                    "gamma_weight_side_bound": p.get("gamma_weight_side_bound"), "aa": p.get("aa"),
                    "epsilon": p.get("epsilon"), "perplexity": p.get("perplexity"), "gate": p.get("gate"),
                    "linears": p.get("linears"), "commits_y": None if arm is None else bool(arm.get("commits_y")),
-                   "note": O.row_note(arm, doc.get("card"))}
+                   "note": O.row_note(arm, doc.get("card")),
+                   "checked_by": "—" if arm is None else p.get("checked_by") or NOT_RECORDED}
             why = whys + list(p.get("whys") or [])
             row |= {"of_record": not why, "why": "; ".join(why) or None}
             best[(row["scheme"], row["card"], row["model"], name)] = row
@@ -448,8 +456,8 @@ def render(table: Mapping) -> str:
 
 
 def _section(c: Mapping, rows: list[dict], covers: str) -> str:
-    lines = ["| Scheme | Card | Point | m | γ, × stock − 1 [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run | Note |",
-             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    lines = ["| Scheme | Card | Point | m | γ, × stock − 1 [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Reference verifier checked by | Run | Note |",
+             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     refused = []
     for r in rows:
         if not r["of_record"]:
@@ -458,8 +466,9 @@ def _section(c: Mapping, rows: list[dict], covers: str) -> str:
         gate = r.get("gate") or {}
         lines.append(f"| {r['scheme']} | {r['card']} | {r['point']} | {r['m']} | {_g(r['gamma'])} | {_g(r['gamma_least_sm'])} "
                      f"| {_g(r['gamma_weight_side_bound'])} | {_g(r['aa'])} | {_eps(r['epsilon'])} | "
-                     f"{'yes' if gate.get('passes') else 'no'} | {r['run']} | {r.get('note') or ''} |")
+                     f"{'yes' if gate.get('passes') else 'no'} | {r.get('checked_by') or NOT_RECORDED} | {r['run']} | {r.get('note') or ''} |")
     lines += ["", covers,
+              "", REFERENCE_VERIFIER,
               "", (f"Per monitoring period, over all compute: the {c['datacenter']} datacenter's {c['gpus']:,} GPUs in "
                    f"{c['window_s']} s windows, spending the share γ/(1+γ) of its compute on proving, and the world's "
                    f"{c['world_flop_per_year']:.3g} FLOP a year of useful work ({c['world']}), to which proving adds γ times it. "

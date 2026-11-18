@@ -6,11 +6,11 @@
 #   `Draw` modules' paths, as whole words in every file that spells them (`[[words_in]]`, files "*"):
 #   `Accounting.Remote.Draw` and `.Assumptions`, `Accounting.SecurityProofs.Remote.Draw` (`Remote.Draw`), and the
 #   modules `…/Remote/Draw` and `…/RemoteHeld/Draw`, wherever the area that holds them stands.
-# - `tools/move/draw_bare.py code` then renames the unqualified bare words in code and in backticked names alone, never
-#   in prose or a string literal, in the files `[code.files]` lists. `draw_bare.py plan --write` writes that list: our
-#   files where no other owner's declaration of the word is reachable through the file's imports (Lean) or imported
-#   (Python), and no record serializes a field by its name. Every other file of ours that spells a bare word in code
-#   is in `[code.by_hand]`, renamed by hand and built; `[code.tokens]` holds the hand edits the build needs.
+# - `[code]` then renames the unqualified bare words in code and in backticked names alone, never in prose or a
+#   string literal, in the files `[code.files]` lists: our files where no other owner's declaration of the word is
+#   reachable through the file's imports (Lean) or imported (Python), and no record serializes a field by its name.
+#   Every other file of ours that spells a bare word in code is in `[code.by_hand]`, renamed by hand and built;
+#   `[code.tokens]` holds the hand edits the build needs.
 # Prose is left for its own map, and PoUW's files in the accounting area (`TS`, `Headline*`, `Compose*`, `HMu`,
 # `Pouw*`, `TS.Drawn` among them) for its lane.
 
@@ -54,7 +54,7 @@ files = ["*"]
 "RemoteHeld/Draw" = "RemoteHeld/Sample"
 
 [code]
-# the words `draw_bare.py code` renames, in code and backticks only
+# the bare words renamed in code and backticks only
 words = { Draw = "Sample", Drawn = "Sampled", draw = "sample", drawn = "sampled", draws = "samples" }
 # other owners' names our files spell, kept: Flock's and SPOT's `Draw` namespaces, Core's module and `Draw.Subset`,
 # PoUW's and SPOT's properties, Flock's sampling module, the game's `draw`
@@ -75,8 +75,7 @@ keep = [
 "security/Proofs/*/RemoteHeld/Sample.lean" = ["namespace Draw", "end Draw", "Draw.pooledSampleLive"]
 "security/Proofs/*/RemoteHeld/DrawMeets.lean" = ["Draw.arrange_lt", "Draw.prfAdvantage_honest", "Draw.four_le_words"]
 
-# `[code.files]` (each file's words) and `[code.by_hand]` (each file's reason) follow, as `draw_bare.py plan --write`
-# writes them on the moved tree
+# `[code.files]` (each file's words) and `[code.by_hand]` (each file's reason) follow, as written on the moved tree
 
 [code.files]
 

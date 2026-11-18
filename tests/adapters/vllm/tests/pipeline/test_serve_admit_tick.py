@@ -684,6 +684,23 @@ def test_a_run_has_one_watermark_stream_and_a_clients_post_is_none():
     assert admit.summary() == {"numbered": 1, "unordered": 0, "passed": 1, "lost": 1, "watermarks": 2, "runs": 2}
 
 
+def test_a_malformed_release_is_refused_by_the_formats_name_and_takes_nothing():
+    """`TickAdmit.key` reads a release as `verity.release.release_fields` does: a head with none is no release, and a
+    malformed N, run or bucket is refused by its header's name, with nothing taken or seen."""
+    q: list[Any] = []
+    admit = na.TickAdmit(q.append, lambda eid: q.append(("abort", eid)), lambda rec: q.append(("tick", rec)))
+    assert admit.key({"host": "s"}) is None
+    for fields, name in (({"x-verity-release": "1x"}, "x-verity-release"),
+                         ({"x-verity-release": "1", "x-verity-release-run": "a"}, "x-verity-release-run"),
+                         ({"x-verity-release": "1", "x-verity-release-run": RUN, "x-verity-release-bucket": "-1"},
+                          "x-verity-release-bucket")):
+        with pytest.raises(ValueError, match=f"^{name}: "):
+            admit.key(fields)
+    assert q == [] and admit.seen == {}
+    assert admit.key({"x-verity-release": "1", "x-verity-release-run": RUN, "x-verity-release-bucket": "4"}) == (RUN, 1)
+    assert admit.key({"x-verity-release": "2"}) == ("", 2)
+
+
 @contextlib.contextmanager
 def tick_endpoint() -> Iterator[SimpleNamespace]:
     """serve-openai under order ``tick`` over `SchedEngine`, its engine loop and its HTTP server each in a thread, until
@@ -908,7 +925,7 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
         for pre, post in ((bytes([b]), b""), (b"", bytes([b]))):
             line, *fields = stamped(pre, post, 3)[:-4].split(b"\r\n")
             assert REL.release_of(stamped(pre, post, 3)) == (3, run, 1)
-            assert na.release_of(hd.header_fields(fields)) == (RUN, 3, 1), (pre, post)
+            assert REL.release_fields(hd.header_fields(fields)) == (3, RUN, 1), (pre, post)
 
 
 def test_the_flag_takes_tick_with_the_engine_class_step_times_under_the_schemes_name(tmp_path):

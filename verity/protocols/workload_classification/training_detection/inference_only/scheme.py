@@ -34,4 +34,5 @@ S.register(S.Scheme(
     y_committed=CHARGES_NOTHING,
     salt_open_root=CHARGES_NOTHING,
     kernels=CHARGES_NOTHING,
+    answers=S.Lacks("has no piece that answers outside an exchange"),
 ))

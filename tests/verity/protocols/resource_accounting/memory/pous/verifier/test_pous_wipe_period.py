@@ -367,13 +367,13 @@ BOUND = {"streamer": "python", "host": "auditor", "address": "auditor:7000", "co
 
 
 def _attach(tmp_path, side_of, *, pins=..., configuration=CONF, trusted=None, judge=None):
-    """The wipe scheme's attach (`WIPE.attach`) in the engine's process, bound to the challenger on `auditor`, with
+    """The wipe scheme's attach (`WIPE.attach`) in its piece's process, bound to the challenger on `auditor`, with
     what a launcher hands it (the configuration's pin of `wipe_side.py`'s key by default); the case and record go under
     `tmp_path/private`."""
     private = tmp_path / "private"
     private.mkdir(exist_ok=True)
     ctx = {"settings": S.settings(WIPE, {"store": "python"}), **wipe_served.FACTS, **BOUND, "private": private,
-           "process": H.ENGINE, "side_of": side_of,
+           "process": H.PIECE, "side_of": side_of,
            "pins": side_pin() if pins is ... else pins, "configuration": configuration, "trusted": trusted,
            "node": "n0", "judge": judge}
     return WIPE.attach(None, ctx), private

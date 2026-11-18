@@ -9,7 +9,7 @@ import pytest
 
 from verity.protocols.resource_accounting.network.verifier.release import one_request, to_watermark
 from verity.release import (BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_END, WATERMARK_PATH,
-                                    read_watermark, release_head, release_of, watermark_chunk, watermark_head,
+                                    read_watermark, release_fields, release_head, release_of, watermark_chunk, watermark_head,
                                     with_release)
 
 BODY = b'{"prompt":"a\\r\\n\\r\\nb","max_tokens":4}'
@@ -93,6 +93,21 @@ def test_release_of_reads_the_first_of_each_and_refuses_a_malformed_one_by_name(
     for absent in (head(), head(b"x-verity-release-run: 00"), head(b"x-verity-release-bucket: 3"),
                    head(b"x-verity-release-run: zz"), watermark_head(RUN), b"x-verity-release: 4\r\n\r\n"):
         assert release_of(absent) is None
+
+
+def test_release_fields_is_the_one_reader_release_of_reads_a_head_through():
+    """A mapping of lower-cased header names gives what the head of those fields gives, the run as its hex, and the
+    same refusals by name; spaces and tabs around a value are not the value's."""
+    assert release_fields({}) is None and release_fields({"x-verity-release-run": "00"}) is None
+    assert release_fields({"x-verity-release": " 41\t", "x-verity-release-run": "00FF", "x-verity-release-bucket": "6"}) == (
+        41, "00FF", 6)
+    assert release_of(with_release(REQUEST, 3, RUN, 9)) == (3, bytes.fromhex(release_fields(
+        {"x-verity-release": "3", "x-verity-release-run": RUN.hex(), "x-verity-release-bucket": "9"})[1]), 9)
+    for fields, name in (({"x-verity-release": "\u0661"}, "x-verity-release"),
+                         ({"x-verity-release": "1", "x-verity-release-run": "abc"}, "x-verity-release-run"),
+                         ({"x-verity-release": "1", "x-verity-release-bucket": "\xa06"}, "x-verity-release-bucket")):
+        with pytest.raises(ValueError, match=f"^{name}: "):
+            release_fields(fields)
 
 
 def test_the_watermark_stream_is_one_chunked_post_of_one_line_a_tick():

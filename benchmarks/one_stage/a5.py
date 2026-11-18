@@ -371,7 +371,7 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
                   S.Check(digests[0] if one else digests, mine.query, proof_deadline=(a.session_timeout + 3600) * len(members)),
                   tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(a.window_root))
     stream = S.Stream(spec, units[0] if one else units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins,
-                      values=taken, log=tie(a).get("log", ()),
+                      values=taken, log=tie(a).get("log", ()), program=None if one else mine.program,
                       **(held if held is not None else AC.held(a.coins) if getattr(a, "coins", None) is not None else {}))
     return stream, None if one else {t: n for t, (_, n) in defs.items()}
 

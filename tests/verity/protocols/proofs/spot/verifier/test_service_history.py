@@ -8,7 +8,8 @@ from typing import Any
 
 from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
 
 from test_registered import (BINDING, BOUND, SAMPLING_DESIGN, MIXED, Q, SCHEME, SERVED, _mixed_case, _program, _registered,
                              _record as _registered_record, _seeded_case)
@@ -166,7 +167,7 @@ def test_r8_lets_a_tied_value_through_on_both_verifiers():
     is never a registered value."""
     prog = _program()
     first, ports = _registered_record(prog, _registered(prog))
-    v1 = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], SERVED)
+    v1 = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], SERVED)
     for rec, registered, tied, codes, through in (
             (v1, None, ["W"], (), ("W",)), (v1, None, None, ("R8-shared-input",), ()),
             (v1, None, ["nope"], ("R8-tied", "R8-shared-input"), ()), (first, {"W": 2}, ["W"], ("R8-tied",), ()),
@@ -187,7 +188,7 @@ def test_r7_reads_each_values_first_registration():
     stream = _stream()
 
     def at(row: int, previous: Any, entry: Any, **change: Any) -> dict:
-        return {**R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": row}, previous=previous,
+        return {**DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": row}, previous=previous,
                            registered=[entry] if entry else ()), **change}
 
     stream._append(stream._registration(first, 0))

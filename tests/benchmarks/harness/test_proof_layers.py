@@ -291,6 +291,9 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     for title in PL.LAYERS.values():
         assert f"| {title} |" in text
     assert "| Flock | not run |" in text and "- Flock: no number: not run" in text
+    assert text.splitlines()[-1] == ("- Lean verdicts: checked by: lean (recomputed by the Lean verifier in the run's own "
+                                     "job, on the developer's node), under the coins each benchmark result's `ran with:` "
+                                     "line names")
     doc = json.loads(line)
     assert doc["schema"] == PL.SCHEMA and [r["layer"] for r in doc["results"]] == list(PL.LAYERS)
     assert json.loads((tmp_path / "report" / "proof-layers.json").read_text()) == doc

@@ -180,7 +180,5 @@ def test_the_remote_session_keeps_a_weight_derived_copy_and_the_bandwidth_audit_
 
 
 def test_what_each_lacks_says_why() -> None:
-    with pytest.raises(LookupError, match="bandwidth attaches through no hook"):
-        poub.BANDWIDTH.attach(None, {})
     with pytest.raises(LookupError, match="poub declares no record: no combined record"):
         S.declared(poub.POUB, "record")

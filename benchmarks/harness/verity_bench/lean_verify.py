@@ -17,8 +17,9 @@ one's (`full`, else 2^35 witness bits' worth); the flags give or override them.
 
 **What is held to the circuit first, and what isn't.** The circuit's second line (`META {...}`) binds a partition
 (`partition`: a `rule` and a `digest`) and states a `program_sha512`. Before any verifier process starts, the command
-hashes a partition file under the bound rule (SHA-512 of the rule, a zero byte and the object's canonical JSON) and
-refuses one whose digest isn't the bound one, or one the circuit binds nothing for. Under the provisional rule
+hashes a partition file under the bound rule, by the proof system's own digest of that rule (`partition_object.digest`
+for `PARTITION_V1`, which refuses an object that isn't one, and `verity_flock.circuit.partition_digest` for the cover),
+and refuses one whose digest isn't the bound one, or one the circuit binds nothing for. Under the provisional rule
 (`PARTITION_COVER`) the verifier takes no partition object and refuses a session given one, so a partition file that
 is the bound cover is held back from it, and the record says so. After `archive-put`, the circuit's SHA-512 is held to
 `stage.json`'s `circuit_sha512` where it states one.
@@ -53,7 +54,8 @@ the proof's files with their bytes, the runs, the label of an accept, and the ho
 memory, the commit). `verity bench prove` reads it from a run labelled `run_of_record=prove-WORKLOAD-lean-verify`
 (`prove_records`).
 
-Standard library and `verity_bench.settings` only.
+Standard library, `verity_bench.settings`, and the proof system's definitions of the circuit's META, the partition's
+rules and digests and the program's digest (`verity_flock.circuit`, `verity.circuits`): none is defined again here.
 """
 
 from __future__ import annotations
@@ -73,7 +75,13 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from verity.circuits import partition_object
+from verity.circuits.codec import program_digest
+from verity_flock.circuit import PARTITION_RULE as PARTITION_COVER
+from verity_flock.circuit import PARTITION_V1, meta_of, partition_digest
+
 from verity_bench import settings
+from verity_bench.kit_report import LEAN
 
 SCHEMA = "verity-bench/lean-verify/v1"
 #: the record's name in the directory the command writes
@@ -81,9 +89,6 @@ RECORD = "lean-verify.json"
 STATEMENT_ID = "verity/flock-circuit"
 #: a full statement's witness bits (`prove.STATEMENT_BITS`)
 STATEMENT_BITS = 2**35
-#: the rules a circuit binds its partition under, as the Lean verifier names them (`Flock.HmRow`): an object the
-#: verifier reads (`--partition`), and the provisional cover, for which it takes none
-PARTITION_V1, PARTITION_COVER = "verity/partition/v1", "flock-circuit/unit-cover/v0"
 #: what an accept at `--zk` on a circuit under `PARTITION_COVER` holds, in the words `verity bench prove` prints
 COVER_LABEL = "accepted on the provisional unit cover, units as stated, the Program not held to the circuit"
 #: a phase the verifier times itself, as it prints it
@@ -166,25 +171,16 @@ def bound(circuit: Path) -> dict:
     states none. A circuit without that line states neither."""
 
     with open(circuit, "rb") as f:
-        f.readline()
-        line = f.readline()
-    if not line.startswith(b"META "):
+        head = f.readline() + f.readline()
+    if not head.partition(b"\n")[2].startswith(b"META ") or not head.endswith(b"\n"):
         return {"program_sha512": None, "partition": None}
     try:
-        meta = json.loads(line[5:])
+        meta = meta_of(head.decode())
     except ValueError as e:
         raise ValueError(f"{circuit}: its second line is not `META` and a JSON object ({e})") from e
     part = meta.get("partition") if isinstance(meta, dict) else None
     return {"program_sha512": meta.get("program_sha512") if isinstance(meta, dict) else None,
             "partition": {"rule": part.get("rule"), "digest": part.get("digest")} if isinstance(part, dict) else None}
-
-
-def _digest(obj: Any, rule: str = "") -> str:
-    """SHA-512 of `obj`'s canonical JSON (compact, keys sorted, ASCII: the bytes the Lean verifier's `canon` writes),
-    after `rule` and a zero byte where a rule tags it."""
-
-    return hashlib.sha512((rule.encode() + b"\0" if rule else b"")
-                          + json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def _json(path: Path, flag: str) -> Any:
@@ -197,7 +193,8 @@ def _json(path: Path, flag: str) -> Any:
 def hold(f: Files, stage: Mapping[str, Any]) -> dict:
     """What the circuit states (`bound`) and the files held to it. A partition file is held by its digest under the
     bound rule, as the verifier computes it (`HmRow.partitionDigest`; the provisional cover's the same bytes under its
-    own rule): one that isn't the bound object, or that the circuit binds nothing for, is refused here. `held` names
+    own rule): one that isn't the bound object, isn't a `PARTITION_V1` object under that rule, or that the circuit
+    binds nothing for, is refused here. `held` names
     the files that passed, and `withheld` the ones the verifier isn't given: the partition under `PARTITION_COVER`,
     for which it takes no object. The program is held to nothing the circuit states. `program` is the one handed: its
     digest as the verifier computes it (`ProvedScope.programDigest`: the descriptor without `annotations`) and the
@@ -210,9 +207,10 @@ def hold(f: Files, stage: Mapping[str, Any]) -> dict:
     named = part.get("program") if (to["partition"] or {}).get("rule") == PARTITION_V1 and isinstance(part, dict) else None
     if f.program:
         desc = _json(f.program, "--program")
-        fn = desc.get("program_fn") if isinstance(desc, dict) else None
-        doc["program"] = {"sha512": _digest({k: v for k, v in desc.items() if k != "annotations"}
-                                            if isinstance(desc, dict) else desc), "fn": fn}
+        if not isinstance(desc, dict):
+            raise ValueError(f"{f.program} (--program) is not a program descriptor, a JSON object: no verifier was started")
+        fn = desc.get("program_fn")
+        doc["program"] = {"sha512": program_digest(desc), "fn": fn}
         if named is None and None not in (fn, stage.get("word")) and fn != stage["word"]:
             raise ValueError(f"{f.program} is the program of another Definition than the statement's: its `program_fn` "
                              f"is {fn}, and {f.stage} names the `word` {stage['word']}: no verifier was started (the "
@@ -223,7 +221,10 @@ def hold(f: Files, stage: Mapping[str, Any]) -> dict:
             raise ValueError(f"{f.circuit} binds no partition under a rule this command hashes (its rule is {rule!r}; "
                              f"{PARTITION_V1} and {PARTITION_COVER} are), so nothing holds {f.partition} to it: no "
                              "verifier was started")
-        got = _digest(part, rule)
+        try:
+            got = partition_digest(part) if rule == PARTITION_COVER else partition_object.digest(part)
+        except ValueError as e:
+            raise ValueError(f"{f.partition} is no {PARTITION_V1} object ({e}): no verifier was started") from e
         if got != to["partition"]["digest"]:
             raise ValueError(f"{f.partition} is not the partition the circuit binds: its digest under {rule} is {got}, "
                              f"and {f.circuit} binds {to['partition']['digest']}: no verifier was started")
@@ -356,7 +357,7 @@ def measure(a: Any, out: Path, *, run: Callable[[Sequence[str], Path], tuple[int
         "proof": {"files": [_sized(p) for p in proofs], "bytes": sum(p.stat().st_size for p in proofs),
                   "record_bytes": (f.session / "session.json").stat().st_size},
         "verifier": {"command": [Path(a.lean).name, *cmd[1:]], "archive_put_s": round(put_s, 3), "repeat": a.repeat, "runs": runs},
-        "accepted": accepted, "label": label(to, not a.plain) if accepted else None,
+        "accepted": accepted, "checked_by": LEAN, "label": label(to, not a.plain) if accepted else None,
         "host": stamp(),
     }
 
@@ -388,7 +389,7 @@ def run(a: Any) -> int:
     doc = measure(a, out)
     (out / RECORD).write_text(json.dumps(doc, indent=1) + "\n")
     runs = doc["verifier"]["runs"]
-    print("LEAN-VERIFY " + json.dumps({"accepted": doc["accepted"], "block": doc["block"], "proof_bytes": doc["proof"]["bytes"],
+    print("LEAN-VERIFY " + json.dumps({"accepted": doc["accepted"], "checked_by": doc["checked_by"], "block": doc["block"], "proof_bytes": doc["proof"]["bytes"],
                                        "wall_s": [r["wall_s"] for r in runs], "maxrss_gib": [r["maxrss_gib"] for r in runs],
                                        "why": runs[-1]["why"], "host": doc["host"]}))
     if not doc["accepted"]:

@@ -1,6 +1,7 @@
 """`kept_bootstrap.sh` keeps pod_bootstrap.sh's environment under a key of what it is built from: built with no card and
 then its taps under the lease's prefix, reused while the key matches, built anew when it doesn't. Run on a tree whose
-pod_bootstrap.sh is a stand-in that records each call; the wheel, nvidia-smi and nvcc are stand-ins too."""
+pod_bootstrap.sh is a stand-in that records each call; the wheel, nvidia-smi, nvcc and the run's machine's record, which
+lists the toolkit, are stand-ins too."""
 
 from __future__ import annotations
 
@@ -16,6 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 OPS = "adapters/vllm/verity_vllm/ops"
 TAPS = ("pod_fa2_tap.sh", "pod_fa3_tap.sh", "pod_norm_tap.sh", "pod_router_tap.sh", "cuda_headers.sh")
+PROPERTIES = ("kind", "card", "cards", "cpus", "threads_per_core", "numa", "compiler", "profiler", "clock_lock", "root", "lease",
+              "launcher", "python", "job_cap_minutes")
 
 
 def _exe(path: Path, body: str) -> None:
@@ -24,10 +27,20 @@ def _exe(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-def _tree(tmp_path: Path) -> tuple[Path, dict[str, str]]:
+def _machine(run: Path, version: str, directory: Path) -> None:
+    """The run's machine's record as `research run --on` copies it, listing one toolkit, at `version` in `directory`."""
+    (run / "inputs").mkdir(parents=True)
+    (run / "inputs/stub.toml").write_text("[properties]\n" + "".join(f'{p} = {{ value = "unread", read = "stub" }}\n' for p in PROPERTIES)
+                                          + f'toolkit = {{ value = {{ directory = "{directory}", version = "{version}", '
+                                          'loader = "stub" }, read = "stub" }\n')
+
+
+def _tree(tmp_path: Path, toolkit: str = "12.9") -> tuple[Path, dict[str, str]]:
     tree, bin_, boot = tmp_path / "tree", tmp_path / "bin", tmp_path / "boot"
     (tree / "benchmarks/one_stage").mkdir(parents=True)
     shutil.copy(ROOT / "benchmarks/one_stage/kept_bootstrap.sh", tree / "benchmarks/one_stage")
+    (tree / "benchmarks/kernels").mkdir()
+    (tree / "benchmarks/kernels/machine.py").symlink_to(ROOT / "benchmarks/kernels/machine.py")
     for d in ("adapters/vllm/manifests", "adapters/vllm/verity_vllm/acquire"):
         (tree / d).parent.mkdir(parents=True, exist_ok=True)
         (tree / d).symlink_to(ROOT / d)
@@ -49,8 +62,9 @@ def _tree(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     _exe(bin_ / "lease", 'LEASED=leased exec "$@"')
     (bin_ / "python3").symlink_to(sys.executable)
     (tmp_path / "arch").write_text("9.0\n")
+    _machine(tmp_path / "run", toolkit, tmp_path / "cuda")
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "BOOT_ROOT": str(boot),
-           "CUDA_HOME": str(tmp_path / "cuda")}
+           "RESEARCH_MACHINE": "stub", "RESEARCH_RUN_DIR": str(tmp_path / "run")}
     return tree, env
 
 
@@ -95,3 +109,12 @@ def test_an_unfinished_directory_is_built_again(tmp_path):
     done, again = _boot(tree, env, tmp_path / "out2")
     assert done.returncode == 0 and again == d and "building" in done.stdout
     assert len((tmp_path / "calls").read_text().splitlines()) == 4
+
+
+def test_a_machine_whose_record_lists_no_cuda_12_9_is_refused_by_name_before_anything_is_built(tmp_path):
+    tree, env = _tree(tmp_path, toolkit="13.3")
+    done, _ = _boot(tree, env, tmp_path / "out1")
+    assert done.returncode == 2
+    assert "machine 'stub': its [properties] list no CUDA toolkit 12.9 under toolkit (they list 13.3)" in done.stderr
+    assert done.stderr.rstrip().endswith("kept_bootstrap.sh: no CUDA 12.9 toolkit (benchmarks/kernels/machine.py toolkit 12.9, above)")
+    assert not (tmp_path / "calls").exists() and not list((tmp_path / "boot").glob("*/ready"))

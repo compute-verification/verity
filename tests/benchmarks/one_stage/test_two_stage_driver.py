@@ -34,6 +34,7 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, c
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
 from verity.circuits import replay_links as RL
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
@@ -92,7 +93,7 @@ def _interior(layout: BR.Layout, previous: str, program: Program | None = None) 
     ports = {v: {"leaves": m, "domain": R.window_domain(part["program"], P.digest(part), v, s, m, layout.run)}
              for v, s in INTERIOR}
     roots = [{"port": v, "root": f"{i + 1:02x}" * 64, **ports[v]} for i, (v, _) in enumerate(INTERIOR)]
-    rec = R.record(program, query, {"law": "subset", "k": m}, S.SCHEME, roots,
+    rec = DK.record(program, query, {"law": "subset", "k": m}, S.SCHEME, roots,
                    {"kind": "served", "run": layout.run, "row": 0, "interior": True}, previous=previous)
     return rec, ports
 

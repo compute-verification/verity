@@ -122,7 +122,7 @@ CASE_DIGESTS = "case-digests.txt"
 REQUEST_KEYS = ("deadline_ns", "node", "passes", "samples", "window_ns", "windows")
 SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 * 10**9, "windows": 6}
 """The auditor's session parameters, which a request must carry as they are (`params_of`): the served bandwidth piece's
-(`benchmarks/pous/held_bandwidth.py`'s defaults, over the store the PoUS piece holds), six windows of at least 20 s,
+(`p2_stage/bandwidth.py`'s defaults, over the store the PoUS piece holds), six windows of at least 20 s,
 four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
 δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13, which leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not
 assumed)."""

@@ -41,6 +41,13 @@ class Exchange:
         return [r for _, r in self.requests if isinstance(r, kind)]
 
 
+def same(got, want) -> bool:
+    """``got`` is ``want`` bit for bit: its bytes, dtype, shape and device. Not `torch.equal`, which compares values: a
+    NaN is unequal to itself and ``-0.0`` equal to ``+0.0``."""
+    return (got.dtype == want.dtype and tuple(got.shape) == tuple(want.shape) and got.device == want.device
+            and got.contiguous().view(torch.uint8).numpy().tobytes() == want.contiguous().view(torch.uint8).numpy().tobytes())
+
+
 @pytest.fixture
 def run(monkeypatch):
     monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
@@ -63,7 +70,7 @@ def test_the_weights_are_committed_before_the_salt_released_and_restored_from_c_
     released = ex.filed(H.ReleaseValue)
     assert [r.value for r in released] == ["a.weight", "b.weight"]                  # the scale is no linear weight
     for r in released:
-        assert torch.equal(r.restore(), plain[r.value])
+        assert same(r.restore(), plain[r.value])
 
 
 def test_what_the_setup_holds_and_its_prover_are_the_stores(run):
@@ -78,7 +85,7 @@ def test_the_kernel_hands_inward_the_weight_decoded_from_c_star_and_leaves_other
     s, ex, plain = run
     [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]
     due = H.BlockDue("b", 1, {"n": 3, "k": 24}, "int8", {"x": None}, weights={"weight": "b.weight"})
-    assert torch.equal(kernel(due, lambda given: given["weight"]), plain["b.weight"])
+    assert same(kernel(due, lambda given: given["weight"]), plain["b.weight"])
     other = H.BlockDue("lm_head", 2, {"n": 1, "k": 1}, "int8", {"x": None}, weights={"weight": "lm_head.weight"})
     assert kernel(other, lambda given: given) is None
     s.release()
@@ -137,3 +144,70 @@ def test_a_released_weight_pous_holds_no_name_for_is_refused_by_name(run):
     tied = H.BlockDue("c", 3, {"n": 1, "k": 1}, "int8", {"weight": torch.empty(0)}, weights={"weight": "c.weight"})
     with pytest.raises(RuntimeError, match="c.weight is released, and PoUS holds no weight by that name"):
         kernel(tied, lambda given: given)
+
+
+def special_bf16(shape, seed):
+    """A bf16 tensor of ``shape``, random bit patterns led by ``-0``, ``+0``, NaNs with payloads (of either sign), ``±inf``
+    and subnormals."""
+    g = torch.Generator().manual_seed(seed)
+    t = torch.randint(0, 1 << 16, shape, generator=g, dtype=torch.int32).to(torch.int16).view(torch.bfloat16).clone()
+    lead = torch.tensor([0x8000, 0x0000, 0x7FC1, 0xFFC3, 0x7F81, 0x7F80, 0xFF80, 0x0001, 0x8001, 0x007F],
+                        dtype=torch.int32).to(torch.int16).view(torch.bfloat16)
+    k = min(lead.numel(), t.numel())
+    t.view(-1)[:k] = lead[:k]
+    return t
+
+
+def decoded_bits(monkeypatch, point, weights):
+    """``weights`` registered through PoUS's served path at ``point``: each released weight's ``restore`` and the
+    kernel's decode for its block, each held to the registered weight bit for bit (`same`)."""
+    monkeypatch.setattr(ws, "geometry", lambda scheme: point)
+    plain = {n: t.clone() for n, t in weights.items()}
+    s, ex = served.Served(P2, CTX), Exchange()
+    s.install(ex)
+    ex.emit(H.Declared("card", {"eager": True}, (POUS.name,), {"pous": S.settings(POUS, {})}))
+    ex.emit(H.RegisteredValues(tuple(weights.items()), operands={n: i for i, n in enumerate(weights)}))
+    pb = s.store.params.payload_bytes
+    assert all(0 < (t.numel() * t.element_size()) % pb for t in plain.values())        # each ends inside its last block
+    [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]
+    released = ex.filed(H.ReleaseValue)
+    assert [r.value for r in released] == list(plain)
+    for r in released:
+        due = H.BlockDue(r.value, 0, {}, "bf16", {"x": None}, weights={"weight": r.value})
+        for got in (r.restore(), kernel(due, lambda given: given["weight"])):
+            assert same(got, plain[r.value]), r.value
+            assert got.is_contiguous() and got.data_ptr() != plain[r.value].data_ptr()
+    return s
+
+
+def test_same_is_a_bit_comparison_where_torch_equal_is_not():
+    nan, z = special_bf16((4,), 0)[2:3], torch.zeros(1, dtype=torch.bfloat16)
+    assert same(nan, nan.clone()) and not torch.equal(nan, nan.clone())
+    assert not same(-z, z) and torch.equal(-z, z)
+
+
+def test_the_decode_hands_back_each_registered_weights_bytes_at_the_toy_point(monkeypatch):
+    """bf16 weights of awkward lengths, ending partway into their last blocks, over many segments of the toy point,
+    beside a tiny one and an int8 one: every byte back, NaN payloads, ``-0``, infinities and subnormals among them."""
+    s = decoded_bits(monkeypatch, SMALL, {"a.weight": special_bf16((7, 1031), 1), "b.weight": special_bf16((3,), 2),
+                                          "c.weight": torch.randint(-128, 128, (5, 13), dtype=torch.int8,
+                                                                    generator=torch.Generator().manual_seed(3))})
+    assert s.store.params.segments > 1
+
+
+@pytest.mark.slow
+def test_the_decode_hands_back_each_registered_weights_bytes_at_the_deployed_field(monkeypatch):
+    """The toy point's test at the registered scheme's own field (``p2-16448/v4``: w = 16448, c0 = 21065, 2054-byte
+    payloads), one segment of 8 blocks. About 35 s on one CPU core, the encode's roots at 16448 bits; it catches what the
+    toy point can't: a payload of P2's width, whose byte order, padding and field reduction the toy's 126-byte payload
+    doesn't exercise."""
+    from verity.protocols.resource_accounting.memory.pous.verifier import schemes as pous_schemes
+
+    q = pous_schemes.get(P2).params
+    point = P2Params(q.w, q.c0, 8, 1, q.expander)
+    assert (point.w, point.c0, point.payload_bytes) == (16448, 21065, 2054)
+    s = decoded_bits(monkeypatch, point, {"a.weight": special_bf16((3, 1031), 4), "b.weight": special_bf16((5, 211), 5),
+                                          "c.weight": special_bf16((3,), 6),
+                                          "d.weight": torch.randint(-128, 128, (5, 13), dtype=torch.int8,
+                                                                    generator=torch.Generator().manual_seed(7))})
+    assert s.store.params.blocks == 8

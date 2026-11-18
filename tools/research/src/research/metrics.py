@@ -3,8 +3,10 @@ loop's readings sent to it with POST /api/metrics.
 
   research metrics show [ID ...] [--owner HANDLE] [--json]   each metric a metrics.toml on main declares (one beside
                                                             each benchmark's script: benchmarks/README.md's
-                                                            "Metrics"): its latest value, changes over 7 and 30
-                                                            days, age and standing
+                                                            "Metrics"), as ID@vN where its version N is above 1,
+                                                            or by a former id (`was`): its latest value, changes over
+                                                            7 and 30 days, age and standing; --json gives each its
+                                                            `version`, 1 where the site's report gives none
   research metrics send [--command SCRIPT] [--commit SHA] [--dry-run] --metric ID (--value N | --why TEXT) --time ISO
                         [--mark M] [--target N] [--period P] [--over O] [--member M] [--run R]
                                                             one reading, or with no --metric the readings on stdin
@@ -23,15 +25,18 @@ may carry `unit`, `ci95`, `target`, `verdict`, `period`, `over` and `member`. Th
 holds any other key, and `send` refuses it first. The control pod's loops send theirs with infra/control/loop_metrics.py.
 
 `REGISTRY_ROOTS` are the directories the site's registry reader walks for metrics.toml files (`REGISTRY_ROOTS` in the
-site's lib/console/metrics/registry.ts), in its order.
+site's lib/console/metrics/registry.ts), in its order. `registry(root)` reads the same files of a tree: each row by its id
+and by each of its former ids (`was`), with its `version`, 1 where the row gives none.
 """
 from __future__ import annotations
 
 import argparse
 import http.client
 import json
+import os
 import re
 import sys
+import tomllib
 import urllib.error
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -43,12 +48,34 @@ from .slack import RouteError, SlackError, _code, _Identity, http_json, http_ope
 METRICS = f"{DEFAULT_URL}/api/metrics"   # the route, and its OIDC token's audience
 SITE_HOST = urlsplit(DEFAULT_URL).netloc   # the one host the panels key goes to
 REGISTRY_ROOTS = ("benchmarks", "calibration", "applications", "infra", "tools")
+REGISTRY_FILE = "metrics.toml"
+REGISTRY_SKIP = frozenset({".git", ".lake", ".venv", "node_modules", "__pycache__", "target", "build", "dist"})
 KEY_PREFIX = "vsk_"   # the site reads a bearer with it as a site key, and any other as a Cursor identity
 MARKS = ("measured", "modeled", "partial")   # kit.MARKS
 #: every key the door takes (the site's lib/console/metrics/readings.ts, KEYS): it refuses a reading with any other
 KEYS = ("metric", "time", "value", "mark", "unit", "ci95", "target", "verdict", "why", "period", "over", "member", "run",
         "commit", "command")
 COMMIT = re.compile(r"[0-9a-f]{7,40}")
+
+
+def registry_files(root: Path) -> list[str]:
+    out = []
+    for tree in REGISTRY_ROOTS:
+        for d, dirs, files in os.walk(root / tree):
+            dirs[:] = sorted(x for x in dirs if x not in REGISTRY_SKIP)
+            if REGISTRY_FILE in files:
+                out.append((Path(d) / REGISTRY_FILE).relative_to(root).as_posix())
+    return sorted(out)
+
+
+def registry(root: Path) -> dict[str, dict]:
+    rows = [{**m, "version": m.get("version", 1)} for f in registry_files(root)
+            for m in tomllib.loads((root / f).read_text(encoding="utf-8")).get("metric", [])]
+    by_id = {m["id"]: m for m in rows}
+    for m in rows:
+        for former in m.get("was", []):
+            by_id.setdefault(former, m)
+    return by_id
 
 
 def off_site(url: str) -> str | None:
@@ -205,7 +232,7 @@ def show(report: dict) -> str:
     lines = []
     for m in report["metrics"]:
         latest = m.get("latest")
-        head = f"{m['id']}  @{m['owner']}  {m['title']}"
+        head = f"{m['id']}{'' if m['version'] == 1 else '@v' + str(m['version'])}  @{m['owner']}  {m['title']}"
         if not latest:
             lines += [head, f"  not recorded yet; measured by: {m['command']}"]
             continue
@@ -260,12 +287,16 @@ def main(argv: list[str], route: Route | None = None, stdin=None) -> int:
         return 0
     try:
         report = (route or Route(ns.url, _key())).call()
-        missing = [i for i in ns.ids if i not in {m["id"] for m in report["metrics"]}]
+        for m in report["metrics"]:
+            m.setdefault("version", 1)
+        named = {i: m["id"] for m in report["metrics"] for i in [*m.get("was", []), m["id"]]}
+        missing = [i for i in ns.ids if i not in named]
         if missing:
             raise SlackError(f"not declared in any metrics.toml on main: {', '.join(missing)} (research metrics show lists "
                              "them; benchmarks/README.md's \"Metrics\" says where a row goes)")
+        ids = {named[i] for i in ns.ids}
         report["metrics"] = [m for m in report["metrics"]
-                             if (not ns.ids or m["id"] in ns.ids) and (not ns.owner or m["owner"] in ns.owner)]
+                             if (not ns.ids or m["id"] in ids) and (not ns.owner or m["owner"] in ns.owner)]
         print(json.dumps(report, indent=1, ensure_ascii=False) if ns.json else show(report))
         return 0
     except (RouteError, SlackError) as e:

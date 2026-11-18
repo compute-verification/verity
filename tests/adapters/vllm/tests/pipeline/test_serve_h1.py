@@ -359,7 +359,11 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     and the window's close waits for both end entries, closed and complete. The window's salt and round coins are its
     session's and its sampling coin its sample session's, its record carries the sessions without their secrets, and the
     verifier's check of the record against the auditor's ledger (`pouw_h1_challenger.session_reason`) passes. No file
-    the windows wrote holds a salt of the weight trees (`pouw_h1.WEIGHT_SALTS`), raw or in hex."""
+    the windows wrote holds a salt of the weight trees (`pouw_h1.WEIGHT_SALTS`), raw or in hex. The process's weight
+    salts are this test's own, so the salts checked are the ones its windows drew."""
+    salts = PH.PV.RunSalts()
+    monkeypatch.setattr(PH, "WEIGHT_SALTS", salts)
+    monkeypatch.setattr("verity_vllm.protocols.pouw.h1_hooks.H1_WEIGHT_SALTS", salts)
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
 

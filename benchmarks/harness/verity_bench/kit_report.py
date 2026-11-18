@@ -6,6 +6,8 @@ re-exported by `kit`:
   where it is not. `record(arg)` gives the same directory and what was withdrawn of the rest of the record.
 - `ran_with(coins, parameters, detail=None, verified=False)`: the one line of the coins and parameters a run ran with,
   in the fixed words (`COINS`, `PARAMETERS`), and its object for the document.
+- `CHECKED_BY`, `checked_by(value)` and `checked_by_of(checks)`: who ran a check a benchmark prints or stores, in the
+  fixed words (`PIECE`, proofs' own, or `LEAN`), and `NOT_RECORDED` for a result that predates the field.
 - `report(name, text, doc, measured, ...)`: a command's last step: prints the text and the one line of JSON, writes them
   where there is a place, gives no number for a run the Lean verifier didn't accept, says where it is not an audit and
   where its record is made up, and writes no measurement where it reprints another run's record (`from_run=`).
@@ -24,11 +26,22 @@ from typing import Any, NamedTuple
 
 from verity_bench import settings
 
+#: the version of each metric whose `metrics.toml` row gives one above 1, by id; every other name's is 1. A literal: the
+#: registry's test (`tests/test_metrics_registry.py`) reads it without importing the kit and holds it equal to the rows
+VERSIONS: dict[str, int] = {}
 #: who drew the verifier's coins: the auditor's deployed challenger, a challenger as its own process on this machine,
 #: or the serve itself holding the challenger
 COINS = ("deployed challenger", "local challenger", "in-process")
 #: the parameters the run ran at: the deployed ones, or development ones
 PARAMETERS = ("deployed", "development")
+#: who ran a check a benchmark prints or stores (its ``checked_by``): every one ours runs is on the developer's side, on
+#: the node that served or proved, none the auditor's. `PIECE`'s words are proofs' `PIECE` (served_verdicts.py), which a
+#: test holds them to.
+PIECE, LEAN = "piece", "lean"
+CHECKED_BY = {PIECE: "run by the developer's piece; no auditor-side entry runs it",
+              LEAN: "recomputed by the Lean verifier in the run's own job, on the developer's node"}
+#: what a result that predates the field says, and the table cell of one
+NOT_RECORDED = "not recorded"
 #: the line of a record that predates the field, the one record that may not say
 NOT_STATED = "ran with: not stated"
 NOT_AN_AUDIT = "a measurement, not an audit"
@@ -121,6 +134,21 @@ def record(arg: str | os.PathLike, *, paths: list[str] | None = None) -> Record:
         return Record(Path(store.fetch(art, paths=paths)), gone)
     except StoreError as e:
         raise NoRecord(f"{arg}: the evidence store can't give its record ({e}): {fix}") from None
+
+
+def checked_by(value: str | None) -> str:
+    """The printed ``checked by: RUNNER (WORDS)``, or ``checked by: not recorded``."""
+    if value is None:
+        return f"checked by: {NOT_RECORDED}"
+    if value not in CHECKED_BY:
+        raise ValueError(f"checked_by {value!r}: one of {', '.join(map(repr, CHECKED_BY))}")
+    return f"checked by: {value} ({CHECKED_BY[value]})"
+
+
+def checked_by_of(checks: Iterable[Mapping[str, Any]]) -> str | None:
+    """The one runner a set of stored checks (gates, verdicts) names, None where any lacks it."""
+    said = {c.get("checked_by") for c in checks}
+    return said.pop() if len(said) == 1 else None
 
 
 def ran_with(coins: str, parameters: str, detail: str | None = None, *,

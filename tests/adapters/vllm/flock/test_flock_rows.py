@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from test_lean_verifier import lake_build
 
 pytest.importorskip("verity_vllm.definitions.registry.prims")
 from verity.circuits import library  # noqa: E402
@@ -72,7 +73,7 @@ def flock_rows(low, tmp: Path, in_split: str | None = None) -> subprocess.Comple
 
 @pytest.fixture(scope="module")
 def built():
-    subprocess.run(["lake", "build", "flock-rows"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN, "flock-rows")
 
 
 def test_every_pinned_template_is_a_case():

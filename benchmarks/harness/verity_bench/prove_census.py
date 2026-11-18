@@ -6,7 +6,10 @@ gates where the census gives them (a block's, times its blocks), and the steady-
 measurement at the stated prover count, timed at the stated host cores or more, the rows `prove_flock.Flock` prices a
 type from. A gap, a Definition whose served rows no block of the census's cut holds, is a row of its own with its rows
 and why: it is never counted as zero blocks. The text (`render`) prints a run of one family's Definitions that differ in
-one static and in nothing else it shows as one line (`runs`); the stored table keeps every Definition.
+one static and in nothing else it shows as one line (`runs`); the stored table keeps every Definition. A block type's rate
+is its own id's, else its census `proved_as`'s (the Definition on bits its proof is), else its `bounded_by`'s (its kind's
+largest block, a rate that bounds its cost from above), in that order (`prove.rated_as`); the row's rate names the field
+that gave it, and the text prints it, a run's `bounded by` once and each of its block types' Definitions on bits.
 
 The totals are refused, each reason named (`refusal`): a block type with blocks and no steady-state rate (under the
 cut of record, where one is labelled), a gap, and each other slot the totals read that isn't labelled, with the label
@@ -68,7 +71,8 @@ def table(docs: Sequence[tuple[str | None, Mapping[str, Any]]], rates: Mapping[s
         for part, rows in found.items():
             for spec, d in doc.get(part, {}).items():
                 row = rows.setdefault(spec, {"block": spec, "k_log": d.get("k_log"), "ands": d.get("ands"),
-                                             "why": d.get("why"), "requests": {}})
+                                             "why": d.get("why"), "requests": {},
+                                             **{k: d[k] for k in (P.PROVED_AS, P.BOUNDED_BY) if k in d}})
                 row["requests"][name] = d["prefill"] + d["decode"]
     for rows in found.values():
         for row in rows.values():
@@ -78,8 +82,10 @@ def table(docs: Sequence[tuple[str | None, Mapping[str, Any]]], rates: Mapping[s
     for row in blocks:
         del row["why"]
         row["gates"] = None if row["ands"] is None else row["ands"] * row["total"]
-        s = rates.get(P.definition_id(row["block"]))
-        row["rate"] = None if s is None else {"record": s.record, "type": s.type, "provers": s.provers, "cores": s.cores}
+        key, how, spec = P.rated_as(row["block"], row.get(P.PROVED_AS), row.get(P.BOUNDED_BY), rates.__contains__)
+        s = rates.get(key)
+        row["rate"] = None if s is None else {"record": s.record, "type": s.type, "provers": s.provers, "cores": s.cores,
+                                              **({} if how is None else {how: spec})}
     gaps = sorted((r for r in found["gaps"].values() if r["total"]), key=lambda r: (-r["total"], r["block"]))
     for row in gaps:
         del row["k_log"]
@@ -114,7 +120,8 @@ def refusal(census: P.Census, found: Mapping[str, Any], rates: Mapping[str, PF.S
     type with blocks and no rate, each gap of the census table `found` and each slot `missing`; None where none."""
 
     no_rate = sorted(({"block": b.name, "per_token": b.per_token} for b in census.blocks
-                      if P.definition_id(b.name) not in rates), key=lambda r: (-r["per_token"], r["block"]))
+                      if P.rated_as(b.name, b.proved_as, b.bounded_by, rates.__contains__)[0] not in rates),
+                     key=lambda r: (-r["per_token"], r["block"]))
     gaps = [{"block": g["block"], "rows": g["total"], "why": g["why"]} for g in found["gaps"]]
     if not (no_rate or gaps or missing):
         return None
@@ -263,6 +270,17 @@ def _ands(of: Sequence[Mapping[str, Any]]) -> str:
     return _count(xs[0]) if min(xs) == max(xs) else f"{min(xs):,} to {max(xs):,}"
 
 
+def _proved(of: Sequence[Mapping[str, Any]]) -> str:
+    """What a line says beside its block types of the Definitions on bits their proofs are (the census's `proved_as`),
+    where its rate isn't their own: as a run in the line's own notation where they make one, else each named."""
+
+    own = of[0]["rate"] is not None and not {P.PROVED_AS, P.BOUNDED_BY} & of[0]["rate"].keys()
+    bits = [{"block": r[P.PROVED_AS]} for r in of if P.PROVED_AS in r and not own]
+    if not bits:
+        return ""
+    return " proved as " + ", ".join(f"`{u['block']}`" for u in runs(bits, lambda _: None))
+
+
 def render(doc: Mapping[str, Any]) -> list[str]:
     """The census table as Markdown lines, then the totals' refusal where they are refused."""
 
@@ -305,14 +323,19 @@ def render(doc: Mapping[str, Any]) -> list[str]:
         r, of = u["of"][0], u["of"]
         rate = ("none" if r["rate"] is None else
                 f"`{r['rate']['type']}` at {r['rate']['provers']} prover(s), {r['rate']['cores']} cores "
-                f"({_record(r['rate']['record'])})")
+                f"({_record(r['rate']['record'])})"
+                + (f", bounded by `{r['rate'][P.BOUNDED_BY]}`" if P.BOUNDED_BY in r["rate"] else ""))
         gates = None if any(x["gates"] is None for x in of) else sum(x["gates"] for x in of)
-        lines.append(f"| `{u['block']}` | {u['definitions']} | {'—' if r['k_log'] is None else r['k_log']} | "
+        lines.append(f"| `{u['block']}`{_proved(of)} | {u['definitions']} | {'—' if r['k_log'] is None else r['k_log']} | "
                      f"{_ands(of)} | " + " | ".join(_count(u["requests"][n]) for n in names)
                      + f" | {_count(u['total'])} | {_count(gates)} | {rate} |")
     rated_rows = [r for r in c["rows"] if r["rate"] is not None]
+    bounded = [r for r in rated_rows if P.BOUNDED_BY in r["rate"]]
     lines += ["", (f"Rated: {len(rated_rows)} of {len(c['rows'])} block types, "
-                   f"{sum(r['total'] for r in rated_rows):,} of {sum(r['total'] for r in c['rows']):,} proof blocks.")]
+                   f"{sum(r['total'] for r in rated_rows):,} of {sum(r['total'] for r in c['rows']):,} proof blocks"
+                   + (f", {len(bounded)} block type(s) of them ({sum(r['total'] for r in bounded):,} proof blocks) "
+                      "bounded by a larger block's rate, an upper bound on their cost and not a measurement of it"
+                      if bounded else "") + ".")]
     if c["gaps"]:
         lines += ["", ("Gaps: Definitions whose served rows no block of the census's cut holds, counted in no proof "
                        "blocks above. A line is one Definition or a run of them as above (`Definitions` says how many), "

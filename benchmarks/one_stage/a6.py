@@ -64,6 +64,7 @@ from verity.commitments.merkle import CommitmentDomain  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 
 #: one Llama-3.2-1B decoder layer's W8A8 coordinates for one token, by K
@@ -300,7 +301,7 @@ def main() -> int:
     window = {"kind": "stand-in", "of": WINDOW_OF,
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
               "link": "none: no served run; vllm's int8 Program and its served rows replace these values"}
-    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = DK.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:

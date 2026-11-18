@@ -57,6 +57,7 @@ from verity.commitments.crypto import lms
 from verity.commitments.identity import canonical_json_text
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as T
 from verity.protocols.proofs.spot.verifier.one_stage import draw as DR, partition as P, docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -328,7 +329,7 @@ def check(j: Any, inner=stand_in) -> Any:
 @functools.cache
 def _record(row: int) -> dict:
     """A docket's record of the test's program at window row `row`: one digest a row."""
-    return _json(R.record(S.program, S.query, DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **S.ports[p]} for p in S.ports],
+    return _json(DK.record(S.program, S.query, DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **S.ports[p]} for p in S.ports],
                           {"kind": "served", "row": row, "run": "r-test"}, leaf_layer=LEAF))
 
 

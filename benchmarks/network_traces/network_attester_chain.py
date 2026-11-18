@@ -32,11 +32,8 @@ the refusal stays with the form that reads them.
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`id_form.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
-* `rows_audit_case`: the run's records as ``network-rows check`` reads them (`NetworkCheck.RowsAudit`,
-  `verity/network-rows/v1`): the auditor's record's key, link, schedule, session and windows (`deployment_of`), and
-  each execution phase's three records (`network_attester_serve.CERTIFIED`'s order), each raw (`lean_audit.encode` of its grid)
-  and then attested. The schedule is the period check's (`scan_period.rows_case`'s: the id egress form's integer
-  fields, and `max_tokens_cap` when the run has one, which the rows audit refuses by name).
+* `rows_audit_case`: the run's records as ``network-rows check`` reads them (`relay_check.rows_audit_case`), under
+  the auditor's record's key, link, schedule, session and windows (`deployment_of`).
 """
 from __future__ import annotations
 
@@ -48,7 +45,6 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
-from verity.protocols.resource_accounting.network.verifier import lean_audit as LA
 from verity.protocols.resource_accounting.network.verifier import service as SVC
 from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
@@ -313,28 +309,11 @@ def io(run: Path) -> dict:
 
 
 def rows_audit_case(run: Path, record: dict) -> dict:
-    """The run's ``network-rows`` case (the module docstring's `rows_audit_case`) as `scan_period.lean_check` writes
-    it: the params, the auditor's ``record``'s (`deployment_of`), and the commitment and evidence hex (no evidence:
-    ``{}``). SystemExit naming an execution phase's record or attested record the run lacks, a deployment.json of
-    the run that isn't the record, or a schedule in another egress form than the id form."""
+    """The run's ``network-rows`` case (`relay_check.rows_audit_case`) under the auditor's ``record`` of its
+    deployment (`deployment_of`). SystemExit naming a deployment.json of the run that isn't the record, or what
+    `relay_check.rows_audit_case` refuses."""
     dep, params = deployment_of(run, record)
-    if params.egress != "id":
-        raise SystemExit(f"{run}: the rows audit's schedule is the id egress form's, not {params.egress!r}'s")
-    wit = witness(run)
-    key = RF.read_public(dep["key"])
-    certified, _ = RC.read_certified(wit / "certified.jsonl")
-    raw = {(name, r.window): r for name, rs in RC.read_records(wit, params).items() for r in rs}
-    body = []
-    for w in range(dep["windows"]):
-        for name, (link, direction) in RC.CERTIFIED.items():
-            r, c = raw.get((name, w)), certified.get((link, direction, w))
-            if r is None or c is None:
-                raise SystemExit(f"{run}: {name} window {w} has no {'record' if r is None else 'certified record'}")
-            body += [LA.encode(r), LA.encode(c)]
-    p = key.params
-    lms = {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy}
-    limit = params.max_tokens_cap
-    schedule = {k: dep["params"][k] for k in W.INTEGER_FIELDS} | ({} if limit is None else {"max_tokens_cap": limit})
-    return {"params": {"key": key.public.hex(), "link": dep["link"], "lms": lms, "schedule": schedule,
-                       "session": dep["session"], "windows": dep["windows"]},
-            "commitment": b"".join(body).hex(), "evidence": b"{}".hex()}
+    try:
+        return RC.rows_audit_case(witness(run), dep, params)
+    except ValueError as e:
+        raise SystemExit(f"{run}: {e}") from None

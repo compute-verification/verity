@@ -356,7 +356,7 @@ def test_the_cheats_subprotocol_rejects_under_a_simulated_placement(tmp_path) ->
     out.mkdir()
     settings = S.settings(WIPE, {"store": "host", "segments": 1})
     got = WIPE.attach(None, {"settings": settings, **wipe_served.FACTS, "streamer": "python", "foreign_past_bound": True,
-                             "simulated": True, "egress_bits": 0, "run_keys": True, "private": out, "process": H.ENGINE, "side_of": side_of,
+                             "simulated": True, "egress_bits": 0, "run_keys": True, "private": out, "process": H.PIECE, "side_of": side_of,
                              "pins": [], "node": "n0"})
     assert got.answer["verdict"] == "reject"
     assert extras == [()], "the period's egress count is the check's evidence, never the challenger's"
