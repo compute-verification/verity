@@ -33,7 +33,6 @@ _SERVING = f"{_PROVER}.serving"
 #: each exported name's module and attribute, read from it at every lookup (never cached here), so an import inside a
 #: function sees the module's current attribute
 _LAZY = {
-    "quantize": (f"{_SERVING}.operands", "quantize"),
     "use_int8_arm": (f"{_SERVING}.int8_arm", "use"),
     "use_tensors": (f"{_SERVING}.tensors", "use"),
     "use_h1_device": (f"{_SERVING}.tensors", "use_h1"),
@@ -211,15 +210,6 @@ def ready_verifier() -> Any:
     return verifier.executable()
 
 
-def pearl_c_salt_key(scheme: str) -> bytes:
-    """Refused: Pearl+ keys no salt.  B's rows are salted from the weights' registration (`pearl_c.weight_row_salts`) and
-    every other leaf with fresh bytes, which the device run takes as data (``weight_roots``' and ``PearlCDeviceRun``'s
-    ``weight_salts``)."""
-    raise NotImplementedError(f"{scheme}: Pearl+ keys no salt.  This name stays only for vLLM's adapter, which imports it "
-                              "(adapters/vllm/verity_vllm/protocols/pouw/__init__.py, its Pearl-C arm, @vllm), and goes "
-                              "with that arm's deletion")
-
-
 def __getattr__(name: str) -> Any:
     if name in _FAMILIES:
         from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names
@@ -235,5 +225,5 @@ def __dir__() -> list[str]:
     return sorted({*globals(), *_LAZY, *_FAMILIES})
 
 
-__all__ = ["MatmulObserver", "MatmulRun", "in_process_coins", "observe_matmul", "pearl_c_salt_key",
-           "ready_verifier", "run_matmul", "verifier_coins", *_LAZY, *_FAMILIES]
+__all__ = ["MatmulObserver", "MatmulRun", "in_process_coins", "observe_matmul", "ready_verifier",
+           "run_matmul", "verifier_coins", *_LAZY, *_FAMILIES]

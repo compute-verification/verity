@@ -67,9 +67,9 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
     sleep 2
   done
   if [ "$up" != 1 ]; then
-    tail -40 "$D/serve.log"
-    echo "$1: not listening: $(grep -m1 -E 'UsageError|Error|refus' "$D/serve.log" | cut -c1-400)" | tee -a "$OUT/stock.txt"
-    kill -TERM "$srv" 2>/dev/null; wait "$srv"; return 10
+    kill -TERM "$srv" 2>/dev/null; wait "$srv"; rc=$?
+    echo "$1: $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" not-listening "$D/serve.log" "$rc")" | tee -a "$OUT/stock.txt"
+    return 10
   fi
   for j in $(seq 1 "$LOADS"); do
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')

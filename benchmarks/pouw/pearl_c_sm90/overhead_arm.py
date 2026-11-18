@@ -392,6 +392,7 @@ class _YTree:
         self.bufs = [self.tree] + [PPDR._zeros(size, run.device) for size in (64 * m, 64 * (n // 256) * self.rows, 4 * n * self.rows)]
         self.salts = y_salts(m).to(run.device)
         self.at, self.salts_at = tuple(t.data_ptr() for t in self.bufs), self.salts.data_ptr()
+        self.salts_n = self.salts.numel()
         PPDR._put(trees.dom, SY.y_domain(run.salt, index, m).domain_id)
 
     def launch(self, y: int) -> None:
@@ -401,7 +402,8 @@ class _YTree:
         def widened(r: int, count: int) -> int:
             R.widen_a(dev, y + 2 * n * r, words, count, count, n, pdl=False)
             return words
-        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.index, widened, self.salts_at)
+        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.index, widened, self.salts_at,
+                      self.salts_n)
 
 
 class _Call:
