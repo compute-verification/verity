@@ -144,7 +144,8 @@ def test_the_generator_covers_what_it_says(random_cases, shaped):
         assert detail.get("error") == m["broken"], (m["shape"], m.get("how"))
         assert (m["case"]["spot"] is None) == (m["broken"] in vectors.EARLY)
         assert isinstance(r["kinds"], list) == isinstance(r["exported"], list) == ("error" not in detail)
-        assert ("message" in detail) == (m["broken"] in ("own-rows", "shared-unheld", "leaf-widths"))
+        assert ("message" in detail) == (m["broken"] in ("own-rows", "shared-unheld", "leaf-widths")) or (
+            m["broken"] == "wires")
     assert {m["broken"] for m in made} == set(vectors.BROKEN) | {None, "shared-unheld"}
     assert {m["how"] for m in random_cases if m["broken"]} == {how for hows in vectors.BROKEN.values() for how in hows}
     good = [r for r in results if "error" not in r["detail"]]

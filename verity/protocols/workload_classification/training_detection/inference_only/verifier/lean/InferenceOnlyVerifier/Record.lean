@@ -576,6 +576,112 @@ def unwhole (P : Prog) (ts : List Tmpl) (ls : List Leaves) (s : Spot.Wires.Summa
     "writer's field leaves of a width that divides the reader's, or make the reader's row one-bit leaves and have " ++
     "its Definition return gates of its own in their place.")
 
+
+/-- An association list as a map, its first entry for a key winning as `List.lookup`'s does. -/
+def firstWins {α β} [BEq α] [Hashable α] (l : List (α × β)) : Std.HashMap α β :=
+  l.foldr (fun (k, v) m => m.insert k v) {}
+
+theorem firstWins_get? {α β} [BEq α] [Hashable α] [LawfulBEq α] [LawfulHashable α] (l : List (α × β)) (k : α) :
+    (firstWins l)[k]? = l.lookup k := by
+  induction l with
+  | nil => simp [firstWins]
+  | cons x xs ih =>
+    obtain ⟨a, b⟩ := x
+    simp only [firstWins, List.foldr_cons] at ih ⊢
+    rw [Std.HashMap.getElem?_insert]
+    by_cases h : a = k
+    · subst h; simp [List.lookup]
+    · have : (k == a) = false := by simpa using Ne.symm h
+      simp [ih, List.lookup, this, h]
+
+/-- A return's fields of a bit or more, each as its first word and its index, in field order. -/
+def firstsOf (ret : Ty) : List (Nat × Nat) :=
+  (List.range (fieldsOf ret).length).filterMap fun f =>
+    if 0 < Spot.Bits.bitsOf (fieldsOf ret)[f]! then some (Spot.Edges.fieldWord ret f, f) else none
+
+theorem lookup_firstsOf (ret : Ty) (off : Nat) : (firstsOf ret).lookup off =
+    (List.range (fieldsOf ret).length).find? fun f =>
+      Spot.Edges.fieldWord ret f == off && 0 < Spot.Bits.bitsOf (fieldsOf ret)[f]! := by
+  unfold firstsOf
+  induction List.range (fieldsOf ret).length with
+  | nil => rfl
+  | cons f fs ih =>
+    rw [List.filterMap_cons, List.find?_cons]
+    by_cases hb : 0 < Spot.Bits.bitsOf (fieldsOf ret)[f]!
+    · rw [if_pos hb]
+      by_cases ho : Spot.Edges.fieldWord ret f = off
+      · simp only [List.lookup, ho, beq_self_eq_true, hb, decide_true, Bool.and_self]
+      · have h1 : (off == Spot.Edges.fieldWord ret f) = false := by simpa using Ne.symm ho
+        have h2 : (Spot.Edges.fieldWord ret f == off) = false := by simpa using ho
+        simp only [List.lookup, h1, h2, Bool.false_and, ih]
+    · rw [if_neg hb]
+      simp only [hb, decide_false, Bool.and_false, ih]
+
+theorem lookup_map_tid {β} (ts : List Tmpl) (v : Tmpl → β) (k : String) :
+    (ts.map fun t => (t.tid, v t)).lookup k = (ts.find? (·.tid == k)).map v := by
+  induction ts with
+  | nil => rfl
+  | cons t ts ih =>
+    by_cases h : t.tid = k
+    · simp [List.lookup, h]
+    · have : (k == t.tid) = false := by simpa using Ne.symm h
+      simp [List.lookup, this, h, ih]
+
+/-- `unwhole` with each writer template's fields by first word as a map, built once: the code compiled in its place
+(`unwhole_eq_fast`). -/
+def unwholeFast (P : Prog) (ts : List Tmpl) (ls : List Leaves) (s : Spot.Wires.Summary) : Option String :=
+  let leaves := fun (tid : String) => ls.find? (·.tid == tid)
+  let width := fun (tid port : String) => ((leaves tid).bind fun l => l.leaf.lookup port).join
+  let closed := fun (tid port : String) => ((leaves tid).map fun l => l.closed.contains port).getD false
+  let nf := fun (w : Spot.Wires.Wire) =>
+    ((ts.find? (·.tid == w.writer)).map fun t => (fieldsOf (P.defs[t.defn]!).ret).length).getD 0
+  let tbl := firstWins (ts.map fun t => (t.tid, firstWins (firstsOf (P.defs[t.defn]!).ret)))
+  let field := fun (w : Spot.Wires.Wire) (off : Nat) => (tbl[w.writer]?).bind (·[off]?)
+  let short := fun (w : Spot.Wires.Wire) (f n : Nat) =>
+    match (leaves w.writer).bind fun l => l.bits.lookup ("o" ++ toString f) with
+    | some b => if b == 16 * n then none else some (b, 16 * n)
+    | none => none
+  let whole := fun (w : Spot.Wires.Wire) (f : Nat) => closed w.reader w.port ||
+    match width w.reader w.port, width w.writer ("o" ++ toString f) with
+    | some r, some o => o != 0 && r % o == 0
+    | _, _ => false
+  (s.wires.zip s.rowWords).findSome? fun (w, n) =>
+    match offsetSteps (nf w) (Circuits.Wire.opairs w) with
+    | none => some (s!"wire {w.writer}.out at word {w.offset} -> {w.reader}.{w.port}: its offset steps " ++
+      s!"{w.ostep} over its radices {w.radix} reach more words than its writer's {nf w} fields have first words. " ++
+      "A wire's every index reads one whole field of its writer's return, from that field's first word. Fix the " ++
+      "Program, not the record: have the root read each writer's field whole, from its first leaf.")
+    | some os => os.findSome? fun d =>
+    let off := ((w.offset : Int) + d).toNat
+    let wire := s!"wire {w.writer}.out at word {off} -> {w.reader}.{w.port}: "
+    match field w off with
+    | none => some (wire ++ s!"word {off} of the writer's output row is no field's first word. A wire reads " ++
+      "one whole field of its writer's return, from that field's first word. Fix the Program, not the record: have " ++
+      "the root read each writer's field whole, from its first leaf.")
+    | some f =>
+    match short w f n with
+    | some (b, r) => some (
+      wire ++ s!"the writer's field {f} is {b} bits and the row it fills {r}. Every bit of a row a wire fills is a " ++
+      "bit of the one writer's field it reads: a row is whole 16-bit words, and a bit of it past that field is no " ++
+      "gate's, or another field's. Fix the Definitions, not the record: give the writer's field whole 16-bit " ++
+      "words, each bit a gate of its own, and the reader's row that field's words.")
+    | none =>
+    let o := "o" ++ toString f
+    if whole w f then none else some (
+    wire ++ s!"the writer's field {f} has leaves of " ++
+    s!"{widthName (width w.writer o)} and the reader's row of {widthName (width w.reader w.port)}. Every leaf of a " ++
+    "writer's field lies inside one leaf of the row that reads it, each side's leaves of one width and the " ++
+    "writer's dividing the reader's; or the reader's row is one-bit leaves and its Definition passes none of them " ++
+    "on: its return refers to no part of that row, itself or through a call, a batch or a scan. Fix the " ++
+    "Definitions, not the record: give the reader's row leaves of the writer's width or a multiple of it, or the " ++
+    "writer's field leaves of a width that divides the reader's, or make the reader's row one-bit leaves and have " ++
+    "its Definition return gates of its own in their place.")
+
+@[csimp] theorem unwhole_eq_fast : @unwhole = @unwholeFast := by
+  funext P ts ls s
+  simp only [unwhole, unwholeFast, firstWins_get?, lookup_map_tid, Option.bind_map, Function.comp_def,
+    lookup_firstsOf]
+
 /-! ## The record, as far as its templates -/
 
 /-- The instance and the trusted input, read as far as the record's templates: the instance, the Program, the trusted
@@ -1228,7 +1334,8 @@ def evaluate (j tr : Json) : Except String Json := do
 /-- The message of a refusal whose fix is the lowering's to make: for `own-rows` the rule (`OWN_ROWS`); for
 `shared-unheld` whether a row is not held (`SHARED_UNHELD`) or the check ran past its bound (`SHARED_UNDECIDED`); for
 `leaf-widths` the first wire that does not land whole, its two rows' bits or its two leaf widths, and the fix
-(`unwhole`). None for any other code. -/
+(`unwhole`); for `wires` the code of SPOT's check's refusal and the wire it names, where the check refuses. None for
+any other code. -/
 def messageOf (j tr : Json) (code : String) : Option String :=
   if code == "own-rows" then some OWN_ROWS
   else if code == "shared-unheld" then
@@ -1248,6 +1355,17 @@ def messageOf (j tr : Json) (code : String) : Option String :=
       | .ok W => match Spot.Wires.check W with
         | .ok wired => unwhole f.P f.ts f.leaves wired
         | .error _ => none
+      | .error _ => none
+    | .error _ => none
+  else if code == "wires" then
+    match front j tr with
+    | .ok f => match wiring f.P f.doc with
+      | .ok W => match Spot.Wires.check W with
+        | .error r => some (s!"SPOT's check of the wires refuses them at `{r.code.name}`" ++
+            match r.wire.bind (W.wires[·]?) with
+            | some w => s!": wire {w.writer}.out at word {w.offset} -> {w.reader}.{w.port}."
+            | none => ".")
+        | .ok _ => none
       | .error _ => none
     | .error _ => none
   else none

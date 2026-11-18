@@ -726,15 +726,21 @@ def root_order(desc: dict, tids) -> list[tuple[str, int, int]]:
 def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dict], dict]:
     """The record's wiring (`RecordText.wiring`): the record's cuts and the wires the Program's root states
     (`program_wires`) with the root's order (`root_order`), refused (`wires`) where it refuses them or as
-    `verity.commitments.periods.interface.check_wires` refuses them."""
+    `verity.commitments.periods.interface.check_wires` refuses them, with its text as the message."""
     import verity.commitments.periods.interface as IF
     cuts = rec.get("cuts", {})
     lays = {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows), tuple(t.outs), (), tuple(n for *_, n in t.rows)),
                     t.units) for t in templates}
     try:
         wires = tuple(IF.Wire.of(x) for x in program_wires(desc, (t.tid for t in templates), cuts))
-        IF.check_wires(lays, wires, IF._cuts(cuts), root_order(desc, [t.tid for t in templates]))
+        order = root_order(desc, [t.tid for t in templates])
     except (ValueError, KeyError, TypeError, AttributeError) as e:
+        raise Malformed("wires") from e
+    try:
+        IF.check_wires(lays, wires, IF._cuts(cuts), order)
+    except ValueError as e:
+        raise refused("wires", str(e)) from e
+    except (KeyError, TypeError, AttributeError) as e:
         raise Malformed("wires") from e
     return [{**w.doc(), "c0": w.cut[0], "C": w.cut[1]} for w in wires], IF._cuts(cuts)
 
