@@ -354,13 +354,13 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
 Positions = dict[tuple[str, str, int], dict[str, tuple[np.ndarray, np.ndarray]]]
 
 
-def unwired_population_program(program: Program, cuts: Mapping[str, Mapping[str, int]] | None = None
+def unwired_population_program(program: Program, cuts: Mapping[str, Mapping[str, int]]
                                ) -> tuple[Program, dict[str, Any], Positions]:
     """A `wired_population_program`'s unwired population and template query, as the periods' `population_program` builds
     them (its values every root parameter no template owns), and its wires' positions: by (reader, port, row of the
-    port's ``cuts``, the record's), each writer tree ``<writer>/o<field>`` the reader's own units and the writer's own
+    port's ``cuts``, the record's: the root does not state a port's rows), each writer tree ``<writer>/o<field>`` the reader's own units and the writer's own
     units they read (`rows.Binding.reads`). Refused (ValueError) by name: cut-input, cut-form, cut-return, cut-root,
-    cut-rows, cut-offset, cut-units, cut-fields, cut-width."""
+    cut-rows, cut-offset, cut-units, cut-fields."""
     fn = program.fn
     if not isinstance(fn, SpecializedDefinition) or (fn.defn.name, fn.defn.version) != ("WiredPopulations", 1):
         raise ValueError(f"cut-input: {descriptor_id(fn)} is no WiredPopulations_v1, so it has no wires to cut")
@@ -410,20 +410,20 @@ def unwired_population_program(program: Program, cuts: Mapping[str, Mapping[str,
     for k, nd in enumerate(nodes):
         j = of[k]
         for (port, t), arg in zip(sigs[j][0], nd.args):
-            kc = int((cuts or {}).get(ids[j], {}).get(port, 1))
+            kc = int(cuts.get(ids[j], {}).get(port, 1))
             if kc < 1 or t.leaves % kc or kc > 1 and not (isinstance(t, Array) and t.n % kc == 0):
                 raise ValueError(f"cut-rows: {ids[j]} {port}: {t!r} in {kc} rows")
-            rl, row = t.leaves // kc, t if kc == 1 else Array(t.n // kc, t.elem)
+            rl = t.leaves // kc
             at = 0
             for s, i, lo, hi in runs(arg.refs):
                 if s == "n":
-                    _wired_rows(got, ids, of, first, fields, ret, row, k, j, port, kc, rl, at, i, lo, hi)
+                    _wired_rows(got, ids, of, first, fields, ret, k, j, port, kc, rl, at, i, lo, hi)
                 at += hi - lo
     return unwired, query, {key: {tree: tuple(np.concatenate(x) for x in zip(*ps)) for tree, ps in trees.items()}
                             for key, trees in got.items()}
 
 
-def _wired_rows(got: dict, ids: list[str], of: list[int], first: list[int], fields: list, ret: list[int], row: Any,
+def _wired_rows(got: dict, ids: list[str], of: list[int], first: list[int], fields: list, ret: list[int],
                 k: int, j: int, port: str, kc: int, rl: int, at: int, i: int, lo: int, hi: int) -> None:
     where = f"{ids[j]} {port}: root node {k}'s leaves [{at}, {at + hi - lo}) read root node {i}'s [{lo}, {hi})"
     if at % rl or (hi - lo) % rl:
@@ -439,9 +439,6 @@ def _wired_rows(got: dict, ids: list[str], of: list[int], first: list[int], fiel
         raise ValueError(f"cut-units: {where}, a row across two of {ids[w]}'s units")
     if (lens[f] != rl).any():
         raise ValueError(f"cut-fields: {where}, a row of {rl} leaves over {ids[w]}'s fields of {sorted(set(lens[f].tolist()))}")
-    for x in np.unique(f).tolist():
-        if fs[x].leaf_widths() != row.leaf_widths():
-            raise ValueError(f"cut-width: {where}: {ids[w]} writes {fs[x]!r} into a row of {row!r}")
     reader, c, writer = first[k] + g // kc, g % kc, first[i] + b
     for cx in np.unique(c * len(fs) + f).tolist():
         m = c * len(fs) + f == cx
