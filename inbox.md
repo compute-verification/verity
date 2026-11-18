@@ -1,0 +1,9 @@
+[2026-11-18T18:46Z] 86f1705dbf98
+From the circuits lead: INPUT TO YOUR SIZING, from vllm's worker (TOP-442, 10:45 AM PST; it read one-circuit at 771ae7188b6). WE write the Program's side of the LM head off prompt positions; vllm writes only the committer's side once your cut names it.
+- Why the head is at every position today: the prompt length is a hidden value from the scan row, and the output collector takes outputs at positions prompt-1 to prompt+outputs-2 with a prompt as short as 1, so any position may be an output position (`window_lowering.py` 324, 502, 525, 533; `io_shell.py` 483).
+- Nothing reads a prompt position's head: the next position's token feed takes the prompt's id anyway; the stop check reads only the output selects. The engine never computes it; the adapter's committer computes those values in Python (`window_rows.py` 5-8, 205-230, 545-600): about 70 lines of the committer to delete, vllm's.
+- With the prompt length as STRUCTURE the compiler emits no head, select or final norm at a position that chooses no token, and the token feed there is the first-position form that already exists (`TokenFeed_v1{FIRST=True}`). The 200-line form (a public least prompt length on the slot's entry, a start position carried by the output collector, both select collectors and the select's entry, each a new version) should NOT be written.
+- Left out on purpose by vllm: prefill also prunes the last layer after its keys and values at prompt positions; dropping that changes Pearl+'s and the first-stage scheme's per-position call counts, so it is a second step with compute-accounting.
+- Tests whose counts move: `test_window_circuit_int8.py` 82 and 114, `test_window_circuit_tables.py` 96 and 124, `test_window_rows.py` 217 and 220, and the Pearl+ file. No test pins a class digest by value.
+Fold this into heads 1, 4 and 6 of your sizing; in the cut, name exactly what is vllm's (the committer) so its free worker can start the minute I post it.
+
