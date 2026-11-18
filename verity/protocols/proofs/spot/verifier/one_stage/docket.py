@@ -934,29 +934,37 @@ NOT_ONE_MEMBER = ("public file: the registration's roots are not one member's: t
 
 def public_ports(rec: Mapping[str, Any]) -> dict[str, Any]:
     """`OneStageZk.publicPorts`: the record's roots by port as v2's one statement's public file names them (bare): its
-    own where no root's port holds a ``/``; else, where every root's port is ``<member>/<port>`` of one member, whose own
-    port names hold no ``/``, that member's roots with its name and the ``/`` taken off. Raises `ValueError` with v2's
-    refusal where the roots are two members' or more, or bare and a member's (`NOT_ONE_MEMBER`), or one is a row tables'
-    (`ROW_TABLES`) or names no port."""
+    own where no root's port holds a ``/``; else, where every root's port but the window's trees of a template's field
+    (``<template>/<field>``, its template another port's name's template) is ``<member>/<port>`` of one member, whose
+    own port names hold no ``/``, that member's roots with its name and the ``/`` taken off, with its template's fields'
+    trees at the fields it has no root of. Raises `ValueError` with v2's refusal where the roots are two members' or
+    more, or bare and a member's (`NOT_ONE_MEMBER`), or one is a row tables' (`ROW_TABLES`) or names no port."""
     roots = rec["roots"]
     ports = [r["port"] for r in roots if isinstance(r.get("port"), str)]
     if all("/" not in p for p in ports):
         return {r["port"]: r for r in roots if isinstance(r.get("port"), str)}
-    names = {p.rsplit("/", 1)[0] if "/" in p else None for p in ports}
+    ts = {n.rsplit("/", 1)[0] for p in ports if "/" in p and "/" in (n := p.rsplit("/", 1)[0])}
+    names = {p.rsplit("/", 1)[0] if "/" in p else None for p in ports if "/" not in p or p.rsplit("/", 1)[0] not in ts}
     if None in names or len(names) != 1:
         raise ValueError(NOT_ONE_MEMBER)
     name, = names
     out: dict[str, Any] = {}
+    fields: dict[str, Any] = {}
     for r in roots:
         port = r.get("port")
         if not isinstance(port, str):
             raise ValueError("roots: a root of the registration names no port")
         if port == TABLE_PORT:
             raise ValueError(ROW_TABLES)
+        if not port.startswith(name + "/") and port != name and "/" in port and port.rsplit("/", 1)[0] in ts:
+            t, f = port.rsplit("/", 1)
+            if name.rsplit("/", 1)[0] == t and f not in fields:
+                fields[f] = {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": f, "root": r.get("root")}
+            continue
         bare = port[len(name) + 1:]
         out.pop(bare, None)
         out[bare] = {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": bare, "root": r.get("root")}
-    return out
+    return {**out, **{f: e for f, e in fields.items() if f not in out}}
 
 
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],
