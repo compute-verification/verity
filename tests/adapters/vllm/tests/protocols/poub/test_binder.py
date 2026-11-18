@@ -27,7 +27,7 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.verify import verify_opening
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, memory_map
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
-from verity.hooks import RangeAllocated, RangeFreed, RangeWritten, StepBegan, StepEnded
+from verity.hooks import MemoryChanged, StepBegan, StepEnded
 
 from tests import fake_vllm
 from tests.engine.test_kv_blocks import kv_classes
@@ -278,12 +278,12 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
     with pytest.raises(RuntimeError, match="filler is registered"):
         b.register_filler(4096, "cpu")
     m = s.record_memory_map(registration=bytes(range(64)))
-    b.on_event(RangeAllocated((1,), "a", step=0))
-    b.on_event(RangeWritten(1, 0, SLOTS, 0))
+    b.on_event(MemoryChanged("allocated", (1,), 0, "a"))
+    b.on_event(MemoryChanged("written", (1,), 0, offset=0, count=SLOTS))
     b.on_event(StepBegan(0, ("a",), SLOTS))
     r.kv_caches[0][:, 1] = 1.5
     b.on_event(StepEnded(0))
-    b.on_event(RangeFreed((1,), step=0))
+    b.on_event(MemoryChanged("freed", (1,), 0))
     b.on_event(StepBegan(1, slots=1))
     b.on_event(StepEnded(1))
     assert m.last == 1 and memory_map_lines(m) == [] and b.step == 2
@@ -319,22 +319,23 @@ def test_steps_append_their_writes_and_free_the_freed_pages():
     b = Binder(s, block_bytes=1024)
     r = runner()
     declare(b, r)
-    b.on_event(RangeAllocated((1, 2), "a", step=0))
-    b.on_event(RangeAllocated((3,), "c", step=0))
-    for w in (RangeWritten(1, 0, 16, 0), RangeWritten(2, 0, 4, 0), RangeWritten(3, 0, 3, 0)):
+    b.on_event(MemoryChanged("allocated", (1, 2), 0, "a"))
+    b.on_event(MemoryChanged("allocated", (3,), 0, "c"))
+    for w in (MemoryChanged("written", (1,), 0, offset=0, count=16), MemoryChanged("written", (2,), 0, offset=0, count=4),
+              MemoryChanged("written", (3,), 0, offset=0, count=3)):
         b.on_event(w)
     b.on_event(StepBegan(0, ("a", "c"), 23))
     assert s.in_pass and s._open_pass.blocks[0].tolist() == [4, 5, 6, 7]
     b.on_event(StepEnded(0))
     assert not s.in_pass and b.step == 1
-    b.on_event(RangeWritten(2, 4, 1, 1))
+    b.on_event(MemoryChanged("written", (2,), 1, offset=4, count=1))
     b.on_event(StepBegan(1, ("a",), 1))
     b.on_event(StepBegan(2, slots=1))
     assert s.counters.calls["end_pass"] == 2 and b.step == 3
-    b.on_event(RangeFreed((1, 2), step=2))
+    b.on_event(MemoryChanged("freed", (1, 2), 2))
     assert not s.pool.allocated[[1, 2]].any() and s.pool.allocated[3]
     with pytest.raises(NotImplementedError, match="the store's binder runs without prefix caching"):
-        b.on_event(RangeAllocated((1,), "c", reused=True, step=2))
+        b.on_event(MemoryChanged("allocated", (1,), 2, "c", reused=True))
 
 
 def steps(b: Binder, n: int) -> None:
@@ -410,13 +411,13 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     def open_step():
         return s._open_pass and s._open_pass.step
 
-    b.on_event(RangeAllocated((1, 2), "a", step=0))
-    b.on_event(RangeWritten(1, 0, SLOTS, 0))
+    b.on_event(MemoryChanged("allocated", (1, 2), 0, "a"))
+    b.on_event(MemoryChanged("written", (1,), 0, offset=0, count=SLOTS))
     b.on_event(StepBegan(0, ("a",), SLOTS))
     assert open_step() == (0 if passes else None)
     r.kv_caches[0][:, 1] = 1.5
     b.on_event(StepEnded(0))
-    b.on_event(RangeFreed((2,), step=0))
+    b.on_event(MemoryChanged("freed", (2,), 0))
     assert m.text().count("\n") == 1
     b.on_event(StepBegan(1, slots=1))
     assert open_step() == (1 if passes else None)
@@ -442,18 +443,19 @@ def test_under_the_admission_hooks_steps_the_memory_map_is_the_one_steps_ending_
         load(b, r)
         declare(b, r)
         m = s.record_memory_map(registration=bytes(range(64)))
-        b.on_event(RangeAllocated((1, 2), "a", step=0))
-        b.on_event(RangeWritten(1, 0, SLOTS, 0))
+        b.on_event(MemoryChanged("allocated", (1, 2), 0, "a"))
+        b.on_event(MemoryChanged("written", (1,), 0, offset=0, count=SLOTS))
         b.on_event(StepBegan(0, ("a",), SLOTS))
         r.kv_caches[0][:, 1] = 1.5
-        ends = [RangeFreed((2,), step=0), StepEnded(0), StepEnded(0)] if admitted else [StepEnded(0), RangeFreed((2,), step=0)]
+        freed = MemoryChanged("freed", (2,), 0)
+        ends = [freed, StepEnded(0), StepEnded(0)] if admitted else [StepEnded(0), freed]
         for e in ends:
             b.on_event(e)
-        b.on_event(RangeAllocated((3,), "c", step=1))
-        b.on_event(RangeWritten(3, 0, SLOTS, 1))
+        b.on_event(MemoryChanged("allocated", (3,), 1, "c"))
+        b.on_event(MemoryChanged("written", (3,), 1, offset=0, count=SLOTS))
         b.on_event(StepBegan(1, ("c",), SLOTS))
         r.kv_caches[0][:, 3] = 2.5
-        b.on_event(RangeFreed((1, 3), step=1))
+        b.on_event(MemoryChanged("freed", (1, 3), 1))
         b.on_event(StepEnded(1))
         b.on_event(StepBegan(2, ("c",), 1))
         return m.text(), s.counters.calls.get("begin_pass"), s.counters.calls.get("end_pass"), b.step

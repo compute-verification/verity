@@ -6,12 +6,12 @@ adapter's, emitted from one in-process engine (the scheduler and the model runne
 RegisteredValues                    each weight tensor a region (kind weights, tier hbm), registered once
 RangesDeclared                      the KV pool, a region per store (a layer's KV cache), every page filler (with
                                     kv=False, unregistered)
-RangeAllocated                      kv_alloc of the pages (with kv=False, none)
-RangeFreed                          kv_free of the pages (with kv=False, none); with fifo, the binder files
+MemoryChanged allocated             kv_alloc of the pages (with kv=False, none)
+MemoryChanged freed                 kv_free of the pages (with kv=False, none); with fifo, the binder files
                                     ReuseOldestFreed, so a page freed inside a window is reused as late as the pool
                                     allows
-RangeAllocated reused               refused: a prefix-cache hit would bring a page back with its KV (run without it)
-RangeWritten                        the step's writes, kept for its StepBegan (with kv=False, none)
+MemoryChanged allocated reused      refused: a prefix-cache hit would bring a page back with its KV (run without it)
+MemoryChanged written               the step's writes, kept for its StepBegan (with kv=False, none)
 StepBegan                           every step, one with no slots too: a verifier's message since the last pass ends
                                     the window, the next challenge begins one; then kv_append of the step's writes, which closes the last step's memory-map
                                     line (with its re-keys for the window just begun), and begin_pass over the
@@ -50,8 +50,7 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     PoubReceipt,
 )
 from verity.protocols.resource_accounting.memory.poub.scheme import POUB
-from verity.hooks import (EVENTS, RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, StepBegan,
-                          StepEnded)
+from verity.hooks import EVENTS, MemoryChanged, RangesDeclared, RegisteredValues, StepBegan, StepEnded
 
 __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
 
@@ -332,17 +331,17 @@ class Binder:
             self.on_step(e)
         elif isinstance(e, StepEnded):
             self.end()
-        elif isinstance(e, RangeWritten):
+        elif isinstance(e, MemoryChanged) and e.change == "written":
             if self.kv:
-                self._writes.append(Append(e.range, e.offset, e.count))
+                self._writes.append(Append(e.ranges[0], e.offset, e.count))
         elif isinstance(e, RegisteredValues):
             self.on_values(e)
         elif isinstance(e, RangesDeclared):
             self.on_ranges(e)
-        elif isinstance(e, RangeAllocated) and e.reused:
+        elif isinstance(e, MemoryChanged) and e.reused:
             raise NotImplementedError("the store's binder runs without prefix caching")
-        elif self.kv and isinstance(e, RangeAllocated | RangeFreed):
-            (self.store.kv_alloc if isinstance(e, RangeAllocated) else self.store.kv_free)(list(e.ranges))
+        elif self.kv and isinstance(e, MemoryChanged):
+            (self.store.kv_alloc if e.change == "allocated" else self.store.kv_free)(list(e.ranges))
 
     def on_step(self, step: StepBegan) -> None:
         if self.store.in_pass:
