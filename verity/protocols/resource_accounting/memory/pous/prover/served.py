@@ -201,7 +201,7 @@ class Served:
         (the prover by default this one's)."""
         from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 
-        if self.store is None:
+        if self.store is None or self.store.rows is None:
             raise RuntimeError(f"{self.entry}: nothing is held to audit")
         kw.setdefault("prover", self.prover)
         return ws.audit(self.store, node, coins, **kw)
