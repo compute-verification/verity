@@ -40,7 +40,7 @@ Where each part is stated in Lean:
 
 N2's count check reads the head leaf of N2's commitment and holds the head to the network attester's grid and digest. Another
 check that reads the same leaf is tied to N2's only under three conditions, each of which holds:
-1. The root is registered before either check's coins or samples (the ZK server's registration, `TransferBlocks.commit`).
+1. The root is registered before either check's coins or samples (the ZK server's registration: `TransferBlocks.commit`, recorded by the prover's `n2_zk.registration`).
 2. The leaf index, 2 + d, is fixed by the execution phase's direction (`service.HEADS`), which is public structure, not
    something the prover chooses.
 3. SHA-512 is collision resistant, as hiding commitments in frame-v3-sha512 trees already assume.
