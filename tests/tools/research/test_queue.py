@@ -2414,6 +2414,7 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
     _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
     world.gh.put(1, head := world.change({"a.txt": "1\n"}))
     monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    monkeypatch.setattr(Qm, "loop_staged", lambda: ([], ""))
     posts, ok = [], [True]
     monkeypatch.setattr(L, "merge_thread_post", lambda text, to, sender="ci": posts.append((text, to, sender)) or ok[0])
     argv = ["queue", "eject", "1", "--reason", "breaks suite `verity`", "--by", "ci", "--workdir", str(world.tmp / "q" / "verity"),
@@ -2437,6 +2438,7 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
 
     monkeypatch.delenv("RESEARCH_DRIVE")
     monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    monkeypatch.setattr(Qm, "loop_staged", lambda: ([], ""))
     monkeypatch.setattr(L, "merge_thread_post", lambda *a, **k: True)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     base = ["--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
@@ -2447,6 +2449,62 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
     before = refs()
     research_main(["queue", "eject", "1", "--reason", "x", "--by", "ci", *base])
     assert refs() == before and "the verified queue leaves it out until a ready mark re-admits it" in capsys.readouterr().out
+
+
+def test_an_eject_refuses_while_a_staged_lean_batch_carries_the_head_naming_it_unless_forced(world, monkeypatch, capsys):
+    """Ejecting a head a staged Lean batch carries, as a member or under one whose commits hold it, would drop the batch, its
+    records run and every candidate built on it: the eject refuses, naming the batch, and withdraws no mark; a head none
+    carries is ejected; an unreadable loop log refuses too; `--force REASON` ejects, the reason in its notice."""
+    import research.landing as L
+    import research.queue as Qm
+
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    posts = []
+    monkeypatch.setattr(L, "merge_thread_post", lambda text, to, sender="ci": posts.append(text) or True)
+    one = world.change({"a.txt": "1\n"})
+    world.gh.put(1, one)
+    two = world.change({"b.txt": "2\n"}, base=one)                   # #2 is stacked on #1: its commits hold #1's head
+    world.gh.put(2, two)
+    world.gh.put(3, three := world.change({"c.txt": "3\n"}))
+    _git(world.origin, "update-ref", "refs/heads/queue/" + two[:12], two)
+    staged = [{"sha": two, "members": [2], "heads": [two], "staged": True}]
+    read = [(staged, "")]
+    monkeypatch.setattr(Qm, "loop_staged", lambda: read[0])
+    base = ["--by", "ci", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
+            "--store", str(world.tmp / "queue-store")]
+    for n in (1, 2):
+        assert research_main(["queue", "eject", str(n), "--reason", "x", *base]) == 1
+        err = capsys.readouterr().err
+        assert f"#{n}'s head is carried by the verified queue's {two[:12]} (#2, staged off main's chain)" in err, err
+    assert posts == []
+    assert research_main(["queue", "eject", "3", "--reason", "x", *base]) == 0 and len(posts) == 1
+    read[0] = ([], "no answer in 100 s")
+    assert research_main(["queue", "eject", "1", "--reason", "x", *base]) == 1
+    assert "the verified queue's log can't be read (no answer in 100 s)" in capsys.readouterr().err and len(posts) == 1
+    read[0] = (staged, "")
+    assert research_main(["queue", "eject", "1", "--reason", "x", "--force", "its batch is dropped anyway", *base]) == 0
+    assert f"#1 at {one[:8]} is ejected from `next` by ci: x (forced over a staged batch carrying it: its batch is dropped " \
+           "anyway)" in posts[-1], posts
+
+
+def test_the_loop_s_staged_batches_are_read_from_its_log_staged_or_put_on_the_chain_until_dropped(tmp_path):
+    """`STAGED_SCRIPT`, as the control pod runs it over the loop's decision log: each staged build (`records_first`) and each
+    candidate a `Commit` built from one (`repairs`), the latter no longer staged, as is a staged one whose check a later build
+    line enqueued; a drop removes either, and a plain candidate is none."""
+    import research.queue as Qm
+
+    lines = [{"action": "build", "sha": "a", "members": [1], "heads": ["h1"], "records_first": True, "done": True},
+             {"action": "build", "sha": "b", "members": [2], "heads": ["h2"], "done": True},
+             {"action": "build", "sha": "c", "members": [1], "heads": ["h1"], "repairs": "a", "done": True},
+             {"action": "drop", "sha": "a"},
+             {"action": "build", "sha": "d", "members": [3], "heads": ["h3"], "records_first": True, "done": True},
+             {"action": "build", "sha": "e", "members": [4], "heads": ["h4"], "records_first": True, "done": True},
+             {"action": "build", "sha": "e", "members": [4], "heads": ["h4"], "enqueued": True, "done": True},
+             {"action": "drop", "sha": "d"}]
+    (tmp_path / "decisions.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines) + "{torn")
+    out = subprocess.run([sys.executable, "-", str(tmp_path)], input=Qm.STAGED_SCRIPT, capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout)["candidates"] == [{"sha": "c", "members": [1], "heads": ["h1"], "staged": False},
+                                                    {"sha": "e", "members": [4], "heads": ["h4"], "staged": False}]
 
 
 def test_a_ready_mark_written_after_an_ejection_re_admits_the_same_head(world):

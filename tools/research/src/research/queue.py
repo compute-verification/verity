@@ -15,10 +15,13 @@ are built again without them in the same tick.
                                                    after a Linear magic word, a bare key of a team main's Slack registry
                                                    lists, or an `Issue: none: REASON` line); --json gives each its `issue`,
                                                    stdout holding the JSON alone (the notices go to stderr)
-    research queue eject PR --reason TEXT [--by HANDLE]
+    research queue eject PR --reason TEXT [--by HANDLE] [--force REASON]
                                                    keep the PR's current head out of the verified queue's candidates, and a new
                                                    head whose own change is the same (`StoreLabels`); a ready mark re-admits it;
-                                                   posted as HANDLE to `CI` and the owner in the merge thread (exit 1 if it couldn't be)
+                                                   posted as HANDLE to `CI` and the owner in the merge thread (exit 1 if it couldn't be);
+                                                   refused, naming the batch, while a staged Lean batch or a candidate put on
+                                                   main's chain from one carries the head (`Queue.staged_holding`, read from the
+                                                   loop's log on the control pod), or when that log can't be read, unless --force
     research queue ready PR (--on MACHINE | --local | --mark) [--by LANE] [--no-preflight] [--sha SHA] [--json]
                                                    the owner's word that the PR is ready at its current head (a new push needs it
                                                    again unless its own change is the marked head's;
@@ -771,7 +774,7 @@ FIRST_RETIRED = ("--first is retired: the verified queue's priority file (`resea
 #: the commands that read each command's own flag; a flag not named here is every command's
 COMMAND_FLAGS = {
     "--jobs": ("map-moves", "cross"), "--main": ("cross",), "--move-commit": ("cross",), "--only": ("cross",),
-    "--push": ("cross",), "--from": ("cross",), "--reason": ("eject",), "--on": ("ready", "judge"), "--local": ("ready",),
+    "--push": ("cross",), "--from": ("cross",), "--reason": ("eject",), "--force": ("eject",), "--on": ("ready", "judge"), "--local": ("ready",),
     "--mark": ("ready",), "--again": ("ready",), "--no-preflight": ("ready",),
     "--land": ("review",), "--hold": ("review",), "--ref": ("review",), "--over": ("review",), "--head": ("open",),
     "--draft": ("open",), "--base": ("open",), "--title": ("open", "edit"), "--body-file": ("open", "edit"),
@@ -3067,6 +3070,31 @@ class Queue:
                 raise QueueError(f"#{pr}'s withdrawn mark didn't reach the store's remote, so other queues may still admit it: {said}")
         self.save_state(state)
         return prs[pr]
+
+    def staged_holding(self, pr: int) -> list[str]:
+        """The verified queue's staged Lean batches, and the candidates `Commit` put on main's chain from staging, that carry
+        ``pr``'s head (`loop_staged`): each as one of its members or under one, as its commits hold it.  An eject of it would
+        drop that batch and its records run with it, and every candidate built on it; ``eject --force REASON`` overrides.
+        Raises when the loop's log can't be read, so nothing is ejected blind."""
+        self._clone()
+        p = next((p for p in self.github.open_prs() if p.number == pr), None)
+        if p is None:
+            return []
+        cands, err = loop_staged()
+        if err:
+            raise QueueError(f"the verified queue's log can't be read ({err}), so it isn't known whether a staged Lean batch "
+                             f"carries #{pr}'s head: eject --force REASON ejects it anyway")
+        held = []
+        for c in cands:
+            sha = str(c.get("sha") or "")
+            if p.head not in (c.get("heads") or ()):
+                self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/pull/{pr}/head:refs/queue/eject/pr",
+                             f"+refs/heads/queue/{sha[:12]}:refs/queue/eject/candidate", ok=None)
+                if _git(self.workdir, "merge-base", "--is-ancestor", p.head, sha, check=False).returncode:
+                    continue
+            kind = "staged off main's chain" if c.get("staged") else "put on main's chain from staging"
+            held.append(f"{sha[:12]} (#{', #'.join(str(m) for m in c.get('members') or ())}, {kind})")
+        return held
 
     def tell_ejected(self, p: PR, reason: str, by: str, post: Callable[..., bool] | None = None) -> int:
         """A hand ejection's notice, posted as ``by`` in the merge thread to `CI` and the lane that owns ``p`` (only a handle's
@@ -6137,6 +6165,39 @@ LEAN_AUDIT_STEP = "lean-audit"
 KEY_COMMAND = "tools/verity/lean/lean_changed.py"
 
 
+#: run on the control pod over the loop's decision log: each candidate a done build line staged (`records_first`) or that a
+#: `Commit` built from a staged batch (`repairs`), and no drop has dropped since, by sha, the latter's `staged` false
+STAGED_SCRIPT = r'''
+import json, sys
+alive = {}
+for line in open(sys.argv[1] + "/decisions.jsonl", errors="replace"):
+    try:
+        r = json.loads(line)
+    except ValueError:
+        continue
+    if not isinstance(r, dict) or not isinstance(r.get("sha"), str):
+        continue
+    sha, action = r["sha"], r.get("action")
+    if action == "build" and r.get("done") and (r.get("records_first") or r.get("repairs")):
+        alive[sha] = {"sha": sha, "members": r.get("members") or [], "heads": r.get("heads") or [],
+                      "staged": bool(r.get("records_first"))}
+    elif action == "build" and r.get("done") and sha in alive:
+        alive[sha]["staged"] = False
+    elif action == "drop":
+        alive.pop(sha, None)
+print(json.dumps({"candidates": list(alive.values())}))
+'''
+
+
+def loop_staged() -> tuple[list[dict], str]:
+    """(The live loop's staged Lean batches and the candidates `Commit` built from them still in flight, as `STAGED_SCRIPT`
+    reads its decision log on the control pod, read-only; why that read failed, else "")."""
+    from .queue_table import CONTROL, LIVE, _remote
+
+    got, err = _remote(CONTROL, STAGED_SCRIPT, LIVE)
+    return (list((got or {}).get("candidates") or []), err) if got is not None else ([], err or "no answer")
+
+
 def ejection(store, pr: PR) -> str | None:
     """Why ``pr``'s current head was ejected, when the newest `ready` label on it is `research queue eject`'s `false` (its reason in
     `ref`), pulled from the store's remote first; else None, and None when that pull fails: this saves a revert, and the after-landing
@@ -6920,6 +6981,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--from", dest="from_dir", type=Path, metavar="DIR", help="cross --push: push what a run left in DIR (its "
                     f"{CROSS_REPORT} and {CROSS_BUNDLE}, from `research fetch RUN --all`) instead of crossing anew")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
+    ap.add_argument("--force", metavar="REASON", help="eject: eject it though a staged Lean batch of the verified queue, or a "
+                    "candidate put on main's chain from one, carries its head (refused without it: the batch, its records run "
+                    "and every candidate on it would be dropped), and why, in its notice; also when the loop's log can't be read")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
                     help="eject, ready, judge: who ejects it, the handle its notice is posted as (default merge-queue, which no "
                          "one holds, so the notice fails) or says it's ready (no default: the owner's lane), "
@@ -7173,7 +7237,12 @@ def main(argv: list[str]) -> int:
                           over=a.over)
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
-        told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
+        if a.force is None and (held := q.staged_holding(a.pr)):
+            raise QueueError(f"#{a.pr}'s head is carried by the verified queue's {'; '.join(held)}: ejecting it drops that "
+                             "batch, its records run with it, and every candidate built on it, so nothing is ejected; eject "
+                             "--force REASON ejects it anyway")
+        reason = a.reason if a.force is None else f"{a.reason} (forced over a staged batch carrying it: {a.force})"
+        told = q.tell_ejected(q.eject(a.pr, reason, a.by, sha=a.sha), reason, a.by)
         print(f"research queue: #{a.pr}'s mark is withdrawn; the verified queue leaves it out until a ready mark re-admits it, "
               "and a candidate in flight holding it still lands it as built unless the eject is ci's or not by its "
               "owner")
