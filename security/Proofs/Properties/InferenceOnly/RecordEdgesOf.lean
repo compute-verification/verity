@@ -28,7 +28,7 @@ private theorem ite_ok {α : Type} {c : Prop} [Decidable c] {x y z : α} {G : Pr
   · exact hx hc (by simpa [hc] using h)
   · exact hy hc (by simpa [hc] using h)
 
-private theorem forIn_inv {β : Type} (I : β → Prop) (l : List Nat) (f : Nat → β → Except String (ForInStep β))
+private theorem forIn_inv {β γ : Type} (I : β → Prop) (l : List γ) (f : γ → β → Except String (ForInStep β))
     (hf : ∀ j ∈ l, ∀ a s, I a → f j a = .ok s → I s.value) :
     ∀ (b b' : β), I b → forIn l b f = .ok b' → I b' := by
   induction l with
@@ -111,9 +111,6 @@ theorem partWires_wire {P : Prog} {fu W k i q s0 out} (h : partWires P fu W k i 
 theorem edgesOf_wire {P : Prog} {rs W ws} (h : edgesOf P rs W = .ok ws) : ∀ w ∈ ws, Digits w := by
   unfold edgesOf at h
   dsimp only at h
-  refine ite_ok h (fun _ h => ?_) (fun _ h => ?_)
-  · refine bind_ok_elim h (fun _ hx _ => ?_)
-    simp [throw, throwThe, MonadExceptOf.throw] at hx
   refine bind_ok_elim h (fun o hs h => ?_)
   cases h
   refine forIn_upto (fun o => ∀ w ∈ o, Digits w) _ _ ?_ _ _ (by simp) hs
@@ -133,8 +130,9 @@ theorem edgesOf_wire {P : Prog} {rs W ws} (h : edgesOf P rs W = .ok ws) : ∀ w 
     intro i b st' hi' hb hst'
     refine bind_ok_elim hst' (fun b' hq hst' => ?_)
     cases hst'
-    refine forIn_upto (fun o => ∀ w ∈ o, Digits w) _ _ ?_ _ _ hb hq
-    intro qi c st'' hqi hc hst''
+    refine forIn_inv (fun o => ∀ w ∈ o, Digits w) _ _ ?_ _ _ hb hq
+    rintro ⟨q, s0⟩ - c st'' hc hst''
+    try dsimp only at hst''
     refine bind_ok_elim hst'' (fun l hl hst'' => ?_)
     cases hst''
     intro w hw
