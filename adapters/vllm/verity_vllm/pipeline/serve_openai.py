@@ -6,7 +6,7 @@
         [--retain host|device [--retain-device-gb 32] [--release-after spot,pouw_h1 [--draws-dir DIR]]]
         [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
-        [--copy-records-to $OUT] [--admit arrival|release-order|tick] [--switch-interval-ms 0.1] [--async-scheduling]
+        [--copy-records-to $OUT] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--protocols pouw:pearl-c-h100-v1-h3 --precision bfloat16 --protocols-config JSON
          [--challenger-gate CMD --challenger-peer NAME --challenger-lane LANE]]
@@ -46,14 +46,14 @@ thread (`serve_loop.EngineLoop`): each HTTP request is admitted with ``add_reque
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection. It
 takes a request's first line only as the network attester does (`serve_head.request_line`), and answers 400 to any other:
 those are the bytes the network attester passes on without its release.
-Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
-attester's release order (``--admit release-order``: the attester's frontend, `network_admission`), where each step's
-rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
-``step_rows``). ``--admit tick`` (the attester's gate) also adds each at the step the certified tick says, from the release
-buckets the network attester's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
-engine class's registered step times, the rows kept as under ``release-order``. The admission's settings (the hold, the
-bucket, the step times) are ``--protocols-config``'s entry under the name of the scheme that provides admission
-(`admission_settings`).
+The admission's settings are ``--protocols-config``'s entry under the name of the scheme that provides admission
+(`admission_settings`), and their ``order`` (`admission_order`) decides it: requests reach the engine in the order the
+frontend parsed them (``arrival``, the default), or in the network attester's release order (``release-order``: the attester's
+frontend, `network_admission`), where each step's rows also keep the scheduler's order, so a step's new rows are in
+admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s ``step_rows``). ``tick`` (the attester's gate) also
+adds each at the step the certified tick says, from the release buckets the network attester's watermark gives (its
+``POST /verity/watermark``, which the server reads as it streams) and the engine class's registered step times, the rows
+kept as under ``release-order``.
 No compile slice replays that admission, so its windows' served rows name none (`no_slice`, `serve_commit.NO_TICK_SLICE`).
 The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare
 (`serve_row`).
@@ -74,7 +74,7 @@ Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in us
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
 record of the step rows it ran, committed at its close under its run root for the compile slice, `serve_commit.commit_served`,
 whose rows and salts go to ``served_rows/w<k>.json``; the record's ``slice`` names that slice, `serve_commit.SERVED_SLICE`, and
-under ``--admit tick`` is null, with why in its ``no_slice`` and once in ``serve.json``'s ``served_rows_no_slice``),
+under order ``tick`` is null, with why in its ``no_slice`` and once in ``serve.json``'s ``served_rows_no_slice``),
 ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
@@ -143,7 +143,7 @@ from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h
                                    serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
                                    serve_seal as SS)
 from verity_vllm.pipeline.scheme_plugin import write_reports
-from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
+from verity_vllm.pipeline.serve_admit import Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
                                                records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop
@@ -255,11 +255,6 @@ class Options:
     force_include_usage: bool = option("--force-include-usage", action="boolean_optional", default=True,
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
-    admit: str = option("--admit", choices=ADMIT, default="arrival",
-                        help="arrival (default): each request to the engine once parsed; release-order: in the network attester's release "
-                             "order (x-verity-release), each once every earlier-released one is in; tick: in release order, each at "
-                             "the step whose logical time its release bucket has closed by (the network attester's gate), its windows' "
-                             "served rows naming no compile slice (serve_commit.NO_TICK_SLICE)")
     protocols: str | None = option("--protocols", default=None,
                                    help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1); "
                                         f"{SPL.ENTRY}: every linear but the LM head Pearl+'s FP8 product under it, one Pearl+ "
@@ -578,21 +573,25 @@ class _Route:
 
 
 def admission_settings(opts: Any) -> dict[str, Any]:
-    """The admission scheme's settings: ``--protocols-config``'s entry under its name (a JSON object, or a JSON file), with
-    ``--admit``'s order."""
+    """The admission scheme's settings: ``--protocols-config``'s entry under its name (a JSON object, or a JSON file)."""
     from verity_vllm.protocols import load_settings
 
     v = opts.protocols_config
     doc = load_settings(json.loads(v) if v and v.lstrip().startswith("{") else v or None)
-    return {**doc.get(M.providing("admission").name, {}), "order": opts.admit}
+    return doc.get(M.providing("admission").name, {})
+
+
+def admission_order(opts: Any) -> str:
+    """The admission's order, its settings' ``order``: ``arrival`` where they name none."""
+    return admission_settings(opts).get("order", "arrival")
 
 
 def network_admission(loop: EngineLoop, sched: Any, opts: Any) -> tuple[Any, H.Front]:
-    """``--admit release-order`` or ``tick``: the network attester's admission, attached to this process's exchange by
+    """Order ``release-order`` or ``tick``: the network attester's admission, attached to this process's exchange by
     the scheme that provides admission (`messages.providing`). Returns the admission hook (under ``tick``, the one the build put on ``sched``
     where it did, after the attester's gate, `loop.gate`; else None) and the attester's frontend."""
     from verity_vllm.engine import admission
-    got = M.current().attach(M.providing("admission"), admission_settings(opts), source="--admit", submit=loop.submit,
+    got = M.current().attach(M.providing("admission"), admission_settings(opts), source="--protocols-config", submit=loop.submit,
                              abort=loop.abort, take=loop.tick)
     loop.gate = got.gate
     if loop.gate is not None:
@@ -670,9 +669,9 @@ def served_class(opts: Options) -> dict[str, int]:
 
 
 def no_slice(opts: Options) -> str | None:
-    """Why the windows' served rows name no compile slice: under ``--admit tick``, `serve_commit.NO_TICK_SLICE`. None
+    """Why the windows' served rows name no compile slice: under order ``tick``, `serve_commit.NO_TICK_SLICE`. None
     under any other admission, whose windows name `serve_commit.SERVED_SLICE`."""
-    return NO_TICK_SLICE if opts.admit == "tick" else None
+    return NO_TICK_SLICE if admission_order(opts) == "tick" else None
 
 
 def no_slice_record(windows: CommitWindows | None) -> dict[str, str]:
@@ -689,15 +688,14 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-steps is at least 1")
     if opts.window_requests < 0:
         raise UsageError("--window-requests is at least 0 (0: no bound)")
-    if opts.admit != "arrival":
-        from verity.protocols.resource_accounting.scheme import settings as checked
-        try:
+    from verity.protocols.resource_accounting.scheme import settings as checked
+    try:
+        if (admit := admission_order(opts)) != "arrival":
             checked(M.providing("admission"), admission_settings(opts))
-        except ValueError as e:
-            raise UsageError(f"--admit {opts.admit}: --protocols-config: {e}") from None
-    if opts.admit == "tick":
-        if opts.window_requests:
-            raise UsageError("--admit tick adds each request at its step; --window-requests would hold it past that")
+    except (OSError, ValueError) as e:
+        raise UsageError(f"--protocols-config {(opts.protocols_config or '')[:80]}: {e}") from None
+    if admit == "tick" and opts.window_requests:
+        raise UsageError("order tick adds each request at its step; --window-requests would hold it past that")
     if (c := served_class(opts))["R"] < opts.max_num_seqs:
         raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
     if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
@@ -777,7 +775,7 @@ def main(opts: Options) -> int:
         windows.on_floor = loop.drain
     served = opts.served_model_name or opts.model
     order = rows = ticked = None
-    if opts.admit in ("release-order", "tick"):
+    if admission_order(opts) in ("release-order", "tick"):
         from verity_vllm.engine.handle import model_runner, scheduler
         rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler(engine))
         ticked, order = network_admission(loop, scheduler(engine), opts)
@@ -802,7 +800,7 @@ def main(opts: Options) -> int:
               "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1", "committer": getattr(com, "name", None),
-              "admit": opts.admit, "admission": M.current().attached.get(M.providing("admission").name) if order is not None else None,
+              "admit": admission_order(opts), "admission": M.current().attached.get(M.providing("admission").name) if order is not None else None,
               "tick": loop.gate.record() if loop.gate is not None else None,
               "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": com.commit_scheme if com is not None else None,

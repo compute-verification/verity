@@ -10,8 +10,8 @@
     instances --workload W [--write]                     regenerate the workload's frozen instance manifest
     workloads                                            the proof-block families and their B caps
     zk                                                   what configuration 2 measures today (job.sh ZK=1: --zk sessions under the ZK server)
-    record   [--workload W] [--B B] [--provers 1,2] --cores C,C   the metric's run, on its GPU node: the prover points, 1 then 2
-             at once (each on its own card and cores), the Lean verifier on each bundle, and one reading a prover count
+    record   [--workload W] [--B B] [--provers 1,2] --cards G,G --cores C,C   the metric's run, on its GPU node: the prover
+             points, 1 then 2 at once (prover I on the I-th card and core range), the Lean verifier on each bundle, and one reading a prover count
 
 The job scripts call the rest: ``population``, ``check-instances``, ``partition``, ``staged``, ``probe``, ``put-bundle``,
 ``fetch-bundle``, ``lean-verdict``, ``point-result``, ``zk-point`` and ``profile-phases``.
@@ -467,12 +467,15 @@ def cmd_record(a) -> int:
 
     from . import record as REC
     provers = [int(n) for n in a.provers.split(",")]
-    cores = a.cores.split(",")
-    if len(cores) < max(provers):
-        raise SystemExit(f"--cores names {len(cores)} core range(s) and --provers needs {max(provers)}, one a prover")
+    cards, cores = a.cards.split(","), a.cores.split(",")
+    for flag, got in (("--cards", cards), ("--cores", cores)):
+        if len(got) < max(provers) or len(set(got[:max(provers)])) < max(provers):
+            raise SystemExit(f"{flag} names {len(set(got))} distinct value(s) and --provers needs {max(provers)}, "
+                             "one of its own a prover")
     w = kit.writer("pt-record")
     out = Path(w.out) / "out"
-    points = REC.run(P.repository_root(), out, a.workload, a.B, provers, cores, w.stamp.get("node") or "local", w.run)
+    points = REC.run(P.repository_root(), out, a.workload, a.B, provers, cards, cores, w.stamp.get("node") or "local",
+                     w.run)
     return REC.write(w, out, a.workload, a.B, points)
 
 
@@ -529,7 +532,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("zk-point"); p.add_argument("--workload", required=True); p.add_argument("--B", type=int, required=True)
     p.add_argument("--dir", required=True); p.add_argument("--out", required=True)
     p = sub.add_parser("record"); p.add_argument("--workload", default=DEFAULT_WORKLOAD); p.add_argument("--B", type=int, default=64)
-    p.add_argument("--provers", default="1,2"); p.add_argument("--cores", required=True)
+    p.add_argument("--provers", default="1,2"); p.add_argument("--cards", required=True)
+    p.add_argument("--cores", required=True)
     p = sub.add_parser("profile-phases"); p.add_argument("--script", required=True); p.add_argument("--time", required=True)
     p.add_argument("--stderr", required=True); p.add_argument("--stdout", default=None); p.add_argument("--out", required=True)
     p.add_argument("--bundle", default=None); p.add_argument("--prove-run", default=None)
