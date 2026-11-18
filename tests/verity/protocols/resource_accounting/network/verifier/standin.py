@@ -132,10 +132,6 @@ def prove_tie(tie: Any, cells: Any, sample: S.Draw, lanes: Any, out: Path, *, pr
     return TS.Delivered(PF.Proof(circuit, public, (session,)), delivered, outputs)
 
 
-def circuit_sha512(delivered: SVC.Delivered) -> str:
-    return PF.file_sha512(delivered.proof.circuit)
-
-
 def _known(registered: dict) -> str | None:
     """The stand-in for Lean's check of the ports a `--registered` file names at known content
     (`Flock.Registered.checkKnownAll`, which refuses the file before any statement): each port's root the root of its
@@ -181,15 +177,13 @@ def _registered(public: Path, registered: dict) -> str | None:
     return None
 
 
-def lean(proof: PF.Proof, *, circuit_sha512: str, program: bytes, partition: dict,
+def lean(proof: PF.Proof, *, program: bytes, partition: dict,
          registered: dict | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
-    """`proofs.verify`'s stand-in: its refusal of a circuit file other than the committed one, or of a `registered`
-    file whose known content isn't its roots' (`_known`), then each session's finding as its session file says
+    """`proofs.verify`'s stand-in: its refusal of a `registered` file whose known content isn't its roots' (`_known`),
+    then each session's finding as its session file says
     (`prove`), with the units the public file's indices name, each rejected when the verifier's `registered` reads
     don't hold (`_registered`)."""
     assert isinstance(program, bytes) and "program" in partition
-    if PF.file_sha512(proof.circuit) != circuit_sha512:
-        return None, ("circuit", "the statement's circuit file is not the one the auditor committed")
     if registered is not None and (bad := _known(registered)) is not None:
         return None, ("registered", bad)
     why = None if registered is None else _registered(proof.public, registered)
@@ -211,7 +205,7 @@ def decide(lw: SVC.TransferBlocks, stream: S.Stream, sample: S.Draw, opening: SV
     delivered = prove(lw, opening, sample, syncs, out, **kw)
     assert stream.deliver(sample, delivered.sessions()) is None
     certificates = [r.certificate for r in opening.records] if certificates is None else certificates
-    outcome = lw.outcome(stream, sample, certificates, syncs, delivered, circuit_sha512=circuit_sha512(delivered),
+    outcome = lw.outcome(stream, sample, certificates, syncs, delivered,
                          opening=opening)
     verdict = stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
     assert verdict["decided_by"] == "proof" and verdict["accepted"] == outcome.accepted

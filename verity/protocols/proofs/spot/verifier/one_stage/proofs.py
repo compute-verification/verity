@@ -408,17 +408,19 @@ def units_exactly(units: Sequence[Sequence[int]], indices: Sequence[int]) -> boo
     return list(indices) == [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
 
 
-def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block: int = 0,
+def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block: int,
            registered: Mapping[str, Any] | None = None,
            strata: Sequence[tuple[str, Sequence[Sequence[int]]]] | None = None,
            ) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by Flock's Lean verifier against the verifier's own `program` (C, its
     descriptor's bytes), `partition` and `registered` file (theta's registration; None only for a program that reads no
     registered value, such as N2's, whose proof block opens the committed value inside its circuit), on the circuit file
-    of the proof block whose first unit is `block`, derived from C and the partition (`one_circuit.restrict`); the
-    findings in session order and None, or None and the refusal (``registered``: `registered` is None and the program
-    reads registered values, `reads_registered`; ``circuit``: the circuit file is not the derived one, or is not derived
-    yet; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the
+    of the drawn proof block, the partition object's block `block` (`one_circuit.block`), derived from C and the
+    partition (`one_circuit.restrict`), never `proof`'s own circuit file; the findings in session order and None, or None
+    and the refusal (``registered``: `registered` is None and the program reads registered values, `reads_registered`;
+    ``circuit``: C and the partition give no block `block` or no C_S of it, or its base circuit is not derived yet,
+    `one_circuit.lower`; ``proof``: a file is missing or the
+    verifier's answer is not one verdict a session naming the
     partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
     the verifier rejects is a finding, not a refusal, and so is one it accepts on a circuit `template_why` refuses,
     rejected with that reason as v2 rejects it.
@@ -440,36 +442,39 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block:
         return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
                                     "the verifier holds no registered reads: verify with its own registered file")
     try:
-        derived = OC.restrict(program, partition, block)
+        derived = OC.restrict(program, partition, OC.block(program, partition, block))
+    except (OC.NotDerived, OC.Refused) as e:
+        return None, ("circuit", str(e))
+    if not (proof.public.is_file() and proof.sessions and all((s / "session.json").is_file() for s in proof.sessions)):
+        return None, ("proof", "the statement's proof files are not a public file and at least one session directory "
+                               "holding its session.json")
+    try:
+        OC.lower(derived)
     except OC.NotDerived as e:
         return None, ("circuit", str(e))
-    if not (proof.circuit.is_file() and proof.public.is_file() and proof.sessions
-            and all((s / "session.json").is_file() for s in proof.sessions)):
-        return None, ("proof", "the statement's proof files are not a circuit file, a public file and at least one session "
-                               "directory holding its session.json")
-    if proof.circuit.read_bytes() != derived:
-        return None, ("circuit", "the statement's circuit file is not C_S, the one C and the partition give its block")
     with tempfile.TemporaryDirectory(prefix="verity-proofs-") as d:
-        files = {"program": Path(d, "program.json"), "partition": Path(d, "partition.json"),
-                 "registered": Path(d, "registered.json")}
+        files = {"circuit": Path(d, "circuit.json"), "program": Path(d, "program.json"),
+                 "partition": Path(d, "partition.json"), "registered": Path(d, "registered.json")}
+        files["circuit"].write_bytes(derived)
         files["program"].write_bytes(program)
         files["partition"].write_text(json.dumps(partition))
         reads = []
         if registered is not None:
             files["registered"].write_text(json.dumps(registered))
             reads = ["--registered", str(files["registered"])]
-        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(proof.circuit),
+        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(files["circuit"]),
                             "--public", str(proof.public), "--partition", str(files["partition"]),
                             "--program", str(files["program"]), *reads,
                             "--session", *map(str, proof.sessions)], capture_output=True, text=True, env=verifier_env())
+        accepted = any(json.loads(x[len("VERDICT "):]).get("accepted") is True
+                       for x in p.stdout.splitlines() if x.startswith("VERDICT "))
+        form = ks_form_why(files["circuit"], proof.public) if accepted else None
+        template = template_why(files["circuit"]) if accepted else None
     lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     if [v.get("session") for v in lines] != [str(s) for s in proof.sessions]:
         return None, ("proof", f"the verifier answered no verdict for each session in order (exit {p.returncode}): "
                                f"{(p.stderr or p.stdout)[-400:]}")
     want = partition.get("program")
-    accepted = any(v.get("accepted") is True for v in lines)
-    form = ks_form_why(proof.circuit, proof.public) if accepted else None
-    template = template_why(proof.circuit) if accepted else None
     population = (population_why(_header(proof.public)["units"]["indices"], strata)
                   if accepted and strata is not None else None)
     out = []
@@ -566,7 +571,8 @@ class Member:
 def members_v2(members: Sequence[Member],
                names: Mapping[str, Sequence[str]] | None = None) -> tuple[dict, dict, list[Path]]:
     """v2's per-member form of ``proofs`` for a window's `members`, every one of them: the parameters'
-    (``{"members": {name: {public, registered, units, vus_per_block}}}``), the evidence's
+    (``{"members": {name: {public, registered, block, vus_per_block}}}``, ``block`` its rank by first unit, its block of
+    the partition object's ``blocks``), the evidence's
     (``{"statements": [{member, sessions}]}``: one statement for each member with a session, in the members' order by
     first unit, its session as `evidence_v2` names it, under `names`' for that member), and the blobs: the
     statements' files, then the circuit and public files of each member with no session, since the form's check reads
@@ -582,9 +588,10 @@ def members_v2(members: Sequence[Member],
         if len(m.proof.sessions) > 1:
             raise ValueError(f"member {m.name} has {len(m.proof.sessions)} sessions: a statement is exactly one session "
                              f"on live coins, never retried")
+    rank = {m.name: k for k, m in enumerate(sorted(members, key=lambda m: min(lo for lo, _ in m.units)))}
     params = {"members": {m.name: {"public": m.public_sha512,
                                    "registered": None if m.registered is None else dict(m.registered),
-                                   "units": [[lo, hi] for lo, hi in m.units], "vus_per_block": m.vus_per_block}
+                                   "block": rank[m.name], "vus_per_block": m.vus_per_block}
                           for m in members}}
     statements, blobs = [], []
     for m in sorted((m for m in members if m.proof.sessions), key=lambda m: min(lo for lo, _ in m.units)):

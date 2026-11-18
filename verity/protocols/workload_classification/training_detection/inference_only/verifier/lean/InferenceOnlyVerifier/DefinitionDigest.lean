@@ -8,7 +8,7 @@ public import Circuits.Steps
 /-!
 # A Definition's digests, read off its Program's descriptor
 
-Two digests of a Definition of a Program (`verity-ir/descriptor/v1`), each computed from the descriptor's JSON, with no
+Two digests of a Definition of a Program (`verity-ir/descriptor/v2`), each computed from the descriptor's JSON, with no
 decode of the Program:
 
 * `definitionDigest`, the circuit format's own (`verity/circuits/PROTOCOL.md` §4.8, `codec.definition_digest`): the
