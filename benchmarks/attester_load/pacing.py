@@ -5,13 +5,14 @@ stored stock run's requests under the schedule.
     uv run python benchmarks/attester_load/pacing.py --dir OUT ...     the same from a run's `out/` on disk
 
 A request of the stored run (vLLM bench's `result.json` of each user: its start, time to first token, latency and
-prompt and output lengths) passes through the network attester as `network_attester.py` states its schedule: its id
-request, cut into cells of `cell_bytes`, goes in at `slots` cells a bucket and reaches the server whole at its `END`'s
-bucket; egress cell i is due at bucket D + ⌊i/r⌋ of its admission, and a cell whose token isn't there by then fails
-the connection (late), as a request over the response cap, past the ingress bounds or past the egress cells does. The
-server's own times are stock's, moved by the ingress. A request that doesn't fail is answered when its `END` cell
-leaves, D + ⌊k/r⌋ buckets after its admission for k tokens, plus a bucket for the admission's and the pacer's place
-in theirs. Each user's later turns move by what its earlier turns added, and a pass ends at its last request's end.
+prompt and output lengths) passes through the network attester as `network_attester.py` states its schedule. It is
+admitted at the first tick after it arrives, half a bucket later on average. Its id request, cut into cells of
+`cell_bytes`, goes in at `slots` cells a bucket from the admission's bucket s, and the server gets it whole at the tick
+of its `END`'s bucket. Egress cell i is cut at tick s + D + ⌊i/r⌋ from the server's bytes there by then, and a cell
+whose token isn't there fails the connection (late), as a request over the response cap, past the ingress bounds or
+past the egress cells does. The server's own times are stock's, from the tick it gets the request. A request that
+doesn't fail is answered when its `END` cell, cell k for k tokens, leaves: `paced` after tick s + D + ⌊k/r⌋. Each
+user's later turns move by what its earlier turns added, and a pass ends at its last request's end.
 
 So the figure holds the engine's times at stock's: it serves nothing again, and a schedule under which any request
 fails has no figure, only its failures, since it doesn't serve the load. Only a request's first and last token have
@@ -34,6 +35,7 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.resource_accounting.network.attester.runner_cli import PACED_MS
 from verity.protocols.resource_accounting.network.verifier import id_form
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 
@@ -56,21 +58,31 @@ class Schedule:
     ingress_buckets: int
     egress_cells: int
     max_tokens_cap: int | None = None
+    paced_ms: float = PACED_MS
 
     @classmethod
     def of_card(cls, path: Path = CARD) -> "Schedule":
         s = json.loads(path.read_text())["value"]["schedule"]
-        return cls(**{k: s.get(k) for k in cls.__dataclass_fields__})
+        return cls(**{k: s[k] for k in cls.__dataclass_fields__ if k in s})
 
 
 def schedules(card: Schedule) -> dict[str, Schedule]:
     """The schedules a run is replayed under: the card's, and the card's with cells, ingress bounds and cap wide enough
-    for an agent's request and response, at three paces and delays."""
-    wide = dict(cell_bytes=4096, ingress_cells=1024, ingress_buckets=128, egress_cells=4096, max_tokens_cap=2048)
+    for an agent's request and response. Past the card's, the delays are the least under which no request of the
+    stored GLM-5.3 four-agent run fails (but the 20 s one, which fails some), and at 250 ms and longer buckets the pace
+    keeps 160 ids a second."""
+    wide = dict(cell_bytes=4096, ingress_cells=1024, egress_cells=4096, max_tokens_cap=2048)
+
+    def w(bucket_ms: int, slots: int, delay: int) -> Schedule:
+        return replace(card, **wide, bucket_ms=bucket_ms, slots=slots, delay=delay, ingress_buckets=min(128, delay))
+
     return {"card": card,
-            "wide-r16-d200": replace(card, **wide, slots=16, delay=200),
-            "wide-r4-d340": replace(card, **wide, slots=4, delay=340),
-            "wide-r16-d415": replace(card, **wide, slots=16, delay=415)}
+            "b100-r16-d200": w(100, 16, 200),
+            "b100-r4-d335": w(100, 4, 335),
+            "b100-r16-d414": w(100, 16, 414),
+            "b250-r40-d166": w(250, 40, 166),
+            "b500-r80-d84": w(500, 80, 84),
+            "b1000-r160-d42": w(1000, 160, 42)}
 
 
 @functools.cache
@@ -85,7 +97,7 @@ def outcome(s: Schedule, ttft: float, latency: float, prompt_ids: int, tokens: i
     """Why the request fails under ``s`` (one of `REASONS`, the first it meets) or None, and its latency through the
     network attester in seconds."""
     tau = s.bucket_ms / 1000
-    answered = (s.delay + tokens // s.slots + 1) * tau
+    answered = tau / 2 + (s.delay + tokens // s.slots) * tau + s.paced_ms / 1000
     if s.max_tokens_cap is not None and tokens > s.max_tokens_cap:
         return "cap", answered
     cells = request_cells(prompt_ids, tokens, s.cell_bytes)
@@ -94,7 +106,7 @@ def outcome(s: Schedule, ttft: float, latency: float, prompt_ids: int, tokens: i
         return "ingress", answered
     if tokens + 1 > s.egress_cells:
         return "limit", answered
-    at = ingress * tau
+    at = (ingress - 1) * tau
     if at + ttft > s.delay * tau or at + latency > (s.delay + (tokens - 1) // s.slots) * tau:
         return "late", answered
     return None, answered

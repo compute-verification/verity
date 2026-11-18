@@ -45,7 +45,17 @@ def test_an_id_request_s_cells_grow_with_its_prompt() -> None:
 
 def test_an_on_time_request_is_answered_when_its_end_cell_leaves() -> None:
     why, through = P.outcome(WIDE, ttft=0.2, latency=0.5, prompt_ids=10, tokens=12)
-    assert why is None and through == pytest.approx((10 + 12 // 4 + 1) * 0.1)
+    assert why is None and through == pytest.approx(0.05 + (10 + 12 // 4) * 0.1 + P.PACED_MS / 1000)
+    assert P.outcome(replace(WIDE, bucket_ms=1000, paced_ms=200), 0.2, 0.5, 10, 12)[1] == pytest.approx(0.5 + 13 + 0.2)
+
+
+def test_the_server_gets_the_request_at_its_end_s_bucket_and_the_delay_counts_from_admission() -> None:
+    s = replace(WIDE, cell_bytes=256, slots=1)
+    cells = P.request_cells(30, 12, 256)
+    assert cells == 3
+    on_time = (s.delay - (cells - 1)) * 0.1
+    assert P.outcome(s, on_time - 1e-9, on_time, 30, 12)[0] is None
+    assert P.outcome(s, on_time + 1e-3, on_time + 1e-3, 30, 12)[0] == "late"
 
 
 @pytest.mark.parametrize("change, served, reason", [
