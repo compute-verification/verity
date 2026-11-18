@@ -2,8 +2,10 @@ Part of network attestation's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The served rows held to their Programs (`verity_vllm.compiler.served_statics`)
 
-The compile slice reads an execution phase's served rows as a committed hidden row, ``srv``, and the verifier holds its b‖c to the
-served-rows registration natively. What binds those rows to the batch the server ran is a tie. The routed tie
+The compile slice reads an execution phase's served rows as a committed hidden row, ``srv``. Its b‖c against the
+served-rows registration has a native check, `verity_vllm.compiler.served_rows.leaf_ok`, which only its tests call: no
+driver and no auditor-side code runs it. A tie is the Definition built to bind those rows to the batch the server ran; no
+proof of it runs, so today nothing binds them. The routed tie
 (`verity_vllm.compiler.served_tie.ServedRowsTie_v2`) holds them to the Commit's committed positions. Each of its proof
 blocks hashes the execution phase's whole ``srv`` row and each step's positions in-circuit, about 400 KB at the served class,
 which no Flock proof block of 2^27 holds. `ServedStaticsTie_v1{R, G, IW, L, T}` holds them to the Programs' statics
@@ -38,10 +40,10 @@ Program reads a committed position. The compiled path's RoPE reads ``c00.input/p
 (`verity_vllm.program.predict.compiled`). For a compiled-path execution phase the committed positions are what the compute read, and the
 routed tie holds the served rows to them.
 
-**Idle blocks are proved.** Every block of every execution phase is a proof block, under `Selection` All, the idle blocks too. A
-step past the execution phase's executed count is idle by public structure, and its Programs' statics are zero. But the compile
-slice reads every step's served rows, and only the tie shows an idle block's rows zero. A block left untied would make
-its rows the prover's word.
+**Idle blocks are proof blocks.** Under the tie, every block of every execution phase would be a proof block, under
+`Selection` All, the idle blocks too. A step past the execution phase's executed count is idle by public structure, and its
+Programs' statics are zero. But the compile slice reads every step's served rows, and only the tie would show an idle
+block's rows zero. No block is tied today, so every block's rows are the prover's word, the idle ones' too.
 
 **Cost** (`size`, pinned in `adapters/vllm/verity_vllm/compiler/served_statics.circuit-check.json`). A step is
 R·(1 + LW + TW) − 2 ANDs, and the steps' flags cost 2·(G − 1) more. Every committed row a proof block reads is hashed in-circuit,
