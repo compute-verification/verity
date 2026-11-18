@@ -34,7 +34,7 @@ import sys
 
 import numpy as np
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.credit import DELTA
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 
 from checked_strip import W_RE, CellGrid, cross_ranks
 from exact_kit.checks import Checks
@@ -88,8 +88,8 @@ def h_decode(L: int, d: int = 128, u_bits_qk: int = 64 * 5, u_bits_pv: int = 32 
             "P·V, V column (b)": L, "P·V, P row (U)": u_bits_pv / d}
 
 
-#: The per-window δ's bits: δ = 2^-DELTA_LOG2 (PoUW's `credit.DELTA`).
-DELTA_LOG2 = DELTA.denominator.bit_length() - 1
+#: The per-window δ's bits: δ = 2^-DELTA_LOG2 (the integrity profile's `WINDOW_DELTA`, PoUW's credit's δ).
+DELTA_LOG2 = WINDOW_DELTA.denominator.bit_length() - 1
 
 
 def grind_eps(L: int, delta_log2: int = DELTA_LOG2, t_log2: int = 128, d: int = 128) -> dict[str, float]:
