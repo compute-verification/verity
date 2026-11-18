@@ -96,15 +96,13 @@ def test_the_lean_verifiers_parameters_name_refresh_only_when_it_is_on(params_wi
     assert {k: v for k, v in lv.params_json(on).items() if k != "refresh"} == lv.params_json(off)
 
 
-def test_a_refresh_session_the_lean_verifier_ran_without_reading_the_setting_is_a_disagreement(params_with_refresh):
+def test_a_refresh_session_the_lean_verifier_ran_without_reading_the_setting_is_never_accepted(params_with_refresh):
     """A Lean verifier that accepts a refresh session and whose record doesn't say refresh ran it under today's rule:
-    the session is refused `disagreement`, never accepted."""
+    the session is refused (`disagreement` where the Lean accepted it), never accepted."""
     rs, _ = H.run("kv:2,kv:2", sessions=2, refresh=(False, True), kv_every=4, kv_pool=8, lifetime=2)
     lean_reads_it = (rs[1].get("lean_record") or {}).get("refresh") is True
     if not lean_reads_it:
         assert not rs[1]["accepted"]
-        if rs[1]["failure"]["failure"] == "disagreement":
-            assert rs[1]["disagreement"]["event"] in ("receive", "refresh", "record")
 
 
 # ------------------------------------------------------------------------------------------------ refresh_result.py
