@@ -337,12 +337,16 @@ def main() -> int:
     return 0
 
 
+def machine(card: str) -> str:
+    from verity_bench import kit
+    return "cpu" if card == "none" else kit.card_short(card, directory=CARD_FILES)
+
+
 def record(out: Path, model: str, window: str, execution: str, rec: dict) -> None:
     from verity_bench import kit
     w = kit.writer(out)
-    card = w.stamp["card"]
     fields = {"model": MODELS[model], "window": window, "execution": execution,
-              "machine": "cpu" if card == "none" else "-".join(card.lower().split()).removeprefix("nvidia-")}
+              "machine": machine(w.stamp["card"])}
     member = f"glm-5.3-{window}-{execution}-{fields['machine']}" if model == "glm-5.3" else f"{model}-h200"
     for name, value, unit in ((MINUTES, rec["wall_min"], "minutes"), (PEAK, rec["peak_gib"], "GiB")):
         m = w.measurement(name, value, unit, mark="measured", member=member, extra=fields)

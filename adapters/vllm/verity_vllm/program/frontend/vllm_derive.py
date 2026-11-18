@@ -11,11 +11,11 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
+from verity.circuits.program import Program
 from verity_torch.frontend import derive as _derive
 from verity_torch.frontend.outcomes import Unsupported
 from verity_torch.frontend.report import DeriveReport
 
-from verity.circuits.program import Program
 from verity_vllm.program.frontend import seed_rule, stop_rule
 
 if TYPE_CHECKING:

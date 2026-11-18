@@ -98,10 +98,6 @@ theorem holds_and {δ₁ δ₂ : ℝ} {P Q : Ω → Prop} (h₁ : r.Holds δ₁ 
   · exact Or.inr ⟨ha, fun hq => hn ⟨hp, hq⟩⟩
   · exact Or.inl ⟨ha, hp⟩
 
-/-- A bound on every accepting outcome is a route at `δ = 0`. -/
-theorem holds_of_forall {P : Ω → Prop} (h : ∀ ω, r.accepts ω → P ω) : r.Holds 0 P :=
-  (pr_eq_zero fun ω ⟨ha, hn⟩ => hn (h ω ha)).le
-
 /-- The rebuild's fit beside `W_r`, from W at π_r and PoUW's certificate of `W_r`. -/
 theorem fit_of_certified {Wr δ : ℝ} (hw : Assumptions.ComputeAdditive r) (hc : r.Certified Wr δ) : r.Fit Wr δ :=
   holds_mono (fun ω _ h => by

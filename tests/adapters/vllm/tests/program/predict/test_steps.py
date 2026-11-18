@@ -16,22 +16,38 @@ from typing import Any
 
 import numpy as np
 import pytest
+import verity.protocols.resource_accounting.network.verifier.advice as I1
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.partition_object import calls
+from verity.circuits.refs import runs
+from verity_torch.prune import dead_free_versions
+
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
+from verity_vllm.definitions.registry import io_shell as IO
+from verity_vllm.definitions.registry import stop_check as SC
+from verity_vllm.definitions.registry.topp_geometry import registered_splits
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 from verity_vllm.engine.served_seed import derived
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.build_instances import check_rows
+from verity_vllm.program.frontend import seed_rule as SEED
+from verity_vllm.program.frontend import stop_rule as SR
+from verity_vllm.program.frontend.targets import parse_launch_context
 from verity_vllm.program.predict import batch as B
 from verity_vllm.program.predict import score as S
-from verity_vllm.program.predict.build import Unexpressible, _Specs, build_program, model_shape
+from verity_vllm.program.predict.build import (
+    Unexpressible,
+    _Specs,
+    build_program,
+    model_shape,
+)
 from verity_vllm.program.predict.common import _arr
 from verity_vllm.program.predict.domain import check_phi
 from verity_vllm.program.predict.dsa import Net
 from verity_vllm.program.predict.phi import Phi
-from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
-from verity_vllm.program.frontend.targets import parse_launch_context
 from verity_vllm.program.predict.steps import (
     Registered,
     RowRef,
@@ -45,16 +61,6 @@ from verity_vllm.program.predict.steps import (
     trace_commands,
     trace_dir,
 )
-from verity_torch.prune import dead_free_versions
-from verity_vllm.definitions.registry import io_shell as IO
-from verity_vllm.definitions.registry import stop_check as SC
-from verity_vllm.definitions.registry.topp_geometry import registered_splits
-
-import verity.protocols.resource_accounting.network.verifier.advice as I1
-from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate_batch
-from verity.circuits.partition_object import calls
-from verity.circuits.refs import runs
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
@@ -777,7 +783,6 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
     `_dead_gates` counts them as circuit-check does and says under which definitions. The second session's prefill has a row of
     16 keys, where `Attention_v5` has 2 dead gates a head."""
     from verity.circuits.liveness import dead_gates
-
     from verity_torch.prune import dead_units
     sixteen = _session([(16, 2, {**GREEDY, "max_tokens": 2})], [[(0, 0, 16)], [(0, 16, 1)]])
     for advice, ingress in (_mixed(), sixteen):
@@ -1017,13 +1022,14 @@ def test_prefill_chunks_are_a_request_s_prompt_rows_at_a_launch_batch():
 
 
 def test_a_class_g_request_whose_launch_no_capture_covers_is_refused_alone(tmp_path):
-    """A class-G registration at the class's limits of 8,192 tokens a step and 131,072 positions: a request co-scheduled in a step
-    of 3,000 tokens builds no Program, since no captured all-reduce covers that launch, and `partial` refuses it by name, request by
-    request, before writing any launch. (A prompt past INDEX_TOPK keys compiles: `test_dsa_long_rows`.)"""
+    """A class-G registration at the class's limits of 8,192 tokens a step and 131,072 positions, the custom all-reduce off: a
+    request co-scheduled in a step of 3,000 tokens builds no Program, since no captured all-reduce covers that launch (that
+    setting's capture stops at 2,048), and `partial` refuses it by name, request by request, before writing any launch. (A prompt
+    past INDEX_TOPK keys compiles: `test_dsa_long_rows`.)"""
     why = "an all-reduce of 3000 x 6144 on route 'symm_mem_comm'"
     advice, ingress = _session([(10, 1, {**GREEDY, "max_tokens": 1})] + [(230, 1, {**GREEDY, "max_tokens": 1})] * 13,
                                [[(0, 0, 10)] + [(i, 0, 230) for i in range(1, 14)]])
-    reg = _class_g(tmp_path, engine={"max_num_batched_tokens": 8192})
+    reg = _class_g(tmp_path, engine={"max_num_batched_tokens": 8192, "disable_custom_all_reduce": True})
     with pytest.raises(Unexpressible, match=re.escape(why)):
         compile_steps(reg, advice, ingress)
     with pytest.raises(Unexpressible, match=re.escape(f"every request is refused, request 0 first: request 0: its Program is refused: "
@@ -1056,7 +1062,6 @@ def test_class_g_samples_by_the_selects_circuit_check_binds_at_its_vocabulary(tm
     import runpy
 
     from verity_vllm.definitions.registry import dead_free as DF
-
     from verity_vllm.program.predict.common import kind
 
     reg = _class_g(tmp_path)

@@ -33,8 +33,6 @@ from dataclasses import dataclass, field
 from importlib import resources
 from typing import Any
 
-from verity_vllm.definitions.registry.bf16_gemm_check import device_pin
-
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire import served as SV
@@ -43,6 +41,7 @@ from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled
 from verity_vllm.config import UsageError, option, workload_arg
+from verity_vllm.definitions.registry.bf16_gemm_check import device_pin
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles.dense_generic import find_hf_config
 from verity_vllm.observe.fold.profiles.generic import router_vpt_bf16

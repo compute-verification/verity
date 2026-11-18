@@ -26,9 +26,11 @@ writer rows (a ``COORDS`` GEMM's coordinates, a ``COLS`` family's column blocks)
 c words and the gathered row fit a gather unit's `GATHER_ROWS` rows, else in levels, `AllGather_v1{WORLD=K/c, N=c}` into
 rows of K words (K the most words of a whole number of writer rows within `GATHER_ROWS`, `grain.chunk` at c = 1) and then
 those R/K rows of K words gathered the same way into the row of R words (`AllGather_v1{WORLD=R/K, N=K}` where they fit one
-gather unit, so two levels in all). A gather is made once for the rows it reads, and its first level's
+gather unit, so two levels in all). A count of rows no such levels divide (2,177 scores, a prime) is gathered unevenly:
+chunks of ``GATHER_ROWS - 1`` rows, then one `AllGather_v1`-like copy of two widths (`AllGatherTail_v1`) reading the
+chunks and the rows left over. A gather is made once for the rows it reads, and its first level's
 K-word rows stand for those writer rows in any later read (``most``), so a column block of a gathered row reads its chunks
-rather than its coordinates. An `AllGather_v1` moves words and computes nothing, and has no rank static.
+rather than its coordinates. An `AllGather_v1` or `AllGatherTail_v1` moves words and computes nothing, and has no rank static.
 
 With ``stand_ins`` (`NodeWindow`), the frame lowers the same window and also keeps, for each port it leaves free, the
 rows that port stands for as its lowering placed them (`NodeWindow.stood`), so a check on values can feed it the Program's
@@ -41,7 +43,7 @@ refuses by comparing the two windows' digests.
 The window is completeness only: that it computes what serving ran is held by the units' proofs on their committed rows.
 Refused by name (`Unexpressible`): a Program with no weights record, an input that is neither the prompt, the weights nor a
 ``peers_*`` partial, a lowered family's argument batched on an axis other than 0 or None, a read that cuts a writer's row,
-a gather whose rows are not one width or of which no whole number within a gather unit divides the row, a port row-fed
+a gather whose rows are not one width, a port row-fed
 at two cuts, and at `NodeWindow.circuit`, a row-fed port also fed whole or a row of a unit fed twice, then at
 `_Builder.settle`, every template whose ports aren't cut a writer row or whose unit Flock's composer wouldn't prove, and
 after it a row-fed port whose cut isn't its `feed_rows` cut.
@@ -60,8 +62,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, runs
 from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.registry import b1_tp2 as B1T
 
+from verity_vllm.definitions.registry import b1_tp2 as B1T
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -505,26 +507,52 @@ class NodeWindow:
             tid, at = self.unit(GATHER, bind(B1T.AllGather, WORLD=n, N=c), M)
             self.b.feed(tid, "parts", at, M, rows, ((M, s),))
             got = [Row(tid, at + t, "o0", R) for t in range(M)]
+        elif not _smooth(n):
+            got = self._uneven(rowss, s)
         else:
-            K = max((d for d in range(c, R + 1, c) if R % d == 0 and d // c + 1 <= GATHER_ROWS), default=c)
-            k, G = K // c, R // K
-            if k == 1:
-                raise Unexpressible(f"{self.name}: a whole read of {n} rows of {c} words: no whole number of them within a "
-                                    f"gather unit's {GATHER_ROWS} rows divides the {R} words")
-            t1, a1 = self.unit(GATHER, bind(B1T.AllGather, WORLD=k, N=c), G * M)
-            groups = [rows[g * k:(g + 1) * k] for g in range(G)]
-            if (gs := _step(groups)) is not None:
-                self.b.feed(t1, "parts", a1, G * M, groups[0], ((G, gs), (M, s)))
-            else:
-                for g, grp in enumerate(groups):
-                    self.b.feed(t1, "parts", a1 + g * M, M, grp, ((M, s),))
-            for t, rs in enumerate(rowss):
-                for g in range(G):
-                    self.chunks[rs[g * k]] = (rs[g * k:(g + 1) * k], Row(t1, a1 + g * M + t, "o0", K))
-            got = self._gather([tuple(Row(t1, a1 + g * M + t, "o0", K) for g in range(G)) for t in range(M)])
+            k = _level(n)
+            got = self._gather(self._chunks(rowss, s, k, n // k))
         for rs, r in zip(rowss, got):
             self.wholes[rs] = r
         return got
+
+    def _chunks(self, rowss: list[tuple[Row, ...]], s: int, k: int, G: int) -> list[tuple[Row, ...]]:
+        """Each member's first G k writer rows gathered k at a time (`AllGather_v1{WORLD=k, N=c}`, unit ``a + g M + t``), each
+        chunk kept for later reads (``most``): each member's G chunk rows."""
+        rows, M, c = rowss[0], len(rowss), rowss[0][0].words
+        t1, a1 = self.unit(GATHER, bind(B1T.AllGather, WORLD=k, N=c), G * M)
+        groups = [rows[g * k:(g + 1) * k] for g in range(G)]
+        if (gs := _step(groups)) is not None:
+            self.b.feed(t1, "parts", a1, G * M, groups[0], ((G, gs), (M, s)))
+        else:
+            for g, grp in enumerate(groups):
+                self.b.feed(t1, "parts", a1 + g * M, M, grp, ((M, s),))
+        for t, rs in enumerate(rowss):
+            for g in range(G):
+                self.chunks[rs[g * k]] = (rs[g * k:(g + 1) * k], Row(t1, a1 + g * M + t, "o0", k * c))
+        return [tuple(Row(t1, a1 + g * M + t, "o0", k * c) for g in range(G)) for t in range(M)]
+
+    def _uneven(self, rowss: list[tuple[Row, ...]], s: int) -> list[Row]:
+        """A whole read of n rows of c words that no chunk size divides into levels (`_smooth`): chunks of
+        ``GATHER_ROWS - 1`` rows (`_chunks`), then one `AllGather_v1`-like copy of two widths, `AllGatherTail_v1`, reading the
+        chunk rows (or the row they gather into, where they and the r rows left over would outgrow a gather unit) and the r
+        rows as they are. Every row of the read is a writer's, so it adds no free row."""
+        n, c, M = len(rowss[0]), rowss[0][0].words, len(rowss)
+        k = GATHER_ROWS - 1
+        G, r = divmod(n, k)
+        heads = self._chunks(rowss, s, k, G)
+        if r == 0:
+            return self._gather(heads)
+        if G + r + 1 > GATHER_ROWS:
+            heads = [(h,) for h in self._whole(heads)]
+        tid, at = self.unit(GATHER, bind(B1T.AllGatherTail, WORLD=len(heads[0]), N=heads[0][0].words, TAIL=r, TN=c), M)
+        if (hs := _step(heads)) is not None:
+            self.b.feed(tid, "parts", at, M, heads[0], ((M, hs),))
+        else:
+            for t, h in enumerate(heads):
+                self.b.feed(tid, "parts", at + t, 1, h, ((1, 0),))
+        self.b.feed(tid, "tail", at, M, rowss[0][G * k:], ((M, s),))
+        return [Row(tid, at + t, "o0", n * c) for t in range(M)]
 
     # ---- the window
 
@@ -604,6 +632,18 @@ class NodeWindow:
 
 def _family(node: Any) -> str:
     return getattr(node.fn, "name", None) or node.fn.id.split("{")[0]
+
+
+def _level(n: int) -> int:
+    """The writer rows a first-level chunk of a whole read of n rows holds: the most within a gather unit's `GATHER_ROWS`
+    rows that divides n, 1 where none does."""
+    return max(d for d in range(1, GATHER_ROWS) if n % d == 0)
+
+
+def _smooth(n: int) -> bool:
+    """Whether a whole read of n rows gathers in levels of chunks of one size each (`_level`), the chunks of one level the
+    rows of the next, down to one gather unit's rows; else it is uneven (`NodeWindow._uneven`)."""
+    return n + 1 <= GATHER_ROWS or (_level(n) > 1 and _smooth(n // _level(n)))
 
 
 def _stands(rows: Sequence[Row]) -> bool:
