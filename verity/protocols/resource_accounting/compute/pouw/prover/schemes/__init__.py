@@ -43,7 +43,10 @@ def build(entry: KernelScheme, **config: Any) -> PoUWScheme:
             raise NotImplementedError(f"{entry.name}: built by {entry.seam}, which registers {entry.family!r} when "
                                       "imported")
         raise KeyError(f"{entry.name} is a {entry.family} scheme, which no PoUWScheme builds")
-    return BUILDERS[entry.family](**entry.parameters, **config)
+    s = BUILDERS[entry.family](**entry.parameters, **config)
+    if s.name != entry.name:
+        raise ValueError(f"the scheme built for {entry.name!r} names itself {s.name!r}")
+    return s
 
 
 def get(name: str, **config: Any) -> PoUWScheme:

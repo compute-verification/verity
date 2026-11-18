@@ -1132,6 +1132,20 @@ def test_a_names_file_must_name_configurations_of_the_enumerated_families(tmp_pa
     assert "names no configuration" in capsys.readouterr().err
 
 
+def test_an_arm_s_passes_need_a_private_directory_outside_the_run_s(tmp_path, capsys):
+    """A run with arms names `--passes`, and it neither is nor shares `--out`'s directory, where a pass's salts and rows
+    would be uploaded with the run; a run without arms needs none."""
+    run = tmp_path / "run"
+    base = ["--gpu", "0", "--out", str(run / "bench.json"), "--arm", "example_arm:ExampleFp8"]
+    for extra, why in (([], "--passes DIR is required with --arm"), (["--passes", str(run)], "shares it"),
+                       (["--passes", str(run / "passes")], "shares it"), (["--passes", str(tmp_path)], "shares it")):
+        with pytest.raises(SystemExit) as ex:
+            H.parse(base + extra)
+        assert ex.value.code == 2 and why in capsys.readouterr().err
+    assert H.parse(base + ["--passes", str(tmp_path / "scratch" / "passes")]).passes == tmp_path / "scratch" / "passes"
+    assert H.parse(base[:4]).passes is None
+
+
 def test_set_count_bounds():
     assert S.set_count(1, 128 << 20) == S.MAX_SETS
     assert S.set_count(1 << 40, 128 << 20) == S.MIN_SETS

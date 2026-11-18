@@ -13,7 +13,16 @@ verifier reads coins only from a challenger's log, and uses no randomness of its
 * `Challenger.Log R C`: its log, oldest entry first;
 * `Log.coins`: the coins the log released, in order;
 * `Log.before l i`: the log before its coin `i`, everything it recorded and released before releasing coin `i` (the
-  whole log, when it released fewer than `i + 1` coins).
+  whole log, when it released fewer than `i + 1` coins);
+* `Log.RecordedBefore l r i`, `Log.ReleasedBefore l c i`: the log records commitment `r`, or releases coin `c`, before
+  its coin `i`. Coins are counted in the one order the log releases them, whatever their families, so the order between
+  families is the log's;
+* `Log.Cut l fixed coins`: the cut, every commitment `fixed` picks out recorded before every coin `coins` picks out,
+  whichever scheme commits or draws it;
+* `Family`: a family of coins, a label and a count, its coins `(label, j)` for `j < count` (`Family.Holds`);
+* `DerivedBefore log v i`: a value derived from the log's prefix, a function of the log before coin `i` on every run.
+
+A scheme's times are its own: the log orders entries and holds no time.
 
 A run of a challenger that flips `n` coins of a finite type `C` is weighed by its flips `ω : Fin n → C`, each sequence
 of flips equally likely (`Game.prCoin`), as `Game.coin` weighs a live coin. What the challenger is taken to do with its
@@ -27,7 +36,9 @@ challenger is impractical; there, randomness is derived from a challenger's coin
 * PoUB's pass seeds within a phase, each hashed from the phase's challenger coin and the previous
   pass's root.
 
-Neither is a coin of this log: a statement about one reads it through the coin it is derived from.
+Neither is a coin of this log: a statement about one reads it through the coin it is derived from. Each is a value
+derived from the log's prefix (`DerivedBefore`): the salt coin and the operands' recorded roots, or the phase's coin
+and the previous pass's recorded root, are in the log before the next coin it releases.
 -/
 
 @[expose] public section
@@ -62,7 +73,36 @@ def before : Log R C → Nat → Log R C
   | .released _ :: _, 0 => []
   | .released c :: l, i + 1 => .released c :: before l i
 
+/-- **Recorded before coin `i`**: the log records the commitment `r` before it releases its coin `i`. -/
+def RecordedBefore (l : Log R C) (r : R) (i : Nat) : Prop :=
+  Entry.recorded r ∈ l.before i
+
+/-- **Released before coin `i`**: the log releases coin `c`, of whichever family, before its coin `i`. -/
+def ReleasedBefore (l : Log R C) (c : C) (i : Nat) : Prop :=
+  Entry.released c ∈ l.before i
+
+/-- **The cut**: every commitment `fixed` picks out is recorded before every coin `coins` picks out, whichever scheme
+commits or draws it. Every credited payload committed before every credited key is drawn is the cut at the credited
+payloads and the credited keys' coins. -/
+def Cut (l : Log R C) (fixed : R → Prop) (coins : Nat → Prop) : Prop :=
+  ∀ i, coins i → ∀ r, fixed r → l.RecordedBefore r i
+
 end Log
+
+/-- **A family of coins**: a label and a count; its coins are `(label, j)` for `j < count`. A challenger's coins are
+in families, named by no protocol. -/
+structure Family (Λ : Type) where
+  label : Λ
+  count : Nat
+
+/-- The families `fs` hold the coin `(label, j)`: one of them has that label and more than `j` coins. -/
+def Family.Holds {Λ : Type} (fs : List (Family Λ)) (c : Λ × Nat) : Prop :=
+  ∃ f ∈ fs, f.label = c.1 ∧ c.2 < f.count
+
+/-- **A value derived from the log's prefix**: on every run of a challenger that flips `n` coins, `v` is a function of
+the log before coin `i`, the commitments recorded and the coins released before it. -/
+def DerivedBefore {R C V : Type} {n : Nat} (log : (Fin n → C) → Log R C) (v : (Fin n → C) → V) (i : Nat) : Prop :=
+  ∃ f : Log R C → V, ∀ ω, v ω = f ((log ω).before i)
 
 end Challenger
 

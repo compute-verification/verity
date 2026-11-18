@@ -813,7 +813,7 @@ def test_a_machine_whose_git_gives_no_answer_is_shut_out_with_the_reason(tmp_pat
 
 def test_a_node_2_that_can_start_no_run_is_closed_to_every_job_a_gpu_one_included(tmp_path, monkeypatch, capsys, idle):
     """Node 2's queue starts a run as a pool does, so a node 2 whose read says no run starts there takes no job: a job a pool
-    fits goes to the pool, and a GPU or quiet job, which no other node runs, is refused with the reason."""
+    fits goes to the pool, and a GPU or timed job, which no other node runs, is refused with the reason."""
     null = tmp_path / "null"
     null.write_text("")
     monkeypatch.setattr(auto, "NULL_DEVICE", str(null))
@@ -834,7 +834,7 @@ def test_a_node_2_that_can_start_no_run_is_closed_to_every_job_a_gpu_one_include
     monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
     monkeypatch.chdir(_auto_repo(tmp_path))
     assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--gpus", "1", "--", "nvidia-smi"]) == 2
-    assert placed == [] and f"research run --on auto: refused: {said}, and a GPU or quiet job runs on no other node" in capsys.readouterr().err
+    assert placed == [] and f"research run --on auto: refused: {said}, and a GPU or timed job runs on no other node" in capsys.readouterr().err
 
 
 def _auto_repo(tmp_path: Path) -> Path:
@@ -1109,7 +1109,7 @@ def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path,
     monkeypatch.chdir(_auto_repo(tmp_path))
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
     assert main([*runs, "--gpus", "1", "--", "nvidia-smi"]) == 3
-    assert "a GPU or quiet job, which only the queue books" in capsys.readouterr().err
+    assert "a GPU or timed job, which only the queue books" in capsys.readouterr().err
     assert main([*runs, "--cpus", "16", "--mem-gb", "160", "--", "pytest"]) == 3
     assert "no slot of /workspace/research/locks/research/slots gives 16 CPUs" in capsys.readouterr().err
     assert [(s["node"], s["gpus"], s["cpus"]) for s in placed] == [(N2, 1, None), (N2, None, 16)]
@@ -1269,7 +1269,7 @@ def test_on_auto_refuses_a_gpu_job_while_node_2_is_down_or_held_and_asks_node_2_
     monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
     monkeypatch.chdir(_auto_repo(tmp_path))
     gpu = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--gpus", "1", "--", "nvidia-smi"]
-    nowhere = ", and a GPU or quiet job runs on no other node"
+    nowhere = ", and a GPU or timed job runs on no other node"
     assert main(gpu) == 2 and placed == []
     assert f"research run --on auto: refused: {N2} is down: its ssh doesn't answer (Connection timed out){nowhere}" in capsys.readouterr().err
     assert main(gpu) == 2 and placed == []
@@ -1610,7 +1610,7 @@ def test_on_auto_with_no_machine_left_to_try_is_refused_with_why_each_was_passed
 
 
 def test_a_node_2_whose_queue_starts_no_run_is_passed_over_for_a_pool_and_refuses_a_gpu_job(tmp_path, monkeypatch, capsys):
-    """Node 2's queue starts a run as a pool does. A job a pool fits goes on to the pool's line; a GPU or quiet job, which no
+    """Node 2's queue starts a run as a pool does. A job a pool fits goes on to the pool's line; a GPU or timed job, which no
     other node runs, is refused once with the reason, and is launched nowhere else."""
     full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
     launched, asked = _on_auto(monkeypatch, tmp_path, {N2: share(free=48), CPU1: full}, {N2: ("CannotStart", NOT_STARTED), CPU1: None})
@@ -1622,7 +1622,7 @@ def test_a_node_2_whose_queue_starts_no_run_is_passed_over_for_a_pool_and_refuse
     assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in err and f" ({said}; " in err
     assert main([*RUN[:3], "--gpus", "1", "--", "nvidia-smi"]) == 3
     assert [kw["machine_name"] for kw in launched[2:]] == [N2] and asked[1:] == [{"node_only": True}]
-    assert f"research run --on auto: refused: {said}, and a GPU or quiet job runs on no other node" in capsys.readouterr().err
+    assert f"research run --on auto: refused: {said}, and a GPU or timed job runs on no other node" in capsys.readouterr().err
 
 
 def test_a_launch_that_names_its_run_is_refused_once_and_says_what_places_it_again(tmp_path, monkeypatch, capsys):

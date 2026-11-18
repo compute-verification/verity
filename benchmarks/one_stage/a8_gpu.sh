@@ -11,6 +11,7 @@
 # Kept in $OUT: a8's records and logs and the sessions' records; never a circuit, a prover's file or a proof's archive.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 PT_WORK=${PT_WORK:-/workspace/cache/proof-throughput}
@@ -64,6 +65,6 @@ log "a8-gpu: samples ${A8_SAMPLES:-64}, points ${A8_POINTS:-1,8,32,64}, arms ${A
 rc=${PIPESTATUS[0]}
 mkdir -p "$O/a8"
 (cd "$S/a8" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' \
-  \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | xargs -0 -r -I{} cp --parents {} "$O/a8/")
+  \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/a8/")
 log "a8-gpu: done, rc $rc"
 exit "$rc"
