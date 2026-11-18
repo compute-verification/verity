@@ -397,10 +397,10 @@ def test_a_released_file_with_one_undeclared_key_fails_the_record(tmp_path):
     run = tmp_path / "run"
     certs = "out/gates/c0/r0/out/certificates.jsonl"
     _put_json(run, {certs: (json.dumps({"certificate": CERTIFICATE}) + "\n").encode(),
-               "out/n2/outcome.json": {"verdict": "accept"}, "out/n2/prove.log": b"text", "resources.jsonl": b"{}\n"})
+               "out/scan/outcome.json": {"verdict": "accept"}, "out/scan/prove.log": b"text", "resources.jsonl": b"{}\n"})
     rc, report, _ = _keys_guard(tmp_path)
     assert rc == 0 and report["verdict"] == "clean" and report["found"] == []
-    assert report["keys"] == {"declared": RK.SCHEMA, "checked": 1, "not_yet": {"n2": 1}, "no_keys": {".log": 1},
+    assert report["keys"] == {"declared": RK.SCHEMA, "checked": 1, "not_yet": {"scan": 1}, "no_keys": {".log": 1},
                               "outside": 1, "undeclared": 0}
     _put_json(run, {certs: {"certificate": {**CERTIFICATE, "undeclared_key": "a value of any length " * 40}}})
     rc, report, held = _keys_guard(tmp_path)

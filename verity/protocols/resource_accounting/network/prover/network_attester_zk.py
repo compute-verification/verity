@@ -440,12 +440,10 @@ def prove(a) -> int:
     if not at.pads or a.units < 2:
         raise SystemExit("pad reads a pad of the delay and swapped two units: D ≥ 1 and --units ≥ 2")
     B, N = WR.row_bytes(at.params), WR.rows_of(at.params)
-    summary: dict = {"run": str(run), "link_window": at.head.value, "value": at.units.value(at.head),
-                     "connection": at.connection, "rows": N, "row_bytes": B, "cell_bytes": at.params.cell_bytes,
-                     "pads": at.pads, "reads": at.reads, "positions": at.positions, "slots": at.slots,
-                     "data_rows": at.data_rows, "units_bytes": len(at.units.encode()), "warden_cost": at.cost,
-                     "registration": at.registration}
-    summary["warden_costs"] = RC.check_cells(run, at.dep, at.params, RC.read_records(run, at.params))[0]
+    # the run's output is public: what the gate publishes and nothing more, so no cost, wiring or opened slot
+    summary: dict = {"link_window": at.head.value, "value": at.units.value(at.head), "rows": N, "row_bytes": B,
+                     "cell_bytes": at.params.cell_bytes, "units": a.units, "units_bytes": len(at.units.encode()),
+                     "registration_root": at.registration["root"]}
     own = member_rows("unsigned", at).own
     c = at.registration["certificate"]
     forged = WR.registration(own.head, Certificate(bytes.fromhex(c["key"]), at.link, at.direction, at.window,
@@ -456,10 +454,9 @@ def prove(a) -> int:
         summary["unsigned_registration"] = "accepted"
     except ValueError as e:
         summary["unsigned_registration"] = f"refused: {e}"
-    log(f"{at.head.value}: {N} rows of {B} bytes, root {at.head.root.hex()[:16]}; the Program's units read connection "
-        f"{at.connection}'s cells {at.pads} … {at.pads + a.units - 1} (units {at.units.digest().hex()[:16]}) at rows "
-        f"{at.positions}, slots {at.slots} ({at.data_rows} data); the network attester's cost {at.cost}; the prover's own root "
-        f"under the network attester's certificate: {summary['unsigned_registration']}")
+    log(f"{at.head.value}: {N} rows of {B} bytes, root {at.head.root.hex()[:16]}; the Program's {a.units} units "
+        f"(units {at.units.digest().hex()[:16]}); the prover's own root under the network attester's certificate: "
+        f"{summary['unsigned_registration']}")
     M = _one_stage()
     sg = stager(M, B, a.units, out / "stager")
     check_shape(M, sg)
@@ -470,7 +467,7 @@ def prove(a) -> int:
     for name in MEMBERS:
         m = staged[name] = stage(M, sg, at, name)
         summary.setdefault("members", {})[name] = {"port": m["port"], "ands": m["ands"], "stage_s": m["stage_s"],
-                                                   "units": m["units"], "predicted_opens": m["opens"],
+                                                   "units": m["units"], "predicted_opens": sum(m["opens"]),
                                                    "predicted": m["predicted"] or "accepted"}
         log(f"staged {name}: port {m['port']} registered, {m['ands']} ANDs, units {m['units'][:16]}, rows that open "
             f"the network attester's root (host) {sum(m['opens'])}/{len(m['opens'])}; the host's read: "
