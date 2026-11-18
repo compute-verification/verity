@@ -4,6 +4,7 @@ public import Definitions.Flock.Audit.SamplingDesign
 public import Definitions.Flock.Circuit
 public import Definitions.Flock.Game
 public import Proofs.Flock.Soundness.Audit.Circuit
+public import Proofs.Flock.Soundness.Audit.Levels
 public import Proofs.Flock.Soundness.Audit.SamplingDesign
 public import Proofs.Flock.Soundness.Game
 import Mathlib.Algebra.Order.Module.Field
@@ -174,19 +175,33 @@ theorem audit_le (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : 
     _ = _ := avg_add₃ _ _ _
     _ ≤ _ := add_le_add (add_le_add (avg_ite_eq_prCoin _).le (hks R τ tgt)) (hlink R τ tgt)
 
-/-- **The one-stage integrity profile.** For every family `𝓑` of incorrect sets,
-`Pr[accept ∧ incorrect(X) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} missProb B + ε_ks + ε_bind`. -/
-theorem audit_profile (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound εbind) (𝓑 : Finset (Fin n) → Prop) (σ : Strategy (audit L Reg session)) :
+/-- **The integrity profile over levels.** When the audit samples the units whose blocks `idx u` the levels `Lv` sample,
+for every family `𝓑` of incorrect sets,
+`Pr[accept ∧ incorrect(X) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} missProb_{Lv} (idx B) + ε_ks + ε_bind`. -/
+theorem audit_profile_levels {G : Type} [Fintype G] [DecidableEq G] (Lv : Verity.Levels G) (idx : Fin n → Finset G)
+    (hL : SamplingDesign.ofLevels Lv idx = L) (A : Analysis L Reg session) {εks εbind : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (𝓑 : Finset (Fin n) → Prop)
+    (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ 𝓑 (A.incorrect (A.committedOf σ))) (audit L Reg session) σ ≤
-      (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), L.missProb B) + εks + εbind := by
+      (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), Lv.design.missProb (B.image idx)) + εks + εbind := by
+  subst hL
   refine (audit_le A hks hlink (fun X _ => 𝓑 (A.incorrect X)) σ).trans ?_
   gcongr
   by_cases hB : 𝓑 (A.incorrect (A.committedOf σ))
-  · exact (prCoin_mono fun ω h => h.2).trans (le_iSup₂_of_le (f := fun B (_ : 𝓑 B) => L.missProb B)
-      _ hB le_rfl)
+  · exact (prCoin_mono fun ω h => h.2).trans (le_iSup₂_of_le
+      (f := fun B (_ : 𝓑 B) => Lv.design.missProb (B.image idx)) _ hB
+      (SamplingDesign.missProb_ofLevels Lv idx _).le)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => absurd h.1 hB).trans (prCoin_false.le.trans
       (zero_le))
+
+/-- **The one-stage integrity profile.** For every family `𝓑` of incorrect sets,
+`Pr[accept ∧ incorrect(X) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} missProb B + ε_ks + ε_bind`: `audit_profile_levels` at `L` as one level. -/
+theorem audit_profile (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (𝓑 : Finset (Fin n) → Prop) (σ : Strategy (audit L Reg session)) :
+    prob (fun o => o.1 = true ∧ 𝓑 (A.incorrect (A.committedOf σ))) (audit L Reg session) σ ≤
+      (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), L.missProb B) + εks + εbind :=
+  (audit_profile_levels L.toLevels (fun u => {u}) (SamplingDesign.ofLevels_toLevels L) A hks hlink 𝓑 σ).trans_eq
+    (by simp only [SamplingDesign.missProb_toLevels])
 
 /-- **The count curve**: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks + ε_bind`. -/
 theorem audit_count (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
