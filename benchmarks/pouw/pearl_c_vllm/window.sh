@@ -47,13 +47,13 @@ MODE=${MODE:-window}
 fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 case $K in
   pearl_c_sm90)
-    GPU_NAME="H100|H200"; GPU_CC=9.0; VARIANTS=h100; SCHEME=${SCHEME:-pearl-c-h100-v1-h3}
+    VARIANTS=h100; SCHEME=${SCHEME:-pearl-c-h100-v1-h3}
     WORK=${WORK:-/workspace/research/pearl-c-sm90}; PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
     MODEL=${MODEL:?on $K, MODEL names the checkpoint directory}
     [ -x "$PY" ] || fail SETUP "no Python at $PY: VERITY_BENCH_VENV names the node's pinned-vLLM environment"
     export PATH=$(dirname "$PY"):$PATH ;;
   pearl_c_sm120)
-    GPU_NAME="RTX PRO 6000 Blackwell"; GPU_CC=12.0; VARIANTS=sm120; [ "$MODE" = perplexity ] && VARIANTS="sm120 sm120-unpromoted"
+    VARIANTS=sm120; [ "$MODE" = perplexity ] && VARIANTS="sm120 sm120-unpromoted"
     WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
     MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
     [ -x "$PY" ] && [ -f "$WORK/ready.json" ] || fail SETUP "no $WORK/ready.json: run setup.sh first"
@@ -88,7 +88,11 @@ touch "$OUT/.started"
   trap 'find "$FLASHINFER_WORKSPACE_BASE/.cache/flashinfer" -name "*.so" -newer "$OUT/.started" > "$OUT/jit-built.txt" 2>/dev/null || true' EXIT
 
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"
-grep -Eq "$GPU_NAME" "$OUT/identity.csv" && grep -q ", $GPU_CC," "$OUT/identity.csv" || fail IDENTITY "$(cat "$OUT/identity.csv")"
+# the card file naming the device, and the kernel directory its card takes (`bench_arm.kernel_directory`): $K's, or refused
+TAKES=$(PYTHONPATH=${PYTHONPATH:-}:$PWD/benchmarks/pouw/pearl_c_vllm:$PWD/benchmarks/harness "$PY" -c 'import sys
+from bench_arm import kernel_directory; from e2e import SCHEME; from verity_bench.kit import card_short
+print(kernel_directory(sys.argv[1] or SCHEME, card_short(sys.argv[2].strip())).name)' "${SCHEME:-}" "$(cut -d, -f2 "$OUT/identity.csv")") || fail IDENTITY "$(cat "$OUT/identity.csv"): no card file names it"
+[ "$TAKES" = "$K" ] || fail IDENTITY "$(cat "$OUT/identity.csv"): its card takes $TAKES, not $K"
 
 mkdir -p "$OUT/ship" && tar -xf "${SHIP_TAR:-${RESEARCH_RUN_DIR:-$OUT}/inputs/${K//_/-}-ship.tar}" -C "$OUT/ship"
 SHIP=$(dirname "$(find "$OUT/ship" -name MANIFEST.sha256 | head -1)")
