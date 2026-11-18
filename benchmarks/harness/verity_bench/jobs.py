@@ -78,12 +78,10 @@ def _commit(root: Path) -> str:
                          "tree is: run under `research run`, which sets it (--tree-sha for a tree without .git)") from None
 
 
-def _file_sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def toolchain(root: Path, spec: ResolvedSpec, *, commit: str | None = None) -> Toolchain:
-    return Toolchain(commit or _commit(root), _file_sha256(root / "uv.lock"), spec.preset.vllm_pin)
+    with (root / "uv.lock").open("rb") as f:
+        lock = hashlib.file_digest(f, "sha256").hexdigest()
+    return Toolchain(commit or _commit(root), lock, spec.preset.vllm_pin)
 
 
 def point_identity(spec_sha256: str, pins: Toolchain, point: SweepPoint) -> str:

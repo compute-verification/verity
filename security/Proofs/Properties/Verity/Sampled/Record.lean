@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.Sampling.InputSlot
 public import Proofs.Flock.Bridge.LeafMap
 public import Proofs.Properties.Spot.Units
-public import Proofs.Properties.Verity.Recursive.PartStatement
+public import Proofs.Properties.Verity.Sampled.RawFits
 
 /-!
 # One-stage v2's audit at a session, as a sampling record

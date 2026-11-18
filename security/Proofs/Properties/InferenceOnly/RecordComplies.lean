@@ -22,8 +22,8 @@ namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 open InferenceOnlyVerifier.Record.SecurityProofs (form form_owns form_laidOut form_rates)
 
 /-- **Accepting a record gives the rate rule on its circuit**, for the record check's own form. -/
-theorem form_complies (hRuns : InferenceOnlyVerifier.Record.SecurityProofs.OwnRowsRuns) (hFT : InferenceOnlyVerifier.Record.SecurityProofs.FinishTemplates) (hED : InferenceOnlyVerifier.Record.SecurityProofs.EdgeDigits) :
+theorem form_complies (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFreeReads) (hFT : InferenceOnlyVerifier.Record.SecurityProofs.FinishTemplates) :
     Complies form :=
-  complies_of form_owns (form_laidOut hRuns hFT) (form_counts hRuns hED) form_rates
+  complies_of form_owns (form_laidOut hNE hFT) (form_counts hNE) form_rates
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

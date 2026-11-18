@@ -3,7 +3,7 @@ integration's pin, on the same node, workload and SLO.
 
     serve_tax.py plan --model-id ID --c4 C4.json.gz --rates NAME=R,... [--span-s 90] [--requests N] --out PLAN.jsonl
     serve_tax.py run --arm ARM --model-id ID --c4 C4.json.gz --rates NAME=R,... [--checkpoint DIR] [--reps 3] [--span-s 90]
-                     [--requests N] [--plan PLAN.jsonl] [--window-s S] [--kv-window-s S]
+                     [--requests N] [--plan PLAN.jsonl] [--window-s S]
                      [--tick-ms SAT,FREE | --tick-from STEP_TRACE|RECORD_ARM_DIR] --out DIR
     serve_tax.py run --arm ARM --model-id ID --client vllm-bench --loads NAME[=RUNG+RUNG...],... [--dataset NAME=FILE]
                      [--checkpoint DIR] [--reps 3] [--private DIR] --out DIR
@@ -56,12 +56,9 @@ The arms, each one engine configuration; each adds its change to the arm it name
   τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the network attester (`corpus.StandIn`);
 - ``tokens``: each window's tokens committed: every prompt id and every sampled id, 4 bytes a token, in ``rows-sha512``
   rows (`verity_vllm.commit.step_rows`), hashed off the engine loop at each window's close (`servetax_plugin.TokenCommit`).
-- ``kv``: the paged KV cache committed at window edges (every ``--kv-window-s``): the whole pool, between two steps, in
-  ``rows-sha512`` rows of 1 MiB hashed on the GPU on a side stream ordered after the step by an event, with no hook inside
-  a CUDA graph (`servetax_plugin.KvEdge`);
 - ``tokens-only``: ``record`` with each Commit period's tokens committed as ``tokens`` commits them, without the tick;
 - ``boundary``: ``tokens-only`` with the boundary commitment at each replay block's edge (every ``--edges-every-s``
-  seconds of a load): the engine drains, the KV pool is hashed where it lies by the row-table kernels under a fresh key
+  seconds of a load): the engine drains, the KV pool is hashed where it lies by the row-table kernels under its salts
   and copied to pinned host memory (on the ranks ``--kv-copy`` names), and the scheduler's state and each rank's runner
   rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
 - ``boundary-rows``: ``record`` with the two-stage audit's boundary commitment at serve, each window's finished
@@ -334,8 +331,6 @@ ARMS = {
     "release-order": Arm("record", "+ admission in the network attester's release order", plugin=("record", "release_order")),
     "tick": Arm("record", "+ admission on the certified tick", plugin=("record",), tick=True),
     "tokens": Arm("tick", "+ each window's tokens committed (rows-sha512)", plugin=("record", "tokens"), tick=True),
-    "kv": Arm("tokens", "+ the paged KV cache hashed in place at each window edge", plugin=("record", "tokens", "kv"),
-              tick=True),
     "restore-base": Arm("record", "+ seeded sampling, each sampled token's logprob returned", plugin=("record",),
                         sampling="seeded", logprobs=True),
     "restore-pause": Arm("restore-base", "+ a replay block's boundary state taken at each edge (drained, copied, hashed, "
@@ -827,7 +822,7 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
     return [*line, *(x for x in added if x not in seed)]
 
 
-def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
+def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float,
                edges: dict | None = None, boundary_rows: dict | None = None, check: str | None = None,
                private: Path | None = None, front: str = PYTHON, schemes: dict | None = None) -> dict[str, str]:
     """The server's environment: the job's, with on its path only what the arm's plugins need (`entry_points`): the
@@ -860,7 +855,7 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
             raise SystemExit("this arm's boundary commitment needs its check template, and the model names none "
                              "(Model.check): --boundary-rows, a JSON object with check (run.sh: BOUNDARY_ROWS)")
     if arm.plugin:
-        env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, "kv_window_s": kv_window_s,
+        env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s,
                                       **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {}),
                                       **({"private": str(private)} if private else {}),
                                       **({"boundary_rows": rows} if rows else {})})
@@ -2049,7 +2044,10 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    port = corpus().free_port()
+    kit()
+    from verity_bench import kit as bench
+
+    port = bench.free_port()
     front = front_end(arm, getattr(a, "published_frontend", None))
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front,
                        published_args(getattr(a, "published_args", None)), limits=held is None)
@@ -2058,7 +2056,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     BODY_EXTRA.update({"logprobs": 0} if arm.logprobs else {})
     edges = edge_config(arm, model, a, rates, load_tag(next(iter(passes)), 1, True) if bench else None)
     try:
-        env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges, a.boundary_rows, model.check, private,
+        env = server_env(arm, srv, site, tick, a.window_s, edges, a.boundary_rows, model.check, private,
                          front, lifetime_settings(getattr(a, "scheme_settings", None), a.lifetime))
         check_plugins(env, arm)
     except SystemExit:
@@ -2070,7 +2068,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": model.ref, "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "front_end": front,
-            "plugin": list(arm.plugin), "env": arm.env, "settings": value_settings(env), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
+            "plugin": list(arm.plugin), "env": arm.env, "settings": value_settings(env), "tick": tick, "window_s": a.window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
             "lifetime": a.lifetime, "left_out": a.leave_out, "private": str(private) if records(arm) or not bench else None,
             "general": entry_points(arm),
             "boundary_rows": ({"window_s": a.window_s, "check": model.check, **(a.boundary_rows or arm.rows)}
@@ -2448,11 +2446,14 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
     srv = out / "server"
     srv.mkdir(parents=True, exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    port = corpus().free_port()
+    kit()
+    from verity_bench import kit as bench
+
+    port = bench.free_port()
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context_of(loads, a.max_model_len))
     front = front_argv(port, a.front, cell_payload(cells), srv / "front.jsonl")
     try:
-        env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, private=private)
+        env = server_env(arm, srv, site, tick, a.window_s, private=private)
         check_plugins(env, arm)
     except SystemExit:
         shutil.rmtree(out / ".site", ignore_errors=True)
@@ -4976,7 +4977,6 @@ def main(argv: list[str] | None = None) -> int:
                         "out; a request unanswered by then is cut and counted unserved")
     r.add_argument("--startup-s", type=float, default=1800.0)
     r.add_argument("--window-s", type=float, default=600.0, help="the Commit period the tokens arm closes at")
-    r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
     r.add_argument("--boundary-rows", type=json.loads, metavar="JSON",
                    help="a boundary commitment's object in place of the arm's own: check, per_prompt, per_output, "
                         "drained, inline, verdicts, ids, tables, stop (the serve's stop rule: ids, max_model_len, outputs)")

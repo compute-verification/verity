@@ -558,7 +558,7 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
             return 0
 
     monkeypatch.setattr(row_stages, "SingleRow", Single)
-    o = cli.parse("row", ["run", row, "LLAMA32_1B", "r", "v", "--sweep-dir", str(tmp_path)], {})
+    o = cli.parse("row", ["run", row, "LLAMA32_1B", "r", "v", "--sweep-dir", str(tmp_path), "--cuda-home", str(tmp_path)], {})
     assert ROW.run_row(o, "build") == 0 and seen["protocols"] is None
     eff = json.loads((tmp_path / row / ROW.EFFECTIVE_NAME).read_text())
     assert eff["row"] == row and eff["config"]["engine"] == RowConfig.load(row).engine.to_json() and "requests" not in eff["config"]
@@ -634,49 +634,17 @@ PEARL = "pouw:pearl-c-h100-v1-h3"
 PEARL_SETTINGS = {"device": "cuda", "kernel": "/k", "cubin": "/c"}
 
 
-def _cut_window(cut=None, **more):
-    """serve-openai's Commit window under Pearl+ (`serve_pearl.context`): Pearl-C beside SPOT, ``cut`` the
-    SPOT setting naming the executor whose sites the window's circuit is cut at."""
-    own = {**({} if cut is None else {PO.CUT: cut}), **more}
-    return PO.Context(stage="commit", enabled=config.parse_protocols(f"{PEARL},sampled-proofs:rows-sha512"),
-                      settings={"pouw": PEARL_SETTINGS, "sampled-proofs": own})
-
-
-def test_beside_spot_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
-    """Pearl-C has no circuit (its y is noise-dependent), so SPOT takes it only where the window's circuit is cut at
-    its linears and reads the tables its calls commit (`window_class.PearlTables`), which the SPOT setting
-    ``cut`` names. Without it, or naming another entry, or under ncp-v2 (which has a circuit and commits no tables), the
-    composition refuses by name; a row's Commit refuses any cut, since its request Programs are never cut."""
-
-    pouw = PO.adapter("pouw")
-    assert pouw.cuts("pearl-c-h100-v1-h3") and not pouw.cuts("ncp-v2") and not pouw.cuts("ncp-v1")
-    assert PO.refusals(_cut_window(PEARL)) == ()
-    uncut = (f"{PEARL}: executes {APPLY}, and no Definition computes what it does there: SPOT takes it only in a "
-             f"window whose circuit is cut at its sites and reads the tables its calls commit (window_class.PearlTables), "
-             f"which the sampled-proofs setting 'cut' names ({{\"sampled-proofs\": {{\"cut\": \"{PEARL}\"}}}})")
-    assert PO.refusals(_cut_window()) == (uncut,)
-    other = PO.refusals(_cut_window("pouw:ncp-v2"))
-    assert other[0] == uncut and "not 'pouw:ncp-v2'" in other[1] and other[2].endswith("the tables the cut reads (cuts)")
-    assert PO.refusals(_cut_window(PEARL, x=1)) == (("sampled-proofs:rows-sha512: the sampled-proofs settings ['x'] are none "
-                                                     "of its (cut)"),)
+def test_beside_spot_pearl_c_is_refused_as_an_executor_with_no_circuit():
+    """Pearl-C has no circuit (its y is noise-dependent), so a composition refuses it beside SPOT as any such executor;
+    serve-openai attaches Pearl+ by name (`serve_openai.scheme_settings`), whose scheme provides the cut. SPOT takes
+    no settings."""
+    row = PO.Context(stage="commit", enabled=config.parse_protocols(f"{PEARL},sampled-proofs:rows-sha512"),
+                     settings={"pouw": PEARL_SETTINGS})
+    assert PO.refusals(row) == (_refused_beside_spot("pearl-c-h100-v1-h3"),)
     ncp = PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"),
-                     settings={"sampled-proofs": {PO.CUT: "pouw:ncp-v2"}})
-    assert PO.refusals(ncp) == (("the sampled-proofs setting 'cut' names 'pouw:ncp-v2', and a window's circuit is cut only at "
-                                 "the sites of an enabled executor with no circuit of its own whose calls commit the tables "
-                                 "the cut reads (cuts)"),)
-    assert PO.refusals(PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"))) == ()
+                     settings={"sampled-proofs": {"cut": "pouw:ncp-v2"}})
+    assert PO.refusals(ncp) == ("sampled-proofs:rows-sha512: the sampled-proofs settings ['cut']: it takes none",)
     assert PO.refusals(_serve(PEARL, settings={"pouw": PEARL_SETTINGS})) == ()
-    row = f"{PEARL},sampled-proofs:rows-sha512"
-    with pytest.raises(PO.Refused) as r:
-        ROW.row_protocols(row, {"protocols_config": {"pouw": PEARL_SETTINGS, "sampled-proofs": {PO.CUT: PEARL}}})
-    assert len(r.value.reasons) == 1 and "a row's Commit replays the row's request Programs" in r.value.reasons[0]
-    with pytest.raises(PO.Refused) as r:
-        ROW.row_protocols(row, {"protocols_config": {"pouw": PEARL_SETTINGS}})
-    assert r.value.reasons == (uncut,)
-    with pytest.raises(PO.Refused) as r:
-        PO.commit_context(TargetProfile.default().with_overrides(protocols=config.parse_protocols(row)),
-                          settings={"pouw": PEARL_SETTINGS, "sampled-proofs": {PO.CUT: PEARL}})
-    assert "a row's Commit replays" in r.value.reasons[0]
 
 
 def test_traced_as_is_the_circuit_of_one_executed_call():

@@ -76,7 +76,7 @@ versions, each owner's tree and FTZ, NCCL's fit, tuning and runs past 64 MiB, an
 `tp_allreduce_nodes.NODE_FILE` with its run record, it keys symmetric memory's and NVLS's routes on that node's tree.
 
     cd adapters/vllm; PY=/workspace/cp/venv312/bin/python  # the H200 pod's venv; PYTHONPATH as verity_vllm/ops/pod_bootstrap.sh sets it
-    export CUDA_HOME=/usr/local/cuda PATH=/workspace/cp/venv312/bin:/usr/local/cuda/bin:$PATH
+    export CUDA_HOME=TOOLKIT; export PATH=/workspace/cp/venv312/bin:$CUDA_HOME/bin:$PATH  # TOOLKIT: the node's placement entry's
     $PY tests/properties/glm53_tp8_allreduce_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--served workload|custom-off]
         [--only fused,allreduce,probe,again,switch,h7168,h7168_probe,nccl_probe,nccl_again] [--register RECORD.json]
 """
@@ -398,7 +398,7 @@ def probe_tokens(rng, M: int, shot: int) -> tuple[np.ndarray, np.ndarray, np.nda
     """M tokens screened on the models at the call's geometry so that each one's normed words differ between the two
     contractions (random tokens past `SCREEN_MAX` candidates if too few do), and the call's weight.  None differ when HIDDEN is
     a power of two: rcp(N) and the product are then exact."""
-    _, cluster = T.mnnvl_grid(M, HIDDEN)
+    _, cluster = T.mnnvl_grid(M, HIDDEN, T.UNSTATED_NODE[0][1])
     w = weight(rng)
     got_p, got_r, found, tried = [], [], 0, 0
     while found < M and tried < SCREEN_MAX:
@@ -425,7 +425,7 @@ def expect(phase: str, M: int, setting: str, N: int | None = None) -> dict[str, 
                 "stage": stage_of(M, N) if comm == "ca_comm" else None}
     if expected_path(M) == UNFUSED:
         return {"path": UNFUSED}
-    return {"path": FUSED, "shot": shot_of(M), "cluster": T.mnnvl_grid(M, HIDDEN)[1]}
+    return {"path": FUSED, "shot": shot_of(M), "cluster": T.mnnvl_grid(M, HIDDEN, T.UNSTATED_NODE[0][1])[1]}
 
 
 def cases(quick: bool, only: set[str], spawns_: dict[str, dict[str, Any]] | None = None) -> list[dict[str, Any]]:

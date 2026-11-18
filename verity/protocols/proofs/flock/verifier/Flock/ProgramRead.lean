@@ -385,7 +385,7 @@ def Stmt.setupHiddenBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
         let note ← HmRow.deriveTemplateUnitsBy readDesc c obj prog indices
         let wires ← HmLinks.checkBy readProg c pop (HmLinks.readersOf draw) prog
         let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
-          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}, each reader's link row read by path in its writer's output field's tree"
+          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}"
         pure (some { f with derived := true, note := note ++ linking })
       else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
       else HmRow.qwordFindingBy readProg c pub obj prog f

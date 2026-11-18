@@ -13,6 +13,7 @@ from types import SimpleNamespace as NS
 import pytest
 import serve_tax as S
 import servetax_plugin as P
+from verity_bench import kit
 
 ARM = "tick-certifier"
 
@@ -36,8 +37,8 @@ def test_the_arm_is_the_tick_arm_with_the_attester_in_front(tmp_path: Path, monk
     assert tau == {"bucket_us": 250000, "sat_us": 220000, "free_us": 230000, "calibrated_from": None}
     assert S.tick_args(None, "220,230")["bucket_us"] == 100000
     with pytest.raises(SystemExit, match="keeps files on the node"):
-        S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0, 600.0)
-    env = S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0, 600.0, private=tmp_path / "private")
+        S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0)
+    env = S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0, private=tmp_path / "private")
     plugin = json.loads(env[S.PLUGIN_ENV])
     assert plugin["private"] == str(tmp_path / "private")
     assert {k: plugin.get(k) for k in ("record", "to_length", "idle_reset", "release_order")} == {
@@ -193,7 +194,8 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     --stop-at, the engine's counters read first. An id front that ends first fails the side."""
     (tmp_path / "tick_plugin.py").touch()
     monkeypatch.setattr(S, "TICK_PLUGIN", tmp_path / "tick_plugin.py")
-    monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100, free_port=lambda: 8100))
+    monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100))
+    monkeypatch.setattr(kit, "free_port", lambda: 8100)
     monkeypatch.setattr(S, "signal", NS(signal=lambda *a: None, SIGTERM=15))
     monkeypatch.setattr(S, "open_files", lambda: 4096)
     monkeypatch.setattr(S, "source_commit", lambda: "c0ffee")
@@ -235,7 +237,7 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     a = argparse.Namespace(
         arm=ARM, model_id="glm53", checkpoint="/ck", client="vllm-bench", side="server", loads="chat=96", cells=None,
         front=18750, tick_from=None, tick_ms="220,220", stop_at="1970-01-01T01:25:00Z" if ends == "stop-at" else None,
-        num_gpu_blocks=None, max_model_len=None, window_s=30.0, kv_window_s=30.0, startup_s=1800.0, lifetime=None,
+        num_gpu_blocks=None, max_model_len=None, window_s=30.0, startup_s=1800.0, lifetime=None,
         out=str(out), private=None)
     with pytest.raises(SystemExit, match="records its step trace"):
         S.certified_server(a, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])

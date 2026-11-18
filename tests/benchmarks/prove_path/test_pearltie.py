@@ -55,7 +55,6 @@ import numpy as np
 import pytest
 import settings
 import window_tie as WT
-from verity_vllm.program.predict import inference_blocks as IB
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WRS
@@ -71,7 +70,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.commitments import randomness as RND
 from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
-from verity.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json, program_digest
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF, rows as CS
 
@@ -220,7 +219,7 @@ def make_toy() -> SimpleNamespace:
     reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=H200), default_seed=7)
     low = WC.lower(reg, CLASS, None, GRAIN, tables=PEARL)
     fields = _weights(low.fn)
-    state = WRS.state_value(IB.program_digest(low.circuit), CLASS,
+    state = WRS.state_value(program_digest(low.circuit.program()[0]), CLASS,
                             SR.standin_rows(CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)]), window=RUN)
     values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi], cut=low.cut)

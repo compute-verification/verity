@@ -158,7 +158,7 @@ def serve_capacity_only(tmp_path, monkeypatch) -> tuple[Path, list[Path]]:
 
 def served_env(site: Path) -> dict[str, str]:
     """The environment serve_tax starts a server with, after its plugin site."""
-    return L.S.server_env(L.S.ARMS["compiled"], site.parent, site, None, 1.0, 1.0)
+    return L.S.server_env(L.S.ARMS["compiled"], site.parent, site, None, 1.0)
 
 
 def test_serving_loads_the_pin_and_the_capacity_server_logs(tmp_path, monkeypatch):

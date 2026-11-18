@@ -3318,7 +3318,7 @@ def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_tak
 #: the added-lines warn gate and what it reads at `main`, committed into the origin as they are in this checkout
 ADDED = "tools/check/added_lines.py"
 ADDED_FILES = {DRIVE_FLAGS: f'warn_gates = ["{ADDED}"]\n', **{f: (Path(__file__).resolve().parents[3] / f).read_text() for f in (
-    ADDED, "GLOSSARY.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py")}}
+    ADDED, "tests/lint/retired_terms.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py")}}
 
 
 def test_the_preflight_prints_the_lines_an_issue_id_is_added_on_and_the_fix_and_marks_the_pr(world, capsys):
@@ -3966,7 +3966,7 @@ def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monk
     assert goal_gates == [Q.goal_gate] * 3                                               # the goal gate isn't the preflight's
     with pytest.raises(SystemExit) as e:
         research_main(["queue", "status", "--no-preflight"])
-    assert e.value.code == 2 and "--no-preflight is for ready only" in capsys.readouterr().err
+    assert e.value.code == 2 and "--no-preflight is for ready only, not status" in capsys.readouterr().err
 
 
 def test_research_queue_judge_marks_through_the_goal_gate(world, monkeypatch):
@@ -5091,8 +5091,11 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for open and edit only: `eject` would act"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for open and edit only: `ready` would act")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for open, edit only, not eject"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for open, edit only, not ready"),
+                      (["queue", "status", "--issue", "X-1"], "--issue is for open, link only, not status"),
+                      (["queue", "cross", "--title", "x"], "--title is for open, edit only, not cross"),
+                      (["queue", "stats", "--mark"], "--mark is for ready only, not stats")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err

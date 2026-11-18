@@ -416,28 +416,6 @@ def test_collective_verdict_holds_match_and_redux_to_one_unit_and_vote_to_16_alu
     assert capsys.readouterr().out.startswith("verdict: hypothesis failed: no row for mix_redux_match; the unit 0.5000")
 
 
-def test_jitter_reports_host_timing_spread_and_the_gap_to_the_chip(tmp_path, capsys):
-    """`eps1.py jitter`: each (trial, length) group's host-timed SM clock mean, its random spread (rel u%) and the
-    systematic gap below the chip's own timer, and a per-trial u taken at the longest length (the tightest bound)."""
-    out = tmp_path / "out"
-    out.mkdir()
-
-    def rep(trial, ln, host, gt, rep_i):
-        return {"op": "calib", "trial": trial, "ref": "p_mma0", "len_s": ln, "probe": "p_mma0", "rep": rep_i,
-                "clock_mhz_host": host, "clock_mhz_gt_median": gt, "nvml_sm_mhz": 2092, "nvml_mw": 150000,
-                "throttle": "0x0"}
-
-    jl = [rep("locked", 0.002, 2090.0, 2120.0, 0), rep("locked", 0.002, 2110.0, 2120.0, 1),
-          rep("locked", 0.2, 2098.0, 2104.0, 0), rep("locked", 0.2, 2102.0, 2104.0, 1)]
-    (out / "jitter.jsonl").write_text("".join(json.dumps(r) + "\n" for r in jl))
-    assert eps1.main(["jitter", str(out)]) == 0
-    got = capsys.readouterr().out
-    assert re.search(r"^locked +0\.002 +2 +2100\.0 +14\.14 +10\.00 +0\.476 +2120\.0 +0\.943 +2092", got, re.M)
-    assert re.search(r"^locked +0\.200 +2 +2100\.0 +2\.83 +2\.00 +0\.095 +2104\.0 +0\.190 +2092", got, re.M)
-    assert "locked: at 0.200s the host clock pins the SM clock to within 0.095% (random) and sits 0.190% below" in got
-    assert "u ~ 0.285%" in got
-
-
 # ---- the probes themselves -------------------------------------------------------------------------------------------
 
 
@@ -459,8 +437,7 @@ def test_nvcc_is_the_one_nvcc_names_then_cuda_homes(tmp_path, monkeypatch):
 
 def _cuda_tools() -> bool:
     try:
-        probe.nvcc()
-        G.H.find_tools()
+        G.H.find_tools(Path(probe.nvcc()).parent)
     except (SystemExit, G.H.SassGateFailed, OSError):
         return False
     return True

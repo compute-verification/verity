@@ -564,8 +564,8 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
         for indexer in (True, False):
             want += [norm_q] * T + [norm_kv] * T + [kr] * T + ([krow] * T if indexer else []) + [up] * T + [qr] * (T * NH)
             want += [iq] * T if indexer else []
-            for p in pos if indexer else ():
-                want += [bind(dsa.DsaMqaLogitsV3, N=p + 1, H=H, D=D).id, f"Const32[0x{p + 1:08x}]_v1", sel]
+            want += [bind(dsa.DsaMqaLogitsV3, N=p + 1, H=H, D=D).id for p in pos] if indexer else []
+            want += [i for p in pos for i in (f"Const32[0x{p + 1:08x}]_v1", sel)] if indexer else []
             want += [attn(p + 1) for p in pos] + [down] * T
     assert ids == want
     assert _run(rep, model, xs) == _reference(model, xs)
@@ -615,9 +615,10 @@ def test_a_row_past_topk_selects_its_top_k_from_its_logits_and_reads_its_rows_in
 def test_the_batched_forms_rows_past_topk_select_each_among_its_own_keys_in_blocks(served, monkeypatch, block):
     """Class G's batched form (`observe_batched_form`, the Build's `--batched`) at TOPK 2: a prefill of two, then a call of three
     rows of 3, 4 and 5 keys.  Each token's latent row is one `dsa_latent_row`, and the call's rows go in blocks
-    (`vllm_dsa.long_row_blocks`): one of 5 keys at the served block, or blocks of 4 and 5 keys at a block of 2.  A block's rows read
-    its keys' logits, then their own key counts, `DsaTopKMaskCounted_v1` at the block's class and the settings, each op over the
-    block's rows in turn, and both layers' sparse MLA reads the rows routed from the block's history.  The outputs are the
+    (`vllm_dsa.long_row_blocks`): one of 5 keys at the served block, or blocks of 4 and 5 keys at a block of 2.  The call's one
+    launch (`vllm_dsa.emit_indexer`) has every row's logits at its block's keys first; then a block's rows read their own key counts,
+    `DsaTopKMaskCounted_v1` at the block's class and the settings, each op over the block's rows in turn, and both layers' sparse
+    MLA reads the rows routed from the block's history.  The outputs are the
     reference's over each row's own top-2 in ascending index order, so no row selects a key past its own."""
     monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
     monkeypatch.setitem(PROFILES, BATCHED.name, BATCHED)
@@ -636,14 +637,15 @@ def test_the_batched_forms_rows_past_topk_select_each_among_its_own_keys_in_bloc
         return bind(dsa_topk_mask.DsaButterflyRows, N=N, K=2, W=L + R, E=16).id
 
     attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
-    select, routed = [], []
+    logits, select, routed = [], [], []
     for Nb, rs in blocks:
         N = vllm_dsa.long_row_keys(Nb, 2)
-        select += [bind(dsa.DsaMqaLogitsV3, N=Nb, H=H, D=D).id] * len(rs) + [bind(dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=2).id] * len(rs)
+        logits += [bind(dsa.DsaMqaLogitsV3, N=Nb, H=H, D=D).id] * len(rs)
+        select += [bind(dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=2).id] * len(rs)
         select += [bind(dsa_topk_mask.DsaButterflySettings, N=N, K=2).id] * len(rs)
         routed += [rows(Nb, N)] * len(rs)
-    kept = set(select) | set(routed) | {attn2}
-    assert [i for i in _ids(rep) if i in kept] == [attn2, attn2] + select + routed + [attn2] * 3 + routed + [attn2] * 3
+    kept = set(logits) | set(select) | set(routed) | {attn2}
+    assert [i for i in _ids(rep) if i in kept] == [attn2, attn2] + logits + select + routed + [attn2] * 3 + routed + [attn2] * 3
     nodes = rep.program.fn.body.nodes
     counted = [n for n in nodes if n.fn.id.startswith("DsaTopKMaskCounted_v1{")]
     assert [nodes[runs(n.args[1].refs)[0][1]].fn.id for n in counted] == [f"Const32[0x{n:08x}]_v1" for n in (3, 4, 5)]
@@ -666,14 +668,15 @@ def test_the_batched_forms_rows_past_topk_read_their_history_by_table(served, mo
     assert rep.program is not None, rep.unsupported
     blocks = {256: [(5, [0, 1, 2])], 2: [(4, [0, 1]), (5, [2])]}[block]
     attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
-    select, routed = [], []
+    logits, select, routed = [], [], []
     for Nb, rs in blocks:
         N = vllm_dsa.long_row_keys(Nb, 2)
-        select += [bind(dsa.DsaMqaLogitsV3, N=Nb, H=H, D=D).id] * len(rs) + [bind(dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=2).id] * len(rs)
+        logits += [bind(dsa.DsaMqaLogitsV3, N=Nb, H=H, D=D).id] * len(rs)
+        select += [bind(dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=2).id] * len(rs)
         select += [bind(dsa_table.DsaTopKIndex, N=N, TOPK=2).id] * len(rs)
         routed += [bind(dsa_table.DsaHistoryReads, V=Nb, TOPK=2, H=L + R).id] * len(rs)
-    kept = set(select) | set(routed) | {attn2}
-    assert [i for i in _ids(rep) if i in kept] == [attn2, attn2] + select + routed + [attn2] * 3 + routed + [attn2] * 3
+    kept = set(logits) | set(select) | set(routed) | {attn2}
+    assert [i for i in _ids(rep) if i in kept] == [attn2, attn2] + logits + select + routed + [attn2] * 3 + routed + [attn2] * 3
     nodes = rep.program.fn.body.nodes
     assert not [n for n in nodes if n.fn.id.startswith(("DsaButterfly", "Const16[0x0000]"))], "no rows network and no zero pad"
     index = [k for k, n in enumerate(nodes) if n.fn.id.startswith("DsaTopKIndex_v1{")]
