@@ -110,7 +110,8 @@ theorem tied_onsite : tied .onsite = Onsite.tied := rfl
 
 theorem tied_remote : tied .remote = Remote.V1.tied := rfl
 
-/-- Onsite's ties are the code's: PoUW's windows on the policy's record, and PoUS and PoUB-P2 on one store. -/
+/-- Onsite's ties are the code's: PoUS and PoUB-P2 on one store, and remote's, Pearl+'s run on the policy's record and
+its window record the one the policy's record is chained after. -/
 theorem ties_onsite : ties .onsite = Onsite.ties := rfl
 
 /-- Remote's ties are the code's: Pearl+'s run on the policy's record, and its window record the one the policy's

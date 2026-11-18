@@ -6,6 +6,7 @@
 
 ``remote-v1`` is remote's composite of record (`Core.Remote.V1`, ``verity/remote/v1``), whose work subprotocol is
 Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`) in the period's place; ``remote`` is v0, H1's development one.
+``onsite`` (`Core.Onsite`, ``verity/onsite/v1``) composes Pearl+'s run verdict as its work too.
 
 Each ``--cases`` is a private directory (0700, its files 0600, as the pieces write it) holding one subprotocol's case,
 or a directory whose subdirectories each hold one. A case is the subprotocol's case as its own `serve` reads it,
@@ -59,11 +60,11 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0", "remote-v1": "verity/remote/v1"}
+PRODUCTS = {"onsite": "verity/onsite/v1", "remote": "verity/remote/v0", "remote-v1": "verity/remote/v1"}
 #: Each product's subprotocols, as `Core.Onsite.components`, `Core.Remote.components` and `Core.Remote.V1.components`
 #: list them; read only to name the missing ones.
 COMPONENTS = {
-    "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+    "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/pearl-plus/v1",
                "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"),
     "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"),
     "remote-v1": ("verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"),
