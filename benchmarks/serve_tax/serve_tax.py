@@ -4179,13 +4179,16 @@ def profile_stock(profile: str, model_id: str) -> str:
 
 def profile_card(model_id: str) -> str:
     """The card a profile's job serves ``model_id`` on: the ``short`` of the card file whose driver name nvidia-smi
-    gives this host's cards (`card`, `card_record`), refused where the profiles' file holds no load of the model on it.
+    gives this host's cards (`card`, the kit's `card_short`), refused where the profiles' file holds no load of the model on it.
     Never a flag or a machine's name, so the same command serves an H100 or an H200, ours or a borrowed one."""
     P = profiles()
     name = card()
     if name == "none":
         raise SystemExit(f"--profile on {model_id}: nvidia-smi names no card on this host, and a profile's job serves on one")
-    short = card_record(name)["short"]
+    kit()
+    from verity_bench import kit as bench
+
+    short = bench.card_short(name)
     cards = P.load().models[model_id].cards
     if short not in cards:
         raise SystemExit(f"--profile on {model_id}: this host's card is {short}, and {P.PATH.name} serves {model_id} on "
