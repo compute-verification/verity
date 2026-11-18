@@ -26,6 +26,10 @@ from verity_bench import spot_status as S
 LOCK = Path(__file__).parent / "fixtures" / "spot_status" / "lock.json"
 RESAMPLED, RECOMMITTED, WIRES = S.HOLES
 LIMIT = "each sampled block on its own inputs; the wires between blocks are not held"
+ONSITE = ("Onsite's theorem takes the inference-only policy's claim as an open premise (`InferenceOnlySound`). That "
+          "claim is about the case as the prover sent it; no check and no premise of the theorem ties that case's wires "
+          "to the committed record's wires. So the wires limit applies to onsite's verdict as it does to remote's, and "
+          "onsite's theorem does not name it.")
 BASE, ONE, BOTH = "r20261112-000001-aaaa", "r20261112-000002-bbbb", "r20261112-000003-cccc"
 
 
@@ -418,6 +422,10 @@ def test_the_theorem_and_its_open_premises_are_the_locks(tmp_path):
     lock["guarantees"]["Verity.Sampled.onsite_soundness_deployedReady"] = {"premises": {"open": ["Verity.Vocab.WipeSound"]}}
     (tmp_path / "lock.json").write_text(json.dumps(lock))
     assert S.theorem(tmp_path, tmp_path / "lock.json")["name"] == "Verity.Sampled.onsite_soundness_deployedReady"
+    onsite = {"holes": [], "runs": 0, "commits": {}, "unread": [], "fixes": "f", "label": "SPOT",
+              "theorem": S.theorem(tmp_path, tmp_path / "lock.json")}
+    assert ("- theorem: `Verity.Sampled.onsite_soundness_deployedReady`, on the 1 open premises its record in "
+            f"`{S.LOCK}` takes: `Verity.Vocab.WipeSound`\n  - {ONSITE}") in S.render(onsite)
     del lock["guarantees"]["Verity.Sampled.onsite_soundness_deployedReady"]
     del lock["guarantees"]["Verity.Sampled.remote_soundness_deployedReady"]
     (tmp_path / "lock.json").write_text(json.dumps(lock))
@@ -428,6 +436,7 @@ def test_the_block_cites_the_theorem_with_its_open_premises(repo):
     text = S.render(_status(repo, **{BASE: {"commit": repo.base, "dirty": False}}))
     assert ("- theorem: `Verity.Sampled.remote_soundness_deployedReady`, on the 2 open premises its record in "
             f"`{LOCK}` takes: `Verity.Sampled.Instance.SessionsReady`, `Verity.Vocab.PouwSound`") in text
+    assert "Onsite's theorem" not in text
 
 
 def _entry(run: str, commit: str | None, **more) -> dict:

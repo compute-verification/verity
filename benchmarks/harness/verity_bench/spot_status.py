@@ -36,7 +36,8 @@ hold in their `--json` under `spot_holes`).
   read and those not given, never closed, and the label stays `SPOT`: `SPOT soundness` needs every hole closed at
   all four runs.
 * **The theorem** is the first of `THEOREMS` that the lock (`LOCK`) lists among its guarantees, printed with the open
-  premises its record there takes (`premises.open`), by name.
+  premises its record there takes (`premises.open`), by name, and under it what those leave unsaid
+  (`THEOREM_NOTES`).
 """
 
 from __future__ import annotations
@@ -62,6 +63,12 @@ LOCK = Path("security/lean-audit.json")
 #: the guarantees the label rests on, the first the lock lists cited: onsite soundness, else remote soundness, each at
 #: the deployed vocabulary
 THEOREMS = ("Verity.Sampled.onsite_soundness_deployedReady", "Verity.Sampled.remote_soundness_deployedReady")
+#: what a cited theorem's printed premises leave unsaid, printed under its line
+THEOREM_NOTES = {THEOREMS[0]: (
+    "Onsite's theorem takes the inference-only policy's claim as an open premise (`InferenceOnlySound`). That claim is "
+    "about the case as the prover sent it; no check and no premise of the theorem ties that case's wires to the "
+    "committed record's wires. So the wires limit applies to onsite's verdict as it does to remote's, and onsite's "
+    "theorem does not name it.")}
 CLOSED, OPEN, UNKNOWN = "closed", "open", "not known"
 #: a served run's hole closed at every commit read while some of its runs were not given, which is never `CLOSED`
 CLOSED_READ = "closed at the runs read"
@@ -545,4 +552,6 @@ def render(doc: Mapping[str, Any]) -> str:
         premises = ", ".join(f"`{p}`" for p in t["open_premises"]) or "none"
         lines.append(f"- theorem: `{t['name']}`, on the {len(t['open_premises'])} open premises its record in "
                      f"`{t['lock']}` takes: {premises}")
+        if t["name"] in THEOREM_NOTES:
+            lines.append(f"  - {THEOREM_NOTES[t['name']]}")
     return "\n".join(lines)
