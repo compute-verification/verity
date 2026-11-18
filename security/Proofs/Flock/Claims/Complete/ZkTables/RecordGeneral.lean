@@ -46,8 +46,8 @@ open _root_.Flock FlockSoundness.Refine in
 set_option maxHeartbeats 4000000 in
 /-- **A statement `Stmt.setupH` returns passed `checkInRange`.** -/
 theorem setupH_inRange {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt}
-    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
+    {sample partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt}
+    (h : Stmt.setupH tags cf pf coins tables sample partition program = .ok st) :
     checkInRange st.c.kLog st.regions.size st.mPts = .ok () := by
   unfold Stmt.setupH at h
   dsimp only at h
@@ -60,8 +60,8 @@ theorem setupH_inRange {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables
 
 /-- `m = k_log + nbl` at a statement `Stmt.setupH` returns, typed or not. -/
 theorem setupH_m {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt}
-    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : st.m = st.c.kLog + st.nbl := by
+    {sample partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt}
+    (h : Stmt.setupH tags cf pf coins tables sample partition program = .ok st) : st.m = st.c.kLog + st.nbl := by
   cases ht : tags.typed
   · exact (FlockSoundness.setupH_spec ht h).2.2.2.2.1
   · exact (FlockSoundness.setupH_spec_typed ht h).2.2.2.2.1
@@ -70,11 +70,11 @@ open _root_.Flock FlockSoundness.Refine in
 set_option maxHeartbeats 4000000 in
 /-- **A session with public outputs takes no public inputs of its own** (`Stmt.setupTables` refuses them). -/
 theorem setupTables_own_none {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
-    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program own : Option ByteArray}
+    {tables : List (String × ByteArray)} {sample partition : Option Lean.Json} {program own : Option ByteArray}
     {work : Option (ℕ × Array (String × ℕ × ℕ))} {stratified : Option ℕ}
     {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hh : tags.hiddenOutputs = false)
-    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure own =
+    (h : Stmt.setupTables tags cf pf coins count tables sample partition program work stratified closure own =
       .ok (spec, sts)) : own = none := by
   by_contra hn
   obtain ⟨p, rfl⟩ := Option.ne_none_iff_exists'.1 hn
