@@ -14,7 +14,7 @@
 # from GitHub; the commit is handed to the bench as RESEARCH_SOURCE_SHA, since the tree has no .git. The last line printed
 # says how far the job got and what refused it. Logs go to result/ in the job's directory, which vcf-job-run.sh copies back.
 # Variables: STAGE, KEEP, VERITY_COMMIT, VLLM_VERSION (0.34.0), BUDGET_MIN (27, the job's own deadline inside Slurm's 30),
-# NODE_ARGS and ENGINE_ARGS (passed to --local as it takes them).
+# CXX_FROM_CONDA (set: conda-forge's g++ even where the node has one), NODE_ARGS and ENGINE_ARGS (passed to --local).
 set -u -o pipefail
 STAGE=${STAGE:-}
 case $STAGE in setup | session) ;; *) echo "vcf_job: STAGE is setup or session, not '${STAGE}'"; exit 2 ;; esac
@@ -95,7 +95,6 @@ if [ "$STAGE" = setup ]; then
     have vllm || {
       { [ -x "$KEEP/vllm/bin/python" ] || uv venv -q --python 3.12 "$KEEP/vllm"; } &&
         timeout "$(left)" uv pip install --python "$KEEP/vllm/bin/python" "vllm==${VLLM_VERSION:-0.34.0}" &&
-        "$KEEP/vllm/bin/python" -c 'import vllm, torch; print("vllm", vllm.__version__, "torch", torch.__version__, torch.version.cuda)' &&
         touch "$KEEP/done/vllm"
     }
   ) > "$J/result/vllm.log" 2>&1 &
@@ -113,15 +112,18 @@ if [ "$STAGE" = setup ]; then
   CUDA_HOME=$KEEP/cuda/lib/python3.12/site-packages/nvidia/cu13
   [ -x "$CUDA_HOME/bin/nvcc" ] || fail "the nvcc package put no bin/nvcc under $CUDA_HOME"
   [ -e "$CUDA_HOME/lib64" ] || ln -s lib "$CUDA_HOME/lib64"
-  if ! command -v g++ > /dev/null; then
-    # no host compiler: zig's clang from PyPI stands in, under the names nvcc and torch look for
-    uv pip install -q --python "$KEEP/cuda/bin/python" ziglang >> "$J/result/cuda.log" 2>&1 || fail "no g++ here, and ziglang can't be installed"
+  if [ -n "${CXX_FROM_CONDA:-}" ] || ! command -v g++ > /dev/null; then
+    # no host compiler (or CXX_FROM_CONDA asks): conda-forge's g++ through micromamba, both without root
+    if [ ! -x "$KEEP/gcc/bin/x86_64-conda-linux-gnu-g++" ]; then
+      curl -fsSL -m 120 https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj -C "$KEEP" bin/micromamba &&
+        MAMBA_ROOT_PREFIX=$KEEP/mamba timeout "$(left)" "$KEEP/bin/micromamba" create -y -q -p "$KEEP/gcc" -c conda-forge \
+          "gxx_linux-64=13" > "$J/result/gcc.log" 2>&1 || fail "no g++ here, and conda-forge's can't be installed ($(tail -1 "$J/result/gcc.log"))"
+    fi
     mkdir -p "$KEEP/cc-bin"
-    for n in cc gcc; do printf '#!/bin/sh\nexec %q -m ziglang cc "$@"\n' "$KEEP/cuda/bin/python" > "$KEEP/cc-bin/$n"; done
-    for n in c++ g++; do printf '#!/bin/sh\nexec %q -m ziglang c++ "$@"\n' "$KEEP/cuda/bin/python" > "$KEEP/cc-bin/$n"; done
-    chmod +x "$KEEP/cc-bin/"*
-    echo 'export PATH=$KEEP/cc-bin:$PATH NVCC_APPEND_FLAGS="-allow-unsupported-compiler"' > "$KEEP/cc.sh"
-    say "no g++ on the node: zig's clang stands in ($KEEP/cc-bin)"
+    for n in cc gcc; do ln -sf "$KEEP/gcc/bin/x86_64-conda-linux-gnu-gcc" "$KEEP/cc-bin/$n"; done
+    for n in c++ g++; do ln -sf "$KEEP/gcc/bin/x86_64-conda-linux-gnu-g++" "$KEEP/cc-bin/$n"; done
+    echo 'export PATH=$KEEP/cc-bin:$PATH' > "$KEEP/cc.sh"
+    say "g++ from conda-forge: $("$KEEP/cc-bin/g++" --version | head -1)"
   fi
   # shellcheck source=/dev/null
   [ -f "$KEEP/cc.sh" ] && . "$KEEP/cc.sh"
@@ -153,7 +155,8 @@ print(d(p["repo"], revision=p["revision"], allow_patterns=sorted(p["files"]), ma
   got "the checkpoint"
   wait "$TREE"; have tree-env || fail "the tree's environment didn't sync ($(tail -1 "$J/result/tree-env.log"))"
   wait "$VLLM"; have vllm || fail "the vLLM venv didn't build ($(tail -1 "$J/result/vllm.log"))"
-  got "the tree's environment" && got "$(tail -1 "$J/result/vllm.log")"
+  got "the tree's environment" &&
+    got "$("$KEEP/vllm/bin/python" -c 'import vllm, torch; print("vllm", vllm.__version__, "torch", torch.__version__, "for CUDA", torch.version.cuda)')"
   wait "$LEAN"; have lean || fail "the Lean verifier didn't build ($(tail -1 "$J/result/lean.log"))"
   got "the Lean verifier ($LEAN_PKG/.lake/build/bin/poub-verifier)" && got "setup whole: STAGE=session runs next"
   exit 0
