@@ -3,7 +3,8 @@ keyed by what it compiles (sources, the shared headers, flags and the compiler's
 and compiled from a flat copy of those files, so the compiler is handed no path in the tree (`built`); the host's and a
 device's libraries (`host_lib`, `device_lib`); the hm96-sha512 byte tables and prefixes the kernels hash with (`hm_tables`,
 `leaf_prefixes`). A device's copy of a library, with its side streams, is the device adapter's, as are H1's device tables,
-registered rows and receipts, which build on it. nvcc is the one on the path."""
+registered rows and receipts, which build on it. The C++ compiler and nvcc are the serving device's (`device.compiler`,
+`device.nvcc`): the configured toolchain's, else the path's."""
 from __future__ import annotations
 
 import ctypes
@@ -20,10 +21,12 @@ import numpy as np
 from verity.commitments import row_table as RT
 from verity.commitments.cuda import ROW_COMMIT, SHA512
 from verity.protocols.resource_accounting.compute.pouw import prover
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as PD
 
 __all__ = ["CFLAGS", "CUDA_DIR", "DEVICE_SOURCES", "HOST_SOURCES", "NVCC_FLAGS", "SEG_BYTES", "SHARED", "TAB_WORDS", "Args",
            "built", "device_lib", "hm_tables", "host_lib", "leaf_prefixes", "nvcc", "table_width", "u64_words"]
 
+nvcc = PD.nvcc
 CUDA_DIR = Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table_host.cpp")
@@ -89,27 +92,22 @@ _vp = ctypes.c_void_p
 
 @cache
 def host_lib() -> ctypes.CDLL:
-    """`row_table_host.cpp` built with the system C++ compiler."""
-    cxx = next((c for c in ("g++", "c++", "clang++") if shutil.which(c)), None)
+    """`row_table_host.cpp` built with `device.compiler`."""
+    cxx = PD.compiler()
     if cxx is None:
-        raise RuntimeError("no C++ compiler on the path")
+        raise RuntimeError("no C++ compiler configured or on the path")
     dll = _build(cxx, HOST_SOURCES, CFLAGS, "librow_table_host.so")
     dll.rt_step_host.argtypes = [_u64, _u32, ctypes.c_uint64, ctypes.c_uint32, _u64, _u64, ctypes.POINTER(Args), _u64]
     dll.rt_step_host.restype = ctypes.c_int
     return dll
 
 
-def nvcc() -> str | None:
-    """nvcc on the path."""
-    return shutil.which("nvcc")
-
-
 @cache
 def device_lib(arch: str) -> ctypes.CDLL:
     """`row_table.cu` built with nvcc for ``sm_<arch>`` (``"120"``: the RTX PRO 6000)."""
-    tool = nvcc()
+    tool = PD.nvcc()
     if tool is None:
-        raise RuntimeError("no nvcc on the path")
+        raise RuntimeError("no nvcc configured or on the path")
     dll = _build(tool, DEVICE_SOURCES, (*NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"), "librow_table_cuda.so")
     dll.rt_midstates.argtypes = [_vp, _vp, _vp]
     dll.rt_step.argtypes = [_vp, _vp, _vp, ctypes.c_uint64, ctypes.c_uint32, _vp, _vp, ctypes.POINTER(Args), *[_vp] * 5]
