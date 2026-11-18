@@ -99,3 +99,26 @@ def test_window_groups_gather_one_group_and_wait_out_the_window_for_a_later_one(
     assert not g.ready(due()) and started == ["a", "b", "c"]
     clock.t = 0.04
     assert g.ready(due(active=1)) and not g.pending()
+
+
+def test_window_groups_filed_as_start_on_boundary_start_each_group_at_a_window_through_the_hook():
+    clock, ex = Clock(), messages.Exchange()
+    ex.request("tie", H.StartOnBoundary(admission.WindowGroups(0.01, clock)))
+    sched = Outputs()
+    hook = admission.install(sched, ex)
+    sched.add_request(Req("a", out=2))
+    sched.add_request(Req("b", out=2))
+    assert sched.added == ["a", "b"] and not hook.ready()
+    clock.t = 0.02
+    assert hook.ready()
+    step(sched)
+    sched.add_request(Req("c", out=1))
+    assert sched.added == ["a", "b"] and hook.ready() and hook.pending()
+    step(sched)
+    assert hook.ready() and sched.added == ["a", "b"]           # a and b complete; the next step frees them
+    step(sched)
+    assert not hook.ready() and sched.added == ["a", "b", "c"]
+    clock.t = 0.04
+    assert hook.ready()
+    step(sched)
+    assert sched.steps == [["a", "b"], ["a", "b"], ["c"]]
