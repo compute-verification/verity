@@ -4,7 +4,9 @@ owner's prefix, an owner the handle registry knows and whose `owns` there covers
 words (a headline `title`, a short `unit` and a one-sentence `axis`), a direction, an `every` in minutes, hours or days,
 and a command naming scripts that exist, with the declaring file's directory recording the metric under its id. Each
 row's `version` says what changed above 1, its unit is pinned to its version (`PINS`), the kit's `VERSIONS` is the rows
-above 1, and no row carries a version key until the site's reader takes them. A whole-tree invariant, since it reads the
+above 1, and no row carries a version key until the site's reader takes them. A row `under` another is a breakdown
+of that main number, one level deep; its `kind` is system or platform; the kit's `NEEDS` is the rows' `needs`; and no
+row carries any of the three until the site's reader takes them. A whole-tree invariant, since it reads the
 handle registry and the benchmarks and loops the commands run."""
 from __future__ import annotations
 
@@ -24,15 +26,22 @@ NAME = REGISTRY_FILE
 RETIRED = "benchmarks/metrics.toml"
 HANDLES = ".agents/skills/using-slack/registry.json"
 REQUIRED = frozenset({"id", "title", "owner", "unit", "axis", "better", "command", "every"})
-OPTIONAL = frozenset({"floor", "goal", "tags", "version", "changed", "was"})
+OPTIONAL = frozenset({"floor", "goal", "tags", "version", "changed", "was", "under", "kind", "needs"})
 #: each row's version and unit as last pinned, so a unit changes only with its version
 PINS = "tests/metric_pins.json"
 PIN = "uv run python tests/test_metrics_registry.py --pin"
 VERSIONS_AT = "benchmarks/harness/verity_bench/kit_report.py"
+KIT_AT = "benchmarks/harness/verity_bench/kit.py"
 VERSION_KEYS = ("version", "changed", "was")
 #: whether the site's reader (infra's) takes `VERSION_KEYS`: the site refuses a metric with a key its reader doesn't
 #: take, so until it does no row may carry one; set True once it takes them
 SITE_TAKES_VERSIONS = True
+STRUCTURE_KEYS = ("under", "kind", "needs")
+KINDS = ("system", "platform")
+#: what a row's `needs` may list (the kit's `kit.NEEDED`)
+NEEDS = ("parameter", "calibration")
+#: whether the site's reader (infra's) takes `STRUCTURE_KEYS`, as `SITE_TAKES_VERSIONS`
+SITE_TAKES_STRUCTURE = True
 #: a title's least and most words, and a unit's most, a rate's two sides (either side of " a ") counted apart
 TITLE_WORDS, UNIT_WORDS = (3, 6), 3
 _ID = re.compile(r"^[a-z][a-z0-9-]*/[a-z0-9][a-z0-9.-]*$")
@@ -101,7 +110,7 @@ def _problems(m: dict, handles: set[str], where: str) -> list[str]:
         out.append(f"floor is {m['floor']!r}, not a number")
     if "tags" in m and not (isinstance(m["tags"], list) and all(isinstance(t, str) for t in m["tags"])):
         out.append("tags is not a list of words")
-    out += _versioned(m)
+    out += _versioned(m) + _structured(m)
     scripts, home = _SCRIPT.findall(str(m.get("command", ""))), ROOT / where
     missing = [f"its command's script {s} doesn't exist" for s in scripts if not (ROOT / s).is_file()]
     if not scripts:
@@ -148,6 +157,38 @@ def _formers(rows: list[tuple[str, dict]]) -> list[str]:
     return out
 
 
+def _structured(m: dict) -> list[str]:
+    out = []
+    if "kind" in m and m["kind"] not in KINDS:
+        out.append(f"kind is {m['kind']!r}, not one of {', '.join(KINDS)}: system where the number measures Verity, "
+                   "platform where it measures the project")
+    needs = m.get("needs")
+    if "needs" in m and not (isinstance(needs, list) and needs and len(set(needs)) == len(needs) and all(n in NEEDS for n in needs)):
+        out.append(f"needs is {needs!r}, not a list of {' and/or '.join(NEEDS)}, each once: what the result depends on "
+                   "(a security parameter) or uses (a calibration number)")
+    under = m.get("under", "")
+    if "under" in m and not (isinstance(under, str) and _ID.match(under)):
+        out.append(f"under is {under!r}, not the OWNER/NAME id of the main number the row breaks down")
+    elif under and under == m.get("id"):
+        out.append("under names the row's own id: name the main number it breaks down")
+    return out
+
+
+def _breakdowns(rows: list[tuple[str, dict]]) -> list[str]:
+    under = {m.get("id"): m.get("under") for _, m in rows}
+    out = []
+    for f, m in rows:
+        main = m.get("under")
+        if not isinstance(main, str) or main == m.get("id"):
+            continue
+        if main not in under:
+            out.append(f"  {f}: {m.get('id')}: under names {main}, which no row has: name a main number's id")
+        elif under[main] is not None:
+            out.append(f"  {f}: {m.get('id')}: under names {main}, which is itself under {under[main]}: a breakdown is "
+                       f"one level deep, so name {under[main]}, or list it as a member of {main}")
+    return out
+
+
 def _unowned(f: str, m: dict, reg: dict) -> list[str]:
     """Whether row `m`'s owner owns its file `f`, the one the longest `owns` entry covering it names, with the fix."""
     from research.slack import owner
@@ -171,7 +212,7 @@ def test_every_metric_is_declared_once_by_a_known_owner_beside_its_producing_scr
         declared.setdefault(str(m.get("id", "?")), []).append(f)
     repeated = [f"  {i}: declared in {', '.join(fs)}; keep one row\n" for i, fs in sorted(declared.items()) if len(fs) > 1]
     off = [f"  {f}: {m.get('id', '?')}: {p}" for f, m in rows for p in _problems(m, handles, where[f]) + _unowned(f, m, reg)]
-    off += _formers(rows)
+    off += _formers(rows) + _breakdowns(rows)
     assert not (broken or repeated or off), (
         "rows of the metrics.toml files break benchmarks/README.md's \"Metrics\" (fix the row):\n"
         + "\n".join(broken) + ("\n" if broken else "") + "".join(repeated) + "\n".join(off))
@@ -452,10 +493,14 @@ def test_a_former_id_names_no_row_and_is_listed_once() -> None:
         "  g: vllm/two: was names vllm/old, which vllm/new names too: one row takes a former id"]
 
 
-def _kit_versions() -> dict[str, int]:
+def _kit_literal(name: str) -> dict:
     tree = ast.parse((ROOT / VERSIONS_AT).read_text(encoding="utf-8"))
     return next(ast.literal_eval(s.value) for s in tree.body if isinstance(s, ast.AnnAssign) and s.value is not None
-                and isinstance(s.target, ast.Name) and s.target.id == "VERSIONS")
+                and isinstance(s.target, ast.Name) and s.target.id == name)
+
+
+def _kit_versions() -> dict[str, int]:
+    return _kit_literal("VERSIONS")
 
 
 def _versions_off(rows: list[tuple[str, dict]], versions: dict[str, int]) -> list[str]:
@@ -482,8 +527,9 @@ def test_versions_hold_a_raised_row_and_nothing_else() -> None:
         "  add the line 'vllm/y': 3,", "  delete the line 'vllm/y': 2, (its row's version is 3)"]
 
 
-def _site_refused(rows: list[tuple[str, dict]], takes: bool = SITE_TAKES_VERSIONS) -> list[str]:
-    return [] if takes else [f"  {f}: {m.get('id')}: {k}" for f, m in rows for k in VERSION_KEYS if k in m]
+def _site_refused(rows: list[tuple[str, dict]], takes: bool = SITE_TAKES_VERSIONS,
+                  keys: tuple[str, ...] = VERSION_KEYS) -> list[str]:
+    return [] if takes else [f"  {f}: {m.get('id')}: {k}" for f, m in rows for k in keys if k in m]
 
 
 def test_no_row_carries_a_version_key_until_the_site_takes_them() -> None:
@@ -498,6 +544,81 @@ def test_the_site_check_holds_each_version_key_until_flipped() -> None:
     assert _site_refused(rows, takes=False) == ["  f: vllm/x: version", "  f: vllm/x: changed", "  f: vllm/x: was"]
     assert _site_refused(rows, takes=True) == []
 
+
+
+def test_a_breakdown_names_a_main_number_one_level_deep() -> None:
+    main, part = {"id": "vllm/total"}, {"id": "vllm/part", "under": "vllm/total"}
+    assert _structured(part) == _breakdowns([("f", main), ("g", part)]) == []
+    assert _breakdowns([("g", part)]) == [
+        "  g: vllm/part: under names vllm/total, which no row has: name a main number's id"]
+    deeper = {"id": "vllm/sliver", "under": "vllm/part"}
+    assert _breakdowns([("f", main), ("g", part), ("h", deeper)]) == [
+        "  h: vllm/sliver: under names vllm/part, which is itself under vllm/total: a breakdown is one level deep, so "
+        "name vllm/total, or list it as a member of vllm/part"]
+    loop = [("f", {"id": "vllm/a", "under": "vllm/b"}), ("g", {"id": "vllm/b", "under": "vllm/a"})]
+    assert [x.split(":")[1] for x in _breakdowns(loop)] == [" vllm/a", " vllm/b"]
+    assert _structured({"id": "vllm/a", "under": "vllm/a"}) == [
+        "under names the row's own id: name the main number it breaks down"]
+    for bad in ("Vllm/total", "total", 3):
+        assert _structured({"id": "vllm/a", "under": bad}) == [
+            f"under is {bad!r}, not the OWNER/NAME id of the main number the row breaks down"]
+
+
+def test_a_kind_is_system_or_platform_and_needs_lists_a_parameter_or_a_calibration_number() -> None:
+    for ok in ({}, {"kind": "system"}, {"kind": "platform"}, {"needs": ["parameter"]},
+               {"needs": ["calibration", "parameter"]}):
+        assert _structured({"id": "vllm/x", **ok}) == [], ok
+    assert _structured({"id": "vllm/x", "kind": "project"}) == [
+        "kind is 'project', not one of system, platform: system where the number measures Verity, platform where it "
+        "measures the project"]
+    for bad in ([], ["parameter", "parameter"], ["seed"], "parameter"):
+        assert _structured({"id": "vllm/x", "needs": bad}) == [
+            f"needs is {bad!r}, not a list of parameter and/or calibration, each once: what the result depends on (a "
+            "security parameter) or uses (a calibration number)"], bad
+
+
+def _needs_off(rows: list[tuple[str, dict]], needs: dict[str, tuple[str, ...]]) -> list[str]:
+    tree = {str(m.get("id")): tuple(m["needs"]) for _, m in rows if m.get("needs")}
+    out = [f"  set the line {i!r}: {n!r}," for i, n in tree.items() if needs.get(i) != n]
+    return out + [f"  delete the line {i!r}: {n!r}, (its row needs {tree[i] if i in tree else 'nothing'})"
+                  for i, n in sorted(needs.items()) if tree.get(i) != n]
+
+
+def test_the_kits_needs_are_the_rows_needs() -> None:
+    off = _needs_off(_metrics(_files())[0], _kit_literal("NEEDS"))
+    assert not off, f"{VERSIONS_AT}'s NEEDS, which the kit refuses a measurement naming none of what its row needs " \
+                    "by, holds exactly each row's needs:\n" + "\n".join(off)
+
+
+def test_needs_hold_each_needing_row_and_nothing_else() -> None:
+    rows = [("f", {"id": "vllm/x"}), ("g", {"id": "vllm/y", "needs": ["parameter", "calibration"]})]
+    assert _needs_off(rows, {"vllm/y": ("parameter", "calibration")}) == []
+    assert _needs_off(rows, {}) == ["  set the line 'vllm/y': ('parameter', 'calibration'),"]
+    assert _needs_off(rows, {"vllm/y": ("parameter", "calibration"), "vllm/x": ("parameter",)}) == [
+        "  delete the line 'vllm/x': ('parameter',), (its row needs nothing)"]
+    assert _needs_off(rows, {"vllm/y": ("parameter",)}) == [
+        "  set the line 'vllm/y': ('parameter', 'calibration'),",
+        "  delete the line 'vllm/y': ('parameter',), (its row needs ('parameter', 'calibration'))"]
+
+
+
+def test_what_a_row_may_need_is_what_the_kit_asks_a_measurement_for() -> None:
+    tree = ast.parse((ROOT / KIT_AT).read_text(encoding="utf-8"))
+    needed = next(ast.literal_eval(s.value) for s in tree.body if isinstance(s, ast.Assign)
+                  and any(isinstance(t, ast.Name) and t.id == "NEEDED" for t in s.targets))
+    assert tuple(needed) == NEEDS, f"{KIT_AT}'s NEEDED is {tuple(needed)}, this test's NEEDS {NEEDS}: make them one list"
+
+def test_no_row_carries_under_kind_or_needs_until_the_site_takes_them() -> None:
+    held = _site_refused(_metrics(_files())[0], SITE_TAKES_STRUCTURE, STRUCTURE_KEYS)
+    assert not held, ("the site refuses a metric with a key its reader doesn't take, and its reader (infra's) doesn't "
+                      "take under, kind or needs yet: drop them from these rows; once it takes them, set "
+                      "SITE_TAKES_STRUCTURE = True in tests/test_metrics_registry.py:\n" + "\n".join(held))
+
+
+def test_the_site_check_holds_each_structure_key_until_flipped() -> None:
+    rows = [("f", {"id": "vllm/x", "under": "vllm/y", "kind": "platform", "needs": ["parameter"]}), ("g", {"id": "vllm/y"})]
+    assert _site_refused(rows, False, STRUCTURE_KEYS) == ["  f: vllm/x: under", "  f: vllm/x: kind", "  f: vllm/x: needs"]
+    assert _site_refused(rows, True, STRUCTURE_KEYS) == []
 
 def pin() -> int:
     rows, broken = _metrics(_files())

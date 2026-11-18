@@ -114,8 +114,8 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
     metrics = runpy.run_path(str(runner))["METRICS"]
     assert metrics == {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C",
                        "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L",
-                       "benchmarks/pearl-plus-gamma-c": "pearl-plus/h100/C",
-                       "benchmarks/pearl-plus-gamma-l": "pearl-plus/h100/L"}
+                       "benchmarks/pearl-plus-gamma-c-h100": "pearl-plus/h100/C",
+                       "benchmarks/pearl-plus-gamma-l-h100": "pearl-plus/h100/L"}
     h200 = {n: metrics[n] for n in metrics if n.endswith("-h200")}
     words = {w: model for model, w in R.MEMBER_MODEL.items()}
 
