@@ -1,0 +1,3 @@
+[2026-11-18T12:30Z] c86481361323
+LEVELSRUN: soundness said YES to (B) with FOUR CONDITIONS. (1) Table of EVERY reader of the Program's digest as R2 reads it (R2-declared, Pool.chains Docket.lean ~483, the supplied root ~495, the history table's domain, any others; Lean + Python), which digest each takes with --wired; a wired record with an unwired chain must NOT open the pool empty: kept cheat. (2) The log's declaration is the WIRED digest. (3) The served route's combined verdict REFUSES by name when given no wired Program; place it where the route is known without a prover-controlled flag (Core.Remote.V1 requiring wired of its SPOT member); if no such place, STOP and report. (4) CutIsRegistered stays listed. Add the readers' table to your return.
+
