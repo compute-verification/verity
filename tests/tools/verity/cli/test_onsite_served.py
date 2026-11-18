@@ -872,12 +872,13 @@ def written(*components: str, composed: bool = False) -> str:
         f"{h} {T.AS_WRITTEN}" for h in ["the composed verdict"] * composed + sorted(components))
 
 
-#: what Pearl+'s row says on every line until its coin sessions' signature pin is in Lean
-COINS_UNCHECKED = "coins' signatures checked on the served node only; not checked by the auditor"
+#: what Pearl+'s row says on every line: its coins' signatures, until its coin sessions' signature pin is in Lean, and
+#: the CUDA-graph rows its tie doesn't cover
+PEARL_UNCHECKED = "; ".join(T.schemes.get("pearl-plus").unchecked.values())
 #: what storage's, the wipe's and the bandwidth audit's rows say on every line: the memory attester's one table
 ATTESTER_UNCHECKED = "; ".join(mc.UNCHECKED.values())
 #: each row's end on every line, by component
-UNCHECKED_ENDS = {"pearl-plus": COINS_UNCHECKED, **dict.fromkeys(("pous", "wipe", "bandwidth"), ATTESTER_UNCHECKED)}
+UNCHECKED_ENDS = {"pearl-plus": PEARL_UNCHECKED, **dict.fromkeys(("pous", "wipe", "bandwidth"), ATTESTER_UNCHECKED)}
 #: the components of the rows `published` writes by default
 BASE = ("network-attester", "pearl-plus", "pous", "sampled-proofs", "wipe")
 #: a row's ``answer_from`` that is not `AS_WRITTEN`, which the serving node may write all the same: served_verdicts.py's
@@ -942,7 +943,7 @@ def test_an_empty_declared_mapping_says_nothing_and_an_entry_not_a_sentence_is_r
 
 
 def test_an_entry_the_launchers_record_says_already_is_said_once_on_the_line() -> None:
-    said = {"pearl-plus": f"{T.AS_WRITTEN} (its piece files in work/); {COINS_UNCHECKED}",
+    said = {"pearl-plus": f"{T.AS_WRITTEN} (its piece files in work/); {PEARL_UNCHECKED}",
             "pous": f"{T.AS_WRITTEN} (its piece files in space/); {ATTESTER_UNCHECKED}"}
     assert {c: T.unchecked(PROTOCOLS, said)[c] for c in said} == said
 
