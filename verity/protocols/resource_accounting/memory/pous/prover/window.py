@@ -5,13 +5,11 @@ workers, which stage from them as they do from an adapter's.
 
 `SetupIntegration` is the setup's statements (each a sampled block's decode against the store's registered row) and
 `SessionIntegration` a session's (the signature check, the message's hash and each round's opened block); each is an
-`Integration`, its `circuit()` and its `run(window)`. `write_window` closes a window an integration ran and writes its
-records. None is written yet.
+`Integration`, its `circuit()` and its `run(window)`. Nothing writes a window's records yet.
 """
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -20,7 +18,6 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as EB
 from verity.commitments.periods.interface import (
     Circuit,
-    Integration,
     Read,
     Registered,
     Window,
@@ -156,10 +153,3 @@ class SessionIntegration:
             outputs = [np.array([u.outputs[0][0] for u in group], dtype=np.uint16),
                        *(rows([u.outputs[o] for u in group]) for o in range(1, len(group[0].outputs)))]
             window.record(group[0].definition, inputs, outputs)
-
-
-def write_window(integration: Integration, out_dir: Path, registrar: Any) -> Path:
-    """The window `integration` runs, closed and written under `out_dir` (`Window.close`, `Window.write`, its
-    registration record made by `registrar`): the four records the workers stage from. Returns the window's
-    directory."""
-    raise NotImplementedError("proofs/zero-knowledge: PoUS's window records for the workers (write_window)")
