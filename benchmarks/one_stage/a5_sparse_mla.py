@@ -128,7 +128,7 @@ def audited(a: argparse.Namespace, mine: CS.Binding, of: dict, root: str, rule: 
     summary = {"root": root, "session": (published.get("plan") or {}).get("session"),
                "window": {"population": mine.population, "members": [[m.key, m.n] for m in mine.members],
                           "templates": {t: {"units": n, "sampled": sampled.get(t, 0)} for t, n in held.items()},
-                          "wired": {m.key: [[p, o, list(ws)] for p, o, ws in m.wired] for m in mine.members if m.wired}},
+                          "wired": {m.key: [w.doc() for w in m.wired] for m in mine.members if m.wired}},
                "challenger": {x: published.get(x) for x in ("trusted", "error")},
                "rank0": {x: s.get(x) for x in RANK},
                "accepted": ok and not published.get("error")}

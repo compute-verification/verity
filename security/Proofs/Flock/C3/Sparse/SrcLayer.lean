@@ -43,7 +43,7 @@ namespace FlockVBridge.Sparse
 
 open Flock.HmNets hiding and
 open Flock (F128)
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockSoundness.Discharge.Hm
 open Flock.RecSparse (messagePorts offset)
 open FlockVBridge.OfVStar (ReadCol sat_of_read rowCol rowCol_inj rowCol_lt foldl_replicate)
@@ -216,7 +216,7 @@ namespace FlockC3.Sparse
 noncomputable section
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockC3.Compose
 open FlockVBridge (wbit copyVal keyInst)
@@ -228,7 +228,7 @@ open FlockVBridge.Sparse (SCoins nw nc verifierRow tauBase vBaseS sparseBase che
 section Layer
 
 variable {mPts nU J : ℕ} {Reg' : Type} {cc : Flock.Circuit} {hU : FlockSoundness.Built cc.unit}
-  {hscope : FlockSoundness.Discharge.Layout.scopeOk cc = true} {Lv : FlockSoundness.Audit.SamplingDesign nU}
+  {hscope : FlockSoundness.Discharge.Layout.scopeOk cc = true} {Lv : Spot.Sampling.SamplingDesign nU}
   (zo : FlockSoundness.Discharge.Recursion.ZkOuter mPts nU J Reg' cc hU hscope Lv)
 
 /-- **(B)'s tie at V*'s layer**: `SparseTie`'s message words `w` and coins `c`, with the unit copy `j` of unit `un` of

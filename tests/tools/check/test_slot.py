@@ -1,6 +1,7 @@
 """`tools/check/slot.py`: a `--record --on` check takes a free check slot's lock and cores, as the lander's train checks do."""
 from __future__ import annotations
 
+import contextlib
 import errno
 import fcntl
 import importlib.util
@@ -620,6 +621,99 @@ def test_a_waiter_whose_run_ends_before_its_run_max_is_not_started(tmp_path, mon
     assert SLOT.main(["--twin", "p4", "--run-max", "5400", "--", "true"], now=lambda: NOW, mono=lambda: 1860.0,
                      sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED
     assert not (tmp_path / SLOT.TWINS / "p4").exists()                           # its pair is left for a twin that can finish
+
+
+def _exec_env(monkeypatch):
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(env)))
+
+
+def _release(lock: Path) -> None:
+    """Close this process's descriptors of ``lock``: a slot taken under a stubbed exec stays held by the test otherwise."""
+    for fd in os.listdir("/proc/self/fd"):
+        with contextlib.suppress(OSError):
+            if os.readlink(f"/proc/self/fd/{fd}") == str(lock):
+                os.close(int(fd))
+
+
+def test_only_slot_takes_that_slot_alone_and_a_name_its_file_lacks_starts_nothing(tmp_path, monkeypatch, capsys):
+    """A booked slot (`research run --slot b`): the waiter takes b though a is free, waits for b alone while b is held, and
+    leaves once b's line goes from the file; a name the file lacks starts nothing, at once, naming the slots it has."""
+    (tmp_path / "slots").write_text("a 0\nb 1\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    _exec_env(monkeypatch)
+    with pytest.raises(Exec) as got:
+        SLOT.main(["--only-slot", "b", "--", "true"], now=lambda: NOW)
+    assert got.value.args[0]["CHECK_SLOT"] == "b"
+    _release(tmp_path / "check-b.lock")
+    assert SLOT.main(["--only-slot", "c", "--", "true"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED
+    assert (f"slot: not started: --only-slot c: {tmp_path / 'slots'} has no slot of that name, only a, b; exit 75"
+            in capsys.readouterr().err)
+    assert list((tmp_path / SLOT.LINE).iterdir()) == []
+
+    held = _hold(tmp_path / "check-b.lock")
+    t = [NOW]
+    assert SLOT.main(["--only-slot", "b", "--wait-max", "40", "--", "true"], now=lambda: t[0],
+                     sleep=lambda s: t.__setitem__(0, t[0] + timedelta(seconds=s))) == SLOT.NOT_STARTED
+    assert "no check slot within --wait-max 40 s (every check slot is taken (b: busy))" in capsys.readouterr().err
+
+    def drop_b(s):
+        (tmp_path / "slots").write_text("a 0\n")
+    assert SLOT.main(["--only-slot", "b", "--", "true"], now=lambda: NOW, sleep=drop_b) == SLOT.NOT_STARTED
+    assert f"--only-slot b: {tmp_path / 'slots'} no longer has a slot of that name; exit 75" in capsys.readouterr().err
+    os.close(held)
+    for bad in (["--only-slot", "b;rm"], ["--only-slot"]):
+        with pytest.raises(SystemExit):
+            SLOT.options(bad)
+
+
+def test_end_refuses_a_bound_that_does_not_fit_gives_up_the_moment_it_cannot_and_caps_the_run(tmp_path, monkeypatch, capsys):
+    """A booked period's end (`research run --end`): a waiter whose --run-max doesn't fit before it starts nothing; one that
+    waits gives up the moment less than its --run-max is left (sleeping no further than that moment); and a run that takes its
+    slot runs no later than the end."""
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    end = "2026-10-01T10:00:00Z"
+    assert SLOT.options(["--end", end])[8] == NOW + timedelta(hours=1)
+    assert SLOT.options(["--end", "2026-10-01T10:00Z"])[8] == NOW + timedelta(hours=1)
+    for bad in ("2026-10-01T10:00:00", "2026-10-01T10:00:00+01:00Z", "tomorrow"):
+        with pytest.raises(SystemExit):
+            SLOT.options(["--end", bad])
+
+    assert SLOT.main(["--run-max", "3601", "--end", end, "--", "true"], now=lambda: NOW,
+                     sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED
+    assert ("slot: not started: the booking ends at 2026-10-01T10:00:00Z (--end), 3600 s from now: less than --run-max 3601 s "
+            "is left before it; exit 75") in capsys.readouterr().err
+    assert not (tmp_path / SLOT.LINE).exists()                                   # it never joined the line
+
+    held = _hold(tmp_path / "check-a.lock")
+    t, slept = [NOW], []
+
+    def sleep(s):
+        slept.append(s)
+        t[0] += timedelta(seconds=s)
+    assert SLOT.main(["--run-max", "3550", "--end", end, "--", "true"], now=lambda: t[0], sleep=sleep) == SLOT.NOT_STARTED
+    assert slept == [SLOT.POLL_S, SLOT.POLL_S, 10] and t[0] == NOW + timedelta(seconds=50)
+    assert ("the booking ends at 2026-10-01T10:00:00Z (--end), 3550 s from now: less than --run-max 3550 s is left before it "
+            "(every check slot is taken (a: busy)); exit 75") in capsys.readouterr().err
+    os.close(held)
+
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "status.json").write_text(json.dumps({"started_mono": 0.0}))
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    _exec_env(monkeypatch)
+    with pytest.raises(Exec):
+        SLOT.main(["--run-max", "3600", "--end", "2026-10-01T11:00:00Z", "--", "true"], now=lambda: NOW + timedelta(hours=1),
+                  mono=lambda: 60.0)
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 60.0 + 3600
+    (run / SLOT.RUN_TIMEOUT).unlink()
+    _release(tmp_path / "check-a.lock")
+    with pytest.raises(Exec):
+        SLOT.main(["--end", "2026-10-01T09:30:00Z", "--", "true"], now=lambda: NOW, mono=lambda: 60.0)
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 60.0 + 1800, "no --run-max: the end bounds it"
+    _release(tmp_path / "check-a.lock")
+    assert SLOT.main(["--end", "2026-10-01T09:00:00Z", "--", "true"], now=lambda: NOW) == SLOT.NOT_STARTED
 
 
 def test_a_wait_with_no_limit_moves_the_run_s_timeout_from_where_it_stands(tmp_path):

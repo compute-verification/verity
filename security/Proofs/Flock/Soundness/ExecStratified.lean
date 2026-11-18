@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.ExecSample
-public import Proofs.Flock.Soundness.Audit.Stratified
+public import Proofs.Spot.Sampling.Stratified
 public import Proofs.Flock.Soundness.E2E
 
 /-!
@@ -29,7 +29,9 @@ unit; `ExecSampleOS.lean` proves the same bounds for it.
 
 @[expose] public section
 
-namespace FlockSoundness.Audit
+namespace Spot.Sampling
+
+open FlockSoundness
 
 open Game Finset
 open scoped ENNReal
@@ -256,4 +258,4 @@ theorem flock_e2e_count_exec (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks :
 
 end Partition
 
-end FlockSoundness.Audit
+end Spot.Sampling

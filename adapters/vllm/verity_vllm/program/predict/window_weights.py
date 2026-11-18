@@ -28,12 +28,14 @@ from typing import Any
 
 import numpy as np
 from verity.commitments.periods import interface as IF
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    registered_commit,
+)
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import CHECKPOINTS
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
 from verity_vllm.records.weights_registration import WeightsRegistration
 
 from .common import _arr_shape

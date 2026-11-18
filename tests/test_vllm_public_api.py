@@ -74,6 +74,10 @@ PUBLIC = {
                                           "replay and rebuild take",
     "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
                                     "input loop and edges that act between two steps once nothing is in flight",
+    "verity_vllm.engine.kv_blocks": "I1: the memory hook (attach): the model runner's registered values and KV ranges, the "
+                                    "block pool's allocations, writes and frees and the scheduler's steps as events to the "
+                                    "exchange, which benchmarks/poub_session and benchmarks/vllm_encoded attach to an engine "
+                                    "they build",
     "verity_vllm.engine.hooks": "I2: the one owner of runtime patches: the patches one component installs on an engine and puts "
                                 "back (Hooks, Patch, patch, wrap, patched, triton_launch), a hook run at a module's import "
                                 "(OnImport) and the patches installed now (live), which the harness's arms and engine install "
@@ -285,21 +289,21 @@ PUBLIC = {
                                  "build under",
     "verity_vllm.protocols": "I1: the protocol options of a vLLM run (PoUW, PoUS and SPOT, each enabled on its own): "
                              "their selector, context, install and refusals (parse, adapter, Context, install, refused, "
-                             "requires_build, commit_guard), which the harness's arms and the served benchmarks of PoUW, PoUS and "
+                             "requests, commit_guard), which the harness's arms and the served benchmarks of PoUW, PoUS and "
                              "the Commit install",
     "verity_vllm.protocols.interface": "I1: what every protocol option implements, and what the selector hands it (Option, "
                                        "Context, Target)",
     "verity_vllm.protocols.pouw": "I1: PoUW's protocol option, and what a run that is its own auditor reads of it: its "
                                   "coins an in-process challenger's (challenged) and the H1 run an installed H1 option "
                                   "serves (h1_run), which the harness's arms and benchmarks/pouw read",
+    "verity_vllm.messages": "I1: the messages between the adapter and the prover: the process's exchange, through which "
+                            "the adapter's hooks emit verity.hooks events and schemes file their requests (current), "
+                            "which benchmarks/pouw's Pearl-C arms file their kernel through",
     "verity_vllm.protocols.linear.api": "I1: the linear-site interface: what computes y at a linear layer, where its weight comes "
-                                        "from, and the one object vLLM's quant_method.apply calls (Stack, Arm, Control, PassSpec, "
+                                        "from, and the kernel a scheme files to compute them (Stack, Arm, Control, PassSpec, "
                                         "LinearSite), which benchmarks/pouw's Pearl-C arms build",
-    "verity_vllm.protocols.linear.vllm_site": "I1: the linear sites of a vLLM model, and a Stack attached to them (discover, "
+    "verity_vllm.protocols.linear.vllm_site": "I1: the linear sites of a vLLM model, each called through the exchange (discover, "
                                               "attach), which benchmarks/pouw's Pearl-C arms attach",
-    "verity_vllm.protocols.poub.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
-                                                     "weights it binds (model_weights, WeightRegion, Every), which "
-                                                     "benchmarks/poub_session and benchmarks/vllm_encoded serve under",
     "verity_vllm.protocols.poub.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
                                                      "pipeline.poub_session reaches through protocols.driver and "
                                                      "benchmarks/poub_session serves under",

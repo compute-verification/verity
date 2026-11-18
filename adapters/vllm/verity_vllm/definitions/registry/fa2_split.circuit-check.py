@@ -10,6 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     keys a block): T = 300 in three splits, the last one empty, and in two (a full block, then the partial one); eight splits
     combined."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import fa2_split, hopper
     from verity_vllm.definitions.registry import prims as P
 

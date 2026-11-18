@@ -294,7 +294,8 @@ first-parent line (`pinnedChallengePhase`), and its files (`challengePhaseNamed`
 roots its log shows received. -/
 def saltChallengePhase (key ledger pins main window session : Json) : R (Audited × LiveCommitment × Roots) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  (pinnedChallengePhase ledger window k pins main >>= fun a => (a, ·) <$> challengePhaseNamed a k session).mapError
+  (pinnedChallengePhase ledger window k pins main >>= fun a =>
+      (fun (c, l) => (a, c, Spot.Challenger.byFamily c l)) <$> challengePhaseNamed a k session).mapError
     fun e => ("coin", s!"the challenger's session is not trusted: {e}")
 
 /-- `core_check._named`: session `sid`'s entries in the auditor's ledger (which `pinnedChallengePhase` has read). -/

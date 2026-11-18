@@ -61,33 +61,28 @@ from types import SimpleNamespace
 from typing import Callable, Sequence
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import and_reduce
 from verity.circuits.boolean.trace import part as _part
-from verity.circuits.census import BooleanWork, NoBooleanWork
+from verity.circuits.census import BooleanWork
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.commitments import hm96
 from verity.commitments.gates.frame_v3 import FrameV3Read, root_ref
 from verity.commitments.gates.hm96 import Hm96Sha512Leaf
 from verity.commitments.gates.lms import LmsEqual, Sha512Compress
-from verity.commitments.gates.sha512 import IV, midstate, pad_tail, words_be
+from verity.commitments.gates.sha512 import IV, midstate, pad_tail
+from verity.commitments.gates.bits import (BIT, BYTE, DIGEST, SALT, WORD, _bytes_bits, _coll, _Consts, _digest_bits,
+                                         _int_bits, _ands, _refs, _same, hiding_value)
 from verity.commitments.identity import tagged_sha512, tagged_sha512_prefix
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
-from verity.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.commitments.rowleaf import sha512_row_v2_prefix
 from verity.protocols.resource_accounting.network.verifier.certificate import (CERTIFICATE_TAG, DIGEST_BYTES, RECORD_TAG, STATUS_CODES,
                                                          certificate_digest)
 from verity.protocols.resource_accounting.network.verifier.grid import GridParams
 
-BIT = BL.BIT
-BYTE = Array(8, BIT)
-WORD = Array(64, BIT)
-DIGEST = Array(8, WORD)
-SALT = Array(hm96.SHA512.salt_bytes // 8, WORD)
 #: the head's leaf in N2's tree is HEADS + direction (`service.HEADS`), so its position bits are (direction, 1)
 HEADS = 2
 GRID_BYTES = 16 + DIGEST_BYTES
@@ -115,13 +110,6 @@ def grid_bytes(params: GridParams, parameters: bytes) -> bytes:
 
 
 # --- the circuit: traced parts ----------------------------------------------------------------------------------------
-
-def _same(x, want) -> object:
-    """1 iff bit x is `want`: a bit of the circuit, or the constant 0 or 1."""
-    if isinstance(want, int):
-        return x if want else x.inv()
-    return (x ^ want).inv()
-
 
 def _sig_counts(S):
     return (("counts", Array(S.T, Array(4, BYTE))), ("profile", Array(S.T, Array(32, BIT)))), BIT
@@ -167,26 +155,6 @@ NetworkHeadFields = _part(
 
 
 # --- the circuit: the opening -----------------------------------------------------------------------------------------
-
-class _Consts:
-    """The constant bits a body reads, one node each."""
-
-    def __init__(self, B):
-        self.B, self.ref = B, {}
-
-    def bits(self, value: int, w: int) -> list:
-        for b in sorted({value >> j & 1 for j in range(w)} - self.ref.keys()):
-            self.ref[b] = self.B.call(BL.constant(b)).refs[0]
-        return [self.ref[value >> j & 1] for j in range(w)]
-
-
-def _refs(c: Coll) -> list:
-    return [c.refs[k] for k in range(c.refs.count)]
-
-
-def _coll(t, refs: list) -> Coll:
-    return Coll(t, TR._refs(list(refs)))
-
 
 def _words(data: Sequence[Sequence]) -> list[list]:
     """Bytes (8 bits each, least significant first) as SHA-512 words: 64 bits least significant first, bytes
@@ -450,12 +418,6 @@ class Instance:
         return (len(self.link), self.T, self.counts)
 
 
-def hiding_value(row: bytes, salt: bytes) -> bytes:
-    """The 64 bytes a row's frame-v3-sha512 leaf binds: hm96's tree leaf over the row's sha512/row/v2 digest."""
-    inst, key = hm96.SHA512, hm96.SHA512.default_key
-    return inst.tree_leaf(key, inst.commit_string(key, sha512_row_v2_digest(row, 8 * len(row)), salt))
-
-
 def reference_parts(inst: Instance) -> dict[str, bool]:
     """Each part's output on the instance, from its arguments as the circuit reads them: the opening
     (`NetworkHidingRead`), the fields (`NetworkHeadFields`), the counts (`NetworkHeadCounts`, 1 without a profile) and
@@ -476,18 +438,6 @@ def reference_parts(inst: Instance) -> dict[str, bool]:
 def reference(inst: Instance) -> bool:
     """`NetworkHeadCheck_v2`'s output on the instance: every part's."""
     return all(reference_parts(inst).values())
-
-
-def _digest_bits(d: bytes) -> list[int]:
-    return [(w >> j) & 1 for w in words_be(d) for j in range(64)]
-
-
-def _int_bits(x: int, w: int) -> list[int]:
-    return [(x >> j) & 1 for j in range(w)]
-
-
-def _bytes_bits(data: bytes) -> list[int]:
-    return _int_bits(int.from_bytes(data, "little"), 8 * len(data))
 
 
 def arguments(inst: Instance) -> list[list[int]]:
@@ -514,19 +464,6 @@ def evaluate(*insts: Instance) -> list[int]:
     return [int(b) for b in evaluate_bits(insts[0].unit, *args).reshape(-1).tolist()]
 
 
-def _ands(work: BooleanWork, fn) -> int:
-    got = work.of(fn)
-    if isinstance(got, str):
-        raise NoBooleanWork({fn.id: f"it reaches {got}, which is not a Boolean gate, a constant bit or an input"})
-    return sum(a for _g, a in got.values())
-
-
-def ands(fn) -> int:
-    """A Boolean Definition's AND gates: the ANDs of its Boolean work as its census counts it (`census.BooleanWork`),
-    every facet's."""
-    return _ands(BooleanWork(), fn)
-
-
 _GROUPS = {"NetworkHidingRead": "opening", "NetworkHeadFields": "fields", "NetworkHeadCounts": "counts",
            "NetworkRecordDigest": "signed", "NetworkSignedDigest": "signed"}
 
@@ -544,5 +481,5 @@ def size(target) -> dict:
 
 __all__ = ["GATE", "GRID_BYTES", "HEADS", "Instance", "NetworkHeadCheck", "NetworkHeadCounts", "NetworkHeadFields",
            "NetworkHidingRead", "NetworkRecordDigest", "NetworkRowDigest", "NetworkSignedDigest", "PINS", "Shape",
-           "UNPINNED", "ands", "arguments", "circuit_digest", "evaluate", "expand", "gate", "gate_of", "grid_bytes",
+           "UNPINNED", "arguments", "circuit_digest", "evaluate", "expand", "gate", "gate_of", "grid_bytes",
            "pinned", "pinned_digest", "reference", "reference_parts", "size", "unit"]

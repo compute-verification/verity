@@ -236,15 +236,19 @@ def find_model(llm):
 
 
 def install(model, args, coins):
-    """Every LinearBase layer's apply, found by type (`verity_vllm.protocols.linear.vllm_site`), through one `Stack` whose executor is a
+    """Every LinearBase layer's apply, found by type (`verity_vllm.protocols.linear.vllm_site`), through one `Stack`, filed as the
+    kernel of every due linear (`verity.hooks.ComputeBlockWith`), whose executor is a
     `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  The execution phase's salt is `coins`' salt coin,
     asked for once the weights are committed (`Coins`).  Returns the run, the weights by id and the stack; the stack starts
     inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
     from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
+    from verity.hooks import ComputeBlockWith
+    from verity_vllm import messages
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.protocols.linear import vllm_site
     from verity_vllm.protocols.linear.api import Stack
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity_torch.pouw.pearl_c import run_device as PPDR
 
     sites = vllm_site.discover(model)
@@ -254,11 +258,11 @@ def install(model, args, coins):
     if bad:
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
-    salt_key = PPD.new_salt_key(scheme)
+    salt_key = PPD.no_salt_key(scheme)
     roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
     tiles, rows = pass_capacity(kernel.run.TILE, [t.shape[0] for t in weights.values()])
     opening = coins.open("salt", weights_root(roots))
-    run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, coins.commitment, opening, time_gemm=True,
+    run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots, coins.commitment, opening, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
                               whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, salt_key=salt_key,
                               whole_defer_a=getattr(args, "whole_defer_a", False),
@@ -274,7 +278,8 @@ def install(model, args, coins):
     bad = stack.refusals()
     if bad:
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
-    vllm_site.attach(stack, sites, Hooks(tag=f"pouw:{scheme}"))
+    messages.current().request(f"pouw:{scheme}", ComputeBlockWith(stack))
+    vllm_site.attach(sites, Hooks(tag=f"pouw:{scheme}"))
     return run, weights, stack
 
 
@@ -1071,6 +1076,7 @@ def agree(a, b) -> float:
 def main() -> None:
     from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SCHEDULES
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names as kernel_names
     from verity_torch.pouw.pearl_c import run_device as PPDR
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
@@ -1087,7 +1093,7 @@ def main() -> None:
     ap.add_argument("--mem-arm", type=float, default=0.3, help="the BF16 engine's; Pearl-C's buffers (about 13 GB) sit outside it")
     ap.add_argument("--interleave", choices=["rep", "blocks"], default="rep", help="blocks: skip co-residency, go straight to ABAB")
     ap.add_argument("--retain", help="the verify passes' directory")
-    ap.add_argument("--scheme", default=SCHEME, choices=sorted(PPD.SCHEMES), help="the Pearl-C scheme, and so its hashing format")
+    ap.add_argument("--scheme", default=SCHEME, choices=sorted(kernel_names("pearl-c")), help="the Pearl-C scheme, and so its hashing format")
     ap.add_argument("--schedule", choices=sorted(SCHEDULES), default="serial",
                     help="deferred: each call's tile hashing on a side lane at the least priority and the rest at the greatest, "
                          "as measured (the decode plan's step 2); deferred-caller: the rest on vLLM's stream at its own")

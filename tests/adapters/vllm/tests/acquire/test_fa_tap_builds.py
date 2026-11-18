@@ -24,6 +24,7 @@ from verity_vllm import settings
 NAME = "verity_fa_tap_builds_test"
 NVCC = "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) NVIDIA\nCuda compilation tools, release 0.0\nBuild a.b\n"
 SET_BY_A_BUILD = ("CUDA_HOME", "MAX_JOBS", "TORCH_CUDA_ARCH_LIST")
+CARD = "h100-sxm-80gb"
 
 
 class Toolkit:
@@ -163,7 +164,7 @@ def test_fa3_build_compiles_the_paged_kernel_of_each_head_dim_links_the_driver_s
     hop, build = tree / "hopper", tmp_path / "build"
     sources = [*tree_sources, str(Path(FA3.__file__).parent / "fa3_stubs.cu"), kernel]
 
-    FA3.main(FA3.Options(tree=str(tree), name=NAME, build_dir=str(build), hdims="128", tree_commit="a commit"))
+    FA3.main(FA3.Options(tree=str(tree), name=NAME, build_dir=str(build), hdims="128", tree_commit="a commit", card=CARD))
 
     defines = [
         "FLASHATTENTION_DISABLE_BACKWARD", "FLASHATTENTION_DISABLE_DROPOUT", "FLASHATTENTION_DISABLE_UNEVEN_K",
@@ -195,7 +196,7 @@ def test_fa3_build_compiles_the_paged_kernel_of_each_head_dim_links_the_driver_s
         "name": NAME, "tree": str(tree), "tree_commit": "a commit", "sources": sources,
         "source_sha256": {s: FA3.sha256(s) for s in sources}, "header_sha256": {h: FA3.sha256(h) for h in headers},
         "defines": defines, "cxx_flags": ["-O3", "-DNDEBUG", "-std=c++20", *_flags(defines)], "nvcc_flags": nvcc_flags,
-        "arch": "9.0a", "hdims": [128], "nvcc_version": ["Cuda compilation tools, release 0.0", "Build a.b"],
+        "card": CARD, "arch": "9.0a", "hdims": [128], "nvcc_version": ["Cuda compilation tools, release 0.0", "Build a.b"],
         "torch": torch.__version__, "torch_cuda": torch.version.cuda, "cuda_home": str(toolkit.home), "max_jobs": "7",
         "ldflags": ldflags, "compile_seconds": 2.5, "so": so, "so_sha256": FA3.sha256(so),
         "so_bytes": len(b"an extension"), "ops": ["verity_tap_mode"],
@@ -205,12 +206,27 @@ def test_fa3_build_compiles_the_paged_kernel_of_each_head_dim_links_the_driver_s
     assert capsys.readouterr().out == f"BUILD-OK {NAME} 2.5 s {so} ['verity_tap_mode']\n"
 
 
-@pytest.mark.parametrize(("build", "home"), [("fa2", "/usr/local/cuda-12.9"), ("fa3", "/usr/local/cuda")], ids=["fa2", "fa3"])
-def test_a_build_names_its_own_toolkit_and_job_count_where_the_environment_names_none(
-        build: str, home: str, toolkit: Toolkit, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without `CUDA_HOME` and `MAX_JOBS` a build sets its own, starts that toolkit's programs and records both; with
-    `--no-ptxas-v` nvcc gets no `-Xptxas -v`; and where `load` leaves no extension the record says so with two nulls."""
+@pytest.mark.parametrize("build", ["fa2", "fa3"])
+def test_a_build_without_a_toolkit_home_is_refused_by_name_before_it_starts_a_program(
+        build: str, toolkit: Toolkit, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CUDA_HOME")
+    out = tmp_path / "build"
+    with pytest.raises(ValueError, match="CUDA_HOME is not set"):
+        if build == "fa2":
+            csrc, _ = _fa2_tree(tmp_path, "flash_fwd_hdim64_bf16_causal_sm80.cu")
+            FA2.main(FA2.Options(tree=str(csrc), name=NAME, build_dir=str(out), files="fwd_causal"))
+        else:
+            tree, _, _ = _fa3_tree(tmp_path, "flash_fwd_hdim64_bf16_paged_sm90.cu")
+            FA3.main(FA3.Options(tree=str(tree), name=NAME, build_dir=str(out), hdims="64", card=CARD))
+    assert toolkit.programs == [] and toolkit.loads == [] and not out.exists()
+
+
+@pytest.mark.parametrize("build", ["fa2", "fa3"])
+def test_a_build_names_its_own_job_count_where_the_environment_names_none(
+        build: str, toolkit: Toolkit, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without `MAX_JOBS` a build sets its own and records it, starting the programs of `CUDA_HOME`'s toolkit; with
+    `--no-ptxas-v` nvcc gets no `-Xptxas -v`; and where `load` leaves no extension the record says so with two nulls."""
+    home = str(toolkit.home)
     monkeypatch.delenv("MAX_JOBS")
     toolkit.extension = None
     out = tmp_path / "build"
@@ -219,7 +235,7 @@ def test_a_build_names_its_own_toolkit_and_job_count_where_the_environment_names
         FA2.main(FA2.Options(tree=str(csrc), name=NAME, build_dir=str(out), files="fwd_causal", no_ptxas_v=True))
     else:
         tree, _, _ = _fa3_tree(tmp_path, "flash_fwd_hdim64_bf16_paged_sm90.cu", "flash_fwd_hdim128_bf16_paged_sm90.cu")
-        FA3.main(FA3.Options(tree=str(tree), name=NAME, build_dir=str(out), no_ptxas_v=True))
+        FA3.main(FA3.Options(tree=str(tree), name=NAME, build_dir=str(out), no_ptxas_v=True, card=CARD))
 
     assert [argv[0] for argv, _ in toolkit.programs] == [os.path.join(home, "bin", "nvcc"), os.path.join(home, "bin", "cuobjdump")]
     written = {name: settings.raw(name) for name in SET_BY_A_BUILD[:2]}
@@ -254,5 +270,5 @@ def test_a_build_refuses_a_head_dim_it_does_not_know_or_a_kernel_the_tree_lacks_
             FA2.main(FA2.Options(tree=str(csrc), name=NAME, build_dir=str(out), hdims=hdims, files=files))
         else:
             tree, _, _ = _fa3_tree(tmp_path, "flash_fwd_hdim64_bf16_paged_sm90.cu")
-            FA3.main(FA3.Options(tree=str(tree), name=NAME, build_dir=str(out), hdims=hdims))
+            FA3.main(FA3.Options(tree=str(tree), name=NAME, build_dir=str(out), hdims=hdims, card=CARD))
     assert toolkit.programs == [] and toolkit.loads == [] and not out.exists()

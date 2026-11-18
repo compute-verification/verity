@@ -74,7 +74,7 @@ theorem find?_unique {α : Type} {p : α → Bool} {a : α} (hp : ∀ x, p x = t
       · exact find?_unique hp ha
 
 theorem qsort_single {α : Type} (lt : α → α → Bool) (a : α) : #[a].qsort lt = #[a] :=
-  Array.toList_inj.1 (List.perm_singleton.1 (FlockSoundness.Audit.StrataExec.qsort_perm lt #[a]))
+  Array.toList_inj.1 (List.perm_singleton.1 (Spot.Sampling.StrataExec.qsort_perm lt #[a]))
 
 theorem mapM_single {α β ε : Type} {f : α → Except ε β} {a : α} {b : β} (h : f a = .ok b) :
     #[a].mapM f = .ok #[b] := by

@@ -71,7 +71,7 @@ incorrect set of the trace the extractor recovers.
      read in the error.
    - Open: the targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
      `NetworkAttesterSound`, `WipeSound`), each open until proved (PoUW's:
-     `verity/protocols/resource_accounting/compute/pouw/verifier/`). Remote: the first two, `WiresSound`, `GateARow`.
+     `verity/protocols/resource_accounting/compute/pouw/verifier/`). Remote: the first two, `WiresSound`.
 
 **The real assumptions.** Items 1 to 3 rest on three: `Claims.ExpectedCR` (SHA-512 collision resistance, which the
 other SHA-512 shapes fold into) and `Claims.Hm96Hiding` (hm96 leaves hide at the pinned key), each under the lock's

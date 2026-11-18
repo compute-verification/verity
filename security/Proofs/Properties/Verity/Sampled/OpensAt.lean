@@ -463,29 +463,23 @@ the ports and roots check being v2's own on the accepted play (`opensReady_of_ac
 `Instance.sessionRegistered`'s from the session's construction (`Instance.sessionOf`) and `FamiliesPinned`, which owes
 only that the coin commitment's families hold the family v2's parameters name; the coupling's, the device's log opening
 only the record's rounds (`LogOpensRecorded`), is v2's record check's, which refuses a session whose coin tree opens a
-round its record doesn't give (`Instance.logOpensRecorded`). The two statements on the committed files
-(`Vocab.WiresSound` at the deployed vocabulary, `GateARow`) are taken as they stand: no clause of the conclusion reads
-either, and neither is proved. -/
+round its record doesn't give (`Instance.logOpensRecorded`). -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hFP : I.FamiliesPinned .remote)
     (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)) .remote)
-    (hW : I.base.PouwSound .remote)
-    (hWi : (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).WiresSound .remote)
-    (hG : Verity.GateARow) :
+    (hW : I.base.PouwSound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
   remote_soundness_deployedAt I K₀ reg record recordDigest I.opensAt I.registeredFiles
-    (I.sessionAt_of_registered .remote (I.sessionRegistered hFP)) (I.logOpensRecorded .remote) hTwo hW hWi hG
+    (I.sessionAt_of_registered .remote (I.sessionRegistered hFP)) (I.logOpensRecorded .remote) hTwo hW
 
 open scoped ENNReal in
 /-- **`remote_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
 reading (`Instance.Honest.inst`), whose coin commitment holds the family v2's parameters name
 (`Instance.Honest.familiesPinned`) and whose base publishes `⊤` for every subprotocol, where the base's PoUW target
-holds. It concludes neither statement on the committed files: the instance runs sessions, at which SPOT's error
-is finite, so the wires' statement bounds something there and holds only by its proof, and `GateARow` reads no
-deployment, so no instance concludes it. -/
+holds. -/
 theorem remote_soundness_deployedReady_honest :
     (Instance.Honest.inst ⊤ Instance.Honest.bound).FamiliesPinned .remote ∧
       (Instance.Honest.inst ⊤ Instance.Honest.bound).base.PouwSound .remote :=

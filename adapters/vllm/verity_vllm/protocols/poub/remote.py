@@ -1,7 +1,7 @@
 """The Commit's PoUB session on its vLLM engine (`CommitSession`, ``--remote-verifier HOST:PORT``,
 `config.CommitConfig.remote_verifier`): PoUB's prover's serving loop (`verity.protocols.resource_accounting.memory.poub.prover.node_store.serving`:
 `StoreBackend`, `prove`, `Lockstep`, `KvDevice`) attached to the engine by the store binder
-(`verity_vllm.protocols.poub.binder`), the session in lockstep with the Commit's instrumented run.
+(`verity.protocols.resource_accounting.memory.poub.prover.binder`), the session in lockstep with the Commit's instrumented run.
 """
 from __future__ import annotations
 
@@ -27,8 +27,9 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.serving 
 from verity.protocols.resource_accounting.memory.poub.verifier import audit
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec
 
+from verity_vllm import messages
 from verity_vllm.engine.handle import core_in_process, engine_of
-from verity_vllm.protocols.poub.binder import Binder
+from verity.protocols.resource_accounting.memory.poub.prover.binder import Binder
 from verity_vllm.records.schema_ids import REMOTE_SESSION_SCHEMA
 
 __all__ = ["CommitSession"]
@@ -41,8 +42,9 @@ class CommitSession:
     engine_args  before the build: one GPU, synchronous scheduling, no prefix caching (refusing anything else), the KV
                  pool at ``kv_pages`` pages (None: the engine's own, at the row's gpu_memory_utilization)
     target       before the build: the row's target declares synchronous scheduling (its Program's LAG 0)
-    install      before the build: ``binder.Binder(store, passes=False, kv=False)`` on vLLM's model runner, block pool
-                 and scheduler, registering weight tensors up to ``weight_blocks`` blocks.  The KV pool stays outside
+    install      before the build: ``binder.Binder(store, passes=False, kv=False)`` on the exchange, subscribed to the
+                 adapter's memory hook (`engine.kv_blocks`, which the build attaches), registering weight tensors up to
+                 ``weight_blocks`` blocks.  The KV pool stays outside
                  the registration (served writes do, and live KV is uncredited for chat),
                  so no step writes a registered block and every pass reads every one
     check        after the build: the engine core in this process, scheduling synchronous, no KV pool registered; then
@@ -113,7 +115,7 @@ class CommitSession:
                              "engine schedules synchronously: declare \"async_scheduling\": false in the workload's target")
 
     def install(self) -> None:
-        self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks, kv=False).install()
+        self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks, kv=False).install(messages.current())
 
     def before_build(self, ekw: dict[str, Any]) -> None:
         """`engine_args`, `target` and `install` on the Commit's engine build arguments (``engine_args``, ``target``)."""

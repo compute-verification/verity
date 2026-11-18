@@ -24,7 +24,7 @@ untraced = ["test_bench.py", "test_booked_card.py", "test_bench_engines.py", "te
             "test_steady_runs.py", "test_steady_specs.py"]
 # The harness is a user of the vLLM integration. Its fake-engine tests import
 # the public hook set and exercise the integration-facing arm contract, and
-# `build_bound` reads the protocol options' `requires_build` to refuse CUDA
+# `build_bound` reads the protocol options' `requests` to refuse CUDA
 # graphs for arms whose served kernels are bound to a row Build. Dispatch names
 # a queue kind from benchmarks' kinds file, which a test checks every spec has. The README is the
 # harness's contract, and a test pins it to the code. The bandwidth spec's setup must export every library variable
@@ -114,6 +114,8 @@ inputs = [
     "benchmarks/overhead/run.py",
     # a card the door measures on reads its SMs and L2 from its card file through verity.device
     "calibration/hardware/cards",
+    # a host core-second's weight is read from its node's file and the cards it names (host_weight)
+    "calibration/hardware/nodes",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
     # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
     # door's runner, which a test runs
@@ -183,7 +185,17 @@ paths = ["pyproject.toml", "*/pyproject.toml", "adapters/vllm/verity_vllm"]
 tests = ["test_bench_served.py"]
 paths = ["pyproject.toml", "*/pyproject.toml",
          "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90",
-         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120"]
+         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120",
+         # the Pearl-C arm's kernel scheme: the useful-work scheme by its registered name, and the kernel-scheme table
+         "benchmarks/harness/verity_bench/schemes.py", "verity/hooks.py", "verity/protocols/__init__.py",
+         "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/scheme.py",
+         "verity/protocols/resource_accounting/compute/__init__.py",
+         "verity/protocols/resource_accounting/compute/pouw/__init__.py",
+         "verity/protocols/resource_accounting/compute/pouw/scheme.py",
+         "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
+         "verity/protocols/resource_accounting/compute/pouw/verifier/kernel_schemes.py",
+         "verity/protocols/experimental/__init__.py", "verity/protocols/experimental/dither/__init__.py",
+         "verity/protocols/experimental/dither/scheme.py", "calibration/hardware/cards"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_settings.py"]

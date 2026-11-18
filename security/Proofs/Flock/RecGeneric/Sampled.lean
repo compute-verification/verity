@@ -88,7 +88,7 @@ end Claims.RecGeneric
 
 namespace Flock.Guarantees
 
-open Claims Claims.RecGeneric FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric
+open Claims Claims.RecGeneric FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.SampledGeneric
 open scoped ENNReal
 
 /-- **B1: a claims-core proof system through the sampled compiler.** For every claims verifier `V` with relation `Rl`

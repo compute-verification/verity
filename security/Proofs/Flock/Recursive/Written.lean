@@ -68,7 +68,7 @@ end FlockSoundness.Game
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit Exec
+open Game Spot.Sampling Exec
 
 variable {α : Type}
 

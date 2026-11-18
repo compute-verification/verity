@@ -59,6 +59,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
+from verity import hooks as H
 from verity_vllm import config
 from verity_vllm.engine import hooks
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
@@ -71,7 +72,7 @@ __all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Cont
            "adapter", "driver",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
-           "parse", "refusals", "refused", "register_weights", "requires_build", "undeclared", "weights_view", "CIRCUITS",
+           "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view", "CIRCUITS",
            "CUT", "circuit_registry", "traced_as"]
 
 #: protocol -> its adapter module in this package
@@ -169,12 +170,18 @@ def traced_as(entry: str, m: int, k: int, n: int) -> Any:
     return None if reg is None else reg.traced_as(scheme, m, k, n)
 
 
-def requires_build(entry: str, ctx: Context) -> bool:
-    """Whether ``entry``'s adapter binds its served computation to a row Build."""
-
-    name, _, scheme = entry.partition(":")
-    required = getattr(adapter(name), "requires_build", None)
-    return bool(required(scheme, ctx)) if callable(required) else False
+def requests(ctx: Context) -> list[tuple[str, H.Request]]:
+    """What each enabled entry's adapter requests of the workload (its ``requests``), by entry; an entry whose adapter
+    can't be imported requests nothing, and `refusals` names it."""
+    out: list[tuple[str, H.Request]] = []
+    for entry in ctx.enabled:
+        name, _, scheme = entry.partition(":")
+        try:
+            asked = getattr(adapter(name), "requests", None)
+        except _refused():
+            continue
+        out += [(entry, r) for r in (asked(scheme, ctx) if callable(asked) else ())]
+    return out
 
 
 def engine_fills(ctx: Context) -> dict[str, tuple[str, ...]]:
@@ -253,6 +260,9 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             out.append(f"{entry}: {name} registers no scheme {scheme!r} (registered: {', '.join(known) or 'none'})")
             continue
         out.extend(f"{entry}: {r}" for r in mod.refusals(scheme, ctx))
+        asked = getattr(mod, "requests", None)
+        out.extend(f"{entry}: {r.why} ({r.property} {ctx.properties().get(r.property)!r})"
+                   for _, r in H.unmet([(entry, r) for r in (asked(scheme, ctx) if callable(asked) else ())], ctx.properties()))
         executes = getattr(mod, "executes", None)
         sites = tuple(executes(scheme) if callable(executes) else getattr(mod, "EXECUTES", ()))
         for site in sites:
