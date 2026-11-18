@@ -98,10 +98,3 @@ def test_with_levels_names_the_levels_and_refuses_a_case_naming_them():
     refused("levels-named", LV.with_levels, got, 1, canon)
     refused("levels-params-mismatch", LV.with_levels, case, 2, canon)
     refused("levels-not-built", LV.with_levels, case, 3, canon)
-
-
-def test_record_field_is_the_count_held_to_the_profiles_levels():
-    assert LV.record_field(2) == {"levels": 2}
-    assert LV.record_field(1, {"levels": [{"name": "block"}]}) == {"levels": 1}
-    refused("levels-profile-mismatch", LV.record_field, 2, {"levels": [{"name": "block"}]})
-    refused("levels-not-built", LV.record_field, 3)

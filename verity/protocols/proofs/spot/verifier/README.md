@@ -89,8 +89,8 @@ it stays refused by name.
   (`levels.of_params`). A case's `levels` (a JSON integer; a string is refused) and its `form` (`one-stage` or `two-stage`, which the Lean
   dispatcher reads today) must name that shape. A case that names neither reads as one level, and a mismatch is
   refused with both values named.
-- **The run's record and `SPOT_LEVELS` are the prover's.** They say what was served. A record's `levels` field (from
-  `levels.record_field`, its one writer) holds the count. A record without the field is of one level. A record of the
+- **The run's record and `SPOT_LEVELS` are the prover's.** They say what was served. A record's `levels` field holds the
+  count. A record without the field is of one level. A record of the
   boundary commitment's format (`verity-vllm/boundary-rows/v1`) is of two by that format, and one whose `levels` is
   another count is refused (`levels-format-mismatch`). A record that served another
   count than the parameters check is refused (`levels-record-mismatch`).
@@ -217,8 +217,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   sample's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`Spot/ChallengerTrees.lean`, `challenger.sessions_tree_reason`, `order_why`).
-  `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s.
+  `one_stage.proofs.verdicts_v2` runs its verdicts alone, which `tests/test_proofs.py` holds to `verify`'s.
   A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
   `statements`; `one_stage.proofs.members_v2` writes it), which the audit's `check` reads beside the one
   statement's and decides by `checkMembersAt`: it accepts where the form's run returns with every session accepted

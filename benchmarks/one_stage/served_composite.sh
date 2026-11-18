@@ -70,6 +70,7 @@ TPY=${TPY:-$TREE/.venv/bin/python}
 [ -x "$TPY" ] || TPY=$PY
 P=$D/private/composite
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
+. "$(dirname "${BASH_SOURCE[0]}")/placement.sh" || exit 2  # hold_placement
 dev=()
 if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
   dev=(--development "$COMPOSE_DEVELOPMENT")
@@ -77,7 +78,7 @@ if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
 elif [ -n "${COMPOSE_ON_NODE:-}" ]; then
   say "COMPOSITE ON-NODE: $COMPOSE_ON_NODE"
 elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
-  if [ "${VERITY_HOLD_PLACEMENT:-}" != 1 ]; then
+  if ! hold_placement; then
     say "COMPOSITE ON-NODE: composed on the served node (SERVED_NODE), which the prover controls"
   elif [ "${COMPOSE_OFF_NODE:-1}" != 0 ]; then
     say "COMPOSITE refused: this is the served node (SERVED_NODE), which the prover controls, so a composite here claims" \

@@ -112,7 +112,9 @@ def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Ma
               configuration: str | None = None, committed: Collection[str] = frozenset(), verifier: str | None = None,
               store_gaps: Sequence[str] = (), simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-device`'s premise holds: that the memory attester ran on a
+    """Which machine ran each party, by the party on it (`memory_attester.machines`: `node` and `host` are compared and
+    never written; a `verifier` named other than `node` is `memory_attester.UNNAMED`), and whether `trusted-device`'s
+    premise holds: that the memory attester ran on a
     machine the developer doesn't control (`memory_attester.trusted_device`). It never holds here: under a
     configuration whose hash `configuration` is one of `committed`, when `key_sha512`, the SHA-512 of the key the
     session was signed under, is a key that configuration's `pins` (its `[[pin]]` entries) give `PARTY` for the wipe,
@@ -125,15 +127,18 @@ def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Ma
     (`{"tier", "bytes", "what"}`), which the bound doesn't count; and `memory_attester.UNCHECKED` under
     ``unchecked``."""
     if simulated and host != node:
-        raise ValueError(f"a simulated placement runs the memory attester on the developer's node {node}, not on {host}")
-    kind = "own-host" if host != node else "simulated" if simulated else "prover-node"
-    names = {"own-host": f"the memory attester ran on {host}, not the developer's {node}",
-             "simulated": f"the memory attester ran as a process of its own on the developer's node {node}, standing "
-                          "in for a host the developer doesn't control",
-             "prover-node": f"the memory attester ran on the developer's node {node}"}[kind]
+        raise ValueError("a simulated placement runs the memory attester on the prover's machine, and it was handed "
+                         "another")
+    prover, attester = mc.machines(node, host)
+    kind = "own-host" if attester != prover else "simulated" if simulated else "prover-node"
+    names = {"own-host": f"the memory attester ran on {attester}, not on {prover}",
+             "simulated": f"the memory attester ran as a process of its own on {prover}, standing in for a machine "
+                          "the developer doesn't control",
+             "prover-node": f"the memory attester ran on {prover}"}[kind]
     premise = mc.trusted_device(pins, PARTY, "wipe", key_sha512, names, configuration=configuration,
                                 committed=committed)
-    return {"kind": kind, "parties": {"memory_attester": host, "prover": node, "verifier": verifier or node},
+    seen = prover if verifier in (None, node) else mc.UNNAMED
+    return {"kind": kind, "parties": {"memory_attester": attester, "prover": prover, "verifier": seen},
             PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared],
             "store_gaps": list(store_gaps), **mc.unchecked()}
 

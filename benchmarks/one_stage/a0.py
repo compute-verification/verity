@@ -41,7 +41,6 @@ from verity_flock.input_sets import InputSet
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier.one_stage import audit, partition as P, docket as R, verifier as V
 from verity.protocols.proofs.spot.prover import docket as DK
-from verity.protocols.proofs.spot.prover import served as SV
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import file_sha512 as sha512_file, verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
@@ -125,15 +124,6 @@ def hold_bound(st: dict, program, query) -> None:
     (st["dir"] / "partition.json").write_text(json.dumps(P.partition(program, query), sort_keys=True))
     (st["dir"] / "program.json").write_bytes(canonical_json(encode_program(program)))
     st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
-
-
-def hold_registered(st: dict, program, query, served, log=(), ports=None) -> SV.ServedDocket:
-    """The verifier's own `--registered` file beside a bound stage (`served.register_served`: each served tree a port, the
-    form every served path registers in), which `lean_verify` passes to `verify --zk`. The returned docket's
-    `registered` entries go into the record (`R.record(..., registered=)`), and its `values` and `outputs` into R7."""
-    sr = SV.register_served(program, query, served, log=log, ports=ports)
-    st["registered_file"] = sr.write(st["dir"] / "registered.json")
-    return sr
 
 
 def proof_block_class(set_dir: str, m0_path: str, out: Path) -> str:
@@ -559,8 +549,9 @@ def archiving(held: dict | None, ident: tuple | None) -> AbstractContextManager:
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
                 flags: Sequence[str] = (), members: VerifyMembers | None = None) -> dict:
     """The verifier: Lean `verity-verify-proof verify` on the session's record, with the circuit and the public file
-    held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
-    `hold_registered`) when the statement reads registered values, with the window's registered circuit record
+    held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`: a5's,
+    bound to the docket's roots and domains after the checks before the sample, `REG.bind_ports`; prove_subprotocol's
+    stand-in's) when the statement reads registered values, with the window's registered circuit record
     (`st["interface_file"]`, `--interface`) whose declared registered ports the file never binds (`bound_files`); `zk`,
     a `--zk` session's. `log` names its logs under `out` (a negative's own, beside the honest verdict's). `flags`: more
     of `verify`'s (a plain session's ``--coins tree --stratified K``). ``members``: the run's kept verifier

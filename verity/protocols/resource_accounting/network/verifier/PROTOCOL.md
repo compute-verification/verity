@@ -484,7 +484,8 @@ vLLM's UTF-8 holdback rule and the base64, and the grouping of tokens into chunk
 of up to F − 1 bits a response that no template fixes.
 
 **(b) Decision: every cell, with the advice's map.** The map is a function of the advice: for each slot, the cell
-the network attester must have released there (`window_map`). Advice request i's stream is q = order[i] + 1, its ingress
+the network attester must have released there (`window_map`, the prototype's map, which a verifier of the design would
+compute; no verifier computes it today, and no real path runs the map or the tie's check). Advice request i's stream is q = order[i] + 1, its ingress
 ordinal on the wire: order[i] is its arrival order from 0 (advice v1's order permutation, (c)), and the wire numbers
 from 1, as the network attester numbers its connections. It was admitted at bucket
 s = admitted[i], which the network attester's FIFO makes non-decreasing in arrival order, and its output k must be released at
@@ -503,7 +504,7 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   the advice before the sample, as rows of `verity.commitments.advice` (fixed-width bit rows under
   `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Committed`), here 4 KiB rows: an execution phase's 8N
   bytes of records and 4S a bucket of steps, at a place aligned to execution phases in a link-day's map. The compile slice's proof block holds the
-  map's rows to the advice's outputs and release buckets, as `window_map` does in the clear. The execution phase reads its rows
+  map's rows to the advice's outputs and release buckets, as the prototype's `window_map` does in the clear. The execution phase reads its rows
   by a range read (each row's digest, hm96 leaf and `FrameV3Leaf`, the subtree's nodes once and the path above it): 12
   rows at depth 15, 3.07 × 10^7, at the rehearsal, and 1,980 rows at depth 22, 4.77 × 10^9, served. That is about half
   of v3's table (9.86 × 10^9), at 8 bytes a cell over N cells against 16 bytes a slot over M. The steps then come from
@@ -771,7 +772,7 @@ So each `release[k]` is output k's frame bucket in the network attester's attest
 this by position: a cell's bucket is its row in the network attester's registered tree,
 and the map puts output k's cell in row `release[k]` − w·T and nowhere else.
 
-`window_map` computes the map and the steps. The Commit sets the port's layout and its binding to
+The prototype's `window_map` computes the map and the steps. The Commit sets the port's layout and its binding to
 `c00.input/ids` and `sampled_token_ids`, in zero knowledge what `adapters/vllm/verity_vllm/check/commit_tokens.py` does in the clear. The tie
 reads the Commit's root as public.
 
@@ -822,8 +823,8 @@ are a function of the map and the port, so the prover rebuilds them, and it comp
   (`trusted-device`). It isn't the head's frames root, which is an unsalted tree that can't be opened outside a
   proof. The head's counts and the cells come from one grid of the network attester's: bucket t holds n_t data cells. The tie
   doesn't read the head; tying the cells' root into it (a record v3 field) is open.
-- **The map** is the advice's, charged as `A_c`. In v4 the verifier computes it from the opened advice v0, the named
-  gap. At the target it is registered with the advice before the sample and read in the proof, and the compile slice's
+- **The map** is the advice's, charged as `A_c`. In v4 the prototype computes it from the opened advice v0, as a verifier of the
+  design would; no verifier computes it today, and no real path runs the map or the tie's check. At the target it is registered with the advice before the sample and read in the proof, and the compile slice's
   proof block holds it to the advice. **The port** is the Commit's root, and its layout and its binding to the run root
   are the Commit's.
 

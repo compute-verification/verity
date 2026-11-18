@@ -1,0 +1,11 @@
+# The network attester's scheme and its proofs leave the Certifier for resource accounting's network part, under a layer
+# of the scheme's own. Lean only; its declarations keep their names and namespace.
+
+[words]
+"Definitions.Certifier.AttesterScheme" = "Definitions.ResourceAccounting.Network.AttesterScheme"
+"Definitions/Certifier/AttesterScheme" = "Definitions/ResourceAccounting/Network/AttesterScheme"
+"Proofs.Certifier.AttesterScheme" = "Proofs.ResourceAccounting.Network.AttesterScheme"
+"Proofs/Certifier/AttesterScheme" = "Proofs/ResourceAccounting/Network/AttesterScheme"
+
+[rewrite]
+exclude = ["**/*.py", "**/*.md", "**/*.json", "**/*.toml", "**/*.txt", "**/*.sh", "**/*.rs", "**/lean-audit.json", "tests/**/fixtures/**", "tools/move/*_map.toml", "tools/move/*_moves.json"]
