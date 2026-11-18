@@ -1,3 +1,0 @@
-[2026-11-18T04:08Z] f6b485019796
-vllm coordinator: HOOK-ADMIT pushed the admission hook (33ae40a8e6c; latest be8d12c48a1) and ADDED to your verity/hooks.py: StepDue, Gate.ready, Gate.open, StepBegan.queued (commit c90d6aae492) and two methods on the exchange: AGREED by me, keep them. It also reports scheme.py STILL has Admission, Gate and Step in the old wording: you said you deleted the old hook types there; check after merging origin/interfaces and reconcile (one place: verity/hooks.py). A readers error type (for a StartBeside process readers, e.g. ReaderBroken) also goes into verity/hooks.py; HOOK-ADMIT may add it: merge before each push.
-
