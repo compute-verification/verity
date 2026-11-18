@@ -91,8 +91,8 @@ def ok? (r : V Unit) : Bool := r.toOption.isSome
 #guard !ok? (checkLinked linked #[{ x with name := "y" }])
 #guard ok? (checkLinked { linked with metaJ := Json.null } #[])
 -- without registered reads, a statement that declares links is refused, and one that declares none is not
-#guard !ok? (check linked default none false)
-#guard ok? (check { linked with metaJ := Json.null } default none false)
+#guard !ok? (Registered.check linked default none false)
+#guard ok? (Registered.check { linked with metaJ := Json.null } default none false)
 
 def dom : ByteArray := ByteArray.mk (Array.replicate 64 7)
 def val (k : UInt8) : ByteArray := ByteArray.mk (Array.replicate 32 k)
