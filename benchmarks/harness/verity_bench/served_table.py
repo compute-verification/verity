@@ -29,7 +29,7 @@ from typing import Any
 from verity_bench import jobs, kit
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import (FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, current_spec, expand_sweep,
-                                       former_specs, load_spec, resolve_spec, spec_file, split_card)
+                                       former_arm, former_specs, load_spec, resolve_spec, spec_file, split_card)
 from verity_bench.vllm.runner import summarize
 
 SCHEMA = "verity-bench/served-table/v1"
@@ -80,13 +80,6 @@ class Member:
         return _on_card(self.spec, self.short)
 
 
-def _option(scheme: str) -> str:
-    """The adapter entry that attaches the declared scheme ``scheme`` to a served run (`Scheme.option`)."""
-    from verity.protocols.compose import schemes
-
-    return schemes.get(scheme).option
-
-
 @dataclass(frozen=True)
 class Protocol:
     """A protocol's served rows: its `arm` over `stock-fp8@compiled`, and `own_arm` (default `arm`) over `eager_stock`,
@@ -121,7 +114,7 @@ PROTOCOLS = (
              members=(Member("llama-3.1-8b", "llama31-8b-fp8-1gpu-bandwidth-served-reps6", "h200-sxm-141gb"),
                       Member("llama-3.2-1b", "llama32-1b-fp8-1gpu-bandwidth-served", "h200-sxm-141gb"))),
     Protocol("Commit", (), "commit@compiled", None, record="commit"),
-    Protocol("Pearl+ served", (), _option("pearl-plus"), "stock-fp8", record="pouw-served-sm90",
+    Protocol("Pearl+ served", (), "pearl-plus", "stock-fp8", record="pouw-served-sm90",
              members=(Member("llama-3.2-1b", "llama32-1b-1gpu-pouw-protocol-served", "h100-sxm-80gb"),)),
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
              record="h1-served"),
@@ -235,7 +228,8 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
            record: str | None = None, card: str | None = None) -> tuple[list[Found], str | None]:
     """The result's points (those of `points`, else all) as rows, or why the result can't stand: a `superseded_by`
     label, an invalid result, a run on another card than `card` (where one is asked), or a point without every one of
-    `arms` timed. The caveats are the result's, its run's and the `record` art's that named the run."""
+    `arms` timed, each under its id now (`former_arm`). The caveats are the result's, its run's and the `record` art's
+    that named the run."""
 
     labels = _labels(store, [art, run, *([record] if record else [])])
     if superseded := [label["value"] for label in labels if label["key"] == SUPERSEDED_BY]:
@@ -248,7 +242,8 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
     ran_on = (doc["identity"].get("preset") or {}).get("gpu_id")
     if card is not None and ran_on != card:
         return [], f"ran on the {ran_on}, not the {card}"
-    rows = [row for row in doc["points"] if points is None or row["point"]["id"] in points]
+    rows = [{**row, "arms": {former_arm(arm) or arm: v for arm, v in row["arms"].items()}}
+            for row in doc["points"] if points is None or row["point"]["id"] in points]
     if not rows:
         return [], f"no timed point {', '.join(points or ())}"
     for row in rows:
