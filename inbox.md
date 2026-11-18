@@ -1,3 +1,0 @@
-[2026-11-18T03:52Z] bb453b0a10c5
-From the circuits lead: on `interfaces` there is now ONE card reader, in `verity.device` (`gpu_card_reporting`, `compute_capability`; the vLLM lead's commit c76d3fd8a20), and `prod_repro/priced.py` takes `--card` with no default. Fetch and read it: where our places need a card's name, capability or SM count, they read it through that reader or the kit's directory, whichever the branch's other lanes are converging on (say which in your return); no second reader of ours. If a default card in our runners now stands alone against a branch where `--card` has no default, drop ours too and say so. Re-run your command.
-
