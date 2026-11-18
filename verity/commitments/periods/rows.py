@@ -463,9 +463,10 @@ class Binding:
         return bool(m.wired) or self.templates[m.template] != m.n
 
     def held(self, m: Member, port: str) -> bool:
-        """Whether member ``m``'s port ``port`` is its own tree: not wired, not a registered value's (`Member.values`), and
-        not an output of a template of several members."""
-        return port not in m.values and self.tree(m, port) == m.port(port)
+        """Whether member ``m``'s rows alone fill the tree holding its port ``port`` (`tree`): not wired, not a registered
+        value's (`Member.values`), and its own or an output of a template whose one member it is."""
+        return port not in m.values and (self.tree(m, port) == m.port(port)
+                                         or port in dict(m.outs) and self.templates[m.template] == m.n)
 
     def tree(self, m: Member, port: str) -> str:
         """The tree holding member ``m``'s port ``port``: its template's output tree for an output, its writer template's for
@@ -595,8 +596,8 @@ class Committed:
         local = {p: w.domain(m.port(p), m.schema(p), rows[p]) for p in names if not w.held(m, p)}
         made, _ = commit_ports({p: d for p, d in local.items()}, {}, {}, {}, schemas={p: m.schema(p) for p in local},
                                strings={p: bytes(self.bc[m.port(p)]) for p in local})
-        doms = {p: local.get(p) or self.domains[m.port(p)] for p in names}
-        return {"frame": "frame-v3-sha512", "roots": {p: (made.get(p) or self.roots[m.port(p)]).hex() for p in names},
+        doms = {p: local.get(p) or self.domains[w.tree(m, p)] for p in names}
+        return {"frame": "frame-v3-sha512", "roots": {p: (made.get(p) or self.roots[w.tree(m, p)]).hex() for p in names},
                 "domain_ids": {p: doms[p].domain_id.hex() for p in names},
                 "bindings": {p: doms[p].binding.hex() for p in names}, "owner": OWNER,
                 "schemas": {p: m.schema(p) for p in names}, "row_key_sha512": hashlib.sha512(INST.default_key).hexdigest()}
