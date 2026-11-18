@@ -168,14 +168,49 @@ def test_pouw_period_under_the_challengers_pin(tmp_path, cheat, reason) -> None:
         assert rc == 1 and got["reason"].startswith(f"params: {reason}: "), got
 
 
+ONSITE = ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+          "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0")
+
+
+def composite(members: dict) -> tuple[dict, dict]:
+    """A composite's parameters and case over `members` (id to parameters), each member's commitment and evidence
+    empty, its commitment 64 zero bytes."""
+    params = {"components": [{"id": i, "params": p} for i, p in members.items()]}
+    evidence = {"components": [{"commitment": "", "evidence": "", "id": i, "params": p} for i, p in members.items()]}
+    return params, {"commitment": "00" * 64, "evidence": D.canonical(evidence).encode().hex()}
+
+
 @pytest.mark.slow
-def test_onsite_under_the_challengers_pin_refuses_a_period_member_whose_key_is_the_forgers(tmp_path) -> None:
-    """Onsite's composite (`onsite`) under the pin refuses, at its parameters and by name, a PoUW period member whose key
-    is the forger's, before any member is read."""
+@pytest.mark.parametrize("pin", [True, False])
+def test_onsite_under_the_challengers_pin_refuses_a_period_member_whose_key_is_the_forgers(tmp_path, pin) -> None:
+    """Onsite's composite (`onsite`) under the pin answers its PoUW period member with the period under the pin, which
+    refuses the forger's key at the member's own parameters by name; unpinned, nothing refuses it so."""
     case = cases.instance(random.Random("honest/credit"))
     public = case["params"]["key"]["public"]
-    member = {**case["params"], "key": {**case["params"]["key"], "public": bytes(80 * [7]).hex()[:len(public)]}}
+    member = {**case["params"], "key": {**case["params"]["key"], "public": bytes(b ^ 0x5A for b in bytes.fromhex(public)).hex()}}
     exe = D.build(LEAN.parents[5] / "compose" / "verifier" / "onsite", "onsite")
-    params = {"components": [{"id": "verity/pouw/period/v1", "params": member}]}
-    rc, got, _ = _run(exe, _pin(tmp_path, public, []), params, {"commitment": "", "evidence": "7b7d"}, tmp_path)
-    assert rc == 1 and got["reason"].startswith("params: challenger-key-not-pinned: "), got
+    params, kase = composite({i: (member if i == "verity/pouw/period/v1" else {}) for i in ONSITE})
+    rc, got, _ = _run(exe, _pin(tmp_path, public, []) if pin else [], params, kase, tmp_path)
+    assert rc == 1, got
+    assert ("verity/pouw/period/v1 reject: params: challenger-key-not-pinned: " in got["reason"]) == pin, got
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("first", ["pinned", "forger"])
+def test_pouw_period_refuses_parameters_naming_key_twice(tmp_path, first) -> None:
+    """Parameters whose JSON names `key` twice, the pinned key and the forger's in either order, are refused as not
+    canonical JSON, the same refusal in both orders, before the pin or the period reads either key."""
+    case = cases.instance(random.Random("honest/credit"))
+    exe = D.build(LEAN, "pouw-period")
+    key = case["params"]["key"]
+    forger = {**key, "public": bytes(b ^ 0x5A for b in bytes.fromhex(key["public"])).hex()}
+    a, b = (key, forger) if first == "pinned" else (forger, key)
+    rest = {k: v for k, v in case["params"].items() if k != "key"}
+    files = [tmp_path / "params.json", tmp_path / "commitment.bin", tmp_path / "evidence.json"]
+    files[0].write_text('{"key":' + D.canonical(a) + ',"key":' + D.canonical(b) + "," + D.canonical(rest)[1:])
+    files[1].write_bytes(bytes.fromhex(case["commitment"]))
+    files[2].write_bytes(bytes.fromhex(case["evidence"]))
+    p = subprocess.run([str(exe), *_pin(tmp_path, key["public"], []), "check", *map(str, files)],
+                       capture_output=True, text=True, check=False)
+    got = json.loads(p.stdout.strip().splitlines()[-1])
+    assert p.returncode == 1 and got["reason"].startswith("params: not canonical JSON"), got

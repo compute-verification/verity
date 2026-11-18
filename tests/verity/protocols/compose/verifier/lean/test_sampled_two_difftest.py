@@ -320,14 +320,16 @@ def test_a_forged_window_root_under_the_pinned_key_is_refused_by_the_ledgers_ope
 @pytest.mark.slow
 @pytest.mark.parametrize("pin", ["forger", None])
 def test_remote_v1_under_the_pin_refuses_a_spot_member_whose_challenger_is_the_forgers(tmp_path, pin) -> None:
-    """Remote's composite (`remote-v1`) under the auditor's pin, its SPOT member the kept play (`CASE`), whose
-    challenger is not the pinned key: refused at its parameters by `challenger-key-not-pinned` before any member is
-    read; without the pin the same parameters are refused for another reason, since they hold no other member."""
+    """Remote's composite (`remote-v1`) under the auditor's pin answers its SPOT member, the kept play (`CASE`) whose
+    challenger is not the pinned key, with SPOT under the pin, which refuses it at the member's own parameters by
+    `challenger-key-not-pinned`; unpinned, nothing refuses it so."""
     spot = _at_two_levels(json.loads((_case_dir() / "params.json").read_text()))
+    members = {"verity/inference-only/v0": {}, "verity/pouw/pearl-plus/v1": {}, "verity/sampled-proofs/v1": spot}
     params = tmp_path / "params.json"
-    params.write_text(canonical({"components": [{"id": "verity/sampled-proofs/v1", "params": spot}]}))
-    (tmp_path / "commitment.bin").write_bytes(b"")
-    (tmp_path / "evidence.json").write_text("{}")
+    params.write_text(canonical({"components": [{"id": i, "params": p} for i, p in members.items()]}))
+    (tmp_path / "commitment.bin").write_bytes(bytes(64))
+    (tmp_path / "evidence.json").write_text(canonical({"components": [
+        {"commitment": "", "evidence": "", "id": i, "params": p} for i, p in members.items()]}))
     keyfile = tmp_path / "challenger-key.json"
     keyfile.write_text(json.dumps({"retired": []}))
     exe = D.build(R.ROOT / "verity/protocols/compose/verifier/remote", "remote-v1")
@@ -336,7 +338,33 @@ def test_remote_v1_under_the_pin_refuses_a_spot_member_whose_challenger_is_the_f
                          str(tmp_path / "evidence.json")], capture_output=True, text=True, check=False)
     reason = json.loads(on.stdout)["reason"]
     assert on.returncode == 1, (on.stdout + on.stderr)[-4000:]
-    assert reason.startswith("params: challenger-key-not-pinned: ") == bool(pin), reason
+    assert ("verity/sampled-proofs/v1 reject: params: challenger-key-not-pinned: " in reason) == bool(pin), reason
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("first", ["pinned", "forger"])
+def test_parameters_naming_challenger_twice_are_refused(tmp_path, first) -> None:
+    """The kept play's parameters with its boundary's `challenger` named twice, its own and a forger's in either order,
+    under the pin of its own key: refused as not canonical JSON, the same refusal in both orders, before the pin or
+    SPOT reads either key."""
+    params = _at_two_levels(json.loads((_case_dir() / "params.json").read_text()))
+    own = params["boundary"]["challenger"]
+    forged = {**own, "key": {**own["key"], "public": bytes(b ^ 0x5A for b in bytes.fromhex(own["key"]["public"])).hex()}}
+    a, b = (own, forged) if first == "pinned" else (forged, own)
+    text = canonical(params)
+    one = '"challenger":' + canonical(own)
+    assert one in text
+    d, keyfile = _case_dir(), tmp_path / "challenger-key.json"
+    keyfile.write_text(json.dumps({"retired": []}))
+    (tmp_path / "params.json").write_text(text.replace(one, f'"challenger":{canonical(a)},"challenger":{canonical(b)}', 1))
+    (tmp_path / "evidence.json").write_text(canonical(_at_two_levels(json.loads((d / "evidence.json").read_text()))))
+    argv = [str(tmp_path / "params.json"), str(d / "commitment.json"), str(tmp_path / "evidence.json"),
+            *map(str, sorted((d / "blobs").iterdir()))]
+    on = subprocess.run([str(D.build(PORT.package, PORT.exe)), "sampled", "--challenger-key-sha512",
+                         hashlib.sha512(bytes.fromhex(_key())).hexdigest(), "--challenger-retired", str(keyfile),
+                         "check", *argv], capture_output=True, text=True, check=False)
+    got = json.loads(on.stdout)
+    assert on.returncode == 1 and got["reason"].startswith("params: not canonical JSON"), got
 
 
 def _evidence() -> dict:
