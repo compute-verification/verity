@@ -19,6 +19,9 @@ each a named `Prop` taken as a hypothesis, never an `axiom`:
   besides the sectors of one carrier, and that carrier is the registered circuit `W`'s computation over at most `L` of
   the audit's windows (`RateSketch.Provenance.OfCircuit`). Registered tiles, whose keys are fixed for the
   registration, are not bounded.
+* `SeasonedRebuilds A layout joined choose seen s X L`: refresh's form of `CircuitCarriers`. Under
+  `RateSketch.LifetimeCappedAll`, `RateSketch.Seasoned` and `RateSketch.ChoosesBefore`, every pass device rebuilds at
+  most `X` bits of all its tiles at every store, the registration's included, with no carrier.
 * `SteeredLayout layout steer`: at each prefix of the session's coins, a pass's layout reads the codec and the append
   coins only through the `a`-bit summary `steer` its devices are told. What `a` is, is the schedule check's
   (`ResourceAccounting.ScheduleDeterministic`, `Poub.Schedule.check`): the bits of the schedule each credited plan is
@@ -81,6 +84,39 @@ def CircuitCarriers {n P N ρ S Lk q G T M : ℕ} {ι Y : Type}
         (dv.prog c.signs D).rebuildsIn (RateSketch.appendedTiles layout c y) O D * 256 ≤ X + K.carried.card * 256) ∧
       I ⊆ Finset.range Aud.windows ∧ I.card ≤ L ∧
       K.provenance.OfCircuit (encodeBitsCost Gates.p1024 3 B εnum εden) W Aud I
+
+/-- **Under refresh, every pass device rebuilds at most `X` bits of its tiles, the registration's included.** Let
+every block a pass reads be read within `L` windows of the one its append joined, the registration's included
+(`RateSketch.LifetimeCappedAll`), every block a pass reads have a payload committed at the registration or `L` or more
+windows before the pass (`RateSketch.Seasoned`, at the origin `seen x t` append `t` declares), the appends join windows
+in order (`RateSketch.JoinsInOrder`), the declared origins be the map `s` fixed before every coin
+(`RateSketch.OriginsFixed`), and each append's choices read only the coins of the appends before `s` of it
+(`RateSketch.ChoosesBefore`). Then every
+pass device rebuilds at most `X` bits of all its tiles at every store, with no carrier term: the device at candidate `g`
+of the session `A c y`, at the prefix `c` of the session's coins before the pass and the codec and append coins `y`. It
+replaces `CircuitCarriers` for a refresh session; like the stacked guarantee's carrier hypothesis it bounds the device at
+every store, since the guarantee moves an unpaid pass to uniform blocks (`KeyBinding`).
+
+**Why it should hold.** Under these conditions every credited tile's payload was committed before every credited
+tile's key was drawn, in the session's own order of appends and coins (the cut, two lines of order arithmetic over
+`joined` and `seen`), so no memory a pass's tiles are rebuilt from holds a value computed after a key it helps rebuild,
+and what is left is the squaring ceiling's `X`, as for any rebuild the node's compute pays for. It is per session and
+for one scheme: a payload another scheme credits or a value of the workload chosen after a key's coin is outside it.
+Which payloads may be credited is the plan's admission, a parameter, not fixed here. A registered tile counts as born
+before the session against this session's coins only. Open until the cut and the rebuild count are proved. -/
+def SeasonedRebuilds {n P N ρ S Lk q G T M : ℕ} {Ω Ca Ch Y : Type}
+    (A : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y →
+      RateSketch.SketchDeployedRun n P N 128 ρ 512 S Lk q 16 G 2773)
+    (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y → Fin N ↪ Fin T × Fin M)
+    (joined : Y × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin T → ℕ)
+    (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
+    (seen : Y × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin T → Fin T) (s : Fin T → Fin T) (X L : ℕ) : Prop :=
+  RateSketch.JoinsInOrder joined → RateSketch.LifetimeCappedAll layout joined L →
+  RateSketch.Seasoned layout joined seen L → RateSketch.OriginsFixed seen s → RateSketch.ChoosesBefore choose s →
+  ∀ (c : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773) (g : Fin G) (y : Y) Es R O,
+    let dv := ((A c y).window c.w c.windows).device c.j c.passes g
+    let D := RateSketch.Data.ofParts Es R
+    (dv.prog c.signs D).rebuilds O D * 256 ≤ X
 
 /-- **A pass's layout reads the codec and the append coins only through the `a`-bit summary its devices are told.**
 At every prefix `c` of the session's coins, the layout `layout c y` is `slot c` of the summary `steer c y`: it takes at
