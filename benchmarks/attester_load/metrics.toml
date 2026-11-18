@@ -32,7 +32,13 @@ better = "lower"
 command = "research run --on NODE --gpu-host --project verity --source . --cwd source --timeout 60m -- gpu-lease 1 --wait --max-min 50 -- uv run python benchmarks/attester_load/run.py --vllm-python /workspace/jobs/venv312/bin/python"
 every = "7d"
 
-# CPU only: a stored stock serving run's requests replayed under each schedule of `pacing.py`, modeled until a run measures it
+# CPU only: a stored stock serving run's requests replayed under each schedule of `pacing.py`, modeled until a run
+# measures it. A rerun on the same run writes no new reading (the replay is deterministic): its figure moves only with
+# the card file, `pacing.py`'s schedules or its reading of `network_attester.py`. So its command takes the run as
+# RUN_OF_RECORD, which keeps the row off the weekly rerun loop, and its owner fills it in from this line.
+#
+# RUN OF RECORD: r20261116-122320-c688, the stock arm (`prod`) of GLM-5.3 at `agentic@4` on one 8×H200 node. To move
+# the row to another run, replace it in this line.
 [[metric]]
 id = "network-accounting/serving-slowdown-under-pacing"
 title = "Serving slowdown under pacing"
@@ -40,6 +46,6 @@ owner = "network-accounting"
 unit = "percent"
 axis = "The time a network attester's release schedule adds to serving a load, as a percent of stock's serving time for the same load, per schedule, model and card: pacing's own cost, never added to serving cost, and none where a request fails under the schedule."
 better = "lower"
-command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/attester_load/pacing.py --from r20261116-122320-c688 --card h200x8"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/attester_load/pacing.py --from RUN_OF_RECORD --card h200x8"
 every = "7d"
 goal = "network/pacing-slowdown-own-number"
