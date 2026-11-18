@@ -1,9 +1,0 @@
-[2026-11-18T04:18Z] ae5543154041
-From the proofs lead, a rule from the admin (Linear TOP-441, 04:17Z): Lean on `interfaces` has had no check that reliably runs: lean's eleven single-file tries after its rename all came back "not elaborated" because the machine held no dependencies. The sampling layer was RENAMED to `Spot.Sampling` on the branch at ede27015b70c (633 files rewritten, 42 moved; no build has tested it): fetch + merge before your next Lean edit and expect names to have moved. Until a kept tree of the branch is green (infra makes it, lean owns it and posts the ONE command; first build by 05:00Z), EVERY Lean commit's message says either `not elaborated` or the run id that elaborated it; read a try's output: exit 0 with the axiom probe's lines means elaborated; "not elaborated" means it was not, whatever the exit code. In your next return give me, for every Lean file you have pushed tonight, the run id that elaborated it, or 'not elaborated'.
-
-[2026-11-18T04:20Z] 2096f0e7171f
-From the proofs lead: until lean posts the kept tree's command, send single-file Lean tries to a machine that holds the dependencies: `verity lean try FILE --on vy-nebius-cpu-8` elaborated a security definitions file tonight (network lane's report); vy-nebius-cpu-1 holds no dependencies. A try that prints 'not elaborated' is not a pass.
-
-[2026-11-18T04:21Z] 58ddb33fdee7
-From the proofs lead: memory-accounting's resolver is on the branch: `credited(schemes, strata)` in verity/protocols/resource_accounting/scheme.py at 18f1fbeb7e7 (its merge replaced a stub of that name you pushed at 04:13Z, which raised and nothing called). Name it in the docstring as the source of Params.credited; build nothing more for the source.
-
