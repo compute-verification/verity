@@ -31,12 +31,13 @@ def reason (pin : Pin) (p : Sampled.Params) : Option String :=
 /-- SPOT's protocol under `pin`, refusing after its own parse. -/
 def sampled (pin : Pin) : Core.BlobProtocol := pinnedB Sampled.protocol (reason pin)
 
-/-- What SPOT under `pin` accepts, SPOT parsed to parameters whose every level names the pinned key: the parameters its
-check read. -/
+/-- What SPOT under `pin` accepts, SPOT parsed to parameters whose every level names the pinned key, not retired: the
+parameters its check is handed. -/
 theorem sampled_accept (pin : Pin) (params commitment evidence : ByteArray) (blobs : Array ByteArray)
     (h : ((sampled pin).answer params commitment evidence blobs).verdict = .accept) :
     ∃ j p, Core.canonicalJson params = .ok j ∧ Sampled.paramsOfJson j = .ok p ∧
-      ∀ k ∈ levels p, ∃ key, k = some key ∧ Spot.sha512Hex key.pub = pin.sha512 := by
+      ∀ k ∈ levels p, ∃ key, k = some key ∧ Spot.sha512Hex key.pub = pin.sha512 ∧
+        pin.retired.contains (Flock.hexOf key.pub) = false := by
   obtain ⟨j, p, hj, hp, hw⟩ := pinnedB_accept Sampled.protocol (reason pin) params commitment evidence blobs h
   refine ⟨j, p, hj, hp, fun k hk => keyReason_none ?_⟩
   exact List.findSome?_eq_none_iff.mp hw k hk

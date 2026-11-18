@@ -91,6 +91,8 @@ private def remoteV1Ids : List String := Core.Remote.V1.components.map (·.id)
 
 #guard composites.map (·.1.id) == ["verity/onsite/v0", "verity/remote/v1"]
 #guard composites.all fun (P, _) => (buildOf P).isSome
+-- no composite's member is a composite: the challenger's pin replaces members at the list's top level only
+#guard composites.all fun (_, xs) => xs.all fun i => !(composites.map (·.1.id)).contains i
 #guard onsiteIds.all known.contains && remoteV1Ids.all known.contains
 #guard known.length == (onsiteIds ++ remoteV1Ids).eraseDups.length
 

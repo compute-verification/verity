@@ -318,16 +318,17 @@ def protocol : Core.Protocol where
   publicJson := Published.toJson
   profileJson := profileJson
 
-/-- The period under the challenger's pin `pin`, read from the parameters the period parsed: their `key`, the key its
-check verifies the draw coin under (`Credit.periodCredit`). -/
+/-- The period under the challenger's pin `pin`, read from the parameters the period parsed: their `key`, still JSON,
+the value its check is handed, which the credit parses with the same `ChallengerKey.ofJson` (`Credit.periodCredit`). -/
 def pinned (pin : Spot.ChallengerPin.Pin) : Core.Protocol :=
   Spot.ChallengerPin.pinned protocol (fun (p : Params) => Spot.ChallengerPin.periodReason pin p.key)
 
-/-- What the period under `pin` accepts, the period parsed to parameters whose `key` is the pinned key. -/
+/-- What the period under `pin` accepts, the period parsed to parameters whose `key` is the pinned key, not retired. -/
 theorem pinned_accept (pin : Spot.ChallengerPin.Pin) (params commitment evidence : ByteArray)
     (h : ((pinned pin).answer params commitment evidence).verdict = .accept) :
     ∃ j p, Core.canonicalJson params = .ok j ∧ paramsOf j = .ok p ∧
-      ∃ key, Spot.Challenger.ChallengerKey.ofJson p.key = .ok key ∧ Spot.sha512Hex key.pub = pin.sha512 := by
+      ∃ key, Spot.Challenger.ChallengerKey.ofJson p.key = .ok key ∧ Spot.sha512Hex key.pub = pin.sha512 ∧
+        pin.retired.contains (Flock.hexOf key.pub) = false := by
   obtain ⟨j, p, hj, hp, hw⟩ := Spot.ChallengerPin.pinned_accept protocol _ params commitment evidence h
   exact ⟨j, p, hj, hp, Spot.ChallengerPin.periodReason_none hw⟩
 

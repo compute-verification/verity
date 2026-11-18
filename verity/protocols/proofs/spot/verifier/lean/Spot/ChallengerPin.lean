@@ -6,7 +6,7 @@ draw coin, a period's `key` (`PouwVerifier.Period.pinned`). A key that is none, 
 refused by name (`keyReason`). A run with no pin says so first, on stderr (`UNPINNED`), its answer line unchanged.
 
 The pin reads the parameters the protocol itself parsed (`pinned`): the value it tests is the value the protocol's check
-is handed, so the key it pins is the key the check verifies under (`pinned_accept`).
+is handed, so the key it pins is the key the check is handed (`pinned_accept`).
 -/
 module
 
@@ -112,28 +112,29 @@ theorem pinnedB_accept (P : Core.BlobProtocol) (why : P.Params → Option String
   exact ⟨j, p, hj, h1, h2⟩
 
 theorem keyReason_none {pin : Pin} {x : Option Challenger.ChallengerKey} (h : keyReason pin x = none) :
-    ∃ k, x = some k ∧ sha512Hex k.pub = pin.sha512 := by
+    ∃ k, x = some k ∧ sha512Hex k.pub = pin.sha512 ∧ pin.retired.contains (Flock.hexOf k.pub) = false := by
   cases x with
   | none => simp [keyReason] at h
   | some k =>
-    refine ⟨k, rfl, ?_⟩
     simp only [keyReason] at h
     split at h
     · cases h
-    · split at h
-      · rename_i heq; exact beq_iff_eq.mp heq
+    · rename_i hr
+      split at h
+      · rename_i heq; exact ⟨k, rfl, beq_iff_eq.mp heq, by simpa using hr⟩
       · cases h
 
 theorem periodReason_none {pin : Pin} {k : Json} (h : periodReason pin k = none) :
-    ∃ key, Challenger.ChallengerKey.ofJson k = .ok key ∧ sha512Hex key.pub = pin.sha512 := by
+    ∃ key, Challenger.ChallengerKey.ofJson k = .ok key ∧ sha512Hex key.pub = pin.sha512 ∧
+      pin.retired.contains (Flock.hexOf key.pub) = false := by
   unfold periodReason at h
   split at h
   · cases h
   · split at h
     · rename_i key hk
-      obtain ⟨k', hk', hs⟩ := keyReason_none h
+      obtain ⟨k', hk', hs, hr⟩ := keyReason_none h
       cases hk'
-      exact ⟨key, hk, hs⟩
+      exact ⟨key, hk, hs, hr⟩
     · cases h
 
 /-- The public keys a `challenger-key/v1` file's `retired` list names, as lowercase hex. -/
