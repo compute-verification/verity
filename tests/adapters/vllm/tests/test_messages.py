@@ -21,7 +21,7 @@ from verity_vllm.pipeline import serve_h1 as SH
 
 
 def test_every_declared_message_is_a_type():
-    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUSStore"} <= M.types().types
+    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows"} <= M.types().types
 
 
 def test_a_type_no_protocol_declares_is_refused():
@@ -408,3 +408,50 @@ def test_the_scheme_that_provides_admission_is_found_by_its_role():
     assert M.providing("admission").name == "network-attester"
     with pytest.raises(LookupError, match="one declared scheme provides 'nothing', not 0"):
         M.providing("nothing")
+
+
+def _declared(name: str, **declared) -> NS:
+    attached = []
+    return NS(**{"name": name, "settings": {}, "check_settings": lambda own: None, "requests": lambda ctx: (),
+                 "attach": lambda ex, ctx: attached.append(name), "attached": attached, "resource": "compute",
+                 "needs": frozenset(), "keeps_weight_copy": schemes.UNDECLARED, **declared})
+
+
+STORE = {"resource": "memory", "needs": frozenset({"store"})}
+
+
+@pytest.mark.parametrize("order", [("store", "copy"), ("copy", "store")])
+def test_storage_beside_a_scheme_keeping_a_weight_copy_is_refused_by_both_names_before_any_attaches(order):
+    made = {"store": _declared("storage", **STORE), "copy": _declared("keeps-copy", keeps_weight_copy=True)}
+    listed = [made[k] for k in order]
+    assert M.listed_refusals(listed) == [
+        "storage is storage (it needs the workload's store) and keeps-copy keeps a weight-derived copy resident for the "
+        "serve's life (keeps_weight_copy), so keeps-copy's GEMMs would not read the weights storage holds: the two are "
+        "not attached in one process while the pairing awaits a decision"]
+    with pytest.raises(Refused, match="storage is storage .* and keeps-copy keeps a weight-derived copy"):
+        M.attach_listed(M.Exchange(), [(s, {}) for s in listed])
+    assert made["store"].attached == made["copy"].attached == []
+
+
+@pytest.mark.parametrize("order", [("store", "other"), ("other", "store")])
+def test_storage_beside_a_scheme_that_has_not_declared_whether_it_keeps_a_copy_is_refused_naming_the_declaration(order):
+    made = {"store": _declared("storage", **STORE), "other": _declared("other")}
+    assert M.listed_refusals([made[k] for k in order]) == [
+        "storage is storage (it needs the workload's store) and other's declaration does not say whether it keeps a "
+        "weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it until it declares "
+        "that, and a scheme that keeps one beside storage awaits a decision"]
+
+
+def test_storage_beside_one_that_declares_no_copy_and_a_copy_without_storage_are_attached():
+    store, plain, copy = _declared("storage", **STORE), _declared("plain", keeps_weight_copy=False), _declared("keeps-copy", keeps_weight_copy=True)
+    wipe = _declared("wipe", resource="memory")
+    for listed in ([store, plain], [plain, store], [copy, plain], [copy, wipe]):
+        assert M.listed_refusals(listed) == []
+        M.attach_listed(M.Exchange(), [(s, {}) for s in listed])
+    assert store.attached == ["storage", "storage"] and copy.attached == ["keeps-copy", "keeps-copy"]
+
+
+def test_the_declared_storage_and_weight_copy_schemes_are_refused_together():
+    pous, pearl = M.named("pous"), M.named("pearl-plus")
+    assert pearl.keeps_weight_copy is True and M.storage(pous) and not M.storage(M.named("wipe"))
+    assert M.listed_refusals([pous, pearl]) == M.listed_refusals([pearl, pous]) != []

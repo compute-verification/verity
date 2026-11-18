@@ -34,8 +34,8 @@ def test_the_prover_serve_proves_by_loads_without_a_card_or_the_adapter_and_its_
     serve_py = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(serve_py)
     adapter = {m for m in sys.modules if m.partition(".")[0] == "verity_vllm"}
-    serving, memory = serve_py.provers()
-    assert issubclass(serve_py.backend_class(serving), serving.StoreBackend) and callable(memory)
+    serving = serve_py.provers()
+    assert issubclass(serve_py.backend_class(serving), serving.StoreBackend)
     assert {m for m in sys.modules if m.partition(".")[0] == "verity_vllm"} == adapter
     inspect.signature(serving.prove).bind(None, "127.0.0.1:0", "serve", node=b"n", codec=None, log=print)
 
