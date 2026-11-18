@@ -1721,7 +1721,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
     out.mkdir(parents=True, exist_ok=True)
-    any_source = not hold_placement() if any_source is None else any_source
+    any_source = not hold_placement(os.environ) if any_source is None else any_source
     reasons = []
     source = None if served is None else (served.get("coins") or {}).get("source", "in-process")
     live = bool(gate) if served is None else source == LIVE_SOURCE
@@ -2094,7 +2094,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
     from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
 
-    any_source = not hold_placement() if any_source is None else any_source
+    any_source = not hold_placement(os.environ) if any_source is None else any_source
     live: dict[str, Any] = {"session": None, "period": {}, "name": None, "drew": {}}
     if not any_source:
         got, why = _pearlplus_live(doc, piece_dir, key, lane)
@@ -2203,7 +2203,7 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
     why."""
     _name, comp, owner, what = PIECES.get(key, WIPE)
     d = pieces_dir / comp
-    any_source = not hold_placement() if any_source is None else any_source
+    any_source = not hold_placement(os.environ) if any_source is None else any_source
     f, dev, ran = d / "answer.json", d / DEVELOPMENT, _json(d / RAN)
     if not f.exists() and dev.exists():
         doc = _json(dev)
