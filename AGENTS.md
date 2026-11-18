@@ -121,7 +121,10 @@ The rules in force, each stated as itself; the friction skill has the standing r
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value, touched only inside a zero-knowledge proof. Only a proof block's inputs and outputs are
-  committed, each under a hiding leaf; the values inside a proof block never are.
+  committed, each under a hiding leaf; the values inside a proof block never are. A hiding leaf's salt is fresh
+  operating-system bytes, or the randomness module's keyed SHA-512 stream under a key drawn fresh for the one step, pass
+  or registration it salts. No other derivation salts a leaf, and no verifier chooses or learns a key
+  (`verity/commitments/hm96/PROTOCOL.md`, section 3; `tests/test_no_keyed_salts.py` enforces it).
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
   reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two

@@ -88,11 +88,13 @@ class ArmSettings:
 @dataclass(frozen=True)
 class CardSettings:
     """What a spec's run takes on one of its cards in place of the spec's own (`[card_settings.SHORT]`): only where the
-    card needs it."""
+    card needs it. ``arms`` replace the spec's, and ``arm_settings`` add to its, each arm's taken whole (`card_arms`)."""
 
     env: Mapping[str, str] = field(default_factory=dict)
     setup: str | None = None
     admission: Admission | None = None
+    arms: tuple[str, ...] = ()
+    arm_settings: Mapping[str, ArmSettings] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -190,10 +192,13 @@ def former_specs() -> dict[str, tuple[str, str]]:
 
 
 def current_spec(spec_id: str) -> str:
-    """The name a stored run's spec id has now: ``SPEC@CARD`` for a former id (`FORMER_IDS`), else the id itself."""
+    """The name a stored run's spec id has now: for a former id (`FORMER_IDS`), its spec, ``@CARD`` where that spec runs on
+    more than its card; else the id itself."""
 
     now = former_spec(spec_id)
-    return spec_id if now is None else f"{now[0]}@{now[1]}"
+    if now is None:
+        return spec_id
+    return now[0] if load_spec(now[0]).cards == (now[1],) else f"{now[0]}@{now[1]}"
 
 
 def _spec_path(spec: str | Path) -> Path:
@@ -249,18 +254,38 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
         setup = PurePosixPath(given)
         if setup.is_absolute() or ".." in setup.parts or not (SOURCE_ROOT / setup).is_file():
             raise ConfigError(f"{path}: setup {given!r} must name a script in the source tree, relative to its root")
-    for name, arm in doc.arm_settings.items():
+    every = {*doc.arms, *(name for on in doc.card_settings.values() for name in on.arms)}
+    for card in doc.cards or (None,):
+        _check_arms(path, doc, card, every)
+    return doc
+
+
+def _check_arms(path: Path, doc: BenchmarkSpec, card: str | None, every: set[str]) -> None:
+    arms, arm_settings = card_arms(doc, card)
+    on = doc.card_settings.get(card, CardSettings())
+    if stray := sorted(set(on.arm_settings) - set(arms)):
+        raise ConfigError(f"{path}: card_settings.{card}.arm_settings {stray} name no arm of the {card}'s arms")
+    for name, arm in {**arm_settings, **{n: doc.arm_settings[n] for n in doc.arm_settings if n not in every}}.items():
         variant = name.partition("@")[2] in SERVED_EXECUTIONS
-        if name not in doc.arms or not (":" in name or variant):
+        if name not in every or not (":" in name or variant):
             raise ConfigError(f"{path}: arm_settings {name!r} must name a protocol arm (protocol:scheme) or a served "
                               f"variant (BUILTIN@{'|'.join(SERVED_EXECUTIONS)}) in arms")
         if variant and (arm.precision is not None or arm.protocols_config):
             raise ConfigError(f"{path}: arm_settings {name!r}: a served variant takes only its control")
         if arm.precision is not None and arm.precision not in PRECISIONS:
             raise ConfigError(f"{path}: arm_settings {name!r}: precision is one of {', '.join(PRECISIONS)}")
-        if arm.control is not None and arm.control != NO_CONTROL and (arm.control not in doc.arms or arm.control == name):
+        if arm.control is not None and arm.control != NO_CONTROL and (arm.control not in arms or arm.control == name):
             raise ConfigError(f"{path}: arm_settings {name!r}: control must be another arm in arms, or {NO_CONTROL!r}")
-    return doc
+
+
+def card_arms(doc: BenchmarkSpec, card: str | None) -> tuple[tuple[str, ...], dict[str, ArmSettings]]:
+    """The arms a run of ``doc`` on ``card`` times, and their settings: the card's (``card_settings``) where it names
+    any, else the spec's; each arm's settings the card's where it gives them, else the spec's."""
+
+    on = doc.card_settings.get(card, CardSettings())
+    arms = on.arms or doc.arms
+    merged = {**doc.arm_settings, **on.arm_settings}
+    return arms, {name: merged[name] for name in arms if name in merged}
 
 
 def load_sweep(name: str) -> Sweep:
@@ -308,18 +333,19 @@ def resolve_spec(spec: str | Path) -> ResolvedSpec:
     doc = load_spec(spec)
     card = run_card(doc, split_card(spec)[1])
     on = doc.card_settings.get(card, CardSettings())
+    arms, arm_settings = card_arms(doc, card)
     preset = Preset(**{f.name: getattr(doc.preset, f.name) for f in fields(SpecPreset)}, gpu_id=card)
     return ResolvedSpec(
         schema=doc.schema,
         backend=doc.backend,
         id=doc.id,
-        arms=doc.arms,
+        arms=arms,
         sweep=load_sweep(doc.sweep),
         reps=doc.reps,
         eager=doc.eager,
         preset=preset,
         arm_modules=doc.arm_modules,
-        arm_settings=doc.arm_settings,
+        arm_settings=arm_settings,
         env={**doc.env, **on.env},
         setup=on.setup or doc.setup,
         admission=on.admission or doc.admission,

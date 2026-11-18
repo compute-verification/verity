@@ -5369,6 +5369,12 @@
         "tests/adapters/vllm/tests/compiler/test_network_attester_charge_rows.py": "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_charge_rows.py",
         "tests/adapters/vllm/tests/compiler/test_network_attester_window_charge_rows.py": "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_window_charge_rows.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-r6.toml": "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-reps6.toml",
+        "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served-h200.toml": "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served.toml"
+      }
     }
   ]
 }
