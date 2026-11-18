@@ -48,8 +48,8 @@ not whole words has bits past its writer's and lays out no circuit.
 **The record's text.** A record lays out a circuit only where the check reads it as its text states it (`Served`),
 by the readers a check of a circuit record is built on (`Spot.RecordText`), so that the check and these
 statements read one definition. The text parses, and the wiring's cuts and wires are its wiring's
-(`Spot.RecordText.wiring`, what `Spot.Wires.Wiring.ofJson` reads of its cuts and wires). The text states no
-template's rows or outputs, which are the Program's (`Templates`), and the wiring's order is left free: under any
+(`Spot.RecordText.wiring`: the text's cuts and the wires `Spot.Edges.edgesOf` reads off the Program's root). The text
+states no template's rows or outputs, which are the Program's (`Templates`), and the wiring's order is left free: under any
 order `Spot.Wires.check` accepts only wires without a cycle (`Spot.Wires.check_acyclic`). The slots are the ones the
 text's inference blocks give each unit (`Spot.RecordText.slot`), and every row the check holds is one the text
 declares, for the reason it declares: a registered read, a table read or an opening
@@ -275,8 +275,8 @@ def Divides (P : Prog) (rs : Array TRange) (slot : String → ℕ → Option ℕ
     at_ x < sc.off + (P.defs[sc.d]!).gates ∧ slot tid u = some s ∧ (U.unit x).map Fin.val = some s
 
 /-- **`d` is the circuit the record `c` lays out.** The instance's Program decodes and the record's text parses. The
-check reads the record as the text states it: the wiring's cuts and wires are its wiring's
-(`Spot.RecordText.wiring`); the slots are the ones its inference blocks give each unit
+check reads the record as the text states it: the wiring's cuts and wires are the record's wiring's, the text's cuts
+and the edges of the Program's root (`Spot.RecordText.wiring`); the slots are the ones its inference blocks give each unit
 (`Spot.RecordText.slot`); and every row the check holds is one the text declares, for the reason it declares
 (`Spot.RecordText.declared`). The wiring passes `Spot.Wires.check`, and its templates are the Program's: the
 root's nodes (`Flock.TemplateQuery.evaluate`), with their units, rows and outputs (`Templates`); every unit's rows
@@ -298,7 +298,7 @@ def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
   ∃ (P : Prog) (doc : Json) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array TRange)
       (at_ : Fin d.D.N → ℕ),
     Flock.Program.decode (F.inst c).program.toUTF8 = .ok P ∧
-    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ Spot.RecordText.wiring doc = .ok W ∧
+    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ Spot.RecordText.wiring P doc = .ok W ∧
     (F.wiring c).cuts = W.cuts ∧ (F.wiring c).wires = W.wires ∧ F.slot c = Spot.RecordText.slot P doc ∧
     (∀ r h, F.held c r = some h → Spot.RecordText.declared P doc r = some h.declared) ∧
     Spot.Wires.check (F.wiring c) = .ok S ∧

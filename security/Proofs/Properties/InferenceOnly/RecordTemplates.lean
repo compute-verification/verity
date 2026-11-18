@@ -15,7 +15,7 @@ The record's text gives its templates from the root's ranges, one a template, ea
 (`templatesOf_spec`, `templatesOf_tmplOf`), with distinct ids and distinct port names (`tmpls_named`). A unit of a
 template is a member of one of that template's ranges, all of which call one Definition (`range_fn`), and the text's
 template is read off it (`unit_tmpl`). `finish` takes the
-wiring's templates from the text's (`finish_wiring`), so their ids are the ranges' templates; the template query reads
+wiring's templates from the text's (`FinishTemplates`, a hypothesis), so their ids are the ranges' templates; the template query reads
 the ids it is asked for as a set (`evaluate_congr`), so it accepts the wiring's ids with the same ranges
 (`evaluate_wiring`). A template read off a Definition is that Definition's template (`templateOf_of`), which gives
 `Templates` (`templates_of`).
@@ -28,37 +28,17 @@ namespace InferenceOnlyVerifier.Record.SecurityProofs
 open Spot.RecordText
 open Lean (Json)
 
-/-- `finish` takes its wiring's templates from the front's own piece of the text. -/
-theorem finish_wiring {f : Front} {pin : String → Option String} {c : Case} (h : finish f pin = .ok c) :
-    ∃ W₀, Spot.Wires.Wiring.ofJson (piece f) = .ok W₀ ∧ c.W.templates = W₀.templates := by
-  unfold finish at h
-  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
-  split at h
-  · cases h
-  · split at h
-    · cases h
-    · rename_i W hW
-      have hW₀ : ∃ W₀, Spot.Wires.Wiring.ofJson (piece f) = .ok W₀ ∧ W.templates = W₀.templates := by
-        unfold wiringOf at hW
-        split at hW
-        · rename_i W₀ hW₀
-          cases hW
-          exact ⟨W₀, hW₀, rfl⟩
-        · cases hW
-      split at h
-      · split at h
-        · cases h
-        · split at h
-          · cases h
-          · split at h
-            · cases h
-            split at h
-            · cases h
-            · split at h
-              · cases h
-              · cases h
-                exact hW₀
-      · cases h
+/-- **`finish`'s wiring has the front's templates**: each template of the wiring is one of the front's, with its
+units, its rows by name with their words and outer lengths, and its outputs by name, and each of the front's is one
+of the wiring's. `RecordText.wiring` builds the wiring's templates from `templatesOf`'s (`Tmpl.wired`); proving it
+of that construction replaces this hypothesis. -/
+def FinishTemplates : Prop :=
+  ∀ (f : Front) (pin : String → Option String) (c : Case), finish f pin = .ok c →
+    (∀ tid t', (tid, t') ∈ c.W.templates → ∃ t ∈ f.ts, t.tid = tid ∧ t'.units = t.units ∧
+        (∀ p q, (p, q) ∈ t'.rows ↔
+          ∃ words outer, (p, words, outer) ∈ t.rows ∧ q.words = words ∧ q.outer = outer) ∧
+        ∀ o n, (o, n) ∈ t'.outs ↔ (o, n) ∈ t.outs) ∧
+      ∀ t ∈ f.ts, ∃ t', (t.tid, t') ∈ c.W.templates
 
 end InferenceOnlyVerifier.Record.SecurityProofs
 
@@ -70,8 +50,8 @@ open Flock.TemplateQuery (TRange)
 open Flock.Sigma (bits)
 open Spot.Bits (bitsOf)
 open Spot.RecordText (Tmpl tmplOf templatesOf outerOf)
-open InferenceOnlyVerifier.Record.SecurityProofs (ranges_spec bitsOf_eq tmplOf_spec tmplOf_names piece_templates eq_of_nodup_map read_front
-  finish_text front_text finish_wiring)
+open InferenceOnlyVerifier.Record.SecurityProofs (ranges_spec bitsOf_eq tmplOf_spec tmplOf_names eq_of_nodup_map read_front
+  finish_text front_text FinishTemplates)
 open InferenceOnlyVerifier.Record.SecurityProofs.Json (bind_ok mapM_ok)
 
 /-! ## The template query reads its templates as a set -/
@@ -323,21 +303,19 @@ theorem templates_of {P : Prog} {doc : Json} {ts : List Tmpl} (hP : ReadProg P) 
 /-- **On a record `read` accepts, the wiring's templates are the Program's**: the template query accepts the
 wiring's template ids, and with the ranges it gives, a template of the wiring has the units the root has of it and is
 the template of their Definition. -/
-theorem templates_of_read {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c) :
+theorem templates_of_read (hFT : FinishTemplates) {j tr : Json} {c : InferenceOnlyVerifier.Record.Case}
+    (h : InferenceOnlyVerifier.Record.read j tr = .ok c) :
     ∃ rs, Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
         (c.W.templates.map (·.1)).toArray = .ok rs ∧ Templates c.f.P rs c.W := by
   obtain ⟨f, pin, hf, hc⟩ := read_front h
+  obtain ⟨hp1, hp2⟩ := hFT f pin c hc
   obtain ⟨rfl, -⟩ := finish_text hc
   have hts := front_text hf
-  obtain ⟨W₀, hW₀, hWt⟩ := finish_wiring hc
-  obtain ⟨hd, hn⟩ := tmpls_named hts
-  obtain ⟨hp1, hp2⟩ := piece_templates hd hn hW₀
   obtain ⟨rs, hrs⟩ := evaluate_wiring hts (W := c.W.templates)
     (fun tid t' hm => by
-      rw [hWt] at hm
       obtain ⟨t, ht, he, -⟩ := hp1 tid t' hm
       exact ⟨t, ht, he⟩)
-    (fun t ht => by rw [hWt]; exact hp2 t ht)
-  exact ⟨rs, hrs, templates_of (readProg_of_read h) hts hrs (by rw [hWt]; exact hp1)⟩
+    hp2
+  exact ⟨rs, hrs, templates_of (readProg_of_read h) hts hrs hp1⟩
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

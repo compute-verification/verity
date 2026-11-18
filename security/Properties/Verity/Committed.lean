@@ -24,8 +24,8 @@ counts that circuit's gates (`Verity.Vocab.computed`), so with it the two count 
 units are held to. The committed circuit's units each commit their own rows, and nothing in it joins a unit's input
 row to the output row the record wires it to. The statement reads the wiring on the commitment:
 
-* **the record's wiring** (`RecordWiring`): the wires of the text whose SHA-512 the record's `window.circuit` is,
-  as SPOT's reader reads them (`Spot.RecordText.wiring`);
+* **the record's wiring** (`RecordWiring`): the wiring of the text whose SHA-512 the record's `window.circuit` is,
+  over the Program the text names by its SHA-512 (`Spot.RecordText.wiring`);
 * **a row's root** (`RecordRoot`, `rowName`): the root the record's `roots` hold for the row's name, a port's own
   name or, of a port cut into several rows, the port's name, `#` and the row;
 * **a unit's leaf under a root** (`Vocab.ReadsLeaf`, `Vocab.WritesLeaf`): the registered position (`Vocab.place`) of
@@ -51,13 +51,13 @@ open ResourceAccounting
 open scoped ENNReal
 
 /-- **The record names the wiring `W`**: the record's `window.circuit` is the SHA-512 of a text, the circuit
-record's, that parses to a document whose cuts and wires SPOT's reader reads as `W`
-(`Spot.RecordText.wiring`: no template and no order, which no wire's rows read). -/
+record's, that parses to a document whose wiring over a Program `P` is `W` (`Spot.RecordText.wiring`: the text's
+cuts and the edges of `P`'s root, of a text that names `P` by its SHA-512). -/
 def RecordWiring (record : Lean.Json) (W : Spot.Wires.Wiring) : Prop :=
-  ∃ (text : String) (doc : Lean.Json),
+  ∃ (text : String) (doc : Lean.Json) (P : Flock.Program.Prog),
     InferenceOnlyVerifier.Theta.strAt (InferenceOnlyVerifier.Theta.getD record "window") "circuit" =
         some (Flock.hexOf (Flock.Sha512.hash text.toUTF8)) ∧
-      Flock.JsonParse.parse text = .ok doc ∧ Spot.RecordText.wiring doc = .ok W
+      Flock.JsonParse.parse text = .ok doc ∧ Spot.RecordText.wiring P doc = .ok W
 
 /-- **The record names `R` as the root of its row `name`**: one of its `roots` has the port `name` and the root
 `R`, in hex. -/
@@ -156,8 +156,7 @@ What it does not say:
   and no more. The per-member form's claim, at its own wiring, is `MemberWiresHold`.
 * **That a unit's rows are the Program's gates.** It holds a wired row to its writer's row; that a unit's file
   computes its template is not in it.
-* **That the wiring is well formed.** It reads the wires of the record's text as they stand, without
-  `Spot.Wires.check`, whose templates the text does not hold.
+* **That the wiring is well formed.** It reads the record's wiring as it stands, without `Spot.Wires.check`.
 * **Anything of a composite whose policy check is another one.** The case is the one `InferenceOnlyCheck.Protocol.protocol`
   decodes (`PolicyCase`); at a composite whose list has another policy check in its place no case decodes, and the
   claim holds of every play.
