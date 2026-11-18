@@ -10,6 +10,9 @@ configuration declares, the admission hook (`engine.admission.register`, keyed b
 scheduler, and what each scheme holds released (`hooks.Releases`) when the engine core shuts down. A scheme's
 `hooks.RefuseInput` there aborts the input, its reason in the engine core's log.
 
+No committer runs here, so there are no execution phases (no `hooks.PhaseOpened`, `PhaseClosed` or `PhaseCommitted`):
+a scheme's epoch is the server's life, from its attach to its release.
+
 vLLM loads its general plugins in each of its processes, so `register` imports vLLM only once ``VERITY_PROTOCOLS`` is
 set, and the engine's side acts only in a process that builds an engine core.
 """
