@@ -270,15 +270,14 @@ def attention_rows(
 def attention_call(
     q: np.ndarray, k: np.ndarray, v: np.ndarray, rows: np.ndarray, seqlen_q: int, seqlen_k: int, softmax_scale: float,
     tables: MufuTables, *, kblock_n: int | None = None,
-    launch_max_seqlen_q: int | None = None,
 ) -> RowsResult:
     """One kernel call for one sequence: ``q`` (len(rows), H, D) words for the query rows ``rows`` (0-based in the
     sequence), ``k``/``v`` (>= seqlen_k, KVH, D).  Returns (len(rows), H, D) words.  ``kblock_n`` defaults to the tile rule
-    :func:`kblock_n_for` on the LAUNCH's max_seqlen_q (``launch_max_seqlen_q``, default ``seqlen_q``: one sequence per launch)."""
+    :func:`kblock_n_for` on the LAUNCH's max_seqlen_q (one sequence per launch: ``seqlen_q``)."""
     nrow, H, D = q.shape
     KVH = k.shape[1]
     ngroups = H // KVH
-    BN = int(kblock_n) if kblock_n is not None else kblock_n_for(D, launch_max_seqlen_q if launch_max_seqlen_q is not None else seqlen_q, ngroups)
+    BN = int(kblock_n) if kblock_n is not None else kblock_n_for(D, seqlen_q, ngroups)
     rows = np.asarray(rows, dtype=np.int64)
     col_limit, nb = kernel_geometry(seqlen_q, seqlen_k, rows, BN)
     qf = q.reshape(nrow * H, D)

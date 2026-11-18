@@ -34,20 +34,6 @@ type Subscriber = Callable[[Any], None]
 _KEYS = itertools.count()
 
 
-class _Context(dict):
-    """A scheme's ``ctx``: reading ``private`` where the launcher gave none is refused by the scheme's name."""
-
-    def __init__(self, scheme: str, **items: Any) -> None:
-        super().__init__(items)
-        self.scheme = scheme
-
-    def __missing__(self, key: str) -> Any:
-        if key == "private":
-            raise Refused(self.scheme, "ctx['private']: this launcher gives no private directory, so nothing the scheme "
-                                       "keeps across a server's lives has a place")
-        raise KeyError(key)
-
-
 class Exchange:
     """One process's exchange: subscribers by hook, requests by scheme (filed until `answer`, fixed after it), and the
     workload's step, as the last `StepBegan` emitted it."""
@@ -70,18 +56,23 @@ class Exchange:
         self.key = f"build-{next(_KEYS)}"
 
     def attach(self, scheme: schemes.Scheme, given: Mapping[str, Any] | None = None, *,
-               gate: Callable[..., Mapping[str, Any]] | None = None, private: Path | None = None, **launcher: Any) -> Any:
+               gate: Callable[..., Mapping[str, Any]] | None = None, private: str | Path | None = None,
+               **launcher: Any) -> Any:
         """Attach ``scheme`` with ``ctx`` (`verity.protocols.resource_accounting.scheme`) ``{"settings": its settings,
-        ``given`` over its defaults; "build": this build's key; "gate": ``gate``; **launcher}``: its ``attach(self, ctx)``,
-        then each of its ``requests(ctx)`` its attach did not file; returns what attach returns.  ``gate`` is the
-        auditor device's challenger gate in its own words, ``gate(*words) -> answer`` (`commit_coins.ChallengerGate.call`),
-        or None where the launcher holds none.  ``private`` is the scheme's own directory under the store's private
-        directory, outside every run output, where it keeps a small value across a server's lives; a scheme that reads
-        ``ctx["private"]`` from a launcher that gave none is refused by name.  Attached before the build is answered, it
-        is declared (`H.Declared`); after, its requests are refused as `request` refuses them."""
-        ctx = _Context(scheme.name, settings=schemes.settings(scheme, given or {}), build=self.key, gate=gate, **launcher)
+        ``given`` over its defaults; "build": this build's key; "gate": ``gate``; "private"; **launcher}``: its
+        ``attach(self, ctx)``, then each of its ``requests(ctx)`` its attach did not file; returns what attach returns.
+        ``gate`` is the auditor device's challenger gate in its own words, ``gate(*words) -> answer``
+        (`commit_coins.ChallengerGate.call`), or None where the launcher holds none.  ``ctx["private"]`` is the scheme's
+        own directory under the launcher's ``private`` (``private/<scheme's name>``, made here), outside every run
+        output, where it keeps what never leaves the node across servers; None where the launcher holds none.
+        Attached before the build is answered, it is declared (`H.Declared`); after, its requests are refused as
+        `request` refuses them."""
+        own = None
         if private is not None:
-            ctx["private"] = Path(private)
+            own = Path(private) / scheme.name
+            own.mkdir(parents=True, exist_ok=True)
+        ctx = {"settings": schemes.settings(scheme, given or {}), "build": self.key, "gate": gate, "private": own,
+               **launcher}
         got = scheme.attach(self, ctx)
         for r in scheme.requests(ctx):
             if (scheme.name, r) not in self.requests:

@@ -114,9 +114,9 @@ def _dec_of_frac(fr: Fraction) -> decimal.Decimal:
     return _CTX.divide(decimal.Decimal(fr.numerator), decimal.Decimal(fr.denominator))
 
 
-def _f32_of_dec(d: decimal.Decimal, neg_zero: bool = False) -> int:
+def _f32_of_dec(d: decimal.Decimal) -> int:
     """RN-even of an exact Decimal to an f32 encoding (through `prims._round_f32`: overflow -> inf, subnormals, zero)."""
-    return P._round_f32(Fraction(d), neg_zero=neg_zero)
+    return P._round_f32(Fraction(d))
 
 
 def _dec_exp(d: decimal.Decimal) -> decimal.Decimal:
