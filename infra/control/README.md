@@ -228,7 +228,7 @@ is older than its `every`; a number the door doesn't list is said and isn't due;
 launch. Each launch is a `research run` of the row's command with its `--on` replaced, from the clone with `--source .` and
 the clone's own `research`, without the site, Slack or Linear keys in its environment. A `runs = "control"` row (it reads
 what only the pod reaches) runs on the pod (below): a local `research run` the pass waits for (`--timeout` at most
-`CONTROL_S`), keeping `CONTROL_KEEPS` and taking none of `NOT_LOCAL`. Which rows a pass launches, on which machine,
+`CONTROL_S`), keeping only the keys its entry in the pod's list names and taking none of `NOT_LOCAL`. Which rows a pass launches, on which machine,
 and whom it rings when is `metrics_rerun.py`'s docstring (its bounds, launch and ring), as the loop enforces it.
 The record's `numbers` holds each declared number's reason at the last pass (one of `REASONS`), and
 `python3 infra/control/metrics_rerun.py classify --tree DIR` prints what the loop could ever do with each number of a
@@ -246,9 +246,13 @@ $CP "tail -n 20 /data/watchers/log/metrics-rerun.log; cat /data/watchers/metrics
 
 A `runs = "control"` row runs on the pod only once `/data/watchers/metrics-rerun.control.toml` (`--control-rows`) lists it:
 infra writes that file on the pod by hand, and no repository holds or deploys it. It is TOML, one `[[row]]` a row, with the
-row's `id` and its `command` exactly as its `metrics.toml` gives it. A row it doesn't hold, by id or by command character for
-character, is `control-unlisted`: it runs nowhere, the pass says the entry to write, and its owners and infra are rung once
-for each declaration of it. A missing or unreadable file lists none, said once a pass. Its entries now:
+row's `id`, its `command` exactly as its `metrics.toml` gives it, and `keys`, the names of the pod's keys its launch keeps
+(none when absent; rows of one command name the same). A row it doesn't hold, by id or by command character for character,
+is `control-unlisted`: it runs nowhere, the pass says the entry to write, and its owners and infra are rung once for each
+declaration of it. A missing or unreadable file lists none, said once a pass. The file holds no key's value (those stay in
+`relay.env` and the pod's other env files), no row a node runs, and no exception to any other bound. A control run's ring
+says how it ended and never what it printed, which stays on the pod; a launch still going after `LAUNCH_S` is killed with
+its process group and its workload's. Its entries now:
 
 ~~~toml
 [[row]]
@@ -260,9 +264,11 @@ command = "research run --project verity --cwd source -- bash benchmarks/landing
 [[row]]
 id = "top/lead-response-p90-minutes"
 command = "research run --project verity --cwd source -- uv run python benchmarks/communication/response.py"
+keys = ["LINEAR_CLIENT_ID", "LINEAR_CLIENT_SECRET"]
 [[row]]
 id = "top/lead-asks-open-over-30-min"
 command = "research run --project verity --cwd source -- uv run python benchmarks/communication/response.py"
+keys = ["LINEAR_CLIENT_ID", "LINEAR_CLIENT_SECRET"]
 ~~~
 
 `classify --tree DIR --control-rows FILE` then shows each `runnable` on control.
