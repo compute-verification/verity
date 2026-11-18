@@ -8,8 +8,8 @@
 # scratch directory removed on exit, unless P2_LIB names one, as a node that refuses `setarch -R` needs, since the build
 # doesn't run there; the library loaded once by the sessions' Python, with no card to see; and the two Lean verifiers
 # that decide, pous-run-protocol (PoUS's case) and poub-p2-protocol (PoUB-P2's), started building in a scratch copy of
-# verity/, never in this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile, unless POUS_EXE and
-# BW_CASE_EXE name ones built already. The builds run one after another beside the run's key, the card and the
+# verity/, never in this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile; no other program answers
+# in their place. The builds run one after another beside the run's key, the card and the
 # sessions, and each program is waited for only where it is needed (lean_ready.sh): poub-verifier by the bandwidth
 # party, the other two by the answers. A build that fails stops the piece at once, the sessions included, with its own
 # error and exit 7.
@@ -44,7 +44,7 @@
 # the card is asked for, which both sessions are trusted under for this run alone, so the record says key_pin run and
 # trusted-device rehearsal; the directory is removed when this script exits. It is refused beside a pin or an
 # attester's flag (--trusted-sha512, --bw-trusted-sha512, --challenger-*, --bw-host, --bw-party). TPY is the tree's
-# Python the attesters run in (default .venv/bin/python), and BW_PARTY_EXE a built poub-verifier for the bandwidth party.
+# Python the attesters run in (default .venv/bin/python); the bandwidth party runs the poub-verifier built beside the two.
 #
 # Logs: DIR/build.log, DIR/lake-build.log, DIR/pous.log (both parts' stderr) and
 # DIR/stamps.txt, the piece's timeline, a line `UTC EVENT` each: its start, the builds' start and each build's end, the
@@ -98,12 +98,12 @@ LOADS=$(CUDA_VISIBLE_DEVICES='' "$PY" -c 'import ctypes, sys; ctypes.CDLL(sys.ar
 stamp "loaded libp2v1.so"
 CHECK=verity/protocols/resource_accounting/memory/pous/verifier/check
 POUB=verity/protocols/resource_accounting/memory/poub/verifier/lean
-POUS_EXE=${POUS_EXE:-} BW_CASE_EXE=${BW_CASE_EXE:-} BW_PARTY_EXE=${BW_PARTY_EXE:-}
-B=$S/built BUILDS=() LOCKS=() BUILDING=
+POUS_EXE=$S/$CHECK/.lake/build/bin/pous-run-protocol BW_CASE_EXE=$S/$POUB/.lake/build/bin/poub-p2-protocol
+BW_PARTY_EXE=$S/$POUB/.lake/build/bin/poub-verifier
+B=$S/built BUILDS=("$CHECK pous-run-protocol") LOCKS=() BUILDING=
 READY=$ROOT/benchmarks/pous/lean_ready.sh
-[ -n "$POUS_EXE" ] || { BUILDS+=("$CHECK pous-run-protocol"); POUS_EXE=$S/$CHECK/.lake/build/bin/pous-run-protocol; }
-[ -z "$RUN_KEYS" ] || [ -n "$BW_PARTY_EXE" ] || { BUILDS+=("$POUB poub-verifier"); BW_PARTY_EXE=$S/$POUB/.lake/build/bin/poub-verifier; }
-[ -n "$BW_CASE_EXE" ] || { BUILDS+=("$POUB poub-p2-protocol"); BW_CASE_EXE=$S/$POUB/.lake/build/bin/poub-p2-protocol; }
+[ -z "$RUN_KEYS" ] || BUILDS+=("$POUB poub-verifier")
+BUILDS+=("$POUB poub-p2-protocol")
 unlocked() {  # "$@" with none of the builds' locks, which only the builder holds
   for fd in "${LOCKS[@]}"; do eval "exec $fd>&-"; done
   exec "$@"
@@ -126,24 +126,21 @@ builds() {  # each of BUILDS in order, its lock released as it ends: B/EXE.ok, o
     fi
   done
 }
-if [ ${#BUILDS[@]} -gt 0 ]; then
-  # tar's exit 1 is only a file that changed as it read it: a process importing the tree's Python writes beside it
-  # meanwhile, as a check's other suites do; 2 or more is a copy that failed
-  { tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \
-    | tar -C "$S" -x || { echo "POUS: no answer: verity/ doesn't copy for the Lean builds"; exit 7; }
-  export PATH="$HOME/.elan/bin:$PATH"
-  : > "$DIR/lake-build.log"
-  mkdir -p "$B"
-  # each lock is taken here, before the builder starts, so a program asked for before its build begins is waited for
-  for b in "${BUILDS[@]}"; do exec {fd}>"$B/${b#* }.lock" && flock -x "$fd" && LOCKS+=("$fd"); done
-  stamp "the Lean builds start"
-  builds &
-  BUILDING=$!
-  for fd in "${LOCKS[@]}"; do eval "exec $fd>&-"; done
-  trap 'kill "$BUILDING" 2> /dev/null || :; rm -rf "$S" ${K:+"$K"}' EXIT
-fi
-ready() {  # the built program $1, waited for if it is being built; a failed build ends the piece with its own error
-  [ -e "$B/$1.lock" ] || return 0
+# tar's exit 1 is only a file that changed as it read it: a process importing the tree's Python writes beside it
+# meanwhile, as a check's other suites do; 2 or more is a copy that failed
+{ tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \
+  | tar -C "$S" -x || { echo "POUS: no answer: verity/ doesn't copy for the Lean builds"; exit 7; }
+export PATH="$HOME/.elan/bin:$PATH"
+: > "$DIR/lake-build.log"
+mkdir -p "$B"
+# each lock is taken here, before the builder starts, so a program asked for before its build begins is waited for
+for b in "${BUILDS[@]}"; do exec {fd}>"$B/${b#* }.lock" && flock -x "$fd" && LOCKS+=("$fd"); done
+stamp "the Lean builds start"
+builds &
+BUILDING=$!
+for fd in "${LOCKS[@]}"; do eval "exec $fd>&-"; done
+trap 'kill "$BUILDING" 2> /dev/null || :; rm -rf "$S" ${K:+"$K"}' EXIT
+ready() {  # the built program $1, waited for while it is being built; a failed build ends the piece with its own error
   bash "$READY" "$B" "$1" true 2>&1 && return
   stamp "the piece stops: $1 didn't build"
   exit 7
@@ -160,7 +157,7 @@ print(hashlib.sha512(onsite.device_key(sys.argv[1], workers=int(sys.argv[2])).pu
   stamp "made the run's key"
   printf -v CC 'bash %q challenger_party %q %q' "$ROOT/benchmarks/pous/run_attester.sh" "$TPY" "$K"
   printf -v BP 'bash %q bw_party %q %q %q' "$ROOT/benchmarks/pous/run_attester.sh" "$TPY" "$K" "$BW_PARTY_EXE"
-  [ ! -e "$B/poub-verifier.lock" ] || printf -v BP 'bash %q %q poub-verifier %s' "$READY" "$B" "$BP"
+  printf -v BP 'bash %q %q poub-verifier %s' "$READY" "$B" "$BP"
   EXTRA+=(--challenger-host "$(hostname)" --challenger-address 127.0.0.1:47610 --challenger-command "$CC"
           --trusted-sha512 "$SHA" --bw-party "$BP" --bw-host 127.0.0.1 --bw-trusted-sha512 "$SHA")
 fi
@@ -180,11 +177,9 @@ else
     _ "$DIR/stamps.txt" "$PY" "${ARGS[@]}" --sessions 2>> "$DIR/pous.log" &
 fi
 SESSIONS=$!
-if [ -n "$BUILDING" ]; then
-  # the builder stops the sessions when a build fails after this line, and this line when one failed before it
-  echo "$SESSIONS" > "$B/sessions.tmp" && mv "$B/sessions.tmp" "$B/sessions.pid"
-  [ ! -e "$B/failed" ] || kill -TERM "$SESSIONS" 2> /dev/null
-fi
+# the builder stops the sessions when a build fails after this line, and this line when one failed before it
+echo "$SESSIONS" > "$B/sessions.tmp" && mv "$B/sessions.tmp" "$B/sessions.pid"
+[ ! -e "$B/failed" ] || kill -TERM "$SESSIONS" 2> /dev/null
 wait "$SESSIONS"
 rc=$?
 if [ -e "$B/failed" ]; then
