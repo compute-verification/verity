@@ -293,7 +293,7 @@ def test_refused_by_name():
     c1, c2 = descriptor_id(C1), descriptor_id(C2)
     # C2's token (one u32) as C1's ``best`` and its ``x0`` beside it would be two words read as one leaf of 32 bits
     x = descriptor_id(X)
-    with pytest.raises(ValueError, match="names each leaf at its own width"):
+    with pytest.raises(ValueError, match=r"wire-width: .* writes Value<32> into a row of Array<2,Value<16>>"):
         WR.replay(*_and_record(IF.Circuit("reinterpreted", ((X, 2), (C2, 1)), external=(f"{c2}/o0",),
                                           cuts={c2: {"idx": 1}}, wires=(IF.Wire(c2, "best", x, "o1", 0, (1,), 0, (0,)),))))
     # C1's unit 1 before its unit 0, C2 between them
