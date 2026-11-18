@@ -1358,7 +1358,7 @@ class World:
 
     def _voided(self, n: int, c: str) -> str | None:
         """The later head of #``n`` than ``c`` whose hold voids ``c``'s land for whatever carries from it (`carry.voided`): a head
-        whose reviewers' newest verdicts hold it (`unreviewed`), logged once a tick; None when none does."""
+        whose reviewers' newest verdicts hold it (`unreviewed`), logged; None when none does."""
         held = [h for h, labs in self.labels._other_heads(n, c, vocab.REVIEWED).items()
                 if (unreviewed(self.labels._verified(n, h, labs)[0], ()) or "").startswith("held")]
         if later := carry.voided(self.repo, c, held):
