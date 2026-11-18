@@ -439,7 +439,7 @@ class Piece:
                               "carries_coins": c.carries_coins} for c in m.channels if role in (c.sender, c.receiver)]}
 
 
-def _serve(cfg, params, bound):
+def _serve(cfg, params, bound, pinned):
     w = cfg["workload"]["params"]
     return {"REPO": w["model"], "REV": w["revision"], "PRECISION": w["precision"], "SLOTS": str(w["slots"]),
             "WINDOW_STEPS": str(w["window-steps"]), "LOAD": w["load"], "V3C_LAW": cfg["service"]["law"]}
