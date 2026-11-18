@@ -1055,7 +1055,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
     "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
     "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
-    "adapters/vllm/verity_vllm/pipeline/ids_front.py",
     "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
     "adapters/vllm/verity_vllm/pipeline/serve_commit.py",
     "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
