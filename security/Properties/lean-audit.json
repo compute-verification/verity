@@ -346,6 +346,7 @@
   },
   "InferenceOnlyVerifier.Properties.Record.RowsHonestAccepted": {
    "owner": "@proofs",
+   "issue": "PRF-638",
    "due": "2026-12-01"
   },
   "MemoryAttester.Properties.CountRan": {
