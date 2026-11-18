@@ -39,6 +39,7 @@ module
 public import Lean.Data.Json
 public import Circuits.Wire
 public import Std.Data.HashMap
+meta import Circuits.Wire
 
 @[expose] public section
 
