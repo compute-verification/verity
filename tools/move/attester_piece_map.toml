@@ -1,0 +1,30 @@
+# The network attester's served piece: what `tools/move/layout.py --map tools/move/attester_piece_map.toml` moves and
+# rewrites. `attester_piece` is the developer's side of the network attester in a served window (the front that puts the
+# auditor's gate in front of serve-openai, and the piece that runs the chain and the period check on the kept run), so it
+# goes to its package's prover side, and its test to that package's prover suite.
+
+[roots]
+old = { verity = "verity" }
+new = { verity = "verity" }
+
+[paths]
+"benchmarks/network_traces/attester_piece.py" = "verity/protocols/resource_accounting/network/prover/attester_piece.py"
+"tests/benchmarks/network_traces/test_attester_piece.py" = "tests/verity/protocols/resource_accounting/network/prover/test_attester_piece.py"
+
+[retired]
+paths = ["benchmarks/network_traces/attester_piece.py", "tests/benchmarks/network_traces/test_attester_piece.py"]
+
+[drop]
+paths = []
+
+[rewrite]
+words = []
+keep = []
+exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/*.lock", "uv.lock",
+           "tools/move/**", "tests/tools/move/**", "archive/**", "tools/research/src/research/store/moves.json",
+           "**/lean-audit.json"]
+include = []
+
+[modules]
+"benchmarks.network_traces.attester_piece" = "verity.protocols.resource_accounting.network.prover.attester_piece"
+"tests.benchmarks.network_traces.test_attester_piece" = "tests.verity.protocols.resource_accounting.network.prover.test_attester_piece"
