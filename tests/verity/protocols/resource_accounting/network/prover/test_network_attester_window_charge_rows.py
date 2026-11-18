@@ -12,10 +12,9 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.interface.charge import window_charge as WC
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.resource_accounting.network.verifier import charge_check as CK
-from verity_vllm.compiler import charge_rows as CR
+from verity.protocols.resource_accounting.network.prover import charge_rows as CR
 
-FIXTURE = (Path(__file__).parents[4] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "fixtures"
-           / "arith_encode_vectors.json")
+FIXTURE = Path(__file__).parents[1] / "verifier" / "fixtures" / "arith_encode_vectors.json"
 PROGRAM, REGISTRATION = "window-charge-test", "ab" * 64
 
 

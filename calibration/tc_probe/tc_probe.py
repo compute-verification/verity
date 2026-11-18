@@ -9,7 +9,8 @@ Hawkeye's adder-width probe of ``characterize.py``; the special-value classes of
 ``wgmma`` path with the SASS confirmation of ``gpu/tc-fp8/wgmma_fp8_probe.py`` (exactly one MMA-class instruction per tile
 kernel).  Only the GPU host runs this; it needs numpy and nvcc (``cuobjdump`` for ``--sass-check``).
 
-Instructions (``--instruction``; ``--arch`` is derived from the entry and may be overridden)::
+Instructions (``--instruction``, each built for the card the run opened, whose ``arch`` must be the instruction's; ``--card`` names
+the card of a ``--compile-only`` build)::
 
     id                          nvcc arch  kernel                       K   model(s) compared
     sm80.mma.m16n8k16.bf16      sm_80      mma_bf16_m16n8k16_tiles      16  ampere_bf16_m16n8k16 (pinned)
@@ -74,7 +75,7 @@ check, per-family counts per model, first mismatches with A/B/C/D words, family 
 run (``RESEARCH_RUN_ID`` set), ``result.json`` with ``kind: tc-evidence/v1`` (``workload_fingerprint`` = instruction, arch, sku, driver, nvcc,
 seed, n, families, models; ``tc_evidence`` = per-family counts, ``model_agrees`` per model, first mismatches; validation passed
 iff every mismatch count against a pinned model and every replay is zero).  ``--compile-only`` builds the instruction's kernel
-for its arch (sm_90a compiles wherever the toolkit is, whatever the GPU), runs ``--sass-check`` (cuobjdump: MMA-class
+for the card ``--card`` names (sm_90a compiles wherever the toolkit is, whatever the GPU), runs ``--sass-check`` (cuobjdump: MMA-class
 instructions per tile kernel, compared with the table's ``sass_mma``; the tile kernel's SASS is kept as ``sass_<kernel>_<arch>.txt``)
 and writes ``result.json`` with ``kind: tc-compile-check/v1`` without touching the device.
 
@@ -456,7 +457,21 @@ INSTRUCTIONS: dict[str, Instruction] = {
                                             Model(S.AMPERE_BF16_M16N8K16, declared=False, total=True))),
     )
 }
-ARCH_DEFAULT_INSTRUCTION = {"sm_80": "sm80.mma.m16n8k16.bf16", "sm_89": "sm89.mma.m16n8k16.bf16", "sm_90a": "sm90.mma.m16n8k16.bf16"}
+
+
+def card_target(card: str, ids: list[str]) -> str:
+    from verity_bench import kit
+
+    if card == "none":
+        raise SystemExit("tc_probe: no GPU here: --card names the card a --compile-only build is for, as nvidia-smi names it")
+    arch = kit.card_arch(card)
+    archs = sorted({i.arch for i in INSTRUCTIONS.values()})
+    if arch not in archs:
+        raise SystemExit(f"tc_probe: no instruction is for the card {card!r} ({arch}); the instructions are for {', '.join(archs)}")
+    if off := [i for i in ids if INSTRUCTIONS[i].arch != arch]:
+        raise SystemExit(f"tc_probe: the card {card!r} is {arch}, and {', '.join(f'{i} is {INSTRUCTIONS[i].arch}' for i in off)}: "
+                         "run it on a card of its architecture")
+    return arch
 
 
 # --- the kernel ----------------------------------------------------------------------------------------------------------------
@@ -467,12 +482,15 @@ def cuda_bin(tool: str) -> str:
     return found or f"/usr/local/cuda/bin/{tool}"  # the CUDA images do not put the toolkit on a non-login PATH
 
 
-def build(tu: str, arch: str, out: Path) -> tuple[Path, str]:
+def build(tu: str, card: str, out: Path) -> tuple[Path, str]:
+    from verity_bench import kit
+
+    arch = kit.card_arch(card)
     so = out / f"lib{Path(tu).stem}_{arch}.so"
     nvcc_bin = cuda_bin("nvcc")
     nvcc = subprocess.run([nvcc_bin, "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
     # sm_100a's tcgen05 is an `a`-feature instruction: a plain -arch=sm_100a also embeds compute_100 PTX, which refuses it
-    target = ["-gencode", f"arch=compute_{arch[3:]},code={arch}"] if arch == "sm_100a" else [f"-arch={arch}"]
+    target = ["-gencode", kit.card_gencode(card)] if arch == "sm_100a" else [f"-arch={arch}"]
     subprocess.run([nvcc_bin, "-O2", *target, "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / tu)], check=True)
     ident = " / ".join(line.strip() for line in nvcc)
     Path(f"{so}.nvcc").write_text(ident + "\n")
@@ -606,7 +624,7 @@ class Probe:
             d = np.zeros((stop - start, M, N), dtype=np.uint32)
             rc = self.fn(a.ctypes.data, b.ctypes.data, c.ctypes.data, d.ctypes.data, stop - start)
             if rc != 0:
-                raise RuntimeError(f"CUDA error {rc} in {self.kernel} (209 = no kernel image for this device: wrong --arch?)")
+                raise RuntimeError(f"CUDA error {rc} in {self.kernel} (209 = no kernel image for this device: built for another card?)")
             if self.tcgen05 and (bad := int(self.lib.tcgen05_replica_mismatches())):
                 raise RuntimeError(f"{self.kernel}: {bad} words of the instruction's columns 8..15 differ from its columns 0..7")
             D[start:stop] = d
@@ -1700,17 +1718,16 @@ def write_result(out: Path, doc: dict) -> None:
     os.replace(tmp, out / "result.json")
 
 
-def compile_only(ids: list[str], out: Path, args: argparse.Namespace) -> int:
-    """Build each instruction's kernel for its arch and run the SASS check; no device needed."""
+def compile_only(ids: list[str], out: Path, card: str, arch: str) -> int:
+    """Build each instruction's kernel for `card` (of `arch`) and run the SASS check; no device needed."""
 
     results: dict = {"schema": "wp1/tc-probe/v0", "mode": "compile-only", "identity": host_identity(), "instructions": {}}
     ok = True
     for id_ in ids:
         ins = INSTRUCTIONS[id_]
-        arch = args.arch or ins.arch
         t0 = time.time()
         try:
-            so, nvcc = build(ins.tu, arch, out)
+            so, nvcc = build(ins.tu, card, out)
             entry = {"instruction": ins.describe(), "arch": arch, "nvcc": nvcc, "so": so.name, "compiled": True, "seconds": round(time.time() - t0, 1)}
             entry["sass"] = sass_check(so, ins.kernel, out, ins.sass_mma)
             ok = ok and entry["sass"]["ok"]
@@ -1754,7 +1771,7 @@ def compile_only(ids: list[str], out: Path, args: argparse.Namespace) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default=None, help="instruction id (see the table); comma list with --compile-only")
-    ap.add_argument("--arch", default=None, help="override the instruction's nvcc arch (sm_80, sm_89, sm_90a); without --instruction selects the BF16 mma of that arch")
+    ap.add_argument("--card", default=None, help="--compile-only: the card to build for, as nvidia-smi names it (default: the run's card)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--replay-golden", default=None, metavar="JSON")
     ap.add_argument("--replay-special", default=None, metavar="JSON.GZ", help="mma_special.reduced.json.gz: its all-finite records (BF16)")
@@ -1790,19 +1807,22 @@ def main() -> int:
     t_all = time.time()
 
     if args.instruction is None:
-        if args.arch not in ARCH_DEFAULT_INSTRUCTION:
-            ap.error("--instruction is required (or --arch sm_80/sm_89/sm_90a for that arch's BF16 mma)")
-        args.instruction = ARCH_DEFAULT_INSTRUCTION[args.arch]
+        ap.error("--instruction is required (see the table)")
+    if args.card and not args.compile_only:
+        ap.error("--card names the card of a --compile-only build; a capture builds for the card the run opened")
     ids = args.instruction.split(",")
     for id_ in ids:
         if id_ not in INSTRUCTIONS:
             ap.error(f"unknown instruction {id_!r}; known: {', '.join(INSTRUCTIONS)}")
+    from verity_bench import kit
+
+    card = args.card or kit.host_stamp()["card"]
+    arch = card_target(card, ids)
     if args.compile_only:
-        return compile_only(ids, out, args)
+        return compile_only(ids, out, card, arch)
     if len(ids) != 1:
         ap.error("one instruction per capture run")
     ins = INSTRUCTIONS[ids[0]]
-    arch = args.arch or ins.arch
     if args.also_model:
         import dataclasses
 
@@ -1814,7 +1834,7 @@ def main() -> int:
             extra.append(Model(TCM.MODELS[name], declared=False, total=mode == "total"))
         ins = dataclasses.replace(ins, models=ins.models + tuple(extra))
 
-    so, nvcc = prebuilt(args.library) if args.library else build(ins.tu, arch, out)
+    so, nvcc = prebuilt(args.library) if args.library else build(ins.tu, card, out)
     results: dict = {"schema": "wp1/tc-probe/v0", "instruction": ins.describe()}
     if args.sass_check:
         results["sass"] = sass_check(so, ins.entry(args.a_source), out, ins.sass_mma)

@@ -111,23 +111,6 @@ def generate(seed: int = 0) -> list[dict]:
                           [rng.randbytes(rng.choice([0, 191, 193])) for _ in range(max(n, 1))]])
         return good if rng.random() < 0.9 else bad
 
-    def salted(h: str, rows: list[bytes], salts: list[bytes] | None, public: bool) -> list[bytes]:
-        """A tree's values from its rows and their salts, as the Lean's `commitRows` takes them."""
-        if h == audit.HM96:
-            if salts is None or len(salts) != len(rows) or any(len(y) != audit.HM96_SALT for y in salts):
-                raise ValueError(f"an {audit.HM96} tree takes one {audit.HM96_SALT}-byte salt a row")
-            return [r + y for r, y in zip(rows, salts)]
-        if salts is not None:
-            raise ValueError(f"a plain {h} tree takes no salts")
-        if not public:
-            raise ValueError(f"a plain {h} tree is not hiding")
-        return rows
-
-    def commit_rows(b: bytes, o: int, rows: list[bytes], h: str, salts: list[bytes] | None, digests: bool,
-                    public: bool) -> MerkleTree:
-        values = salted(h, rows, salts, public)
-        return MerkleTree(audit.rows_domain(b, o, len(values), h, digests), dict(enumerate(values)), lambda _: audit.ROW_SCHEMA)
-
     def hexes(salts: list[bytes] | None) -> list[str] | None:
         return None if salts is None else [y.hex() for y in salts]
 
@@ -138,11 +121,11 @@ def generate(seed: int = 0) -> list[dict]:
         b, o, rows = binding(), owner(), rows_for(h, digests)
         salts = salts_for(h, len(rows))
         public = rng.random() < 0.8
-        res = _outcome(lambda: commit_rows(b, o, rows, h, salts, digests, public).commitment.root.hex())
+        res = _outcome(lambda: audit.commit_rows(b, o, rows, h, salts, digests, public).commitment.root.hex())
         add("commit_rows", {"binding": b.hex(), "owner": o, "rows": [r.hex() for r in rows], "hash": h,
                             "salts": hexes(salts), "digests": digests, "public": public}, res)
         if "ok" in res and rows:
-            trees.append((b, o, h, digests, commit_rows(b, o, rows, h, salts, digests, public), audit.ROW_SCHEMA))
+            trees.append((b, o, h, digests, audit.commit_rows(b, o, rows, h, salts, digests, public), audit.ROW_SCHEMA))
 
     for _ in range(COUNTS["transcript"]):
         h = rng.choice(["sha256", "sha512", "hm96-sha512", "hm96-sha512"])
@@ -150,13 +133,8 @@ def generate(seed: int = 0) -> list[dict]:
         digs = rows_for(h, True)
         salts = salts_for(h, len(digs))
 
-        def root() -> str:
-            values = salted(h, digs, salts, True)
-            epoch = SimpleNamespace(salt=salt, weights_root=wr)
-            tree = MerkleTree(audit.transcript_domain(epoch, len(values), h), dict(enumerate(values)), lambda _: audit.TILE_SCHEMA)
-            return tree.commitment.root.hex()
         add("transcript", {"salt": salt.hex(), "weights_root": wr.hex(), "digests": [d.hex() for d in digs], "hash": h,
-                           "salts": hexes(salts)}, _outcome(root))
+                           "salts": hexes(salts)}, _outcome(lambda: audit.transcript_root(salt, wr, digs, h, salts).hex()))
 
     def flip(b: bytes) -> bytes:
         if not b:

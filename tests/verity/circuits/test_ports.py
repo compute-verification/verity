@@ -634,7 +634,8 @@ def used(f: CompositeDefinition) -> CompositeDefinition:
 
 def test_an_s32_word_typed_as_s8_lanes_is_refused_as_an_argument_and_as_a_return():
     """`Coll(Array(32, S8), refs to one s32 word)` names a 32-bit leaf at every 8-bit position: the Builder refuses it where a
-    node reads it and where the body returns it, whether the word is a node's or a parameter's."""
+    node reads it and where the body returns it, whether the word is a node's or a parameter's, and an input node's as no
+    whole leaves (`refs.recut`)."""
     arg = comp("PortsTestLanesArg", [("x", V32)], Array(32, V8), lambda B, S, x: B.batch(Id8, lanes(B.call(Pair, x)), axes=(0,)))
     with pytest.raises(TypeError, match=r"E_REINTERPRET: node 1 \(batch PortsTestId8_v1\) argument 'x': leaf 0 is typed "
                                         r"Value<8> but names leaf 0 of node 0, a Value<32>: a silent reinterpretation"):
@@ -645,8 +646,7 @@ def test_an_s32_word_typed_as_s8_lanes_is_refused_as_an_argument_and_as_a_return
     param = comp("PortsTestLanesParam", [("x", V32)], Array(32, V8), lambda B, S, x: lanes(x))
     with pytest.raises(TypeError, match="the body's return: leaf 0 is typed Value<8> but names leaf 0 of parameter 'x', a Value<32>"):
         Program(used(param))
-    with pytest.raises(TypeError, match=r"E_REINTERPRET: node 1 \(batch PortsTestId8_v1\) argument 'x': leaf 0 is typed "
-                                        r"Value<8> but names leaf 0 of node 0, a Value<32>"):
+    with pytest.raises(ValueError, match=r"recut-boundary: .* reads an input node of 32-bit leaves in 8-bit leaves"):
         Program(comp("PortsTestLanesRoot", [("x", V32)], Array(32, V8), lambda B, S, x: B.batch(Id8, lanes(x), axes=(0,))))
 
 

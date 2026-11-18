@@ -209,6 +209,10 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_LEASE_MAX_MIN", int, None, WHERE, "minutes a leased Commit holds its GPUs (the row sets it)"),
     S("VERITY_LEASE_STARTED", str, None, WHERE, "the lease marker a leased Commit takes its GPUs by (the row sets it)"),
     S("VERITY_MANIFEST_JOBS", int, None, VALUE, "concurrent component builds of the required-value manifest"),
+    S("VERITY_PROTOCOLS", csv, (), VALUE, "the schemes attached by name inside vLLM's own server (`pipeline.scheme_plugin`), "
+      "comma-separated, an application's protocols line; unset, none"),
+    S("VERITY_PROTOCOLS_CONFIG", json.loads, None, VALUE, "VERITY_PROTOCOLS's JSON object: feed, the directory the server's "
+      "front and its engine share (required with a scheme), and each scheme's settings under its name"),
     S("VERITY_QUERY_ID", str, None, VALUE, "the verification query id a row runs"),
     S("VERITY_QWORD_MAX_GATES", str, None, VALUE, "the strict word check's gate bound for the row"),
     S("VERITY_QWORD_MAX_GATES_ALLOWED", str, None, VALUE, "the one raised VERITY_QWORD_MAX_GATES a GO allows"),
@@ -217,9 +221,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_REPLAY_DUMP_MAX", int, 1024, DEBUG, "the most values the replay dumps"),
     S("VERITY_REPLAY_FORK_GC_FREEZE", not_off, True, VALUE, "the replay freezes the GC before it forks its workers"),
     S("VERITY_RESEARCH", str, None, WHERE, "the research tree a row's stages import (the row sets it)"),
-    S("VERITY_TICK", json.loads, None, VALUE, "the certified tick under vLLM's own OpenAI server (`pipeline.tick_plugin`), a JSON "
-      "object: the registered bucket_us, sat_us and free_us, hold_ms, the feed file, the gate's log directory and a rule measured "
-      "against the registered one (token_ns, catch_up, and the arm measuring it where catch_up is open); unset, none"),
     S("VERITY_TIMELINE", str, None, WHERE, "the stage telemetry file"),
     S("VERITY_TREE", str, None, WHERE, "the source tree that runs (the mixed-tree refusal)"),
     S("VERITY_UNIT_RULE_CACHE", str, None, WHERE, "the host's unit-rule cache directory (`sweep --unit-rule-cache`)"),

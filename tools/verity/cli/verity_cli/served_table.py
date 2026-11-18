@@ -50,7 +50,9 @@ from typing import Any, NamedTuple
 from verity import config as K
 from verity.config import Component, Workload
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
+from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS
 from verity.protocols.resource_accounting.network.verifier import parties as NC
+from verity.protocols.resource_accounting.scheme import settings
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
@@ -115,14 +117,25 @@ def _pous(params: Mapping[str, Any]) -> dict[str, Any]:
 _CLASS = re.compile(r"[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*")
 
 
+#: Pearl+'s settings that are the application's parameters, which its hash covers; its other settings are values a
+#: launch gives `attach` (a kernel's path, the challenger's address). Provisional, until the interface says which is which.
+PEARLPLUS_PARAMS = ("tie-uniform",)
+
+
 def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
-    if extra := sorted(set(params) - {"class", "tie-uniform"}):
-        raise Refused("unknown-key", f"[params.\"{SP.IDS['pearl-plus']}\"]: {', '.join(extra)} (known: class, tie-uniform)")
+    """Pearl+'s served piece: its scheme's settings that are the application's (`PEARLPLUS_PARAMS`, checked by
+    `scheme.settings`), and ``class``, the table's own."""
+    own = {k: v for k, v in params.items() if k != "class"}
+    if extra := sorted(set(own) - set(PEARLPLUS_PARAMS)):
+        known = ", ".join(["class", *PEARLPLUS_PARAMS])
+        raise Refused("unknown-key", f"[params.\"{SP.IDS['pearl-plus']}\"]: {', '.join(extra)} (known: {known})")
     if "class" in params and not (isinstance(params["class"], str) and _CLASS.fullmatch(params["class"])):
         raise Refused("params", f"class is SLOTS,PROMPT,OUTPUTS, three positive integers, not {params['class']!r}")
-    if type(params["tie-uniform"]) is not bool:
-        raise Refused("params", f"tie-uniform is true or false, not {params['tie-uniform']!r}")
-    return {k: params[k] for k in ("class", "tie-uniform") if k in params}
+    try:
+        own = settings(PEARL_PLUS, own)
+    except ValueError as e:
+        raise Refused("params", str(e)) from None
+    return {**({"class": params["class"]} if "class" in params else {}), **{k: own[k] for k in PEARLPLUS_PARAMS}}
 
 
 _COMMIT = re.compile(r"[0-9a-f]{40}")
@@ -174,7 +187,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("pearl-plus", SP.IDS["pearl-plus"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
                                                            Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
               channels=(Channel(CHALLENGER, WORKERS, ("PearlSalt",), carries_coins=True),),
-              needs=frozenset({"windows"}), params=_pearlplus_params, default_params={"tie-uniform": False}),
+              needs=frozenset({"windows"}), params=_pearlplus_params),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
               channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("SignedRun",), after=("End",))),

@@ -47,7 +47,7 @@ def test_a_run_without_its_machine_or_card_or_with_a_card_no_card_file_holds_is_
         submit(on=None, card=None)
     with pytest.raises(SystemExit, match="give --python, --hf-home"):
         submit(python=None, hf_home=None)
-    with pytest.raises(SystemExit, match="'NVIDIA H100', the card nvidia-smi names here"):
+    with pytest.raises(SystemExit, match="'NVIDIA H100', the name the device reports"):
         submit(card="NVIDIA H100")
     with pytest.raises(SystemExit, match="at most 2 GPUs"):
         submit(gpus=3)

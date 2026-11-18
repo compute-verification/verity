@@ -267,6 +267,10 @@ def captured(run: str | None, by: str) -> tuple[Path, dict, dict]:
     if not all(SLUG.fullmatch(str(fp.get(k))) for k in ("served", "card")):
         refuse(by, f"capture run {run}'s fingerprint names no member parts (`served` {fp.get('served')!r}, `card` "
                    f"{fp.get('card')!r}); the record: {contract('capture')}")
+    try:
+        kit.card_named_short(fp["card"])
+    except SystemExit as e:
+        refuse(by, f"capture run {run}'s fingerprint's `card`: {e}")
     arms: dict[str, int] = {}
     for x in sorted((d / "out").glob("*.*")):
         if (m := LIFETIME.fullmatch(x.name)) and (x / "meta.json").is_file():
