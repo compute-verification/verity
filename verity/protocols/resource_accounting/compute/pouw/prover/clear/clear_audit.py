@@ -101,8 +101,8 @@ class Prover:
     fast implementation replaces it and must agree with the reference on the scheme's vectors."""
 
     def __init__(self, scheme: PoUWScheme, weights: Mapping[int, Sequence[bytes]],
-                 kernel: Callable[..., list[tuple[bytes, list[list]]]] = reference_kernel, salt_key: bytes | None = None):
-        """Under `HM96` every tree's salts are fresh (`audit.fresh_salts`); `salt_key` is unread.  A scheme of a plain format (h0, or
+                 kernel: Callable[..., list[tuple[bytes, list[list]]]] = reference_kernel):
+        """Under `HM96` every tree's salts are fresh (`audit.fresh_salts`).  A scheme of a plain format (h0, or
         no ``commitment_hash``) has trees that are not hiding, which this reference tool replays as `audit.commit_rows`'
         ``public`` trees; a served commitment is never one."""
         self.scheme, self.kernel = scheme, kernel

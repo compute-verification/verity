@@ -230,7 +230,8 @@ class Node:
         base = {"PATH": f"{self.bin}:{MACHINE_PATH}", "HOME": str(self.tmp / "home"), "TMPDIR": str(self.tmp / "scratch"),
                 "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "CUDA_ROOT": str(self.tmp / "cuda"),
                 "STUB_DIR": str(self.stub), "REAL_PY": sys.executable, "STUB_TORCH_CUDA": "12.9",
-                "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0"}
+                "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0",
+                "NODE_KIND": "rtx-pro-6000-server-x8"}
         env = {k: v for k, v in (base | env).items() if v is not None}
         return subprocess.run([BASH, str(RUN)], cwd=ROOT, env=env, capture_output=True, text=True)
 
@@ -706,7 +707,8 @@ def test_a_red_prover_under_role_prover_ends_the_verifier_itself(node, tmp_path)
     line = [sys.executable, str(ROOT / "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py"),
             "--host", "127.0.0.1", "--port", port, "--out", str(tmp_path / "verifier"), "--windows", "3",
             "--window-ms", "2000", "--samples", "2773", "--jitter-ms", "5000", "--sessions", "1", "--check-workers", "1",
-            "--lean-exe", str(lv.build())]
+            "--lean-exe", str(lv.build()),
+            "--figures", str(ROOT / "tests/verity/protocols/resource_accounting/memory/poub/figures.json")]
     verifier = subprocess.Popen(line, cwd=ROOT, env=os.environ | {"HOME": str(tmp_path / "home")},
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:
