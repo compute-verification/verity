@@ -22,12 +22,14 @@ inner blocks are its incorrect units with those having an outer committed wire o
 * `Levels.prCoin_accept_le_late`: the sampling step of soundness at a miss `δ` with interiors committed late. A run
   accepted only where the inner samples miss the late interiors' incorrect inner blocks, or a break occurs, is
   accepted while the largest miss over the interiors is at most `δ` with probability at most `δ` plus the break's.
-* `Levels.ofPartitions_late_le_missProb`: at the levels of a chain of partitions, any number of them, the prover commits
-  a trace after each level's draw, by any rule, agreeing with the one before on that level's committed gates. Every
-  sample misses the last trace's incorrect last-level blocks with probability at most `missProb` of one trace's, fixed
-  in advance and agreeing with the first on the first level's committed gates. It is `Levels.late_le_missProb_levels`
-  with traces near a block when they agree on the gates it holds or reads (`Partition.region`).
-* `Levels.ofPartitions_prCoin_accept_le_levels`: the sampling step of soundness at a miss `δ` at those levels.
+* `Levels.ofChain_late_le_missProb_opened`: at the levels of a chain of partitions, any number of them, the prover
+  commits a trace after each level's draw, by any rule, keeping the first trace's opened gates `O` and, from the second
+  level on, each level's committed gates. Every sample misses the last trace's incorrect last-level blocks, with the
+  unopened ones, with probability at most `missProb` of one trace's, fixed in advance and agreeing with the first on
+  `O`. It is `Levels.late_le_missProb_levels` with traces near a block when they agree on the gates it holds or reads
+  (`Partition.region`) that are opened or not first-level committed.
+* `Levels.ofChain_late_le_missProb`: the same with every first-level committed wire opened.
+* `Levels.ofChain_prCoin_accept_le_late`: the sampling step of soundness at a miss `δ` at those levels.
 -/
 
 @[expose] public section
@@ -281,24 +283,107 @@ theorem io_subset_region (P : Partition C n) (u : Fin n) : P.io u ⊆ region (P.
   · exact Or.inl ⟨⟨g, hin g hu⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩, rfl⟩
   · exact Or.inr ⟨⟨h, hin h hu⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩, hgh⟩
 
-/-- Whether a block is incorrect reads a trace only in the block's region. -/
-theorem mem_image_incorrect_of_region (P : Partition C n) {X : Finset C.Computed} {a b : C.Trace}
-    (h : ∀ g ∈ region X, a g = b g) (hX : X ∈ (P.incorrect a).image P.block) : X ∈ (P.incorrect b).image P.block := by
+/-- Whether a block is bad, its units unopened from `S` at `O` counted bad, reads a trace only in the block's region
+outside `S` or inside `O`. -/
+theorem mem_image_unopened_incorrect_of_region (P : Partition C n) (S O : Finset (Fin C.N)) {X : Finset C.Computed}
+    {a b : C.Trace} (h : ∀ g ∈ region X, g ∉ S ∨ g ∈ O → a g = b g)
+    (hX : X ∈ (P.unopened S O ∪ P.incorrect a).image P.block) :
+    X ∈ (P.unopened S O ∪ P.incorrect b).image P.block := by
+  classical
   obtain ⟨u, hu, rfl⟩ := Finset.mem_image.1 hX
-  refine Finset.mem_image.2 ⟨u, P.mem_incorrect.2 fun hb => P.mem_incorrect.1 hu ?_, rfl⟩
-  exact P.correct_congr (fun g hg => h g (P.io_subset_region u hg)) hb
+  refine Finset.mem_image.2 ⟨u, ?_, rfl⟩
+  by_cases hU : u ∈ P.unopened S O
+  · exact Finset.mem_union_left _ hU
+  · refine Finset.mem_union_right _ (P.mem_incorrect.2 fun hb =>
+      P.mem_incorrect.1 ((Finset.mem_union.1 hu).resolve_left hU) ?_)
+    refine P.correct_congr (fun g hg => h g (P.io_subset_region u hg) ?_) hb
+    by_contra hc
+    rw [not_or, not_not] at hc
+    exact hU (Finset.mem_filter.2 ⟨Finset.mem_univ _, g, hg, hc.1, hc.2⟩)
 
 end Partition
+
+theorem Partition.Chain.committed_zero_subset {C : Circuit} {nc : ℕ} {Pc : Partition C nc}
+    (ch : Partition.Chain C Pc) : ∀ k, (ch.part 0).2.committed ⊆ (ch.part k).2.committed
+  | 0 => subset_rfl
+  | k + 1 => (ch.committed_zero_subset k).trans (ch.committed_part_subset k)
 
 namespace Levels
 
 variable {C : Circuit}
 
+/-- **Committing late does not help, at any number of levels, from a partly opened first trace.** At the levels of a
+circuit's partitions, the trace `τ k` is committed after `Q_k` is drawn, by any rule. Each keeps the opened gates `O`
+of the one before, and from the second level on its committed gates too. Every sample misses the last trace's
+incorrect last-level blocks, with those of units having a first-level committed wire outside `O`
+(`Partition.unopened`), with probability at most the miss of those of one trace fixed in advance that agrees with
+`τ 0` on `O`. It is `Levels.late_le_missProb_levels` with traces near a block when they agree on the gates it holds or
+reads (`Partition.region`) that are opened or not first-level committed. -/
+theorem ofChain_late_le_missProb_opened (ch : Partition.Chain C (Partition.whole C)) (O : Finset (Fin C.N))
+    (τ : ℕ → (Levels.ofPartitions ch).Coins → C.Trace) (hτ : ∀ k, (Levels.ofPartitions ch).ReadsBelow k (τ k))
+    (hstep : ∀ k ω, (∀ g ∈ O, τ (k + 1) ω g = τ k ω g) ∧
+      (0 < k → ∀ g ∈ (ch.part k).2.committed, τ (k + 1) ω g = τ k ω g)) :
+    ∃ τ' : C.Trace, (∀ g ∈ O, τ' g = τ 0 (Classical.arbitrary _) g) ∧
+      prCoin (fun ω => Disjoint ((Levels.ofPartitions ch).drawTo ω ch.levels.length)
+          (((ch.part (ch.levels.length - 1)).2.unopened (ch.part 0).2.committed O ∪
+            (ch.part (ch.levels.length - 1)).2.incorrect (τ (ch.levels.length - 1) ω)).image
+              (ch.part (ch.levels.length - 1)).2.block)) ≤
+        (Levels.ofPartitions ch).design.missProb
+          (((ch.part (ch.levels.length - 1)).2.unopened (ch.part 0).2.committed O ∪
+            (ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block) := by
+  classical
+  set K₀ := (ch.part 0).2.committed
+  refine Exists.imp (fun _ h => ⟨h.1.1, h.2⟩) <| (Levels.ofPartitions ch).late_le_missProb_levels
+    (fun θ => ((ch.part (ch.levels.length - 1)).2.unopened K₀ O ∪
+      (ch.part (ch.levels.length - 1)).2.incorrect θ).image (ch.part (ch.levels.length - 1)).2.block)
+    (fun k a b => (∀ g ∈ O, b g = a g) ∧ (0 < k → ∀ g ∈ (ch.part k).2.committed, b g = a g))
+    (fun X a b => ∀ g ∈ Partition.region X, g ∉ K₀ ∨ g ∈ O → a g = b g)
+    (fun _ _ => ⟨fun _ _ => rfl, fun _ _ _ => rfl⟩)
+    (fun k _ _ _ hab hbc => ⟨fun g hg => (hbc.1 g hg).trans (hab.1 g hg),
+      fun hk g hg => (hbc.2 (Nat.succ_pos k) g (ch.committed_part_subset k hg)).trans (hab.2 hk g hg)⟩)
+    (fun _ _ _ h g hg ho => (h g hg ho).symm) (fun _ _ _ _ hXY h g hg ho => h g (Partition.region_mono hXY hg) ho)
+    (fun X a b h => ⟨Partition.mem_image_unopened_incorrect_of_region _ _ _ h,
+      Partition.mem_image_unopened_incorrect_of_region _ _ _ fun g hg ho => (h g hg ho).symm⟩)
+    (fun k X a b a' h ha => ⟨fun g => if g ∈ Partition.region X ∧ (g ∉ K₀ ∨ g ∈ O) then a' g else b g,
+      ⟨fun g hg => ?_, fun hk g hg => ?_⟩, fun g hg ho => by simp only [hg, ho, and_self, ite_true]⟩) ?_ τ hτ hstep
+  · by_cases hc : g ∈ Partition.region X ∧ (g ∉ K₀ ∨ g ∈ O)
+    · simp only [hc, ite_true]
+      exact (ha.1 g hg).trans (h g hc.1 hc.2)
+    · simp only [hc, ite_false]
+  · by_cases hc : g ∈ Partition.region X ∧ (g ∉ K₀ ∨ g ∈ O)
+    · simp only [hc, ite_true]
+      exact (ha.2 hk g hg).trans (h g hc.1 hc.2)
+    · simp only [hc, ite_false]
+  · intro k hk θ θX hθX
+    rw [show ((Levels.ofPartitions ch).levels.get ⟨k, by omega⟩).blocks = (ch.part k).2.blocks from
+      ch.levels_get_blocks k _]
+    refine ⟨fun g => if h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X then θX h.choose g else θ g,
+      ⟨fun g hg => ?_, fun hk g hg => ?_⟩, fun X hX g hg ho => ?_⟩
+    · by_cases h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X
+      · simp only [h, dite_true]
+        exact (hθX _).1 g hg
+      · simp only [h, dite_false]
+    · by_cases h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X
+      · simp only [h, dite_true]
+        exact (hθX _).2 hk g hg
+      · simp only [h, dite_false]
+    · have h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X := ⟨X, hX, hg⟩
+      simp only [h, dite_true]
+      obtain ⟨hX₀, hg₀⟩ := h.choose_spec
+      by_cases hXX : h.choose = X
+      · rw [hXX]
+      · have hc := (ch.part k).2.mem_committed_of_region hX₀ hX hXX hg₀ hg
+        by_cases hk0 : k = 0
+        · subst hk0
+          have hgO : g ∈ O := ho.resolve_left (not_not.2 hc)
+          rw [(hθX _).1 g hgO, (hθX X).1 g hgO]
+        · rw [(hθX _).2 (Nat.pos_of_ne_zero hk0) g hc, (hθX X).2 (Nat.pos_of_ne_zero hk0) g hc]
+
 /-- **Committing late does not help, at any number of levels.** At the levels of a circuit's partitions, the trace
 `τ k` is committed after `Q_k` is drawn, by any rule, and agrees with `τ (k - 1)` on the committed gates of level
 `k - 1`. Every sample misses the incorrect last-level blocks of the last trace with probability at most the miss of
 those of one trace fixed in advance that agrees with `τ 0` on the first level's committed gates. -/
-theorem ofPartitions_late_le_missProb (ch : Partition.Chain C (Partition.whole C))
+theorem ofChain_late_le_missProb (ch : Partition.Chain C (Partition.whole C))
     (τ : ℕ → (Levels.ofPartitions ch).Coins → C.Trace) (hτ : ∀ k, (Levels.ofPartitions ch).ReadsBelow k (τ k))
     (hstep : ∀ k ω, ∀ g ∈ (ch.part k).2.committed, τ (k + 1) ω g = τ k ω g) :
     ∃ τ' : C.Trace, (∀ g ∈ (ch.part 0).2.committed, τ' g = τ 0 (Classical.arbitrary _) g) ∧
@@ -307,65 +392,40 @@ theorem ofPartitions_late_le_missProb (ch : Partition.Chain C (Partition.whole C
             (ch.part (ch.levels.length - 1)).2.block)) ≤
         (Levels.ofPartitions ch).design.missProb
           (((ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block) := by
-  classical
-  refine (Levels.ofPartitions ch).late_le_missProb_levels
-    (fun θ => ((ch.part (ch.levels.length - 1)).2.incorrect θ).image (ch.part (ch.levels.length - 1)).2.block)
-    (fun k a b => ∀ g ∈ (ch.part k).2.committed, b g = a g) (fun X a b => ∀ g ∈ Partition.region X, a g = b g)
-    (fun _ _ _ _ => rfl) (fun k _ _ _ hab hbc g hg => (hbc g (ch.committed_part_subset k hg)).trans (hab g hg))
-    (fun _ _ _ h g hg => (h g hg).symm) (fun _ _ _ _ hXY h g hg => h g (Partition.region_mono hXY hg))
-    (fun X a b h => ⟨Partition.mem_image_incorrect_of_region _ h,
-      Partition.mem_image_incorrect_of_region _ fun g hg => (h g hg).symm⟩)
-    (fun k X a b a' h ha => ⟨fun g => if g ∈ Partition.region X then a' g else b g, fun g hg => ?_,
-      fun g hg => by simp only [hg, ite_true]⟩) ?_ τ hτ hstep
-  · by_cases hX : g ∈ Partition.region X
-    · simp only [hX, ite_true]
-      exact (ha g hg).trans (h g hX)
-    · simp only [hX, ite_false]
-  · intro k hk θ θX hθX
-    rw [show ((Levels.ofPartitions ch).levels.get ⟨k, by omega⟩).blocks = (ch.part k).2.blocks from
-      ch.levels_get_blocks k _]
-    refine ⟨fun g => if h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X then θX h.choose g else θ g,
-      fun g hg => ?_, fun X hX g hg => ?_⟩
-    · by_cases h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X
-      · simp only [h, dite_true]
-        exact hθX _ g hg
-      · simp only [h, dite_false]
-    · have h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X := ⟨X, hX, hg⟩
-      simp only [h, dite_true]
-      obtain ⟨hX₀, hg₀⟩ := h.choose_spec
-      by_cases hXX : h.choose = X
-      · rw [hXX]
-      · have hc := (ch.part k).2.mem_committed_of_region hX₀ hX hXX hg₀ hg
-        rw [hθX _ g hc, hθX X g hc]
+  obtain ⟨τ', h, hle⟩ := ofChain_late_le_missProb_opened ch (ch.part 0).2.committed τ hτ fun k ω =>
+    ⟨fun g hg => hstep k ω g (ch.committed_zero_subset k hg), fun _ g hg => hstep k ω g hg⟩
+  simp only [Partition.unopened_self, Finset.empty_union] at hle
+  exact ⟨τ', h, hle⟩
 
 /-- **The sampling step of soundness at a miss `δ`, interiors committed late, at any number of levels.** The prover's
-coins `p`, drawn before the samples and independently of them, fix its rule `τ p`. Where every accepted run's sample
-misses the last trace's incorrect last-level blocks or a break occurs, the run is accepted while the largest miss over
-the traces agreeing with the first on the first level's committed gates is at most `δ` with probability at most `δ`
-plus the break's. -/
-theorem ofPartitions_prCoin_accept_le_levels (ch : Partition.Chain C (Partition.whole C)) {P : Type} [Fintype P]
-    [Nonempty P] (τ : P → ℕ → (Levels.ofPartitions ch).Coins → C.Trace)
+coins `p`, drawn before the samples and independently of them, fix its rule `τ p` and the opened gates `O p` of its
+first trace. Where every accepted run's sample misses the last trace's incorrect last-level blocks, with the unopened
+ones, or a break occurs, the run is accepted while the largest miss over the traces agreeing with the first on `O p`
+is at most `δ` with probability at most `δ` plus the break's. -/
+theorem ofChain_prCoin_accept_le_late (ch : Partition.Chain C (Partition.whole C)) {P : Type} [Fintype P]
+    [Nonempty P] (O : P → Finset (Fin C.N)) (τ : P → ℕ → (Levels.ofPartitions ch).Coins → C.Trace)
     (hτ : ∀ p k, (Levels.ofPartitions ch).ReadsBelow k (τ p k))
-    (hstep : ∀ p k ω, ∀ g ∈ (ch.part k).2.committed, τ p (k + 1) ω g = τ p k ω g)
+    (hstep : ∀ p k ω, (∀ g ∈ O p, τ p (k + 1) ω g = τ p k ω g) ∧
+      (0 < k → ∀ g ∈ (ch.part k).2.committed, τ p (k + 1) ω g = τ p k ω g))
     (acc brk : P → (Levels.ofPartitions ch).Coins → Prop)
     (h : ∀ p ω, acc p ω → Disjoint ((Levels.ofPartitions ch).drawTo ω ch.levels.length)
-        (((ch.part (ch.levels.length - 1)).2.incorrect (τ p (ch.levels.length - 1) ω)).image
-          (ch.part (ch.levels.length - 1)).2.block) ∨ brk p ω) (δ : ℝ≥0∞) :
+        (((ch.part (ch.levels.length - 1)).2.unopened (ch.part 0).2.committed (O p) ∪
+          (ch.part (ch.levels.length - 1)).2.incorrect (τ p (ch.levels.length - 1) ω)).image
+            (ch.part (ch.levels.length - 1)).2.block) ∨ brk p ω) (δ : ℝ≥0∞) :
     prCoin (fun x : P × (Levels.ofPartitions ch).Coins => acc x.1 x.2 ∧
-        (⨆ (τ' : C.Trace) (_ : ∀ g ∈ (ch.part 0).2.committed, τ' g = τ x.1 0 (Classical.arbitrary _) g),
+        (⨆ (τ' : C.Trace) (_ : ∀ g ∈ O x.1, τ' g = τ x.1 0 (Classical.arbitrary _) g),
           (Levels.ofPartitions ch).design.missProb
-            (((ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block)) ≤ δ) ≤
+            (((ch.part (ch.levels.length - 1)).2.unopened (ch.part 0).2.committed (O x.1) ∪
+              (ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block)) ≤ δ) ≤
       δ + prCoin (fun x : P × (Levels.ofPartitions ch).Coins => brk x.1 x.2) := by
-  refine prCoin_accept_le_of _ acc brk (fun p => ⨆ (τ' : C.Trace)
-    (_ : ∀ g ∈ (ch.part 0).2.committed, τ' g = τ p 0 (Classical.arbitrary _) g),
-      (Levels.ofPartitions ch).design.missProb
-        (((ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block))
-    (fun p => ?_) h δ
-  obtain ⟨τ', hτ', hle⟩ := ofPartitions_late_le_missProb ch (τ p) (hτ p) (hstep p)
-  exact hle.trans (le_iSup₂ (f := fun (τ' : C.Trace)
-    (_ : ∀ g ∈ (ch.part 0).2.committed, τ' g = τ p 0 (Classical.arbitrary _) g) =>
-      (Levels.ofPartitions ch).design.missProb
-        (((ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block)) τ' hτ')
+  let m : P → C.Trace → ℝ≥0∞ := fun p τ' => (Levels.ofPartitions ch).design.missProb
+    (((ch.part (ch.levels.length - 1)).2.unopened (ch.part 0).2.committed (O p) ∪
+      (ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block)
+  refine prCoin_accept_le_of _ acc brk
+    (fun p => ⨆ (τ' : C.Trace) (_ : ∀ g ∈ O p, τ' g = τ p 0 (Classical.arbitrary _) g), m p τ') (fun p => ?_) h δ
+  obtain ⟨τ', hτ', hle⟩ := ofChain_late_le_missProb_opened ch (O p) (τ p) (hτ p) (hstep p)
+  exact hle.trans (le_iSup₂ (f := fun (τ' : C.Trace) (_ : ∀ g ∈ O p, τ' g = τ p 0 (Classical.arbitrary _) g) =>
+    m p τ') τ' hτ')
 
 end Levels
 
