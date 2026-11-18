@@ -22,7 +22,7 @@ import pous_fakes
 import pous_test_signer as ts
 import pytest
 
-from verity.clock import Device
+from verity.clock import Device, raw_ns, raw_resolution_ns
 from verity.runtime import sources as S
 from verity.party import Send
 from verity.protocol import ProtocolDef
@@ -542,3 +542,41 @@ def test_the_side_prints_a_refusal_that_quotes_none_of_the_request(tmp_path, mon
         why = refusal(bad)
         assert why and not _quotes(why, value), why
     assert not (device / "seed").exists() and len(cases) >= 2 * 12
+
+
+def test_the_side_serves_its_session_on_the_raw_clock(tmp_path, monkeypatch, capsys) -> None:
+    """`main` serves the session it admits on the device's raw monotonic clock at that clock's resolution, the
+    clock its records are readings of."""
+    got: dict = {}
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def setsockopt(self, *_):
+            pass
+
+    class Server(Conn):
+        def getsockname(self):
+            return ("127.0.0.1", 1)
+
+        def accept(self):
+            return Conn(), None
+
+    def serve(f, request, **kw):
+        got.update(kw)
+        return b"s" * 64, None
+
+    monkeypatch.setattr(CP, "designate", lambda *_: None)
+    monkeypatch.setattr(CP, "setup_of", lambda _: None)
+    monkeypatch.setattr(CP.onsite, "device_key", lambda *_, **__: ts.TestSigner(b"side", 2))
+    monkeypatch.setattr(CP.socket, "create_server", lambda *_: Server())
+    monkeypatch.setattr(CP, "serve", serve)
+    monkeypatch.setattr(CP, "keep", lambda *_: None)
+    monkeypatch.setattr(CP, "report", lambda *_: {})
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"audit": AUDIT.hex()}) + "\n"))
+    assert CP.main(["--device", str(tmp_path / "device")]) == 0
+    assert got["clock"] is raw_ns and got["resolution_ns"] == raw_resolution_ns()

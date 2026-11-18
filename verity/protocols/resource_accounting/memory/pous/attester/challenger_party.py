@@ -61,7 +61,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.clock import Device
+from verity.clock import Device, raw_ns, raw_resolution_ns
 from verity.protocol import ProtocolDef, Start
 from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message, Phase, Refused
@@ -367,7 +367,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         with conn:
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sid, s = serve(Polled(conn), request, signer=signer, log=sessions, salts=salts,
-                           coins=secrets.token_bytes(COIN_BYTES), domain=period.SESSION_DOMAIN)
+                           coins=secrets.token_bytes(COIN_BYTES), domain=period.SESSION_DOMAIN, clock=raw_ns,
+                           resolution_ns=raw_resolution_ns())
     keep(device, sid, request)
     _reply(json.dumps(report(sid, s, signer.public_key), sort_keys=True))
     return 0
