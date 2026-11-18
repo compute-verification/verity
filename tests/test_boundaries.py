@@ -1059,7 +1059,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/serve_commit.py",
     "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
     "adapters/vllm/verity_vllm/pipeline/serve_pearl.py",
-    "adapters/vllm/verity_vllm/pipeline/serve_protocol.py",
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
     "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
     "adapters/vllm/verity_vllm/program/predict/node_window_values.py",

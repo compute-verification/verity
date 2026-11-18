@@ -13,9 +13,10 @@
 # (pod_bootstrap.sh --cases ROLE,... fetches and checks them).  SPAN_S, OVER and BURST set the window (ladder.py serve).
 # SERVED=DIR (an earlier run's ARM/MODEL directory) replays that run's window instead of serving one: one model, and the
 # arm it was served in. LADDER_TOPK_PROBE=record|sort probes each replay's DSA prefill top-k (topk_probe.py, into
-# replay-I/topk), and each replay after the first is compared with the first call by call (topk-I.json).
+# PRIVATE/ARM/MODEL/replay-I/topk), and each replay after the first is compared with the first call by call (topk-I.json).
 # PRIVATE names a directory outside every run's for what holds request values, kept on the node in PRIVATE/ARM/MODEL:
-# the record arm's step trace, the replays' and the alone requests' tokens.
+# the plan, the record arm's client records and step trace, the replays' and the alone requests' tokens and the top-k
+# probe's checksums.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -80,7 +81,7 @@ for m in "$@"; do
     if [ -n "${SERVED:-}" ]; then
       echo "== $m $arm replays of $SERVED's window $(date -u +%FT%TZ) $(cat "$d/arm_env.txt")"
       if ! cp -a "$SERVED/record" "$d/record"; then echo "replay-ladder: SERVED=$SERVED has no record/"; rc=1; rm -rf "$cache"; continue; fi
-      for f in serve.json plan.jsonl serving; do [ -e "$SERVED/$f" ] && cp -a "$SERVED/$f" "$d/"; done
+      for f in serve.json serving; do [ -e "$SERVED/$f" ] && cp -a "$SERVED/$f" "$d/"; done
       rm -rf "$d/record/route_capture"
     else
       echo "== $m $arm serve $(date -u +%FT%TZ) $(cat "$d/arm_env.txt")"
@@ -104,7 +105,7 @@ for m in "$@"; do
       grep '^{"mode"' "$d/replay-$i.log" | tail -n 1
       autotune "replay-$i"
       if [ -n "${LADDER_TOPK_PROBE:-}" ] && [ "$i" -gt 1 ]; then
-        "$PY" "$here/topk_probe.py" compare "$d/replay-1/topk" "$d/replay-$i/topk" > "$d/topk-$i.json" || rc=1
+        "$PY" "$here/topk_probe.py" compare "$PRIVATE/$arm/$m/replay-1/topk" "$PRIVATE/$arm/$m/replay-$i/topk" > "$d/topk-$i.json" || rc=1
       fi
     done
     if [ "$alone" -gt 0 ]; then

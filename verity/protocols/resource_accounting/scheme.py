@@ -33,13 +33,16 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   schemes (one for each value of its parameters) and its code, which `bound` evaluates at parameters its caller gives;
   unsaid, `bound` refuses.
 - code only: ``name`` (the configuration's), ``protocol`` (`Core.Protocol.id`), ``resource`` (`Core.Account.Part`),
-  ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`), ``hooks``, ``ports``,
+  ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`, which is the one place
+  they are checked, with ``check_settings``; `verity.hooks.Declared.settings` carries them into the served run), ``hooks``, ``ports``,
   ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
-  (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels, returning what the adapter
-  reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`), and
+  (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels (``ctx``'s keys:
+  `verity.hooks.FRONT`), returning what the adapter reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`, a
+  `verity.hooks.Releases`), and
   ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`), and
   ``messages``, the message types its workload writes and reads on disk (`verity.channel.Schema`s), which an adapter's
-  codec reads by the scheme's name.
+  codec reads by the scheme's name, and ``framings``, the completion framings it serves by name, each built over the
+  adapter's own framing (``framing(base=..., **settings)``).
 
 What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks
 the integrity profile's ``credited`` takes.
@@ -73,7 +76,12 @@ def _attaches_nothing(exchange: Any, ctx: Any) -> None:
     return None
 
 
-#: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`)
+def _no_settings_check(values: Mapping[str, Any]) -> str | None:
+    return None
+
+
+#: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`); a row may publish its amount in
+#: another measure (`Account.Measure`: PoUB P2's ``q_bytes`` in bytes, 8 bits each), which the row converts to this one
 RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "bits", "read": "bits",
                                                  "egress": "bits"})
 #: what a scheme needs of the proof layer that the layer doesn't provide every scheme the same way yet
@@ -101,12 +109,13 @@ class Order:
     """A condition on the verifier's log (`Verity.Scheme.logOK`): ``committed`` is logged ``direction`` (``before`` or
     ``after``) ``coin``, a coin drawn or another logged event, and, where ``within_ns`` is set, within that many
     nanoseconds of it: a deadline, which no guarantee of the proof layer reads, so it names the scheme's ``assumption``
-    that does (a bound on the prover's speed, say)."""
+    that does (a bound on the prover's speed, say). A deadline set per session is the name of the public parameter,
+    logged before the coin, that carries it in nanoseconds (PoUB's ``deadline_ns``); no value of it is declared."""
 
     committed: str
     coin: str
     direction: Literal["before", "after"] = "before"
-    within_ns: int | None = None
+    within_ns: int | str | None = None
     assumption: str | None = None
 
     def __post_init__(self) -> None:
@@ -115,7 +124,10 @@ class Order:
         if (self.within_ns is None) != (self.assumption is None):
             raise ValueError(f"{self.committed} {self.direction} {self.coin}: a time is read only by an assumption, "
                              "and names it")
-        if self.within_ns is not None and self.within_ns <= 0:
+        if isinstance(self.within_ns, str) and not _NAME.fullmatch(self.within_ns.replace("_", "-")):
+            raise ValueError(f"{self.committed} {self.direction} {self.coin}: a deadline set per session names its "
+                             f"logged parameter, not {self.within_ns!r}")
+        if isinstance(self.within_ns, int) and self.within_ns <= 0:
             raise ValueError(f"{self.committed} {self.direction} {self.coin}: a deadline is a positive time")
 
 
@@ -162,7 +174,8 @@ class Term:
 @dataclass(frozen=True)
 class Scheme:
     """What a resource scheme supplies. ``settings`` are its settings with their defaults, which a configuration's
-    ``[params."<protocol>"]`` overrides (`settings`); ``option`` is the adapter's entry that attaches it to a served run
+    ``[params."<protocol>"]`` overrides (`settings`), and ``check_settings`` what it refuses of their values beyond their
+    types (a count below 1), as a sentence, None where it accepts them; ``option`` is the adapter's entry that attaches it to a served run
     (``NAME:scheme``, an adapter's ``protocols`` spelling), empty when it attaches through none; ``hooks`` the served
     run's hooks it attaches through (`HOOKS`); ``ports`` the external ports it reads or writes; ``requires`` maps each
     requirement it has of the proof layer to today's stand-in. ``delta_scheme`` is `Verity.Scheme.δscheme`, the bound on
@@ -180,6 +193,7 @@ class Scheme:
     log: tuple[Order, ...]
     charges: tuple[Charge, ...]
     settings: Mapping[str, Any] = field(default_factory=dict)
+    check_settings: Callable[[Mapping[str, Any]], str | None] = _no_settings_check
     option: str = ""
     hooks: tuple[str, ...] = ()
     requires: Mapping[str, str] = field(default_factory=dict)
@@ -191,6 +205,7 @@ class Scheme:
     attach: Callable[[Any, Any], Any] = _attaches_nothing
     processes: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
     messages: tuple[Any, ...] = ()
+    framings: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -222,14 +237,19 @@ class Scheme:
 
 
 def settings(scheme: Scheme, given: Mapping[str, Any]) -> dict[str, Any]:
-    """``scheme``'s settings with ``given`` over its defaults; refuses a key it doesn't have and a value of another type
-    than its default's."""
+    """``scheme``'s settings with ``given`` over its defaults, the one place a setting is checked: refuses a key it
+    doesn't have, a value of another type than its default's, and what its ``check_settings`` refuses. Every setting is
+    returned, its default included: what a run used is what an application's hash covers (`verity.config.check` fills
+    the defaults), so stating a default moves no hash and changing a default in code does."""
     if unknown := sorted(set(given) - set(scheme.settings)):
         raise ValueError(f"{scheme.name} has no setting {unknown}: its settings are {sorted(scheme.settings)}")
     for k, v in given.items():
         if type(v) is not type(scheme.settings[k]):
             raise ValueError(f"{scheme.name}.{k} is a {type(scheme.settings[k]).__name__}, not {v!r}")
-    return {**scheme.settings, **given}
+    out = {**scheme.settings, **given}
+    if refused := scheme.check_settings(out):
+        raise ValueError(f"{scheme.name}: {refused}")
+    return out
 
 
 @dataclass(frozen=True)

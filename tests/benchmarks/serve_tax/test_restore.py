@@ -28,7 +28,7 @@ def arm(tmp_path: Path, gz: bool = False) -> tuple[Path, Path]:
     """A restore arm whose edge 0 holds ``a`` and ``b`` at step 2 and whose edge 1 holds ``c`` and ``d`` at step 4; ``b``
     arrived before step 1, ``c`` before step 3, and ``d`` and ``e`` before step 4, ``d`` while edge 1 drained."""
     d, kv, private = tmp_path / "restore", tmp_path / "kv", tmp_path / "private"
-    (d / "server" / "edges").mkdir(parents=True)
+    (d / "server").mkdir(parents=True)
     (private / "server" / "edges").mkdir(parents=True)
     (d / "medium" / "rep-1").mkdir(parents=True)
     kv.mkdir()
@@ -57,7 +57,7 @@ def arm(tmp_path: Path, gz: bool = False) -> tuple[Path, Path]:
     for k, held in ((0, [a, b]), (1, [c, e4])):
         st = {"requests": B.pickle_requests([Request(x) for x in held], {"block_hasher": None}), "next_step": 2 + 2 * k}
         (kv / f"edge-{k}.state.pkl").write_bytes(pickle.dumps(st))
-        (d / "server" / "edges" / f"edge-{k}.dump.json").write_text(json.dumps({"sched.x": k}))
+        (private / "server" / "edges" / f"edge-{k}.dump.json").write_text(json.dumps({"sched.x": k}))
     outs = private / "server" / "edges" / "outputs.9.jsonl"
     outs.write_text("".join(json.dumps({"step": t, "out": {a: [[t], None]}}) + "\n" for t in range(1, 5)))
     if gz:

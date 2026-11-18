@@ -59,6 +59,14 @@ def test_settings_toggle() -> None:
         S.settings(s, {"refresh": 1})
 
 
+def test_a_settings_values_are_checked_by_its_declaration() -> None:
+    s = _toy(settings={"challenges": 320},
+             check_settings=lambda v: None if v["challenges"] >= 1 else f"challenges is at least 1, not {v['challenges']}")
+    assert S.settings(s, {}) == {"challenges": 320} and S.settings(s, {"challenges": 1}) == {"challenges": 1}
+    with pytest.raises(ValueError, match="toy-bandwidth: challenges is at least 1, not 0"):
+        S.settings(s, {"challenges": 0})
+
+
 def test_block_cost_and_unit() -> None:
     s = _toy()
     assert s.unit == "bits" and s.blocks[0].cost({"bytes": 4096}) == 32_768
@@ -100,6 +108,10 @@ def test_time_only_through_an_assumption() -> None:
         S.Order("value roots", "seeds", "after", assumption="SAKMatmul")
     with pytest.raises(ValueError, match="positive time"):
         S.Order("value roots", "seeds", "after", within_ns=0, assumption="SAKMatmul")
+    per_session = S.Order("receipts", "pass seed", within_ns="deadline_ns", assumption="SquaringCeiling")
+    assert per_session.within_ns == "deadline_ns"
+    with pytest.raises(ValueError, match="names its logged parameter"):
+        S.Order("receipts", "pass seed", within_ns="10 s", assumption="SquaringCeiling")
     with pytest.raises(ValueError, match="not among its assumptions"):
         _toy(log=(S.Order("value roots", "seeds", "after", within_ns=30 * 10**9, assumption="SAKMatmul"),))
 
