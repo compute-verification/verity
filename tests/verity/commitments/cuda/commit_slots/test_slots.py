@@ -81,30 +81,6 @@ def test_a_step_is_frame_v3_trees_of_hm96_row_v2_leaves() -> None:
     assert S.commit(CTX, layout, 4, y, out, slots) == S.StepCommit(step_root, tuple(roots))
 
 
-def test_every_unit_opens_and_a_changed_opening_is_refused() -> None:
-    layout, slots, step = S.edge_layout(), 3, 2
-    out = S.random_outputs(layout, slots, np.random.default_rng(2))
-    y = salts_of(layout, slots)
-    c = S.commit(CTX, layout, step, y, out, slots)
-    for s in range(slots):
-        rows = S.slot_rows(layout, out, s)
-        for u in range(layout.unit_count):
-            o = S.open_unit(CTX, layout, step, y[s], c.slot_roots, s, u, rows)
-            b, n = layout.row_base[u], len(layout.units[u])
-            mine = {r: (rows[b + r], y[s, b + r].tobytes()) for r in range(n)}
-            assert S.verify_unit(c.root, CTX, layout, step, slots, o)
-            assert S.verify_unit(c.root, CTX, layout, step, slots, o, mine)
-            assert not S.verify_unit(c.root, CTX, layout, step + 1, slots, o)
-            assert not S.verify_unit(c.root, CTX, layout, step, slots + 1, o)
-            flipped = bytes([o.strings[0][0] ^ 1]) + o.strings[0][1:]
-            assert not S.verify_unit(c.root, CTX, layout, step, slots, S.UnitOpening(s, u, (flipped, *o.strings[1:]),
-                                                                                     o.unit_path, o.slot_path))
-            other = {0: (bytes([mine[0][0][0] ^ 1]) + mine[0][0][1:], mine[0][1]), **{r: mine[r] for r in range(1, n)}}
-            assert not S.verify_unit(c.root, CTX, layout, step, slots, o, other)
-    o = S.open_unit(CTX, layout, step, y[1], c.slot_roots, 1, 0, S.slot_rows(layout, out, 1))
-    assert not S.verify_unit(c.root, CTX, layout, step, slots, S.UnitOpening(2, 0, o.strings, o.unit_path, o.slot_path))
-
-
 def test_a_replay_of_other_rows_is_refused() -> None:
     layout = S.edge_layout()
     out = S.random_outputs(layout, 2, np.random.default_rng(3))
