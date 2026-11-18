@@ -1,21 +1,19 @@
-"""Every word primitive the catalogs register, `verity.circuits.ops`', PoUW's circuits' and this adapter's
-(`verity_vllm.definitions`), has one Boolean body (`versions.boolean_version`), since a Program over one without is refused at build (`E_NO_BODY`). `BODYLESS`
-is the list of those that have none yet, each with why. It is held exactly: a new primitive without a body fails, and so does
-one listed that has gained one, until its entry is removed, so the list only shrinks."""
+"""Every word primitive registered once every module of `verity`, both adapters and Flock's prover is imported has one
+Boolean body (`versions.boolean_version`), since a Program over one without is refused at build (`E_NO_BODY`). `BODYLESS` is
+the list of those that have none yet, each with why. It is held exactly: a new primitive without a body fails, and so does
+one listed that has gained one, until its entry is removed, so the list only shrinks. A module is left out only when it
+needs a package outside the workspace that this environment lacks (a GPU runtime)."""
 from __future__ import annotations
 
 import importlib
 import pkgutil
 
-import verity.circuits.ops as OPS
-import verity.protocols.resource_accounting.compute.pouw.prover.circuit as POUW
-import verity_vllm.definitions  # noqa: F401  (registers the adapter's catalog with the lookup)
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.ops.boolean import versions as V
 from verity.circuits.program import is_word_primitive
 
-CATALOGS = ("verity.circuits.ops", POUW.__name__, "verity_vllm.definitions")
+ROOTS = ("verity", "verity_vllm", "verity_torch", "verity_flock")
 
 _ADAPTER = "the adapter's registry: no Boolean body written yet"
 _BYTE = ("byte `at` of a SHA-512 compression, its word form one gate a byte (pearl_c_noise): the compression's Boolean "
@@ -34,18 +32,22 @@ BODYLESS: dict[str, str] = {
 }
 
 
-def _catalog_primitives() -> dict[str, PrimitiveDefinition]:
-    for pkg in OPS, POUW:
-        for m in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
-            importlib.import_module(m.name)
+def _word_primitives() -> dict[str, PrimitiveDefinition]:
+    for root in ROOTS:
+        pkg = importlib.import_module(root)
+        for m in pkgutil.walk_packages(pkg.__path__, root + "."):
+            try:
+                importlib.import_module(m.name)
+            except ModuleNotFoundError as e:
+                if (e.name or "").split(".")[0] in ROOTS:
+                    raise
     assert not V.load(), "a catalog module failed to import"
     return {descriptor_id(d): d for d in list(REGISTRY.defs.values())
-            if isinstance(d, PrimitiveDefinition) and is_word_primitive(d)
-            and getattr(d.evaluate, "__module__", "").startswith(CATALOGS)}
+            if isinstance(d, PrimitiveDefinition) and is_word_primitive(d)}
 
 
-def test_every_catalog_word_primitive_has_a_boolean_body_but_the_listed() -> None:
-    prims = _catalog_primitives()
+def test_every_word_primitive_has_a_boolean_body_but_the_listed() -> None:
+    prims = _word_primitives()
     missing = {}
     for fid, p in prims.items():
         try:
@@ -55,4 +57,4 @@ def test_every_catalog_word_primitive_has_a_boolean_body_but_the_listed() -> Non
     new = sorted(set(missing) - set(BODYLESS))
     assert not new, f"word primitives without a Boolean body, not listed: {new}; write each one's body"
     gained = sorted(set(BODYLESS) - set(missing))
-    assert not gained, f"listed in BODYLESS but now with a Boolean body, or gone from the catalogs: {gained}; remove them"
+    assert not gained, f"listed in BODYLESS but now with a Boolean body, or gone: {gained}; remove them"
