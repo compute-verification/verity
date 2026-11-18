@@ -38,8 +38,8 @@ KNOWN = {
     ("tests/verity/protocols/proofs/flock/verifier/sigma/test_sigma_difftest.py", "verity_vllm.definitions.registry.catalog"),
     ("tests/verity/protocols/proofs/flock/verifier/sigma/test_sigma_difftest.py", "verity_vllm.definitions.replay"),
     # SiluMul_v2's unit is the registry's Boolean SiluMulBf16_v4, which only this import registers; core has no SiluMulBf16_v2
-    ("verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py", "verity_vllm.definitions.registry.topp_keep_builder"),
-    ("verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py", "verity_vllm.definitions.registry.topp_word_gates"),
+    ("adapters/vllm/verity_vllm/flock/topp_word.py", "verity_vllm.definitions.registry.topp_keep_builder"),
+    ("adapters/vllm/verity_vllm/flock/topp_word.py", "verity_vllm.definitions.registry.topp_word_gates"),
     # Listed ahead of the served circuits' move into the vLLM adapter, which makes each of these an integration's import;
     # each group says whose it is to remove.  circuits': core's tests take what they check from `verity`.
     ("tests/verity/circuits/test_codec.py", "verity_vllm.definitions.registry.io_shell"),

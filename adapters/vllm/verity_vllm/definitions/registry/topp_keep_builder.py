@@ -3,7 +3,7 @@ F = 8 pivots and the mask kernel as `topp_split` runs them, each step an operati
 (:class:`Vec`).
 
 An :class:`Engine` applies each operation: an element whose operands are constants is folded, one an operand's constant decides is
-wired (the operation's word gate is a select, an AND, an OR or an XOR), and the rest are instances.  `verity_flock.topp_word` runs
+wired (the operation's word gate is a select, an AND, an OR or an XOR), and the rest are instances.  `verity_vllm.flock.topp_word` runs
 the builder with the operations' `gf2` circuits (counting and evaluating them); `topp_words.IREngine` runs it inside a composite body.
 """
 from __future__ import annotations
@@ -104,7 +104,7 @@ class Engine:
     """Applies operations to vectors: an element whose operands are all constants is folded, one an operand's constant decides
     is wired, and the rest are instances of the operation's variant for their constant operands, counted in ``counts`` (key:
     the stage path, the operation, the constant operands) and handed to :meth:`instances`. :meth:`_run` computes an operation on
-    arrays (the known elements; with T > 0, the instances): here on ints by its word gate, in `verity_flock.topp_word` by its
+    arrays (the known elements; with T > 0, the instances): here on ints by its word gate, in `verity_vllm.flock.topp_word` by its
     circuit."""
 
     def __init__(self, T: int = 0):

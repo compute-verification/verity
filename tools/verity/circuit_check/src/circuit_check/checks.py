@@ -911,9 +911,9 @@ def _piece_status(pid: str, opts: Options, pins: dict, memo: dict) -> None:
 
 
 def _topp_word(t: Any, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> dict:
-    """The top-p keep word through ``verity_flock.topp_word``: a composition of pieces too large to build as one circuit, every
+    """The top-p keep word through ``verity_vllm.flock.topp_word``: a composition of pieces too large to build as one circuit, every
     piece instance evaluated on the correspondence vectors."""
-    from verity_flock import topp_word as TW
+    from verity_vllm.flock import topp_word as TW
 
     rows = [i for i, r in enumerate(ref) if r is not None]
     if not rows:

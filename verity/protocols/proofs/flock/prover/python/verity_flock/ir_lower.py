@@ -208,7 +208,7 @@ COMPOSED: dict[str, Any] = {}
 
 def compositions() -> dict[str, Any]:
     """`COMPOSED`, with `topp_word`'s registered."""
-    from . import topp_word  # noqa: F401  (registers itself)
+    from verity_vllm.flock import topp_word  # noqa: F401  (registers itself)
 
     return COMPOSED
 
