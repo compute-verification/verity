@@ -149,7 +149,7 @@ def test_every_other_port_reads_the_interior_record_at_its_own_leaves_or_its_wri
             if p == T.link(t):
                 continue
             value, wire = win.tree(m, p), win.wire(m, p)
-            assert (value == m.port(p)) == (wire is None and p not in dict(m.outs))
+            assert (value == m.port(p)) == (wire is None)
             e, header = reads[m.key]["ports"][p], T.CS.registered_header(head, t)[p]
             n = roots[value]["leaves"]
             assert (e["value"], e["root"], e["leaves"], e["domain"]) == (T.CS.own_value(value), roots[value]["root"], n,

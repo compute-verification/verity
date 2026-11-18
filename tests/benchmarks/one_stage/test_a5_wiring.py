@@ -66,7 +66,7 @@ def negatives(circuit: I.Circuit, n: int, records) -> tuple[I.Window, dict[str, 
 
 
 def held(members, publics: dict[str, bytes]) -> tuple[list, dict[str, bytes]]:
-    """``members`` with each wired port held in its writer's tree (no wired trees, its table its writer member's output rows,
+    """``members`` with each wired port held in its writer's tree (its table its writer member's output rows,
     `rows.Member.tables`) and their public bodies so (`wiring.strings`): each port's table, then each unit's reference into
     each table, the writer unit's row for a held port and its own for the rest."""
     at, out, bodies = WI.bases(members), [], dict(publics)
@@ -82,7 +82,7 @@ def held(members, publics: dict[str, bytes]) -> tuple[list, dict[str, bytes]]:
             tables.append(WI.strings(publics, wm, o or q))
             refs.append(theirs)
         bodies[m.key] = b"".join(t.tobytes() for t in tables) + np.stack(refs, axis=1).astype("<u4").tobytes()
-        out.append(replace(m, wired_trees=False, tables=tuple((q, len(tables[j])) for j, (q, _w) in enumerate(m.rows))))
+        out.append(replace(m, tables=tuple((q, len(tables[j])) for j, (q, _w) in enumerate(m.rows))))
     return out, bodies
 
 
@@ -118,7 +118,7 @@ def test_a_held_wired_row_flipped_at_the_row_its_reference_names_is_refused():
     win, publics = closed(circuit, UNITS, [(GEMM, np.concatenate([x0, gemm(GEMM, x0, w[:UNITS])[::-1]]), w)])
     ms, bodies = held(win.window.members, publics)
     (m,) = [m for m in ms if m.wired]
-    assert (m.wired_trees, m.tables, m.wired[0][2]) == (False, (("x", UNITS), ("w", UNITS)), tuple(range(UNITS - 1, -1, -1)))
+    assert (m.tables, m.wired[0][2]) == ((("x", UNITS), ("w", UNITS)), tuple(range(UNITS - 1, -1, -1)))
     assert WI.check(ms, bodies) == {}
     neg = a5.wiring_negatives(tuple(ms), bodies)
     assert set(neg) == {"chunk-wired-to-another-unit (§16.13)", "wired-row-not-its-writer-s-output (§16.13)"}
