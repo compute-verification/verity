@@ -38,7 +38,9 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
   (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels, returning what the adapter
   reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`), and
-  ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`).
+  ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`), and
+  ``messages``, the message types its workload writes and reads on disk (`verity.channel.Schema`s), which an adapter's
+  codec reads by the scheme's name.
 
 What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks
 the integrity profile's ``credited`` takes.
@@ -195,6 +197,7 @@ class Scheme:
     requests: Callable[[Any], Sequence[Any]] = _no_requests
     attach: Callable[[Any, Any], Any] = _attaches_nothing
     processes: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
+    messages: tuple[Any, ...] = ()
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):

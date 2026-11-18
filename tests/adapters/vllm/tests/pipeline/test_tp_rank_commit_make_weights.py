@@ -36,9 +36,9 @@ UNPINNED = MAKE.UNPINNED
 class _Keeping(MAKE._Committer):
     """A committer that keeps every weight's bytes as they were when the rank registered them."""
 
-    def register_weights(self) -> dict[str, Any]:
+    def register_weights(self, replay: bool = False) -> dict[str, Any]:
         self.words = {n: _sha(p) for n, p in self.model.named_parameters()}
-        return super().register_weights()
+        return super().register_weights(replay)
 
 
 def committer(engine: Any, run_id: str) -> _Keeping:
