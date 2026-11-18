@@ -94,7 +94,7 @@ the lock's sections, each naming the docstring with the detail. This is the work
 
 ## Assumptions and guarantees
 
-- **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
+- **An assumption** is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
   (a module or a list of them), or in a module under it that reads less than the root module; an area's other premises
   live in its `Definitions/<Area>/Assumptions` (Flock's in `Proofs/Flock/Soundness/Assumptions` for now), each owner
   in the lock. Its docstring opens with its claim id, which its lock entry carries as `id`, and gives its rationale; a
