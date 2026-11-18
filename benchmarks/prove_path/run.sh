@@ -254,8 +254,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
     records $name $part $forged
     local rc=$?
-    keep $name   # whole: served_verdicts.sh takes the served arm's records audit from $OUT/served
-
+    keep $name public   # served_verdicts.sh reads the served arm's records audit in the keep
     return $rc
   fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
