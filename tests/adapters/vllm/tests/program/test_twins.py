@@ -95,3 +95,13 @@ def test_attention_twin_declines_non_finite_operands():
     args[1][0] = 0x7FC0                                                   # a NaN key word
     with pytest.raises(KR.Declined):
         tw(*args, **spec.statics)
+
+
+def test_attention_twin_declines_a_non_finite_intermediate_of_finite_operands():
+    """Every word the largest finite BF16 (0x7F7F): the operands pass the twin's own check, S = QK^T overflows, and
+    `fa2_rows`' flag declines the row, where the model's saturated result (+inf) differs from the gates' NaN."""
+    spec = bind(TW.DEFINITIONS["Attention_v3"], T=5, NH=2, KVH=1, D=16, BN=128)
+    tw = KR.instance(spec, TW.KERNEL)
+    args = [np.full(n, 0x7F7F, dtype=np.uint64) for n in (2 * 16, 5 * 16, 5 * 16)]
+    with pytest.raises(KR.Declined, match="non-finite intermediate"):
+        tw(*args, **spec.statics)

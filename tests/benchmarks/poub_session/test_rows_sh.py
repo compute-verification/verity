@@ -28,6 +28,10 @@ def _run(tmp_path: Path, rows: str, rows_args: str) -> list[str]:
     for script in ("same_sass.py", "sign_key.py", "sass_gate.py"):
         (tree / "benchmarks" / "poub_session" / script).write_text(
             f"import os, sys\nopen(os.environ['STUB_LOG'], 'a').write('{script} ' + ' '.join(sys.argv[1:]) + '\\n')\n")
+    # the tree's own machine.py, run from the stand-in tree: the build's -gencode is the architecture file's
+    (tree / "benchmarks" / "kernels").mkdir()
+    (tree / "benchmarks" / "kernels" / "machine.py").write_text(
+        f"import runpy\nrunpy.run_path({str(ROOT / 'benchmarks/kernels/machine.py')!r}, run_name='__main__')\n")
     bin_.mkdir(parents=True)
     for name, body in {"nvcc": OUTPUT, "cuobjdump": "", "nvdisasm": ""}.items():
         (bin_ / name).write_text(STUB.format(name=name, body=body))

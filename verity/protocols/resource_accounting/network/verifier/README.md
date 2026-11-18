@@ -182,8 +182,8 @@ A spec-level reference for network attestation's timing channel:
   execution-phase row (`window_fields`) every step reads: the attested arrivals not yet taken and the execution phase's decisions, since the step's cursors are
   private. `ReplayAdvance` sits beside each step and checks its arrivals and decision bits are the execution-phase row's at the
   heads; `ReplayLoad` runs once an execution phase and carries the decisions the last one left unread; `ReplayClose` ends the
-  session with none unread. The execution phases join by equal openings and the session starts from the empty rows under public
-  salts (`check_chain`). Its cost at a shape is `size`;
+  session with none unread. The honest prover joins the execution phases by equal openings and starts the session from the
+  empty rows under public salts; the check of both (`check_chain`) is called by no verifier. Its cost at a shape is `size`;
 - the compile slice, in vLLM's compiler (`verity_vllm.compiler.compile_slice`): `CompileSlice_v1`, a Boolean Definition
   with `check` its reference, composes `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires,
   `CacheStep_v1`'s calls on the attested tokens checking the hits `ReplayStep_v1` reads, and `ChargeLink_v1` over the
@@ -225,8 +225,10 @@ A spec-level reference for network attestation's timing channel:
   v1's execution phases and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is
   in no proof-system Spec yet (`PROTOCOL.md`, "Advice v1");
 - the charge's carry chain (`charge_chain`): `ChargeCount_v1`'s carry committed from execution phase to execution phase as hiding commitments,
-  execution phase 0's the book's priors under a public salt, with the verifier's check of how they join (`check_chain`)
-  and `ChargeLink_v1{N}`, the charge from the carry-in row held to the carry-out row (`protocol/charge-chain.md`);
+  execution phase 0's the book's priors under a public salt by the honest prover, and `ChargeLink_v1{N}`, the charge
+  from the carry-in row held to the carry-out row, which takes any carry-in. The check of how they join (`check_chain`)
+  is called by no verifier, so the coded charge `A_c` is not established as a bound for any period
+  (`protocol/charge-chain.md`);
 - the whole execution phase's charge (`window_charge`): `ChargeCount_v2{N, H, O, L}` and `ChargeLink_v2{N, H, O, L}` charge
   advice v1's execution phase (`Window`, the record `code_v1` codes) with its hits and order entries and their counts, coded as
   `code_v1` codes them, and its length terms' tail, with the order's position and rank added to the carry and chained
