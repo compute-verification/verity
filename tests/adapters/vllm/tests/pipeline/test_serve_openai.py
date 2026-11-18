@@ -217,7 +217,9 @@ def _stand_in(name: str, log: list) -> SimpleNamespace:
 
 
 def _listing(monkeypatch, tmp_path, protocols: str, log: list) -> Any:
-    monkeypatch.setattr(declarations, "load", lambda: {n: _stand_in(n, log) for n in ("a", "b")})
+    stand = {n: _stand_in(n, log) for n in ("a", "b")}
+    monkeypatch.setattr(declarations, "DECLARATIONS", dict.fromkeys(stand, "stand-in"))
+    monkeypatch.setattr(declarations, "get", stand.__getitem__)
     return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), "--protocols", protocols,
                                       "--protocols-config", json.dumps({"a": {"k": 1}})], environ={})
 
