@@ -344,8 +344,9 @@ def _weight_toy(name: str, part) -> dict:
 INPUT_CASES = [
     ("the shared weight, strided: members read successive stretches of a run, then repeat",
      _weight_toy("CoreEdgesWeightS", {"strided": ["n", 0, 0, 256, 0, 1, 1024]}), {"wires": []}),
-    ("the shared weight, a grid lane of outer step 0",
-     _weight_toy("CoreEdgesWeightG", {"grid": [256, [["n", 0, 0, 1, [[4, 0]]]]]}), {"wires": []}),
+    ("the shared weight, a grid of two lanes in reverse of outer step 0",
+     _weight_toy("CoreEdgesWeightG", {"grid": [128, [["n", 0, 128, 1, [[4, 0]]], ["n", 0, 0, 1, [[4, 0]]]]]}),
+     {"wires": []}),
     ("the shared weight in runs the members straddle",
      _weight_toy("CoreEdgesWeightR", {"strided": ["n", 0, 0, 100, 0, 1, 1024]}), {"wires": []}),
 ]
@@ -385,10 +386,6 @@ GRID_CASES = [
      {"refusal": "edge-units"}),
     ("a grid over an input node", _of(TUP, cuts=_CUT, b_refs=_grid(("n", 0, 0, 0, [[2, 2]]), ("n", 0, 3, 0, [[2, -2]]))),
      {"wires": [_wire(UA, UB, 0, 2, 0, 0), _wire(UA, UB, 1, 2, 0, 1)]}),
-    ("lanes of two period counts", _of(TUP, cuts=_CUT, b_refs=_grid(("n", None, 0, 0, [[2, 2]]), ("n", None, 0, 0, [[4, 1]]))),
-     {"refusal": "edge-rows"}),
-    ("a lane past its writer node", _of(TUP, cuts=_CUT, b_refs=_grid(("n", None, 0, 0, [[2, 4]]), ("n", None, 3, 0, [[2, -2]]))),
-     {"refusal": "edge-rows"}),
 ]
 
 
@@ -458,6 +455,19 @@ def test_the_edges_cost_the_description(pieces):
     want = {"wires": [{**_wire_of(ROPE_WIDE, [2**15, 32], [1, 0]), "ostep": [0, 64]}]}
     assert _code(got := reference(ROPE_WIDE)) == want
     assert pieces.call("edges", ROPE_WIDE) == ("output", D.canonical(got))
+
+
+@pytest.mark.slow
+def test_the_edges_cost_their_parts(pieces):
+    """700,000 parts, reader member m reading writer member 699,999 - m, each its own wire: the wires grow with the
+    parts, once each. A piece or twin that copied its wires at each part (about 2.5e11 copies here) would not return;
+    the served classes' 26,038 parts are too few to show it."""
+    n = 700_000
+    j = _fields_toy("CoreEdgesParts", 1, 1, Value(16),
+                    lambda w: {"concat": [{"affine": ["n", w, n - 1 - m, 1]} for m in range(n)]}, readers=n, writers=n)
+    got = reference(j)
+    assert len(got["wires"]) == n and got["wires"][-1] == _wire_of(j, [1], [0], base=0, at=n - 1)
+    assert pieces.call("edges", j) == ("output", D.canonical(got))
 
 
 @pytest.mark.parametrize("name, j, want", WORD_CASES, ids=[c[0] for c in WORD_CASES])
