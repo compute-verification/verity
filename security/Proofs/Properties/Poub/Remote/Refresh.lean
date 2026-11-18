@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Poub.Remote.Accept
 public import Properties.Poub.Remote.Refresh
-import Proofs.Properties.Poub.Remote.Released
+public import Proofs.Properties.Poub.Remote.Released
 
 /-!
 # Proofs of refresh's code-side properties
@@ -135,14 +135,28 @@ theorem cap_final {s : State} (h : Cap s) (u : Nat) :
     Cap { s with windows := s.windows.modify u ({· with final := true}) } :=
   cap_same h (samePlans_modify _ _ _ fun _ => rfl)
 
+theorem cap_boundaryNs {s : State} (h : Cap s) (u now : Nat) :
+    Cap { s with windows := s.windows.modify u ({· with boundaryNs := some now}) } :=
+  cap_same h (samePlans_modify _ _ _ fun _ => rfl)
+
+theorem cap_sample {s : State} (h : Cap s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat) :
+    Cap { s with windows := s.windows.modify u ({· with drawn := some d, openedNs := some now}) } :=
+  cap_same h (samePlans_modify _ _ _ fun _ => rfl)
+
+theorem cap_accept {s : State} (h : Cap s) (u : Nat) :
+    Cap { s with windows := s.windows.modify u ({· with verdict := some .accept}) } :=
+  cap_same h (samePlans_modify _ _ _ fun _ => rfl)
+
 theorem cap_releaseCoin {s : State} (h : Cap s) (t now : Nat) : Cap (s.releaseCoin t now) :=
   fun hr => capOn_push (h hr) _ rfl
 
 /-- A plan `receive` lets past `refreshRefusal` in window `t`, with refresh, reads a block below `N` only if
 `t < lifetime`. -/
-theorem cap_check {s : State} {t : Nat} {plan : Plan} (hP : EndsOk plan) (hchk : s.refreshRefusal t plan = none)
-    (hr : s.params.refresh = true) : ∀ p, p < plan.length → plan.block p < s.reg.blocks → t < s.params.lifetime := by
+theorem cap_check {s : State} {t : Nat} {plan : Plan} (hP : EndsOk plan)
+    (hchk : ∀ f, s.refreshRefusal t plan = some f → False) (hr : s.params.refresh = true) :
+    ∀ p, p < plan.length → plan.block p < s.reg.blocks → t < s.params.lifetime := by
   intro p hp hN
+  replace hchk : s.refreshRefusal t plan = none := Option.eq_none_iff_forall_ne_some.2 hchk
   refine Nat.lt_of_not_le fun hL => ?_
   obtain ⟨⟨f, c⟩, hrun, hr1, -⟩ := block_mem hP hp
   dsimp only at hr1
@@ -174,8 +188,8 @@ theorem cap_boundary {s : State} {now : Nat} {r : Result} {s' : State} (h : Cap 
   all_goals cases he
   all_goals first
     | exact h
-    | exact cap_releaseCoin (cap_same h (samePlans_modify _ _ _ fun _ => rfl)) _ _
-    | exact cap_same h (samePlans_modify _ _ _ fun _ => rfl)
+    | exact cap_releaseCoin (cap_boundaryNs h _ _) _ _
+    | exact cap_boundaryNs h _ _
 
 theorem cap_append {s : State} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat}
     {r : Result} {s' : State} (h : Cap s) (he : append s root count origin slot = .ok (r, s')) : Cap s' := by
@@ -208,7 +222,7 @@ theorem cap_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State} (h
   all_goals first
     | exact h
     | exact cap_fail (cap_final h _) _ _ _
-    | exact cap_same (cap_final h _) (samePlans_modify _ _ _ fun _ => rfl)
+    | exact cap_sample (cap_final h _) _ _ _
 
 theorem cap_verify {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State}
     (h : Cap s) (he : verify s t openings = (r, s')) : Cap s' := by
@@ -220,7 +234,7 @@ theorem cap_verify {s : State} {t : Int} {openings : Array Opening} {r : Result}
   all_goals first
     | exact h
     | exact cap_fail h _ _ _
-    | exact cap_same h (samePlans_modify _ _ _ fun _ => rfl)
+    | exact cap_accept h _
 
 theorem cap_receive {s : State} {t i : Int} {root : ByteArray} {runs : Option (Array (Int × Int))}
     {change : Option (Array (Int × Int) × Array (Int × Int))} {step : Option Int} {now : Nat} {r : Result}
@@ -283,7 +297,7 @@ theorem step_cap {s : State} {e : Event} {r : Result} {s' : State} (h : Cap s)
 
 theorem registeredCapped : RegisteredCapped := by
   intro params reg coins appendCoins notBeforeNs events rs s hrun hr
-  have hc := run_inv Cap (fun _ _ _ _ hs he => step_cap hs he) _ _ _ _ (cap_init ..) hrun
+  have hc := run_inv Cap (fun _ _ _ _ hs he => step_cap hs he) _ _ _ _ (cap_init _ _ _ _ _) hrun
   obtain ⟨-, hp, hreg, -⟩ := inv_run hrun
   intro t ht i hi p hpl hN
   have := hc (by rw [hp]; exact hr) t ht i hi p hpl (by rw [hreg]; exact hN)
