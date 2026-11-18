@@ -88,15 +88,17 @@ def _rows(param: str, words: Any) -> np.ndarray:
     return data.view("<u2").reshape(-1, w)
 
 
-def _entry(program: str, param: str, words: int, registers: int) -> dict[str, Any]:
+def _entry(program: str, param: str, words: int, registers: int, bits: int = RV.WORD_BITS) -> dict[str, Any]:
     """Weight parameter ``param``'s entry with no root, its weight ``words`` u16 words in rows of its width, as the circuit
-    registers ``registers`` words of it."""
+    registers ``registers`` words of it, in leaves of ``bits`` bits (its format's, `interface.value_format`)."""
     w = _param(param)[1]
     if not words or words % w:
         raise ValueError(f"{param}: {words} words are no whole rows of {w} u16 words")
     if words != registers:
         raise ValueError(f"{param}: {words} words of record, and the circuit registers {registers}")
-    return {"value": param, "leaves": words // w, "words": w, "domain": RV.domain(program, param, w, words // w).domain_id.hex()}
+    k = w * 16 // bits
+    return {"value": param, "leaves": words // w, "words": k, **RV.width_entry(bits),
+            "domain": RV.domain(program, param, k, words // w, bits).domain_id.hex()}
 
 
 def _analytic(rec: dict[str, Any], of: dict[str, list[str]]) -> list[dict[str, Any]]:
@@ -123,16 +125,24 @@ def _table_words(f: dict[str, Any], served: Any) -> np.ndarray:
     return a.view(np.uint16)
 
 
-def weight_value(program: str, param: str, words: Any, salts: bytes | None = None, keep_rows: bool = False) -> RV.Registered:
+def weight_value(program: str, param: str, words: Any, salts: bytes | None = None, keep_rows: bool = False,
+                 word_bits: int = RV.WORD_BITS) -> RV.Registered:
     """Weight parameter ``param``'s registered value: its rows (``words`` in rows of its width) committed as core's
     `registered_value.Registered` commits ``hm96-sha512/row/v2`` rows, or a table's ``hm96-sha512/row-seg/v1`` rows (the leaves
     its opening reads in-circuit, `gates.embedding`), with `pouw.h1.registered.commit` (on the GPU where this process has
     one) under ``program``, the weights record's program digest, row j under ``salts``' 192 bytes j (the registration's,
     `salt_file`), or fresh OS bytes: a hiding commitment, so its root says nothing of the weight to anyone without the
     salts, a verifier holding a candidate checkpoint included. ``keep_rows``: hold the rows (a window's committer, which
-    opens them)."""
+    opens them). ``word_bits`` 32 (its format's, `window_circuit.WIDE_FORMAT`): each row's u16 words as 32-bit leaves, low
+    word first, committed by core's `registered_value.Registered.commit`, which holds the rows."""
     rows = _rows(param, words)
     ys = os.urandom(len(rows) * SF.SALT_BYTES) if salts is None else bytes(salts)
+    if word_bits != RV.WORD_BITS:
+        if word_bits != 32 or rows.shape[1] % 2:
+            raise ValueError(f"{param}: rows of {rows.shape[1]} u16 words as {word_bits}-bit leaves")
+        return RV.Registered.commit(program, param, np.ascontiguousarray(rows).view("<u4").tolist(),
+                                    [ys[j:j + SF.SALT_BYTES] for j in range(0, len(ys), SF.SALT_BYTES)],
+                                    word_bits=32, schema=SCHEMA_HM96_SHA512_ROW_V2)
     return registered_commit(program, param, rows, ys, keep_rows=keep_rows,
                              schema=SCHEMA_HM96_SHA512_ROW_SEG if _param(param)[2] else SCHEMA_HM96_SHA512_ROW_V2)
 
@@ -149,12 +159,14 @@ def _fields(registered: Any) -> tuple[Any, list[tuple[str, list[int], int]]]:
 
 
 def _weights(registered: Any, grain: Grain, served_params: Any = ()) -> tuple[Any, list[tuple[str, list[int], int]], dict[str, int],
-                                                                             dict[str, list[str]]]:
+                                                                             dict[str, list[str]], dict[str, int]]:
     """`_fields`, the weight parameters the class circuit registers at ``grain`` and those of ``served_params`` (a served
     window's record's, ``weights/<label>@<words>``: its slice units' rows of a weight, `pipeline.weight_rows`) with their
-    words, wired or not, and those by field. Refused (ValueError) for a served parameter of no field, or of a table."""
+    words, wired or not, those by field, and each one's leaf width (`interface.value_format`). Refused (ValueError) for a
+    served parameter of no field, or of a table."""
     r, fields = _fields(registered)
-    every = lower(registered, WEIGHTS_CLASS, None, grain).circuit.registered.params
+    reg = lower(registered, WEIGHTS_CLASS, None, grain).circuit.registered
+    every = reg.params
     params = {p: every[p] for p in weight_params(every)}
     words = {n: int(np.prod(s, dtype=np.int64)) * int(b) // 16 for n, s, b in fields}
     for p in served_params:
@@ -165,7 +177,7 @@ def _weights(registered: Any, grain: Grain, served_params: Any = ()) -> tuple[An
     of: dict[str, list[str]] = {}
     for p in params:
         of.setdefault(_param(p)[0], []).append(p)
-    return r, fields, params, of
+    return r, fields, params, of, {p: IF.value_format(reg, p)[1] for p in params}
 
 
 def _composed(registered: Any, r: Any, fields: list, checkpoint_dir: str, checkpoints_manifest: str | None,
@@ -202,17 +214,17 @@ def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: s
     its declared shape, the verifier never reading its words; a parameter whose field has neither is ``unrooted`` with
     why, and its reads stay free. The weights record is the model's, one at every class; its parameters are the grain's,
     which the record names, and ``served_params``, a served window's record's (`_weights`), which its entries name."""
-    r, fields, params, of = _weights(registered, grain, served_params)
+    r, fields, params, of, bits = _weights(registered, grain, served_params)
     shapes: dict[str, dict[str, Any]] = {}
 
     def shape(name: str, words: np.ndarray) -> None:
         for p in of.get(name, ()):
-            shapes[p] = _entry(r.digest, p, _rows(p, words).size, params[p])
+            shapes[p] = _entry(r.digest, p, _rows(p, words).size, params[p], bits[p])
 
     rec = _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest, kv_cache_dtype, shape)
     for f in _analytic(rec, of):
         for p in of[f["field"]]:
-            shapes[p] = _entry(r.digest, p, _words(f), params[p])
+            shapes[p] = _entry(r.digest, p, _words(f), params[p], bits[p])
     return {**rec, "grain": asdict(grain), "registered_entries": dict(sorted(shapes.items())),
             "unrooted": _unrooted(rec, of, shapes)}
 
@@ -227,9 +239,9 @@ def weight_values(registered: Any, served: Any, registration: str | Path | None,
     root is not the registered one (other words served) or the registration doesn't name the weight; one it leaves unrooted
     under fresh salts, its reads free. With no ``registration`` (a window no registration pins), every weight under fresh
     salts, its reads free (`interface.input_count`)."""
-    r, _fields, params, of = _weights(registered, grain, served_params)
+    r, _fields, params, of, bits = _weights(registered, grain, served_params)
     if registration is None:
-        return {p: weight_value(r.digest, p, served[name], None, keep_rows) for name in sorted(of) if name in served
+        return {p: weight_value(r.digest, p, served[name], None, keep_rows, bits[p]) for name in sorted(of) if name in served
                 for p in of[name]}
     reg = WeightsRegistration.of(json.loads(Path(registration).read_text()), str(registration))
     salts = SF.beside(registration)
@@ -240,12 +252,12 @@ def weight_values(registered: Any, served: Any, registration: str | Path | None,
             continue
         for p in of[name]:
             if p in reg.values:
-                v = weight_value(r.digest, p, served[name], SF.read(salts, p), keep_rows)
+                v = weight_value(r.digest, p, served[name], SF.read(salts, p), keep_rows, bits[p])
                 if v.root.hex() != reg.values[p]["root"]:
                     bad[p] = "served words whose root under the registration's salts is not the registered one"
                 out[p] = v
             elif p in reg.unrooted:
-                out[p] = weight_value(r.digest, p, served[name], None, keep_rows)
+                out[p] = weight_value(r.digest, p, served[name], None, keep_rows, bits[p])
             else:
                 bad[p] = "not in the registration"
     if bad:
@@ -285,16 +297,16 @@ def weights_registration(registered: Any, salts_to: str | Path, checkpoint_dir: 
     A field the weights record holds to an analytic table is registered at ``tables``' words for that table (the words the
     engine serves, by the record's table name: ``cos_sin``, the rotary table), refused by name unless they are within its
     bound (`_table_words`); a table ``tables`` doesn't name leaves its parameters unrooted."""
-    r, fields, params, of = _weights(registered, grain, served_params)
+    r, fields, params, of, bits = _weights(registered, grain, served_params)
     entries: dict[str, dict[str, Any]] = {}
     salts: dict[str, bytes] = {}
     refused: dict[str, str] = {}
 
     def register(name: str, words: np.ndarray) -> None:
         for p in of[name]:
-            v = weight_value(r.digest, p, words)
-            if v.words * v.leaves != params[p]:
-                raise ValueError(f"{p}: {v.words * v.leaves} words of record, and the circuit registers {params[p]}")
+            v = weight_value(r.digest, p, words, word_bits=bits[p])
+            if (n := v.words * v.leaves * v.word_bits // 16) != params[p]:
+                raise ValueError(f"{p}: {n} words of record, and the circuit registers {params[p]}")
             entries[p], salts[p] = v.entry(), value_salts(v)
 
     def commit(name: str, words: np.ndarray) -> None:

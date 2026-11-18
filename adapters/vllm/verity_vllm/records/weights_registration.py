@@ -16,8 +16,8 @@ from verity_vllm.records.fields import RecordError, only, required
 __all__ = ["WeightsRegistration"]
 
 SCHEMA = "verity-vllm/weights-registration/v1"
-#: an entry's fields: core's `registered_value.Registered.entry()` of a value of 16-bit words
-ENTRY = ("value", "root", "leaves", "words", "domain")
+#: an entry's fields: core's `registered_value.Registered.entry()`, its `word_bits` only for leaves other than 16 bits
+ENTRY = ("value", "root", "leaves", "words", "word_bits", "domain")
 ROOT = re.compile(r"[0-9a-f]{128}")
 
 

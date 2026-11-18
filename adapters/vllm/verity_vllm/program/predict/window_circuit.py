@@ -42,9 +42,11 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   template's ``x`` at another row count (a port is cut one way, and o_proj's ``x`` is a row a head).
 - An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit `Int8RowQuant_v3{K, R}` (v1 with
   ``x`` as R rows of K / R, R its writers' rows: one after a norm, a head's at o_proj; v5 at the K of H1's tables, below),
-  and its product `ScaledMmS8_v1{K, N}`, ⌈N / n⌉ slices `ScaledMmS8_v3{K, n}` at the same weight words a slice (n =
-  ``grain.gemm_words`` // (K / 2): an s8 weight row is K / 2 words), each reading its s8 weight rows and their f32 row scales
-  as the weights record's u16 words, and the quantizer's codes ``x`` and scale ``sx`` whole. Words are laid out by each
+  and its product `ScaledMmS8_v1{K, N}`, ⌈N / n⌉ slices `ScaledMmS8_v1{K, n}` at the same weight words a slice (n =
+  ``grain.gemm_words`` // (K / 2): an s8 weight row is K / 2 words), each reading its s8 weight rows as the weights record's
+  u16 words recut to bytes (`refs.recut`), their f32 row scales as words of a 32-bit format (a parameter a 32-bit port reads
+  is registered at 32-bit leaves in ``hm96-sha512/row/v2`` rows, `WIDE_FORMAT`), and the quantizer's codes ``x`` and scale
+  ``sx`` whole. Words are laid out by each
   field's leaf width (`_spans`): a weight or node output whose leaves aren't one byte width filling whole u16 words, and a
   read that starts inside a word, are refused.
 - `RoPE_v1{NHEADS, D}` is its heads (`RoPEHead_v1{D}`), each reading its slice of ``x``.
@@ -162,9 +164,16 @@ from .window_cut import ROW_FORMAT, cut_values, linears
 from .window_lowering import CUTS, FAMILIES, _Program
 
 NAME = "verity-vllm/window"
+#: a weight parameter's format where a 32-bit port reads it (an int8 linear's f32 row scales): its u16 words as 32-bit leaves,
+#: low word first, in the default ``hm96-sha512/row/v2`` rows
+WIDE_FORMAT = {"row_schema": IF.V2, "word_bits": 32}
 
 
 _GRAIN = Grain()
+
+
+def _wide(b: Any) -> set[str]:
+    return {r.param for r in b.reads if dict(b.fns[r.reader].signature()[0])[r.port].homogeneous_width() == 32}
 
 
 def class_program(registered: Any, n: int) -> Any:
@@ -278,7 +287,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         held = ()
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings), values=(*held, SS.SCAN_STATE),
-                        formats={v: ROW_FORMAT for v in held} if layout is not None else {})
+                        formats={**{p: WIDE_FORMAT for p in _wide(b)},
+                                 **({v: ROW_FORMAT for v in held} if layout is not None else {})})
     wires = tuple(IF.coalesce(b.wires))
     entry_units = {r.entry_unit[0] for r in progs if r.entry_unit is not None}
     if len(entry_units) != 1 or any(r.entry_unit is None for r in progs):
