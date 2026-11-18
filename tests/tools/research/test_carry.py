@@ -259,6 +259,42 @@ def test_merging_another_prs_head_carries_only_once_that_head_is_trusted(repo: P
     assert carry.delta(repo, old, new, landed(repo, newer)).kind == "untrusted-parent"
 
 
+def test_merging_a_head_with_a_land_verdict_of_its_own_carries_even_once_its_pr_moved_on(repo: Path):
+    """A merged head that is neither landed nor another PR's current marked head is trusted when ``lands`` says it has its own
+    PR's land verdict at it: a reader passed it, so merging it changes nothing unread."""
+    branch(repo, "other")
+    theirs = commit(repo, {"b.py": "other\n"}, "another PR")
+    commit(repo, {"b.py": "other, re-headed\n"}, "the other PR moves on, with no verdict yet")
+    branch(repo, "pr", "main")
+    old = commit(repo, {"a.py": "a2\n"}, "the PR")
+    new = merge(repo, theirs)
+    main = git(repo, "rev-parse", "main")
+    asked = []
+    assert carry.delta(repo, old, new, carry.trust(repo, [main], (), lambda c: asked.append(c) or False)).kind == \
+        "untrusted-parent" and asked == [theirs]
+    d = carry.delta(repo, old, new, carry.trust(repo, [main], (), lambda c: c == theirs))
+    assert d.kind == "merge-only" and d.parents == (theirs,)
+    assert carry.delta(repo, old, new, carry.trust(repo, [main], ())).kind == "untrusted-parent", "nothing trusts it unasked"
+
+
+def test_a_head_with_its_own_land_verdict_vouches_for_no_hand_resolution_and_no_commit_of_the_prs_own(repo: Path):
+    """Trusting a merged head for its own land verdict loosens only `untrusted-parent`: a merge of it resolved by hand, or a
+    commit of the PR's own beside it, still needs a reader."""
+    branch(repo, "other")
+    theirs = commit(repo, {"a.py": "other\n"}, "another PR, in the PR's file")
+    branch(repo, "pr", "main")
+    old = commit(repo, {"a.py": "pr\n"}, "the PR")
+    lands = carry.trust(repo, [git(repo, "rev-parse", "main")], (), lambda c: c == theirs)
+    hand = merge(repo, theirs, {"a.py": "both\n"})
+    assert carry.delta(repo, old, hand, lands).kind == "hand-resolved"
+    git(repo, "checkout", "-q", "-B", "pr2", "main")
+    old = commit(repo, {"c.py": "pr\n"}, "a PR in another file")
+    clean = merge(repo, theirs)
+    assert carry.delta(repo, old, clean, lands).kind == "merge-only"
+    authored = commit(repo, {"c.py": "pr, more\n"}, "the PR's own commit after the merge")
+    assert carry.delta(repo, old, authored, lands).kind == "authored"
+
+
 def test_a_reviewed_pr_built_on_the_old_head_and_merged_back_carries(repo: Path):
     branch(repo, "pr")
     old = commit(repo, {"a.py": "a2\n"}, "the PR")

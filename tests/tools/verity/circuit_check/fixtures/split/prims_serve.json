@@ -8,6 +8,7 @@
   "Advance_v1{K=2}": "e9bed8592ad83f5fab967686568f73b9ae3590aff1fa03d5cbcc3d12bf65b9cb17fdf4afc77b7ff6262cd3aaa6fc10afa7976f5ffabca1d335ca6e781df8e4aa",
   "AllGather2_v1{N=16}": "d65517c2add59aa014abebebc4085526603c225e6312c3db97e8f484c06580212ede9d08e5e7186daa2971ce81809830eed83aae95bd697b86b53617824d913c",
   "AllGather2_v1{N=32}": "85ec63afd68cf56fffd8e67a44d3c9d56f74635c9c67c9710f3dfd73ca42392f90d84cb251db4132308243400c898fbc75a35071b25c375ac1a20097c7fead1d",
+  "AllGatherTail_v1{WORLD=3,N=8,TAIL=5,TN=2}": "c027dac1c38bf27795445647a4f6c37ca5069fb8772bb3cb8ef4131b6a57200c7994c6e994dd1d48db3bc8c7d944248ca336c5a11a89b5f2fe400758aebd7d30",
   "AllGather_v1{WORLD=2,N=16}": "568431c401831b3a5661784ff405c7034e2f67646ce1453850278045d548aea7a43172a35446d9d56665ace091eba3373b27ea7818da9ad05e15d5713ae6900b",
   "AllGather_v1{WORLD=4,N=8}": "21f12bd3b8cccd705f0a78e7b4cb361d573b693b74ec7138fb0a8ae085222abfe08fc5dd7f20a316958b72aaf0472bd7080bff46119d5674c785985b11024411",
   "AllReduce2_v1{N=16}": "b117beccc4967cf5656a2e7c582c6f22d3b89c2875508f54460f5c9733be449f5e569cb8999f8818b5331b7b53c5ee89e07a0b09c487a19c20a06496f913a36b",
@@ -394,6 +395,7 @@
   "AddScalarF32_v3": "value_inputs",
   "Advance_v1": "spec",
   "AllGather2_v1": "b1_tp2",
+  "AllGatherTail_v1": "b1_tp2",
   "AllGather_v1": "b1_tp2",
   "AllReduce2_v1": "b1_tp2",
   "AllReduce_v2": "b1_tp2",
@@ -581,6 +583,7 @@
   "AddScalarF32_v3",
   "Advance_v1",
   "AllGather2_v1",
+  "AllGatherTail_v1",
   "AllGather_v1",
   "AllReduce2_v1",
   "AllReduce_v2",
@@ -744,6 +747,10 @@
   [
    "definition",
    "AllGather2_v1{N=32}"
+  ],
+  [
+   "definition",
+   "AllGatherTail_v1{WORLD=3,N=8,TAIL=5,TN=2}"
   ],
   [
    "definition",

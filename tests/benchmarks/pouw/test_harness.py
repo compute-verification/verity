@@ -711,11 +711,12 @@ def test_a_queue_job_accepts_any_listed_gpu_and_records_it():
         I.check({**ENV, "CUDA_VISIBLE_DEVICES": "0"}, 0, 1, table[6], node + ",GPU-nope")
 
 
-def test_the_card_must_be_an_rtx_pro_6000_sm120_with_188_sms_or_an_h200_sm90_with_132():
+def test_the_card_must_be_an_rtx_pro_6000_sm120_with_188_sms_or_an_h200_or_h100_sm90_with_132():
     assert I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")["arch"] == "sm_120a"
     assert I.check_card("NVIDIA H200", "9.0", 132, "570.133.20")["arch"] == "sm_90a"
+    assert I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "580.173.02")["arch"] == "sm_90a"
     for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86"),
-                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "9.0", 132, "570.1"),
+                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 PCIe", "9.0", 114, "570.1"),
                 ("NVIDIA H200", "9.0", 132, "unknown"), ("NVIDIA H200", "9.0", 132, "")):
         with pytest.raises(I.IdentityError, match="not the card"):
             I.check_card(*bad)

@@ -18,6 +18,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes M,.. --oprove-runs 1 --lea
        --forge KINDS (85's forgeries; with coef, dirs or message the forge-after step too, unless --no-forge-after)
        --cpu (GPU=0: the CPU prover, no lease) --on MACHINE --cores 0-31 --mem-gb G --cpus 32 --max-min M
        --release (85's RELEASE=1: the release side, one pass)  --env KEY=VALUE ...
+       --window DIR --member K --units A-B --subcircuit ID --serves NAME (stage.sh over a served window on --on's machine)
 """
 from __future__ import annotations
 
@@ -38,6 +39,8 @@ HERE = Path(__file__).resolve().parent
 
 #: the job's command before its KEY=VALUE arguments, run from the tree's root; a caller of `main` may wrap it (`job`)
 JOB = ("bash", "benchmarks/recursion_e2e/job.sh")
+#: the job over a served window (--window): stage.sh stages it into FLOCK_WORK/data/TAG on the run's machine, then runs job.sh
+STAGE = ("bash", "benchmarks/recursion_e2e/stage.sh")
 NODE = "vy-nebius-1"
 STEPS = RP.ORDER
 E2E = (*RP.E2E_STEPS, "negative")
@@ -73,6 +76,9 @@ AUTO = "auto"
 CPU_NODE, PLAIN_CPU_NODES = "vy-nebius-cpu-2", ("vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5")
 SLOT_ONLY = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1")
 CPU_WORK = "/workspace/cache/rec-bench"
+# A GPU node that keeps served windows takes a --window run as a plain run on the cores of its calendar row (--cores, no
+# default there), reading the window in place, so no private file of it travels to another machine or into a record.
+WINDOW_NODES = ("vy-spot-glm53",)
 
 STAGES = {
     "build": "the CUDA prover (60-circuit.sh), the Lean verifier (lake build), the inner statement staged with plain and hm96 leaves",
@@ -151,6 +157,13 @@ def cpu_run(a) -> bool:
 def on(a) -> str:
     """The machine: --on (AUTO: research run's queue places it), else a plain CPU node for a CPU run and the GPU node's
     queue for a GPU one."""
+    if a.window:
+        if not a.on:
+            raise SystemExit("--window: say the machine that keeps it (--on); the window is read there, never copied")
+        if not cpu_run(a):
+            raise SystemExit("--window: a run on the CPU prover (behind the ZK server, or --cpu); a window node's cards aren't leased")
+        if a.on in WINDOW_NODES and not a.cores:
+            raise SystemExit(f"--window on {a.on}: --cores, the cores of its calendar row")
     m = a.on or (CPU_NODE if cpu_run(a) else NODE)
     if m in PLAIN_CPU_NODES and not cpu_run(a):
         raise SystemExit(f"--on {m}: a CPU node has no GPU; --oprove-gpu 1 and GPU modes need a GPU node")
@@ -201,8 +214,9 @@ def forge_after(a) -> list[str]:
 
 
 def direct(a) -> bool:
-    """A plain run on a CPU node (``research run --on``, pinned to --cores), not a queued job."""
-    return on(a) in PLAIN_CPU_NODES
+    """A plain run on a CPU node, or a --window run on a window node (``research run --on``, pinned to --cores), not a
+    queued job."""
+    return on(a) in PLAIN_CPU_NODES or bool(a.window) and on(a) in WINDOW_NODES
 
 
 def job_env(a: argparse.Namespace) -> list[str]:
@@ -211,12 +225,12 @@ def job_env(a: argparse.Namespace) -> list[str]:
         raise SystemExit(f"--env: {', '.join(bad)} is not KEY=VALUE")
     lease = a.lease_min or lease_min(a.oprove_warm + a.oprove_runs, zk_server(a), levels(a))
     # a CPU node has no GPU, and /workspace/jobs isn't the research user's there; a CPU run books no GPU anywhere
-    cpu_node = direct(a) or (on(a) == AUTO and cpu_run(a))
+    cpu_node = on(a) in PLAIN_CPU_NODES or (on(a) == AUTO and cpu_run(a))
     node = ["GPU=0", f"FLOCK_WORK={CPU_WORK}"] if cpu_node else ["GPU=0"] if cpu_run(a) else []
     env = [f"K={a.K}", f"N={a.N}", f"STEPS={','.join(steps(a.steps))}", f"REPEAT={a.repeat}", f"MODES={a.modes}",
            f"OPROVE_WARM={a.oprove_warm}", f"OPROVE_RUNS={a.oprove_runs}", f"GPU_MAX_MIN={lease}", f"NEG={','.join(a.neg.split())}",
            f"FORGE={','.join(forge(a))}", *([f"FORGE_AFTER={','.join(forge_after(a))}"] if "forge-after" in steps(a.steps) else []),
-           *node, *([f"OPROVE_GPU={a.oprove_gpu}"] if a.oprove_gpu != "auto" else []), *a.env]
+           *node, *([f"OPROVE_GPU={a.oprove_gpu}"] if a.oprove_gpu != "auto" else []), *window_env(a), *a.env]
     # job.sh refuses the same on the pod (settings.py record); here it fails before anything is launched
     try:
         RS.validate(dict(e.split("=", 1) for e in env), of_record=False)
@@ -225,12 +239,28 @@ def job_env(a: argparse.Namespace) -> list[str]:
     return env
 
 
+def window_env(a: argparse.Namespace) -> list[str]:
+    """stage.sh's settings for --window; the member's measurements are named from --serves (`record.member`)."""
+    if not a.window:
+        return []
+    if not a.window.startswith("/") or not a.subcircuit or not a.serves:
+        raise SystemExit("--window: an absolute path on --on's machine, with --subcircuit and --serves")
+    return [f"WINDOW={a.window}", f"MEMBER={a.member}", *([f"UNITS={a.units}"] if a.units else []),
+            f"SUBCIRCUIT={a.subcircuit}", f"SERVES={a.serves}"]
+
+
+def job_argv(a: argparse.Namespace) -> list[str]:
+    """The job's command and its KEY=VALUE arguments: stage.sh's for --window unless a caller wraps the job."""
+    return [*(STAGE if a.window and a.job == JOB else a.job), *job_env(a)]
+
+
 def job_command(a: argparse.Namespace, root: Path) -> list[str]:
-    env, m, limit = job_env(a), on(a), a.max_min or max_min(a)
-    job = [*a.job, *env]
+    m, limit = on(a), a.max_min or max_min(a)
+    job = job_argv(a)
     if direct(a):
         return ["research", "run", "--on", m, "--project", "verity", "--campaign", "recursion-e2e", "--source", str(root),
-                "--cwd", "source", "--mem-gb", str(mem_gb(a)), "--timeout", f"{limit}m", "--", "taskset", "-c", a.cores, *job]
+                "--cwd", "source", "--mem-gb", str(mem_gb(a)), "--timeout", f"{limit}m", "--", "taskset", "-c",
+                a.cores or "0-31", *job]
     return ["research", "run", *([] if m == AUTO else ["--queue"]), "--on", m, *([] if cpu_run(a) else ["--gpu-host"]),
             *(["--preemptible"] if a.preemptible else []), "--project", "verity",
             "--campaign", "recursion-e2e", "--source", str(root), "--cwd", "source", "--mem-gb", str(mem_gb(a)),
@@ -262,7 +292,7 @@ def cmd_plan(a) -> int:
 
 def cmd_run(a) -> int:
     a = preset(a)
-    cmd = [*a.job, *job_env(a)] if a.here else job_command(a, root())
+    cmd = job_argv(a) if a.here else job_command(a, root())
     print(" ".join(cmd), flush=True)
     return 0 if a.dry_run else subprocess.run(cmd, cwd=root(), check=False).returncode
 
@@ -369,7 +399,15 @@ def main(argv: list[str] | None = None, job: tuple[str, ...] = JOB) -> int:
         p.add_argument("--on", "--node", dest="on", default="", metavar="MACHINE",
                        help=f"default {CPU_NODE} for a CPU run (behind the ZK server on the CPU prover, or --cpu), a plain run there; "
                             f"else {NODE}'s queue; {AUTO}: research run's queue places it")
-        p.add_argument("--cores", default="0-31", help="a plain run's cores on its CPU node (taskset -c; default 0-31)")
+        p.add_argument("--cores", default="", help="a plain run's cores on its CPU node (taskset -c; default 0-31; on a "
+                       "window node, its calendar row's, no default)")
+        p.add_argument("--window", default="", metavar="DIR", help="a served window's serving-rows on --on's machine: "
+                       "stage.sh stages its member there (FLOCK_WORK, removed at the end) and nothing of it is sent")
+        p.add_argument("--member", type=int, default=0, help="the window's member (--window)")
+        p.add_argument("--units", default="", help="those of the member's proof blocks alone, A-B,C (--window)")
+        p.add_argument("--subcircuit", default="", help="the member's census-style subcircuit id (--window)")
+        p.add_argument("--serves", default="", help="the served workload's member name, which the measurements' member "
+                       "starts with (--window: llama-3.2-1b-h200)")
         p.add_argument("--preemptible", action="store_true",
                        help="queue the run preemptible (a guest on a node that admits guests only so)")
         p.add_argument("--mem-gb", type=int, default=0, help="the run's memory (default mem_gb: 128 with an oprove behind the ZK server, else 64)")

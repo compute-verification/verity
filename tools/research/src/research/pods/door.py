@@ -65,7 +65,7 @@ def _verb(method: str, path: str, body: dict[str, Any] | None) -> tuple[list[str
 
 
 def api(method: str, path: str, body: dict[str, Any] | None = None, *, no_key: str = "no RunPod API key here", run=None) -> Any:
-    """RunPod's REST call `method path`, made by the control pod's gate with the account's key, which stays there; what
+    """RunPod's pod call `method path` (`runpod._request`), made by the control pod's gate with the account's key, which stays there; what
     `runpod._request` returns, and `runpod.PodError` (with the HTTP status the pod saw) as it raises."""
     from . import connect, runpod
 
