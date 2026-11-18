@@ -1,15 +1,18 @@
 """The stand-in Boolean bodies the suite's test primitives get (`stand_in_body`), registered with `verity.circuits.program` as
 this module loads: the catalog's body where it has one, a stand-in for a primitive a test defines, and a refusal for a
-primitive of `verity` or an adapter with none."""
+primitive of `verity` or an adapter with none, or one a test defines under such a primitive's id. Another suite loads it by
+file from its conftest, the file among its inputs."""
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
 from verity.circuits import program as PG
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops.boolean import versions as V
 from verity.circuits.refs import Coll, Explicit, array_of
 
 _STAND_INS: dict[str, object] = {}
+#: the packages whose primitives are the catalog's: none of them gets a stand-in
+CATALOG = ("verity", "verity_vllm", "verity_torch")
 
 
 def stand_in_body(p: PrimitiveDefinition):
@@ -37,11 +40,15 @@ def stand_in_body(p: PrimitiveDefinition):
     return _STAND_INS[p.id]
 
 
+def _of_catalog(p: PrimitiveDefinition) -> bool:
+    return getattr(p.evaluate, "__module__", "").split(".")[0] in CATALOG
+
+
 def _lookup(p: PrimitiveDefinition):
     try:
         return V.boolean_version(p)
     except V.NoBooleanVersion:
-        if getattr(p.evaluate, "__module__", "").split(".")[0] in ("verity", "verity_vllm", "verity_torch"):
+        if _of_catalog(p) or (p.id in REGISTRY and _of_catalog(REGISTRY[p.id])):
             raise
         return stand_in_body(p)
 
