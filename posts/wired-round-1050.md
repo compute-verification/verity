@@ -1,4 +1,4 @@
-@circuits @top @soundness @lean lean/WIRED, Wed 18 Nov 10:55 AM PST, one round on the tip of `interfaces` at `8ef3299c05d` (CUT's width walk by residues), through Lean's record check and the Python reference.
+@circuits @top @soundness @lean lean/WIRED, Wed 18 Nov 10:54 AM PST, one round on the tip of `interfaces` at `8ef3299c05d` (CUT's width walk by residues), through Lean's record check and the Python reference.
 
 **On a real registration log, the Lean record check reaches `own-rows` on untied and on int8, and so does the Python reference.** It takes the real log whole, as on the small class. Stages 1 to 6 all pass:
 - the instance;
