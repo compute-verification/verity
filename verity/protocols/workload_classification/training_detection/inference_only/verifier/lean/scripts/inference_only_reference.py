@@ -1,6 +1,6 @@
 """The inference-only policy's check of a declared division, straight from the definitions: the reference `InferenceOnlyCheck.check` is held to.
 
-    check(instance) -> {"gates", "ius", "complies", "failure"} | {"error": code}
+    check(instance) -> {"gates", "ius", "weighed", "complies", "failure"} | {"error": code}
 
 `InferenceOnly.CompliesRate Γ α` (`security/Definitions/InferenceOnly.lean`): the computed gates of `D` divide into inference blocks of at
 most `Γ` gates, each with `freshInput R = width(into(R) \\ θ) ≤ α · size R`, where `into(R)` is the gates outside `R`
@@ -10,7 +10,9 @@ with a wire into `R` (`security/Definitions/Core/Circuit.lean`). The instance an
 (`program.is_input`, with no operands), reading the gates its operands name; θ is a list of ids of input gates bound at
 registration (`program.is_registered`; one bound per run is refused, `theta-not-registered`); the division is one owner
 per gate, `"input"` or an inference block index. A primitive is taken as the descriptor declares it, as Flock's decoder takes it, so
-no registry is needed.
+no registry is needed. The allowance `α · weighed R` counts `R`'s gates less its calls that weigh nothing (`weighs_nothing`: a
+constant, a wiring between leaf widths or another primitive of `GATELESS`), never more than `size R`; those calls still
+count in `size R ≤ Γ`.
 
     check_desc(instance) -> the same, for `InferenceOnlyCheck.Desc`'s instance: θ and the owners per root node
 
@@ -41,6 +43,7 @@ first record, the first run's own included; any other record is refused `theta-n
 from __future__ import annotations
 
 import json
+import re
 from fractions import Fraction
 
 from verity.circuits import codec
@@ -49,6 +52,20 @@ from verity.circuits.program import input_id, is_input, is_registered
 from verity.circuits.types import type_from_json
 
 FIELDS = ("program", "theta", "owner", "gamma", "alpha")
+
+#: `InferenceOnlyCheck.wiringId`: the wiring between leaf widths (`verity.circuits.population`), at version 1 or its Boolean
+#: version 2
+WIRING_ID = re.compile(r"(BitOf[1-9][0-9]*x(0|[1-9][0-9]*)|WordOf[1-9][0-9]*)_v[12]")
+#: `InferenceOnlyCheck.GATELESS`: the primitives other than constants and `WIRING_ID`'s that the gate table prices at no
+#: Boolean gate
+GATELESS = frozenset({"Bf16ToF32_v1", "E8m0ShlBf16_v1", "F32BitsShl23_v1", "F32Fabs_v1", "I64ToU8_v1", "PouwDigitLo_v1",
+                      "PouwLow8_v1", "PouwSx8_v1", "S32LowByte_v1", "U32Hi16_v1", "U8ToI64_v1", "U8ToU16_v1", "U8x4ToU32_v1"})
+
+
+def weighs_nothing(prim) -> bool:
+    """`InferenceOnlyCheck.weighsNothing`: whether a call of the primitive ``prim`` weighs nothing in the rate rule's
+    allowance: a constant (no parameters), a wiring between leaf widths (`WIRING_ID`) or one of `GATELESS`."""
+    return not prim.params or WIRING_ID.fullmatch(prim.id) is not None or prim.id in GATELESS
 
 
 class Malformed(Exception):
@@ -79,12 +96,17 @@ def declared(desc: dict) -> DefinitionTable:
 def circuit(program: str) -> tuple[list[int], list[bool], list[bool], list[set[int]]]:
     """Each gate's width, whether it is an input gate, whether it is one bound at registration, and the gates it
     reads."""
+    return weighed_circuit(program)[:4]
+
+
+def weighed_circuit(program: str) -> tuple[list[int], list[bool], list[bool], list[set[int]], list[bool]]:
+    """`circuit`, and whether each gate is a call that weighs nothing (`weighs_nothing`)."""
     try:
         desc = json.loads(program)
         C = codec.decode_program(desc, declared(desc)).circuit
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Malformed("program") from e
-    w, inp, reg, reads = [], [], [], []
+    w, inp, reg, reads, free = [], [], [], [], []
     for g in range(C.size):
         gate = C.gate(g)
         if is_input(gate.prim) and gate.operands:
@@ -95,7 +117,8 @@ def circuit(program: str) -> tuple[list[int], list[bool], list[bool], list[set[i
         inp.append(is_input(gate.prim))
         reg.append(is_registered(gate.prim))
         reads.append(set(gate.operands))
-    return w, inp, reg, reads
+        free.append(weighs_nothing(gate.prim))
+    return w, inp, reg, reads, free
 
 
 def evaluate(inst) -> dict:
@@ -106,7 +129,7 @@ def evaluate(inst) -> dict:
     if not (_nat(gamma) and isinstance(alpha, list) and len(alpha) == 2 and all(map(_nat, alpha)) and alpha[1] > 0):
         raise Malformed("params")
     alpha = Fraction(*alpha)
-    w, inp, reg, reads = circuit(inst["program"])
+    w, inp, reg, reads, free = weighed_circuit(inst["program"])
     N = len(w)
     theta: set[int] = set()
     for t in inst["theta"]:
@@ -132,20 +155,21 @@ def evaluate(inst) -> dict:
     used = {o for o in owner if o != "input"}
     if used != set(range(len(used))):
         raise Malformed("empty-iu")
-    ius = []
+    ius, weighed = [], []
     for u in range(len(used)):
         R = {g for g in range(N) if owner[g] == u}
         into = {a for g in R for a in reads[g] if a not in R}
         ius.append([len(R), sum(w[a] for a in into - theta)])
+        weighed.append(sum(not free[g] for g in R))
     failure = None
     for u, (size, novel) in enumerate(ius):
         if size > gamma:
             failure = [u, "size"]
-        elif novel > alpha * size:
+        elif novel > alpha * min(size, weighed[u]):
             failure = [u, "nci"]
         if failure:
             break
-    return {"gates": N, "ius": ius, "complies": failure is None, "failure": failure}
+    return {"gates": N, "ius": ius, "weighed": weighed, "complies": failure is None, "failure": failure}
 
 
 def check(inst) -> dict:

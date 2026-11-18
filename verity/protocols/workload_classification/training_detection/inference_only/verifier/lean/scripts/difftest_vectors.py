@@ -22,7 +22,9 @@ check refuses (every code of `InferenceOnlyCheck.Check`). Then come `mistyped_ve
 that name leaves of other widths than their types give them, which the codec and the check refuse as `program`, and
 their well-typed neighbours. The data ends with `pinned()`'s three instances: two on the declaration worked by hand
 (`hand()`), θ every input, which the check must refuse, and θ the registered input, which it must accept, and one on a
-declaration with a constant gate (`hand_const()`), which it must accept.
+declaration with a constant gate (`hand_const()`), which it must accept. Last come `weighing()`'s, gate by gate: inference blocks
+padded with calls that compute nothing (the wiring between leaf widths, a primitive of `GATELESS`, a constant), which
+buy no fresh bit, and with calls of their ids' neighbours, which do.
 """
 from __future__ import annotations
 
@@ -420,17 +422,77 @@ def pinned() -> list[dict]:
     """The three instances the data ends with, with the result each must get (`expect`). Two on `hand()` divided as
     {c}, {d, e}: θ every input (`theta_kind` "all"), which holds b, bound per run, so it is refused; and θ the
     registered input alone, which saves IU 1 a's 8 bits and gets a verdict. Then `hand_const()` divided as {k, c}, {d}
-    with θ its registered input: the constant is a gate of inference block 0 that reads nothing, so IU 0 reads no fresh bit, and
-    IU 1 reads c's 8 and b's 8. Gate ids are root node ids here, so each is an instance of `InferenceOnlyCheck.Desc` too."""
+    with θ its registered input: the constant is a gate of inference block 0 that reads nothing and weighs nothing, so IU 0
+    reads no fresh bit and weighs 1, and IU 1 reads c's 8 and b's 8. Gate ids are root node ids here, so each is an instance of `InferenceOnlyCheck.Desc` too."""
     base = {"program": hand(), "owner": ["input", "input", 0, 1, 1], "gamma": 2, "alpha": [16, 1]}
     return [
         {"instance": base | {"theta": [0, 1]}, "theta_kind": "all", "expect": {"error": "theta-not-registered"}},
         {"instance": base | {"theta": [0]}, "theta_kind": "registered",
-         "expect": {"gates": 5, "ius": [[1, 16], [2, 20]], "complies": True, "failure": None}},
+         "expect": {"gates": 5, "ius": [[1, 16], [2, 20]], "weighed": [1, 2], "complies": True, "failure": None}},
         {"instance": {"program": hand_const(), "theta": [0], "owner": ["input", "input", 0, 0, 1], "gamma": 2,
                       "alpha": [16, 1]}, "theta_kind": "registered",
-         "expect": {"gates": 5, "ius": [[2, 0], [1, 16]], "complies": True, "failure": None}},
+         "expect": {"gates": 5, "ius": [[2, 0], [1, 16]], "weighed": [1, 1], "complies": True, "failure": None}},
     ]
+
+
+def padded(pad) -> str:
+    """A declaration whose one inference block pads one computing call with calls that compute nothing: a: Value<16>
+    (bound per run), r: Value<16> (registered); c = f(a, r): Value<16>; then `pad(B, c)`'s calls. Root nodes 0 a, 1 r,
+    2 c, then `pad`'s."""
+    f = prim((16, 16), 16)
+
+    def body(B, S, a, r):
+        return pad(B, B.call(f, a, r))
+    fn = bind(CompositeDefinition("PaddedDecl", 1, (), lambda S: ((("a", Value(16)), ("r", Value(16))), _padded_ret(pad)),
+                                  body, register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=("r",)))).decode()
+
+
+def _padded_ret(pad):
+    return Value(16) if pad is _wired else Value(1)
+
+
+def _wired(B, c):
+    from verity.circuits.population import BitsWord, WordBits
+    return B.call(bind(BitsWord, W=16), B.call(bind(WordBits, W=16), c))
+
+
+#: Primitive ids as `weighing()` names them, each (name, version) of a call `(Value<16>) -> Value<1>` and whether it
+#: weighs nothing (`inference_only_reference.weighs_nothing`): the wiring ids at both versions, `GATELESS`'s, and
+#: neighbours of each that weigh
+NAMED = (("BitOf16x0", 1, True), ("BitOf16x15", 1, True), ("BitOf16x0", 2, True), ("WordOf16", 1, True),
+         ("WordOf16", 2, True), ("U32Hi16", 1, True), ("F32Fabs", 1, True), ("BitOf16x01", 1, False),
+         ("BitOf0x0", 1, False), ("BitOf16x0", 3, False), ("WordOf016", 1, False), ("WordOf16", 10, False),
+         ("XBitOf16x0", 1, False), ("BitOf16x0x1", 1, False), ("WordOf", 1, False), ("U32Hi16", 2, False),
+         ("BitOf16", 1, False))
+
+
+def weighing() -> list[dict]:
+    """The rate rule's weighing, each as `InferenceOnlyCheck.Desc` reads it (`instance`) with the result it must get
+    (`expect`) and whether the rule that weighed every call accepted it (`accepted_unweighed`). θ is r and the inference block is
+    every computed gate, so it reads a's 16 fresh bits. `padded(_wired)`, c's word as its 16 bits (`WordBits{16}`, 16
+    `BitOf16x{i}_v1` calls) and back (`BitsWord{16}`, one `WordOf16_v1`), at α = 1: its 18 calls allowed 18 fresh bits,
+    its one weighed call allows 1, so it is refused `nci`; at α = 16 it is accepted, the bits its computing call buys.
+    Then each of `NAMED`, and a constant, as c's one pad at α = 8: 2 calls allowed 16 bits; a call that weighs nothing
+    leaves 8, refused, and one that weighs keeps 16."""
+    from verity.circuits.ops.prims import const
+
+    def one(alpha, size, weighed):
+        refused = 16 * alpha[1] > alpha[0] * min(size, weighed)
+        return {"gates": 2 + size, "ius": [[size, 16]], "weighed": [weighed], "complies": not refused,
+                "failure": [0, "nci"] if refused else None}
+
+    wired = padded(_wired)
+    out = [{"instance": {"program": wired, "theta": [1], "owner": ["input", "input", 0, 0, 0], "gamma": 18, "alpha": a},
+            "expect": one(a, 18, 1), "accepted_unweighed": True} for a in ([1, 1], [16, 1])]
+    k = const(1, 1)
+    pads = [(PrimitiveDefinition(n, v, (("x", Value(16)),), Value(1), _zero, register=False), free) for n, v, free in NAMED]
+    for p, free in [*pads, (k, True)]:
+        program = padded(lambda B, c, p=p: B.call(p, c) if p.params else B.call(p))
+        out.append({"instance": {"program": program, "theta": [1], "owner": ["input", "input", 0, 0], "gamma": 2,
+                                 "alpha": [8, 1]},
+                    "expect": one([8, 1], 2, 1 if free else 2), "accepted_unweighed": True})
+    return out
 
 
 @functools.cache
@@ -450,8 +512,8 @@ def mistyped() -> list[dict]:
 
 
 def total(count: int = COUNT) -> int:
-    """How many instances the data has: `count` random ones, then `mistyped()`'s, then `pinned()`'s."""
-    return count + len(mistyped()) + len(pinned())
+    """How many instances the data has: `count` random ones, then `mistyped()`'s, `pinned()`'s and `weighing()`'s."""
+    return count + len(mistyped()) + len(pinned()) + len(weighing())
 
 
 def python_results(inst: dict) -> dict:
@@ -463,11 +525,13 @@ def line(obj) -> str:
 
 
 def write(out: Path, count: int = COUNT) -> dict[str, Path]:
-    """Both files for instances 0 … count − 1, then `mistyped()`'s and `pinned()`'s, under ``out/difftest``."""
+    """Both files for instances 0 … count − 1, then `mistyped()`'s, `pinned()`'s and `weighing()`'s gate by gate, under
+    ``out/difftest``."""
     d = out / "difftest"
     d.mkdir(parents=True, exist_ok=True)
     paths = {"difftest/instances.jsonl": d / "instances.jsonl", "difftest/python.jsonl": d / "python.jsonl"}
-    insts = [*(instance(seed)["instance"] for seed in range(count)), *mistyped(), *(p["instance"] for p in pinned())]
+    insts = [*(instance(seed)["instance"] for seed in range(count)), *mistyped(), *(p["instance"] for p in pinned()),
+             *(reference.expand(w["instance"]) for w in weighing())]
     with open(paths["difftest/instances.jsonl"], "w") as fi, open(paths["difftest/python.jsonl"], "w") as fp:
         for inst in insts:
             fi.write(line(inst))

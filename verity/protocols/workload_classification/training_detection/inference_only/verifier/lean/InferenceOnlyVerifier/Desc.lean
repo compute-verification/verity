@@ -21,8 +21,9 @@ per root node instead of per gate:
   any inference block, so its entry is only read for its form.
 
 The expansion, θ as the gates of its nodes and each gate's owner its root node's, is an instance of `InferenceOnlyCheck.evaluate`, and
-the verdict is the one `InferenceOnlyCheck.evaluate` gives on it: `gates`, per inference block its size and fresh input bits, the verdict and the first
-failing inference block with its rule.
+the verdict is the one `InferenceOnlyCheck.evaluate` gives on it: `gates`, per inference block its size and fresh input bits, its
+weighed gates, the verdict and the first failing inference block with its rule. A root node's weighed gates are its gates less
+its calls that weigh nothing (`weighedSizes`), one count per Definition (`unweighed`) multiplied through the node's members.
 
 ## What is computed, once per Definition
 
@@ -1068,6 +1069,15 @@ def sizes (offs : Array Nat) (own : Array (Option Nat)) (n : Nat) : Array Nat :=
     | some u => s.modify u (· + (offs[k + 1]! - offs[k]!))
     | none => s) (Array.replicate n 0)
 
+/-- Per inference block `u < n`, its weighed gates: those of its root nodes less each node's calls that weigh nothing
+(`nodeUnweighed` on `unweighed P`, one summary per Definition multiplied through the node's members). -/
+def weighedSizes (P : Prog) (offs : Array Nat) (own : Array (Option Nat)) (n : Nat) : Array Nat :=
+  let f := unweighed P
+  let nodes := (P.defs[P.root]!).body.nodes
+  (List.range own.size).foldl (fun s k => match own[k]! with
+    | some u => s.modify u (· + (offs[k + 1]! - offs[k]! - nodeUnweighed f nodes[k]!))
+    | none => s) (Array.replicate n 0)
+
 /-- One entry of θ, a root node (`inp[k]`: node `k` is an input node; `reg[k]`: its callee is bound at registration),
 added to the mask of the entries before it. -/
 def thetaStep (inp reg mask : Array Bool) (t : Json) : Except String (Array Bool) := do
@@ -1142,7 +1152,8 @@ def evaluate (j : Json) : Except String Json := do
   let size := sizes offs own n
   let into := intoOf offs own theta reads n
   let r := (Array.range n).map fun u => (size[u]!, freshWidth into[u]!)
-  return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
+  let w := weighedSizes P offs own n
+  return verdict (P.defs[P.root]!).gates r w (failure i.gamma i.num i.den r w)
 
 /-- A refusal of `j` as JSON: `unwalked` with its reason as the `message`, else as `InferenceOnlyCheck.refusalOf` writes it. -/
 def refusal (j : Json) (code : String) : Json :=

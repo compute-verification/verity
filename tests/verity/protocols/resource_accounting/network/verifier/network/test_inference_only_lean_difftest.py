@@ -3,7 +3,8 @@
 `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions,
 335 whose references name leaves of other widths than their types give them (`E_REINTERPRET`) or are their well-typed
 neighbours, and three pinned ones (θ with an input bound per run, refused, θ the registered input, accepted, and a
-declaration with a constant gate, accepted), and
+declaration with a constant gate, accepted), then `weighing()`'s inference blocks padded with calls that compute nothing
+(refused) or with their ids' neighbours (accepted), and
 `scripts/inference_only_reference.py`'s results on each (per inference block its size and fresh input bits, the verdict and the first failing inference block, or
 the first malformation's code). `check` runs the Lean half in its Lean audit (`runs` in that package's
 `lean-audit.json`): `InferenceOnlyCheck/DifftestMain.lean` checks every instance with `InferenceOnlyCheck.check` and fails on any difference.
@@ -79,7 +80,8 @@ def test_the_reference_on_a_declaration_worked_by_hand():
     """`vectors.hand()`: IU 0 = {c} reads a (baseline) and b: 16 fresh input bits. IU 1 = {d, e} reads c, b and a: 4 + 16
     fresh input bits, a free. b is bound per run, so it can't be baseline."""
     inst = {"program": vectors.hand(), "theta": [0], "owner": ["input", "input", 0, 1, 1], "gamma": 2, "alpha": [16, 1]}
-    assert reference.check(inst) == {"gates": 5, "ius": [[1, 16], [2, 20]], "complies": True, "failure": None}
+    assert reference.check(inst) == {"gates": 5, "ius": [[1, 16], [2, 20]], "weighed": [1, 2], "complies": True,
+                                     "failure": None}
     assert reference.check(inst | {"alpha": [31, 2]})["failure"] == [0, "nci"]
     assert reference.check(inst | {"alpha": [32, 2], "gamma": 1})["failure"] == [1, "size"]
     assert reference.check(inst | {"theta": []})["ius"] == [[1, 24], [2, 28]]
@@ -105,3 +107,37 @@ def test_the_pinned_instances_get_their_results():
     assert defs["Const8[0x2a]_v1"] == {"form": "primitive", "id": "Const8[0x2a]_v1", "params": [], "ret": ["Value", 8]}
     for p in pins:
         assert reference.check(p["instance"]) == p["expect"]
+
+
+def test_a_call_that_computes_nothing_buys_no_fresh_bit():
+    """`vectors.weighing()`: an inference block padded with the wiring between leaf widths (`WordBits{16}`, `BitsWord{16}`), a
+    `GATELESS` primitive or a constant, which the rule that weighed every call accepted, is refused `nci`, by `check` on it
+    gate by gate and by `check_desc` on it node by node; the same block padded with a neighbour of a wiring id is accepted.
+    The difftest holds `InferenceOnlyCheck.check` and `InferenceOnlyCheck.Desc.check` to these results."""
+    cases = vectors.weighing()
+    assert {c["expect"]["complies"] for c in cases} == {True, False}
+    for c in cases:
+        inst, expect = c["instance"], c["expect"]
+        assert reference.check_desc(inst) == expect == reference.check(reference.expand(inst))
+        (size, fresh), = expect["ius"]
+        num, den = inst["alpha"]
+        assert c["accepted_unweighed"] == (fresh * den <= num * size)
+        assert expect["weighed"][0] <= size
+    named = cases[2:-1]
+    assert [c["expect"]["complies"] for c in named] == [not free for _, _, free in vectors.NAMED]
+    assert not cases[0]["expect"]["complies"] and cases[1]["expect"]["complies"] and not cases[-1]["expect"]["complies"]
+
+
+@pytest.mark.parametrize("pid, free", [
+    ("BitOf16x0_v1", True), ("BitOf1x0_v2", True), ("BitOf32x31_v1", True), ("WordOf1_v1", True), ("WordOf64_v2", True),
+    ("BitOf16x01_v1", False), ("BitOf00x0_v1", False), ("BitOf16x0_v3", False), ("BitOf16x0_v1 ", False),
+    ("BitOf16x0_v1\n", False), ("WordOf16_v12", False), ("WordOf_v1", False), ("BitOfx0_v1", False), ("BitOf16x_v1", False),
+    ("WordOf١٦_v1", False), ("bitof16x0_v1", False)])
+def test_the_wiring_ids_are_exactly_the_populations(pid, free):
+    """`WIRING_ID` frees exactly the ids `verity.circuits.population` spells, at version 1 or 2: a leading zero, another
+    version, a trailing newline (which `re`'s `$` would let through) or a non-ASCII digit is a neighbour, which weighs."""
+    from verity.circuits import population
+    assert (reference.WIRING_ID.fullmatch(pid) is not None) == free
+    if free:
+        v1 = pid.removesuffix("_v2") + "_v1" if pid.endswith("_v2") else pid
+        assert population.BIT_OF_ID.match(v1) or population.WORD_OF_ID.match(v1)

@@ -20,7 +20,7 @@ namespace InferenceOnlyVerifier.Difftest
 open Lean (Json)
 
 /-- The results' fields, in the order they are compared. -/
-def fields : List String := ["error", "gates", "ius", "complies", "failure"]
+def fields : List String := ["error", "gates", "ius", "weighed", "complies", "failure"]
 
 /-- How the Lean check's results for instance line `i` differ from Python's, one line per field that differs. -/
 def differences (i : Nat) (inst python : String) : List String :=

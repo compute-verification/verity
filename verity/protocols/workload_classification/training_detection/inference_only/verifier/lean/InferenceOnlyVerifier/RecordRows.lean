@@ -80,7 +80,7 @@ def ofSummary (P : Flock.Program.Prog) (m : String → Option Nat) (s : Record.S
 /-- **The rate rule in rows**, `failure` on the one pair: `size` where a block has more than `Γ` rows, else `inference_only`
 where its fresh bits exceed `α = num/den` times its rows. -/
 def rate (gamma num den rows fresh : Nat) : Option String :=
-  (failure gamma num den #[(rows, fresh)]).map (·.2)
+  (failure gamma num den #[(rows, fresh)] #[rows]).map (·.2)
 
 /-- The limits: the rows table, `Γ` and `α = num/den`. -/
 structure Limits where

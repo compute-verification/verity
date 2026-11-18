@@ -23,8 +23,9 @@ An instance is one JSON object:
   layout's operands; a repeat names the same gate). The definition's gates read only earlier gates (`reads_lt`), so a
   Program with a gate reading itself or a later one is refused (`not-topological`), and its input gates read nothing
   (`input_reads`), so an input node with operands is refused (`program`; descriptor v1's input primitives take no
-  parameters, so the decoder admits none, but the check does not rely on it). Nothing here reads a gate's operation or
-  the outputs, and neither does `freshInput`.
+  parameters, so the decoder admits none, but the check does not rely on it). Nothing here reads the outputs, and
+  `freshInput` reads no gate's operation. The allowance reads one thing of it: whether its primitive holds no gate
+  (`weighsNothing`).
 * `theta`: θ, a list of gate ids (canonical root-scoped gate indices), each an input gate bound at registration
   (`RegisteredInput<w>_v1`, binding `registration` in `Flock.Program.inputId?`), none twice. The baseline is what the
   developer committed before the run, so an input bound per run (`Input<w>_v1`) is refused (`theta-not-registered`):
@@ -34,8 +35,10 @@ An instance is one JSON object:
   with `none` written `"input"`, so a gate in two inference blocks has no encoding. The inference blocks are `0 … n - 1`, `n` one more than the
   largest `u`, and each holds a gate (`empty-iu`): an empty unit has size and reads 0 and meets both bounds, so a
   division with empty units complies exactly when the one with them dropped and the rest renumbered does.
-* `gamma`: `Γ`, a natural number; `alpha`: `α` as `[num, den]`, naturals with `den > 0`. `freshInput R ≤ α · size R`
-  is checked as `freshInput R · den ≤ num · size R` in ℕ.
+* `gamma`: `Γ`, a natural number; `alpha`: `α` as `[num, den]`, naturals with `den > 0`. The allowance is checked as
+  `freshInput R · den ≤ num · weighed R` in ℕ, where `weighed R ≤ size R` counts `R`'s gates whose primitive holds a gate:
+  a constant, a wiring between leaf widths or another primitive of `GATELESS` counts in `size R ≤ Γ` and buys no fresh
+  bit. So every division the check accepts meets `freshInput R ≤ α · size R`.
 
 `evaluate` refuses a malformed instance with the first failing code, in the order checked: `instance` (a field missing
 or of the wrong JSON kind), `params` (`Γ` or `α`), `program` (the decoder refuses it, among them a reference that
@@ -62,6 +65,59 @@ def natOf? : Json → Option Nat
 /-- Whether a primitive id is an input bound at registration, `RegisteredInput<w>_v1` (`Flock.Program.inputId?`). -/
 def isRegisteredId (id : String) : Bool :=
   (Flock.Program.inputId? id).map (·.1) == some Flock.Program.REGISTRATION
+
+/-- A decimal as the wiring ids write one: digits, with no leading zero but `0` itself. -/
+def decimal : List Char → Bool
+  | [] => false
+  | ['0'] => true
+  | '0' :: _ => false
+  | cs => cs.all Char.isDigit
+
+/-- A decimal of at least 1. -/
+def positive (cs : List Char) : Bool := decimal cs && cs != ['0']
+
+/-- `cs` less its version, `_v1` or `_v2`. -/
+def unversioned (cs : List Char) : Option (List Char) :=
+  match cs.reverse with
+  | '1' :: 'v' :: '_' :: r | '2' :: 'v' :: '_' :: r => some r.reverse
+  | _ => none
+
+/-- `cs` on either side of its one `x`. -/
+def splitX (cs : List Char) : Option (List Char × List Char) :=
+  match cs.span (· != 'x') with
+  | (w, 'x' :: i) => if i.contains 'x' then none else some (w, i)
+  | _ => none
+
+/-- Whether a primitive id is the wiring between leaf widths (`verity.circuits.population`): `BitOf{W}x{I}`, bit `I` of a
+`W`-bit word, or `WordOf{W}`, a word of `W` bits, at version 1 or its Boolean version 2. -/
+def wiringId (id : String) : Bool :=
+  match id.toList with
+  | 'B' :: 'i' :: 't' :: 'O' :: 'f' :: r => match (unversioned r).bind splitX with
+    | some (w, i) => positive w && decimal i
+    | none => false
+  | 'W' :: 'o' :: 'r' :: 'd' :: 'O' :: 'f' :: r => ((unversioned r).map positive).getD false
+  | _ => false
+
+/-- The primitives other than constants and `wiringId`'s that the gate table prices at no Boolean gate: each selects,
+extends or shifts its operand's bits. -/
+def GATELESS : List String :=
+  ["Bf16ToF32_v1", "E8m0ShlBf16_v1", "F32BitsShl23_v1", "F32Fabs_v1", "I64ToU8_v1", "PouwDigitLo_v1", "PouwLow8_v1",
+   "PouwSx8_v1", "S32LowByte_v1", "U32Hi16_v1", "U8ToI64_v1", "U8ToU16_v1", "U8x4ToU32_v1"]
+
+/-- Whether a call of `defn` weighs nothing in the rate rule's allowance: a primitive that holds no gate, a constant (no
+parameters), a wiring between leaf widths (`wiringId`) or one of `GATELESS`. Such a call still counts in a block's size. -/
+def weighsNothing (defn : Flock.Program.Defn) : Bool :=
+  defn.prim && (defn.params.isEmpty || wiringId defn.key || GATELESS.contains defn.key)
+
+/-- A node's calls that weigh nothing, `f` giving each Definition's: its callee's, times its members. -/
+def nodeUnweighed (f : Array Nat) (nd : Flock.Program.Node) : Nat :=
+  if nd.form == .prim then f[nd.fn]! else nd.members * f[nd.fn]!
+
+/-- Per Definition, the calls of one activation of it that weigh nothing (`weighsNothing`), callees first, its nodes'
+(`nodeUnweighed`) as the decoder sums its gates. -/
+def unweighed (P : Flock.Program.Prog) : Array Nat :=
+  P.defs.foldl (fun f defn => f.push (if defn.prim then (if weighsNothing defn then 1 else 0)
+    else defn.body.nodes.foldl (fun s nd => s + nodeUnweighed f nd) 0)) #[]
 
 /-- Gate `g` of the Program's canonical circuit: its width, whether it is an input gate, whether it is one bound at
 registration, and its operands. Refused (`program`) where its primitive can't be located, returns more than one value, or
@@ -142,12 +198,24 @@ def tally (c : GateTable) (d : Division) : Array (Nat × Std.HashSet Nat) :=
 def ius (c : GateTable) (d : Division) : Array (Nat × Nat) :=
   (tally c d).map fun (s, into) => (s, into.fold (fun x a => if d.theta.contains a then x else x + c.w[a]!) 0)
 
+/-- Whether `P`'s gate `g` is a call that weighs nothing (`weighsNothing`); a gate the walk can't locate weighs. -/
+def unweighedAt (P : Flock.Program.Prog) (g : Nat) : Bool :=
+  match P.gate g with
+  | .ok (p, _, _) => weighsNothing P.defs[p]!
+  | .error _ => false
+
+/-- Per inference block, its weighed gates: those of its gates that are no call weighing nothing (`unweighedAt`). -/
+def weighs (P : Flock.Program.Prog) (c : GateTable) (d : Division) : Array Nat :=
+  (List.range c.N).foldl (fun acc g => match d.owner[g]! with
+    | some u => if unweighedAt P g then acc else acc.modify u (· + 1)
+    | none => acc) (Array.replicate d.n 0)
+
 /-- The first inference block that breaks the policy, with the rule: `size` when it has more than `Γ` gates, else `inference_only` when its
-fresh input bits exceed `num/den` times its size. -/
-def failure (gamma num den : Nat) (r : Array (Nat × Nat)) : Option (Nat × String) :=
+fresh input bits exceed `num/den` times its weighed gates `w[u]`, or its size where that is less. -/
+def failure (gamma num den : Nat) (r : Array (Nat × Nat)) (w : Array Nat) : Option (Nat × String) :=
   (List.range r.size).findSome? fun u =>
     let (size, novel) := r[u]!
-    if size > gamma then some (u, "size") else if novel * den > num * size then some (u, "nci") else none
+    if size > gamma then some (u, "size") else if novel * den > num * min size w[u]! then some (u, "nci") else none
 
 /-- An instance's fields: the program's text, θ, the owners, `Γ`, and `α = num/den`. -/
 structure Instance where
@@ -183,10 +251,11 @@ def parse (j : Json) : Except String Instance := do
   if den = 0 then throw "params"
   return { program, theta, owner, gamma, num, den }
 
-/-- The verdict as JSON: `{gates, ius: [[size, freshInput], …], complies, failure: null | [iu, rule]}`. -/
-def verdict (gates : Nat) (r : Array (Nat × Nat)) (f : Option (Nat × String)) : Json :=
+/-- The verdict as JSON: `{gates, ius: [[size, freshInput], …], weighed: [weighed, …], complies, failure: null | [iu, rule]}`. -/
+def verdict (gates : Nat) (r : Array (Nat × Nat)) (w : Array Nat) (f : Option (Nat × String)) : Json :=
   Json.mkObj [("gates", toJson gates),
     ("ius", Json.arr (r.map fun (s, x) => Json.arr #[toJson s, toJson x])),
+    ("weighed", Json.arr (w.map toJson)),
     ("complies", Json.bool f.isNone),
     ("failure", match f with
       | none => Json.null
@@ -207,7 +276,8 @@ def evaluate (j : Json) : Except String Json := do
   let c ← circuitOf P
   let d ← divisionOf c i.theta i.owner
   let r := ius c d
-  return verdict c.N r (failure i.gamma i.num i.den r)
+  let w := weighs P c d
+  return verdict c.N r w (failure i.gamma i.num i.den r w)
 
 /-- The fix a refusal's `message` gives, for a code whose fix is the declaration's to make. -/
 def fixOf : String → Option String

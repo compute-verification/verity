@@ -831,7 +831,7 @@ def summarize (c : Case) : Summary :=
 /-- **The rate rule** on a summary, `InferenceOnlyCheck.failure` on its one pair: `size` where a block has more than `Γ` gates,
 else `inference_only` where its fresh bits exceed `α = num/den` times its gates. -/
 def rate (gamma num den : Nat) (s : Summary) : Option String :=
-  (InferenceOnlyVerifier.failure gamma num den #[(s.gates, s.fresh)]).map (·.2)
+  (InferenceOnlyVerifier.failure gamma num den #[(s.gates, s.fresh)] #[s.gates]).map (·.2)
 
 /-- A summary's counts as a verdict's fields. -/
 def Summary.fields (s : Summary) : List (String × Json) :=

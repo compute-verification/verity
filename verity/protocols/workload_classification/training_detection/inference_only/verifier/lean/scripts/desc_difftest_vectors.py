@@ -21,7 +21,9 @@ node's (`shared`), then `mistyped_vectors.cases()`'s (`mistyped`: references tha
 their types give them, which both sides refuse as `program`, and their well-typed neighbours), then ten on
 declarations read through grid parts no older form spells (`grids`), then
 `difftest_vectors.pinned()`'s three (θ every
-input, refused, θ the registered one, accepted, and a declaration with a constant gate, accepted). θ is no input node, every one (refused, `theta-not-registered`,
+input, refused, θ the registered one, accepted, and a declaration with a constant gate, accepted), then
+`difftest_vectors.weighing()`'s, inference blocks padded with calls that weigh nothing in the allowance and with their ids'
+neighbours, whose weighed gates `InferenceOnlyCheck.Desc` counts once per Definition. θ is no input node, every one (refused, `theta-not-registered`,
 where one is bound per run), the registered ones or a random set of them. A division puts every Call in one inference block, each in
 its own, runs of consecutive Calls or a random assignment, and a Call without gates in any inference block or none. `Γ` and `α` are
 set as `difftest_vectors` sets them, at, below or above the division's largest inference block and its fresh input per gate. About a third of the
@@ -495,14 +497,14 @@ NAMES = ("instances", "expanded", "python")
 def total() -> int:
     """How many instances the audit's data has: the random ones, every fixture's, the decoys,
     `difftest_vectors.pinned()`'s, the walks, the empties, the shared members', the mistyped ones and the grids."""
-    return (COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks())
+    return (COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(vectors.weighing()) + len(walks())
             + len(empties()) + len(shared()) + len(mistyped()) + len(grids()))
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:
-    """The three files for instances 0 … count − 1, then `difftest_vectors.pinned()`'s (all of them, `total()`, by
+    """The three files for instances 0 … count − 1, then `difftest_vectors.pinned()`'s and `weighing()`'s (all of them, `total()`, by
     default) under ``out/desc_difftest``."""
-    pins = [p["instance"] for p in vectors.pinned()]
+    pins = [*(p["instance"] for p in vectors.pinned()), *(w["instance"] for w in vectors.weighing())]
     count = total() - len(pins) if count is None else count
     d = out / "desc_difftest"
     d.mkdir(parents=True, exist_ok=True)
