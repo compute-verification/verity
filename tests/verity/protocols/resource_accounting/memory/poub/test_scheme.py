@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.compose import schemes as table
 from verity.protocols.resource_accounting.memory.poub import scheme as poub
 from verity.protocols.resource_accounting.memory.poub.verifier import p2, p2_parties
 
 
 def test_registered_under_the_name_a_configuration_lists() -> None:
-    assert S.get("bandwidth") is poub.SCHEME
+    assert table.get("bandwidth") is poub.SCHEME
     assert (p2_parties.COMPONENT, p2_parties.PROTOCOL) == (poub.SCHEME.name, poub.SCHEME.protocol)
     assert poub.SCHEME.unit == "bits"
 
