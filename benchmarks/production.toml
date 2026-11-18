@@ -1,0 +1,174 @@
+schema = "verity-bench/production/v1"
+vllm = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[client]
+command = ["vllm", "bench", "serve"]
+backend = "openai"
+endpoint = "/v1/completions"
+stream = true
+
+[server]
+command = ["vllm", "serve"]
+fixed = ["--seed", "0", "--disable-uvicorn-access-log"]
+prefix_caching = true
+
+[sampling]
+defaults = "the model's generation_config"
+stop = "the recorded length"
+
+[bounds]
+first_token_s = 2.0
+token_s = 0.08
+
+[models.glm53]
+repository = "zai-org/GLM-5.3"
+revision = "aca966e4e02791568aa6a4ced368624b3d897f42"
+served = "glm-5.3"
+card = "H200"
+gpus = 8
+context = 262144
+max_model_len = 262144
+quick_check = false
+cap_minutes = 120
+serve = ["--tensor-parallel-size", "8", "--kv-cache-dtype", "fp8", "--speculative-config.method", "mtp",
+         "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47", "--reasoning-parser", "glm47",
+         "--enable-auto-tool-choice", "--tokenizer-mode", "auto"]
+
+[models.llama32-1b]
+repository = "unsloth/Llama-3.2-1B"
+revision = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"
+served = "llama-3.2-1b"
+card = "H200"
+gpus = 1
+context = 131072
+quick_check = true
+cap_minutes = 20
+serve = ["--dtype", "bfloat16"]
+
+[profiles.coding-agent]
+version = 1
+what = "a coding agent's recorded sessions, each user sending its sessions' turns in order with one request in flight"
+dataset_name = "timed_trace"
+block = 64
+within = ["token"]
+
+[profiles.coding-agent.cuts.262144]
+dataset = "agentx-256k"
+turns = 12
+cut = "the publisher's: no request with its output passes 262,144 tokens"
+
+[profiles.coding-agent.cuts.131072]
+dataset = "agentx"
+turns = 24
+cut = "ours: each session up to its first request that does not fit 131,072 tokens with its output"
+
+[profiles.coding-agent.users]
+glm53 = 4
+llama32-1b = "not found yet"
+
+[profiles.coding-agent.datasets.agentx]
+repository = "semianalysisai/cc-traces-weka-062126"
+revision = "23f152f6f0f9399a85901b89a6458def0ef16729"
+file = "traces.jsonl"
+bytes = 1847151435
+sha512 = "e9737b2661bf90958672b5aa7b133bf009bd2642d43fb3c22060e85b9f15a4aced11b887571578abdfdc7b14df3b72a0825440628437dad16701697e48386470"
+license = "Apache-2.0"
+
+[profiles.coding-agent.datasets.agentx-256k]
+repository = "semianalysisai/cc-traces-weka-062126-256k"
+revision = "8fecd2fc56694469f758f0afbbb6335ad3043740"
+file = "traces.jsonl"
+bytes = 568864747
+sha512 = "a6c659d9d773a3b00552266103937cad1cd6a7f1233fb98aa00f2ff6f706c4d77ebf1bf7b640485ba0df5cebf2321242e85ecf786182f98d32137d5a173d679d"
+license = "Apache-2.0"
+
+[profiles.chat]
+version = 1
+what = "ShareGPT's first turns, each answer as long as the recorded one"
+dataset_name = "sharegpt"
+prompts = 200
+within = ["first_token", "token"]
+
+[profiles.chat.in_flight]
+glm53 = "not found yet"
+llama32-1b = "not found yet"
+
+[profiles.chat.dataset]
+repository = "anon8231489123/ShareGPT_Vicuna_unfiltered"
+revision = "192ab2185289094fc556ec8ce5ce1e8e587154ca"
+file = "ShareGPT_V3_unfiltered_cleaned_split.json"
+bytes = 672837942
+sha512 = "324efe241e9a5a284c94a9cd15776a8a037092528e44b4bc6aa7338f7c93ee8062e859ae182c2b9440a1099f6f6f7659b1c3d4ffecf2672e0d9ff8771946d5db"
+license = "Apache-2.0"
+
+[profiles.fixed-size]
+version = 1
+what = "random tokens, 8,192 in and 1,024 out"
+dataset_name = "random"
+input = 8192
+output = 1024
+prompts = 24
+within = ["token"]
+
+[profiles.fixed-size.in_flight]
+glm53 = "not found yet"
+llama32-1b = "not found yet"
+
+[[differences]]
+command = "the Rust front end, tokenizer mode glm5_next"
+profile = "the Python front end, --tokenizer-mode auto"
+why = "the pinned vLLM has neither; the recipe names this alternative"
+models = ["glm53"]
+
+[[differences]]
+command = "no context limit named: the model's 1,048,576 tokens, which does not start on eight H200s"
+profile = "262,144 tokens"
+why = "the limit the recipe's own builder sets for these cards"
+models = ["glm53"]
+
+[[differences]]
+command = "prefix caching off under a benchmark, by the recipe's page"
+profile = "on"
+why = "a server has it on; each pass starts from an empty cache"
+models = ["glm53"]
+
+[[differences]]
+command = "no seed; the server's access log on"
+profile = "--seed 0; the access log off"
+why = "the same engine seed on both runs"
+
+[[differences]]
+command = "the chat route with tools"
+profile = "the completions route with token ids; the parsers loaded, parsing nothing"
+why = "every run then serves the same number of tokens"
+
+[[differences]]
+command = "draft tokens accepted at the rate real text gives"
+profile = "draft tokens accepted at the rate the filler token ids give"
+why = "the trace holds no text, and the rate measured on real coding text is not set yet"
+models = ["glm53"]
+profiles = ["coding-agent"]
+
+[[differences]]
+command = "an agent pauses between turns"
+profile = "turns sent back to back, each once the one before has ended"
+why = "the trace records no pause to replay"
+profiles = ["coding-agent"]
+
+[[differences]]
+command = "sub-agents' requests"
+profile = "dropped: a session is its own chain"
+why = "they are separate groups in the trace"
+profiles = ["coding-agent"]
+
+[[differences]]
+command = "a session to its end"
+profile = "12 turns a user at 262,144 tokens, 24 at 131,072, cut at the first request that does not fit"
+why = "the users' sessions must fit the KV cache together"
+profiles = ["coding-agent"]
+
+[[differences]]
+command = "real text"
+profile = "filler token ids made from each 64-token block's id"
+why = "the trace holds lengths and block ids only"
+profiles = ["coding-agent"]
