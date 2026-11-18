@@ -1827,6 +1827,8 @@ def test_a_records_run_below_its_packages_floor_is_refused_at_launch_with_the_no
     assert main([*runs, "--env", "VERITY_LEAN_MEM_FLOOR_GIB=0", "--", *RECORDS, "security"]) == 0
     assert main([*runs, "--", "bash", "-lc", " ".join([*RECORDS, "Security"])]) == 0, "a name matching no package is the node's"
     assert main([*runs, "--", *RECORDS, "base"]) == 0, "a package pinning neither Mathlib nor ArkLib has no floor"
+    assert main([*runs, "--env", "VERITY_LEAN_MEM_FLOOR_GIB=lots", "--", *RECORDS, "security"]) == 2
+    assert "VERITY_LEAN_MEM_FLOOR_GIB='lots' is no number of GiB" in capsys.readouterr().err
     for light in (["verity", "lean", "try", "security/Definitions/Core.lean"],
                   ["python3", "tools/verity/lean/lean_changed.py", "--try", "security/Definitions/Core.lean"]):
         assert main([*runs, "--", *light]) == 0, "an edit loop's node refuses nothing for memory"

@@ -182,10 +182,10 @@ def below_floor(source: Path, command: list[str], env: list[str], mem_gb: float)
     manifest = source / match[0] / "lake-manifest.json"
     pins = {p.get("name") for p in json.loads(manifest.read_text()).get("packages", [])} & HEAVY_DEPS if manifest.is_file() else set()
     named = dict(kv.split("=", 1) for kv in (*env, *words) if "=" in kv and not kv.startswith("-"))
-    try:
-        floor = float(named.get("VERITY_LEAN_MEM_FLOOR_GIB", reserve.floor("build", pins)))
-    except ValueError:
-        return None
+    floor = named.get("VERITY_LEAN_MEM_FLOOR_GIB", str(reserve.floor("build", pins)))
+    if not re.fullmatch(r"[0-9]+(\.[0-9]*)?", floor):
+        return f"VERITY_LEAN_MEM_FLOOR_GIB={floor!r} is no number of GiB: set it to one (0 for none), or unset it for the package's floor"
+    floor = float(floor)
     if floor <= 0 or reserve.gib(mem_gb) >= floor:
         return None
     gb = reserve.ask({match[0]: pins}, ("build",))[0]
@@ -200,10 +200,8 @@ def below_floor(source: Path, command: list[str], env: list[str], mem_gb: float)
 
 
 def _lake_name(pkg: Path) -> str | None:
-    try:
-        return tomllib.loads((pkg / "lakefile.toml").read_text()).get("name")
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
+    lakefile = pkg / "lakefile.toml"
+    return tomllib.loads(lakefile.read_text()).get("name") if lakefile.is_file() else None
 
 
 class Unplaceable(Exception):
