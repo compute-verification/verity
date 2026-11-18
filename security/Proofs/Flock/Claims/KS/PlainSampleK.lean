@@ -2,8 +2,8 @@ module
 
 public import Proofs.Flock.Claims.DeployVK
 public import Proofs.Flock.Claims.KS.PlainSampleKDefs
-public import Proofs.Flock.Claims.Recursion.CallsBridgeE
-public import Proofs.Flock.Claims.Recursion.FlockKSDeployK
+public import Proofs.Flock.Claims.Steps.CallsBridgeE
+public import Proofs.Flock.Claims.Steps.FlockKSDeployK
 public import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 import Flock.With.Deployed
 import Flock.With.SetupEq

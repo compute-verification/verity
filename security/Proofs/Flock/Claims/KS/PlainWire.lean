@@ -1,8 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainSimW
-public import Proofs.Flock.Claims.Recursion.PlainK
-
+public import Proofs.Flock.Claims.Steps.PlainK
 /-!
 # The plain wire, and the lockstep a simulator owes
 

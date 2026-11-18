@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Steps.VarLen
 public import Proofs.Flock.Claims.DeployInputs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -55,24 +56,11 @@ def encV (n : ℕ) : Claims.Msg :=
 termination_by n
 decreasing_by omega
 
-/-- `encV` read off the front of a message. -/
-def rdVL : Claims.Msg → Option (ℕ × Claims.Msg)
-  | [] => none
-  | b :: t => if b.toNat < 128 then some (b.toNat, t) else (rdVL t).map fun p => (b.toNat - 128 + 128 * p.1, p.2)
-
-def rdV : Rd ℕ := fun m => rdVL m
-
 /-- A list, after its length's variable-length bytes. -/
 def encVL {α : Type} (e : α → Claims.Msg) (l : List α) : Claims.Msg := encV l.length ++ l.flatMap e
 
-def rdVLs {α : Type} (r : Rd α) : Rd (List α) := do rdListN r (← rdV)
-
 /-- Bytes, after their length's variable-length bytes. -/
 def encVB (b : ByteArray) : Claims.Msg := encV b.size ++ b.data.toList
-
-def rdVB : Rd ByteArray := do
-  let n ← rdV
-  pure ⟨(← rdTake n).toArray⟩
 
 theorem rdVL_encV : ∀ (n : ℕ) (rest : Claims.Msg), rdVL (encV n ++ rest) = some (n, rest) := by
   intro n

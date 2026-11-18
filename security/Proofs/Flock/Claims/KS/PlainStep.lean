@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.KS.Width
-import Proofs.Flock.Claims.Recursion.FlockKSDeployK
+import Proofs.Flock.Claims.Steps.FlockKSDeployK
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.VBridge.Family.Lig

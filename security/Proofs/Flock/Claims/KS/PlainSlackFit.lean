@@ -5,7 +5,7 @@ public import Proofs.Flock.Claims.KS.ForkCoupling
 public import Proofs.Flock.Claims.KS.ForkSlack
 public import Proofs.Flock.Claims.KS.LiveMix
 public import Proofs.Flock.Claims.KS.PlainSimW
-public import Proofs.Flock.Claims.Recursion.PlainK
+public import Proofs.Flock.Claims.Steps.PlainK
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real

@@ -39,7 +39,7 @@ import Proofs.Flock.Claims.DeployRounds
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Entries
 import Proofs.Flock.Claims.KS.PlainQueryRound
-import Proofs.Flock.Claims.Recursion.PlainK
+import Proofs.Flock.Claims.Steps.PlainK
 import Proofs.Flock.Claims.ZkQueryRound
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Bool
