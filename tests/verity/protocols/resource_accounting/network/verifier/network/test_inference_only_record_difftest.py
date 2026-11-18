@@ -2,7 +2,7 @@
 reference: the Python half.
 
 `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 718 cases (600 random circuits,
-two in five broken in one way, 92 shaped ones, most in the shape of a served class, and 25 toys of edges) and, on each,
+two in five broken in one way, 92 shaped ones, most in the shape of a served class, and 26 toys of edges) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
