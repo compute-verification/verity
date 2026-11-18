@@ -216,8 +216,6 @@
   "benchmarks/pouw/pearlc_k256_gate.py": 5,
   "benchmarks/pouw/proved_ticks.py": 2,
   "benchmarks/pouw/served_zk/of_record_lean.py": 1,
-  "benchmarks/pouw/served_zk/replay_core.py": 5,
-  "benchmarks/pouw/served_zk/replay_window.py": 2,
   "benchmarks/pouw/served_zk/served_commit_run.py": 1,
   "benchmarks/pouw/served_zk/statement_torch.py": 1,
   "benchmarks/property_redteam/cases.py": 1,
