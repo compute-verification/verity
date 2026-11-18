@@ -30,6 +30,7 @@ from pous_fakes import Clock
 from verity import hooks as H
 from verity.runtime.stream import Side
 from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
 from verity.protocols.resource_accounting.memory.pous.scheme import WIPE
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
@@ -353,9 +354,9 @@ def test_the_cheats_subprotocol_rejects_under_a_simulated_placement(tmp_path) ->
 
     out = tmp_path / "private"
     out.mkdir()
-    settings = S.settings(WIPE, {"store": "host", "streamer": "python", "segments": 1, "foreign_past_bound": True,
-                                 "simulated": True, "egress_bits": 0, "run_keys": True})
-    got = WIPE.attach(None, {"settings": settings, "private": out, "process": H.ENGINE, "side_of": side_of,
+    settings = S.settings(WIPE, {"store": "host", "segments": 1})
+    got = WIPE.attach(None, {"settings": settings, **wipe_served.FACTS, "streamer": "python", "foreign_past_bound": True,
+                             "simulated": True, "egress_bits": 0, "run_keys": True, "private": out, "process": H.ENGINE, "side_of": side_of,
                              "pins": [], "node": "n0"})
     assert got.answer["verdict"] == "reject"
     assert extras == [()], "the period's egress count is the check's evidence, never the challenger's"

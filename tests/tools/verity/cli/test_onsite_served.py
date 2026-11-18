@@ -992,7 +992,8 @@ from verity_vllm import messages
 
 def attach(self, scheme, given, **ctx):
     tmp = os.environ["TMPDIR"]
-    Path({log!r}).write_text(json.dumps({{"settings": given, "trusted": ctx.get("trusted"),
+    facts = {{k: ctx[k] for k in ("host", "address", "command", "links", "run_keys")}}
+    Path({log!r}).write_text(json.dumps({{"settings": given, "facts": facts, "trusted": ctx.get("trusted"),
                                           "tmpdir": [tmp, oct(stat.S_IMODE(os.stat(tmp).st_mode))[2:]]}}))
     raise ValueError("wipe: the stand-in attach")
 
@@ -1029,11 +1030,11 @@ def test_the_wipes_key_is_the_pin_when_bound_and_the_runs_otherwise(tmp_path, bo
     assert p.returncode == 3 and "the stand-in attach" in (tmp_path / "wipe" / "refused.txt").read_text(), p.stdout + p.stderr
     handed = json.loads(log.read_text())
     if bound:
-        assert handed["trusted"] == WIPE_PIN and handed["settings"] == {
-            "host": "auditor-1", "address": "192.0.2.1:7001", "command": ["ssh", "auditor-1"], "reads": 5500,
-            "links": handed["settings"]["links"]}
+        assert handed["trusted"] == WIPE_PIN and handed["settings"] == {"reads": 5500} and handed["facts"] == {
+            "host": "auditor-1", "address": "192.0.2.1:7001", "command": ["ssh", "auditor-1"], "run_keys": False,
+            "links": handed["facts"]["links"]}
     else:
-        assert handed["settings"]["run_keys"] is True and "host" not in handed["settings"]
+        assert handed["settings"] == {} and handed["facts"]["run_keys"] is True and not handed["facts"]["host"]
     assert handed["tmpdir"] == [str(keys), "700"] and not keys.exists()
 
 

@@ -40,6 +40,7 @@ from verity.runtime.stream import Side
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
+from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
 from verity.protocols.resource_accounting.memory.pous.scheme import WIPE
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_store as WS
 from verity.protocols.resource_accounting.memory.pous.verifier.period import decided_by
@@ -361,8 +362,8 @@ def _side(tmp_path, wipe: dict, pins: list | None = None) -> tuple[Path, Callabl
     return period, side_of
 
 
-#: the wipe's settings for `_attach`: the Python's store and streamer, the challenger bound to `auditor`
-BOUND = {"store": "python", "streamer": "python", "host": "auditor", "address": "auditor:7000", "command": ["true"]}
+#: the wipe's facts for `_attach`: the Python's streamer, the challenger bound to `auditor`
+BOUND = {"streamer": "python", "host": "auditor", "address": "auditor:7000", "command": ["true"]}
 
 
 def _attach(tmp_path, side_of, *, pins=..., configuration=CONF, trusted=None, judge=None):
@@ -371,7 +372,8 @@ def _attach(tmp_path, side_of, *, pins=..., configuration=CONF, trusted=None, ju
     `tmp_path/private`."""
     private = tmp_path / "private"
     private.mkdir(exist_ok=True)
-    ctx = {"settings": S.settings(WIPE, BOUND), "private": private, "process": H.ENGINE, "side_of": side_of,
+    ctx = {"settings": S.settings(WIPE, {"store": "python"}), **wipe_served.FACTS, **BOUND, "private": private,
+           "process": H.ENGINE, "side_of": side_of,
            "pins": side_pin() if pins is ... else pins, "configuration": configuration, "trusted": trusted,
            "node": "n0", "judge": judge}
     return WIPE.attach(None, ctx), private

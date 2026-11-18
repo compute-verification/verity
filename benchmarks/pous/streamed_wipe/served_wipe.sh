@@ -5,8 +5,11 @@
 #
 #   WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3" [SETTINGS]'   # _ SERVE_DIR WINDOW DIR
 #
-# SETTINGS is the wipe's settings (`WIPE.settings`), one JSON object or a file holding one; by default the auditor's
-# memory attester through infra's wipe gate (vy-auditor-2, `DEFAULT` below). A setting the application's configuration
+# SETTINGS is one JSON object, or a file holding one: the wipe's parameters (`WIPE.settings`, checked by
+# `S.settings`) and this node's facts (`wipe_served.FACTS`, handed in the attach's context, the rest at their defaults),
+# any other key refused; by default the auditor's memory attester through infra's wipe gate (vy-auditor-2, `DEFAULT`
+# below). The pins and the configuration's hash are the attach's own reading (VERITY_PINS, VERITY_CONFIGURATION,
+# `Exchange.attach`). A setting the application's configuration
 # states (VERITY_PROTOCOLS_CONFIG's `wipe`) is the application's: SETTINGS stating it otherwise is refused. The control
 # link is the node's own (`ip route`) unless SETTINGS names `links`; a `disk.paths` directory gets a scratch directory of
 # the run's inside it, removed when the wipe ends. With `run_keys` the memory attester is this node's, under a key made for
@@ -75,12 +78,16 @@ if "links" not in doc and ctrl:
     dev, src, mbps = ctrl.split(" ")
     doc["links"] = [{"name": "control", "to": "outside", "via": f"{dev} {src}: the node's own NIC (ssh, research run)",
                      "mbps": int(mbps) if mbps.isdigit() and int(mbps) > 0 else None}]
-pins = json.loads(pins or "[]")
-ctx = {"process": H.ENGINE, "side_of": Side.of, "private": f"{serve_dir}/private", "pins": pins, "trusted": trusted or None,
-       "node": node, "judge": judge or None}
+if unknown := sorted(set(doc) - set(wipe.settings) - set(WS.FACTS)):
+    refused(f"unknown settings {unknown}: the wipe's parameters are {sorted(wipe.settings)}, and the launcher's facts "
+            f"{sorted(WS.FACTS)}")
+given = {k: v for k, v in doc.items() if k in wipe.settings}
+facts = json.loads(json.dumps(WS.FACTS | {k: v for k, v in doc.items() if k in WS.FACTS}))
+ctx = {"process": H.ENGINE, "side_of": Side.of, "private": f"{serve_dir}/private", "trusted": trusted or None,
+       "node": node, "judge": judge or None, **facts}
 try:
-    settings = S.settings(wipe, doc)
-    if why := WS.refusals(ctx | {"settings": settings}):
+    settings = S.settings(wipe, given)
+    if why := WS.refusals(ctx | {"settings": settings, "pins": json.loads(pins) if pins else None}):
         raise ValueError(f"wipe: {'; '.join(why)}")
 except ValueError as e:
     refused(str(e).removeprefix("wipe: "))
@@ -88,14 +95,14 @@ if mode == "check":
     print(settings["store"])
     sys.exit(0)
 made = []
-for i, p in enumerate((doc.get("disk") or {}).get("paths") or ()):
+for i, p in enumerate(facts["disk"].get("paths") or ()):
     if Path(p).is_dir():
         made.append(tempfile.mkdtemp(prefix="verity-wipe-disk.", dir=p))
-        doc["disk"]["paths"][i] = made[-1]
+        facts["disk"]["paths"][i] = made[-1]
     elif not Path(p).is_block_device():
         refused(f"the disk target {p} is neither a directory nor a block device")
 try:
-    got = Exchange().attach(wipe, doc, **ctx)
+    got = Exchange().attach(wipe, given, **ctx)
 except ValueError as e:
     refused(str(e).removeprefix("wipe: "))
 except Exception as e:

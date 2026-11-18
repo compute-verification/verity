@@ -164,7 +164,7 @@ def node(tmp_path) -> dict[str, str]:
     return env | {"FAKE_BIN": str(bin_), "WIPE_NODE": "vy-dc-h200", "WIPE_KEY_SHA512": PINNED,
                   "FAKE_SMI_LOG": str(tmp_path / "smi.log"), "FAKE_SMI_APPS": "", "FAKE_SMI_USED": "0",
                   "FAKE_SMI_NAME": "", "FAKE_LEASE_LOG": str(tmp_path / "lease.log"), "PY": str(_python(tmp_path)),
-                  "FAKE_SETTINGS": _settings(key)}
+                  "FAKE_SETTINGS": _settings(key), "VERITY_PINS": "[]"}
 
 
 def _wipe(env: dict[str, str], d: Path, *args: str) -> subprocess.CompletedProcess:
@@ -526,7 +526,7 @@ def test_with_no_key_pinned_the_wipe_is_refused(node, tmp_path, pin, why) -> Non
 
 
 @pytest.mark.parametrize("given, why", [
-    ('{"bogus": 1}', "wipe has no setting ['bogus']"),
+    ('{"bogus": 1}', "unknown settings ['bogus']: the wipe's parameters are"),
     ("[1", "the wipe's settings are one JSON object, or a file holding one: "),
     ('{"host": "vy-auditor-2"}', "host, address and command bind the challenger together, not ['host'] alone"),
     ('{"run_keys": true, "simulated": true, "host": "h", "address": "h:1", "command": ["x"]}',

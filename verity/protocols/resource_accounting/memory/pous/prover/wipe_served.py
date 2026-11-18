@@ -2,17 +2,25 @@
 before the attach returns. The engine core's process attaches its schemes just before its model runner loads the model
 (`scheme_plugin.attach`), so the wipe ends before any workload byte reaches the card.
 
-Its settings (the declaration's ``settings``) are `period.json`'s ``wipe`` (`wipe_run.CONFIG`), each typed so that a configuration's
-``[params."wipe"]`` can say it, with CONFIG's None as ``0``, ``-1``, ``""`` or ``{}`` (`period_wipe`), and:
+Its settings (the declaration's ``settings``, which an application states and its hash covers) are the protocol's
+parameters alone, what changes what the wipe proves: `period.json`'s ``wipe`` keys ``store``, ``tier``, ``segments``,
+``reserve_bytes``, ``limit_ns`` and ``reads`` (`wipe_run.CONFIG`), with CONFIG's None as ``0`` or ``""``.
 
-- ``foreign_past_bound``: the cheat one label past the bound (CONFIG's ``foreign_bytes`` ``"fM"``);
-- ``simulated``: a challenger on this node named the stand-in for one on its own host (``placement`` ``"simulated"``);
+What says only where and how this node runs it is a launcher's fact (`FACTS`), handed in ``ctx`` by name, each one
+there or refused by name, of its default's type: ``device``, ``streamer``, ``threads``, ``links``, ``disk``, ``dram``,
+``egress_bits`` (the network certifier's count over the session, evidence and not a parameter), ``idle_mib`` (the most
+of a ``cuda`` store's card in use that counts as idle), and:
+
 - ``host``, ``address`` and ``command``: the memory attester on a host of its own, all three or none (`period.json`'s
-  ``challenger_host`` and ``challenger.wipe``). None is refused unless ``run_keys``, a challenger on this node under a
-  key the run makes, trusted for the run: a rehearsal;
-- ``idle_mib``: the most of a ``cuda`` store's card in use that counts as idle.
+  ``challenger_host`` and ``challenger.wipe``). None is refused unless ``run_keys``;
+- the development facts (`DEVELOPMENT`): ``run_keys``, a challenger on this node under a key the run makes;
+  ``simulated``, a challenger on this node named the stand-in for one on its own host (``placement`` ``"simulated"``);
+  ``foreign_bytes`` and ``foreign_past_bound``, the prover a cheat that keeps that much prior content (``"fM"``, one
+  label past the bound). A record made under any of them names them in ``served.development``, and its placement's
+  premise never holds (`wipe_party.placement`: a key the run made, or a challenger on the developer's node, reads
+  rehearsal), so it never reads as a wipe.
 
-What its launcher hands it in ``ctx`` (`LAUNCHER`), beside ``settings`` and ``private``:
+What else its launcher hands it in ``ctx`` (`LAUNCHER`), beside ``settings``, ``private`` and the facts:
 
 - ``side_of``: the runtime's `Side.of`, which no protocol imports;
 - ``pins``: the application's ``[[pin]]`` entries, read-only. Its ``memory-challenger`` pin for ``wipe`` is the one
@@ -50,8 +58,14 @@ from verity.protocols.resource_accounting.memory.pous.verifier.wipe_parties impo
 
 NAME = "wipe"
 SMI = "nvidia-smi"
-#: the settings that stand for CONFIG's None, by the value that does
+#: the settings and facts that stand for CONFIG's None, by the value that does
 UNSET = {"segments": 0, "tier": "", "threads": 0, "egress_bits": -1, "reads": 0, "disk": {}, "dram": {}}
+#: the launcher's facts, at the values its launcher hands by default: never in an application
+FACTS = {"device": 0, "streamer": "native", "threads": 0, "links": [], "disk": {}, "dram": {}, "egress_bits": -1,
+         "idle_mib": 1024, "host": "", "address": "", "command": [], "run_keys": False, "simulated": False,
+         "foreign_bytes": 0, "foreign_past_bound": False}
+#: the facts that make a run a development run, named in its record's ``served.development``
+DEVELOPMENT = ("run_keys", "simulated", "foreign_bytes", "foreign_past_bound")
 BINDING = ("host", "address", "command")
 #: what a launcher hands the wipe in ``ctx``, beside ``settings``, ``private`` and ``process``
 LAUNCHER = ("side_of", "pins", "configuration", "trusted", "node", "judge", "ready")
@@ -68,7 +82,23 @@ def period_wipe(settings: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def check_settings(values: Mapping[str, Any]) -> str | None:
-    """`Scheme.check_settings`: what the wipe refuses of its settings beyond their types."""
+    """`Scheme.check_settings`: what the wipe refuses of its settings beyond their types, at the default facts."""
+    return check({**FACTS, **values})
+
+
+def facts_of(ctx: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """The launcher's facts in ``ctx`` (`FACTS`), and why they can't stand, each by name."""
+    out, why = {k: ctx[k] for k in FACTS if k in ctx}, []
+    if missing := [k for k in FACTS if k not in ctx]:
+        why.append(f"no {', '.join(missing)} handed to it: the launcher's facts, each in ctx by name")
+    for k, v in out.items():
+        if type(v) is not type(FACTS[k]):
+            why.append(f"{k} is a {type(FACTS[k]).__name__}, not {v!r}")
+    return out, why
+
+
+def check(values: Mapping[str, Any]) -> str | None:
+    """What the wipe refuses of its settings and facts together, beyond their types."""
     bound = [k for k in BINDING if values[k]]
     if bound and len(bound) != len(BINDING):
         return f"host, address and command bind the challenger together, not {bound} alone"
@@ -136,7 +166,12 @@ def card_of(ordinal: int) -> str:
 
 def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
     """Why the wipe can't run with ``ctx``, each by name; empty when it can."""
-    s, out = ctx["settings"], []
+    facts, out = facts_of(ctx)
+    if out:
+        return tuple(out)
+    s = {**ctx["settings"], **facts}
+    if why := check(s):
+        out.append(why)
     if ctx.get("process") != H.ENGINE:
         out.append(f"it runs in the engine's process, before the model loads, not in {ctx.get('process')!r}")
     if ctx.get("side_of") is None:
@@ -162,8 +197,9 @@ def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
 @dataclass(frozen=True)
 class Wiped:
     """The wipe's report: ``answer``, the verifier's, and ``wipe``, the record `wipe_run.subprotocol` wrote with
-    ``served`` beside it: the wiped server, the card (a cuda store's UUID) and ``key_pin``, ``configuration`` where the
-    trusted key is the one the pins give the wipe, else ``run``."""
+    ``served`` beside it: the wiped server, the card (a cuda store's UUID), ``key_pin``, ``configuration`` where the
+    trusted key is the one the pins give the wipe, else ``run``, and ``development``, the development facts it ran
+    under (`DEVELOPMENT`)."""
 
     answer: Mapping[str, Any]
     wipe: Mapping[str, Any]
@@ -179,7 +215,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
     """One wipe of this node as ``ctx["settings"]`` say, with what its launcher handed in ``ctx`` (`LAUNCHER`)."""
     if why := refusals(ctx):
         raise ValueError(f"{NAME}: {'; '.join(why)}")
-    s = ctx["settings"]
+    s = {**ctx["settings"], **facts_of(ctx)[0]}
     card = card_of(s["device"]) if s["store"] == "cuda" else None
     if card and (why := busy(card, s["idle_mib"])):
         raise ValueError(f"{NAME}: {why}")
@@ -204,11 +240,12 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
         answer = wipe_run.subprotocol(period, node, private,
                                       side_of=ctx["side_of"], ready=ctx.get("ready") or built)
     (private / "wipe.case.json").chmod(0o600)
-    served = {"server": node, "card": card, "key_pin": "configuration" if key and key == pin_of(pins) else "run"}
+    served = {"server": node, "card": card, "key_pin": "configuration" if key and key == pin_of(pins) else "run",
+              "development": [k for k in DEVELOPMENT if s[k]]}
     record = json.loads((private / "wipe.json").read_text()) | {"served": served}
     (private / "wipe.json").write_text(json.dumps(record, indent=1, sort_keys=True))
     return Wiped(answer, record)
 
 
-__all__ = ["BINDING", "LAUNCHER", "NAME", "SMI", "UNSET", "Wiped", "attach", "built", "busy", "card_of", "check_settings",
+__all__ = ["BINDING", "DEVELOPMENT", "FACTS", "LAUNCHER", "NAME", "SMI", "UNSET", "Wiped", "attach", "built", "busy", "card_of", "check", "check_settings", "facts_of",
            "period_wipe", "pin_of", "refusals"]

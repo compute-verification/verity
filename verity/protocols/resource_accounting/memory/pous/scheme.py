@@ -152,10 +152,8 @@ WIPE = register(Scheme(
     assumptions=("Verity.Vocab.WipeSound", TRUSTED_DEVICE),
     log=(Order("fill", "reveal"),),
     charges=(),
-    settings={"store": "cuda", "device": 0, "segments": 0, "reserve_bytes": 1 << 30, "tier": "",
-              "limit_ns": 20_000_000, "streamer": "native", "threads": 0, "foreign_bytes": 0,
-              "foreign_past_bound": False, "simulated": False, "egress_bits": -1, "reads": 0, "links": [], "disk": {},
-              "dram": {}, "host": "", "address": "", "command": [], "run_keys": False, "idle_mib": 1024},
+    settings={"store": "cuda", "segments": 0, "reserve_bytes": 1 << 30, "tier": "", "limit_ns": 20_000_000,
+              "reads": 0},
     check_settings=_wipe_check_settings,
     attach=_wipe_attach,
     over="the prior content's bits kept through an accepted wipe, in bits",
@@ -177,6 +175,9 @@ WIPE = register(Scheme(
     depends=(),
     pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
     record="wipe",
+    # the wipe holds labels from a key fresh for the wipe, and closes its store and the card's memory before the attach
+    # returns: it touches no weight and keeps nothing resident
+    keeps_weight_copy=False,
     symbol="foreign_bits",
     published=("bits", Fraction(1)),
     check=wipe_period.answer,
