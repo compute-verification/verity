@@ -1,6 +1,5 @@
 """The front door (``run.py``): which runner a NAME starts, what it hands it, and what it says to a NAME it has none for.
-And the runners of commit_gpu (``verity/commitments/cuda/commit_gpu/``) and ``harness/``: the job each starts, and the
-names ``harness/``'s refuses."""
+And ``harness/``'s runner: the job it starts, and the names it refuses."""
 from __future__ import annotations
 
 import re
@@ -12,7 +11,6 @@ from pathlib import Path
 from conftest import load
 
 R = load("run.py")
-COMMIT_GPU = R.HERE.parents[1] / "verity" / "commitments" / "cuda" / "commit_gpu"
 
 
 def test_a_directorys_runner_is_its_run_py_else_its_run_sh(tmp_path):
@@ -48,17 +46,6 @@ def test_a_name_with_no_runner_is_refused_with_the_names_that_have_one(tmp_path)
         got = _front_door(tmp_path, *argv)
         assert got.returncode == 1 and got.stdout == ""
         assert got.stderr.strip() == "benchmarks/pouw/run.py NAME [ARGS] (a - in NAME is a _): NAME is one of echo"
-
-
-def test_commit_gpus_runner_starts_the_job_beside_it_and_ends_as_it_does(tmp_path):
-    """commit_gpu's ``run.sh`` beside a stand-in ``gpu.sh``: whatever the working directory, the job gets the arguments
-    and the caller's variables, and its exit code is the runner's. The directory holds the job the runner names."""
-    assert (COMMIT_GPU / "gpu.sh").is_file()
-    shutil.copy(COMMIT_GPU / "run.sh", tmp_path / "run.sh")
-    (tmp_path / "gpu.sh").write_text('printf "%s|" "$@" "$BUILDS"; exit 7\n')
-    got = subprocess.run(["bash", str(tmp_path / "run.sh"), "a b", "c"], capture_output=True, text=True, cwd="/",
-                         env={"PATH": "/usr/bin:/bin", "BUILDS": "a0r0l"})
-    assert (got.returncode, got.stdout, got.stderr) == (7, "a b|c|a0r0l|", "")
 
 
 #: the harness's jobs, each with the script the runner starts for it
