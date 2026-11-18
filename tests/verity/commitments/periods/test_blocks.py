@@ -130,52 +130,70 @@ EID, QID, KID, OID, HID = map(descriptor_id, (EMB, QKV, QK, OUT, HEAD))
 QK_LAYER = S * T * (T + 1)
 
 
+def qk_at(p: int, k: int) -> int:
+    return LAYERS * S * p * (p + 1) + 2 * k * (p + 1) * S
+
+
 def cmp92() -> I.Circuit:
     """The class circuit (S slots, NP prompt bytes, O outputs, T = NP + O − 1 steps) at its block layout and width
     H = 16, its row ops stood in by catalog units, rows gathered by the wire cut. At step p,
     slot j: the token's embedding as H ``Bf16Add`` coordinates (the token and the position's weight, units (p·S + j)·H + c);
-    per layer, six ``Gemm_v2{16, 16}`` head rows (q0 q1 k0 k1 v0 v1) reading the H coordinates cut a row each, QKᵀ as
-    ``GemmCoordinate_v2{16}`` over every key so far in the plan's order (head, key, slot: layer l's at l·S·T(T+1) +
-    S·p(p+1), the KV cache wired across steps), and the layer's H coordinates (``GemmCoordinate_v2{32}``, its ``x`` the two
-    v rows); at the O logit steps p = NP − 1 + k the next token (``Gemm_v2{16, 1}``). Byte k of slot j enters at step k
+    per layer l, six ``Gemm_v2{16, 16}`` head rows (q0 q1 k0 k1 v0 v1, units ((p·L + l)·S + j)·6 + r) reading the H
+    coordinates cut a row each, QKᵀ as ``GemmCoordinate_v2{16}`` over every key so far in the plan's order (head, key, slot:
+    at L·S·p(p+1) + 2l(p+1)S, the KV cache wired across steps), and the layer's H coordinates (``GemmCoordinate_v2{32}``,
+    units ((p·L + l)·S + j)·H + c, its ``x`` the two v rows): step-major, as a Program root numbers units; at the O logit steps p = NP − 1 + k the next token (``Gemm_v2{16, 1}``). Byte k of slot j enters at step k
     from the request row's leaf j(1 + NP) + 1 + k (the length, then the bytes as u16) and leaves at step NP − 1 + k as the
     response's leaf j·O + k, the head's output row read once, as the response. Its templates read one
     another, so it states an order, a range each inference entry's step (`ordered`)."""
     pos, layer = T * H, 8 * H * H
     qw = {0: pos, 1: pos + layer}
     ow = {k: qw[k] + 6 * H * H for k in (0, 1)}
-    wires = [I.Wire(QID, "x", EID, "o0", at=0, radix=(T * S, 6, H), base=0, step=(H, 0, 1), cut=(0, H)),
-             I.Wire(OID, "x", QID, "o0", at=0, radix=(LAYERS * T * S, H, 2), base=4, step=(6, 0, 1), cut=(0, 2)),
-             I.Wire(HID, "x", OID, "o0", at=0, radix=(O * S, H), base=H * (T + NP - 1) * S, step=(H, 1), cut=(0, H)),
-             I.Wire(QID, "x", OID, "o0", at=6 * T * S, radix=(T * S, 6, H), base=0, step=(H, 0, 1), cut=(0, H)),
+    wires = [I.Wire(OID, "x", QID, "o0", at=0, radix=(T * LAYERS * S, H, 2), base=4, step=(6, 0, 1), cut=(0, 2)),
+             I.Wire(HID, "x", OID, "o0", at=0, radix=(O, S, H), base=((NP - 1) * LAYERS + LAYERS - 1) * S * H,
+                    step=(LAYERS * S * H, H, 1), cut=(0, H)),
              I.Wire(EID, "a", HID, "o0", at=NP * S * H, radix=((T - NP) * S, H), base=0, step=(1, 0))]
-    for k in range(LAYERS):
-        for p in range(T):
-            at = k * QK_LAYER + S * p * (p + 1)
-            wires += [I.Wire(KID, "x", QID, "o0", at=at, radix=(2, p + 1, S), base=6 * (k * T + p) * S, step=(1, 0, 6)),
-                      I.Wire(KID, "wrow", QID, "o0", at=at, radix=(2, p + 1, S), base=6 * k * T * S + 2, step=(1, 6 * S, 6))]
+    for p in range(T):
+        for k in range(LAYERS):
+            writer, base = (EID, p * S * H) if k == 0 else (OID, (p * LAYERS + k - 1) * S * H)
+            wires.append(I.Wire(QID, "x", writer, "o0", at=(p * LAYERS + k) * S * 6, radix=(S, 6, H), base=base,
+                                step=(H, 0, 1), cut=(0, H)))
+            at = qk_at(p, k)
+            wires += [I.Wire(KID, "x", QID, "o0", at=at, radix=(2, p + 1, S), base=6 * (p * LAYERS + k) * S, step=(1, 0, 6)),
+                      I.Wire(KID, "wrow", QID, "o0", at=at, radix=(2, p + 1, S), base=6 * k * S + 2,
+                             step=(1, 6 * LAYERS * S, 6))]
     reads = [I.Read(EID, "a", "request", at=0, radix=(NP, S, H), base=1, step=(1, 1 + NP, 0)),
              I.Read(EID, "b", "weights", at=0, radix=(T, S, H), base=0, step=(H, 0, 1)),
              I.Read(HID, "o0", "response", at=0, radix=(O, S), base=0, step=(1, O)),
-             *(I.Read(QID, "w", "weights", at=k * 6 * T * S, radix=(T * S, 6), base=qw[k], step=(0, H * H)) for k in (0, 1)),
-             *(I.Read(OID, "wrow", "weights", at=k * H * T * S, radix=(T * S, H), base=ow[k], step=(0, 2 * H)) for k in (0, 1)),
+             I.Read(QID, "w", "weights", at=0, radix=(T, LAYERS, S, 6), base=qw[0], step=(0, layer, 0, H * H)),
+             I.Read(OID, "wrow", "weights", at=0, radix=(T, LAYERS, S, H), base=ow[0], step=(0, layer, 0, 2 * H)),
              I.Read(HID, "w", "weights", at=0, radix=(O * S,), base=ow[1] + 2 * H * H, step=(0,))]
     params = {"request": S * (1 + NP), "response": S * O, "weights": pos + 2 * layer + H}
     inference = (I.InferenceEntry(EID, 0, (T, S, H), ("step", "slot", "-"), 0),
-                 I.InferenceEntry(QID, 0, (LAYERS, T, S, 6), ("-", "step", "slot", "-"), 0),
-                 *(I.InferenceEntry(KID, k * QK_LAYER + S * p * (p + 1), (2, p + 1, S), ("-", "-", "slot"), p)
-                   for k in range(LAYERS) for p in range(T)),
-                 I.InferenceEntry(OID, 0, (LAYERS, T, S, H), ("-", "step", "slot", "-"), 0),
+                 I.InferenceEntry(QID, 0, (T, LAYERS, S, 6), ("step", "-", "slot", "-"), 0),
+                 *(I.InferenceEntry(KID, qk_at(p, k), (2, p + 1, S), ("-", "-", "slot"), p)
+                   for p in range(T) for k in range(LAYERS)),
+                 I.InferenceEntry(OID, 0, (T, LAYERS, S, H), ("step", "-", "slot", "-"), 0),
                  I.InferenceEntry(HID, 0, (O, S), ("step", "slot"), NP - 1))
     templates = ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER), (OUT, LAYERS * H * T * S), (HEAD, O * S))
     starts: dict[str, list[int]] = {}
     for e in inference:
-        run = math.prod(e.radix[e.axes.index("step") + 1:]) if "step" in e.axes else e.units
+        run = math.prod(e.radix[e.axes.index("slot"):]) if "step" in e.axes else e.units
         starts.setdefault(e.template, []).extend(range(e.at, e.at + e.units, run))
     return I.Circuit("cmp92", templates, external=(f"{EID}/a", f"{HID}/o0"), wires=tuple(wires),
                      cuts={QID: {"x": H}, OID: {"x": 2}, HID: {"x": H}}, registered=I.Registered(params, (), tuple(reads)),
                      blocks=I.Blocks(S, T, inference),
                      order=I.ordered({descriptor_id(fn): n for fn, n in templates}, wires, starts))
+
+
+def test_a_template_numbered_layer_major_is_a_cycle():
+    """Two steps of two layers with the row units numbered layer-major (unit 2l + p): step 1's embedding reads layer 1 of
+    step 0, unit 2, and layer 0 of step 1, unit 1, reads that embedding, so unit 1 waits on the later unit 2 of its own
+    template, whose tree leaf comes after it."""
+    wires = [I.Wire(QID, "x", EID, "o0", at=0, radix=(2,), base=0, step=(1,)),
+             I.Wire(QID, "x", QID, "o0", at=2, radix=(2,), base=0, step=(1,)),
+             I.Wire(EID, "a", QID, "o0", at=1, radix=(1,), base=2, step=(0,))]
+    with pytest.raises(ValueError, match="cycle: .* ranges wait on one another"):
+        I.ordered({EID: 2, QID: 4}, wires, {EID: [0, 1], QID: [0, 1, 2, 3]})
 
 
 @pytest.fixture(scope="module")
@@ -184,11 +202,11 @@ def circuit() -> I.Circuit:
 
 
 def test_cmp92s_class_circuit_has_one_inference_and_nothing_free(circuit):
-    """The class circuit's units with one inference block, the plan's QKᵀ entry at step p
-    ``{at: S·p(p+1), radix: [2, p+1, S], axes: [-, -, slot], step: p}`` among them; with the verifier's pins (the weights
+    """The class circuit's units with one inference block, the plan's layer-0 QKᵀ entry at step p
+    ``{at: L·S·p(p+1), radix: [2, p+1, S], axes: [-, -, slot], step: p}`` among them; with the verifier's pins (the weights
     and the request) no input row is free, the response on its writer being an output-row read that fills none."""
     assert list(circuit.units.values()) == [H * T * S, 12 * T * S, 2 * QK_LAYER, 2 * H * T * S, O * S]
-    assert {"template": KID, "at": S * 5 * 6, "radix": [2, 6, S], "axes": ["-", "-", "slot"], "step": 5} in \
+    assert {"template": KID, "at": LAYERS * S * 5 * 6, "radix": [2, 6, S], "axes": ["-", "-", "slot"], "step": 5} in \
         [e.doc() for e in circuit.blocks.inference]
     count = I.input_count(json.loads(json.dumps(circuit.description())), **held("weights", "request"))
     assert count["free"] == 0 and count["ingress"] == 0, count
