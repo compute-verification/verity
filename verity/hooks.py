@@ -29,7 +29,7 @@ type Handle = object
 class Declared:
     """``declared``: what the workload declares before it runs: the card's file id, its properties (``stage``: serve,
     capture or commit; ``world``; ``eager``; ``async_steps``, whether a step is scheduled before the last one's outputs
-    are read; a precision, a cache, a sampler), the schemes enabled with it as ``name:scheme`` and each scheme's own
+    are read; a precision, a cache, a sampler), the schemes attached to it by name and, under each one's name, its
     settings."""
 
     hook: ClassVar[str] = "declared"
@@ -42,13 +42,13 @@ class Declared:
 
 @dataclass(frozen=True)
 class RegisteredValues:
-    """``memory``: the registered values once resident, by name; ``linear`` names those that are a linear block's
-    weight."""
+    """``memory``: the registered values once resident, by name; ``operands`` maps each one a block reads as its weight
+    operand to that block's ``key`` (`BlockDue.key`)."""
 
     hook: ClassVar[str] = "memory"
     values: tuple[tuple[str, Handle], ...]
     step: int = 0
-    linear: frozenset[str] = frozenset()
+    operands: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -66,9 +66,9 @@ class InputArrived:
 
 @dataclass(frozen=True)
 class StepBegan:
-    """``steps``: workload step ``step`` begins, computing for ``inputs`` over ``slots`` slots, with ``queued`` started
-    inputs left waiting for a slot. Steps are numbered from 0, each ends in one `StepEnded`, and a step that computes
-    nothing has ``slots == 0`` and no ``inputs``."""
+    """``steps``: workload step ``step`` begins, computing for ``inputs`` over ``slots`` slots (the positions the step
+    computes, drafted ones excluded), with ``queued`` started inputs left waiting for a slot. Steps are numbered from 0,
+    each ends in one `StepEnded`, and a step that computes nothing has ``slots == 0`` and no ``inputs``."""
 
     hook: ClassVar[str] = "steps"
     step: int
@@ -78,27 +78,50 @@ class StepBegan:
 
 
 @dataclass(frozen=True)
+class StepComputed:
+    """``steps``: step ``step``'s blocks are all issued and its outputs not yet read: between its `StepBegan` and its
+    `StepEnded`, after the next step's `StepBegan` where steps overlap. A step that computes nothing has none."""
+
+    hook: ClassVar[str] = "steps"
+    step: int
+
+
+@dataclass(frozen=True)
 class StepEnded:
     hook: ClassVar[str] = "steps"
     step: int
 
 
 @dataclass(frozen=True)
-class RunBegan:
-    """``steps``: the instrumented run ``run`` begins: its steps from ``step`` on are the run's."""
+class PhaseOpened:
+    """``steps``: execution phase ``phase`` (numbered from 0 by its committer) opens before any of its values is
+    committed; its first step is ``step``. Phases are emitted only where a committer commits the workload in phases."""
 
     hook: ClassVar[str] = "steps"
-    run: str
+    phase: int
     step: int
 
 
 @dataclass(frozen=True)
-class RunEnded:
-    """``steps``: the instrumented run ``run`` ends after step ``step``."""
+class PhaseClosed:
+    """``steps``: execution phase ``phase`` closes after step ``step``, before the next one opens, its values committed
+    under the Program whose digest is ``program``."""
 
     hook: ClassVar[str] = "steps"
-    run: str
+    phase: int
     step: int
+    program: bytes
+
+
+@dataclass(frozen=True)
+class PhaseCommitted:
+    """``steps``: closed execution phase ``phase``'s committed values have root ``root`` (empty: it committed none).
+    After its `PhaseClosed`, and where the committer finalizes off the serving loop, on the committer's thread, possibly
+    after later phases opened."""
+
+    hook: ClassVar[str] = "steps"
+    phase: int
+    root: bytes
 
 
 @dataclass(frozen=True)
@@ -191,8 +214,8 @@ class OutputsComplete:
 
 
 #: every event a served run emits, each read through its ``hook``
-EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepEnded, ValueProduced, BlockDue, RangesDeclared,
-          RangeAllocated, RangeWritten, RangeFreed, OutputReleased, OutputsComplete, RunBegan, RunEnded)
+EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepComputed, StepEnded, ValueProduced, BlockDue, RangesDeclared,
+          RangeAllocated, RangeWritten, RangeFreed, OutputReleased, OutputsComplete, PhaseOpened, PhaseClosed, PhaseCommitted)
 
 
 @dataclass(frozen=True)
@@ -279,6 +302,14 @@ class Releases(Protocol):
     when it stops, and closes what the scheme holds (its run's commitment, its sessions)."""
 
     def release(self) -> None: ...
+
+
+class Commits(Reports, Releases, Protocol):
+    """`Reports` and `Releases` from a scheme that commits while the workload runs: ``commitment``, what it commits to,
+    which the run's record hashes under its scheme's name (``summary`` is kept beside it, unhashed), readable after
+    ``release``."""
+
+    def commitment(self) -> Mapping[str, Any]: ...
 
 
 class Front(Protocol):
@@ -377,7 +408,7 @@ type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBou
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldResident",
-           "Broken", "ENGINE", "FRONT", "FixRanges", "Front", "Releases", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+           "Broken", "Commits", "ENGINE", "FRONT", "FixRanges", "Front", "Releases", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
-           "Route", "RunBegan", "RunEnded", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced",
+           "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

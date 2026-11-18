@@ -36,8 +36,8 @@ def reference(on: bool):
     """`second_statements`' Python with the wired key's switch `on` (the development executable's) or as the code holds
     it (the build of record's)."""
     def check(j):
-        allow, own, statements = _second_own(j)
-        return SS.check_twin(allow, dataclasses.replace(own, wired_key=True) if on else own, statements).to_json()
+        own, statements = _second_own(j)
+        return SS.check_twin(dataclasses.replace(own, wired_key=True) if on else own, statements).to_json()
     return check
 
 
@@ -56,7 +56,7 @@ def _moe(statements: bool = False) -> dict:
     design links the read's ports to them, wires its key to the router's `out` (each of its two units a block its
     router unit's row, of the router's three), and derives the rows of two words both sides; the read's reference
     statement reads its verdict at the verifier's 1. Without `statements`, round 2 reads none (``second-statements``)."""
-    c = _second_case(SECOND_MIXED, True, SAMPLE, DRAWN, allow=True)
+    c = _second_case(SECOND_MIXED, True, SAMPLE, DRAWN)
     entry = {"root": "dd" * 64, "domain": "de" * 64, "leaves": 8}
     c["interior"] = {**c["interior"], "registered": [{"value": v, **entry} for v in READ_VALUES]}
     c["boundary"] = {**c["boundary"], "roots": [*c["boundary"]["roots"], {"port": "t", "root": T_ROOT,
@@ -124,7 +124,7 @@ def test_each_wired_key_that_is_not_whole_is_refused_with_its_reason(of_record, 
 def test_no_input_turns_the_switch_on(of_record):
     """The build of record reads the switch from no input: the MoE layer with `wired_key` or `wiredKey` set in it is
     refused as without them."""
-    for extra in ({"wired_key": True}, {"wiredKey": True}, {"wired_key": True, "wiredKey": True, "allow": True}):
+    for extra in ({"wired_key": True}, {"wiredKey": True}, {"wired_key": True, "wiredKey": True}):
         got = _agree(OF_RECORD, of_record, {**MOE, **extra})
         assert got["detail"]["second-inputs"] == {"value": "row", "why": SS.KEY_WHY}, (extra, got)
 
@@ -168,7 +168,7 @@ def test_a_read_whose_key_is_wired_lists_no_table_rows(of_record, dev):
             **ports, port: {**ports[port], "table_rows": [0, 1]}}}}]})
 
     keyed = listed(_key_statements(), "tok")
-    plain = listed(_second_case(SECOND_MIXED, True, SAMPLE, DRAWN, wires=[(TRIPLE, PAIR)], allow=True), "x")
+    plain = listed(_second_case(SECOND_MIXED, True, SAMPLE, DRAWN, wires=[(TRIPLE, PAIR)]), "x")
     for port, server in ((ON, dev), (OF_RECORD, of_record)):
         for case, at, why in ((keyed, "tok", SS.KEY_ROWS_WHY), (plain, "x", SS.TABLE_ROWS_WHY)):
             got = _agree(port, server, case)
@@ -179,7 +179,7 @@ def test_a_read_whose_key_is_wired_lists_no_table_rows(of_record, dev):
 def _key_statements() -> dict:
     """The two-template interior with TRIPLE's key `tok` wired to PAIR's `out` and read in its statement, each slot at
     its writer's first unit in its cell: `_second_case`'s wired run with TRIPLE's port named `tok`."""
-    c = _second_case(SECOND_MIXED, True, SAMPLE, DRAWN, wires=[(TRIPLE, PAIR)], allow=True)
+    c = _second_case(SECOND_MIXED, True, SAMPLE, DRAWN, wires=[(TRIPLE, PAIR)])
 
     def renamed(x):
         if isinstance(x, dict):

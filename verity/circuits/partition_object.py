@@ -64,7 +64,7 @@ from .cut import (CALL_X, RECOMPUTE, WIRING, CallCut, CallGates, CallGraph, Defi
 from .layout import resolve
 from .partition import CutVerdict
 from .program import is_input
-from .refs import Concat, Explicit
+from .refs import Concat, Explicit, Grid
 
 FORMAT = "verity/partition/v1"
 _KEYS = {"format", "program", "query"}
@@ -408,10 +408,11 @@ def _out_of_order(refs: Any, params: int, nodes: int) -> list | None:
     parts = [refs]
     while parts:
         r = parts.pop()
-        if isinstance(r, Concat):
-            parts.extend(reversed(r.parts))
+        if isinstance(r, (Concat, Grid)):
+            parts.extend(reversed(r.parts if isinstance(r, Concat) else r.pieces()))
             continue
-        names = [(x[0], x[1]) for x in r.items] if isinstance(r, Explicit) else ([(r.space, r.idx)] if r.count else [])
+        names = ([(x[0], x[1]) for x in r.items] if isinstance(r, Explicit) else
+                 [(s, i) for s, i, *_ in r.lanes] if isinstance(r, Grid) else [(r.space, r.idx)] if r.count else [])
         for space, idx in names:
             if not (_is_int(idx) and 0 <= idx < (params if space == "p" else nodes if space == "n" else 0)):
                 return [space, idx]
