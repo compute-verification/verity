@@ -82,6 +82,7 @@ from verity.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 
 ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
@@ -936,7 +937,7 @@ def main() -> int:
     window = {"kind": "stand-in", "of": WINDOW_OF, "link": LINK,
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]],
                                       "call": staged[m["kind"]]["name"], "step": staged[m["kind"]]["step"]} for m in members}}
-    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = DK.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
@@ -1062,7 +1063,7 @@ def main() -> int:
         theader = a0.public_header(d, tn)
         tlaw = RND.parse_design("subset:2")
         twant = a6.frame_ports(set_name, tst.meta, tn)
-        trec = R.record(tprog, tq, tlaw, a0.SCHEME, a0.registered_roots(theader, twant),
+        trec = DK.record(tprog, tq, tlaw, a0.SCHEME, a0.registered_roots(theader, twant),
                         {"kind": "stand-in", "of": f"tampered copy of {tm['kind']}'s first {tn} units: bit 0 of every instance's "
                                                    "first output word flipped before commitment"},
                         leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))

@@ -55,7 +55,7 @@ import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -63,7 +63,7 @@ from verity.commitments.cuda.commit_slots import slots as S
 from verity.commitments.cuda.sha512_rows import engine as E
 from verity.commitments.merkle import merkle_depth
 
-__all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepCommitter", "build", "commit", "driver_bindings",
+__all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepCommitter", "commit", "driver_bindings",
            "regroup"]
 
 LAG = 1               # adds a plan holds unread tensors for before their producer waits for the read: 1 keeps no more
@@ -71,17 +71,6 @@ LAG = 1               # adds a plan holds unread tensors for before their produc
 TEMP_BYTES = 1 << 30
 TEMP_BUFFERS = 4      # a pass's live (rows, slots) digest buffers at most: row digests, the run, the rest's leaves, a level
 PAD_CHUNK = 16        # pads alone are hashed 2^16 at a time
-
-
-def _arch(major: int, minor: int) -> str:
-    return f"{major}{minor}" + ("a" if major in (9, 10, 12) else "")
-
-
-def build(capability: str, build: Path, default: str = E.DEFAULT_VARIANT) -> list[str]:
-    """The engine's device and host builds for compute capability ``capability`` (e.g. ``"9.0"``) under ``build``, with no
-    GPU needed: what a job builds before it takes a GPU lease."""
-    major, minor = (int(x) for x in capability.split("."))
-    return [str(E.device_lib(build, _arch(major, minor), default).path), str(E.host_lib(build).path)]
 
 
 class _Engine(E.Engine):
@@ -123,6 +112,19 @@ class _Group:
     leaf_table: Any
     dids: Any
     first_unit: int
+
+
+class _GraphKey(NamedTuple):
+    """What a captured graph serves: a group's add (``k``) at a slot count, the plan's pass size and leaf kernel, the SMs
+    its leaf grid was sized to (``sms``, 0 for the whole device's), and the strides it read its salts at, a row's and a
+    slot's."""
+    k: int
+    slots: int
+    temp_bytes: int
+    leaf_minb: int
+    sms: int
+    row_stride: int
+    slot_stride: int
 
 
 @dataclass(frozen=True)
@@ -308,7 +310,7 @@ class Plan:
             self.stream = None
         else:
             self.stream = self.partition.stream() if self.partition else self.torch.cuda.Stream(self.device)
-        self._graphs: dict[tuple[int, ...], _Graph] = {}
+        self._graphs: dict[_GraphKey, _Graph] = {}
         self._pool: Any = None
         self._frontiers: dict[int, Any] = {}
         self._open: StepCommitter | None = None
@@ -461,7 +463,7 @@ class Plan:
         after another on that stream), reading its tensors' addresses from its ``addr`` and its salts from ``salts`` ((G,
         slots, 192), ``StepCommitter._by_row``) until ``resalt`` points it at the next add's. A graph keeps the leaf grid
         it was captured with and the strides it read its salts at, so ``sms`` and those strides are in its key."""
-        key = (sc.k, sc.slots, self.temp_bytes, self.leaf_minb, self.sms, int(salts.stride(0)), int(salts.stride(1)))
+        key = _GraphKey(sc.k, sc.slots, self.temp_bytes, self.leaf_minb, self.sms, int(salts.stride(0)), int(salts.stride(1)))
         if key not in self._graphs:
             torch = self.torch
             if self._pool is None:

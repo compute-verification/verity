@@ -419,6 +419,16 @@ loads = [
 
 [[place]]
 paths = [
+    "verity/protocols/proofs/spot/prover/docket.py",
+]
+loads = [
+    "verity/circuits",
+    "verity/commitments",
+    "verity/protocols/proofs/spot/verifier",
+]
+
+[[place]]
+paths = [
     "verity/protocols/proofs/spot/prover/produced.py",
 ]
 loads = [
@@ -498,6 +508,7 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_sparse.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
     "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
+    "verity/protocols/proofs/spot/prover/docket.py",
     "verity/protocols/proofs/spot/prover/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1window.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py",
@@ -567,6 +578,7 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
+    "verity/protocols/proofs/spot/prover/docket.py",
     "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/prover/served.py",
     "verity/protocols/proofs/spot/verifier",
@@ -656,7 +668,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/live.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/public_rows.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled_rows.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_sample.py",
@@ -871,6 +882,7 @@ loads = [
     "verity/commitments/periods",
     "verity/commitments/randomness",
     "verity/protocols/interface/charge",
+    "verity/protocols/proofs/spot/prover/docket.py",
     "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/scheme.py",

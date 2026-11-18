@@ -144,6 +144,7 @@ class FlashSdpaBackward(_TrainRule):
         if deterministic and structure:
             raise ValueError("FlashSdpaBackward: a structure derivation reads no cell, so no setting of the kernels")
         self.cc, self.deterministic, self.structure = f"cc{cc[0]}.{cc[1]}", deterministic, structure
+        self.target = tuple(cc)
         self.info = _info(f"FlashSdpaBackward_{self.cc}" + ("_deterministic" if deterministic else "")
                           + ("_structure" if structure else ""),
                           "aten._scaled_dot_product_flash_attention_backward of bf16 values",
@@ -161,7 +162,7 @@ class FlashSdpaBackward(_TrainRule):
         if (B, H, T, D) not in FTB.TRAIN_SDPA_BWD:
             return None, (f"numerics_unregistered: no capture fits torch's flash attention backward at [B, H, T, D] = "
                           f"{[B, H, T, D]} (fa2_train_bwd.TRAIN_SDPA_BWD: {sorted(FTB.TRAIN_SDPA_BWD)})")
-        return FTB.train_sdpa_backward(B, H, T, D), None
+        return FTB.train_sdpa_backward(B, H, T, D, self.target), None
 
     def targets(self):
         return {aten._scaled_dot_product_flash_attention_backward.default}

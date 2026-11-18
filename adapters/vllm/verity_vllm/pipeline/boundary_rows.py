@@ -101,8 +101,8 @@ from typing import Any
 import numpy as np
 
 from verity.circuits import population as PN
-from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.circuits import replay_links as RL
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
@@ -393,12 +393,12 @@ class Layout:
         if not self.ids:
             return self.verdict_rows
         params = {PO.template_id(t): {name for name, _ty in t.signature()[0]} for t in self.templates}
-        runs = SS.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
+        runs = RL.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
         got = [(x, per, rs) for x, per, rs in runs if x.port not in params.get(x.template, ())]
         by = {PO.template_id(t): t for t in self.templates}
         ok = (len(got) == 1 and got[0][0].value == RETURN and got[0][0].template in by
               and sum(by[got[0][0].template].signature()[1].leaf_widths()) == 32 and got[0][1] == self.outputs == self.n_rho
-              and [SS.row_at(got[0][2], j) for j in range(self.outputs)] == list(range(self.outputs)))
+              and [RL.row_at(got[0][2], j) for j in range(self.outputs)] == list(range(self.outputs)))
         if not ok:
             raise ValueError(f"a class commits its replay block's return as ids where the block returns one 32-bit id an "
                              f"output, in output order, by one return link round 2 derives: not "
@@ -424,14 +424,14 @@ class Layout:
                              f"inlined, one instance an output: not {t}{'' if self.inline else ' as instances'} at "
                              f"{self.per_prompt} a prompt id and {self.per_output} an output")
         units, params = GS.plan(V, V // N), {PO.template_id(x): dict(x.signature()[0]) for x in self.templates}
-        runs = SS.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
+        runs = RL.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
         read = [(x, per, rs) for x, per, rs in runs if x.port in params.get(x.template, {})]
         got = {x.template: (per, rs) for x, per, rs in read}
         K, n_out = len(units), self.outputs
         want = [PO.template_id(u.defn) for u in units]
         ok = (len(got) == len(read) and sorted(got) == sorted(want) and {x.value for x, _p, _r in read} == {LOGITS}
               and all(u.lanes == (k * N, (k + 1) * N) and got[w][0] == K * n_out
-                      and [SS.row_at(got[w][1], j) for j in range(n_out)] == [j * K + k for j in range(n_out)]
+                      and [RL.row_at(got[w][1], j) for j in range(n_out)] == [j * K + k for j in range(n_out)]
                       for k, (u, w) in enumerate(zip(units, want, strict=True))))
         if not ok:
             raise ValueError(f"{t}: round 2's links at its units' parameters are not each unit k's {LOGITS} at row j·{K} + k "
@@ -650,7 +650,7 @@ def record(pub: Mapping[str, Any], check: SpecializedDefinition, design: Mapping
     roots = [{"port": p, "root": c.values[p]["root"], **e} for p, e in L.ports().items()]
     w = {"kind": "served", "run": L.run, "row": c.window, **L.provenance(), "index": c.index, "boundary": FORMAT,
          **(window or {})}
-    return R.record(L.program, L.grain, design, CS.SCHEME, roots, w, previous=previous)
+    return DK.record(L.program, L.grain, design, CS.SCHEME, roots, w, previous=previous)
 
 
 def commit(spans: Sequence[Span], layout: Layout, window: int, *, salts: Mapping[str, bytes] | None = None,

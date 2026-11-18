@@ -78,7 +78,8 @@ from verity.protocols.resource_accounting.network.verifier.certificate import Ce
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync
 from verity.protocols.resource_accounting.network.verifier.service import TransferBlocks
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R, partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.ports import free_port
 
 ENDS = ("egress", "ingress")
@@ -403,7 +404,7 @@ def registration(lw: TransferBlocks, opening: SVC.Hidden, previous: str | None =
     digest of the stream's previous registration."""
     w = opening.window
     roots = [{"port": SVC.VALUE, "root": lw.root(opening), **lw.ports(w)[SVC.VALUE]}]
-    return R.record(lw._program, lw.query, {"law": "subset", "k": 1}, S.SCHEME, roots, lw.provenance(w),
+    return DK.record(lw._program, lw.query, {"law": "subset", "k": 1}, S.SCHEME, roots, lw.provenance(w),
                     previous=previous)
 
 

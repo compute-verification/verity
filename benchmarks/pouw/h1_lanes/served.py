@@ -6,7 +6,7 @@ registered tables at the rows the verifier reads them.
 * **extract** (the H1 venv: it unpickles the prover's saved window, whose classes import torch). From the window's record
   (``pouw-h1-calls.json``: its manifest checked by `pouw_h1_challenger.manifest_reason`, so the served trees' entries
   are the ones its ``calls_root`` binds), the sampled proof blocks (``--drawn``, `h1_prove/served.py`'s), the period's
-  descriptor and the prover's private directory (``--prover``, `pouw_h1_prover`: its salt key, each call's kept values
+  descriptor and the prover's private directory (``--prover``, `pouw_h1_prover`: its salt file, each call's kept values
   and the saved window ``state/`` `pouw_h1_handoff.FILE`): the verifier's own reads of the sampled proof block's call
   (`credit.registered_file` at the record's roots, the window's root, steps and Program salt), and for each of its data
   ports (the unit's 32 A rows, its 32 B rows and its z/y record; ``pub`` and ``o1`` are the verifier's own rows, which no
@@ -71,7 +71,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # no
 from verity.protocols.proofs.spot.prover import produced as PP  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 
 RC = L.RC
 EXPECT = {"tampered-zy": "REJECT", "other-call-a": "REJECT"}
@@ -442,7 +442,7 @@ def prepare(a: argparse.Namespace) -> None:
     print(f"the unit's committed record checks on words (all {len(z)} cells), {time.time() - t0:.0f} s", flush=True)
 
     win = {v: op["ports"][p]["entry"] for v, p in ((LL.A, f"a_k{k}_0"), (LL.B, f"b_k{k}_0"), (LL.ZY, "zy"))}
-    rec = R.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, L.SCHEME, [],
+    rec = DK.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, L.SCHEME, [],
                    {"kind": "served-window", "window": op["window"], "draw_root": op["draw_root"], "unit": u,
                     "call": unit["call"]}, partition=ctx.reg.part, registered=list(win.values()))
     d = DD.digest(rec)

@@ -7,6 +7,10 @@ A new scheme adds its name here, one line; `get` imports its module on first use
 (`verity.protocols.resource_accounting.scheme.register`), so a reader loads only the schemes an application lists;
 `load` imports every module and returns the registry.
 
+`KEYS` is a second copy of declared facts: beside each name, the values a reader looks a scheme up by before anything
+is attached (its option, the roles it provides, its ports', framings' and processes' names), so that such a lookup
+(`named`) imports the one scheme it finds and not every scheme; a test holds it equal to the declarations both ways.
+
 A shell script reads a declaration through this module's one command, run from the tree's root (the standard library
 alone imports it), which prints one field of the scheme named NAME (`FIELDS`), or exits 2 naming the declared ones:
 
@@ -39,6 +43,48 @@ DECLARATIONS: Mapping[str, str] = MappingProxyType({
     "sampled-proofs": "verity.protocols.proofs.spot.scheme",
     "wipe": f"{_MEMORY}.pous.scheme",
 })
+
+#: the modules whose ``MESSAGES`` are workload message types no scheme declares: useful work's (H1's)
+WORKLOAD_MESSAGES = (f"{_COMPUTE}.pouw.prover.workload",)
+
+
+def workload_messages() -> tuple:
+    """The schemas of `WORKLOAD_MESSAGES`, their modules imported; no scheme is imported."""
+    return tuple(m for module in WORKLOAD_MESSAGES for m in import_module(module).MESSAGES)
+
+
+#: the fields `named` looks a scheme up by: `Scheme.option`, `provides`, and the names of its `ports`, `framings` and
+#: `processes`
+LOOKUPS = ("option", "provides", "ports", "framings", "processes")
+
+#: beside each name, the values of `LOOKUPS` its declaration states (a field it leaves empty is left out)
+KEYS: Mapping[str, Mapping[str, tuple[str, ...]]] = MappingProxyType({
+    "network-attester": {"provides": ("admission",), "ports": ("released", "scan-state"), "framings": ("ids",),
+                         "processes": ("id-relay",)},
+    "pearl-plus": {"option": ("pouw:pearl-c-h100-v1-h3",), "provides": ("cut",)},
+    "poub": {"processes": ("poub-session",)},
+    "pous": {"option": ("pous:p2-16448/v4",)},
+})
+
+
+def keys(scheme: Scheme) -> dict[str, tuple[str, ...]]:
+    """What `KEYS` holds for ``scheme``, read from its declaration."""
+    got = {"option": (scheme.option,) if scheme.option else (), "provides": tuple(scheme.provides),
+           "ports": tuple(sorted(p.name for p in scheme.ports)), "framings": tuple(sorted(scheme.framings)),
+           "processes": tuple(sorted(scheme.processes))}
+    return {f: v for f, v in got.items() if v}
+
+
+def named(field: str, value: str) -> str:
+    """The name of the one scheme whose ``field`` (`LOOKUPS`) holds ``value``, read from `KEYS` with no scheme imported;
+    `LookupError` naming the schemes when none or more than one does."""
+    if field not in LOOKUPS:
+        raise LookupError(f"no lookup by {field!r}; the lookups: {', '.join(LOOKUPS)}")
+    found = sorted(n for n, k in KEYS.items() if value in k.get(field, ()))
+    if len(found) != 1:
+        carried = sorted({v for k in KEYS.values() for v in k.get(field, ())})
+        raise LookupError(f"one scheme whose {field} is {value!r}, not {len(found)}: {found}; declared: {', '.join(carried)}")
+    return found[0]
 
 
 def get(name: str) -> Scheme:
@@ -80,4 +126,5 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 
 
-__all__ = ["DECLARATIONS", "FIELDS", "get", "load", "main"]
+__all__ = ["DECLARATIONS", "FIELDS", "KEYS", "LOOKUPS", "WORKLOAD_MESSAGES", "get", "keys", "load", "main", "named",
+           "workload_messages"]

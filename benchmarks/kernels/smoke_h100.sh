@@ -18,8 +18,12 @@
 #     commit_gpu.build   `commit_gpu.cu` for the card's gencode; commit_gpu.gate, the harness's gate on the binary
 #     commit_gpu.cases   `reference.py prepare`'s quick cases, each with its salts
 #     collect            pytest's collection of the device tests below
+#     card_sku           vLLM's settings read the card file's name from CARD_SKU and refuse it unset, which collection
+#                        does not reach (only the tests that serve a window build vLLM's committer); where this host
+#                        has a card, `machine.py sku` names its record and the settings build for sm_90a under it
 #   on the card
-#     card               one card, an H100 (or H200: the same architecture), whose record states sm_90a
+#     card               one card, an H100 (or H200: the same architecture), whose record states sm_90a; CARD_SKU is
+#                        set for the steps below to that record's name (`machine.py sku NAME`), which the reason states
 #     pearl_c.check      `run.py`'s check on the fixture (check_chains and the rest): every kernel's bytes against the
 #                        fixture's, no timing (SHAPES is empty)
 #     rows.device        the row engine's tests, `sha512_rows`: the device's leaves against the host's and the reference's
@@ -93,6 +97,9 @@ ZY_FILE=tests/protocols/test_pouw_h1_registered_device.py
 ROWS=$SCRATCH/rows.txt
 SKIPPED=77
 CUDA="" GENCODE="" NVCC_VERSION="" GPU="" CARD_OK=0
+# the target the smoke's builds are for: Pearl-C's tree says its own (build.sh --arch; it refuses another's GENCODE)
+TARGET=$(bash "$PEARL/build.sh" --arch) && [[ "$TARGET" =~ ^[a-z]+_[0-9]+[a-z]?$ ]] || {
+  echo "smoke_h100.sh: $PEARL/build.sh --arch names no one target its kernels are built for (it said: ${TARGET:-nothing})" >&2; exit 2; }
 : > "$ROWS"
 
 sha() { sha256sum "$1" | cut -d' ' -f1; }
@@ -171,8 +178,8 @@ p_toolkit() {
     REASON="machine.py toolkit 13.0 names no toolkit with nvcc: set CUDA_HOME to the node's CUDA 13.0"
     [ "$DRY" = 1 ] && return "$SKIPPED"; return 1; }
   if arch=$(python3 "$ROOT/benchmarks/kernels/machine.py" arch); then said="the machine's record states $arch"
-  else arch=sm_90a; said="the machine's record is unread here, so sm_90a is taken and the card step holds the card to it"; fi
-  [ "$arch" = sm_90a ] || { REASON="the machine's card is $arch: this smoke is sm_90a's"; return 1; }
+  else arch=$TARGET; said="the machine's record is unread here, so $TARGET is taken, Pearl-C's build's, and the card step holds the card to it"; fi
+  [ "$arch" = "$TARGET" ] || { REASON="the machine's card is $arch: this smoke's builds are $TARGET's"; return 1; }
   GENCODE=$(python3 "$ROOT/benchmarks/kernels/machine.py" gencode "$arch") || { REASON="no -gencode for $arch"; return 1; }
   CUDA=$kit
   NVCC_VERSION=$("$CUDA/bin/nvcc" --version | grep -oE 'V[0-9]+\.[0-9]+\.[0-9]+' | head -1)
@@ -278,6 +285,35 @@ stamp() {
    echo "${CUDA_HOME:-}"; echo "$PY") | sha256sum | cut -d' ' -f1
 }
 
+# vLLM's reading of CARD_SKU (the first argument; empty: unset), from the suite's directory: the arch it builds for, or
+# its refusal's first line
+vllm_arch() {
+  (cd "$ZY_T" && if [ -n "$1" ]; then export CARD_SKU=$1; else unset CARD_SKU; fi
+   "$PY" -c 'from verity_vllm import settings
+from verity_vllm.config import cuda_arch
+try:
+    print(cuda_arch(settings.card_sku()))
+except ValueError as e:
+    print(e)')
+}
+
+p_card_sku() {
+  local said sku arch
+  said=$(vllm_arch "") || { REASON="verity_vllm.settings does not import"; return 1; }
+  case $said in "CARD_SKU is not set"*) ;; *) REASON="verity_vllm.settings no longer refuses an unset CARD_SKU by that name (it said: $said), so what the card step exports is not what it reads"; return 1 ;; esac
+  if sku=$(python3 "$ROOT/benchmarks/kernels/machine.py" sku 2> "$SCRATCH/card_sku.err") && [ -n "$sku" ]; then
+    arch=$(vllm_arch "$sku")
+    [ -n "$GENCODE" ] || { REASON="no -gencode to hold vLLM's arch under CARD_SKU=$sku to (step toolkit)"; [ "$DRY" = 1 ] && return "$SKIPPED"; return 1; }
+    # vLLM writes the arch as torch does (9.0a); the toolkit step's -gencode ends with the same target without the dot
+    [ "${arch/./}" = "${GENCODE##*_}" ] || { REASON="under CARD_SKU=$sku, this host's card's record, vLLM's settings build for '$arch', not for -gencode $GENCODE"; return 1; }
+    REASON="vLLM's settings refuse an unset CARD_SKU, and under CARD_SKU=$sku, this host's card's record, build for $arch; the card step sets it"
+  elif [ "$DRY" = 1 ]; then
+    REASON="vLLM's settings refuse an unset CARD_SKU by that name; no card here names its record ($(head -c 200 "$SCRATCH/card_sku.err" | tr '\n' ' ')), so the name is first read on the card, where the card step sets it"
+  else
+    REASON="machine.py sku names no card record: $(head -c 300 "$SCRATCH/card_sku.err" | tr '\n' ' ')"; return 1
+  fi
+}
+
 PREPARED=$SCRATCH/prepared
 if [ "$DRY" = 0 ] && [ -s "$PREPARED/stamp" ] && [ "$(cat "$PREPARED/stamp")" = "$(stamp)" ] \
    && ! cut -d $'\037' -f2 "$PREPARED/rows.txt" | grep -qv PASS; then
@@ -303,6 +339,7 @@ else
   step commit_gpu.gate p_cg_gate
   step commit_gpu.cases p_cg_cases
   step collect p_collect
+  step card_sku p_card_sku
   if [ "$OWN_SCRATCH" = 0 ]; then
     mkdir -p "$PREPARED/out"
     cp -r "$O/." "$PREPARED/out/"
@@ -315,7 +352,7 @@ fi
 # ---- on the card -----------------------------------------------------------------------------------------------------
 
 c_card() {
-  local rows row index uuid name arch
+  local rows row index uuid name arch sku
   rows=$(nvidia-smi --query-gpu=index,uuid,name,driver_version --format=csv,noheader) || { REASON="nvidia-smi names no card"; return 1; }
   if [ -n "${GPU_LEASE_UUID:-}" ]; then row=$(printf '%s\n' "$rows" | grep -F "$GPU_LEASE_UUID")
   elif [[ "${CUDA_VISIBLE_DEVICES:-}" =~ ^[0-9]+$ ]]; then row=$(printf '%s\n' "$rows" | grep -E "^$CUDA_VISIBLE_DEVICES,")
@@ -326,10 +363,12 @@ c_card() {
   uuid=${uuid# } name=${name# }
   printf '%s\n' "$row" > "$O/gpu.txt"
   arch=$(python3 "$ROOT/benchmarks/kernels/machine.py" arch "$name") || { REASON="no card record names $name"; return 1; }
-  [ "$arch" = sm_90a ] || { REASON="$name's record states $arch, and the builds are sm_90a's"; return 1; }
-  export CUDA_VISIBLE_DEVICES=$index PEARLC_EXPECT_UUID=$uuid
+  [ "$arch" = "$TARGET" ] || { REASON="$name's record states $arch, and the builds are $TARGET's"; return 1; }
+  sku=$(python3 "$ROOT/benchmarks/kernels/machine.py" sku "$name") && [ -n "$sku" ] || { REASON="no card record names $name, so there is no CARD_SKU to set"; return 1; }
+  [ -z "${CARD_SKU:-}" ] || [ "$CARD_SKU" = "$sku" ] || { REASON="CARD_SKU is $CARD_SKU here, and $name's record is $sku"; return 1; }
+  export CUDA_VISIBLE_DEVICES=$index PEARLC_EXPECT_UUID=$uuid CARD_SKU=$sku
   GPU=$name CARD_OK=1
-  REASON="$name, index $index, its record states $arch"
+  REASON="$name, index $index, its record states $arch; CARD_SKU=$sku set for the card's steps"
 }
 
 # what every later card step needs: the card and the toolkit

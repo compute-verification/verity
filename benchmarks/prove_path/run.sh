@@ -96,7 +96,10 @@
 #   PP_LLAMA=DIR bash benchmarks/prove_path/run.sh
 # Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
 # advice or its opening (the prover's, private: the verifier is handed the opening, the named gap), a prover's file (inst-*,
-# *-private.bin: the rows and their salts), a circuit (its pin is) nor a request value (the stand-in's workload.json, its prompts).
+# *-private.bin: the rows and their salts), a circuit (its pin is), a request value (the stand-in's workload.json, its prompts)
+# nor a serve's own records (serve.json, windows.jsonl: only vLLM's mirror publishes them, through serve_mirror.PUBLIC).
+# The rest goes to PP_KEEP=DIR (0700, refused under $OUT or the run dir; without it, scratch removed at exit): a window's
+# partition and the files beside it, the advice's length, the tools' logs and error output, the machine's shape.
 set -uxo pipefail
 PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../one_stage/public_files.py
 for v in PP_LLAMA PP_SERVE_RUN PP_SERVE_ROWS; do
@@ -128,12 +131,19 @@ fi
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:+$RESEARCH_RUN_DIR/out}}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 [ -n "$O" ] || { O=$REPO/out/prove_path; echo "OUT unset outside a research run: the outputs go to $O"; }
 mkdir -p $O
+K=${PP_KEEP:-$W/keep}
+for p in "$O" "${RESEARCH_RUN_DIR:-}"; do
+  [ -z "$p" ] || case $(realpath -m "$K")/ in "$(realpath -m "$p")"/*)
+    echo "PP_KEEP=$K is under $p, which custody publishes: give a directory outside it"; exit 2;; esac
+done
+(umask 077 && mkdir -p "$K") && chmod 700 "$K" || exit 2
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/proofs/flock; } | tee $O/machine.txt
+{ nproc; free -g | head -2; } > $K/machine.txt
+git rev-parse HEAD HEAD:verity/protocols/proofs/flock | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
-uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
+uv sync --all-packages --extra torch-cpu > $K/sync.log 2>&1 || { tail -20 $K/sync.log; exit 5; }
 PY=$REPO/.venv/bin/python
 PLAIN=(); SAMPLING_DESIGN=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) SAMPLING_DESIGN=stratified-rate
 STEP1=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json STEP24=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24.json
@@ -143,16 +153,16 @@ if [ -z "${PP_TP:-}" ] && [ -n "${PP_SERVE_RUN:-}${PP_LLAMA:+${PP_SERVE_STANDIN:
     ${PP_FORGED_PARTITION:+--forged $PP_FORGED_PARTITION} > $O/forged-partition.json || exit 8
 fi
 
-(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server flock-read-tmpl) > $O/build-lean.log 2>&1 &
+(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server flock-read-tmpl) > $K/build-lean.log 2>&1 &
 LP=$!
-mkdir -p $O/m0-build
+mkdir -p $K/m0-build
 FW=${PP_FLOCK_WORK:-$W}
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
-  || { tail -40 $O/m0-build/build.log; exit 6; }
+RESEARCH_RUN_DIR=$K/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $K/m0-build/build.log 2>&1 \
+  || { tail -40 $K/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
-wait $LP || { tail -40 $O/build-lean.log; exit 7; }
+wait $LP || { tail -40 $K/build-lean.log; exit 7; }
 LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-zk-server
-(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > $K/build-sampled-proofs.log 2>&1 || { tail -40 $K/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 PP_CHALLENGER=${PP_CHALLENGER:-local}   # the sample's coins are a challenger's: a local development session unless named
 $PY benchmarks/prove_path/prove_path.py ran-with --challenger "$PP_CHALLENGER" ${PP_CHALLENGER_KEY:+--challenger-key "$PP_CHALLENGER_KEY"} \
@@ -160,7 +170,7 @@ $PY benchmarks/prove_path/prove_path.py ran-with --challenger "$PP_CHALLENGER" $
 
 for I in 256 1536 8192 ${PP_SETS:-}; do   # the verifier's lowering: a synthetic input set per template (its values are never read)
   case $I in */*) SUB=$I SET=${I//\//_};; *) SUB=silu-mul-v2/i$I/bf16 SET=i$I;; esac
-  $PY -m verity_numerical.bench.generate --subcircuit $SUB --n 4 --seed 1 --out $W/sets/$SET > $O/sets-$SET.log 2>&1 || exit 9
+  $PY -m verity_numerical.bench.generate --subcircuit $SUB --n 4 --seed 1 --out $W/sets/$SET > $K/sets-$SET.log 2>&1 || exit 9
 done
 TG=(); for t in ${PP_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); done
 CH=()
@@ -169,9 +179,9 @@ if [ -n "${PP_CHALLENGER:-}" ] && [ -n "${PP_MAIN:-}" ]; then   # the run's firs
   [ "$PP_MAIN" -ef $O/main.txt ] || cp "$PP_MAIN" $O/main.txt
 elif [ -n "${PP_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
   UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
-  git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > $O/fetch-main.log 2>&1 \
-    || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> $O/fetch-main.log 2>&1 \
-    && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $O/fetch-main.log; exit 4; }
+  git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > $K/fetch-main.log 2>&1 \
+    || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> $K/fetch-main.log 2>&1 \
+    && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $K/fetch-main.log; exit 4; }
 fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
   CH=(--challenger $PP_CHALLENGER --main $O/main.txt)
@@ -214,19 +224,20 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
     return 0;; esac
   local adv="--advice $advice" op="--opening $W/$name-opening.json"
   case "$src" in *--serve-run*) adv=; op=;; esac
-  mkdir -p $O/$name
+  mkdir -p $O/$name $K/$name
   $TIME $PP commit $src $adv $op --partition $part \
     ${ranks:+--ranks $ranks} "${TG[@]}" \
     --jobs ${PP_JOBS:-1} --out $W/$name-windows "$@" > $O/$name/commit.log 2>&1 || { tail -30 $O/$name/commit.log; return 1; }
-  for d in $W/$name-windows/rank*; do   # serving's public files, never a private body
-    mkdir -p $O/$name/windows/$(basename $d) && cp $d/{registration,window,partition,index}.json $d/m*-public.bin $O/$name/windows/$(basename $d)/
+  for d in $W/$name-windows/rank*; do   # its registration public; its partition and the files beside it kept
+    mkdir -p $O/$name/windows/$(basename $d) $K/$name/windows/$(basename $d) && cp $d/registration.json $O/$name/windows/$(basename $d)/ \
+      && cp $d/{window,partition,index}.json $d/m*-public.bin $K/$name/windows/$(basename $d)/
     [ ! -e $d/circuit.json ] || cp $d/circuit.json $O/$name/windows/$(basename $d)/
   done
   cp $W/$name-windows/commit.json $O/$name/windows/
   if [ -n "${PP_KEEP_WINDOWS:-}" ]; then   # the windows whole, the prover's files included, for a later job on this node
     mkdir -p "$PP_KEEP_WINDOWS" && rm -rf "$PP_KEEP_WINDOWS/$name-windows" && cp -a $W/$name-windows "$PP_KEEP_WINDOWS/" || return 1
     R keep "$PP_KEEP_WINDOWS" --owner @proofs --expires 7d --priority low \
-      --why "prove_path.sh PP_KEEP_WINDOWS: committed windows (rows and salts) a later job stages from" >> $O/keep.log 2>&1
+      --why "prove_path.sh PP_KEEP_WINDOWS: committed windows (rows and salts) a later job stages from" >> $K/keep.log 2>&1
   fi
   if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
     records $name $part $forged
@@ -236,9 +247,9 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
     ${ranks:+--ranks $ranks} ${PP_JOBS:+--jobs $PP_JOBS} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
-    ${PP_VLLM_PYTHON:+--vllm-python $PP_VLLM_PYTHON} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    ${PP_VLLM_PYTHON:+--vllm-python $PP_VLLM_PYTHON} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $K/$name/audit.err
   local rc=$?
-  grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
+  grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; tail -25 $K/$name/audit.err
   keep $name
   return $rc
 }
@@ -249,24 +260,24 @@ records() {  # NAME PARTITION [--forged]: records_audit.py on the served window 
 c = json.load(open(sys.argv[1]))
 print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[2:]}}))' $O/$REC_NAME-records/compiler.json \
     $PY $REPO/benchmarks/prove_path/prove_path.py circuit --serve-run $REC_RUN --window $REC_K --vllm-python ${PP_VLLM_PYTHON:-$PY} \
-    ${PP_TARGET:+--target $PP_TARGET} --partition $(realpath $part) "${TG[@]}" > $O/$name/compilers.json || return 1
+    ${PP_TARGET:+--target $PP_TARGET} --partition $(realpath $part) "${TG[@]}" > $K/$name/compilers.json || return 1
   local root sampling_design
   root=$($PY -c 'import json, sys
 print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["window"]) == int(sys.argv[2])))' $REC_RUN/windows.jsonl $REC_K) || return 1
   sampling_design=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["law"])' $part) || return 1
   $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-windows/rank0 --sampling-design $sampling_design --run $root \
-    --opening $REC_RUN/advice/w$REC_K/private/opening.json --compilers $O/$name/compilers.json --template-sets $W/sets \
+    --opening $REC_RUN/advice/w$REC_K/private/opening.json --compilers $K/$name/compilers.json --template-sets $W/sets \
     ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
-    --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $K/$name/audit.err
   local rc=$?
-  grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
+  grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $K/$name/audit.err
   return $rc
 }
 
 rc=0
 FORGE=${PP_FORGE:-0:1}
 if [ -n "${PP_TP:-}" ]; then
-  $PP advice --workload adapters/vllm/workloads/$ROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
+  $PP advice --workload adapters/vllm/workloads/$ROW.json --out $W/advice.bin | tee $K/advice.log || exit 8
   GLM="--tp-commit $PP_TP/commit --build-root $PP_TP/build"
   run glm "$GLM" $W/advice.bin ${PP_PARTITION:-benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16_stratified.json} "${PP_RANKS:-}" || rc=1
   run glm-forged "$GLM" $W/advice.bin benchmarks/prove_path/glm53_silu_mul_v2_i1536_step16_all.json "${PP_FORGED_RANKS:-0}" \
@@ -274,9 +285,11 @@ if [ -n "${PP_TP:-}" ]; then
 elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
   D=${PP_SERVE_ROWS:-${PP_LLAMA:-}}
   [ -d "$D" ] || { echo "no row dir ${D:-(PP_SERVE_ROWS or PP_LLAMA)}: give the Commit's row dir on this node"; exit 8; }
-  served() {  # NAME SERVE_RUN K: the served window's honest and forged audits, its public records and its compiler kept
+  served() {  # NAME SERVE_RUN K: the served window's honest and forged audits, its registration's public form and its compiler
+              # kept; serve.json and windows.jsonl stay in SERVE_RUN, where records() reads them
     mkdir -p $O/$1-records
-    cp $2/serve.json $2/windows.jsonl $2/advice/w$3/registration.json $O/$1-records/
+    python3 "$(dirname "$PUBF")/served_verdicts.py" public-registration $2/advice/w$3/registration.json \
+      > $O/$1-records/registration.json || { rm -f $O/$1-records/registration.json; return 1; }
     $PP compiler --serve-run $2 ${PP_TARGET:+--target $PP_TARGET} "${TG[@]}" | tee $O/$1-records/compiler.json || return 1
     local src="--serve-run $2 --window $3 --row-dir $D ${PP_TARGET:+--target $PP_TARGET}"
     REC_NAME=$1 REC_RUN=$2 REC_K=$3
@@ -292,15 +305,15 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
       $PP serve-standin $LLAMA --out $W/serve-run | tee $O/serve-standin.json || exit 8
       served llama-served $W/serve-run 0 || rc=1
     else
-      $PP advice --workload $LWL --out $W/advice.bin | tee $O/advice.log || exit 8
+      $PP advice --workload $LWL --out $W/advice.bin | tee $K/advice.log || exit 8
       run llama "$LLAMA" $W/advice.bin ${PP_PARTITION:-$STEP1} "" || rc=1
       run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
     fi
   fi
 elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   TCAP=${PP_TIE_CAP:-16} F=$W/tie-fixture
-  (cd tests/adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $O/tie-fixture.err \
-    || { tail -20 $O/tie-fixture.err; exit 8; }
+  (cd tests/adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $K/tie-fixture.err \
+    || { tail -20 $K/tie-fixture.err; exit 8; }
   WT="$PY -m verity_vllm.pipeline.cli weights-tie"
   tie() {  # NAME [--served] [--forge-digest]: the committer's registration of X and its tie window (--served: Y's words served
            # as X's; --forge-digest: its ends' digests forged to X's), the verifier's tie of X, the records audit of the window
@@ -317,7 +330,7 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
     local common=(--phi $F/phi.json --checkpoint-dir $F/x/snap --manifest $F/x/checkpoints.json
                   --grain $($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["grain"])' $O/tie-fixture.json)
                   --cap $TCAP --run-id $id)
-    mkdir -p $O/$name
+    mkdir -p $O/$name $K/$name/window
     $WT commit "${common[@]}" --registration-out $W/$name-registration.json --out $W/$name-window \
       "${commit[@]}" | tee $O/$name/commit.json || return 1
     cp $W/$name-registration.json $O/$name/registration.json
@@ -325,13 +338,14 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
     c=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["circuit"])' $O/$name/verifier/tie.json) || return 1
     run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/verifier/tie.json) || return 1
     units=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["units"])' $O/$name/verifier/tie.json) || return 1
-    mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
+    mkdir -p $O/$name/window && cp $W/$name-window/{registration,circuit}.json $O/$name/window/ \
+      && cp $W/$name-window/{window,index}.json $W/$name-window/m*-public.bin $K/$name/window/
     $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --sampling-design work-rate:$units/$units --circuit $c --run $run \
       --registered $O/$name/verifier/registered.json \
       ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
-      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $K/$name/audit.err
     rc=$?
-    grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
+    grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $K/$name/audit.err
     keep $name
     $WT pins "${common[@]}" --registration $O/$name/registration.json --summary $W/$name/summary.json --out $O/$name/pins.json \
       | tee $O/$name/pins-verdict.json
@@ -345,9 +359,9 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
 else
   S=$W/served
   (cd tests/adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $SAMPLING_DESIGN:1/2 --deferred) \
-    > $O/standin.json 2> $O/standin.err || { tail -20 $O/standin.err; exit 8; }
+    > $O/standin.json 2> $K/standin.err || { tail -20 $K/standin.err; exit 8; }
   mkdir -p $O/standin && (cd $S/commit && find . -maxdepth 1 -type f -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp {} $O/standin/)
-  $PP advice --workload $S/workload.json --out $W/advice.bin | tee $O/advice.log || exit 8
+  $PP advice --workload $S/workload.json --out $W/advice.bin | tee $K/advice.log || exit 8
   echo "{\"templates\": [\"SiluMul_v2{I=256}\"], \"law\": \"$SAMPLING_DESIGN:1/1\"}" > $W/all.json
   SI="--tp-commit $S/commit --build-root $S/build"
   run standin "$SI" $W/advice.bin $S/partition.json "${PP_RANKS:-}" || rc=1

@@ -82,8 +82,8 @@ What the launch before this one did that `research run` doesn't yet:
 
 | What it did | Now |
 | --- | --- |
-| `--end UTC`: a booked period's end; the slot wait stopped in time and a point whose `max_minutes` didn't fit wasn't started | none: `--timeout` and `--pool-wait` are lengths, not an end (`jobs.booked`, infra's launcher) |
-| `--cores CPUS`: the slot taker ran under `taskset -c CPUS`, so it took the booked slot or waited for it | none: `--pool` takes the first free slot (`jobs.booked`); the lease's CPUs are `GPU_LEASE_CORES` (gpu-lease's `--cores`) |
+| `--end UTC`: a booked period's end; the slot wait stopped in time and a point whose `max_minutes` didn't fit wasn't started | `research run --end UTC` with `--timeout`, refused at launch unless the bound fits before the end |
+| `--cores CPUS`: the slot taker ran under `taskset -c CPUS`, so it took the booked slot or waited for it | `research run --pool P --slot NAME`, which waits for that slot alone; the lease's CPUs are `GPU_LEASE_CORES` (gpu-lease's `--cores`) |
 | `--card INDEX`: the lease asked for the booked card alone | `--env GPU_LEASE_ON=INDEX`, read by the point's lease (gpu-lease reads no such variable, and `research run --gpus N` takes any card) |
 | a GPU slot of the node, waited for up to 4 h | `--pool gpu --pool-wait S`, which also runs the point under `nice -n 19` |
 | the run bounded by the spec's `max_minutes` | `--timeout`, counted from taking the slot; the lease's `--max-min` is the spec's |
@@ -104,6 +104,12 @@ code, and fails when the code has one this list lacks.
 | A point | one recorded `research run` of `verity-bench run SPEC`; queued, of the kind `vllm-bench-1gpu` |
 
 One failed gate times nothing. Every metric is reported as a mean and as a ratio to the baseline paired by rep.
+
+Every gate is the benchmark's own check, run by its process on the served node: each stored gate says so as
+`checked_by: piece`, and the result's table prints it. `checked_by` takes proofs' runners and no word of our own
+(`verity_bench.checked_by`: `piece`, `lean`, `device`, from `RAN_BY` in `benchmarks/one_stage/served_verdicts.py`). The
+served table, the overhead table, a steady point's `out/verdict.json`, `lean-verify`'s record and `prove layers` say who
+ran their checks in the same words. A result stored before the field says `not recorded`.
 
 ## The kit
 
