@@ -310,7 +310,7 @@ def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (r
   if portSchema c.ports[p]! != reg.schema then
     throw s!"registered reads: port {reg.name} is a {portSchema c.ports[p]!} row, and {reg.value}'s registered rows are {reg.schema} rows"
   if !reg.fits c.ports[p]! then
-    throw s!"registered reads: port {reg.name}'s rows are {c.ports[p]!.bits} bits ({c.ports[p]!.words} u16 words), not {reg.value}'s registered rows of {reg.words.getD 0} {reg.wordBits}-bit leaves"
+    throw s!"registered reads: port {reg.name}'s rows are {c.ports[p]!.bits} bits ({c.ports[p]!.words} u16 words), not {reg.value}'s registered rows of {reg.words.getD 0} {reg.wordBits}-bit leaves; a reader of registered leaves at another width (the same bits cut again, low part first) is not read until the Program's Lean defines that cut"
   let (positions, paths) ← entry pub reg
   let rows := t.counts.getD p 0
   if positions.size != rows || paths.size != rows then
