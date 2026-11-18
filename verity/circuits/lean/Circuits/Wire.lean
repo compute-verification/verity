@@ -204,6 +204,14 @@ open Json in
 def WIRE_KEYS : List String := ["reader", "port", "writer", "out", "at", "radix", "base", "step"]
 
 open Json in
+/-- A wire record's `ostep`: none, or one integer a digit of its `n` digits. -/
+def ostepOf (j : Lean.Json) (n : Nat) : Except String (List Int) := do
+  if !((keysOf j).getD []).contains "ostep" then return []
+  let os ← (← arrOf "ostep" (← field j "ostep")).mapM (intOf "an offset step")
+  if !os.isEmpty && os.length != n then throw "a wire's ostep is one integer a digit"
+  return os
+
+open Json in
 /-- The one reader of a wire's record (`WIRE_KEYS`), which SPOT's wiring and Flock's registered reads both read. -/
 def Wire.ofJson (j : Lean.Json) : Except String Wire := do
   let ks := (keysOf j).getD []
@@ -221,9 +229,7 @@ def Wire.ofJson (j : Lean.Json) : Except String Wire := do
       | _ => throw "a wire's cut is [c0, C]"
     | .error _ => pure (0, 1)
   let offset ← if ks.contains "offset" then natAt j "offset" else pure 0
-  let ostep ← if ks.contains "ostep" then (← arrOf "ostep" (← field j "ostep")).mapM (intOf "an offset step")
-    else pure []
-  if !ostep.isEmpty && ostep.length != radix.length then throw "a wire's ostep is one integer a digit"
+  let ostep ← ostepOf j radix.length
   return { reader := ← s "reader", port := ← s "port", writer := ← s "writer", out := ← s "out",
            start := ← natAt j "at", radix, base := ← intOf "base" (← field j "base"), step, cut0, cuts, offset,
            ostep }
