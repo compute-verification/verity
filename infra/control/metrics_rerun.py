@@ -88,10 +88,13 @@ missing or unreadable file lists no row, and the pass says so), one table a row:
     [[row]]
     id = "OWNER/NAME"
     command = "..."                    # the row's `command`, character for character
-    keys = ["NAME", ...]               # the pod's keys (of LEFT_OUT) its launch keeps; none when absent
+    keys = ["NAME", ...]               # the pod's keys its launch keeps, of ENTRY_KEYS; none when absent
 
 It holds names and never a key's value, which stays in the pod's environment files; no row that runs on a machine, which it
-doesn't govern; and no exception to any other bound: a listed row passes all of them, or isn't launched.
+doesn't govern; and no exception to any other bound: a listed row passes all of them, or isn't launched. The list compares
+the command's string. What that string runs is main's tip as the loop fetches it: the row's script, what it imports, the
+lockfile `uv run` installs from, and `research` itself. So anything that lands on main runs on the control pod with the kept
+keys, the list unchanged. That is the same trust main already has on the pod; the list does not bound it.
 
 usage (the watchers' `metrics-rerun` loop on the control pod, infra/control/watchers.toml; research importable, the store's
 key, a site key with events:read in $JOBS_TOKEN, and $SLACK_BOT_TOKEN for its rings):
@@ -190,6 +193,8 @@ HELPER = "!/data/infra/gh_app_token.sh git"             # hands git the App's to
 GIT_S = 1800
 SITE_KEY = "JOBS_TOKEN"                                 # the door's key, which no launch needs
 LEFT_OUT = re.compile(rf"^(?:{SITE_KEY}|SLACK_.*|LINEAR_.*)$")   # the pod's keys a launch's environment holds none of, but those its row's entries name
+#: the only names of the pod's keys an entry of its list may give a CONTROL row's launch: the Linear app's
+ENTRY_KEYS = frozenset({"LINEAR_CLIENT_ID", "LINEAR_CLIENT_SECRET"})
 #: why a declared number is or isn't launched, as the record's `numbers` and `classify` say
 REASONS = {
     "launched": "launched at this pass",
@@ -384,8 +389,8 @@ def planned(opts: list[tuple[str, str | None]]) -> bool:
 
 @dataclass(frozen=True)
 class Entry:
-    """A row of the pod's list: the command it may run, character for character, and the names of the pod's keys (of LEFT_OUT)
-    its launch keeps."""
+    """A row of the pod's list: the command it may run, character for character, and the names of the pod's keys (of
+    ENTRY_KEYS) its launch keeps."""
     command: str
     keys: frozenset[str] = frozenset()
 
@@ -403,9 +408,11 @@ def control_list(path: Path | None, say: Callable[[str], None]) -> dict[str, Ent
                     or not all(isinstance(r[k], str) for k in ("id", "command"))):
                 raise ValueError(f"{r!r} is no [[row]] of an id and a command, both strings, and its keys")
             keys = r.get("keys", [])
-            if (not isinstance(keys, list) or len(set(keys)) != len(keys)
-                    or not all(isinstance(k, str) and LEFT_OUT.match(k) for k in keys)):
-                raise ValueError(f"{r['id']}'s keys {keys!r} are no list of distinct names of the pod's keys a launch leaves out")
+            if not isinstance(keys, list) or len(set(map(str, keys))) != len(keys):
+                raise ValueError(f"{r['id']}'s keys {keys!r} are no list of distinct names")
+            if bad := [k for k in keys if k not in ENTRY_KEYS]:
+                raise ValueError(f"{r['id']}'s keys name {', '.join(map(repr, bad))}, which is not a name an entry may give "
+                                 f"(ENTRY_KEYS: {', '.join(sorted(ENTRY_KEYS))})")
             if out.setdefault(r["id"], e := Entry(r["command"], frozenset(keys))) != e:
                 raise ValueError(f"it lists {r['id']} twice, differently")
         return out

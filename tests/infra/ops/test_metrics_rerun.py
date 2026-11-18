@@ -811,15 +811,41 @@ def test_rows_of_one_command_whose_entries_name_different_keys_run_nowhere(tmp_p
             "one launch measures them all") in state["numbers"]["ci/plain"]["why"]
 
 
-@pytest.mark.parametrize("keys", [["AWS_SECRET_ACCESS_KEY"], ["LINEAR_CLIENT_ID", "LINEAR_CLIENT_ID"], "LINEAR_CLIENT_ID"])
-def test_an_entry_may_name_only_keys_a_launch_would_leave_out_each_once(tmp_path, keys):
+def list_of(tmp_path, keys):
     lst = tmp_path / "metrics-rerun.control.toml"
     lst.write_text(f"[[row]]\nid = \"ci/plain\"\ncommand = {json.dumps(LANDING)}\nkeys = {json.dumps(keys)}\n")
+    return lst
+
+
+@pytest.mark.parametrize("name", ["SLACK_BOT_TOKEN", "JOBS_TOKEN", "LINEAR_API_KEY", "AWS_SECRET_ACCESS_KEY"])
+def test_an_entry_may_give_only_the_names_of_entry_keys(tmp_path, name):
+    """The pod's site and Slack keys, and every name but the Linear app's two, are no key an entry may give."""
+    lst = list_of(tmp_path, ["LINEAR_CLIENT_ID", name])
     cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain")]}, control_rows=lst)
     pod = Pod(out=here)
     state, _ = run(cfg, pod)
     assert pod.launched == [] and state["numbers"]["ci/plain"]["reason"] == "control-unlisted"
-    assert any(ln.startswith(f"the control pod's list of rows {lst} is unreadable (ValueError: ci/plain's keys ") for ln in pod.lines)
+    assert (f"the control pod's list of rows {lst} is unreadable (ValueError: ci/plain's keys name '{name}', which is not a "
+            "name an entry may give (ENTRY_KEYS: LINEAR_CLIENT_ID, LINEAR_CLIENT_SECRET)), so no row runs on the control pod"
+            ) in pod.lines
+
+
+@pytest.mark.parametrize("keys", [["LINEAR_CLIENT_ID", "LINEAR_CLIENT_ID"], "LINEAR_CLIENT_ID"])
+def test_an_entry_gives_each_name_once_in_a_list(tmp_path, keys):
+    lst = list_of(tmp_path, keys)
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain")]}, control_rows=lst)
+    pod = Pod(out=here)
+    run(cfg, pod)
+    assert pod.launched == [] and any(ln.startswith(f"the control pod's list of rows {lst} is unreadable (ValueError: "
+                                                    f"ci/plain's keys {keys!r} are no list of distinct names") for ln in pod.lines)
+
+
+def test_an_entry_giving_the_linear_apps_two_names_is_taken(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain")]}, control_rows=list_of(tmp_path, list(LINEAR)))
+    pod = Pod(out=here, states={run_id(1): ("done", 0, True, {"here": True})})
+    state, _ = run(cfg, pod)
+    assert pod.kept == [list(LINEAR)] and state["launches"][0]["keys"] == list(LINEAR)
+    assert R.ENTRY_KEYS == frozenset(LINEAR)
 
 
 def test_a_failed_control_runs_ring_says_how_it_ended_and_nothing_it_printed(tmp_path):
