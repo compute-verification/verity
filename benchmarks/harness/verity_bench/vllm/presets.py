@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 import tomllib
 from dataclasses import asdict, dataclass, field, fields, replace
@@ -50,7 +49,6 @@ class SpecPreset:
     case: str | None = None
     engine_settings: Mapping[str, Any] = field(default_factory=dict)
     vllm_pin: str = VLLM_PIN
-    model_digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -363,41 +361,6 @@ def served(preset: Preset, eager: bool) -> tuple[Preset, bool]:
     eager = bool(eager)
     settings = {**preset.engine_settings, "cuda_graphs": not eager, "enforce_eager": eager}
     return replace(preset, engine_settings=settings), eager
-
-
-def checkpoint_files(root: Path) -> list[Path]:
-    """The files of a local checkpoint that bind it: all but a Hub snapshot's repository metadata (dot-files such as
-    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (a node's
-    llama-3.1-8b-instruct gained ``.gitattributes`` and ``README.md`` with every weight unchanged)."""
-
-    return sorted(p for p in root.iterdir() if p.is_file() and not p.name.startswith(".") and p.suffix != ".md")
-
-
-def local_checkpoint(preset: Preset, path: str | Path) -> Preset:
-    """Bind a machine-local checkpoint to a preset by hashing its files (`checkpoint_files`)."""
-
-    root = Path(path)
-    files = checkpoint_files(root)
-    if not files:
-        raise ValueError(f"benchmark checkpoint {root} has no files")
-    digest = hashlib.sha256()
-    for file in files:
-        name = file.name.encode()
-        digest.update(len(name).to_bytes(4, "big"))
-        digest.update(name)
-        digest.update(file.stat().st_size.to_bytes(8, "big"))
-        content = hashlib.sha256()
-        with file.open("rb") as stream:
-            while chunk := stream.read(8 << 20):
-                content.update(chunk)
-        digest.update(content.digest())
-    return replace(
-        preset,
-        model=str(root),
-        revision=None,
-        case=None,
-        model_digest=digest.hexdigest(),
-    )
 
 
 @dataclass(frozen=True)

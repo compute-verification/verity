@@ -1,5 +1,6 @@
 """The network attester as a resource scheme (`verity.protocols.resource_accounting.scheme`): what it bounds is egress,
-the bits that leave beyond what the registered circuit explains."""
+the bits that leave beyond what the registered circuit explains. Its Lean instance (`NetTiming.Attester.scheme`)
+is at one execution phase, and its charge there is a named premise (`NetTiming.Attester.Phase.ChargeHolds`)."""
 
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from verity.protocols.resource_accounting.network.verifier.blocks import SCAN_ST
 from verity.protocols.resource_accounting.network.verifier.io_request import IoTieRequest
 from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBucket, IoTieContent, IoTieRoute
 from verity.protocols.resource_accounting import scheme as S
-from verity.protocols.resource_accounting.scheme import Block, Charge, Layout, Order, Port, Scheme, register
+from verity.protocols.resource_accounting.scheme import Block, Charge, Layout, Order, Port, Scheme, Term, register
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay, workload
@@ -61,7 +62,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     the certified tick, on the server's feed directory (`prover.admission.FrontFeed`, `prover.admission.engine`)."""
     s = settings(ctx.get("settings", {}))
     if ctx.get("process") == H.FRONT:
-        return FrontFeed(ctx["feed"]).attach(exchange, NETWORK_ATTESTER.name)
+        return FrontFeed(ctx["feed"], log=s["log"]).attach(exchange, NETWORK_ATTESTER.name)
     if ctx.get("process") == H.ENGINE:
         return engine(s, ctx["feed"]).install(exchange, NETWORK_ATTESTER.name)
     if s["order"] == "arrival":
@@ -111,6 +112,10 @@ NETWORK_ATTESTER = register(Scheme(
         Charge("start", "start"),
         Charge("tied-entries", "scans[].faulty_entries"),
     ),
+    delta_scheme=Term("Claims.ecrBound", ("q",), lambda q: Fraction(q, 2**256)),
+    over="bits: the ceiling of log2 of the number of records (the attester's rows and the channel) that committed values "
+         "with the phase's incorrect blocks explain",
+    under="bits: zero; the attester credits nothing",
     settings=SETTINGS,
     check_settings=_check,
     hooks=("declared", "steps"),

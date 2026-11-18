@@ -13,6 +13,7 @@ from types import SimpleNamespace as NS
 import pytest
 import serve_tax as S
 import servetax_plugin as P
+from verity_bench import kit
 
 ARM = "tick-certifier"
 
@@ -40,8 +41,8 @@ def test_the_arm_is_the_tick_arm_with_the_attester_in_front(tmp_path: Path, monk
     env = S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0, private=tmp_path / "private")
     plugin = json.loads(env[S.PLUGIN_ENV])
     assert plugin["private"] == str(tmp_path / "private")
-    assert {k: plugin.get(k) for k in ("record", "to_length", "idle_reset", "release_order")} == {
-        "record": True, "to_length": True, "idle_reset": True, "release_order": None}
+    assert {k: plugin.get(k) for k in ("record", "to_length", "idle_reset")} == {
+        "record": True, "to_length": True, "idle_reset": True}
     tick = json.loads(env["VERITY_PROTOCOLS_CONFIG"])[env["VERITY_PROTOCOLS"]]
     assert {k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} == {
         "bucket_us": 250000, "sat_us": 220000, "free_us": 230000}
@@ -89,15 +90,15 @@ def test_each_sides_commands_are_the_fronts_the_attesters_and_the_shims(tmp_path
 
 
 def test_the_servers_side_holds_its_engine_until_the_attesters_run_ends_or_its_stop_time(tmp_path: Path):
-    feed = tmp_path / "tick-feed.jsonl"
-    assert S.runs_ended(feed) == 0
+    feed = tmp_path / "tick.7.jsonl"
+    assert S.runs_ended(tmp_path) == 0
     lines = [{"key": "chat@96-r1-0", "run": "aa", "n": 0, "bucket": 21}, {"run": "aa", "t": 21, "n": 1},
              {"run": "aa", "n": 0, "passed": True}, {"run": "aa", "error": "the connection closed before the watermark's end"}]
     feed.write_text("".join(json.dumps(x, separators=(",", ":")) + "\n" for x in lines))
-    assert S.runs_ended(feed) == 0                      # a watermark that broke is no run's end: the side holds on
+    assert S.runs_ended(tmp_path) == 0                  # a watermark that broke is no run's end: the side holds on
     with feed.open("a") as f:
         f.write('{"run":"bb","t":0,"n":0}\n{"run":"bb","end":true}\n')
-    assert S.runs_ended(feed) == 1
+    assert S.runs_ended(tmp_path) == 1
     assert S.hold_ends(None, None, 0, None) is None and S.hold_ends(None, None, 0, S.STOP_S + 1) is None
     assert S.hold_ends(None, None, 1, 3600.0) == ("the network certifier's run ended", True)
     assert S.hold_ends(None, None, 0, S.STOP_S) == ("--stop-at", True)
@@ -193,7 +194,8 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     --stop-at, the engine's counters read first. An id front that ends first fails the side."""
     (tmp_path / "tick_plugin.py").touch()
     monkeypatch.setattr(S, "TICK_PLUGIN", tmp_path / "tick_plugin.py")
-    monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100, free_port=lambda: 8100))
+    monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100))
+    monkeypatch.setattr(kit, "free_port", lambda: 8100)
     monkeypatch.setattr(S, "signal", NS(signal=lambda *a: None, SIGTERM=15))
     monkeypatch.setattr(S, "open_files", lambda: 4096)
     monkeypatch.setattr(S, "source_commit", lambda: "c0ffee")
@@ -202,7 +204,7 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     monkeypatch.setattr(S, "scrape", lambda port: events.append(("scrape", port)) or COUNTERS)
     monkeypatch.setattr(S, "stop", lambda server, grace_s: events.append(("stop", server.name, grace_s)) or "exited")
     out, t, events, procs = tmp_path / "out", [5000.0], [], {}
-    feed = S.tick_feed(out / "server")
+    feed = out / "server" / "tick.9.jsonl"
 
     def popen(argv, stdout, stderr, env, **how):
         name = "front" if "ids-front" in argv else "server"

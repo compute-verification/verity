@@ -70,8 +70,10 @@ def _run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
 
 
 def _cuda_tool(name: str) -> str:
-    home = os.environ.get("CUDA_HOME") or "/usr/local/cuda"
-    return shutil.which(name) or os.path.join(home, "bin", name)
+    if found := shutil.which(name):
+        return found
+    home = os.environ.get("CUDA_HOME") or sys.exit(f"no {name} on the PATH and CUDA_HOME is unset: set CUDA_HOME to the toolkit")
+    return os.path.join(home, "bin", name)
 
 
 def cpu_workers() -> int:

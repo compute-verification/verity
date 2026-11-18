@@ -3,8 +3,8 @@
 // one 512-thread block an SM; `--sustain NAME SECONDS` launches it back to back for SECONDS and prints a JSON line a
 // launch: every block's clock64 cycles and %globaltimer ns over the timed loop (their ratio is the SM clock the block
 // actually ran at, whatever NVML reports), the work done, and NVML's SM clock, power and clock-event reasons.
-// `power.sh` runs it under one gpu-lease, at the node's lock and then at the default clocks. The table also gates every
-// kernel's SASS through probe.py like any probe's (`--list`).
+// `clock_ceiling.sh` runs it under one gpu-lease. The table also gates every kernel's SASS through probe.py like any
+// probe's (`--list`).
 //   p_honest    8 IMMA + the duo fold of their 32 words a lane (honest.cuh), sampled operands
 //   p_half      4 IMMA + the same fold (half the MMAs)
 //   p_mma       8 IMMA, no fold (tensor only)
