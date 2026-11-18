@@ -430,6 +430,8 @@
 # under the same tree and FLOCK_* environment, take each circuit they would compose the same and compose only the rest
 # (at `v3c_audit`). It holds every such template's circuit, one of which can be past 100 GB, for as long as it is kept:
 # no step here removes it or checks its room, and the run that names it finds the disk for it.
+# SPOT_LEVELS (default 1) is SPOT's levels as the application file states them: the window serves one level, so 2, or
+# anything else, is refused before any step runs (exit 3).
 set -uo pipefail
 if [ -n "${SETTINGS:-}" ]; then
   [ -f "$SETTINGS" ] && [ -r "$SETTINGS" ] || { echo "PREFLIGHT: SETTINGS=$SETTINGS is not a readable file" >&2; exit 3; }
@@ -438,6 +440,11 @@ if [ -n "${SETTINGS:-}" ]; then
   . "$SETTINGS"
   set +a
 fi
+case ${SPOT_LEVELS:-1} in
+  1) ;;
+  2) echo "PREFLIGHT: SPOT_LEVELS=2: the served window has no two-level path yet (the outer blocks' boundaries committed at serve, the drawn outer blocks' inner blocks committed after the draw, and the second level's audit), so nothing is run, and it is not run as one level" >&2; exit 3;;
+  *) echo "PREFLIGHT: SPOT_LEVELS is 1 or 2, not ${SPOT_LEVELS}: SPOT has one level or two" >&2; exit 3;;
+esac
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=$PWD
 ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}

@@ -355,6 +355,38 @@ def test_the_bindings_bind_every_party_of_the_demo_by_the_env_files_names(tmp_pa
     assert not re.search(r"\d+\.\d+\.\d+\.\d+", got.stdout)
 
 
+@pytest.mark.parametrize("given", ["environment", "flag"])
+def test_the_launchs_spot_levels_reaches_the_window_run_once(tmp_path, given):
+    args, env = (("--env", "SPOT_LEVELS=1"), {}) if given == "flag" else ((), {"SPOT_LEVELS": "1"})
+    got = run(tmp_path, "window", "--dry-run", *args, **ROW_OF_CARDS, **env)
+    assert got.returncode == 0, got.stderr
+    assert env_of(got)["SPOT_LEVELS"] == "1"
+    assert "SPOT_LEVELS" not in env_of(run(tmp_path, "window", "--dry-run", **ROW_OF_CARDS))
+
+
+@pytest.mark.parametrize(("args", "env", "refusal"), [
+    ((), {"SPOT_LEVELS": "2"}, "SPOT_LEVELS=2: the served window has no two-level path yet"),
+    (("--env", "SPOT_LEVELS=2"), {}, "SPOT_LEVELS=2: the served window has no two-level path yet"),
+    ((), {"SPOT_LEVELS": "3"}, "SPOT_LEVELS is 1 or 2, not '3'"),
+])
+def test_a_launch_asking_for_levels_no_served_path_runs_starts_nothing(tmp_path, args, env, refusal):
+    got = run(tmp_path, "window", "--dry-run", *args, **ROW_OF_CARDS, **env)
+    assert (got.returncode, got.stdout) == (1, "")
+    assert refusal in got.stderr
+    assert "2" not in env or "it is not run as one level" in got.stderr
+
+
+@pytest.mark.parametrize(("levels", "refusal"), [
+    ("2", "window.sh: SPOT_LEVELS=2: the served window has no two-level path yet"),
+    ("x", "window.sh: SPOT_LEVELS is 1 or 2, not x"),
+])
+def test_the_window_refuses_levels_it_cannot_serve_before_anything_else(tmp_path, levels, refusal):
+    got = subprocess.run(["bash", str(HERE / "window.sh")], capture_output=True, text=True, check=False, cwd=tmp_path,
+                         env={"PATH": os.defpath, "HOME": str(tmp_path), "SPOT_LEVELS": levels})
+    assert got.returncode == 2 and got.stdout.startswith(refusal)
+    assert levels != "2" or "it is not run as one level" in got.stdout
+
+
 @pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "workload_env.sh", "copy.sh", "audit.sh", "handoff.sh"])
 def test_the_runs_scripts_parse(script):
     assert subprocess.run(["bash", "-n", str(HERE / script)], capture_output=True, check=False).returncode == 0

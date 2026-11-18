@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # The served window on its node (`run.sh window`): served_verdicts.sh under the card's lease, then its hand-off packed.
 set -uo pipefail
+case ${SPOT_LEVELS:-1} in
+  1) ;;
+  2) echo "window.sh: SPOT_LEVELS=2: the served window has no two-level path yet (the outer blocks' boundaries committed at serve, the drawn outer blocks' inner blocks committed after the draw, and the second level's audit), so nothing is run, and it is not run as one level"; exit 2;;
+  *) echo "window.sh: SPOT_LEVELS is 1 or 2, not ${SPOT_LEVELS}: SPOT has one level or two"; exit 2;;
+esac
 for v in CARD CORES END COMPOSE_OFF_NODE COMPOSE_NODE ROW REPO REV VENV CUDA_HOME HF_HOME SERVE_ROOT FLOCK_WORK HIDDEN_SO NORM_TAP_SO; do
   [ -n "${!v:-}" ] || { echo "window.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh window\`"; exit 2; }
 done
@@ -31,7 +36,7 @@ LEASE_MIN=${LEASE_MIN:-$(( lease_min < 150 ? lease_min : 150 ))}
 
 [ ! -f "$IN/main.txt" ] || export MAIN_FILE=$IN/main.txt
 log "coins: ${PP_CHALLENGER:-local} (peer ${PP_PEER:-none}${DEVELOPMENT:+, a development run})"
-log "window run of $row_id from $SHA on $(hostname), card $CARD (free: 0 processes, ${used} MiB, lease: $lease), cores $CORES, lease at most $LEASE_MIN min, COMPOSE_NODE $COMPOSE_NODE${PEARLPLUS_TIE:+, tied to Pearl+}"
+log "window run of $row_id from $SHA on $(hostname), card $CARD (free: 0 processes, ${used} MiB, lease: $lease), cores $CORES, SPOT levels ${SPOT_LEVELS:-1}, lease at most $LEASE_MIN min, COMPOSE_NODE $COMPOSE_NODE${PEARLPLUS_TIE:+, tied to Pearl+}"
 export PATH=$RESEARCH_RUN_DIR/bin:$PATH LEASE_MIN OUT
 mkdir -p "$SERVE_ROOT" /dev/shm/vllm-served-run && chmod 700 "$SERVE_ROOT" /dev/shm/vllm-served-run
 D=/dev/shm/vllm-served-run/${RESEARCH_RUN_ID:?run under research run}; export D

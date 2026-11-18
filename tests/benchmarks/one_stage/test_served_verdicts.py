@@ -633,6 +633,21 @@ def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
     assert capsys.readouterr().out == "no session (FileNotFoundError)\n"
 
 
+@pytest.mark.parametrize(("levels", "rc", "said"), [
+    (None, 0, ""), ("1", 0, ""),
+    ("2", 3, "PREFLIGHT: SPOT_LEVELS=2: the served window has no two-level path yet"),
+    ("3", 3, "PREFLIGHT: SPOT_LEVELS is 1 or 2, not 3"),
+])
+def test_the_runner_serves_one_level_and_refuses_any_other_before_any_step(tmp_path, levels, rc, said):
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "D": str(tmp_path / "serve"), "OUT": str(tmp_path / "out"),
+           **({"SPOT_LEVELS": levels} if levels else {})}
+    got = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "private-pieces"],
+                         cwd=tmp_path, env=env, capture_output=True, text=True, check=False)
+    assert got.returncode == rc and got.stderr.startswith(said)
+    assert levels != "2" or "it is not run as one level" in got.stderr
+    assert rc == 0 or not (tmp_path / "out").exists()
+
+
 def test_the_attesters_chain_files_that_count_requests_move_to_the_serve_dirs_private_after_the_record(tmp_path):
     """`served_verdicts.sh private-pieces` moves CERTIFIER_PRIVATE out of $OUT/pieces/certifier into the serve dir's
     private/, 0700, and leaves the piece's answer, its certificates and its verdict where the record and its reader

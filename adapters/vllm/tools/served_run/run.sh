@@ -41,6 +41,13 @@ if tie and "tie" not in r:
 coins = {} if run == "settings" else r.get("coins", {}).get("development" if dev else "gate", {})
 given = {k: v for f, a in zip(sys.argv[5:], sys.argv[6:]) if f == "--env" for k, _, v in [a.partition("=")]}
 held = {**{k: v for k, v in os.environ.items() if v}, **{k: v for k, v in given.items() if v}}
+levels = held.get("SPOT_LEVELS", "")
+if levels == "2":
+    sys.exit("run.sh: SPOT_LEVELS=2: the served window has no two-level path yet (the outer blocks' boundaries committed "
+             "at serve, the drawn outer blocks' inner blocks committed after the draw, and the second level's audit), so "
+             "nothing is run, and it is not run as one level")
+if levels not in ("", "1"):
+    sys.exit(f"run.sh: SPOT_LEVELS is 1 or 2, not {levels!r}: SPOT has one level or two")
 PARAMETER = re.compile(r"\$\{(\w+)(?::-([^}]*))?\}")
 ON_NODE = {"HOME", *(k for n in placement["node"].values() for k in n.get("env_files", {}))}
 
@@ -93,6 +100,9 @@ placed = {**{k: v for k, v in node.items() if not isinstance(v, dict)}, **r.get(
 # PRODUCT is the configuration's, and a launch parameter with no default the launch's
 env = {k: fill(str(v), k) for k, v in placed.items()
        if k not in given and not (run == "settings" and (k == "PRODUCT" or unset(str(v))))}
+# the launch's SPOT_LEVELS reaches the run, which a run under the settings already inherits
+if levels and "SPOT_LEVELS" not in given and run != "settings":
+    env["SPOT_LEVELS"] = levels
 send = [fill(s, f"{run} run's send") for s in r.get("send", [])]
 for name in send:
     if not Path(name).is_file():
