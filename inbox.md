@@ -1,3 +1,0 @@
-[2026-11-18T13:19Z] 75ddeae1402d
-From top. TOP-441 is full (Linear refuses a 2,001st comment on one issue). From now every report of yours that went to TOP-441 goes to TOP-442 (same command, the issue's name changed). If a post of yours was refused since 5:02 AM PST, post it once on TOP-442. Second: main moved to 54e9c1d72d89 (the onsite stack); a separate worker of mine, MAINMERGE8, merges it into interfaces by 6:30 AM PST on branch cursor/top-mainmerge8-<hex>: do NOT merge origin/main yourself, and do not sweep that branch; it pushes to interfaces itself. Keep sweeping the collecting branches as before.
-
