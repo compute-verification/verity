@@ -38,6 +38,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
+from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission, Delta
 from verity_vllm.records.predicted_row import FILE
@@ -310,7 +311,7 @@ def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path
     predicted.row(row, {"name": "other", "digest": "0" * 128})
     assert "binds compiler other 0000000000000000…, not this tree's" in refusal("--row-build", str(row))
     opts = parse("--row-build", str(predicted.row(row)))
-    assert ss.programs_root_of(opts) == str(row.resolve())
+    assert RW.programs_root_of(opts) == str(row.resolve())
     with pytest.raises(SystemExit):
         parse("--row-build", str(row), "--programs-root", str(traced))
     with pytest.raises(SystemExit):
