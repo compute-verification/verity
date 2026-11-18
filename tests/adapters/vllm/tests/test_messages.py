@@ -3,26 +3,44 @@ before, and its reader reads what it read before."""
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 from types import SimpleNamespace as NS
 
 import pytest
 from verity import hooks as H
-from verity.channel import Refused
 from verity.protocols.resource_accounting import scheme as schemes
 
+from verity.channel import Body, MessageTypes, Refused
 from verity_vllm import messages as M
+from verity_vllm.config import UsageError
 from verity_vllm.pipeline import advice as A
+from verity_vllm.pipeline import serve_day as SD
+from verity_vllm.pipeline import serve_h1 as SH
 
 
 def test_every_declared_message_is_a_type():
-    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUSStore"} <= M.types().types
+    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows"} <= M.types().types
 
 
 def test_a_type_no_protocol_declares_is_refused():
     with pytest.raises(Refused, match="unknown-type"):
         M.body("Summary", b"{}")
+
+
+@pytest.mark.parametrize("entry", ["serve_h1.config_of", "serve_day.declare"])
+def test_a_body_its_declaration_refuses_is_a_usage_error_naming_the_bound(tmp_path, monkeypatch, entry):
+    type_ = "MonitoringPeriodDeclaration" if entry == "serve_day.declare" else "PoUWScheme"
+    narrowed = MessageTypes(dataclasses.replace(s, body=Body(max=8)) if s.type == type_ else s
+                            for s in M.types().schemas.values())
+    monkeypatch.setattr(M, "types", lambda: narrowed)
+    (big := tmp_path / "big.json").write_text(json.dumps({"pouw": {}}))
+    day = SD.DayOptions(day=0, day_log=str(tmp_path / "log.json"), day_program="5a" * 64, day_params=str(big))
+    call = {"serve_h1.config_of": lambda: SH.config_of(str(big)),
+            "serve_day.declare": lambda: SD.declare(NS(day=day), tmp_path)}[entry]
+    with pytest.raises(UsageError, match=f"oversized: {type_}'s body is at most 8 bytes, not 12"):
+        call()
 
 
 def test_run_totals_bytes_unchanged(tmp_path):
