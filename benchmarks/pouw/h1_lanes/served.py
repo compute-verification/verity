@@ -121,7 +121,7 @@ def extract(a: argparse.Namespace) -> None:
     import pickle
 
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import handoff as HO
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import kept as KP

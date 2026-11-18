@@ -209,7 +209,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import socket
 import sys
 import time
 from contextlib import contextmanager
@@ -232,6 +231,7 @@ from verity.commitments.frame_v3 import BitRowLeaf, FrameV3, Port
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+from verity.ports import free_port
 from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf,
                                            sha512_row_seg_digest)
 from verity.commitments.crypto import lms
@@ -1719,14 +1719,6 @@ def network_attester_roots(members) -> list[dict]:
     return [out[p] for p in sorted(out)]
 
 
-def _free_port() -> int:
-    """A loopback port the OS has free now. A pool's slots share a machine, and the nodes' 7811-7899 are the challenger
-    gate's tunnels, so a fixed port collides across runs."""
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None, coins: SimpleNamespace | None = None,
           carry: SimpleNamespace | None = None) -> dict:
@@ -1851,7 +1843,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             log(f"{name}/{m['name']}: no unit sampled, no session")
             continue
         sdir = out / f"session-{m['name']}"
-        record, live, proc = M.a8.session(a, m, sdir, local, port + j if port else _free_port(), env=WZ.zk_server(M, m))
+        record, live, proc = M.a8.session(a, m, sdir, local, port + j if port else free_port(), env=WZ.zk_server(M, m))
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
         verdicts[f"m0-verifier/{m['name']}"] = {

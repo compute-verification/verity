@@ -19,8 +19,8 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); ROOT=$(cd "$here/../.." && p
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python
 export PATH="$VENV/bin:$PATH"
 export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
-# DeepGEMM JIT-compiles its kernels with CUDA_HOME's nvcc: the newest toolkit under /usr/local unless CUDA_HOME names one
-CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
+# DeepGEMM JIT-compiles its kernels with CUDA_HOME's nvcc: the machine's toolkit at the CUDA version VENV's torch is built for
+CUDA_HOME=${CUDA_HOME:-$(python3 "$ROOT/benchmarks/kernels/machine.py" toolkit "$("$PY" -c 'import torch; print(torch.version.cuda)')")} || { echo "no toolkit at VENV torch's CUDA version (machine.py, above): set CUDA_HOME" >&2; exit 2; }
 export CUDA_HOME
 # vLLM takes FlashInfer's block-FP8 GEMM below 32 rows only with FlashInfer's kernels prebuilt (flashinfer-cubin, which
 # serving images ship) or nvcc on PATH to compile them, and its sampler compiles at warmup with that nvcc;

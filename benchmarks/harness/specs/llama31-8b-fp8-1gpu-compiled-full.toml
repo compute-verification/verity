@@ -6,8 +6,8 @@ cards = ["rtx-pro-6000"]
 # an eager ratio R as a served one (the protocol's eager time over stock's compiled time is R times this row's
 # stock-fp8 / stock-fp8@compiled), over the full sweep: batch 1/8/32/128, prompt 512 and 8192, and decode-heavy,
 # prefill-heavy and mixed traffic, since the quick sweep's two points disagreed (b32 0.559x, b8 0.346x under host load
-# ~200). The preset is llama31-8b-1gpu-pouw-protocol-served's (its 4,096-token step budget and 8 GiB KV pin in both
-# modes), so `stock-fp8` is that row's baseline engine: eager through verity_vllm.LLM, which builds it batch invariant
+# ~200). The preset is the 8B eager protocol rows' (their 4,096-token step budget and 8 GiB KV pin in both modes), so
+# `stock-fp8` is their baseline engine: eager through verity_vllm.LLM, which builds it batch invariant
 # (`bi-eager`). `stock-fp8@eager` is the same engine at vLLM's serving defaults, eager and not batch invariant, and
 # `stock-fp8@compiled` at its serving defaults compiled (torch.compile with vLLM's CUDA-graph mode), so the factor splits
 # into batch invariance's cost and compilation's gain.
@@ -35,7 +35,6 @@ revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
 case = "LLAMA31_8B"
 precision = "fp8"
 gpu_count = 1
-vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
 
 [preset.engine_settings]
 cuda_graphs = true

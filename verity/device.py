@@ -1602,6 +1602,17 @@ def gpu_card_reporting(name: str, *, directory: Path) -> dict:
     return found[0]
 
 
+def gpu_card_called(short: str, *, directory: Path) -> dict:
+    """The one GPU card file in ``directory`` whose ``short`` is ``short``, the card's name in a member, a row id or a
+    flag (``h200``, ``rtx-pro-6000``); refused, naming the shorts there are, unless exactly one has it."""
+    cards = [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
+    found = [card for card in cards if card.get("short") == short]
+    if len(found) != 1:
+        raise KeyError(f"{len(found)} GPU card files under {directory} have `short` {short!r}: the shorts are "
+                       f"{sorted(card['short'] for card in cards if card.get('short'))}")
+    return found[0]
+
+
 def compute_capability(card: dict) -> tuple[int, int]:
     """A GPU card's compute capability, read from its ``arch`` (``sm_<major><minor>[a|f]``)."""
     arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", str(card.get("arch", "")))

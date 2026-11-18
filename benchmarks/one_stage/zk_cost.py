@@ -61,7 +61,6 @@ import argparse
 import hashlib
 import json
 import os
-import socket
 import subprocess
 import sys
 import time
@@ -114,12 +113,6 @@ def draws(c: int, spec: str = "1,8,64,c") -> list[tuple[int, list[str] | None]]:
             prev = got.get(k, set())
             got[k] = None if not arms or prev is None else prev | set(arms.split("+"))
     return [(k, None if got[k] is None else sorted(got[k])) for k in sorted(got)]
-
-
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 def proc_cpu(pids) -> tuple[float, float, int]:
@@ -348,11 +341,13 @@ def placed_unit(a, d: Path) -> list[str]:
 
 def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     """One prover process against its own `serve --zk`, proving ``warm + runs`` sessions of the point's sample."""
+    from verity_bench import kit
+
     sd, d, c, k = Path(pt["dir"]), Path(pt["stage_dir"]), pt["c"], pt["k"]
     warm, runs = (0, 1) if mode == "cold" else (a.warm, a.runs)
     o = out / (f"{pt['tag']}-c{c}-k{k}" if "unit" in pt else f"k{pt['K']}-c{c}-k{k}") / f"{arm}-{mode}{rep}"
     o.mkdir(parents=True, exist_ok=True)
-    port = free_port()
+    port = kit.free_port()
     if "unit" in pt:
         inst, pub = pt["inst"], pt["pub"]
         tmpl = placed_unit(a, d)

@@ -28,7 +28,7 @@
 #      STAGE_ONLY=1 (a job with no GPU: build the prover and stage the preflight check's and the step's statements into
 #      FLOCK_STAGE_CACHE, default FLOCK_WORK/stage-cache, then stop; the GPU job with the same settings takes both from the
 #      cache, so it holds its GPU from the preflight check's selftests on, and its point is flagged staged-on-gpu if it staged
-#      the step's statement itself)  SM=120
+#      the step's statement itself)  SM (the GPU job's target, 120 for sm_120: a job with no GPU gives it, nvidia-smi is absent)
 #      STATEMENT_DIGEST=1 (with STAGE_ONLY: each staged statement's digest in out/staged.jsonl, as the verifier builds it)
 #      FLOCK_PACK_WORDS=1 (an FP row's elements packed four FP4 or two FP8 a u16 leaf: a different statement, its point flagged)
 #      FLOCK_CORE_ROWS=1 (an FP row is core's bit row, sha512/row/v2, its codes then its scales: a different statement,
@@ -58,7 +58,6 @@ export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proofs-bf16-hill}; mkdir -p $FLO
 export HOME=$FLOCK_WORK/home FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache}
 # BF16's source (DEFS=, its Gemm_v2 row) names the Definition by id, which circuit-check's catalog binds
 export RESOLVER=${RESOLVER:-verity/protocols/proofs/flock/prover/pod/catalog.py:definition}
-[ "${STAGE_ONLY:-0}" = 1 ] || [ "${SERVE_ONLY:-0}" = 1 ] && export SM=${SM:-120}
 [ -n "${VERIFIERS:-}" ] && [ "${SERVE_ONLY:-0}" != 1 ] && export FC_VERIFIERS=$VERIFIERS
 POINTS=${POINTS:-1}; [ "${STAGE_ONLY:-0}" = 1 ] && [ "$POINTS" != 0 ] && POINTS=1
 case $POINTS in ''|*[!0-9]*|0?*) echo "POINTS=$POINTS: a count of points (0: the preflight check alone)"; exit 1 ;; esac

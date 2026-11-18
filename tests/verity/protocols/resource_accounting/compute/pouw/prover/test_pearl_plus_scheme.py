@@ -13,7 +13,7 @@ from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.compute.pouw import scheme as PS
 from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as T
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as Wn
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as Wn
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PSALT
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_tile import PearlCTileRead
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile import PearlPlusTile
@@ -24,6 +24,27 @@ def test_found_by_name() -> None:
     assert S.SCHEMES["pearl-plus"] is PS.PEARL_PLUS
     assert {b.definition for b in PS.PEARL_PLUS.blocks} == {PearlPlusTile.id, PearlCTileRead.id}
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
+
+
+def test_its_window_record_values_are_named_in_the_tables_it_declares() -> None:
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+
+    assert S.declared(PS.PEARL_PLUS, "tables") == PWR.tables() == ("pearl-a", "pearl-y", "pearl-b")
+    assert (PWR.a_value(2, 3), PWR.y_value(2, 3), PWR.b_value(5)) == ("pearl-a/2/3", "pearl-y/2/3", "pearl-b/5")
+
+
+def test_it_hands_the_model_a_committed_bf16_y_and_opens_its_salt_after_the_epoch_root() -> None:
+    assert (S.declared(PS.PEARL_PLUS, "number_format"), S.declared(PS.PEARL_PLUS, "y_committed")) == ("bf16", True)
+    assert S.declared(PS.PEARL_PLUS, "salt_open_root") is PSALT.epoch_open_root
+    assert PSALT.epoch_open_root(bytes(64), 3) != PSALT.epoch_open_root(bytes(64), 4)
+
+
+def test_its_record_row_is_verified_compute_in_the_macs_its_verifier_credits() -> None:
+    """The run verdict's ``credited`` (`Credit.lean`'s `creditAtAssumption`) is MACs, the unit its costs are in."""
+    assert (S.declared(PS.PEARL_PLUS, "record"), S.declared(PS.PEARL_PLUS, "symbol")) == ("work", "V")
+    assert S.declared(PS.PEARL_PLUS, "published") == (PS.PEARL_PLUS.unit, Fraction(1)) == ("MACs", Fraction(1))
+    with pytest.raises(LookupError, match="pearl-plus declares no channel_schemas: no Schema is declared for PearlSalt"):
+        S.declared(PS.PEARL_PLUS, "channel_schemas")
 
 
 def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
@@ -305,10 +326,30 @@ def test_attach_refuses_without_coins_or_a_challenger_its_gate_or_a_kernel() -> 
         PS.PEARL_PLUS.attach(_Exchange(), {"settings": {"coins": "in-process"}})
 
 
-def test_a_capture_is_refused_by_name_until_what_it_records_is_settled() -> None:
-    with pytest.raises(NotImplementedError, match=r"Match capture \(ctx\['stage'\] 'capture'\) records rather than commits"):
-        PS.PEARL_PLUS.attach(_Exchange(), {**IN_PROCESS, "stage": "capture"})
-    PS.PEARL_PLUS.attach(_Exchange(), {**IN_PROCESS, "stage": "commit"})
+def test_a_capture_records_each_call_as_one_op_on_in_process_coins(monkeypatch) -> None:
+    with pytest.raises(ValueError, match="a Match capture .* opens no session on the auditor device's challenger"):
+        PS.PEARL_PLUS.attach(_Exchange(), {**CTX, "stage": "capture"})
+    ops: list = []
+
+    def linear_op():
+        return lambda x, weight, bias, entry, w: ops.append((x, weight, bias, entry, w)) or _Device.runs[entry].gemm(
+            w, x, weight, bias)
+
+    monkeypatch.setattr(SV, "PearlCKernel", _Kernel, raising=False)
+    monkeypatch.setattr(SV, "in_process_coins", lambda window: _Coins())
+    monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
+    monkeypatch.setattr(_Device, "linear_op", staticmethod(linear_op), raising=False)
+    monkeypatch.setattr(_Device, "runs", {}, raising=False)
+    ex = _Exchange()
+    on = PS.PEARL_PLUS.attach(ex, {**IN_PROCESS, "stage": "capture", "build": "build-7"})
+    [(_, req)] = ex.filed
+    ex.emit(H.RegisteredValues((("model.layers.0.qkv.weight", W0),), operands={"model.layers.0.qkv.weight": 3}))
+    ex.emit(H.StepBegan(0, ("a",), 8))
+    assert _Device.runs == {"build-7": on.run}
+    assert req.kernel(_due(), lambda given: "stock") == "y"
+    assert ops == [("x", "w", None, "build-7", 3)] and on.run.calls == [(3, "x", "w", None)]
+    on.release()
+    assert _Device.runs == {}
 
 
 def test_attach_refuses_an_undeclared_setting() -> None:

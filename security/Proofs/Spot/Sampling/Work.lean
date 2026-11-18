@@ -14,19 +14,19 @@ PoUW work: dequantization, the quantizer, attention), and the population does `W
 which the verifier's work table sets per stratum beside `w_s` (one when it names none).
 
 The work sampling design is `SamplingDesign.stratified` at those sizes (`SamplingDesign.work`), so every theorem of the stratified sampling design and of the one-stage
-audit holds of it as stated: `stratified_escape`, `stratified_escape_floor`, `audit_whole_stratum`,
+audit holds of it as stated: `stratified_missProb`, `stratified_missProb_floor`, `audit_whole_stratum`,
 `extraction_audit_whole_stratum`, `audit_profile`, `audit_count`, `audit_sampled` and the Flock instantiations. What is new,
 for every floor `f ≥ 1`:
 
 * `floor_le_workK`: **the floor**. A stratum samples at least `min(n_s, f_s)` units, so every non-empty stratum samples at least
   one and a wholly incorrect stratum is caught whatever its work (`audit_work_whole_stratum`,
   `extraction_audit_work_whole_stratum`).
-* `work_escape_floor_le`: **the per-stratum floor missProb**. A set with `b_s` units in a non-empty stratum `s` escapes with
+* `work_missProb_floor_le`: **the per-stratum floor missProb**. A set with `b_s` units in a non-empty stratum `s` escapes with
   probability at most `((n_s − b_s)/n_s)^(f_s)`, so a floor `f_s ≈ ln(1/δ)/ε_s` catches a fraction `ε_s` of the stratum
   incorrect up to `δ` (`audit_work_floor`, `extraction_audit_work_floor`).
 * `workK_ge`: **samples sized by work**. A stratum samples at least `K w_s n_s / W` units, or all of them.
 * `sum_workK_le`: at most `K + Σ_s f_s` units are sampled (`K` plus one per stratum at `f = 1`).
-* `work_escape_le`: **the work bound**. A set of units doing `W_B` of the work escapes with probability at most
+* `work_missProb_le`: **the work bound**. A set of units doing `W_B` of the work escapes with probability at most
   `((W − W_B)/W)^K`, so incorrect proof blocks doing a fraction `ε` of the work missProb with at most `(1 − ε)^K`.
 * `audit_work`, `extraction_audit_work`: the audit accepts while its incorrect proof blocks do at least `T` of the work with
   probability at most `((W − T)/W)^K + ε_ks + ε_bind`.
@@ -36,7 +36,7 @@ for every floor `f ≥ 1`:
 For the strata that do no work:
 
 * `workK_rest`: such a stratum samples exactly `min(n_s, f_s)`.
-* `work_escape_le_count`: **floors at the count sampling design's sizes keep its guarantee**. When every stratum that does no work has
+* `work_missProb_le_count`: **floors at the count sampling design's sizes keep its guarantee**. When every stratum that does no work has
   `f_s` at least `countK σ C s` (`main`'s stratified sampling design's `stratumK C n_s N` for a non-empty stratum and `C ≤ N`,
   `countK_eq`), a set escapes the work sampling design at most as often as its units in those strata missProb the stratified sampling design at `C`;
   `audit_work_rest` and `extraction_audit_work_rest` carry any such integrity profile to the audit.
@@ -44,7 +44,7 @@ For the strata that do no work:
   (`stratumK N n_s N = n_s`), so its sampling term is zero: a recursive inner session's full sample.
 
 Closure samples (a sampled proof block proved with the units it reads) are not part of this sampling design. `SamplingDesign.widen` proves more units than a
-sampling design samples on the same coins, and `escape_widen_le` carries every missProb bound to it.
+sampling design samples on the same coins, and `missProb_widen_le` carries every missProb bound to it.
 -/
 
 @[expose] public section
@@ -187,7 +187,7 @@ theorem choose_div_le_pow {n m k : ℕ} (hk : k ≤ n) (hn : 0 < n) :
 
 /-- **The work bound.** Under the work sampling design, a set of units doing `W_B` of the population's work `W` escapes with
 probability at most `((W − W_B)/W)^K`. So incorrect proof blocks doing a fraction `ε` of the work missProb with at most `(1 − ε)^K`. -/
-theorem work_escape_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (hf : ∀ s, 1 ≤ f s)
+theorem work_missProb_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (hf : ∀ s, 1 ≤ f s)
     (hW : 0 < totalWork σ w) (B : Finset (Fin n)) :
     (work σ w f K).missProb B ≤ (((totalWork σ w - workOf σ w B : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K := by
   classical
@@ -264,7 +264,7 @@ theorem work_escape_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m →
           pow_le_pow_left₀ zero_le (NNReal.geom_mean_le_arith_mean_weighted univ a x ha1) K
       _ = _ := by rw [hax]
   have hC : ∀ s, ((N s).choose (k s) : ℝ≥0) ≠ 0 := fun s => by exact_mod_cast (Nat.choose_pos (hkN s)).ne'
-  rw [stratified_escape]
+  rw [stratified_missProb]
   calc ∏ s, (((stratum σ s).card - (B.filter (σ · = s)).card).choose (workK σ w f K s) : ℝ≥0∞) /
         ((stratum σ s).card.choose (workK σ w f K s) : ℝ≥0∞)
       = ((∏ s, ((N s - M s).choose (k s) : ℝ≥0) / ((N s).choose (k s) : ℝ≥0) : ℝ≥0) : ℝ≥0∞) := by
@@ -277,10 +277,10 @@ theorem work_escape_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m →
 
 /-- The work bound, monotone in the threshold: units doing at least `T` of the work missProb with at most
 `((W − T)/W)^K`. -/
-theorem work_escape_le_of_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (hf : ∀ s, 1 ≤ f s)
+theorem work_missProb_le_of_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (hf : ∀ s, 1 ≤ f s)
     (hW : 0 < totalWork σ w) {B : Finset (Fin n)} {T : ℕ} (hT : T ≤ workOf σ w B) :
     (work σ w f K).missProb B ≤ (((totalWork σ w - T : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K := by
-  refine (work_escape_le σ w f K hf hW B).trans ?_
+  refine (work_missProb_le σ w f K hf hW B).trans ?_
   gcongr
 
 /-! ## Floors -/
@@ -303,12 +303,12 @@ theorem choose_div_le_one (n m k : ℕ) : ((n - m).choose k : ℝ≥0∞) / (n.c
 
 /-- **The per-stratum floor missProb**: a set with `b_s` units in a non-empty stratum `s` escapes with probability at most
 `((n_s − b_s)/n_s)^(f_s)`. -/
-theorem work_escape_floor_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (s : Fin m)
+theorem work_missProb_floor_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (s : Fin m)
     (hs : (stratum σ s).Nonempty) (B : Finset (Fin n)) :
     (work σ w f K).missProb B ≤
       ((((stratum σ s).card - (B.filter (σ · = s)).card : ℕ) : ℝ≥0∞) / ((stratum σ s).card : ℝ≥0∞)) ^ (f s) := by
   classical
-  rw [stratified_escape, ← Finset.mul_prod_erase univ _ (mem_univ s)]
+  rw [stratified_missProb, ← Finset.mul_prod_erase univ _ (mem_univ s)]
   refine (mul_le_of_le_one_right' (Finset.prod_le_one fun t _ => choose_div_le_one _ _ _)).trans ?_
   have hpos : 0 < (stratum σ s).card := Finset.card_pos.2 hs
   have hk := workK_le σ w f K s
@@ -328,10 +328,10 @@ theorem work_escape_floor_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin
 
 /-- The per-stratum floor missProb, monotone in the count: a set with at least `b` units in stratum `s` escapes with at most
 `((n_s − b)/n_s)^(f_s)`. -/
-theorem work_escape_floor_le_of_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (s : Fin m)
+theorem work_missProb_floor_le_of_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (s : Fin m)
     (hs : (stratum σ s).Nonempty) {B : Finset (Fin n)} {b : ℕ} (hb : b ≤ (B.filter (σ · = s)).card) :
     (work σ w f K).missProb B ≤ ((((stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((stratum σ s).card : ℝ≥0∞)) ^ (f s) := by
-  refine (work_escape_floor_le σ w f K s hs B).trans ?_
+  refine (work_missProb_floor_le σ w f K s hs B).trans ?_
   gcongr
 
 /-- **A stratum that does no work samples `min(n_s, f_s)`.** -/
@@ -426,11 +426,11 @@ theorem choose_div_anti {a n k k' : ℕ} (ha : a ≤ n) (hkk : k ≤ k') (hk' : 
 /-- **Floors at the count sampling design's sizes keep its guarantee.** When every stratum that does no work has a floor of at least
 the count sampling design's size at `C`, a set escapes the work sampling design at most as often as its units in those strata missProb the
 stratified sampling design at `C`. -/
-theorem work_escape_le_count (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K C : ℕ)
+theorem work_missProb_le_count (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K C : ℕ)
     (hf : ∀ s, w s = 0 → countK σ C s ≤ f s) (B : Finset (Fin n)) :
     (work σ w f K).missProb B ≤ (stratified σ (countK σ C) (countK_le σ C)).missProb (B.filter fun u => w (σ u) = 0) := by
   classical
-  rw [stratified_escape, stratified_escape]
+  rw [stratified_missProb, stratified_missProb]
   refine Finset.prod_le_prod fun s _ => ?_
   by_cases hw : w s = 0
   · have hm : ((B.filter fun u => w (σ u) = 0).filter (σ · = s)).card = (B.filter (σ · = s)).card := by
@@ -464,7 +464,7 @@ def widen (L : SamplingDesign n) (f : Finset (Fin n) → Finset (Fin n)) : Sampl
 
 /-- **Widening only helps**: when `f` keeps every sampled proof block, the widened sampling design escapes at most as often, so every missProb
 bound of `L` (the work bound, the floor) holds of it. -/
-theorem escape_widen_le (L : SamplingDesign n) {f : Finset (Fin n) → Finset (Fin n)} (hf : ∀ S, S ⊆ f S) (B : Finset (Fin n)) :
+theorem missProb_widen_le (L : SamplingDesign n) {f : Finset (Fin n) → Finset (Fin n)} (hf : ∀ S, S ⊆ f S) (B : Finset (Fin n)) :
     (L.widen f).missProb B ≤ L.missProb B :=
   prCoin_mono fun _ hd => hd.mono_left (hf _)
 
@@ -486,10 +486,10 @@ theorem record_sizing_one_fewer : ¬ ((999 : ℝ≥0∞) / 1000) ^ 27712 ≤ ((2
   fun h => absurd ((sizing_iff 27712).1 h) (by decide +kernel)
 
 /-- Units doing at least 0.1% of the work (`W ≤ 1000 · W_B`) missProb `K = 27,713` samples with at most `2^-40`. -/
-theorem work_escape_of_record (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (hf : ∀ s, 1 ≤ f s)
+theorem work_missProb_of_record (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (hf : ∀ s, 1 ≤ f s)
     (hW : 0 < totalWork σ w) {B : Finset (Fin n)} (hB : totalWork σ w ≤ 1000 * workOf σ w B) :
     (work σ w f 27713).missProb B ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ := by
-  refine (work_escape_le σ w f 27713 hf hW B).trans (le_trans (pow_le_pow_left₀ zero_le ?_ 27713) record_sizing)
+  refine (work_missProb_le σ w f 27713 hf hW B).trans (le_trans (pow_le_pow_left₀ zero_le ?_ 27713) record_sizing)
   have hWt : (totalWork σ w : ℝ≥0∞) ≠ ⊤ := ENNReal.natCast_ne_top _
   have hW0 : (totalWork σ w : ℝ≥0∞) ≠ 0 := by exact_mod_cast hW.ne'
   rw [ENNReal.div_le_iff hW0 hWt, ← ENNReal.mul_div_right_comm, ENNReal.le_div_iff_mul_le (Or.inl (by norm_num))
@@ -513,7 +513,7 @@ theorem audit_work (A : Analysis (SamplingDesign.work σ w f K) Reg session) {ε
       (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => T ≤ SamplingDesign.workOf σ w B) σ').trans ?_
   gcongr
-  exact iSup₂_le fun B hB => SamplingDesign.work_escape_le_of_le σ w f K hf hW hB
+  exact iSup₂_le fun B hB => SamplingDesign.work_missProb_le_of_le σ w f K hf hW hB
 
 /-- **The work audit** (compiled layer, randomized extractor): at most
 `((W − T)/W)^K + ε_ks(σ) + ε_bind(σ)`. -/
@@ -528,7 +528,7 @@ theorem extraction_audit_work (A : ExtractionAnalysis (SamplingDesign.work σ w 
   refine (extraction_audit_le A hks hlink (fun X _ => T ≤ SamplingDesign.workOf σ w (A.incorrect X)) σ').trans ?_
   gcongr
   by_cases hB : T ≤ SamplingDesign.workOf σ w (A.incorrect (A.committedOf σ'))
-  · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.work_escape_le_of_le σ w f K hf hW hB)
+  · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.work_missProb_le_of_le σ w f K hf hW hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **The work audit at the sizing of record**: with `K = 27,713`, the audit accepts while its incorrect proof blocks do at least
@@ -540,7 +540,7 @@ theorem audit_work_of_record (A : Analysis (SamplingDesign.work σ w f 27713) Re
         (audit (SamplingDesign.work σ w f 27713) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.workOf σ w B) σ').trans ?_
   gcongr
-  exact iSup₂_le fun B hB => SamplingDesign.work_escape_of_record σ w f hf hW hB
+  exact iSup₂_le fun B hB => SamplingDesign.work_missProb_of_record σ w f hf hW hB
 
 /-- **The integrity floor, audited** (oracle layer): a wholly incorrect non-empty stratum, one that does no PoUW work
 included, is caught: the audit accepts while all of it is incorrect with probability at most `ε_ks + ε_bind`. -/
@@ -570,7 +570,7 @@ theorem audit_work_floor (A : Analysis (SamplingDesign.work σ w f K) Reg sessio
       ((((SamplingDesign.stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((SamplingDesign.stratum σ s).card : ℝ≥0∞)) ^ (f s) + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => b ≤ (B.filter (σ · = s)).card) σ').trans ?_
   gcongr
-  exact iSup₂_le fun B hB => SamplingDesign.work_escape_floor_le_of_le σ w f K s hs hB
+  exact iSup₂_le fun B hB => SamplingDesign.work_missProb_floor_le_of_le σ w f K s hs hB
 
 /-- **The per-stratum floor, audited** (compiled layer, randomized extractor): at most
 `((n_s − b)/n_s)^(f_s) + ε_ks(σ) + ε_bind(σ)`. -/
@@ -585,7 +585,7 @@ theorem extraction_audit_work_floor (A : ExtractionAnalysis (SamplingDesign.work
   refine (extraction_audit_le A hks hlink (fun X _ => b ≤ ((A.incorrect X).filter (σ · = s)).card) σ').trans ?_
   gcongr
   by_cases hB : b ≤ ((A.incorrect (A.committedOf σ')).filter (σ · = s)).card
-  · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.work_escape_floor_le_of_le σ w f K s hs hB)
+  · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.work_missProb_floor_le_of_le σ w f K s hs hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **Floors at the count sampling design's sizes keep its profile, audited** (oracle layer): when every stratum that does no work has
@@ -601,7 +601,7 @@ theorem audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → SamplingDesign.countK
         εks + εbind := by
   refine (audit_profile A hks hlink (fun B => 𝓑 (B.filter fun u => w (σ u) = 0)) σ').trans
     (add_le_add (add_le_add ?_ le_rfl) le_rfl)
-  exact iSup₂_le fun B hB => (SamplingDesign.work_escape_le_count σ w f K C hf B).trans
+  exact iSup₂_le fun B hB => (SamplingDesign.work_missProb_le_count σ w f K C hf B).trans
     (le_iSup₂_of_le (f := fun (B : Finset (Fin n)) (_ : 𝓑 B) =>
       (SamplingDesign.stratified σ (SamplingDesign.countK σ C) (SamplingDesign.countK_le σ C)).missProb B) _ hB le_rfl)
 
@@ -619,7 +619,7 @@ theorem extraction_audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → SamplingDe
   refine (extraction_audit_le A hks hlink (fun X _ => 𝓑 ((A.incorrect X).filter fun u => w (σ u) = 0)) σ').trans ?_
   gcongr
   by_cases hB : 𝓑 ((A.incorrect (A.committedOf σ')).filter fun u => w (σ u) = 0)
-  · exact (prCoin_mono fun ω h => h.2).trans ((SamplingDesign.work_escape_le_count σ w f K C hf _).trans
+  · exact (prCoin_mono fun ω h => h.2).trans ((SamplingDesign.work_missProb_le_count σ w f K C hf _).trans
       (le_iSup₂_of_le (f := fun (B : Finset (Fin n)) (_ : 𝓑 B) =>
         (SamplingDesign.stratified σ (SamplingDesign.countK σ C) (SamplingDesign.countK_le σ C)).missProb B) _ hB le_rfl))
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)

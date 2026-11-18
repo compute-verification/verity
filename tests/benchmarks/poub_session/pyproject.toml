@@ -76,6 +76,9 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           "verity/protocols/resource_accounting/memory/poub/prover/word_codec/cuda_lib.py",
           # sheets.py: the node's figures, read from its node file and cards
           "verity/device.py", "calibration/hardware/cards", "calibration/hardware/nodes",
+          # test_run_serve.py: a loopback port by the harness kit's `free_port`
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with SPOT's one cost fit; and the
           # ledger and credit checks' Lean verifier, `spot-verifier` (`coins.lean_answer`), with the
           # interface its package requires
@@ -95,7 +98,9 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           "verity/protocols/compose/verifier/live_challenger/__init__.py",
           # test_vllm_serve.py: serve.py proves by PoUB's node store (`provers`: serving.prove, NodeMemory), which its
           # CPU test loads without the adapter
-          "verity/protocols/resource_accounting/memory/poub/prover/node_store", "benchmarks/poub_session"]
+          "verity/protocols/resource_accounting/memory/poub/prover/node_store", "benchmarks/poub_session",
+          # keep.py: the private names it refuses, the vLLM integration's one list, read as plain data
+          "adapters/vllm/verity_vllm/pipeline/private_names.json"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

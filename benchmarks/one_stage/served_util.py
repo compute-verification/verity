@@ -18,7 +18,7 @@ to 100 less the mean.
 
 Tensor Active counts cycles at the clock the card ran (the GPC Clock Frequency metric, sampled with it). ``sm_clock_mhz`` is
 that clock's mean over the window, and ``tensor_active_pct_at_ref`` the tensor-busy cycles over the cycles the window would
-hold at ``--ref-mhz`` (1,830): the mean over samples of Tensor Active times the sample's clock over the reference.
+hold at the card's ``clock.tensor`` (``--card``): the mean over samples of Tensor Active times the sample's clock over the reference.
 
 ``served_stack`` is false for the arms that override serve-openai's engine options and drop the bench row (NOT_SERVED),
 and for a Commit arm served async (``<arm>-async``) unless its bench row declares async scheduling (``serve.json``'s
@@ -228,8 +228,9 @@ def steady_cut(ts: list[int], tv: list[float], clock: tuple[list[int], list[floa
     return got
 
 
-def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None, ref_mhz: float = 1830.0) -> dict[str, Any]:
-    """``sent_s``: when the load's last request was sent (`last_send`), from which the ``queued`` window starts."""
+def analyse(sqlite: Path, trace: Path, T: int, ref_mhz: float, sent_s: float | None = None) -> dict[str, Any]:
+    """``sent_s``: when the load's last request was sent (`last_send`), from which the ``queued`` window starts; ``ref_mhz``:
+    the card's ``clock.tensor``."""
     db = sqlite3.connect(sqlite)
     z = utc0_ns(db)
     names, series = metrics(db)
@@ -383,12 +384,15 @@ def main() -> int:
     ap.add_argument("--arm", default=None)
     ap.add_argument("--serve-dir", type=Path, default=None)
     ap.add_argument("--timings", type=Path, default=None)
-    ap.add_argument("--ref-mhz", type=float, default=1830.0)
+    ap.add_argument("--card", required=True, help="the card's sku: its clock.tensor is the reference clock")
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
+    from verity.device import load_card, number
+    from verity_bench import kit
+    ref_mhz = float(number(load_card(a.card, directory=kit.cards_directory())["clock"]["tensor"]))
     served = a.arm not in NOT_SERVED and (not str(a.arm).endswith("-async") or row_declares_async(a.serve_dir))
     doc: dict[str, Any] = {"arm": a.arm, "served_stack": served, "T": a.T, "N": a.N,
-                           **analyse(a.sqlite, a.trace, a.T, last_send(a.timings), a.ref_mhz)}
+                           **analyse(a.sqlite, a.trace, a.T, ref_mhz, last_send(a.timings))}
     if a.serve_dir is not None:
         doc["serve"] = windows(a.serve_dir)
     if a.timings is not None and a.timings.exists():

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 import tomllib
 from dataclasses import asdict, dataclass, field, fields, replace
@@ -12,7 +11,14 @@ from collections.abc import Mapping
 
 from verity_config import Admission, ConfigError, gpus, load, sha256
 
-VLLM_PIN = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+from verity_bench import profiles
+
+_PRODUCTION = profiles.load()
+#: the vLLM commit every spec runs: the serving profiles' (`benchmarks/production.toml`'s ``vllm``)
+VLLM_PIN = _PRODUCTION.vllm
+#: each model the serving profiles pin, its repository to its revision (`production.toml`'s ``models``): a spec naming
+#: one of them and no revision runs that revision
+REVISIONS = {m.repository: m.revision for m in _PRODUCTION.models.values()}
 SPEC_ROOT = Path(__file__).resolve().parents[2] / "specs"
 SOURCE_ROOT = Path(__file__).resolve().parents[4]
 #: A spec's path from the source tree's root while the specs had a directory of their own, and that directory. A run
@@ -43,7 +49,6 @@ class SpecPreset:
     case: str | None = None
     engine_settings: Mapping[str, Any] = field(default_factory=dict)
     vllm_pin: str = VLLM_PIN
-    model_digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -191,6 +196,13 @@ def former_specs() -> dict[str, tuple[str, str]]:
     return {old: (entry["spec"], entry["card"]) for old, entry in tomllib.loads(FORMER_IDS.read_text())["former"].items()}
 
 
+def retired_spec(spec_id: str) -> str | None:
+    """Why a spec deleted with no successor refuses a launch (`FORMER_IDS`' ``[retired]``); None for any other id. Its
+    stored runs read under the id itself."""
+
+    return tomllib.loads(FORMER_IDS.read_text()).get("retired", {}).get(spec_id)
+
+
 def current_spec(spec_id: str) -> str:
     """The name a stored run's spec id has now: for a former id (`FORMER_IDS`), its spec, ``@CARD`` where that spec runs on
     more than its card; else the id itself."""
@@ -213,6 +225,8 @@ def _spec_path(spec: str | Path) -> Path:
     if now := former_spec(name):
         raise ConfigError(f"spec {name!r} is {now[0]!r} on the {now[1]}, `{now[0]}@{now[1]}`: its former id names a "
                           "stored run's spec, and no run is launched under it")
+    if why := retired_spec(name):
+        raise ConfigError(f"spec {name!r} is refused: {why}")
     raise ConfigError(f"no benchmark spec {spec!r}")
 
 
@@ -268,6 +282,8 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
             raise ConfigError(f"{path}: arm_settings {name!r}: precision is one of {', '.join(PRECISIONS)}")
         if arm.control is not None and arm.control != NO_CONTROL and (arm.control not in doc.arms or arm.control == name):
             raise ConfigError(f"{path}: arm_settings {name!r}: control must be another arm in arms, or {NO_CONTROL!r}")
+    if doc.preset.revision is None and doc.preset.model in REVISIONS:
+        doc = replace(doc, preset=replace(doc.preset, revision=REVISIONS[doc.preset.model]))
     return doc
 
 
@@ -345,41 +361,6 @@ def served(preset: Preset, eager: bool) -> tuple[Preset, bool]:
     eager = bool(eager)
     settings = {**preset.engine_settings, "cuda_graphs": not eager, "enforce_eager": eager}
     return replace(preset, engine_settings=settings), eager
-
-
-def checkpoint_files(root: Path) -> list[Path]:
-    """The files of a local checkpoint that bind it: all but a Hub snapshot's repository metadata (dot-files such as
-    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (a node's
-    llama-3.1-8b-instruct gained ``.gitattributes`` and ``README.md`` with every weight unchanged)."""
-
-    return sorted(p for p in root.iterdir() if p.is_file() and not p.name.startswith(".") and p.suffix != ".md")
-
-
-def local_checkpoint(preset: Preset, path: str | Path) -> Preset:
-    """Bind a machine-local checkpoint to a preset by hashing its files (`checkpoint_files`)."""
-
-    root = Path(path)
-    files = checkpoint_files(root)
-    if not files:
-        raise ValueError(f"benchmark checkpoint {root} has no files")
-    digest = hashlib.sha256()
-    for file in files:
-        name = file.name.encode()
-        digest.update(len(name).to_bytes(4, "big"))
-        digest.update(name)
-        digest.update(file.stat().st_size.to_bytes(8, "big"))
-        content = hashlib.sha256()
-        with file.open("rb") as stream:
-            while chunk := stream.read(8 << 20):
-                content.update(chunk)
-        digest.update(content.digest())
-    return replace(
-        preset,
-        model=str(root),
-        revision=None,
-        case=None,
-        model_digest=digest.hexdigest(),
-    )
 
 
 @dataclass(frozen=True)

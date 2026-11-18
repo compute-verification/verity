@@ -20,7 +20,6 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm import LLM
-from verity_vllm.engine import handle
 from verity_vllm.engine.arrivals import run_requests_arrivals
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK, apply_compile_fresh, apply_engine, apply_target, own_inductor_dir
 from verity_vllm.engine.hooks import Hooks, live
@@ -59,21 +58,6 @@ def _allocator_counts() -> dict[str, float]:
     return {k: stats.get(k, 0) for k in keys}
 
 
-class _DirectLLM:
-    """The subset of ``verity_vllm.LLM`` needed for a content-bound local checkpoint."""
-
-    def __init__(self, llm: Any, engine_overrides: Mapping[str, Any]) -> None:
-        runner = handle.model_runner(llm)
-        self.vllm, self.model = llm, runner.get_model()
-        self.engine_record = {"engine_overrides": dict(engine_overrides)}
-        self.protocols = None
-
-    def close(self) -> None:
-        # The worker process exits immediately after close and releases vLLM's
-        # process-owned CUDA state.
-        pass
-
-
 PASS_COUNTS = ("units", "tiles", "screened_rows", "failing_rows", "unsure_rows")
 
 
@@ -83,9 +67,8 @@ def _pearl_c_run(llm: Any) -> Any | None:
     (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
     from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
 
-    option = llm.protocols.get("pouw") if llm.protocols is not None else None
-    run = getattr(getattr(option, "end_pass", None), "__self__", None)
-    return run if isinstance(run, PearlCDeviceRun) else None
+    runs = (getattr(getattr(o, "end_pass", None), "__self__", None) for o in getattr(llm.protocols, "installed", ()))
+    return next((run for run in runs if isinstance(run, PearlCDeviceRun)), None)
 
 
 def _pass_totals(run: Any) -> dict[str, int]:
@@ -151,7 +134,7 @@ class _VllmEngine:
     """One worker process's live vLLM engine."""
 
     def __init__(self, arm: Arm, preset: Preset, resident: bool, eager: bool) -> None:
-        if preset.revision is None and preset.model_digest is None:
+        if preset.revision is None:
             raise ValueError(f"preset {preset.id} has no pinned checkpoint revision")
         if preset.engine_settings.get("serving_defaults"):
             apply_compile_fresh()
@@ -176,32 +159,18 @@ class _VllmEngine:
         engine = engine_args(preset, precision, resident=resident, eager=eager)
         overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
         engine.update(overrides or {})
-        if preset.model_digest is not None:
-            if arm.protocols:
-                raise ValueError("a local checkpoint override supports stock and experimental arms, not protocol-option arms")
-            self.llm = _DirectLLM(
-                vllm.LLM(
-                    model=preset.model,
-                    enable_prefix_caching=False,
-                    seed=0,
-                    **{k: v for k, v in engine.items() if k != "execution"},
-                ),
-                {k: engine[k] for k in ("dtype", "quantization", "compilation_config", "kv_cache_memory_bytes")
-                 if engine.get(k) is not None},
-            )
-        else:
-            config: dict[str, Any] = {}
-            if arm.protocols:
-                config = protocols_config(arm, settings.environ())
-                engine["protocols"] = ",".join(arm.protocols)
-                if config:
-                    engine["protocols_config"] = config
-            self.llm = LLM(preset.model, revision=preset.revision, **engine)
-            if arm.protocols:
-                self.pearl_c = _pearl_c_run(self.llm)
-                cubin = config.get("pouw", {}).get("cubin")
-                if cubin:
-                    kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
+        config: dict[str, Any] = {}
+        if arm.protocols:
+            config = protocols_config(arm, settings.environ())
+            engine["protocols"] = ",".join(arm.protocols)
+            if config:
+                engine["protocols_config"] = config
+        self.llm = LLM(preset.model, revision=preset.revision, **engine)
+        if arm.protocols:
+            self.pearl_c = _pearl_c_run(self.llm)
+            cubin = next((s["cubin"] for s in config.values() if s.get("cubin")), None)
+            if cubin:
+                kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
         ready = getattr(self.installed, "ready", None)
         if callable(ready):

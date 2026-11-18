@@ -55,7 +55,7 @@ for o in STANDIN_DRAWS:STANDIN_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" 
   || { echo "served-util: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=${TREE:-$PWD}
-ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; T=${T:-8192}; N=${N:-64}; SLOTS=$(( T / 1024 )); WARM=${WARM:-$(( 2 * SLOTS ))}
+ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; CARD=${CARD:?CARD is the sku of the card served on, whose clock.tensor the analysis reads Tensor Active at}; T=${T:-8192}; N=${N:-64}; SLOTS=$(( T / 1024 )); WARM=${WARM:-$(( 2 * SLOTS ))}
 case $ARM:${ASYNC:-0} in graphs:*|async:*|*:1) SEQS=${SEQS:-$(( 2 * SLOTS ))} ;; *) SEQS=${SEQS:-$SLOTS} ;; esac
 LABEL=$ARM; [ "${ASYNC:-0}" = 1 ] && LABEL=$ARM-async
 ROOT=${UTIL_ROOT:-/workspace/research/vllm-util80}
@@ -64,10 +64,11 @@ REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
 ROW=${ROW:-$(dirname "$(find "$ROOT" -maxdepth 3 -path '*__b4__i256__*' -name manifest.json | sort | tail -1)")} ROW_ID=${ROW_ID:-${ROW##*/}}
 HIDDEN_SO=${HIDDEN_SO:-$ROOT/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NORM_TAP_SO=${NORM_TAP_SO:-$ROOT/norm_tap/build/verity_norm_tap.so}
-NSYS=${NSYS:-/usr/local/cuda-13.0/bin/nsys}
+CUDA_HOME=$(python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.0) || { echo "served-util: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+NSYS=${NSYS:-$CUDA_HOME/bin/nsys}
 SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve; PRED=${PRED:-$SCR/predicted}
 PORT=${PORT:-18190}
-export TREE ARM LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW ROW_ID HIDDEN_SO NORM_TAP_SO NSYS SCR D PRED PORT OUT
+export TREE ARM CARD LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW ROW_ID HIDDEN_SO NORM_TAP_SO NSYS SCR D PRED PORT OUT CUDA_HOME
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 
 if [ "${1:-}" != leased ]; then
@@ -107,8 +108,8 @@ if [ "${1:-}" != leased ]; then
   GPU_LEASE_WHO=vllm-util80 gpu-lease 1 --wait --max-min "${LEASE_MIN:-90}" -- bash "$TREE/benchmarks/one_stage/served_util.sh" leased
   rc=$?
   say "LEASED PART rc=$rc"
-  "$PY" "$TREE/benchmarks/one_stage/served_util.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
-    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
+  PYTHONPATH=$TREE:$TREE/benchmarks/harness:$TREE/tools/config "$PY" "$TREE/benchmarks/one_stage/served_util.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
+    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --card "$CARD" --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
   say "ANALYSIS rc=$?"; cat "$OUT/util.txt"
   if [ "${PYSPY:-0}" = 1 ]; then
     "$PY" "$TREE/benchmarks/one_stage/pyspy_steps.py" --trace-json "$SCR/pyspy.json" --t0 "$SCR/pyspy.t0" \
@@ -125,7 +126,7 @@ fi
 
 # under the lease; the server holds one socket a request in flight, so N past the default 1,024 files needs the hard limit
 ulimit -n "$(ulimit -Hn)"
-export HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 CUDA_HOME=/usr/local/cuda-13.0
+export HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
 export PATH=$VENV/bin:$CUDA_HOME/bin:$HOME/.elan/bin:$PATH
 export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm

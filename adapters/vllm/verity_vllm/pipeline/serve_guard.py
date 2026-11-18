@@ -4,10 +4,11 @@ would take it under is not sealed, and `Watchdog` records what still stalls the 
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,19 @@ class DiskFloor:
             return None
         return (f"{self.path} has {free / GB:.0f} GB free, under the disk floor ({self.floor / GB:.0f} GB, --disk-floor-gb) plus one "
                 f"sealed window ({int(window) / GB:.0f} GB, --window-gb): free space there or lower them")
+
+
+def out_refusal(out: str | None, environ: Mapping[str, str] = os.environ) -> str | None:
+    """Why ``--out`` can't hold the serve's private records: none given, or it is the run's directory or inside it, which custody
+    uploads with no filter by private name (only ``--copy-records-to $OUT`` writes the public records there)."""
+    if not out:
+        return ("--out DIR is required: the serve's private records' directory, outside the run's directory "
+                "(the launchers' SERVE_ROOT); --copy-records-to $OUT mirrors the public records")
+    for name in ("RESEARCH_RUN_DIR", "OUT"):
+        if (run := environ.get(name)) and Path(os.path.realpath(out)).is_relative_to(os.path.realpath(run)):
+            return (f"--out {out} is ${name} ({run}) or inside it, which a run uploads with no filter by private name: put --out "
+                    "outside it (the launchers' SERVE_ROOT) and mirror the public records with --copy-records-to $OUT")
+    return None
 
 
 def disk_floor_of(opts: Any, usage: Callable[[Any], Any] = shutil.disk_usage) -> DiskFloor | None:
