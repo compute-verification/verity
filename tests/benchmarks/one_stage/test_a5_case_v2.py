@@ -336,6 +336,7 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     assert LP.refused({"k": 20, "law": "subset"}, 40, a5.link_members(ms)) == [0]
     assert [a5.per_member(ms[:n], zk) for n in (1, 2, 3) for zk in (True, False)] == [False, False, True, False, True, False]
     assert a5.members_proof(ms[:1], [], True) is None and isinstance(a5.members_proof(ms, [], False), str)
+    assert a5.per_member(ms[:1], True, one=True) and not a5.per_member(ms[:1], False, one=True)
 
 
 def test_a5_records_a_sampling_design_none_of_whose_samples_ends(monkeypatch):

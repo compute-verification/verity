@@ -1590,11 +1590,12 @@ def link_members(members: Sequence[dict]) -> list[tuple[list[list[int]], int]]:
     return [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
 
 
-def per_member(members: Sequence[dict], zk: bool) -> bool:
-    """Whether the audit's case is of the per-member form (`members_proof`): a window of several members, its sessions
-    `--zk`. Its docket's check reads the members (`link_members`), as v2's check of that case does
-    (`OneStageZk.membersParamsOfJson`); the one statement's form names none."""
-    return len(members) >= 2 and zk
+def per_member(members: Sequence[dict], zk: bool, one: bool = False) -> bool:
+    """Whether the audit's case is of the per-member form (`members_proof`): a window of several members, or of one
+    whose sessions ran on a caller's stage's challenger session (``one``), its sessions `--zk`. Its docket's check reads
+    the members (`link_members`), as v2's check of that case does (`OneStageZk.membersParamsOfJson`); the one
+    statement's form names none."""
+    return (len(members) >= 2 or one) and zk
 
 
 def link_points(sampling_design: dict, population: int, members: Sequence[dict]) -> dict:
@@ -1668,7 +1669,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
 
     if len(members) < 2 and not one:
         return None
-    if not per_member(members, zk):
+    if not per_member(members, zk, one):
         return "v2 verifies --zk sessions; this audit's are plain"
     sdirs = {got["mm"]["m"].key: got["sdir"] for got in done}
     out, tables = [], {}
