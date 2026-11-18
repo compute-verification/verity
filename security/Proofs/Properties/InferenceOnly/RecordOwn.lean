@@ -15,7 +15,7 @@ node, an affine part or a strided part whose reference k is the run's leaf k mod
 part whose rows are leaves of one input node (`part_cover`, `gatherRuns_some`); a batch node of those has `dims` on
 every argument (`batch_dims`); a strided part that reads its run more than once reads a shared run (`part_shared`); two
 parts at two positions, each of some leaf, are runs that share none, or one shared run (`runs_shared`); and a row of one
-shares no leaf with a run or a row of the other (`rows_apart`). The tests sort the runs and compare neighbours; sorted,
+shares no leaf with a run or a row of the other (`pieces_apart`). The tests sort the runs and compare neighbours; sorted,
 neighbours the same or apart are all the same or apart (`same_or_apart_of_sorted`, `eq_or_apart_of_sorted`), two the
 same are neighbours the same with all between (`shared_of_sorted`), and the order they stood in does not matter
 (`List.Perm.pairwise_iff`, `pieces_perm`).
@@ -461,7 +461,7 @@ theorem eq_or_apart_of_sorted : ∀ (l : List ((Nat × Nat × Nat) × Bool)),
           exact hap
 
 /-- **What `apart` admits**: every two runs of some leaf share none, or are one run neither of them a row. -/
-theorem apart_pairwise {l : List ((Nat × Nat × Nat) × Bool)} (h : apart l = true) :
+theorem apart_spec {l : List ((Nat × Nat × Nat) × Bool)} (h : apart l = true) :
     l.Pairwise fun a b => 0 < a.1.2.2 → 0 < b.1.2.2 → (a.1 = b.1 ∧ a.2 = false ∧ b.2 = false) ∨ Apart a.1 b.1 := by
   unfold apart at h
   have hs := List.pairwise_mergeSort (le := fun (a b : (Nat × Nat × Nat) × Bool) => runLe a.1 b.1)
@@ -513,7 +513,7 @@ theorem pieces_perm (P : Prog) : ∀ parts : List Part,
 theorem rows_pairwise {P : Prog} {parts : List Part} {runs : Runs} (h : gatherRows P parts = some runs) :
     parts.Pairwise fun q q' => ∀ a ∈ pieces P q, ∀ b ∈ pieces P q', (a.2 = true ∨ b.2 = true) → 0 < a.1.2.2 →
       0 < b.1.2.2 → Apart a.1 b.1 := by
-  have hap := apart_pairwise (gatherRows_some h).2
+  have hap := apart_spec (gatherRows_some h).2
   have hpw := ((pieces_perm P parts).pairwise_iff (fun {a b} hab hb ha => (hab ha hb).elim
     (fun ⟨e, e1, e2⟩ => Or.inl ⟨e.symm, e2, e1⟩) (fun hap => Or.inr hap.symm))).2 hap
   refine (List.pairwise_flatMap.1 hpw).2.imp fun hqq a ha b hb hm hp hp' => ?_
@@ -723,7 +723,7 @@ theorem runs_shared {P : Prog} (h : OwnRuns P) {k i q k' i' q' : Nat}
 
 /-- **Two parts at two positions share no leaf where either piece is a strided part's row.** Positions are a root
 node that is no input node, one of its arguments and one of that argument's parts. -/
-theorem rows_apart {P : Prog} (h : OwnRuns P) {k i q k' i' q' : Nat}
+theorem pieces_apart {P : Prog} (h : OwnRuns P) {k i q k' i' q' : Nat}
     (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
     (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size)

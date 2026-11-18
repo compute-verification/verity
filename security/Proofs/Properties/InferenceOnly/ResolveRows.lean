@@ -13,7 +13,7 @@ leaves, as far into the run as into the part, mod the run, or a strided part who
 reference a leaf of its own (`arg_leaf`). So the leaf is gate `j` of input node `n` (`unit_leaf`), and no two leaves
 of units are one gate but a leaf of a shared run (`unit_leaf_inj`): a gate of the root names its node and the leaf
 (`node_of_gate`), a leaf of an input node lies in one part at one place, or in a run read more than once (`leafAt_inj`,
-from `Record.SecurityProofs.runs_shared`, `rows_apart` and `part_shared`), and a batch's members read an argument at
+from `Record.SecurityProofs.runs_shared`, `pieces_apart` and `part_shared`), and a batch's members read an argument at
 references of their own (`memberIdx_inj`).
 -/
 
@@ -22,7 +22,7 @@ references of their own (`memberIdx_inj`).
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
 open Flock.Program
-open InferenceOnlyVerifier.Record.SecurityProofs (runOf unitsOf partsIn Apart runs_shared rows_apart part_cover
+open InferenceOnlyVerifier.Record.SecurityProofs (runOf unitsOf partsIn Apart runs_shared pieces_apart part_cover
   part_shared batch_dims pieces runOf_some partRun_of_runOf partRun_some gatherRuns_some inputAt_some
   axisDims_of_removeAxis)
 
@@ -280,7 +280,7 @@ theorem run_row_apart {P : Prog} (hown : InferenceOnlyVerifier.Record.SecurityPr
     cases hpn
   · have hmem : ((n, base, count), false) ∈ pieces P ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!) := by
       simp [pieces, hf]
-    have hap := rows_apart hown hk hu hi hq hk' hu' hi' hq' hsame hmem ha (Or.inr ha2) hpos hapos
+    have hap := pieces_apart hown hk hu hi hq hk' hu' hi' hq' hsame hmem ha (Or.inr ha2) hpos hapos
     have hap' : n ≠ a.1.1 ∨ base + count ≤ a.1.2.1 ∨ a.1.2.1 + a.1.2.2 ≤ base := hap
     omega
 
@@ -304,7 +304,7 @@ theorem leafAt_inj {P : Prog} (hown : InferenceOnlyVerifier.Record.SecurityProof
     by_cases hsame : k = k' ∧ i = i' ∧ q = q'
     · obtain ⟨rfl, rfl, rfl⟩ := hsame
       exact Or.inl ⟨rfl, rfl, (hinj x' h1' h2' hgx').symm⟩
-    · have hap := rows_apart hown hk hu hi hq hk' hu' hi' hq' hsame ha ha' (Or.inl ha2) hapos hapos'
+    · have hap := pieces_apart hown hk hu hi hq hk' hu' hi' hq' hsame ha ha' (Or.inl ha2) hapos hapos'
       have hap' : a.1.1 ≠ a'.1.1 ∨ a.1.2.1 + a.1.2.2 ≤ a'.1.2.1 ∨ a'.1.2.1 + a'.1.2.2 ≤ a.1.2.1 := hap
       omega
 
