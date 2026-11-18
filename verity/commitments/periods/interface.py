@@ -1645,12 +1645,13 @@ class Circuit:
         """Each template's unit count, by descriptor id."""
         return {tid: n for tid, (_, n) in zip(self.ids, self.templates)}
 
-    def blocks_record(self) -> dict[str, Any] | None:
-        """The record's ``blocks`` (`Blocks.doc`), its proof block the circuit's units and partition digest, or None."""
+    def blocks_record(self, cap: int) -> dict[str, Any] | None:
+        """The record's ``blocks`` (`Blocks.doc`), its proof block the circuit's units and the digest of its partition into
+        its members at ``cap`` (`partition_blocks`), or None."""
         if self.blocks is None:
             return None
-        program, query = self.program()
-        return self.blocks.doc(sum(self.units.values()), PO.digest(PO.build(program, query)))
+        built = self.program()
+        return self.blocks.doc(sum(self.units.values()), PO.digest(PO.build(*built, partition_blocks(self, cap, built))))
 
     @functools.cached_property
     def _ids(self) -> tuple[str, ...]:
@@ -2287,7 +2288,7 @@ def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
     program, query = circuit.program()
-    part = PO.build(program, query)
+    part = PO.build(program, query, partition_blocks(circuit, cap, (program, query)))
     sts, seg = {}, seg_ports(circuit.registered)
     for fn, tid in zip((f for f, _ in circuit.templates), circuit.ids):
         i, o = unit_rows(fn, circuit.cuts.get(tid), seg.get(tid, ()))
