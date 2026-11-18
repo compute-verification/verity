@@ -31,6 +31,7 @@ from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Subset
 from verity.protocols.proofs.spot.prover import optimize as O, plancheck as PC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments.window import window_binding
 
 import fake_challenger as FC
@@ -110,7 +111,7 @@ def _ports(program: Program, query, names, n: int | Mapping[str, int]) -> dict:
 def _record(program: Program, query, names, n: int | Mapping[str, int], sampling_design, window, previous) -> dict:
     ports = _ports(program, query, names, n)
     roots = [{"port": v, "root": f"{i + 1:02x}" * 64, **ports[v]} for i, v in enumerate(names)]
-    return R.record(program, query, sampling_design, S.SCHEME, roots, window, previous=previous)
+    return DK.record(program, query, sampling_design, S.SCHEME, roots, window, previous=previous)
 
 
 def _boundary(n=N, row=0, previous=None, q=Q, **window) -> tuple[dict, dict]:
