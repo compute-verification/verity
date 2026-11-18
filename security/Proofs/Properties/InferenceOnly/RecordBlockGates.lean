@@ -207,14 +207,13 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
       rw [← sum_fin_map (fun t : Tmpl => t.units / S * (P.defs[t.defn]!).gates) ts ts.length
         (fun j => (ts[j]?.map fun t => t.units / S * (P.defs[t.defn]!).gates).getD 0) rfl
         (fun j hj => by simp [List.getElem?_eq_getElem hj])]
-      exact Finset.sum_congr rfl fun j _ => by simp [List.getElem?_eq_getElem j.isLt]
+      exact Finset.sum_congr rfl fun j _ => by simp
     rw [← hsum]
     refine block_ranges D U at_ hL.1 (fun j : Fin ts.length => ts[j.val].units)
       (fun j => (P.defs[ts[j.val].defn]!).gates) (fun j => ts[j.val].units / S)
       (fun j w => (Classical.choose (hex j w)).off)
       (fun j w => (slotIn S per ts[j.val].tid w.val).getD 0) ?_ ?_ ?_ u ?_
     · intro j j' w w' hne
-      beta_reduce
       have h1 := Classical.choose_spec (hex j w)
       have h2 := Classical.choose_spec (hex j' w')
       rw [← hdefn j h1, ← hdefn j' h2]
@@ -229,7 +228,7 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
       have hmm : m = m' := Classical.not_not.1 fun h => hc (Or.inr h)
       subst hii hmm
       have hjj : j.val = j'.val :=
-        (hnd.getElem_inj_iff (hi := by simpa using j.isLt) (hj := by simpa using j'.isLt)).1
+        (hnd.getElem_inj_iff (hi := by simp) (hj := by simp)).1
           (by simpa using hti.symm.trans hti')
       have hjj' : j = j' := Fin.ext hjj
       subst hjj'
