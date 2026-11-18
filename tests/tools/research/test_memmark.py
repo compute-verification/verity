@@ -47,7 +47,76 @@ def test_the_peak_is_the_most_a_sample_held_with_the_file_cache_out_and_shared_m
     no_stat = {**_rec(5, 99), "cgroup": {"path": SCOPE, "memory_current_bytes": 99 * GB, "memory_stat": None}}
     got = memmark.peak([*recs, no_stat], 100 * GB)
     assert got == {"peak_held_bytes": 8 * GB, "peak_utc": _utc(3), "samples": 4, "over_limit": False, "over_limit_utc": None,
-                   "cgroup": SCOPE}, "a record without memory.stat is no sample: its cache can't be taken out"
+                   "cgroup": SCOPE, "root": False}, "a record without memory.stat is no sample: its cache can't be taken out"
+
+
+def _procs(i: int, *anon_shmem: tuple[float, float], foreign: int | None = None, truncated: bool = False) -> dict:
+    """The sampler's process record `i` seconds in: one row per workload process, its RssAnon and RssShmem in GB."""
+    rows = [{"pid": 100 + k, "rss_anon_bytes": int(a * GB), "rss_shmem_bytes": int(s * GB), "rss_file_bytes": int(50 * GB)}
+            for k, (a, s) in enumerate(anon_shmem)]
+    return {"schema": "telemetry/resources/v0.1", "kind": "process", "scope": "process", "t_utc": _utc(i), "t_mono": 50.0 + i,
+            "processes": rows, "truncated": truncated, "cgroup_foreign_pids": foreign}
+
+
+def _on(path: str, rec: dict) -> dict:
+    return {**rec, "cgroup": {**rec["cgroup"], "path": path}}
+
+
+def test_on_a_container_s_root_cgroup_the_peak_is_the_workload_s_process_tree_and_no_limit_is_judged():
+    """The case seen on a RunPod container: the pod held 333.9 GB while the run's own processes held 0.19 GB at most. The mark
+    counts the process tree, keeps the machine's figure beside it, and gives no "would have been stopped" line."""
+    recs = [_on("/", _rec(1, 156)), _on("/", _rec(2, 333.9)), _on("/", _rec(3, 200))]
+    procs = [_procs(1, (0.05, 0.0)), _procs(2, (0.12, 0.07)), _procs(3, (0.1, 0.0), (0.01, 0.0))]
+    got = memmark.mark({}, {}, {}, recs, processes=procs)
+    assert (got["peak_held_bytes"], got["peak_utc"], got["samples"], got["held_of"]) == (int(0.12 * GB) + int(0.07 * GB), _utc(2), 3,
+                                                                                         "process tree")
+    assert (got["machine_peak_held_bytes"], got["machine_peak_utc"]) == (int(333.9 * GB), _utc(2))
+    assert (got["limit_bytes"], got["over_limit"], got["over_limit_utc"]) == (128 * GB, None, None), "no limit judged from the pod"
+    line = memmark.line(got)
+    assert "would have been stopped" not in line
+    assert line.startswith("peak held 0.2 GB at 2026-01-01T00:00:02Z (3 samples); asked none; limit 128.0 GB")
+    assert "the machine held 333.9 GB at 2026-01-01T00:00:02Z" in line and "container's root" in line
+    bare = memmark.mark({}, {}, {}, recs)
+    assert (bare["peak_held_bytes"], bare["over_limit"], bare["machine_peak_held_bytes"]) == (None, None, int(333.9 * GB)), \
+        "without process records the run's own figure is unknown, and still no limit is judged"
+    assert "would have been stopped" not in memmark.line(bare)
+
+
+def test_a_cgroup_that_held_processes_outside_the_run_is_read_as_the_machine_s_and_one_that_held_none_as_the_run_s():
+    recs = [_rec(1, 100), _rec(2, 300)]
+    shared = memmark.mark({}, {}, {}, recs, processes=[_procs(1, (2, 0), foreign=0), _procs(2, (3, 1), foreign=4)])
+    assert (shared["peak_held_bytes"], shared["over_limit"], shared["held_of"]) == (4 * GB, None, "process tree")
+    assert shared["reason"].startswith(f"the runner's cgroup {SCOPE} also held 4 processes outside the run")
+    own = memmark.mark({}, {}, {}, recs, processes=[_procs(1, (2, 0), foreign=0), _procs(2, (3, 1), foreign=0)])
+    assert (own["peak_held_bytes"], own["over_limit"], own["over_limit_utc"], own["held_of"]) == (300 * GB, True, _utc(2), "cgroup")
+    old = memmark.mark({}, {}, {}, recs, processes=[_procs(1, (2, 0))])
+    assert (old["held_of"], old["over_limit"]) == ("cgroup", True), "a sampler that predates the count: the root alone tells"
+
+
+def test_a_truncated_process_record_counts_no_peak_and_the_mark_is_read_from_the_run_dir(tmp_path):
+    _samples(tmp_path, [_on("/", _rec(1, 333.9)), _procs(1, (9, 0), truncated=True), _procs(2, (0.1, 0.0))],
+             tail='{"kind":"process","scope":"process","t_utc"')
+    got = memmark.of_run(tmp_path, {}, {})[memmark.KEY]
+    assert (got["peak_held_bytes"], got["samples"], got["over_limit"]) == (int(0.1 * GB), 1, None), \
+        "a record of only some of the tree's processes undercounts it; a line a write left unfinished is passed over"
+
+
+def test_a_cgroup_s_foreign_processes_are_those_neither_under_nor_above_the_runner():
+    """Read through injected stand-ins for cgroup.procs and /proc/<pid>/stat: no real cgroup or process is read."""
+    from research.telemetry.procs import foreign_pids
+
+    ppid = {1: 0, 50: 1, 60: 50, 70: 60, 71: 70, 80: 1, 81: 80, 90: 1}   # 1 init, 50 a wrapper, 60 the runner, 70-71 the workload
+
+    def stat(p):
+        return {"ppid": ppid[p]} if p in ppid else None
+
+    def procs(members):
+        return lambda path, n: ("\n".join(map(str, members)), None) if path == "/cg/cgroup.procs" else (None, "gone")
+
+    assert foreign_pids("/cg", 60, read=procs([50, 60, 70, 71]), stat=stat) == 0, "the run and what started it"
+    assert foreign_pids("/cg", 60, read=procs([1, 50, 60, 70, 71, 80, 81, 90, 99]), stat=stat) == 3, \
+        "another runner, its child and a daemon; init is above the runner, and 99 is gone"
+    assert foreign_pids("/cg", 60, read=lambda path, n: (None, "gone"), stat=stat) is None
 
 
 def test_the_ask_is_the_slot_s_booking_then_the_queue_job_s_memory_then_the_run_s_mem_gb():
@@ -153,7 +222,7 @@ def test_a_run_dir_s_mark_is_made_from_its_slot_record_and_its_samples_and_never
     got = memmark.of_run(run, request, {"effective_memory_max_bytes": 600 * GB}, stated=request["mem_limit"])
     assert got == {"memory": {"ask_bytes": 23 * GIB, "ask_from": "slot", "limit_bytes": 30 * GB, "limit_from": "stated", "limit_by": "proofs",
                               "bound_bytes": 600 * GB, "peak_held_bytes": 32 * GB, "peak_utc": _utc(3), "samples": 2, "over_limit": True,
-                              "over_limit_utc": _utc(3), "cgroup": SCOPE, "reason": None}}
+                              "over_limit_utc": _utc(3), "cgroup": SCOPE, "held_of": "cgroup", "reason": None}}
     unread = memmark.of_run(run, request, {}, elsewhere="its own unit research-job-r1.service (--job-user)")["memory"]
     assert (unread["ask_bytes"], unread["ask_from"], unread["peak_held_bytes"]) == (24 * GB, "--mem-gb", None), \
         "nothing in the run dir is read: the job could have left anything there"

@@ -25,10 +25,13 @@ are built again without them in the same tick.
                                                    --sha: only at SHA, refused when GitHub still has another head after a few reads),
                                                    once the quick tier passes on its merge onto `main`'s tip
                                                    (`onto_main`): as a run on MACHINE in a check slot
-                                                   (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
+                                                   (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot, with twins
+                                                   on the others as check.py's `twins` places a check's, the first to take a
+                                                   slot running; a tier for a newer head stops the PR's older heads' tiers
+                                                   from this VM, waiting or running), or here
                                                    (`QuickTier`); exit 3 when it never started (no slot within its wait), 79 when
-                                                   --on's run is still going after 20 min (research.waitcap: `judge RUN` marks it
-                                                   once it ends); or, with
+                                                   --on's run is still going after 20 min (research.waitcap: `judge RUN
+                                                   [TWIN...]` marks it once it ends); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`).  First it refuses a PR
                                                    whose head is on another repository or whose author isn't the
                                                    organization's or one of `AUTHORS` (`PR.outside`), as admission does; it
@@ -45,16 +48,13 @@ are built again without them in the same tick.
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
                                                    test_repository.py, tests/tools/research/test_pythonpath.py, a lint its
                                                    change reaches (tests/test_no_wall_clock.py, tests/adapters/vllm/tests/lint),
-                                                   or `pytest --collect-only` in a suite
-                                                   whose inputs its change touches, or breaks the build of a Lean module that
+                                                   or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
                                                    on the first node of PREFLIGHT_LEAN_ON that starts it, whatever the tier;
                                                    refused when none can build them),
                                                    naming the PR that owns it, or
                                                    drops from a Lean lock it changes a shape.inline premise or shape.frozen
-                                                   key the merged tree's statements still need (naming each); the vLLM
-                                                   integration's ratchet gate, on a change that reaches what it judges,
-                                                   prints what it fails as a warning and refuses nothing; each marked PR
+                                                   key the merged tree's statements still need (naming each); each marked PR
                                                    the head doesn't merge with is a warning too (its lane, the files and the
                                                    fix: the queue refuses whichever of the two it merges second); a check it
                                                    couldn't run it names under "checks skipped";
@@ -77,9 +77,10 @@ are built again without them in the same tick.
                                                    land verdicts as LANE for N days (default 7, at most 14); LANE is also a
                                                    name the caller's handle staffs in the registry (a PR reader's, as
                                                    `review-36`), which registers AGENT as that reader: see Signed verdicts
-    research queue judge RUN [--on MACHINE] [--by LANE]
+    research queue judge RUN [TWIN...] [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
-                                                   (its caller gone), for the open PR at the head the tier ran at, or at its tree
+                                                   (its caller gone), or the twin of it that ran, for the open PR at the head
+                                                   the tier ran at, or at its tree
     research queue open --head BRANCH --title T --body-file F --issue KEY|none:REASON [--sha SHA] [--base main] [--draft]
                                                    open a PR for any pushed branch through gh (the repo's broker wrapper when the
                                                    checkout has one), for a lead whose PR tool opens PRs only from its own run
@@ -179,13 +180,12 @@ code, so the loop maps only a head a reviewer passed (`StoreLabels.lands`), and 
 
 Preflight.  What breaks a candidate is cheap to catch at mark time, on the head merged onto `main`'s tip as the loop merges it
 (`Preflight._fetch`, under drive.toml's `land_into = "main"`): a conflict with `main`, a stale Lake pin, a module string naming a
-module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, a test that errors at collection, an open PR
+module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, an open PR
 it carries that isn't admitted, a merge of an old `next` that carries a PR's head the PR no longer lands (closed, rebuilt
 without it, or withdrawn: `stale_carried`, after `old_next` for one closed unlanded), and a failure of
 `tests/test_repository.py` (a report-genre name), which the preflight runs too, as it runs the landing gates on the head; a
-warn gate's failure (a Markdown file over its size limit) it prints as a warning, and so it prints what the vLLM integration's ratchet
-gate fails on the merged tree (`PREFLIGHT_RATCHET`), since the gate tells a new violation by its text and can take an honest
-change's violation for one.  A Lean change can pass its own Lean check and break
+warn gate's failure (a Markdown file over its size limit) it prints as a warning.  The suites the change touches and the vLLM
+integration's ratchet gate are its candidate's quick tier's: neither ends within a mark's budget.  A Lean change can pass its own Lean check and break
 a module that imports it (a changed signature, dropped premises, a dropped import), which its candidate's records run finds,
 blaming it; the preflight builds those modules (`LakeBuild`), from a machine without a warm Lean tree on the first node of
 `PREFLIGHT_LEAN_ON` that starts the build, whatever the tier, and refuses a head whose modules no node can build.  A head whose
@@ -1063,10 +1063,6 @@ GATE_FIX_LINES = 15
 GATE_VERDICTS = 1000
 #: what the ready mark's preflight says after a warn gate's failure (`Preflight._gates`)
 WARN_GATE_SAYS = "A warn gate refuses nothing: the PR lands, and its owner fixes it in their next PR"
-#: what the ready mark's preflight says after the ratchet gate's failure (`Preflight._merged`)
-RATCHET_SAYS = ("The ratchet gate refuses nothing here, since it can read a violation whose line moved, or an import cycle through a "
-                "module the PR adds, as new: check's `ratchet-gate` step, off the merge gate, judges the PR's merge again in its "
-                "candidate")
 #: what the ready mark's preflight says after the marked PRs a head doesn't merge with (`Preflight._collisions`)
 COLLIDE_SAYS = ("Nothing is refused for it: the verified queue refuses whichever of the two it merges second, for its conflict "
                 "with `main` by then. To be the second without that refusal, wait for the PR named to land, merge `main` and mark "
@@ -1558,17 +1554,26 @@ class StoreLabels:
                                  f"so ready marks on #{pr}'s other heads here may be old") from None
             self._pulled.add(pr)
             self._dirs = None
+        out = {}
+        for old in self._listed().get(ids.target_dirname(prefix), ()):
+            if old != head and ids.is_pr(label_target(pr, old)) and (labs := self.store.labels(label_target(pr, old), key=key)):
+                out[old] = labs
+        return out
+
+    def at(self, head: str) -> list[int]:
+        """The PRs with labels at ``head`` here (`pr:{n}@{head}`), from what this store pulled so far."""
+        return sorted(int(m.group(1)) for prefix, heads in self._listed().items()
+                      if head in heads and (m := re.fullmatch(r"pr_(\d+)@", prefix)))
+
+    def _listed(self) -> dict[str, list[str]]:
+        """{a label directory's prefix (`pr_12@`): its heads}, listed again after a pull."""
         if self._dirs is None:
             root, self._dirs = Path(self.store.root) / "labels", {}
             for name in sorted(os.listdir(root)) if root.is_dir() else ():
                 at, sep, old = name.rpartition("@")
                 if sep:
                     self._dirs.setdefault(at + sep, []).append(old)
-        out = {}
-        for old in self._dirs.get(ids.target_dirname(prefix), ()):
-            if old != head and ids.is_pr(label_target(pr, old)) and (labs := self.store.labels(label_target(pr, old), key=key)):
-                out[old] = labs
-        return out
+        return self._dirs
 
     def _labels(self, pr: int, head: str, key: str) -> list:
         from .store import labels_sync
@@ -3882,6 +3887,9 @@ REMOTE_GRACE_S = 1800
 REMOTE_POLL_S = 30
 #: slot.py's exit when no check slot came within --wait-max (its NOT_STARTED): the tier never ran
 SLOT_NOT_STARTED = 75
+#: the quick tiers `ready --on` launched from this VM, by PR: the head each ran for and its runs, so one for a newer head stops them
+#: (a directory under its `root`, holding them as tiers.json and its lock, apart from the worktrees' locks)
+TIERS = "quick-tiers"
 #: the remote tier's command, slot.py from the shipped tree as the launcher of a machine with /etc/vy/runs-via-slot accepts it
 #: (pods/nebius/slot_only.py's `through_slot`, which the suites that read this module may not read)
 SLOT = ("python3", "tools/check/slot.py")
@@ -3891,6 +3899,10 @@ READY_NOT_STARTED = 3
 SPILL_CPUS, SPILL_MEM_GB = 4, 16
 #: the slot list of a pool on a CPU node, which slot.py takes when its run names one (`MACHINE:POOL` from `place`)
 POOL_SLOTS = "/workspace/research/locks/{pool}/slots"
+#: what a quick tier asks of its slot, in the run's environment (slot.py's RUN_CORES_ENV and RUN_BOOK_ENV, which a slot.py
+#: from before them ignores): the slot of the fewest cores with 8 or more, so an 8-core line where the machine lists one, and
+#: 6 GiB booked of its mem=, what a tier holds with room, so the rest of mem= stays free to the machine's other runs
+QUICK_ASK = {"CHECK_RUN_CORES": "8", "CHECK_RUN_BOOK_GB": "6"}
 #: a lane's own test run, which no landing needs (its candidate's full check decides whether a PR lands)
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
@@ -3902,15 +3914,17 @@ class NotStarted(str):
 
 class StillGoing(str):
     """`ready --on`'s caller stopped waiting at research.waitcap's limit with the tier's run still going: nothing failed or was
-    cancelled, and `research queue judge RUN` marks the PR once the run has ended."""
+    cancelled, and `research queue judge RUN [TWIN...]` marks the PR once the run has ended."""
 
 
 def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None,
-          spill: Callable[[Path], tuple[tuple[str, str] | None, str]] | None = None) -> tuple[str | None, str]:
+          spill: Callable[[Path], tuple[tuple[str, str] | None, str]] | None = None) -> tuple[str | None, str, list[str], float]:
     """`--on auto` (check.py's AUTO) or `--on M1,M2`: the machine `check.py --on` would take for a lane check now (`choose` over
     each machine's `read_slots`, from the caller's checkout), with the Lean audit slots left out, since the quick tier takes none.
     With `--on auto` and none of AUTO readable (node 2 stopped), a CPU node's research pool as `research run --on auto` spills to
-    (``spill``, research.auto), as `MACHINE:POOL`. None when nothing could be placed. And why, with each machine skipped."""
+    (``spill``, research.auto), as `MACHINE:POOL`. None when nothing could be placed. And why, with each machine skipped; and
+    the machines to launch twins of the tier on with the seconds those off the pick wait first, as `check.py --on` launches a
+    check's (check.py's `twins`: every machine that can run it, at once, when the pick has no slot free; none for a pool)."""
     from .store import tools_registry
 
     path = tools_registry.resolve("tools/check/check.py", lambda p: (repo / p).is_file()) or "tools/check/check.py"
@@ -3925,9 +3939,10 @@ def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None
     if got is None and spec == "auto":
         target, how = (spill or _spill)(repo)
         if target is not None:
-            return f"{target[0]}:{target[1]}", f"{how}, as none of {', '.join(names)} could be read ({why})"
+            return f"{target[0]}:{target[1]}", f"{how}, as none of {', '.join(names)} could be read ({why})", [], 0
         why += f"; no research pool either: {how}"
-    return got, why
+    twins = getattr(check, "twins", None)
+    return got, why, *(twins(names, docs, got) if got is not None and twins else ([], 0))
 
 
 def _spill(repo: Path) -> tuple[tuple[str, str] | None, str]:
@@ -3947,20 +3962,23 @@ def _launch(argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
 
 def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | None = None, audit: list[str] | None = None,
               by: str = "", project: str = "verity", wait_s: float = REMOTE_WAIT_S, timeout_s: float = REMOTE_TIMEOUT_S,
-              pool: str = "", priority: bool = False) -> list[str]:
+              pool: str = "", priority: bool = False, twin: str = "", twin_after: float = 0, note: str = "") -> list[str]:
     """The `research run` of the quick tier at ``at`` (``wt``, a checkout of it, its `--source`) since ``base`` as run ``rid`` on
     machine ``on`` (`RemoteQuickTier`): in a check slot of the machine (of its ``pool``'s), a `--priority` one with
     ``priority``, waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
-    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`)."""
+    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`); ``twin``, its `slot.py --twin` (PAIR on the pair's home,
+    PAIR@HOME elsewhere, joining the line after ``twin_after``); ``note``, the line its log starts with."""
     slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
     job = Path(quick_tier.__file__)
     args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
             *(["--merged", merged] if merged else []), *(["--lean-audit", shlex.join(audit)] if audit else []),
-            "--", *QUICK_TIER]
-    opts = [*(["--priority"] if priority else []), *(["--by", by] if by else []), "--wait-max", f"{wait_s:g}",
-            "--run-max", f"{timeout_s:g}"]
+            *(["--note", note] if note else []), "--", *QUICK_TIER]
+    opts = [*(["--priority"] if priority else []), *(["--by", by] if by else []),
+            *(["--twin", twin] if twin else []), *(["--twin-after", f"{twin_after:g}"] if twin and twin_after else []),
+            "--wait-max", f"{wait_s:g}", "--run-max", f"{timeout_s:g}"]
     return [sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", project,
             "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
+            *(x for k, v in QUICK_ASK.items() for x in ("--env", f"{k}={v}")),
             "--timeout", f"{wait_s + timeout_s:g}", "--custody-ttl", str(math.ceil(wait_s + timeout_s + REMOTE_GRACE_S)),
             "--declared-output", "out/*", "--", *slot, *opts,
             "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}']
@@ -3986,78 +4004,169 @@ class RemoteQuickTier(QuickTier):
                  timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S, max_wait_s: float = waitcap.WAIT_LIMIT_S,
                  poll_s: float = REMOTE_POLL_S, launch: Callable[[list[str], Path], subprocess.CompletedProcess] = _launch,
                  fetch: Callable[[Path], dict] | None = None, sleep: Callable[[float], None] = time.sleep,
-                 clock: Callable[[], float] = time.monotonic, place: Callable[[str, Path], tuple[str | None, str]] = place):
+                 clock: Callable[[], float] = time.monotonic, place: Callable[[str, Path], tuple] = place,
+                 stop: Callable[[Path, str], str | None] | None = None):
         super().__init__(repo, remote, root)
         self.on, self.by, self.project, self.poll_s = on, by, project, poll_s
         self.timeout_s, self.wait_s, self.max_wait_s = timeout_s, wait_s, max_wait_s
         self.launch, self.fetch, self.sleep, self.clock, self.place = launch, fetch, sleep, clock, place
+        self.stop = stop or self._cancel
 
     def __call__(self, pr: PR) -> str | None:
         from . import runs as R
 
-        on, pool = self.on, ""
+        on, pool, twins, after = self.on, "", [], 0
         if on == "auto" or "," in on:
-            got, why = self.place(on, self.repo)
+            got, why, *plan = self.place(on, self.repo)
             if got is None:
                 return NotStarted(f"--on {on}: {why}")
             print(f"research queue: --on {on}: {got}: {why}", flush=True)
             on, _, pool = got.partition(":")
-        rid = R.new_run_id()
+            twins, after = plan or ([], 0)
+        runs = [(R.new_run_id(), m) for m in twins or [on]]
+        if len(runs) > 1:
+            print(f"research queue: twins of the quick tier on {', '.join(twins)}: the first to take a check slot runs, and the others "
+                  f"leave their lines (exit {SLOT_NOT_STARTED}, not started)" + (
+                      f"; {on} has a slot free, so the others join their lines after {after:g} s, and only if it hasn't started by "
+                      "then" if after else ""), flush=True)
+        note = self._supersede(pr, runs)
         try:
             with self._checkout(pr) as (wt, at, base):
-                r = self.launch(quick_run(rid, on, wt, at, base, merged=None if at == pr.head else pr.head,
-                                          audit=lean_audit(self.repo, base, at), by=self.by, project=self.project,
-                                          wait_s=self.wait_s, timeout_s=self.timeout_s, pool=pool), wt)
+                audit = lean_audit(self.repo, base, at)
+
+                def launch(i: int) -> subprocess.CompletedProcess:
+                    rid, m = runs[i]
+                    twin = "" if len(runs) == 1 else runs[0][0] if i == 0 else f"{runs[0][0]}@{on}"
+                    return self.launch(quick_run(rid, m, wt, at, base, merged=None if at == pr.head else pr.head, audit=audit,
+                                                 by=self.by, project=self.project, wait_s=self.wait_s, timeout_s=self.timeout_s,
+                                                 pool=pool, twin=twin, twin_after=after if i else 0, note=note), wt)
+
+                if (r := launch(0)).returncode:
+                    return f"`research run --on {on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
+                with concurrent.futures.ThreadPoolExecutor(max(1, len(runs) - 1)) as ex:
+                    rest = list(ex.map(launch, range(1, len(runs))))
         except TierRefused as e:
             return str(e)
-        if r.returncode:
-            return f"`research run --on {on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
-        print(f"research queue: the quick tier runs as {rid} on {on}, in {'a slot of its ' + pool + ' pool' if pool else 'a check slot'}; waiting for it to end "
-              f"(`research inspect {rid}`)", flush=True)
-        d = R.runs_root() / rid
-        status, why = self._wait(d, on)
-        return why or judge_run(d, rid, on, at, status, allowed(self.repo, base))
+        launched = [runs[0]]
+        for (rid, m), r in zip(runs[1:], rest):
+            if r.returncode:
+                print(f"research queue: the twin {rid} on {m} wasn't launched (`research run` exit {r.returncode}): "
+                      f"{(r.stderr or r.stdout or '').strip()[-200:]}", flush=True)
+            else:
+                launched.append((rid, m))
+        rid = runs[0][0]
+        print(f"research queue: the quick tier runs as {rid} on {on}, in {'a slot of its ' + pool + ' pool' if pool else 'a check slot'}"
+              + "".join(f", or as its twin {t} on {m}" for t, m in launched[1:]) + f"; waiting for it to end (`research inspect {rid}`)",
+              flush=True)
+        d, on, status, why = self._wait([(R.runs_root() / t, m) for t, m in launched])
+        if status.get("state") == "cancelled" and (newer := self._tiers().get(self._key(pr), {}).get("head")) not in (None, pr.head):
+            return NotStarted(f"#{pr.number}'s quick tier at its newer head {newer[:12]} stopped run {d.name} on {on}")
+        return why or judge_run(d, d.name, on, at, status, allowed(self.repo, base))
 
-    def _wait(self, d: Path, on: str) -> tuple[dict, str | None]:
-        """The run's status.json once it says the run ended, from its records fetched every `poll_s` until the wait's deadline; or why
-        the wait gave up."""
+    def _key(self, pr: PR) -> str:
+        return f"{self.remote}#{pr.number}"
+
+    def _tiers(self) -> dict:
+        return _json_file(self.root / TIERS / "tiers.json")
+
+    def _supersede(self, pr: PR, runs: list[tuple[str, str]]) -> str:
+        """Stop the quick tiers this VM's `ready --on` launched for ``pr`` at another head, waiting or running (``stop``, `research
+        cancel` by default), and record ``runs`` (its tier at its head now, twins and all) in TIERS, so a tier at a
+        newer head stops them in turn; a tier at the same head stops nothing.  What it stopped, said for the new run's log, or ''."""
+        from . import runs as R
+
+        (d := self.root / TIERS).mkdir(parents=True, exist_ok=True)
+        with open(d / "lock", "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            doc = self._tiers()
+            old = doc.get(self._key(pr)) or {}
+            older = (old.get("runs") or []) if old.get("head") not in (None, pr.head) else []
+            kept = [] if older else old.get("runs") or []
+            doc[self._key(pr)] = {"head": pr.head, "runs": [*kept, *map(list, runs)]}
+            (d / "tiers.json.tmp").write_text(json.dumps(doc, indent=1) + "\n")
+            os.replace(d / "tiers.json.tmp", d / "tiers.json")
+        said = []
+        for rid, m in older:
+            why = self.stop(R.runs_root() / rid, f"#{pr.number}'s quick tier at its newer head {pr.head[:12]} supersedes it")
+            said.append(f"stopped {rid} on {m}" if why is None else f"left {rid} on {m}: {why}")
+        if not said:
+            return ""
+        note = f"#{pr.number}'s quick tier at its older head {old['head'][:12]}: {'; '.join(said)}"
+        print(f"research queue: {note}", flush=True)
+        return note
+
+    def _cancel(self, d: Path, reason: str) -> str | None:
+        """`research cancel` of the run in ``d``: None once it is stopped, else why not (it had ended, its machine is gone)."""
+        from . import remote
+
+        try:
+            remote.cancel(d, reason=reason, by=self.by or "merge-queue")
+        except (remote.Refused, OSError, KeyError) as e:
+            return str(e)
+        return None
+
+    def _wait(self, runs: list[tuple[Path, str]]) -> tuple[Path, str, dict, str | None]:
+        """The run of ``runs`` (a tier's twins, its home first, each a run dir and its machine) that took a check slot, its machine
+        and status.json once it says the run ended, from their records fetched every `poll_s` until the wait's deadline; the
+        first one, once every one ended without taking one (`SLOT_NOT_STARTED`) or one's runner is gone; and why the wait gave
+        up.  A twin that left its line never ran, so the wait goes on for the one that runs."""
         from . import remote
         from . import runs as R
 
-        status: dict = {}
         bound = self.wait_s + self.timeout_s + REMOTE_GRACE_S
         limit = min(bound, self.max_wait_s)
         deadline = self.clock() + limit
         fetch = self.fetch or (lambda d: remote.fetch(d, timeout=deadline - self.clock()))
+        ended: dict[int, tuple[dict, str | None]] = {}
+        seen: dict[int, dict] = {}
         while self.clock() < deadline:
             self.sleep(min(self.poll_s, deadline - self.clock()))
+            for i, (d, on) in enumerate(runs):
+                if i not in ended:
+                    seen[i], gone = self._poll(d, on, fetch)
+                    if gone or seen[i].get("state") in R.TERMINAL:
+                        ended[i] = seen[i], gone
+            ran = [i for i, (st, gone) in ended.items() if not gone and st.get("rc") != SLOT_NOT_STARTED]
+            if ran or len(ended) == len(runs):
+                i = min(ran or [i for i, (_, gone) in ended.items() if gone] or [0])
+                return (*runs[i], *ended[i])
+        d, on = runs[0]
+        status = seen.get(0, {})
+        twins = f" (or its twins {', '.join(x.name for x, _ in runs[1:])})" if len(runs) > 1 else ""
+        if limit < bound:
+            return d, on, status, StillGoing(waitcap.still_going(
+                f"the quick tier's run {d.name} on {on}{twins} ({status.get('state') or 'without a status'})",
+                f"research queue judge {' '.join(x.name for x, _ in runs)} --by {self.by or 'LANE'}", limit))
+        return d, on, status, (f"run {d.name} on {on}{twins} didn't end within {bound:g} s (last seen "
+                               f"{status.get('state') or 'without a status'}): `research inspect {d.name}`")
+
+    @staticmethod
+    def _poll(d: Path, on: str, fetch: Callable[[Path], dict]) -> tuple[dict, str | None]:
+        """Run ``d``'s status.json from its records fetched now, and why it is lost when its runner is gone."""
+        from . import runs as R
+
+        try:
+            rec = fetch(d)
+        except Exception as e:  # noqa: BLE001  (a fetch that fails is a poll that saw nothing)
+            rec = {"last_fetch_error": {"stderr": f"{type(e).__name__}: {e}"}}
+        status = _json_file(d / "status.json")
+        if status.get("state") in R.TERMINAL:
+            return status, None
+        if rec.get("launcher_exited") or rec.get("runner_gone"):
+            # a fetch copies status.json before it probes the runner, which can record its end and exit in between
+            # (a run that passed can read as gone): fetch once more before calling the run lost
             try:
-                rec = fetch(d)
-            except Exception as e:  # noqa: BLE001  (a fetch that fails is a poll that saw nothing)
-                rec = {"last_fetch_error": {"stderr": f"{type(e).__name__}: {e}"}}
+                fetch(d)
+            except Exception:  # noqa: BLE001
+                pass
             status = _json_file(d / "status.json")
             if status.get("state") in R.TERMINAL:
                 return status, None
-            if rec.get("launcher_exited") or rec.get("runner_gone"):
-                # a fetch copies status.json before it probes the runner, which can record its end and exit in between
-                # (a run that passed can read as gone): fetch once more before calling the run lost
-                try:
-                    fetch(d)
-                except Exception:  # noqa: BLE001
-                    pass
-                status = _json_file(d / "status.json")
-                if status.get("state") in R.TERMINAL:
-                    return status, None
-            if gone := rec.get("launcher_exited"):
-                return status, f"run {d.name}'s runner on {on} exited before the run ended ({gone.get('last_line') or 'no log line'})"
-            if gone := rec.get("runner_gone"):
-                return status, f"run {d.name} on {on} ended without recording it: {gone['why']}"
-        if limit < bound:
-            return status, StillGoing(waitcap.still_going(
-                f"the quick tier's run {d.name} on {on} ({status.get('state') or 'without a status'})",
-                f"research queue judge {d.name} --by {self.by or 'LANE'}", limit))
-        return status, (f"run {d.name} on {on} didn't end within {bound:g} s (last seen "
-                        f"{status.get('state') or 'without a status'}): `research inspect {d.name}`")
+        if gone := rec.get("launcher_exited"):
+            return status, f"run {d.name}'s runner on {on} exited before the run ended ({gone.get('last_line') or 'no log line'})"
+        if gone := rec.get("runner_gone"):
+            return status, f"run {d.name} on {on} ended without recording it: {gone['why']}"
+        return status, None
 
 
 def tier_report(d: Path, rid: str, on: str, status: dict):
@@ -4290,22 +4399,86 @@ def move_lines_at(repo: Path, at: str) -> dict[str, dict]:
     return {k: v for k, v in data.items() if isinstance(v, dict)}
 
 
+#: whether a merge's tree is its first parent's (an `-s ours` merge, which took nothing from its other parents), by commit id
+_KEEPS_FIRST: dict[str, bool] = {}
+#: the commits a tip reaches through its trees over its whole history (`reached`), and the bodies of those with a move line,
+#: by the tip, for `_ran`: the last few tips
+_REACHED: dict[str, tuple[frozenset[str], dict[str, str]]] = {}
+
+
+def reached(repo: Path, graph: dict[str, tuple[str, list[str]]]) -> set[str]:
+    """The commits of ``graph`` (each commit of a range `TIP ^HEAD`, or of TIP's whole history: its tree and parents) that TIP
+    reaches without stepping from a merge whose tree is its first parent's to one of its other parents: such a merge (`-s
+    ours`, as a branch's earlier, landed work is merged back keeping the tree) took nothing from that side. A first parent
+    outside ``graph`` has its tree read, once for all; a merge whose trees can't be read keeps every parent. The same walk
+    as `tools/move/restack.py`'s `reached`."""
+    parents = {p for _, ps in graph.values() for p in ps}
+    outside = sorted({ps[0] for c, (_, ps) in graph.items() if len(ps) > 1 and c not in _KEEPS_FIRST and ps[0] not in graph})
+    r = _git(repo, "rev-parse", *(f"{x}^{{tree}}" for x in outside), check=False) if outside else None
+    trees = dict(zip(outside, r.stdout.split())) if r is not None and r.returncode == 0 else {}
+    for c, (tree, ps) in graph.items():
+        if len(ps) > 1 and c not in _KEEPS_FIRST and (first := graph[ps[0]][0] if ps[0] in graph else trees.get(ps[0])):
+            _KEEPS_FIRST[c] = tree == first
+    seen, todo = set(), [c for c in graph if c not in parents]
+    while todo:
+        if (c := todo.pop()) in seen or c not in graph:
+            continue
+        seen.add(c)
+        ps = graph[c][1]
+        todo.extend(ps[:1] if _KEEPS_FIRST.get(c) else ps)
+    return seen
+
+
+def _ran(repo: Path, tip: str, corrections: dict[str, dict], want: set[str]) -> set[str]:
+    """The move lines of ``want`` that ``tip`` holds at a commit it reaches through its trees (`reached` over its whole
+    history): a commit's own line, or its entry's in ``corrections``, and none whose entry says `move = false`. What the
+    history holds (the commits reached, and the bodies of those with a move line) is read once a tip, by two logs."""
+    if tip not in _REACHED:
+        log = _git(repo, "log", "--format=%H %T %P", tip, check=False).stdout
+        on = reached(repo, {c: (t, ps) for c, t, *ps in (x.split() for x in log.splitlines() if x)})
+        log = _git(repo, "log", "--no-merges", "-E", "--grep=^(Move|Layout-move): tools/move/", "--format=%H%x00%B%x1e", tip,
+                   check=False).stdout
+        bodies = dict(rec.partition("\x00")[::2] for rec in filter(None, (s.strip() for s in log.split("\x1e"))))
+        if len(_REACHED) >= 4:
+            _REACHED.clear()
+        _REACHED[tip] = (frozenset(on), {c: b for c, b in bodies.items() if c in on})
+    on, bodies = _REACHED[tip]
+    held = set()
+    for commit in {*bodies, *corrections}:
+        entry = corrections.get(commit, {})
+        if commit in on and entry.get("move") is not False and (
+                m := MOVE_LINE_RE.search(str(entry.get("line") or bodies.get(commit, "")))) and m[0] in want:
+            held.add(m[0])
+    return held
+
+
 def moves_between(repo: Path, onto: str, head: str) -> list[tuple[str, list[str]]]:
     """(commit, its parents) of each move ``onto`` has and ``head`` lacks, oldest first: each commit that isn't a merge with a
     move line (`MOVE_LINE_RE`), its entry's in ``onto``'s corrections where it has one (`move_lines_at`) and none whose entry
     says `move = false`, as `tools/move/restack.py`'s `moves_on` finds those it carries a branch across, on whichever parent
-    of `main`'s merges it landed."""
+    of `main`'s merges it landed. A move ``onto`` holds only through the other parents of a merge that kept its first
+    parent's tree (`reached`) is left out where ``onto`` also holds its move line at a commit it reaches through its trees
+    (`_ran`): that merge took none of the copy's change, and ``onto`` ran the same line itself, in the range or in what
+    ``head`` holds. Without such a line it stays in, since its change may have reached ``onto`` by another commit (restack.py's
+    rerun of a move, which carries no move line, on such a merge's first parent)."""
     lines = move_lines_at(repo, onto)
-    log = _git(repo, "log", "--topo-order", "--reverse", "--no-merges", "--format=%H %P%x00%B%x1e", onto, f"^{head}",
+    log = _git(repo, "log", "--topo-order", "--reverse", "--format=%H %T %P%x00%B%x1e", onto, f"^{head}",
                check=False).stdout
-    found = []
+    recs = []
     for rec in filter(None, (s.strip() for s in log.split("\x1e"))):
         line, _, body = rec.partition("\x00")
-        commit, *parents = line.split()
+        commit, tree, *parents = line.split()
+        recs.append((commit, tree, parents, body))
+    on = reached(repo, {c: (t, ps) for c, t, ps, _ in recs})
+    moves = []
+    for commit, _, parents, body in recs:
         entry = lines.get(commit, {})
-        if entry.get("move") is not False and MOVE_LINE_RE.search(str(entry.get("line") or body)):
-            found.append((commit, parents))
-    return found
+        if len(parents) < 2 and entry.get("move") is not False and (m := MOVE_LINE_RE.search(str(entry.get("line") or body))):
+            moves.append((commit, parents, m[0]))
+    held = {line for commit, _, line in moves if commit in on}
+    if lost := {line for commit, _, line in moves if commit not in on} - held:
+        held |= _ran(repo, recs[-1][0], lines, lost)
+    return [(commit, parents) for commit, parents, line in moves if commit in on or line not in held]
 
 
 @dataclass(frozen=True)
@@ -4891,7 +5064,7 @@ def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]
 
 def reaches(paths: Iterable[str], reach: Iterable[str]) -> bool:
     """Whether one of ``paths`` starts with, or holds as a directory, a prefix of ``reach`` ending in `/`, or is another of
-    ``reach``, a file's path from the root: what a preflight lint judges (`PREFLIGHT_LINTS`, `PREFLIGHT_RATCHET`)."""
+    ``reach``, a file's path from the root: what a preflight lint judges (`PREFLIGHT_LINTS`)."""
     return any(f.startswith(r) or f"/{r}" in f if r.endswith("/") else f == r for f in paths for r in reach)
 
 
@@ -4900,20 +5073,10 @@ PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
 #: lints the preflight runs on the merged tree only when the change reaches what they judge (`reaches`): they take about 20 s
 #: and 40 s, and a train that fails one of them loses its hour-long check
 PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("tests/adapters/vllm/tests/lint", ("adapters/vllm/",)))
-#: the vLLM integration's ratchet gate, which the preflight runs after its other checks of the merged tree and their run on
-#: the base, as a lint of `PREFLIGHT_LINTS` is, when the change reaches what it judges: the integration (its lints, lists, ruff
-#: config and noqa comments), the repository's lints and lists, the root ruff.toml, and the root pyproject.toml's ruff pin.
-#: It runs as check's `ratchet-gate` step does, as the merge's base has it, on the merge, keeping no verdict (no merge is
-#: judged twice); it takes seconds on a change to the integration's code and over a minute on one to a lint or a list, which
-#: can outlast the budget.  What it finds is a warning (`Preflight._merged`)
-PREFLIGHT_RATCHET = ("adapters/vllm/tools/ratchet_gate.py", ("adapters/vllm/", "tests/lint/", "ruff.toml", "pyproject.toml"))
-#: suites whose collection is no cheap check, each with why; the preflight names them and leaves them to the train's check
-PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)
 PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-cpu", "-q")
-#: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
-#: collection but circuit-check's takes about 18 s on 4 workers of a 4-core VM; `PREFLIGHT_LINTS` add up to a minute, and the
-#: ratchet gate (`PREFLIGHT_RATCHET`), last, gets what is left
+#: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing: the sync, `pins.py
+#: --stale` and the invariant tests take seconds, and `PREFLIGHT_LINTS` add up to a minute
 PREFLIGHT_CHECKS_S = 120.0
 #: what the preflight's read of the marked heads (`Preflight._collisions`) may take: a budget of its own, which ends before
 #: `PREFLIGHT_CHECKS_S` starts, so the read never costs a lint its time.  The read is one pull of the open PRs' marks, one
@@ -4922,10 +5085,6 @@ PREFLIGHT_CHECKS_S = 120.0
 PREFLIGHT_COLLIDE_S = 30.0
 #: how many of a collision's files its warning names before "and N more" (the PRs the read didn't get to are all named)
 PREFLIGHT_COLLIDE_NAMED = 5
-#: collections at once: four torch-importing `--collect-only` runs reach about 8 GB, half of a marker's 16 GB VM
-PREFLIGHT_JOBS = 2
-#: below this share of memory available, no suite is collected, so a mark never OOMs the VM's other agents (the shell hook's `AGENT_GUARD_MIN_AVAIL`)
-PREFLIGHT_MIN_FREE = 0.25
 #: the Lean step's bounds (`Preflight._lean`): the most modules it builds (those the change touches and every module importing one,
 #: transitively, each rebuilt since an import changed), and the seconds its builds may take, on the merged tree and, for what fails
 #: there, on `next`; past either it notes why and refuses nothing (`LeanTimedOut`).  With `PREFLIGHT_CHECKS_S` the whole
@@ -4944,7 +5103,8 @@ LEAN_BUILDER, LEAN_BUILD_LINE = "tools/verity/lean/lean_changed.py", "lean-build
 #: `lean_slot.py`'s SLOTS: a machine whose file lists a `build` pool keeps warm Lean trees; an agent VM has none
 LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
 #: the Lake packages the Lean step reads: a directory with a lakefile and a `lean-audit.json`, the auditor's fixtures aside
-LEAN_FIXTURES = "tools/verity/lean/"
+#: (`lean_audit.packages`' prefixes: the builder skips them, and the audit suite's controls build them)
+LEAN_FIXTURES = ("tools/verity/lean/", "tests/tools/verity/lean/")
 #: the temporary worktrees' prefix (`merged_worktree`), `<tmp>/research-merged-<pid>-*`: one whose process is gone is swept (a kill
 #: skips `finally`)
 MERGED_PREFIX = "research-merged-"
@@ -4952,33 +5112,7 @@ MERGED_PREFIX = "research-merged-"
 #: drive's other merged trees (`ported`'s codemod, a move's regeneration: `scratch`) leave its network-volume TMPDIR too, where
 #: each add and remove takes minutes
 MERGED_ROOT: Path | None = None
-#: prints, as JSON, the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2]
-#: (`suites`) and, for each, the fetched registry entries under its inputs (`fixtures`), as `suites.py` picks what to fetch before
-#: it runs them: the repository's own suite reads tracked files only, so it needs none
-_TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/check'); import suites as S; pkgs = S.members(); "
-            "chosen = S.touched(S.discover(), pkgs, sys.argv[1], sys.argv[2], S.locked()); "
-            "ins = {s: S.inputs_of(s, pkgs) for s in chosen}; own = {s: [p for p in ps if p != '.'] for s, ps in ins.items()}; "
-            "fx = S.fetched_fixtures(sys.argv[2], {p for ps in own.values() for p in ps}); "
-            "print(json.dumps({'suites': [s.path for s in chosen], 'fixtures': {s.path: sorted(p for p in fx "
-            "if S.covered(p, own[s], S.dropped(s, ins[s]))) for s in chosen}}))")
-#: prints, as JSON, the suites under the test paths of each suite whose path is on its command line (`Suite.inner`), which
-#: `suites.py` has that suite's pytest ignore: the root's `tests/` holds every suite's tests, so a suite's pytest collects the
-#: suites mirrored under it unless told not to, each away from its own configuration
-_INNER = ("import json, sys; sys.path.insert(0, 'tools/check'); import suites as S; want = set(sys.argv[1:]); "
-          "print(json.dumps({s.path: list(getattr(s, 'inner', ())) for s in S.discover() if s.path in want}))")
-#: what the preflight's fetch of its suites' fixtures (`research data fetch-fixtures`) may take of `PREFLIGHT_CHECKS_S`: the
-#: machine's store keeps every blob it fetches, so a later preflight here copies them from it in seconds
-PREFLIGHT_FETCH_S = 45.0
 #: a line of pytest's short summary: `FAILED tests/x.py::test_y - why`, `ERROR tests/x.py - why` (a collection error)
-def free_memory() -> float | None:
-    """The share of this machine's memory available (`/proc/meminfo`'s MemAvailable over MemTotal), or None where unreadable."""
-    try:
-        info = dict(ln.split(":", 1) for ln in Path("/proc/meminfo").read_text().splitlines() if ":" in ln)
-        return int(info["MemAvailable"].split()[0]) / int(info["MemTotal"].split()[0])
-    except (OSError, KeyError, ValueError, ZeroDivisionError):
-        return None
-
-
 _SUMMARY_RE = re.compile(r"^(?:FAILED|ERROR) (.+?)(?: - (.*))?$", re.M)
 _LOCK_STALE = "needs to be updated"
 
@@ -4986,26 +5120,6 @@ _LOCK_STALE = "needs to be updated"
 class Ran(str):
     """A preflight note saying what ran.  Every other note names a check that didn't run or couldn't judge, and the preflight's
     result lists it under "checks skipped", never as nothing refused."""
-
-
-@dataclass
-class Touched:
-    """What `touched_suites` gave.  ``failed``: each failed suite in `suites.py --json`'s shape (`quick_tier.ROW_KEYS`, status
-    failed, with each failing test's summary line under `summary`); ``suites``: those that ran here; ``ids``: the runs launched;
-    ``notes``: what kept a suite or a launch from running; ``tail``: the launch's output; ``fixtures``: each selected suite's
-    fetched fixtures (`LocalSuites`)."""
-    suites: list[str] = field(default_factory=list)
-    failed: list[dict] = field(default_factory=list)
-    ids: list[str] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)
-    tail: str = ""
-    fixtures: dict[str, list[str]] = field(default_factory=dict)
-
-
-def failed_row(suite: str, failures: dict[str, str]) -> dict:
-    """Suite ``suite``'s failures, {node id: its summary line}, as `suites.py --json` reports a failed suite."""
-    return {"name": suite, "suite": suite, "status": "failed", "failed_tests": list(failures), "log": None,
-            "summary": list(failures.values())}
 
 
 def pytest_failures(run: Callable[[list[str], Path], tuple[subprocess.CompletedProcess | None, str]],
@@ -5101,101 +5215,6 @@ def root_suite(wt: Path) -> list[str]:
     (`suite_layout.root_owns`): the suites mirrored there, which `pytest tests` would otherwise collect as the root suite's."""
     under = sorted(d.relative_to(wt).as_posix() for d in (wt / suite_layout.MIRROR).iterdir() if d.is_dir())
     return [*CROSS_ROOT_SUITE, *(f"--ignore={d}" for d in under if not suite_layout.root_owns(d + "/"))]
-
-
-@dataclass
-class LocalSuites:
-    """`touched_suites` here, as the preflight runs them: `pytest ARGS` (`--collect-only`) in each suite `suites.py`'s own `touched`
-    selects (run with the tree's ``python``; `PREFLIGHT_UNCOLLECTED` left out), or in ``suites`` alone when given, ``jobs`` at once,
-    each through ``run`` (the caller's budget), ignoring the suites under its test paths as `suites.py` does (`_INNER`); none
-    while under `PREFLIGHT_MIN_FREE` of memory is available.  First ``fetch``
-    (the tree, the paths; gives the paths still missing and why) brings the fetched fixtures under those suites' inputs into the
-    tree (`_TOUCHED`'s, or ``fixtures`` with ``suites``), since a test may read one at import; a suite whose fixtures it couldn't
-    fetch isn't collected, and one note says so."""
-    python: str
-    run: Callable[[list[str], Path], tuple[subprocess.CompletedProcess | None, str]]
-    jobs: int = PREFLIGHT_JOBS
-    free: Callable[[], float | None] = free_memory
-    suites: list[str] | None = None
-    args: tuple[str, ...] = ("--collect-only",)
-    fetch: Callable[[Path, list[str]], tuple[set[str], str]] | None = None
-    fixtures: dict[str, list[str]] = field(default_factory=dict)
-
-    def __call__(self, wt: Path, commit: str, base: str) -> Touched:
-        out = Touched(fixtures=dict(self.fixtures))
-        suites = self.suites
-        if suites is None:
-            r, why = self.run([self.python, "-P", "-c", _TOUCHED, base, _out(wt, "rev-parse", f"{commit}^{{tree}}")], wt)
-            try:
-                said = json.loads(r.stdout.strip().splitlines()[-1]) if r is not None and r.returncode == 0 else None
-                suites, out.fixtures = (said["suites"], said["fixtures"]) if said is not None else (None, {})
-            except (ValueError, IndexError, KeyError, TypeError):
-                suites = None
-            if suites is None:
-                out.notes.append(f"no suite collected: `suites.py` couldn't say which the change touches "
-                                 f"({why or (r.stderr or r.stdout).strip()[-200:]})")
-                suites = []
-            out.notes += [f"{s} not collected: {PREFLIGHT_UNCOLLECTED[s]}" for s in suites if s in PREFLIGHT_UNCOLLECTED]
-            suites = [s for s in suites if s not in PREFLIGHT_UNCOLLECTED]
-        todo = [s for s in suites if (wt / s).is_dir()]
-        if todo and (f := self.free()) is not None and f < PREFLIGHT_MIN_FREE:
-            out.notes.append(f"no suite collected: {f:.0%} of memory available, under {PREFLIGHT_MIN_FREE:.0%}; its candidate's "
-                             "check still collects them")
-            todo = []
-        need = sorted({p for s in todo for p in out.fixtures.get(s, ())})
-        if need and self.fetch is not None:
-            missing, why = self.fetch(wt, need)
-            if blocked := [s for s in todo if missing & set(out.fixtures.get(s, ()))]:
-                shown = ", ".join(sorted(missing)[:3]) + (f" and {len(missing) - 3} more" if len(missing) > 3 else "")
-                out.notes.append(f"{', '.join(blocked)} not judged: {len(missing)} of the {len(need)} fixture(s) the suites read "
-                                 f"weren't fetched ({why or 'no source held them'}: {shown}); its candidate's check fetches them")
-                todo = [s for s in todo if s not in blocked]
-        inner = self._inner(wt, todo, out) if todo else {}
-        args = lambda s: [*self.args, *(f"--ignore={wt / q}" for q in inner.get(s, ()))]               # noqa: E731
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(self.jobs, len(todo) or 1))) as pool:
-            for s, res in zip(todo, pool.map(lambda s: pytest_failures(self.run, self.python, wt / s, args(s)), todo)):
-                if isinstance(res, str):
-                    out.notes.append(f"collect:{s} not checked: {res}")
-                    continue
-                out.suites.append(s)
-                if res:
-                    out.failed.append(failed_row(s, res))
-        if self.suites is None:
-            out.notes.append(Ran(f"collected {len(todo)} suite(s)" + (f" ({', '.join(todo)})" if len(todo) <= 6 else "")))
-        return out
-
-    def _inner(self, wt: Path, todo: list[str], out: Touched) -> dict[str, list[str]]:
-        """{suite: the suites under its test paths} for ``todo``, as the tree's `suites.py` names them (`_INNER`); none, and a note
-        in ``out``, when it can't say."""
-        r, why = self.run([self.python, "-P", "-c", _INNER, *todo], wt)
-        said = None
-        if r is not None and r.returncode == 0:
-            try:
-                said = json.loads(r.stdout.strip().splitlines()[-1])
-            except (ValueError, IndexError) as e:
-                why = f"its output isn't JSON: {e}"
-        if not isinstance(said, dict):
-            out.notes.append(f"each suite collected with the suites under its test paths: `suites.py` couldn't name them "
-                             f"({why or (r.stderr or r.stdout).strip()[-200:]})")
-            return {}
-        return said
-
-
-def touched_suites(repo: Path, commit: str, base: str, how: LocalSuites, *, wt: Path | None = None,
-                   root: Path | None = None) -> Touched:
-    """The suites the change from ``base`` to ``commit`` (a merged tree) touches, run at ``commit`` by ``how`` within the
-    caller's budget (`LocalSuites`: the preflight, a PR's head merged onto `next`).  In ``wt`` when given (checked out at
-    ``commit``), else in a temporary worktree of ``repo`` at ``commit`` (`merged_worktree`), removed once ``how`` returns.  The
-    failures come back in `suites.py --json`'s shape, in `Touched.failed`.  A worktree that can't be made is a note, and
-    nothing runs."""
-    if wt is not None:
-        return how(wt, commit, base)
-    try:
-        with merged_worktree(repo, commit, root) as tree:
-            return how(tree, commit, base)
-    except QueueError as e:
-        why = f"no worktree of {commit[:12]}: {e}"
-        return Touched(notes=[why], tail=why)
 
 
 _IMPORT = re.compile(r"(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?(.*)")
@@ -5618,9 +5637,7 @@ class Preflight:
     (a) conflicts with `next` outside the pins (`merged_tree`, as drive's sync merges, no worktree, with the merge drivers of the
     commit it merges onto, `base_drivers`, never the caller's checkout's), naming the paths and the PRs on `next` that touched them;
     (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, a lint of `PREFLIGHT_LINTS` the change
-    reaches, or `pytest --collect-only` in a suite whose inputs
-    the change touches (`touched_suites` with `LocalSuites`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
-    finds its lock stale; (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
+    reaches, or the merged tree's `uv sync --locked` finds its lock stale; (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
     owner), naming each; (d) fails one of drive.toml's `landing_gates` at `main` (`_gates`, which logs what its `warn_gates`
     say as warnings), with the gate's fix; or (e) merged
     onto `next`, breaks the build of a Lean module that is or imports, transitively, a module it changes, in that module's package
@@ -5640,14 +5657,9 @@ class Preflight:
     The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
     first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
     ``python`` stands in for its interpreter), under `budget_s` together (`math.inf`: unbounded), and the worktree is
-    removed whatever happens.  Last, after the run on the base below, with what is left of the budget, the vLLM integration's
-    ratchet gate judges the merge when the change reaches what it judges (`PREFLIGHT_RATCHET`, `_ratchet`): what it fails is
-    logged as a warning and refuses nothing, so the time it takes never costs a refusing check its comparison.  First of all,
+    removed whatever happens.  The suites the change touches and the ratchet gate are its candidate's quick tier's.  First of all,
     once the head merges onto `next`, and in a budget of its own that ends before theirs starts (`collide_s`), the marked PRs
-    whose heads it doesn't merge with are logged as a warning too, with the fix (`_collisions`).  Before
-    (b), the fetched fixtures under the collected suites' inputs come into it (``fetch``, by default `_fetch_fixtures`: through
-    ``store``, within `PREFLIGHT_FETCH_S` of the budget); a suite whose fixtures can't be fetched (no credentials, no source) is
-    named once and not judged.  A failure that `next` has too (a pin already stale there, a module two PRs on `next` already
+    whose heads it doesn't merge with are logged as a warning too, with the fix (`_collisions`).  A failure that `next` has too (a pin already stale there, a module two PRs on `next` already
     broke) isn't the PR's: each failed check runs again at `next` in the same worktree, within the same budget, and only what
     fails on the merge alone refuses.  What keeps a check from running (no `next` to fetch, the budget spent, labels that can't
     be pulled, more than `lean_modules` Lean modules, a Lean build that didn't end in time) is said under "checks skipped", never
@@ -5658,16 +5670,13 @@ class Preflight:
     drops and the landing gates."""
 
     def __init__(self, repo: Path, remote: str, store, *, sync: tuple[str, ...] | None = PREFLIGHT_SYNC, python: str | None = None,
-                 budget_s: float = PREFLIGHT_CHECKS_S, jobs: int = PREFLIGHT_JOBS, clock: Callable[[], float] = time.monotonic,
+                 budget_s: float = PREFLIGHT_CHECKS_S, clock: Callable[[], float] = time.monotonic,
                  root: Path | None = None, log: Callable[[str], None] = print,
-                 free: Callable[[], float | None] = free_memory,
-                 fetch: Callable[[Path, list[str], float], tuple[set[str], str]] | None = None,
                  lean: Callable[[Path, list[str], float], LeanBuilt | str] | None = None,
                  lean_s: float = PREFLIGHT_LEAN_S, lean_modules: int = PREFLIGHT_LEAN_MODULES,
                  collide_s: float = PREFLIGHT_COLLIDE_S, collide_jobs: int | None = None):
         self.repo, self.remote, self.store, self.sync, self.python = Path(repo), remote, store, sync, python
-        self.budget_s, self.jobs, self.clock, self.log, self.free = budget_s, jobs, clock, log, free
-        self.fetch = fetch or self._fetch_fixtures
+        self.budget_s, self.clock, self.log = budget_s, clock, log
         self.lean, self.lean_s, self.lean_modules = lean, lean_s, lean_modules
         self.collide_s, self.collide_jobs = collide_s, max(1, collide_jobs or os.cpu_count() or 1)
         self.root = Path(root or tempfile.gettempdir())
@@ -5947,25 +5956,19 @@ class Preflight:
     def _merged(self, pr: PR, base: str, tree: str, onto: str, notes: list[str], members: list[Member] | None = None) -> list[str]:
         """(b) and (e), in a temporary worktree at the merge of the head onto ``base``, ``tree`` (`merged_tree`)."""
         commit = _out(self.repo, "commit-tree", tree, "-p", base, "-p", pr.head, "-m", f"preflight: #{pr.number} onto {base[:12]}")
-        fixtures: dict[str, list[str]] = {}
         out: list[str] = []
         with merged_worktree(self.repo, commit, self.root) as wt:
             graph, lean_failed, lean_deadline = self._lean(wt, base, tree, notes, out)
             deadline = self.clock() + self.budget_s
-            failed = self._checks(wt, base, tree, None, notes, deadline, fixtures)
+            failed = self._checks(wt, base, tree, None, notes, deadline)
             again: dict[str, dict[str, str]] = {}
             lean_again: dict[str, str] | str = {}
             if any(failed.values()) or lean_failed:
                 _git(wt, "checkout", "-q", "--detach", "--force", base)
                 _git(wt, "clean", "-qffdx", "-e", "/.venv")
-                again = (self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
+                again = (self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline)
                          if any(failed.values()) else {})
                 lean_again = self._lean_at_base(wt, lean_failed, lean_deadline) if lean_failed else {}
-            # warn only: the gate compares violation texts across two trees, so a moved line, or an import of a module the PR adds (on the base, of its package: a cycle), reads as new
-            if ratchet := self._ratchet(wt, base, commit, tree, notes, deadline):
-                self.log(f"research queue: preflight: warning: #{pr.number} at {pr.head[:12]}: the ratchet gate "
-                         f"({PREFLIGHT_RATCHET[0]} as {onto} has it) fails the merge: " + "\n    ".join(ratchet)
-                         + f"\n  {RATCHET_SAYS}")
         if not any(failed.values()) and not lean_failed:
             return out
         for name, fails in failed.items():
@@ -6044,11 +6047,8 @@ class Preflight:
             return (f"`pins.py --stale` on the merged tree: {shown}: regenerate each with its command, never by hand "
                     f"(`python3 tools/check/pins.py --regen`); when the head alone is fresh, the other side is a PR on "
                     f"`next`: regenerate once it lands")
-        if kind == "tests":
-            return (f"the invariant tests in {where} fail on the merged tree: {shown}: reproduce on `git merge origin/next` in a "
-                    f"scratch worktree, fix the branch, push and mark the new head")
-        return (f"`pytest --collect-only` in {where} fails on the merged tree: {shown}: a test reads what another queued PR "
-                f"changes or what only an unlanded PR adds; make it read what `main` and `next` hold, or wait for that PR")
+        return (f"the invariant tests in {where} fail on the merged tree: {shown}: reproduce on `git merge origin/next` in a "
+                f"scratch worktree, fix the branch, push and mark the new head")
 
     def _run(self, argv: list[str], cwd: Path, deadline: float,
              extra: dict[str, str] | None = None) -> tuple[subprocess.CompletedProcess | None, str]:
@@ -6068,38 +6068,9 @@ class Preflight:
         except OSError as e:
             return None, f"{argv[0]} didn't start ({e})"
 
-    def _fetch_fixtures(self, wt: Path, paths: list[str], deadline: float) -> tuple[set[str], str]:
-        """The fetched registry entries ``paths`` brought into ``wt`` by `research data fetch-fixtures` (`suites.py`'s fetch, every
-        byte checked against its id) through ``store``, whose blobs stay there for the next preflight on this machine, within
-        `PREFLIGHT_FETCH_S` of what's left by ``deadline``: the paths still missing, and why."""
-        left = min(deadline - self.clock(), PREFLIGHT_FETCH_S)
-        if left <= 0:
-            return set(paths), "the budget was spent before the fetch started"
-        root = getattr(self.store, "root", None)
-        argv = [sys.executable, "-P", "-m", "research", "data", "fetch-fixtures", *(["--store", str(root)] if root else []),
-                "--repo", str(wt), "--json", *(str(wt / p) for p in paths)]
-        try:
-            r = subprocess.run(argv, capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL, timeout=left,
-                               check=False)
-        except subprocess.TimeoutExpired:
-            return set(paths), f"`research data fetch-fixtures` still running after {left:.0f} s"
-        except OSError as e:
-            return set(paths), f"`research data fetch-fixtures` didn't start ({e})"
-        try:
-            rep = json.loads(r.stdout)
-            missing = {e["path"] for e in rep["entries"] if e["status"] in ("missing", "stale")}
-        except (ValueError, KeyError, TypeError):
-            return set(paths), f"`research data fetch-fixtures` exited {r.returncode}: {(r.stderr or r.stdout).strip()[-200:]}"
-        if not missing:
-            return missing, ""
-        return missing, ("no source here: no reachable private remote, no public URL" if not rep.get("sources")
-                         else f"not on {', '.join(rep['sources'])}")
-
-    def _checks(self, wt: Path, base: str, tree: str, only: set[str] | None, notes: list[str],
-                deadline: float, fixtures: dict[str, list[str]]) -> dict[str, dict[str, str]]:
+    def _checks(self, wt: Path, base: str, tree: str, only: set[str] | None, notes: list[str], deadline: float) -> dict[str, dict[str, str]]:
         """{check: {what failed: its line}} for the checks of (b) on the tree checked out in ``wt`` (``only`` those named), each
-        that ran by ``deadline``; why each other didn't run goes to ``notes``.  ``fixtures`` gets each collected suite's fetched
-        fixtures on the first pass (``only`` None), and a later pass fetches them again."""
+        that ran by ``deadline``; why each other didn't run goes to ``notes``."""
         want = (lambda name: True) if only is None else (lambda name: name in only)
         out: dict[str, dict[str, str]] = {}
 
@@ -6135,39 +6106,7 @@ class Preflight:
             if reaches(changed, reach):
                 d, _, rest = path.rpartition("tests/")
                 got(f"tests:{path}", pytest_failures(run, py, wt / (d.rstrip("/") or "."), ["tests/" + rest]))
-        names = None if only is None else [n.partition(":")[2] for n in only if n.startswith("collect:")]
-        fetch = lambda wt_, paths: self.fetch(wt_, paths, deadline)                    # noqa: E731
-        res = touched_suites(self.repo, tree, base, LocalSuites(py, run, self.jobs, self.free, names, fetch=fetch,
-                                                                fixtures=fixtures), wt=wt)
-        fixtures.update(res.fixtures)
-        notes += res.notes
-        failed = {row["suite"]: dict(zip(row["failed_tests"], row["summary"])) for row in res.failed}
-        for s in res.suites:
-            out[f"collect:{s}"] = failed.get(s, {})
         return out
-
-    def _ratchet(self, wt: Path, base: str, commit: str, tree: str, notes: list[str], deadline: float) -> list[str]:
-        """What `PREFLIGHT_RATCHET`'s gate, as ``base`` has it, fails on the merge ``commit`` (of ``tree``) when the change
-        reaches what it judges, run in ``wt`` as check's `ratchet-gate` step runs it (`ratchet_gate.py BASE COMMIT --json`)
-        with what the other checks of (b) left of their ``deadline``: each line it fails, none when it passed or didn't judge,
-        and then why in ``notes``.  It keeps no verdict, and its scratch (its worktrees) goes in ``wt``'s temporary directory,
-        which `merged_worktree` removes, also when the budget's end kills the gate before it cleans up."""
-        path, reach = PREFLIGHT_RATCHET
-        if (_git(self.repo, "cat-file", "-e", f"{base}:{path}", check=False).returncode
-                or not reaches(_out(self.repo, "diff", "--name-only", base, tree).split(), reach)):
-            return []
-        script = wt.parent / Path(path).name
-        script.write_text(_git(self.repo, "show", f"{base}:{path}").stdout, errors="surrogateescape")
-        r, why = self._run([self.python or str(wt / ".venv" / "bin" / "python"), str(script), base, commit, "--json"], wt,
-                           deadline, {"RATCHET_GATE_CACHE": "", "TMPDIR": str(wt.parent)})
-        if r is not None:
-            with contextlib.suppress(ValueError, TypeError, KeyError, AttributeError):
-                found = [str(x) for f in json.loads(r.stdout)["failures"] for x in (f["why"], *(f.get("fix") or []))]
-                if r.returncode in (0, 1) and bool(found) == (r.returncode == 1):
-                    return list(dict.fromkeys(found))
-            why = f"exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}"
-        notes.append(f"ratchet-gate not checked: {why}")
-        return []
 
 
 class MarkOnly:
@@ -6300,10 +6239,11 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
 
 def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callable[[Path], dict] | None = None,
           runs_root: Path | None = None, repo: Path | None = None, url: str | None = None,
-          goals: Callable[[PR], str | None] | None = None) -> int:
-    """`research queue judge RUN`: what `ready --on` does once its run ends, for a quick-tier run that already ended (its waiting
-    client gone): fetch its records (`research fetch`; a run another VM launched is adopted from its machine, ``on`` or each), judge
-    them as `RemoteQuickTier` does, at the commit the tier ran at, and mark the open PR at the head it ran for (the head it merged
+          goals: Callable[[PR], str | None] | None = None, twins: Iterable[str] = ()) -> int:
+    """`research queue judge RUN [TWIN...]`: what `ready --on` does once its run ends, for a quick-tier run that already ended (its
+    waiting client gone): fetch its records (`research fetch`; a run another VM launched is adopted from its machine, ``on`` or
+    each), and its ``twins``', of which the one that took a check slot is judged (the first when none did), as `RemoteQuickTier`
+    does, at the commit the tier ran at, and mark the open PR at the head it ran for (the head it merged
     onto `main`'s tip, the facts' `merged`, else that commit) ready, or, when none is there now
     and ``repo`` (a clone of ``url``) is given, the one open PR whose head has that head's tree (`same_tree_mark`'s reason).
     Refused when the run can't be fetched, hasn't ended, isn't a quick tier, failed, or no open PR is at that head or tree now;
@@ -6315,12 +6255,16 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
         print(f"research queue judge: {why}", file=sys.stderr)
         return 1
 
-    try:
-        d = cli._run_dir(R.runs_root(runs_root), ref, on)
-        rec = (fetch or remote.fetch)(d)
-    except (FileNotFoundError, LookupError, remote.Refused) as e:
-        return refuse(str(e))
-    rid, machine, status = d.name, rec.get("machine") or "its machine", _json_file(d / "status.json")
+    seen = []
+    for one in (ref, *twins):
+        try:
+            d = cli._run_dir(R.runs_root(runs_root), one, on)
+            seen.append((d, (fetch or remote.fetch)(d), _json_file(d / "status.json")))
+        except (FileNotFoundError, LookupError, remote.Refused) as e:
+            return refuse(str(e))
+    ran = [x for x in seen if x[2].get("state") in R.TERMINAL and x[2].get("rc") != SLOT_NOT_STARTED]
+    d, rec, status = (ran or [x for x in seen if x[2].get("state") not in R.TERMINAL] or seen)[0]
+    rid, machine = d.name, rec.get("machine") or "its machine"
     if status.get("state") not in R.TERMINAL:
         err = (rec.get("last_fetch_error") or {}).get("stderr")
         return refuse(f"run {rid} hasn't ended (last seen {status.get('state') or 'without a status'}"
@@ -6949,7 +6893,7 @@ def main(argv: list[str]) -> int:
                                             "delegate", "vqueue", "map-moves", "cross", "stranded"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; "
                     "delegate: the Cursor agent id to delegate --by's handle to; map-moves: the first old head, as N@HEAD")
-    ap.add_argument("shard_run", nargs="*", metavar="N@HEAD", help="map-moves: the other old heads")
+    ap.add_argument("shard_run", nargs="*", metavar="N@HEAD", help="map-moves: the other old heads; judge: the run's twins")
     ap.add_argument("--jobs", type=int, default=1, metavar="N", help="map-moves: the heads mapped at once, each running a move's "
                     "script on a whole tree in a worktree of its own under --preflight-root; cross: the stacks crossed at once "
                     "(default 1)")
@@ -6983,9 +6927,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--json", action="store_true", help="status: as JSON; ready: one JSON object on stdout (pr, head, base, exit, "
                     "warning), the rest on stderr")
     ap.add_argument("--on", metavar="MACHINE", help="ready: run the quick tier as a `research run` there, in a check slot (`auto` or "
-                                                    "M1,M2: the one with a free check slot, as `check.py --on` picks), waiting for it "
+                                                    "M1,M2: the one with a free check slot, as `check.py --on` picks, with twins as "
+                                                    "it launches a check's), waiting for it "
                                                     f"{waitcap.WAIT_LIMIT_S} s at most (then exit {waitcap.STILL_GOING}, the run going "
-                                                    "on: `judge RUN` marks the PR once it ends); judge: look "
+                                                    "on: `judge RUN [TWIN...]` marks the PR once it ends); judge: look "
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (its candidate's check tests it)")
@@ -6997,12 +6942,12 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--no-preflight", action="store_true",
                     help="ready: skip the preflight: the head merged onto the branch `Preflight._fetch` fetches must merge cleanly, contain "
                          "no open PR that isn't admitted, and pass `pins.py --stale`, the invariant tests (module strings, pins, "
-                         "doc paths, pythonpath) and `pytest --collect-only` of the suites its change touches, in a temporary "
+                         "doc paths, pythonpath) and the lints its change reaches, in a temporary "
                          f"worktree, in about {PREFLIGHT_CHECKS_S:g} s, and build the Lean modules that are or import what it "
                          f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
                          f"node, else on the first of {', '.join(PREFLIGHT_LEAN_ON)} that starts the build, whatever the tier; "
                          "one no node can build refuses the mark, one not "
-                         "built in time is a skipped check), and its warnings with it (the vLLM ratchet gate's, and the marked PRs "
+                         "built in time is a skipped check), and its warnings with it (the marked PRs "
                          f"the head doesn't merge with, read in {PREFLIGHT_COLLIDE_S:g} s of their own before those checks)")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status: admit only ready marks written at "
                                                                            "or after this time (default: `marked_after` in the rules file)")
@@ -7157,7 +7102,7 @@ def main(argv: list[str]) -> int:
             store = label_signer(store, Path(here) if here else None)
         if a.command == "judge":
             return judge(GitHub(repo), store, a.pr, a.by, on=a.on, repo=Path(here) if here else None, url=remote,
-                         goals=goal_gate)
+                         goals=goal_gate, twins=a.shard_run)
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)

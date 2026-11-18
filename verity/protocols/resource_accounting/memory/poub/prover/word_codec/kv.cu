@@ -274,8 +274,11 @@ __device__ __forceinline__ void sqr_dbl_n(const u32 (&a)[N], u32 (&y)[2 * N]) {
 #pragma unroll
   for (int m = 1; m < 2 * N - 2; ++m) {
     u32 r[3] = {c0, c1, 0};
+    // A fixed trip count with the bounds as a test: with bounds that depend on m, sm_90a's ptxas leaves the loop rolled
+    // and keeps a in local memory.
 #pragma unroll
-    for (int i = (m < N ? 0 : m - N + 1); 2 * i < m; ++i) mac(r, a[i], a[m - i]);
+    for (int i = 0; i < N; ++i)
+      if (2 * i < m && m - i < N) mac(r, a[i], a[m - i]);
     s[m] = r[0];
     c0 = r[1];
     c1 = r[2];
@@ -441,8 +444,10 @@ __device__ __forceinline__ void mul(const u32 (&a)[NL], const u32 (&b)[NL], u32 
 #pragma unroll
     for (int m = 0; m < 2 * NL - 1; ++m) {
       u32 r[3] = {0, 0, 0};
+      // A fixed trip count with the bounds as a test, as in sqr_dbl_n.
 #pragma unroll
-      for (int i = (m < NL ? 0 : m - NL + 1); i <= (m < NL ? m : NL - 1); ++i) mac(r, a[i], b[m - i]);
+      for (int i = 0; i < NL; ++i)
+        if (i <= m && m - i < NL) mac(r, a[i], b[m - i]);
       add3(r, c0, c1);
       if (m < NL) y[m] = r[0];
       else fold_column(y, m - NL, r[0], f);

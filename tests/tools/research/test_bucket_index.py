@@ -57,8 +57,9 @@ def label(root, target: str, key: str, value, by: str = "lane", ts: str = "2026-
 
 
 def test_one_pass_and_pass_by_pass_give_the_same_rows_including_a_run_published_late(tmp_path):
-    """The rebuild test carried over (design invariant 4).  A run whose id sorts before the newest indexed one (custody published it
-    late) is missed by the start-after listing and caught by the hourly full listing; after that the two builds agree."""
+    """The rebuild test carried over (design invariant 4).  A run that started more than RUNS_MARGIN before the newest indexed one
+    (custody published it by hand, late) is missed by the start-after listing and caught by the hourly full listing; after that
+    the two builds agree."""
     b = tmp_path / "bucket"
     remote = FsRemote(b)
     a1 = artifact(b, meta={"x": 1})
@@ -71,9 +72,9 @@ def test_one_pass_and_pass_by_pass_give_the_same_rows_including_a_run_published_
                                                                               "files": [{"path": "x", "sha256": "f" * 64, "bytes": 3}]})
     run(b, "r20261011-180000-0002", outputs={"evidence": a2}, inputs={"golden": a1})
     rep = BI.index(remote, inc, now=T0 + timedelta(minutes=5))
-    assert rep["runs_listing"] == "tail" and rep["listed"][BI.RUNS_TAIL] == 1 and rep["added"] == {"artifact": 1, "run": 1, "label": 0}
+    assert rep["runs_listing"] == "tail" and rep["listed"][BI.RUNS_TAIL] == 2 and rep["added"] == {"artifact": 1, "run": 1, "label": 0}
 
-    run(b, "r20261011-175000-0003")                          # sorts before the newest indexed run
+    run(b, "r20261009-175959-0003")                          # one second before the margin before the newest indexed run
     label(b, "pr:1782@" + "a" * 40, "ready", True, by="infra")
     rep = BI.index(remote, inc, now=T0 + timedelta(minutes=10))
     assert rep["runs_listing"] == "tail" and rep["added"] == {"artifact": 0, "run": 0, "label": 1}
@@ -89,8 +90,35 @@ def test_one_pass_and_pass_by_pass_give_the_same_rows_including_a_run_published_
     BI.index(remote, fresh, now=T0 + timedelta(days=3))
     assert BI.dump(inc) == BI.dump(fresh)
     idx = BI.SqliteIndex(inc)
-    assert dict(idx.db.execute("SELECT prefix, keys FROM listings")) == {"manifests/": 2, "labels/": 2, "attempts/": 3, "attempts/>": 0}
+    assert dict(idx.db.execute("SELECT prefix, keys FROM listings")) == {"manifests/": 2, "labels/": 2, "attempts/": 3, "attempts/>": 2}
     idx.close()
+
+
+def test_a_run_stored_after_a_later_started_run_was_indexed_is_indexed_by_the_next_short_pass_with_its_edges(tmp_path):
+    """A run is stored when it ends, so one that started before the newest indexed run can reach the bucket after it: its result
+    artifact is indexed first (manifests are listed whole), and the next short pass, listing runs from RUNS_MARGIN before the
+    newest indexed one, takes the run and its edges in. A pass after that lists the window again and reads nothing."""
+    b = tmp_path / "bucket"
+    remote, db = FsRemote(b), tmp_path / "i.sqlite"
+    newest = run(b, "r20261011-175500-0001")
+    assert BI.index(remote, db, now=T0)["runs_listing"] == "full"
+    assert BI.runs_tail_start(newest) == "attempts/r20261009-175500" and BI.runs_tail_start("not-a-run") is None
+
+    result, golden = artifact(b, meta={"long": True}), artifact(b, meta={"golden": True})
+    rep = BI.index(remote, db, now=T0 + timedelta(minutes=5))
+    assert rep["runs_listing"] == "tail" and rep["added"] == {"artifact": 2, "run": 0, "label": 0}
+
+    late = run(b, "r20261009-175500-0002", outputs={"result": result}, inputs={"golden": golden})    # at the margin's edge
+    rep = BI.index(remote, db, now=T0 + timedelta(minutes=10))
+    assert rep["runs_listing"] == "tail" and rep["added"] == {"artifact": 0, "run": 1, "label": 0}
+    idx = BI.SqliteIndex(db)
+    assert idx.edges_of(late) == [(late, "inputs.golden", golden), (late, "outputs.result", result)]
+    assert idx.producers([result]) == {result: [late]}
+    idx.close()
+
+    rep = BI.index(remote, db, now=T0 + timedelta(minutes=15))
+    assert rep["runs_listing"] == "tail" and rep["listed"][BI.RUNS_TAIL] == 2 and rep["read"] == 0
+    assert rep["added"] == {"artifact": 0, "run": 0, "label": 0}
 
 
 def test_rows_drop_bulk_and_findings_text_and_name_every_id_a_record_names(tmp_path):
