@@ -75,7 +75,7 @@ from typing import Any
 import numpy as np
 
 from verity.circuits import partition_object as PO, refs as RF
-from verity.commitments import hm96, row_table as RT
+from verity.commitments import domains as DM, hm96, row_table as RT
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
 from verity.commitments.window import WINDOW_DOMAIN, window_binding, window_domain
@@ -1757,7 +1757,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
            **({"row_tables": tables, "row_table_steps": segs} if tables else {}),
            **({"registered_paths": paths} if paths else {}), **({"value_rows": values} if values else {}),
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
-           "domain_tag": DOMAIN_TAG, "registration": registrar.FORMAT_V2 if entries else registrar.FORMAT,
+           "domain_tag": DOMAIN_TAG, "registration": DM.REGISTRATION if entries else DM.REGISTRATION_V1,
            "registration_digest": registrar.digest(rec),
            "leaf_layer": rec["leaf_layer"],
            "leaf_layer_rule": LEAF_LAYER, "index_leaf": leaf, "index_rule": INDEX_RULE,

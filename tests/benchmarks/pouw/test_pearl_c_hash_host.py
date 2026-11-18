@@ -334,6 +334,34 @@ def test_a_pipeline_without_a_trees_salts_refuses_it(host):
     assert not launched
 
 
+@pytest.mark.parametrize("run", ["pearl_c_sm120/run.py", "pearl_c_sm90/run.py"])
+def test_a_salts_buffer_of_the_wrong_length_or_alignment_is_refused_before_any_launch(host, run):
+    """The leaf kernels read `count` salts of 192 bytes by 16-byte loads from an address, so the launch code refuses, by
+    the buffer's name and before any launch, an address that is not a multiple of 16 (a caller's own ``salts_<tree>`` and
+    one handed to `hm_level0`) and a stated length that is a salt too few, a salt too many or a byte short; the right
+    length at an aligned address launches."""
+    M = load(run)
+    count = 4
+    values, salts = host.put(bytes(64 * count)), host.put(salts_of("aligned", count + 1))
+    p = SimpleNamespace(dev=host, keys={"hm": host.put(audit.hm96_kernel_constants()), "dom_b": host.put(bytes(64))},
+                        b={"tree_b": host.alloc(64 * count), "salts_b": salts + 1})
+    launched, launch = [], host.launch
+    host.launch = lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw)
+    try:
+        with pytest.raises(ValueError, match="salts_b at 0x[0-9a-f]+: .*multiple of 16 bytes"):
+            M.Pipeline.hm_level0(p, "b", values, count, "dom_b")
+        with pytest.raises(ValueError, match="tree 'b''s salts at 0x[0-9a-f]+: .*multiple of 16 bytes"):
+            M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts + 8, salt_bytes=M.HM_SALT * count)
+        for given in (M.HM_SALT * (count - 1), M.HM_SALT * (count + 1), M.HM_SALT * count - 1):
+            with pytest.raises(ValueError, match=f"tree 'b''s salts: {given} bytes for {count} leaves, which take {M.HM_SALT * count}"):
+                M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts, salt_bytes=given)
+        assert not launched
+        M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts, salt_bytes=M.HM_SALT * count)
+        assert launched == ["hm_leaves", "s512_frame_leaves"]
+    finally:
+        host.launch = launch
+
+
 @pytest.mark.parametrize("sha", ["fast", pytest.param("ref", marks=pytest.mark.slow)])
 def test_sm120_h3_phases_are_the_verifiers(host, monkeypatch, sha):
     """pearl_c_sm120/run.py's `Pipeline` under -h3 at 64 x 128 x 1024 (m_real 48: a partial row block), its epoch, unit, commit

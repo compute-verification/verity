@@ -47,6 +47,7 @@ import numpy as np
 import pytest
 import settings
 
+from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.prover import registered_reads as RR
 from verity.protocols.proofs.spot.verifier.one_stage import caller as C, produced as PR, registered as REG, docket as R
 from verity.commitments import randomness as RND
@@ -679,7 +680,7 @@ def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
     rows = np.arange(4 * K // 2, dtype=np.uint16).reshape(4, K // 2)
     a, other, ids = (REG.Registered.commit("h1/program", v, r.tolist(), schema=REG.SCHEMA_V2).entry()
                      for v, r in ((f"h1/a/{K}@0", rows), (f"h1/a/{K}@1", rows), ("h1/ids@0", rows[:, :4])))
-    w = {"format": R.FORMAT_V2, "registered": [a, other, ids], "previous": None}
+    w = {"format": DM.REGISTRATION, "registered": [a, other, ids], "previous": None}
     values = [f"row-table/0/k{K}", "input-ids/0"]
     reg = {"params": {values[0]: 4 * K // 2, values[1]: 16}, "tables": [], "reads": [], "roots": [], "openings": []}
     doc = {"registered": {**reg, "values": values}}
@@ -713,7 +714,7 @@ def test_a_value_w_registers_registered_afresh_by_the_window_is_held_to_w_and_re
     assert RA.phase_values(rec, [name]) == {} and RA.window_pins(rec["window"], doc, registration=rec) == ({}, {})
     rows = np.arange(4 * K // 2, dtype=np.uint16).reshape(4, K // 2)
     theirs = REG.Registered.commit("w/program", w_name, rows.tolist(), schema=REG.SCHEMA_V2).entry()
-    w = {"format": R.FORMAT_V2, "registered": [theirs], "previous": None}
+    w = {"format": DM.REGISTRATION, "registered": [theirs], "previous": None}
     tied, pins = RA.tie_of(doc, w, prefix, RA.phase_values(rec, [name]))
     assert tied["outputs"] == {name: {"record": R.digest(w), "value": w_name}} and pins[name]["root"] == theirs["root"]
     mine, _doc, _sets = RA.verifier_window(got.dir, RND.parse_design(SAMPLING_DESIGN), None)
@@ -736,7 +737,7 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
             "pearl-y/0/0": np.arange(5 * 2 * K, dtype=np.uint32).reshape(5, 2 * K)}
     a, y = (REG.Registered.commit("pearl/program", v, r.tolist(), word_bits=32, schema=REG.SCHEMA_SEG).entry()
             for v, r in rows.items())
-    w = {"format": R.FORMAT_V2, "registered": [a, y], "previous": None}
+    w = {"format": DM.REGISTRATION, "registered": [a, y], "previous": None}
     seg = {"row_schema": REG.SCHEMA_SEG, "word_bits": 32}
     doc = {"registered": {"params": {v: 2 * r.size for v, r in rows.items()}, "tables": [], "reads": [], "roots": [],
                           "openings": [], "values": list(rows), "formats": {v: seg for v in rows}}}
@@ -803,7 +804,7 @@ def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
     opens sampled rows in the clear; tied to H1's W, whose window names none, it doesn't."""
     entry = {"value": "pearl-a/0/0", "root": "00" * 64, "leaves": 16, "words": K, "domain": "00" * 32, REG.WIDTH_KEY: 32}
     outputs = {"pearl-a/0/0": {"record": "", "value": "pearl-a/0/0"}}
-    pearl = {"format": R.FORMAT_V2, "window": {"kind": "served", "entry": "pouw:pearl-c-h100-v1-h3",
+    pearl = {"format": DM.REGISTRATION, "window": {"kind": "served", "entry": "pouw:pearl-c-h100-v1-h3",
                                                "scheme": "pearl-c-h100-v1-h3", "salt": "00" * 64},
              "registered": [entry], "previous": None}
     h1 = {**pearl, "window": {"kind": "served", "entry": "toy-window", "open_root": "00" * 64, "refused": []}}
@@ -837,7 +838,7 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
     rng = np.random.default_rng(2)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
     theirs = REG.Registered.commit("h1/program", f"h1/a/{K}@0", rows.tolist(), schema=REG.SCHEMA_V2)
-    w = {"format": R.FORMAT_V2, "registered": [theirs.entry()], "previous": None}
+    w = {"format": DM.REGISTRATION, "registered": [theirs.entry()], "previous": None}
     name = f"row-table/0/k{K}"
     value = _Reused(**{**{f.name: getattr(theirs, f.name) for f in fields(theirs)}, "value": name},
                     domain_id=theirs.domain.domain_id)
