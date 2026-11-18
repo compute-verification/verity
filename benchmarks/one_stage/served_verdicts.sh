@@ -101,18 +101,22 @@
 #     record ($OUT/record/block-record.json), `reject` where a piece about this node rejects or errs, and otherwise the
 #     verdict of the product's compiled Lean check (onsite's, or remote's) on the run's cases: the answer `composite.py`
 #     wrote to the composite's public output, which the record reads (--composite) where the composite ran before it,
-#     and takes only where it is of record, composed on an auditor device off the served node (`compose`; the deferral's
-#     follow-on composes on a prover node, so its composite is a development check), and names the window's
+#     and takes only where it is of record (under VERITY_HOLD_PLACEMENT=1 composed on an auditor device off the served
+#     node, `compose`; the deferral's follow-on composes on a prover node, so its composite is then a development
+#     check), and names the window's
 #     docket R that the record's SPOT audit sampled against: one of another window, or bound to
 #     no record, is refused, exit 1; any other server's answer is carried as elsewhere. Network attestation's chain files
-#     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/attester. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
+#     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/certifier. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
 #     verdicts on the run's cases (`served_composite.sh`'s docstring): a composite that didn't run (a tree without
-#     composite.py) or whose Lean didn't answer fails the run. On the served node no composite is of record (under
-#     COMPOSE_OFF_NODE=0 it is a development check), so this record is `pending`; under COMPOSE_OFF_NODE=1, the default,
+#     composite.py) or whose Lean didn't answer fails the run. On the served node its composite is of record, and the
+#     record is composed again after it, reading it (--composite), its composed_on saying where it was made (the served
+#     node, served_node true); under VERITY_HOLD_PLACEMENT=1 none is (under COMPOSE_OFF_NODE=0 it is a
+#     development check), so this record is `pending`; under COMPOSE_OFF_NODE=1, then the default,
 #     it says (its `deferred`) that the final record and the composite are composed off it, and in the composite's place
 #     the run's last step, after V3c, writes the compose hand-off they are composed from (below, at `handoff`).
 #     The run's exit is the record's verdict: 0 only where it is the compiled Lean check's accept, 2 where it is
-#     `pending`, no composite of record yet (always on the served node and in a deferral's follow-on), and otherwise
+#     `pending`, no composite of record yet (on the served node and in a deferral's follow-on under
+#     VERITY_HOLD_PLACEMENT=1), and otherwise
 #     nonzero: 1 where it is `reject`, a composite is refused or a step around it failed, the step's own code where one
 #     stopped the run before it.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote SPOT and PoUW
@@ -177,8 +181,9 @@
 #     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
 #     network attester's answer.json in DIR, which step 4's attester piece reads; `served_verdicts.sh v3c`, which writes no
 #     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
-# Composed off the served node: with COMPOSE_OFF_NODE=1 (the default; 0 composes both on the served node, the composite
-# then a development check that claims no record, `served_composite.sh`, which refuses one there under 1) the run's
+# Composed off the served node: with COMPOSE_OFF_NODE=1 (the default under VERITY_HOLD_PLACEMENT=1, else 0, which
+# composes both on the served node, the composite a development check that claims no record only under
+# VERITY_HOLD_PLACEMENT=1, `served_composite.sh`, which then refuses one there under 1) the run's
 # last step (`handoff`, after V3c in every run, so the composite reads V3c's audit's cases where it ran, the class window
 # of record, and step 3's audit's only in a run without V3c) writes the serve dir's private/compose: the
 # record's pieces (only the files the record reads of each, Pearl+'s verdict of record's among them), the inference-only
@@ -320,9 +325,10 @@
 # node), its exit then 2 (pending: the record is composed off it), or under COMPOSE_OFF_NODE=0 composes the composite
 # (`served_composite.sh`, SERVED_NODE the served node) and then the final record (`record --node` the served node
 # `--composite`, so its composed_on names the host it composed on, served_node false, and that it read a prover-side
-# copy). That node is a prover node, which the prover controls, so its composite is a development check
-# (COMPOSE_DEVELOPMENT), never the record's verdict: the record stays pending and the exit is 2 at best (step 5); only
-# the compose follow-on's composite, on an auditor device, is of record. Its $OUT is published as every run's is.
+# copy). That node is a prover node, which the prover controls, which its composite's COMPOSITE ON-NODE line says;
+# under VERITY_HOLD_PLACEMENT=1 its composite is a development check (COMPOSE_DEVELOPMENT), never the record's verdict:
+# the record stays pending and the exit is 2 at best (step 5); only the compose follow-on's composite, on an auditor
+# device, is of record. Its $OUT is published as every run's is.
 # POUW=pearlplus (default h1) makes Pearl+ PoUW's piece instead: H1_GATE defaults empty (set, the preflight refuses
 # it), and POUW_CMD to 'bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"' within POUW_TIMEOUT 120m, which
 # once the window is audited serves Pearl+ (pouw:pearl-c-h100-v1-h3, Llama 3.2 1B's BF16 checkpoint) on this card under
@@ -540,7 +546,8 @@ PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_
 T=${T:-${H1_T:-512}}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
 PEARLPLUS_INODES=${PEARLPLUS_INODES:-772388}  # two commits of the tied window at the class of record, three files a member
-H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
+H1_KEY_OF_RECORD=27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc  # vy-challenger-1's
+H1_KEY_SHA512=${H1_KEY_SHA512:-$H1_KEY_OF_RECORD}
 POUW=${POUW:-h1}
 H1_PEER=${H1_PEER:-vy-dc-h200}
 LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@${VY_CHALLENGER_1_HOST:-}"
@@ -563,7 +570,10 @@ elif [ -n "$PEARLPLUS_TIE" ]; then WINDOW_STEPS=${WINDOW_STEPS:-$(cut -d, -f3 <<
 else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
 MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
 PRODUCT=${PRODUCT:-onsite}
-COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE:-1} COMPOSE_NODE=${COMPOSE_NODE:-vy-auditor-2}
+# true under VERITY_HOLD_PLACEMENT=1, which restores the holds that rest only on where coins are flipped or a composite made
+hold_placement() { [ "${VERITY_HOLD_PLACEMENT:-}" = 1 ]; }
+# off the node only where the caller runs a composer there (COMPOSE_OFF_NODE=1), or under VERITY_HOLD_PLACEMENT=1
+COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE:-$(hold_placement && echo 1 || echo 0)} COMPOSE_NODE=${COMPOSE_NODE:-vy-auditor-2}
 COMPOSE_GATE=${COMPOSE_GATE:-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes research@${VY_AUDITOR_2_HOST:-}}
 export COMPOSE_OFF_NODE
 if [ -n "${ONSITE_PIECES:-}" ]; then
@@ -621,7 +631,7 @@ case $PRODUCT in
     done ;;
   *) say "PREFLIGHT: PRODUCT is onsite or remote, not $PRODUCT"; exit 3 ;;
 esac
-case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default) or 0, not $COMPOSE_OFF_NODE"; exit 3 ;; esac
+case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) or 0, not $COMPOSE_OFF_NODE"; exit 3 ;; esac
 [[ -z ${V3C_GPUS:-} || $V3C_GPUS =~ ^[0-9]+(,[0-9]+)*$ ]] \
   || { say "PREFLIGHT: V3C_GPUS is the cards V3c's audit proves on, their indices comma-separated (0,1), not $V3C_GPUS"; exit 3; }
 [ -z "${V3C_GPUS:-}" ] || command -v gpu-lease > /dev/null \
@@ -694,18 +704,20 @@ kept_windows() {  # the tied windows the serve root's other serve dirs keep, the
 # V3c's audit's coins (`v3c_audit`, records_audit's --challenger): V3C_CHALLENGER, by default SPOT's PP_CHALLENGER,
 # on the gate with its peer V3C_PEER (default PP_PEER: the node the audit runs on, as the gate's /etc/vy/peers names it,
 # in a follow-on not the served node) under PP_CHALLENGER_KEY and PP_GATE_KEY. A local or loopback session's coins are a
-# development session's, which only a development run (DEVELOPMENT=1) takes.
+# development session's, simulated, which the COINS line says; under VERITY_HOLD_PLACEMENT=1 only a development run
+# (DEVELOPMENT=1) takes them.
 V3C_CHALLENGER=${V3C_CHALLENGER:-${PP_CHALLENGER:-local}} V3C_PEER=${V3C_PEER:-${PP_PEER:-}} DEVELOPMENT=${DEVELOPMENT:-}
 v3c_live() { [[ $V3C_CHALLENGER == gate:* ]]; }
 # Step 3's: PP_CHALLENGER's, but local while V3c's audit is live, since both open on the window's run root, which the
 # gate opens once, ever, and V3c's is the SPOT audit of record
 SP_CHALLENGER=${PP_CHALLENGER:-local}
 [ -n "$V3C" ] && v3c_live && SP_CHALLENGER=local
-v3c_coins() {  # where V3c's audit's coins come from, as its COINS line says
+v3c_coins() {  # where V3c's audit's coins come from, as its published COINS line says: a session's form, no host
   if v3c_live; then
     echo "the challenger ${V3C_CHALLENGER%%@*} (peer $([ -n "${DEFER:-}" ] && echo "the follow-on's node's" || echo "$V3C_PEER")), the window's run root's one session, the sampled-proofs audit of record"
   else
-    echo "a development challenger session where it runs (V3C_CHALLENGER $V3C_CHALLENGER), in a development run (DEVELOPMENT=1)"
+    echo "a development challenger session where it runs (V3C_CHALLENGER ${V3C_CHALLENGER%%:*}), $([ "$DEVELOPMENT" = 1 ] \
+      && echo "in a development run (DEVELOPMENT=1)" || echo "simulated: not the auditor's challenger")"
   fi
 }
 coin_trees_held() {  # CHALLENGER SUMMARY STEP: an audit on the gate's coins (CHALLENGER) took its sessions' coin trees
@@ -1537,7 +1549,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   local rc vrc rec comp=0 TPY=$TREE/.venv/bin/python
   (cd "$D" && sha256sum --check --strict --quiet private/deferred/inputs.sha256) > "$DEFER_DIR/check.log" 2>&1
   rc=$?
-  say "FOLLOW-ON on $(hostname -s), $NODE_MEM_GB GB: $DEFERRED_WHAT, which the served node $SERVED_NODE deferred, from its serve" \
+  say "FOLLOW-ON on a prover node, $NODE_MEM_GB GB: $DEFERRED_WHAT, which the served node (SERVED_NODE) deferred, from its serve" \
       "dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's private/deferred/inputs.sha256):" \
       "$([ "$rc" = 0 ] && echo PASS || echo "FAIL (the serve dir's private/deferred/check.log)")"
   [ "$rc" = 0 ] || return 3
@@ -1564,10 +1576,12 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   fi
   local lean=()
   if [ -n "${COMPOSITE-1}" ]; then
-    local why="composed by a deferral's follow-on on $(hostname -s), a prover node, which the prover controls: a"
-    why+=" development check, no claim of record (only the compose follow-on's composite, off the served node on an"
-    why+=" auditor device, is the record's)"
-    TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_DEVELOPMENT=$why bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" \
+    local why="composed by a deferral's follow-on on a prover node, which the prover controls" how=COMPOSE_ON_NODE
+    if hold_placement; then
+      why+=": a development check, no claim of record (only the compose follow-on's composite, off the served node on an"
+      why+=" auditor device, is the record's)" how=COMPOSE_DEVELOPMENT
+    fi
+    TPY=$TPY SERVED_NODE=$SERVED_NODE env "$how=$why" bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" \
       || comp=1
     lean=(--composite "$OUT/composite")
   fi
@@ -2097,11 +2111,14 @@ if [ -n "${V3C_NEGATIVE_WORKERS:-}" ]; then  # V3c's audit's negatives side by s
     || { say "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, not $V3C_NEGATIVE_WORKERS"; exit 3; }
 fi
 case $DEVELOPMENT in '' | 1) ;; *) say "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not $DEVELOPMENT"; exit 3 ;; esac
+case ${VERITY_HOLD_PLACEMENT:-} in '' | 0 | 1) ;; *) say "PREFLIGHT: VERITY_HOLD_PLACEMENT is 1, which restores the refusals that rest on where coins are flipped or composites made, or 0 or unset, not $VERITY_HOLD_PLACEMENT"; exit 3 ;; esac
+[ "$H1_KEY_SHA512" = "$H1_KEY_OF_RECORD" ] || [ "$DEVELOPMENT" = 1 ] || ! hold_placement \
+  || { say "PREFLIGHT: H1_KEY_SHA512 replaces the challenger key of record (vy-challenger-1's), which under VERITY_HOLD_PLACEMENT=1 only a development run takes: unset H1_KEY_SHA512, DEVELOPMENT=1, or VERITY_HOLD_PLACEMENT unset"; exit 3; }
 if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live challenger's, or a development run's
   case $V3C_CHALLENGER in
     local | loopback:*)
-      [ "$DEVELOPMENT" = 1 ] \
-        || { say "PREFLIGHT: V3c's audit is the sampled-proofs audit of record, and V3C_CHALLENGER (default PP_CHALLENGER) is a development session, which only a development run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1"; exit 3; } ;;
+      [ "$DEVELOPMENT" = 1 ] || ! hold_placement \
+        || { say "PREFLIGHT: V3c's audit is the sampled-proofs audit of record, and V3C_CHALLENGER (default PP_CHALLENGER) is a development session, which under VERITY_HOLD_PLACEMENT=1 only a development run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or VERITY_HOLD_PLACEMENT unset"; exit 3; } ;;
     gate:?*@?*)
       [ -n "$V3C_PEER" ] \
         || { say "PREFLIGHT: V3c's audit's session on its gate listens on its peer's 127.0.0.1, and V3C_PEER (default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"; exit 3; }
@@ -2119,9 +2136,9 @@ if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live cha
     *) say "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or gate:USER@HOST, and it is none of them"; exit 3 ;;
   esac
 fi
-if [ -z "$V3C" ] && [ -z "$FOLLOW$COMPOSE" ] && [ "$DEVELOPMENT" != 1 ]; then  # step 3's audit is then the one of record
+if [ -z "$V3C" ] && [ -z "$FOLLOW$COMPOSE" ] && [ "$DEVELOPMENT" != 1 ] && hold_placement; then  # step 3's audit is then the one of record
   case $SP_CHALLENGER in local | loopback:*)
-    say "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER is a development session, which only a development run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1"; exit 3 ;;
+    say "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER is a development session, which under VERITY_HOLD_PLACEMENT=1 only a development run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or VERITY_HOLD_PLACEMENT unset"; exit 3 ;;
   esac
 fi
 if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under Pearl+, its commit and audit tied to Pearl+'s W
@@ -2209,9 +2226,9 @@ EOF
   [ -z "$why" ] || { say "PREFLIGHT: $why"; exit 3; }
 fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served
-  if [ -n "$FOLLOW" ]; then plan="the follow-on of $SERVED_NODE's deferral"
+  if [ -n "$FOLLOW" ]; then plan="the follow-on of the served node's (SERVED_NODE) deferral"
     [ "$COMPOSE_OFF_NODE" = 0 ] || plan+=", its compose hand-off for COMPOSE_NODE"
-  elif [ -n "$COMPOSE" ]; then plan="the compose follow-on of $SERVED_NODE's hand-off: $HANDED_WHAT"
+  elif [ -n "$COMPOSE" ]; then plan="the compose follow-on of the served node's (SERVED_NODE) hand-off: $HANDED_WHAT"
   else
     plan="the serve's lease ${LEASE_MIN:-60} min, capped at ${LEASE_MEM_GB:-128} GB"
     [ -z "$DEFER" ] || plan+="; $DEFER, so step 6 defers $DEFERRED_WHAT to a follow-on"
@@ -2311,9 +2328,9 @@ fi
 if [ "$SP_CHALLENGER" != local ]; then
   COINS="the challenger ${SP_CHALLENGER%%@*} (peer ${PP_PEER:-?})"
 elif [ "${PP_CHALLENGER:-local}" != local ]; then
-  COINS="a local development challenger session on $(hostname -s), the served node, for step 3, a development check, since V3c's audit's live session takes the window's run root, which the gate opens once, ever"
+  COINS="a local development challenger session on the served node, for step 3, a development check, since V3c's audit's live session takes the window's run root, which the gate opens once, ever"
 else
-  COINS="a local development challenger session on $(hostname -s), the served node, not an auditor's (PP_CHALLENGER local)"
+  COINS="a local development challenger session on the served node, not an auditor's (PP_CHALLENGER local)"
 fi
 COINS+="; $H1_COINS;"
 [ -z "$V3C" ] || COINS+=" V3c's audit: $(v3c_coins);"
@@ -2342,7 +2359,7 @@ if [ -n "${CERTIFIER_CMD:-}" ]; then  # network attestation's chain is the longe
   CERT_TASKSET=(); NCPU=$(nproc)
   command -v taskset > /dev/null && [ "$NCPU" -gt 2 ] && CERT_TASKSET=(taskset -c "${CERT_CPUS:-2-$((NCPU - 1))}")
   ${CERT_TASKSET[@]+"${CERT_TASKSET[@]}"} "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$KN" --out "$OUT/pieces" \
-    --product "$PRODUCT" --only attester > "$LOGS/pieces-certifier.txt" 2>&1 &
+    --product "$PRODUCT" --only certifier > "$LOGS/pieces-certifier.txt" 2>&1 &
   CERT=$!
 fi
 advice
@@ -2356,7 +2373,7 @@ IOV=$!
 export PP_PARTITION PP_SETS=${PP_SETS:-}
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
   PP_CHALLENGER="$SP_CHALLENGER" PP_MAIN="${PP_MAIN:-${MAIN_FILE:-}}" PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" \
-  OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
+  PP_KEEP="$LOGS/sampled-proofs/keep" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
 rc=$?
 (cd "$OUT/sampled-proofs" 2>/dev/null && mkdir -p "$LOGS/sampled-proofs" \
   && find . -maxdepth 1 \( -name machine.txt -o -name '*.log' -o -name '*.err' -o -name m0-build \) -exec mv -t "$LOGS/sampled-proofs" {} +)
@@ -2387,7 +2404,7 @@ if [ -n "$SPLIT" ]; then
 fi
 
 # 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
-pieces ${CERT:+--skip attester}
+pieces ${CERT:+--skip certifier}
 [ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$LOGS/pieces-certifier.txt"; }
 # under PEARLPLUS_TIE, once Pearl+'s piece wrote W: the served compare, whose line the record names
 SC=() sc=0
@@ -2424,6 +2441,13 @@ comp=0
 fixed_limits
 [ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 1 ] || [ -z "${COMPOSITE-1}" ] \
   || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+if [ -z "$DEFER" ] && [ "$COMPOSE_OFF_NODE" = 0 ] && [ -n "${COMPOSITE-1}" ] && ! hold_placement; then
+  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
+    --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" ${WT[@]+"${WT[@]}"} ${SC[@]+"${SC[@]}"} \
+    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --composite "$OUT/composite" \
+    2>&1 | publish_lines
+  rec=${PIPESTATUS[0]}
+fi
 if [ -n "$v3c_done" ]; then :
 elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
