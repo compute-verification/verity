@@ -2171,6 +2171,7 @@ class Loop:
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
                for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._carried(t) \
             + self._unauthenticated(t)
+        steps.lap("notices")
         new += self._moved(t)
         steps.lap("on_main")
         for rec in new:

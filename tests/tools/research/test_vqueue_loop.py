@@ -2189,7 +2189,7 @@ def _two_with_runs(env) -> tuple[Loop, Slim, dict, dict]:
     env.put(2, {"b.txt": "2\n"})
     slim = Slim()
     loop = env.loop(vqueue.decide, slim=slim, batch=1)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.slim_driver = lambda: DRIVE
     _, one, _ = loop.tick()
     two, _ = loop.tick()
     return loop, slim, one, two
@@ -2229,10 +2229,9 @@ def test_a_tick_s_drops_cancel_their_runs_at_once_and_are_logged_in_order_and_a_
     loop.world.cancel_runs, loop.world.push = cancel_runs, pushing
     if refused:
         loop.world.delete = delete
-    keys = env.listed(one["sha"], {"pytest:a": ["a.txt"]})
-    env.result(keys["pytest:a"], "pytest:a", "fail")
-    eject, drop1, drop2, *rest = loop.tick()
-    assert (eject["action"], cancels) == ("eject", [["run-2"]] if refused else [["run-2"], ["run-1"]])
+    env.labels.held.add(1)                                          # held by a reviewer: #1's candidate and #2's above it go
+    drop1, drop2, *rest = loop.tick()
+    assert cancels == ([["run-2"]] if refused else [["run-2"], ["run-1"]])
     assert [(d["action"], d["sha"], d.get("error", "")[-7:]) for d in (drop1, drop2)] == [
         ("drop", one["sha"], "refused" if refused else ""), ("drop", two["sha"], "")]
     assert "beside_cancelled" not in drop1 if refused else drop1["beside_cancelled"] == ["run-1"]
