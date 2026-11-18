@@ -55,13 +55,13 @@ from typing import Any, Callable
 from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.network.verifier import registered as RH
 from verity.protocols.resource_accounting.network.verifier import span
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as WP
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check, credit, period_check
 from verity.protocols.proofs.spot.verifier.challenger import challenger as CH
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
@@ -695,7 +695,7 @@ def pearl_commitment(commitment: bytes) -> tuple[bytes, bytes] | Reject | None:
         return None
     if not isinstance(w["record"], dict) or not (w["rounds"] is None or _nats(w["rounds"])) or not _nats(w["dropped"]):
         return None
-    return record, bytes.fromhex(REG.digest(w["record"]))
+    return record, bytes.fromhex(DD.digest(w["record"]))
 
 
 def run_record(commitment: bytes, evidence: bytes) -> list[bytes] | Reject | None:

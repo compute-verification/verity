@@ -169,7 +169,6 @@ def guard_argv(*args: str | Path) -> list[str]:
     return [sys.executable, "-m", LEAK_GUARD, *(str(a.absolute()) if isinstance(a, Path) else a for a in args)]
 sys.path.insert(0, str(TREE / "verity/protocols/compose/verifier/live_challenger"))
 import auditor as A  # noqa: E402
-from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER  # noqa: E402
 
 #: this directory's settings registry, by its path: a bare ``settings`` is whichever one sys.path has first
 _spec = importlib.util.spec_from_file_location("network_traces_settings", HERE / "settings.py")
@@ -201,7 +200,7 @@ SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "Se
 #: the flags the endpoint serves the session with: the network attester's id form, in its release order, each window
 #: sealed without the attention interiors (about 1 GB a request at 256 ids)
 ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 " \
-           f"--protocols-config '{{{{\"{NETWORK_ATTESTER.name}\": {{{{\"order\": \"release-order\"}}}}}}}}' " \
+           "--protocols-config '{{\"network-attester\": {{\"order\": \"release-order\"}}}}' " \
            "--scheme rows-sha512 --seal --retain-exclude hidden_m1"
 #: serve-openai's default --max-model-len, which the endpoint's flags name only past it
 CONTEXT = 512

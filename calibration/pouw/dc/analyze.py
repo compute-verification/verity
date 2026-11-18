@@ -21,7 +21,10 @@ import re
 import sys
 from pathlib import Path
 
-__all__ = ["analyze", "balanced", "HONEST", "K_OF", "lane_of", "LD_REGS", "main", "MARGIN", "METRIC", "record",
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import archs  # the one table of what dc times on each architecture
+
+__all__ = ["analyze", "balanced", "K_OF", "lane_of", "LD_REGS", "main", "MARGIN", "METRIC", "record",
            "SYNC_SLOTS", "tmem_model", "upper"]
 
 MARGIN = 0.02
@@ -198,10 +201,120 @@ def duo_words(rows: dict) -> float | None:
     return r["rates"].get("0:LOP3.LUT", 0) * 32 if r else None
 
 
+def _wgmma(rows: dict, verdicts: dict, forms: dict, joints: dict, out: dict, arch: archs.Arch) -> None:
+    """M3: ρ_T over every wgmma and mma.sync form against the honest wgmma, and the joint points beside it."""
+    honest = next((forms[n] for n in arch.honest_forms if n in forms), None)
+    t_alone = rows.get("wg_s8_n256_a1", {}).get("rates", {}).get("0:IGMMA.64x256x32.S8.S8*")
+    for name, row in rows.items():
+        if lane_of(name):
+            joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
+        elif name.startswith("wgli_") and t_alone:
+            # the honest LI-CP-W loop (static-trip): its wgmma rate over the wgmma alone is the profile's tensor
+            # fraction, and dc90-licpw's measured cycles a MMA = the plain GEMM's cycles over it
+            joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone,
+                            "issue": issue_rates(row, verdicts.get(name))}
+        elif name.startswith("wgbulk_") and t_alone:
+            # a TMA bulk op beside the saturated wgmma: the wgmma's rate over its alone rate (does the bulk steal the
+            # wgmma's issue), and the bulk's own words a SM-clock (UBLKCP a copy, UBLKRED a reduce; 1024 words an op)
+            op = "UBLKCP" if name.endswith("_cp") else "UBLKRED"
+            br = rate_of(row, op)
+            joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone,
+                            "bulk_words_per_clk": br * 1024 if br else None,
+                            "issue": issue_rates(row, verdicts.get(name))}
+        elif name in ("bulkcp", "bulkred"):
+            op = "UBLKCP" if name == "bulkcp" else "UBLKRED"
+            br = rate_of(row, op)
+            joints[name] = {"bulk_words_per_clk": br * 1024 if br else None}
+        elif name.startswith("wgU_sync") and t_alone:
+            joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone, "exact": True,
+                            "issue": issue_rates(row, verdicts.get(name)),
+                            "sync_slots": (rate_of(row, "IMMA") or 0.0) * SYNC_SLOTS}
+    best = max((f for f in forms.values() if "slots" in f and not f.get("zero_data")), key=lambda f: f["slots"],
+               default=None)
+    out["M3"] = {"rho_T": best and best["slots"], "rho_T_form": best and best["form"],
+                 "honest_slots": honest and honest["slots"],
+                 "pass": bool(best and honest and best["slots"] <= honest["slots"] * (1 + MARGIN))}
+
+
+def _tcgen05(rows: dict, verdicts: dict, forms: dict, joints: dict, out: dict, arch: archs.Arch) -> None:
+    """M4: ρ_T5, ρ_ld, ρ_sync and the TMEM model over the joint points beside tcgen05.mma."""
+    t5 = forms.get("tc_i8_m128_n256")
+    t_alone = rows.get("tc_i8_m128_n256", {}).get("rates", {}).get("0:UTCIMMA*")
+    for name, row in rows.items():
+        if lane_of(name) or name.startswith(("ldmma_", "syncmma_")):
+            joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
+        elif (li := re.fullmatch(r"tcliU_[xp](\d+)f?(?:_t\d+)?", name)) and t_alone and rate_of(row, "LDTM"):
+            # words loaded and folded (one LI op each) a SM a clock; L = 64 commits one slot in two of UTCIMMA's
+            cols = int(li.group(1))
+            words, asked = rate_of(row, "LDTM") * 32 * cols, rate_of(row, "UTC") * 128 * 256 / 2
+            joints[name] = {"tensor_fraction": rate_of(row, "UTC") / t_alone, "exact": True,
+                            "issue": issue_rates(row, verdicts.get(name)), "li_words": words,
+                            "l64_asked": asked, "keeps_up_l64": words / asked}
+        elif name.startswith(("ldU_", "mmaU_", "syncU_", "tcliU_", "tcbulk_")) and t_alone:
+            # OP_UNTIL points: both rates exact (neither includes time at the barrier)
+            j = {"tensor_fraction": rate_of(row, "UTC") / t_alone, "exact": True,
+                 "issue": issue_rates(row, verdicts.get(name))}
+            if rate_of(row, "LDTM"):
+                j["ld_words"] = rate_of(row, "LDTM") * 32 * 32
+            if rate_of(row, "IMMA"):
+                j["sync_slots"] = rate_of(row, "IMMA") * SYNC_SLOTS
+            for op in ("UBLKCP", "UBLKRED"):   # a TMA bulk op moves 1024 words; its rate beside the saturated MMA
+                if rate_of(row, op):
+                    j["bulk_words_per_clk"] = rate_of(row, op) * 1024
+            joints[name] = j
+        elif name in ("bulkcp", "bulkred"):
+            op = "UBLKCP" if name == "bulkcp" else "UBLKRED"
+            br = rate_of(row, op)
+            joints[name] = {"bulk_words_per_clk": br * 1024 if br else None}
+        elif name.startswith("tcfU_") and "tc_mxf4_m128_n256" in rows:
+            # kind::mxf4 beside lanes: its fraction of mxf4 alone
+            joints[name] = {"tensor_fraction": rate_of(row, "UTC") / rate_of(rows["tc_mxf4_m128_n256"], "UTC"),
+                            "exact": True, "issue": issue_rates(row, verdicts.get(name))}
+    rho5 = t5["slots"] if t5 else 256.0
+    for name in [n for n in joints if n.startswith("ldmma_")]:
+        ld = loop_rate(rows[name], 1, ("LDTM",))
+        m = re.fullmatch(r"ldmma_w(\d+)(?:_r(\d+))?", name)
+        if ld and m:
+            j = joints[name]
+            j["ld_words"] = ld[1] * 32 * 32
+            # the MMA warp's iteration is 4 x 128x256 slots; the loaders' is R loads of 32 x 32 words a warp
+            j["ld_asked"] = int(m.group(1)) * int(m.group(2) or 8) * 1024 * rho5 / (4 * 128 * 256)
+            j["demand_limited"] = j["ld_words"] >= j["ld_asked"] * (1 - MARGIN)
+            j["honest_fraction"] = min(j.get("tensor_fraction", 0), j["ld_words"] / rho5)
+    for name in [n for n in joints if n.startswith("syncmma_")]:
+        sy = loop_rate(rows[name], 1, ("IMMA",))
+        if sy:
+            joints[name]["sync_slots"] = sy[1] * SYNC_SLOTS
+    rho_t5 = t5 and t5["slots"]
+    ld_alone = max((f["ld_words"] for f in forms.values() if "ld_words" in f), default=None)
+    # beside: the most words loaded while the tensor stays saturated; a demand-limited point is a lower bound
+    ld_beside = max((j["ld_words"] for j in joints.values()
+                     if "ld_words" in j and j.get("tensor_fraction", 0) >= 1 - MARGIN), default=None)
+    honest = max((j["honest_fraction"] for j in joints.values() if "honest_fraction" in j), default=None)
+    rho_sync = max((f["slots"] for n, f in forms.items() if n.startswith("imma_")), default=None)
+    model = {}
+    if rho_t5 and ld_alone:
+        model = tmem_model(joints, ld_alone, rho_t5, rho_sync)
+        ld_beside, honest = model["ld_beside_saturated"], model["honest_fraction_L32"]
+    rho_ld = min(x for x in (ld_alone, ld_beside) if x is not None) if (ld_alone or ld_beside) else None
+    out["M4"] = {"rho_T5": rho_t5, "rho_ld_alone": ld_alone, "rho_ld_beside_mma": ld_beside, "rho_ld": rho_ld,
+                 "rho_sync": rho_sync, "honest_tensor_fraction": honest,
+                 "pass": bool(rho_t5 and rho_ld and rho_sync and rho_ld >= rho_t5 * (1 - MARGIN)
+                              and rho_sync <= rho_t5 * (1 + MARGIN)),
+                 **{k: v for k, v in model.items() if not k.endswith("_points")}}
+    out["tmem_model"] = model
+
+
+#: how a run's rows are read for the tensor instruction its architecture's entry (`archs`) names: (a form's slots,
+#: the joint points and the M3 or M4 line)
+TIMED = {"wgmma": (slots_sm90, _wgmma), "tcgen05": (slots_sm100, _tcgen05)}
+
+
 def analyze(family: str, d: Path) -> dict:
+    arch = archs.of_family(family)
     rows, verdicts = load(d)
     forms, joints = {}, {}
-    slots_of = slots_sm90 if family == "sm90" else slots_sm100
+    slots_of = TIMED[arch.tensor][0]
     for name, row in rows.items():
         s = slots_of(name, row)
         if s:
@@ -210,104 +323,7 @@ def analyze(family: str, d: Path) -> dict:
     scalar = {n: {"rates": r["rates"], "issue": issue_rates(r, verdicts.get(n))}
               for n, r in rows.items() if n.startswith(("s_", "p_"))}
     out: dict = {"family": family, "dir": str(d), "forms": forms, "scalar": scalar, "duo_words": duo_words(rows)}
-    if family == "sm90":
-        honest = forms.get("wg_s8_n256_a1") or forms.get("wg_s8_n256_a0")
-        t_alone = rows.get("wg_s8_n256_a1", {}).get("rates", {}).get("0:IGMMA.64x256x32.S8.S8*")
-        for name, row in rows.items():
-            if lane_of(name):
-                joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
-            elif name.startswith("wgli_") and t_alone:
-                # the honest LI-CP-W loop (static-trip): its wgmma rate over the wgmma alone is the profile's tensor
-                # fraction, and dc90-licpw's measured cycles a MMA = the plain GEMM's cycles over it
-                joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone,
-                                "issue": issue_rates(row, verdicts.get(name))}
-            elif name.startswith("wgbulk_") and t_alone:
-                # a TMA bulk op beside the saturated wgmma: the wgmma's rate over its alone rate (does the bulk steal the
-                # wgmma's issue), and the bulk's own words a SM-clock (UBLKCP a copy, UBLKRED a reduce; 1024 words an op)
-                op = "UBLKCP" if name.endswith("_cp") else "UBLKRED"
-                br = rate_of(row, op)
-                joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone,
-                                "bulk_words_per_clk": br * 1024 if br else None,
-                                "issue": issue_rates(row, verdicts.get(name))}
-            elif name in ("bulkcp", "bulkred"):
-                op = "UBLKCP" if name == "bulkcp" else "UBLKRED"
-                br = rate_of(row, op)
-                joints[name] = {"bulk_words_per_clk": br * 1024 if br else None}
-            elif name.startswith("wgU_sync") and t_alone:
-                joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone, "exact": True,
-                                "issue": issue_rates(row, verdicts.get(name)),
-                                "sync_slots": (rate_of(row, "IMMA") or 0.0) * SYNC_SLOTS}
-        best = max((f for f in forms.values() if "slots" in f and not f.get("zero_data")), key=lambda f: f["slots"],
-                   default=None)
-        out["M3"] = {"rho_T": best and best["slots"], "rho_T_form": best and best["form"],
-                     "honest_slots": honest and honest["slots"],
-                     "pass": bool(best and honest and best["slots"] <= honest["slots"] * (1 + MARGIN))}
-    else:
-        t5 = forms.get("tc_i8_m128_n256")
-        t_alone = rows.get("tc_i8_m128_n256", {}).get("rates", {}).get("0:UTCIMMA*")
-        for name, row in rows.items():
-            if lane_of(name) or name.startswith(("ldmma_", "syncmma_")):
-                joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
-            elif (li := re.fullmatch(r"tcliU_[xp](\d+)f?(?:_t\d+)?", name)) and t_alone and rate_of(row, "LDTM"):
-                # words loaded and folded (one LI op each) a SM a clock; L = 64 commits one slot in two of UTCIMMA's
-                cols = int(li.group(1))
-                words, asked = rate_of(row, "LDTM") * 32 * cols, rate_of(row, "UTC") * 128 * 256 / 2
-                joints[name] = {"tensor_fraction": rate_of(row, "UTC") / t_alone, "exact": True,
-                                "issue": issue_rates(row, verdicts.get(name)), "li_words": words,
-                                "l64_asked": asked, "keeps_up_l64": words / asked}
-            elif name.startswith(("ldU_", "mmaU_", "syncU_", "tcliU_", "tcbulk_")) and t_alone:
-                # OP_UNTIL points: both rates exact (neither includes time at the barrier)
-                j = {"tensor_fraction": rate_of(row, "UTC") / t_alone, "exact": True,
-                     "issue": issue_rates(row, verdicts.get(name))}
-                if rate_of(row, "LDTM"):
-                    j["ld_words"] = rate_of(row, "LDTM") * 32 * 32
-                if rate_of(row, "IMMA"):
-                    j["sync_slots"] = rate_of(row, "IMMA") * SYNC_SLOTS
-                for op in ("UBLKCP", "UBLKRED"):   # a TMA bulk op moves 1024 words; its rate beside the saturated MMA
-                    if rate_of(row, op):
-                        j["bulk_words_per_clk"] = rate_of(row, op) * 1024
-                joints[name] = j
-            elif name in ("bulkcp", "bulkred"):
-                op = "UBLKCP" if name == "bulkcp" else "UBLKRED"
-                br = rate_of(row, op)
-                joints[name] = {"bulk_words_per_clk": br * 1024 if br else None}
-            elif name.startswith("tcfU_") and "tc_mxf4_m128_n256" in rows:
-                # kind::mxf4 beside lanes: its fraction of mxf4 alone
-                joints[name] = {"tensor_fraction": rate_of(row, "UTC") / rate_of(rows["tc_mxf4_m128_n256"], "UTC"),
-                                "exact": True, "issue": issue_rates(row, verdicts.get(name))}
-        rho5 = t5["slots"] if t5 else 256.0
-        for name in [n for n in joints if n.startswith("ldmma_")]:
-            ld = loop_rate(rows[name], 1, ("LDTM",))
-            m = re.fullmatch(r"ldmma_w(\d+)(?:_r(\d+))?", name)
-            if ld and m:
-                j = joints[name]
-                j["ld_words"] = ld[1] * 32 * 32
-                # the MMA warp's iteration is 4 x 128x256 slots; the loaders' is R loads of 32 x 32 words a warp
-                j["ld_asked"] = int(m.group(1)) * int(m.group(2) or 8) * 1024 * rho5 / (4 * 128 * 256)
-                j["demand_limited"] = j["ld_words"] >= j["ld_asked"] * (1 - MARGIN)
-                j["honest_fraction"] = min(j.get("tensor_fraction", 0), j["ld_words"] / rho5)
-        for name in [n for n in joints if n.startswith("syncmma_")]:
-            sy = loop_rate(rows[name], 1, ("IMMA",))
-            if sy:
-                joints[name]["sync_slots"] = sy[1] * SYNC_SLOTS
-        rho_t5 = t5 and t5["slots"]
-        ld_alone = max((f["ld_words"] for f in forms.values() if "ld_words" in f), default=None)
-        # beside: the most words loaded while the tensor stays saturated; a demand-limited point is a lower bound
-        ld_beside = max((j["ld_words"] for j in joints.values()
-                         if "ld_words" in j and j.get("tensor_fraction", 0) >= 1 - MARGIN), default=None)
-        honest = max((j["honest_fraction"] for j in joints.values() if "honest_fraction" in j), default=None)
-        rho_sync = max((f["slots"] for n, f in forms.items() if n.startswith("imma_")), default=None)
-        model = {}
-        if rho_t5 and ld_alone:
-            model = tmem_model(joints, ld_alone, rho_t5, rho_sync)
-            ld_beside, honest = model["ld_beside_saturated"], model["honest_fraction_L32"]
-        rho_ld = min(x for x in (ld_alone, ld_beside) if x is not None) if (ld_alone or ld_beside) else None
-        out["M4"] = {"rho_T5": rho_t5, "rho_ld_alone": ld_alone, "rho_ld_beside_mma": ld_beside, "rho_ld": rho_ld,
-                     "rho_sync": rho_sync, "honest_tensor_fraction": honest,
-                     "pass": bool(rho_t5 and rho_ld and rho_sync and rho_ld >= rho_t5 * (1 - MARGIN)
-                                  and rho_sync <= rho_t5 * (1 + MARGIN)),
-                     **{k: v for k, v in model.items() if not k.endswith("_points")}}
-        out["tmem_model"] = model
+    TIMED[arch.tensor][1](rows, verdicts, forms, joints, out, arch)
     out["joints"] = joints
     rho = (out.get("M3") or {}).get("rho_T") or (out.get("M4") or {}).get("rho_T5")
     if rho and out["duo_words"]:
@@ -327,8 +343,6 @@ def agree(a: Path, b: Path, margin: float = MARGIN) -> dict:
 
 
 METRIC = "compute-research/fastest-tensor-form-over-honest"
-#: the honest form a family's tensor forms are held to: the first of these the run timed
-HONEST = {"sm90": ("wg_s8_n256_a1", "wg_s8_n256_a0"), "sm100": ("tc_i8_m128_n256",)}
 
 
 def record(where: Path, out: dict, failed: str | None) -> int:
@@ -347,7 +361,7 @@ def record(where: Path, out: dict, failed: str | None) -> int:
     except SystemExit as refused:
         w.measurement(METRIC, None, "times honest", mark="measured", why=str(refused), extra={"family": out["family"]})
         return 0
-    forms, names = out["forms"], HONEST[out["family"]]
+    forms, names = out["forms"], archs.of_family(out["family"]).honest_forms
     honest = next((forms[n] for n in names if n in forms), None)
     best = max((f for f in forms.values() if f.get("slots") and not f.get("zero_data")), key=lambda f: f["slots"],
                default=None)
@@ -368,7 +382,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(out, indent=1))
         return 0 if out["agree"] else 1
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("family", choices=("sm90", "sm100"))
+    p.add_argument("family", choices=archs.FAMILIES)
     p.add_argument("dir", type=Path)
     p.add_argument("--json", type=Path)
     p.add_argument("--record", type=Path, metavar="OUT", help="also write the run's result through the kit (`record`)")
