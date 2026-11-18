@@ -93,7 +93,7 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
       simp only [ha, Option.bind] at h
       cases ho : originLeaf reg reg.digest appends a j with
       | none =>
-        simp only [ho, Option.map] at h ⊢
+        simp only [ho, Option.map] at h
         split at h
         · simp at h
         split at h
@@ -110,12 +110,13 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
             split at h
             · simp at h
             rename_i h5
-            exact ⟨⟨payload, Or.inr ⟨Nat.le_of_not_lt hb, a, rfl, hdec, by simpa using h4⟩⟩, by simpa using h5⟩
+            exact ⟨⟨payload, Or.inr ⟨Nat.le_of_not_lt hb, a, rfl, hdec, by rw [ho]; simpa using h4⟩⟩,
+              by simpa using h5⟩
           · simp at h
         · simp at h
       | some v =>
         obtain ⟨q, oroot, odom⟩ := v
-        simp only [ho, Option.map] at h ⊢
+        simp only [ho, Option.map] at h
         split at h
         · simp at h
         rename_i hq
@@ -133,8 +134,8 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
             split at h
             · simp at h
             rename_i h5
-            exact ⟨⟨payload, Or.inr ⟨Nat.le_of_not_lt hb, a, rfl, hdec, by simpa using hq, by simpa using h4⟩⟩,
-              by simpa using h5⟩
+            exact ⟨⟨payload, Or.inr ⟨Nat.le_of_not_lt hb, a, rfl, hdec,
+              by rw [ho]; exact ⟨by simpa using hq, by simpa using h4⟩⟩⟩, by simpa using h5⟩
           · simp at h
         · simp at h
 
