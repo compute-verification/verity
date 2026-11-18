@@ -59,6 +59,7 @@ import a5 as A5  # noqa: E402
 import records_audit as RA  # noqa: E402
 import zk_mutants as ZM  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.periods import flock_inputs as FI, rows as CS  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402
@@ -106,7 +107,7 @@ class Staged:
     def __init__(self, wdir: Path, out: Path) -> None:
         self.wdir, self.out = wdir, out
         self.rec = json.loads((wdir / "registration.json").read_text())
-        self.mine, _doc, self.sets = RA.verifier_window(wdir, D.parse_design(_design(self.rec["law"])), None)
+        self.mine, _doc, self.sets = RA.verifier_window(wdir, RND.parse_design(_design(self.rec["law"])), None)
         self.files = (json.loads((wdir / "window.json").read_text()), self.rec)
         self.want = CS.expected_ports(self.mine)
         self.roots = {r["port"]: r for r in self.rec["roots"]}

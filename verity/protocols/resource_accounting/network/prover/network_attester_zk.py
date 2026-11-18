@@ -70,6 +70,7 @@ from verity.protocols.resource_accounting.network.verifier.link_frame import DAT
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate
 from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams, cell
 from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G
+from verity.commitments import randomness as RND
 
 #: the unit's ports: its input row and its output row
 PORTS = ("row", "o0")
@@ -351,7 +352,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
         want[f"{name}/{p_}"] = w
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_design(f"stratified:{n}")
+    law = RND.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the network certifier's "
                                       f"egress execution phase {at.window} (network_attester_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},

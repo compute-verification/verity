@@ -249,6 +249,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as RG
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.protocols.resource_accounting.network.verifier.scan_answer import _found, window_answer
+from verity.commitments import randomness as RND
 
 _TRAFFIC = Path(__file__).resolve().parents[5] / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "scan_traffic.py"
 _spec = importlib.util.spec_from_file_location("scan_traffic", _TRAFFIC)
@@ -1770,7 +1771,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     n = sum(m["n"] for m in members)
     k = n if k is None else k
     rule = f"stratified:{k}" if coins is None else rule_of(k, n)
-    law, table = (M.D.parse_design(rule), None) if coins is None else S.params_sampling_design(rule, pg.program, pg.query, None)
+    law, table = (RND.parse_design(rule), None) if coins is None else S.params_sampling_design(rule, pg.program, pg.query, None)
     win = {"kind": "stand-in", "of": f"round {name}: execution phase {at.number} of {at.source}, its ingress and egress "
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}

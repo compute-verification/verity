@@ -51,6 +51,7 @@ sys.path[:0] = [str(HERE), str(REPO)]
 
 from benchmarks.network_traces import zk_drivers  # noqa: E402
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 from verity_vllm.compiler import served_rows as SR  # noqa: E402
 from verity_vllm.compiler import served_tie as ST  # noqa: E402
@@ -263,7 +264,7 @@ def audit(M, N2, a, sg, m: dict, units: list, w: int, run_root: bytes, out: Path
         want[f"{name}/{p_}"] = wd
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": wd["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_design(f"stratified:{n}")
+    law = RND.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the served rows' tie on a sealed served window ({a.serve_run.name} w{w})",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "served_tie: each unit's srv row is its served-rows registration's row w; its positions are the step "

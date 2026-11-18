@@ -52,6 +52,7 @@ from verity_vllm.definitions.registry import sampling as SA  # noqa: E402
 from verity_vllm.definitions.registry import topp_keep_builder as K  # noqa: E402
 from verity_vllm.definitions.registry import topp_stages as T  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
@@ -112,7 +113,7 @@ def commit(out: Path, v: int, splits: tuple[int, ...], rows: int, stages: str, s
     ms = TS.members(s, tmpls, dict.fromkeys(tmpls, MEMBER_UNITS))
     ms = select_alone(ms) if select_only else ms
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in held]
-    w = a5.rated(CS.Binding(*CS.population_program(defs, several=True), a5.D.parse_design("stratified:1"), f"{ROOT}/rank0",
+    w = a5.rated(CS.Binding(*CS.population_program(defs, several=True), RND.parse_design("stratified:1"), f"{ROOT}/rank0",
                             tuple(ms)), SM.RULE)
     of = {"fixture": FIXTURE, "row": spec, "rows": rows, "splits": list(splits), "stages": stages}
     if select_only:

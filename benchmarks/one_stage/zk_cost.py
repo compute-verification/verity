@@ -78,6 +78,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS  # noqa: E402
 
 #: a templated statement's id (`verity_flock.circuit.TMPL_STATEMENT`): its prover and server read the placed unit
@@ -310,7 +311,7 @@ def stage(a) -> int:
             jsonl(out / "records" / "stage.jsonl", rec)
             statement = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             for k, arms in draws(c, a.draws):
-                sampling_design = D.derive(program, query, D.parse_design(f"stratified:{k}"))
+                sampling_design = D.derive(program, query, RND.parse_design(f"stratified:{k}"))
                 p = a0.challenger_sample(a.lean, ["--program", str(sd / "program.json"), "--partition",
                                                 str(sd / "partition.json"), "--stratified", str(k)], sampling_design, c, statement,
                                        sd / f"draw-k{k}.log")
