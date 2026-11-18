@@ -88,7 +88,5 @@ def tree_launches(R: Any, p: Any, tree: int, dig: int, seg: int, m: int, rows: i
     for r in range(0, m, rows):
         count = min(rows, m - r)
         p.row_digests(words(r, count), dig + 64 * r, seg, count)
-    raise NotImplementedError("y's hm96 leaves under salts given as data: `Pipeline.hm_level0` taking a device buffer of "
-                              "192-byte salts, one a leaf in leaf order (hash_h3.cuh's hm_leaves, p2 the salts)")
     R.Pipeline.hm_level0(p, "b", dig, m, "dom_b", salts=salts)
     p.levels("b", m, "dom_b")

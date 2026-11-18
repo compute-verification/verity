@@ -1,5 +1,6 @@
 """The exact-int8 linear and attention exported under the pinned `b1-eager-v3` profile (`vllm_bindings.int8`): `verity_int8::row_quant`
-binds to `Int8RowQuant_v1{K}` and `verity_int8::scaled_mm` to `ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}` per token row, and an int8 attention layer's call
+binds to `Int8RowQuant_v1{K}` and `verity_int8::scaled_mm` to `ScaledMmS8_v3{K,N,DOT=BlackwellS8ImmaDot32_v1}` per token row (its
+weight and scales read as their u16 words), and an int8 attention layer's call
 to `Int8KvQuant_v1{S,D}` per KV head then `Int8LutAttentionRow_v1{D,pos+1,SCALE}` per (row, head), the Definitions the Match fold
 resolves the same launches to (`observe/fold/patterns/int8.py`); the Programs' words are the torch ops' bit for bit; forms the ops
 do not compute are refused by name."""
@@ -66,12 +67,11 @@ def test_int8_linear_binds_int8_linear_per_row_and_evaluates_to_the_op(sw_shape)
     x = (torch.randn(M, K) * 2).to(BF)
     rep = _derive(m, x)
     assert rep.unsupported is None, f"refused: {rep.unsupported}"
-    assert _emitted(rep) == [f"Int8RowQuant_v1{{K={K}}} x{M}", f"ScaledMmS8_v1{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}} x{M}"], _emitted(rep)
+    assert _emitted(rep) == [f"Int8RowQuant_v1{{K={K}}} x{M}", f"ScaledMmS8_v3{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}} x{M}"], _emitted(rep)
     roles = rep.provenance["weight_roles"]
     assert roles["weight"]["role"] == "int8_w" and roles["weight_scale"]["role"] == "int8_ws"
     params = dict(m.named_parameters())
-    enc = {torch.int8: (torch.int8, np.uint8), torch.float32: (torch.int32, np.uint32)}
-    wwords = sum((_bits(params[w["name"]], *enc[params[w["name"]].dtype]) for w in rep.provenance["weights"]), [])
+    wwords = sum((_bits(params[w["name"]], torch.int16, np.uint16) for w in rep.provenance["weights"]), [])
     t = materialize(rep.program, [_bits(x, torch.int16, np.uint16), wwords])
     got = [int(np.uint32(t[g])) for g in rep.program.circuit.root_outputs()]
     xq, s_a, y = m(x)

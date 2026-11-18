@@ -34,7 +34,7 @@ from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, Ident
                    SpecializedDefinition, _static_key, bind)
 from . import ports as P
 from .program import input_id, input_prim, is_input
-from .refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, refs_from_json
+from .refs import Affine, Coll, Concat, Explicit, Grid, PartLog, Refs, Strided, lane_bounds, refs_from_json
 from .types import type_from_json
 
 SCHEMA_V0 = "verity-ir/descriptor/v0"
@@ -134,6 +134,8 @@ def _part_key(p: Refs) -> tuple:
         return ("a", p.space, p.idx, p.base, p.count)
     if isinstance(p, Strided):
         return ("s", p.space, p.idx, p.base, p.inner, p.outer_stride, p.inner_stride, p.count)
+    if isinstance(p, Grid):
+        return ("g", p.run, p.lanes)
     assert isinstance(p, Explicit)
     return ("e", p.items)
 
@@ -790,6 +792,9 @@ def _checked_refs(r: Refs, leaves: Callable[[str, int], int | None] | None) -> R
     elif isinstance(r, Affine):
         ok = _int(r.base) and _nat(r.count)
         spans = [(r.space, r.idx, r.base, r.base + r.count - 1)] if ok and r.count else []
+    elif isinstance(r, Grid):
+        ok = True
+        spans = [(ln[0], ln[1], *lane_bounds(r.run, ln)) for ln in r.lanes]
     else:
         ok = all(map(_int, (r.base, r.outer_stride, r.inner_stride))) and _nat(r.count) and _int(r.inner) and r.inner >= 1
         spans = []
@@ -801,6 +806,8 @@ def _checked_refs(r: Refs, leaves: Callable[[str, int], int | None] | None) -> R
     for s, i, lo, hi in spans:
         n = leaves(s, i) if s in ("p", "n") and _nat(i) else None
         ok = ok and n is not None and 0 <= lo and hi < n
+    if not ok and isinstance(r, Grid):
+        raise ValueError(f"grid-overrun: references {r.to_json()} reach outside a lane's parameter or node")
     if not ok:
         raise ValueError(f"references {r.to_json()} name no leaf of a parameter or a node")
     return r
