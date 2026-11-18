@@ -42,7 +42,7 @@ from verity.protocols.resource_accounting.network.prover.workload import (
     TRAILER,
     id_event,
 )
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 
 __all__ = ["BLANK", "BODY_BYTES", "COMPLETIONS", "GONE", "READ_BYTES", "Broken", "Front", "RequestOf", "READERS", "StreamIds", "process", "run", "serve"]
 

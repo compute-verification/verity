@@ -190,6 +190,7 @@ trusted = true
 paths = [
     "verity/channel.py",
     "verity/party.py",
+    "verity/release.py",
     "verity/runtime/__init__.py",
     "verity/runtime/framing.py",
     "verity/runtime/handshake.py",
@@ -204,6 +205,10 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/challenger_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/workload.py",
+    "verity/protocols/resource_accounting/network/prover/admission.py",
+    "verity/protocols/resource_accounting/network/prover/id_relay.py",
+    "verity/protocols/resource_accounting/network/prover/ids_protocol.py",
+    "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/workload.py",
 ]
 
@@ -527,6 +532,7 @@ loaded_by = [
 [[place]]
 paths = [
     "verity/protocols/registration/verifier/registration.py",
+    "verity/protocols/registration/verifier/site_log.py",
 ]
 trusted = true
 loads = [
@@ -545,7 +551,6 @@ paths = [
 loads = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/circuits/kernels",
     "verity/circuits/ops",
     "verity/circuits/silicon",
     "verity/commitments",
@@ -858,6 +863,7 @@ loads = [
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/resource_accounting/network/verifier",
+    "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
 
@@ -906,7 +912,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/response_tie.py",
     "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
-    "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
     "verity/protocols/resource_accounting/network/scheme.py",
 ]
@@ -956,6 +961,7 @@ loaded_by = [
     "verity/protocols/proofs/spot/prover/workload.py",
     "verity/protocols/proofs/spot/scheme.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/workload.py",
+    "verity/protocols/resource_accounting/compute/pouw/scheme.py",
     "verity/protocols/resource_accounting/memory/poub/prover/p2_party_prover.py",
     "verity/protocols/resource_accounting/memory/poub/prover/session_prover.py",
     "verity/protocols/resource_accounting/memory/poub/scheme.py",
@@ -965,5 +971,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/scheme.py",
     "verity/protocols/resource_accounting/network/prover/block_attester.py",
     "verity/protocols/resource_accounting/network/prover/workload.py",
+    "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/workload_classification/training_detection/inference_only/scheme.py",
 ]

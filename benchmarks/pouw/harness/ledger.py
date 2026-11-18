@@ -178,15 +178,15 @@ def typed_gamma(result: dict) -> dict[str, str]:
 
 #: a Pearl-C scheme's device names the record: sm120 (G = 4) is the panel's v1, sm120-unpromoted its v2; a name neither
 #: declared nor in `SchemeId`'s grammar (``pearl-c-sm120-v2-hot-h3``) isn't checked
-def _family_device(scheme: str) -> tuple[str, str] | None:
+def _family_device(scheme: str) -> tuple[str, str] | str:
     """A scheme's family and device: its declaration's (`kernel_schemes`), else, for a development name, `SchemeId`'s;
-    None for a name neither holds."""
+    for a name neither holds, why it isn't checked."""
     if (k := kernel_schemes.BY_NAME.get(scheme)) is not None:
         return k.family, k.parameters.get("device", "")
     try:
         s = serving.SchemeId.parse(scheme)
-    except ValueError:
-        return None
+    except ValueError as e:
+        return f"undeclared, and {e}"
     return s.family, s.device
 
 
@@ -194,10 +194,12 @@ def _scheme_conflict(scheme: str | None, statement: str | None) -> str | None:
     """The scheme's device record against the panel version's statement."""
     if not scheme or not statement or not statement.startswith("pearl-c-sm120/"):
         return None
+    line, version = statement.split("/", 1)
+    promoted = line.removeprefix("pearl-c-")
     got = _family_device(scheme)
-    if got is None or got[0] != "pearl-c" or got[1] not in ("sm120", "sm120-unpromoted"):
+    if isinstance(got, str) or got[0] != "pearl-c" or not got[1].startswith(promoted):
         return None
-    if (got[1] == "sm120-unpromoted") != statement.split("/", 1)[1].startswith("v2"):
+    if (got[1] != promoted) != version.startswith("v2"):
         return f"scheme {scheme} isn't {statement}'s device record"
     return None
 

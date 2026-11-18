@@ -18,9 +18,9 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import MerkleTree
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.randomness import derive, frame
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import MerkleTree
 
 from . import reference as R
 from . import wire as Wi

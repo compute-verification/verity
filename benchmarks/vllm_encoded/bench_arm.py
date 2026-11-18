@@ -8,7 +8,13 @@ under ids of their own (README.md): ``topup=False`` (or ``VERITY_VLLM_BENCH_TOPU
 under a credited id its gate fails, so the run has no line. ``topup_sms=F`` (or ``VERITY_VLLM_BENCH_TOPUP_SMS``) places
 the top-up on F SMs of its own and the engine on the rest (`kv_filler/green.py`, green contexts), split before vLLM
 starts; 0 interleaves it with the engine on every SM. A partition whose confinement check fails, or a run off the
-step's stream, fails the gate.
+step's stream, fails the gate. Set F for the token control too: the splits change the attention's rounding, so a
+partitioned audit is gated against a partitioned plain run. F rounds up to the driver's smallest partition, 8 SMs on
+the RTX PRO 6000. Under any setting the gate reads no timing: spans and filler bytes are reported, never judged.
+
+An ablation names these objects in a spec's ``arm_modules`` and their ids in ``arms``, never wrapping ``PLAIN`` or
+``AUDIT`` or setting their variables around an install; an arm they don't cover is one ``BandwidthArm(...)`` line in a
+module of its own.
 
 The GPU libraries are built outside the lease's Python process and named by:
 
@@ -182,7 +188,7 @@ class _Installed:
 
         self.green_lib = SimpleNamespace(so=ctypes.CDLL(str(Path(self.libs["topup_lib"]).resolve())))
         self.green, self.step_stream, self.new_stream = green.partition(self.green_lib, torch, fill_sms)
-        import stack as S   # benchmarks.vllm_encoded.serve put HERE first; the install imports this module
+        import stack as S  # benchmarks.vllm_encoded.serve put HERE first; the install imports this module
 
         if Path(S.__file__).resolve().parent != HERE:
             raise RuntimeError(f"the stack module is {S.__file__}, not {HERE / 'stack.py'}")
@@ -190,9 +196,9 @@ class _Installed:
 
     def ready(self, target: Any) -> None:
         import torch
+        from verity_vllm.engine import handle
 
         from benchmarks.kv_filler.bench import FILL_WARPS, RUN_SEED, Topup, mode_of
-        from verity_vllm.engine import handle
 
         if self.install.stack is None:
             raise RuntimeError("bandwidth benchmark arm did not install during model loading")

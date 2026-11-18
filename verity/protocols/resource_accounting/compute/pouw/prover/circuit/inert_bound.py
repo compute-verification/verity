@@ -136,7 +136,7 @@ from . import hashes as H
 from . import leaves as L
 from . import pc8
 from . import tile_units as U
-from . import words as W
+from verity.circuits.ops import words as W
 
 F32, BIT, I32, OK = pc8.F32, Value(1), Value(32), pc8.OK
 SLICE = C.SLICE

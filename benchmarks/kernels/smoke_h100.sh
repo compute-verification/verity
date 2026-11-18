@@ -325,7 +325,6 @@ c_card() {
   IFS=, read -r index uuid name _ <<< "$row"
   uuid=${uuid# } name=${name# }
   printf '%s\n' "$row" > "$O/gpu.txt"
-  case $name in "NVIDIA H100"*|"NVIDIA H200"*) ;; *) REASON="the card is $name: this smoke is an H100's"; return 1 ;; esac
   arch=$(python3 "$ROOT/benchmarks/kernels/machine.py" arch "$name") || { REASON="no card record names $name"; return 1; }
   [ "$arch" = sm_90a ] || { REASON="$name's record states $arch, and the builds are sm_90a's"; return 1; }
   export CUDA_VISIBLE_DEVICES=$index PEARLC_EXPECT_UUID=$uuid
