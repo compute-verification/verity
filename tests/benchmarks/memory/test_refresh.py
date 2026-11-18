@@ -102,6 +102,14 @@ def test_constant_life_comes_to_the_formula():
     assert math.isclose(f, 1 - (period - (window - 1) / 2) / life)
 
 
+def test_credit_starts_where_the_rota_says(monkeypatch):
+    base = one_block(life_steps=100, lifetime=2)
+    monkeypatch.setattr(R, "ROTA", lambda born_window, lifetime: born_window + lifetime + 1)
+    later = one_block(life_steps=100, lifetime=2)
+    assert math.isclose(base["written_share_byte_seconds"], (101 - 60) / 100)
+    assert math.isclose(later["written_share_byte_seconds"], (101 - 90) / 100)
+
+
 def test_a_share_affords_a_period():
     head = MM.Header(bytes(64), 1000)
     setting = R.Refresh(1, 30.0, 1.0)

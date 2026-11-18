@@ -13,7 +13,7 @@ window    w(t) = ⌊t / window_s⌋; the refresh period is P = L·window_s, L th
 today     every resident block is credited (registered blocks, written blocks from their write)
 refresh   rule 1: every credited block is re-keyed once a period (uniform rota: each resident block once in each period,
           a full encoding of 4,096 bytes); rule 2: a written block of birth window b is credited from (b + L)·window_s,
-          a registered block while resident
+          the window `ROTA` gives, a registered block while resident
 (a)       written share = Σ max(0, end − max(born, (b + L)·window_s)) / Σ (end − born), by byte-seconds; by bytes, the
           share of written blocks with end > (b + L)·window_s
 (b)       work a period = mean resident bytes, all blocks (W_all), or those that reach credit (W_credit); the share of the
@@ -47,6 +47,18 @@ P512_K2 = codec.Codec(codec.P512, 2, False)
 RATES = {"deployed@2.044e10": (codec.DEFAULT, 2.044e10), "p512@5.13e10": (P512_K2, 5.13e10),
          "p512@6.531e10": (P512_K2, 6.531e10)}
 SHARES = (0.05, 0.10, 0.20)
+
+
+def uniform_rota(born_window: int, lifetime: int) -> int:
+    """The first window a written chunk of birth window `born_window` is credited in, under the uniform rota: its first
+    rota re-key lands within the L windows after its birth, and probation ends at born + L, so credit starts there."""
+    return born_window + lifetime
+
+
+#: The one place the replay reads the rota from: the first credited window of a written chunk, as a function of its
+#: birth window and L.  The prover's rota (`poub/prover/rota.py`, on MERGE2's branch, not `main`) starts credit at the same
+#: window; when the verifier's side has a rota, this names it.
+ROTA = uniform_rota
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,7 +157,7 @@ def credit(lives: Lives, refresh: Refresh) -> dict:
     total = credited = credit_bs = 0.0
     n = n_credited = 0
     for g in lives.written:
-        start = max(g.start, (math.floor(g.born / refresh.window_s) + refresh.lifetime) * refresh.window_s)
+        start = max(g.start, ROTA(math.floor(g.born / refresh.window_s), refresh.lifetime) * refresh.window_s)
         total += g.end - g.start
         if g.end > start:
             credited += g.end - start
@@ -224,8 +236,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="also take the work a period as this store, re-keyed whole (a card's); repeatable")
     ap.add_argument("--json", type=Path, help="write every figure here as JSON")
     args = ap.parse_args(argv)
-    print(FORMULA + "; rota: uniform")
-    doc = {"formula": FORMULA, "rota": "uniform", "maps": {}}
+    rota = f"{ROTA.__module__}.{ROTA.__qualname__}"
+    print(f"{FORMULA}; rota: {rota}")
+    doc = {"formula": FORMULA, "rota": rota, "maps": {}}
     for path in args.maps:
         with path.open() as f:
             head, steps = memory_map.parse(f)
