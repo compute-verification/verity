@@ -13,7 +13,9 @@ C's gates; and the reference: the listing's sha256, C on bits' gate count, and t
 (its input bits, its gates as `[lo, hi)` ranges, its output bits).
 
 Cases: the periods' chain (eight `Gemm_v2{K=16,N=16}` units, one wire between consecutive ones, each weight a registered
-read), each window member of two units (`[2i, 2i + 2)`) and each unit alone.
+read), each window member of two units (`[2i, 2i + 2)`) and each unit alone; then `test_restrict`'s toys (`TOYS`), on
+one-bit templates: two readers of one writer, a registered value, a wire inside a two-unit block, and a root batch taken
+whole, in part and one member.
 """
 from __future__ import annotations
 
@@ -41,6 +43,17 @@ def chain_cases() -> list[tuple[str, bytes, dict, list[tuple[int, int]]]]:
     c, part = r["C"], dict(r["partition"])
     return ([(f"chain/member{i}", c, part, [(2 * i, 2 * i + 2)]) for i in range(4)]
             + [(f"chain/unit{u}", c, part, [(u, u + 1)]) for u in range(8)])
+
+
+def toy_cases() -> list[tuple[str, bytes, dict, list[tuple[int, int]]]]:
+    spec = importlib.util.spec_from_file_location("restrict_toys", Path(__file__).parent / "test_restrict.py")
+    T = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(T)
+    out = []
+    for name, (_f, blocks) in T.TOYS.items():
+        _p, c, _b = T.toy(name)
+        out += [(f"toy/{name}/{'+'.join(f'{lo}-{hi}' for lo, hi in u)}", c, T.TOY_PARTITION, u) for u in blocks]
+    return out
 
 
 def _put(d: Path, sub: str, ext: str, data: bytes) -> str:
@@ -78,7 +91,7 @@ def vectors(cases, out: Path) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, required=True)
-    vectors(chain_cases(), ap.parse_args().out)
+    vectors(chain_cases() + toy_cases(), ap.parse_args().out)
 
 
 if __name__ == "__main__":
