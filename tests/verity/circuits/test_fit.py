@@ -115,10 +115,11 @@ def _bit(t, bits, x):
     return (t[g] >> bits.out[g].index(x)) & 1
 
 
-def test_a_piece_restricted_computes_what_C_computes_there():
+@pytest.mark.parametrize("rows", [4, 7])
+def test_a_block_restricted_computes_what_C_computes_there(rows):
     program, c = toy()
-    blocks = FT.build(program, rows=4)
-    obj = PO.build(program, FT.query(rows=4), blocks)
+    blocks = FT.build(program, rows=rows)
+    obj = PO.build(program, FT.query(rows=rows), blocks)
     bits = R.Bits(R.program(c))
     C, rng, t = program.circuit, random.Random(7), {}
     for g in C.gates():

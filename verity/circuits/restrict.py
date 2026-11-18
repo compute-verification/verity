@@ -335,6 +335,14 @@ def _partition(D: DecodedProgram, partition: Mapping[str, Any]) -> Any:
         raise Refused("E_QUERY", str(e)) from e
 
 
+def _ranges(tp: Any, units: Any) -> Any:
+    """``units`` with a `Q_fit` entry of root units, ``[lo, hi]``, as its one range."""
+    if isinstance(tp, FT.FitPartition) and not isinstance(units, Mapping) and len(units) == 2 and \
+            all(isinstance(x, int) for x in units):
+        return [tuple(units)]
+    return units
+
+
 def _where(D: DecodedProgram, tp: Any, units: Any) -> _Where:
     """``units`` (ascending ``[lo, hi)`` ranges of the partition's units, or under `Q_fit` a piece, `fit`'s entry) in C."""
     if isinstance(units, Mapping):
@@ -369,7 +377,8 @@ def _where(D: DecodedProgram, tp: Any, units: Any) -> _Where:
 def unit_gates(D: DecodedProgram, partition: Mapping[str, Any], units: Any) -> list[tuple[int, int]]:
     """The gates of C (§6) of ``units``, ascending ``[lo, hi)`` ranges of the partition's units (or, under `Q_fit`, a piece),
     as gate ranges."""
-    return _where(D, _partition(D, partition), units).part.intervals()
+    tp = _partition(D, partition)
+    return _where(D, tp, _ranges(tp, units)).part.intervals()
 
 
 def ports(part: Part) -> tuple[list[int], list[int]]:
@@ -588,6 +597,7 @@ def restrict(c: bytes, partition: Mapping[str, Any], units: Any, bits: Bits | No
     piece (`fit`) (module docstring: the index, the block and the object)."""
     bits = Bits(program(c)) if bits is None else bits
     tp = _partition(bits.D, partition)
+    units = _ranges(tp, units)
     where = _where(bits.D, tp, units)
     ins, outs = ports(where.part)
     prog = _build(bits, where, ins, outs, _rows(bits.D, tp, partition, units))
