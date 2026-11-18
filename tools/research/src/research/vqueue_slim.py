@@ -83,7 +83,7 @@ from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, 
                       NOT_STARTED, OWN_TRAIN, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
                       _suite_log, elsewhere, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps,
                       step_named, step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root, unread_suites)
-from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git, allowed, judge_report, tier_report
+from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, NotStarted, QueueError, _git, allowed, judge_report, tier_report
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
 from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, MACHINE_KINDS, PASS, PENDING, STATES, Failed, Verdict, meets
@@ -428,16 +428,19 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
 
 def start_quick(driver: Landing, sha: str, base: str, avoid: Iterable[str] = ()) -> dict | None:
     """Launch candidate ``sha``'s quick tier since ``base`` (`Landing.launch_quick`: `queue.QUICK_TIER` on its own merge, as a
-    `research run`) on one of the queue's machines, the one its sha picks, so a start again takes the same one, but of those
-    ``avoid`` doesn't name (the machine its tier before ended in infra on, ``erred_on``) where that leaves any.  The record to
+    `research run`) on one of the queue's machines, of those ``avoid`` doesn't name (the machine its tier before ended in infra
+    on, ``erred_on``) where that leaves any: the one with a free check slot now (`Landing.place_quick`), so it doesn't wait in
+    one machine's line while another's slots stand free, or the one its sha picks when no machine's slots could be read.  The record to
     keep: ``ids`` (none while its detached launch runs, ``launch`` then), ``tip``, ``base``, ``at``, ``on``, ``steps``
     (`QUICK_STEP`) and ``gate`` (`QUICK`), which `judge` reads by `_quick`.  None, logged, when it registered no run or
     ``driver`` launches nothing (a dry run, or its queue's shadow)."""
     if not driver.on:
         raise ValueError("a candidate's quick tier needs the queue's machines: build the Landing with drive.toml's `on`")
     ms = elsewhere(driver.on, avoid).split(",")
-    on = ms[int(sha[:8], 16) % len(ms)]
-    what = f"the quick tier of candidate {sha[:12]} since {base[:12]} on {on}"
+    placed, why = driver.place_quick(",".join(ms))
+    on = placed if placed in ms else ms[int(sha[:8], 16) % len(ms)]
+    what = f"the quick tier of candidate {sha[:12]} since {base[:12]} on {on}" + (
+        f" ({why})" if placed in ms else f" (by its sha: {why})" if why else "")
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
@@ -475,7 +478,7 @@ def _quick(driver: Landing, rec: dict) -> Verdict:
     status, on = {"state": st, "rc": rc}, rec.get("on") or driver.on
     res, why = tier_report(got[0], ids[0], on, status)
     if why is not None:
-        return _keep(_erred(rec), _down(rec, f"{why}"))
+        return _keep(_erred(rec), _down(rec, f"{why}", launch=isinstance(why, NotStarted)))
     covers = allowed(driver.repo, base)
     if (why := judge_report(res, ids[0], on, tip, status, covers)) is None:
         return _keep(rec, Verdict(PASS), [QUICK_STEP])

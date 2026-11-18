@@ -297,6 +297,16 @@ _WRAPPER_NAMES = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMP
 _CONSTRUCTION = "the construction"
 
 
+def _platform_device_name() -> str | None:
+    """The device the Build answers for: the declared one or the host's, None on no CUDA platform or with no GPU (the bf16 GEMM
+    rules then read the scan's device's pin)."""
+    from vllm.platforms import current_platform
+    try:
+        return current_platform.get_device_name() if current_platform.is_cuda() else None
+    except (RuntimeError, AssertionError):
+        return None
+
+
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0,
                dead_free: bool = False, stop: dict | None = None, batched: bool = False, table_reads: bool = False) -> None:
@@ -320,6 +330,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             declared_derived_accounting,
             observe_attention_impls,
             observe_batched_form,
+            observe_device_name,
             observe_export_facts,
             observe_launch_context,
             observe_target_profile,
@@ -334,6 +345,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         res["target"]["host"] = host_facts()
         t0 = time.time()
         with apply_target_profile(target):  # ONE application of the declared target for config, instantiation, export and derive
+            observe_device_name(_platform_device_name())
             from verity_vllm.engine.build import register_int8_parts
             register_int8_parts(target)
             # `TargetProfile.engine_args()` = the attention knobs the target applies (`attention_backend`, `attention_config.flash_attn_version`)

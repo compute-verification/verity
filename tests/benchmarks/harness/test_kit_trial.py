@@ -11,8 +11,8 @@ from kit_standins import RUN, _result
 from kit_standins import no_gpu as no_gpu
 from verity_bench import kit, overhead_node
 
-#: the sha256 of the result `_write` wrote before trials existed
-BEFORE = "60e008a588a9f360961bc359fb748956673ae23c299026a74a846ccbf41f2ff5"
+#: the sha256 of the result `_write` wrote before trials existed, its measurement holding its metric's version
+BEFORE = "0e72ba6f4628fcae17f495c6860e18569eac0bd6a6afb921b7ada62a0edb56e4"
 
 
 def _write(out):

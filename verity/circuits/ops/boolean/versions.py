@@ -10,8 +10,8 @@ looked up in `REGISTRY` once every module of `verity.circuits.ops.boolean` and o
 catalog by name: a catalog registers its loader as its package loads (an adapter's catalog package does), and a
 lookup made while none is registered scans only the core's modules and what is already imported, which `NoBooleanVersion`
 says.  A Boolean Definition marked ``opt_in`` is left out of the table:
-it serves only the callers that bind it (`HopperBF16WgmmaDot16_v3`, the training routes' k16 step), never `boolean_version`,
-so adding it moves no served Program.  A function-valued static is bound to its own Boolean version; a
+it serves only the callers that bind it (`HopperBF16WgmmaDot16_v3`, the training routes' k16 step), and `boolean_version` only
+with ``opt_in=True`` (a reader asking what a block is proved as), so adding it moves no served Program.  A function-valued static is bound to its own Boolean version; a
 static the word has no counterpart for, to the Boolean version of the word Definition the Boolean Definition's ``word_statics``
 names for it.  A word primitive made on demand (`prims.const`'s `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`,
 `BitAtx{W}`) has its Boolean version made on demand too (`_families`, by id: `made_on_demand`), since no module can register one per constant or
@@ -127,9 +127,14 @@ def _catalogs() -> list[str]:
     return errors
 
 
-def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
+def _load(opt_in: bool = False) -> tuple[dict[str, list], dict[str, list], list[str]]:
     """(exact, by_name, errors): Boolean Definitions whose word is one Definition, keyed by its id; those whose word is a function
-    of their bindings, keyed by their name; the modules that failed to import."""
+    of their bindings, keyed by their name; the modules that failed to import.  With ``opt_in``, the ``opt_in`` ones beside them."""
+    if _TABLE and opt_in:
+        exact, by_name, errors = _TABLE[0]
+        more_exact, more_by_name = _TABLE[1]
+        return ({k: exact.get(k, []) + more_exact.get(k, []) for k in {*exact, *more_exact}},
+                {k: by_name.get(k, []) + more_by_name.get(k, []) for k in {*by_name, *more_by_name}}, errors)
     if _TABLE:
         return _TABLE[0]
     errors = _catalogs()
@@ -141,16 +146,19 @@ def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
             errors.append(f"verity.circuits.ops.boolean.{m.name}: {type(e).__name__}: {e}")
     exact: dict[str, list] = {}
     by_name: dict[str, list] = {}
+    more_exact: dict[str, list] = {}
+    more_by_name: dict[str, list] = {}
     for d in list(REGISTRY.defs.values()):
         w = getattr(d, "word", None)
-        if not isinstance(d, CompositeDefinition) or w is None or getattr(d, "opt_in", False):
+        if not isinstance(d, CompositeDefinition) or w is None:
             continue
+        ex, bn = (more_exact, more_by_name) if getattr(d, "opt_in", False) else (exact, by_name)
         if isinstance(w, FunctionDefinition):
-            exact.setdefault(descriptor_id(bind(w) if isinstance(w, CompositeDefinition) else w), []).append(d)
+            ex.setdefault(descriptor_id(bind(w) if isinstance(w, CompositeDefinition) else w), []).append(d)
         elif callable(w):
-            by_name.setdefault(d.name, []).append(d)
-    _TABLE.append((exact, by_name, errors))
-    return _TABLE[0]
+            bn.setdefault(d.name, []).append(d)
+    _TABLE.extend([(exact, by_name, errors), (more_exact, more_by_name)])
+    return _load(opt_in)
 
 
 def load() -> list[str]:
@@ -162,21 +170,21 @@ def load() -> list[str]:
 _VERSIONS: dict[tuple[str | None, str], Any] = {}
 
 
-def boolean_version(fn: FunctionDefinition, family: str | None = None) -> FunctionDefinition:
+def boolean_version(fn: FunctionDefinition, family: str | None = None, opt_in: bool = False) -> FunctionDefinition:
     """The Boolean Definition whose word is ``fn``: the one registered Boolean Definition linked to it, its newest version when
     several versions of one name are, with ``bit_type`` of ``fn``'s signature as its own.  With ``family`` (`Name_vN`), that
     version and not the newest: the one a Program names, for a reader of that Program, taken before any other name's is weighed,
     since at most one registered Definition has that name and version.  Its function-valued statics are still the newest Boolean
-    versions of ``fn``'s.  `NoBooleanVersion` otherwise."""
+    versions of ``fn``'s.  With ``opt_in``, an ``opt_in`` Boolean Definition is weighed too.  `NoBooleanVersion` otherwise."""
     fid = descriptor_id(bind(fn) if isinstance(fn, CompositeDefinition) else fn)
-    key = (family, fid)
+    key = (family, fid, opt_in)
     hit = _VERSIONS.get(key)
     if hit is not None:
         if isinstance(hit, NoBooleanVersion):
             raise hit
         return hit
     try:
-        hit = _find(fn, fid, family)
+        hit = _find(fn, fid, family, opt_in)
     except NoBooleanVersion as e:
         _VERSIONS[key] = e
         raise
@@ -225,12 +233,12 @@ def made_on_demand(fid: str) -> FunctionDefinition | None:
     return None
 
 
-def _find(fn: FunctionDefinition, fid: str, family: str | None = None) -> FunctionDefinition:
+def _find(fn: FunctionDefinition, fid: str, family: str | None = None, opt_in: bool = False) -> FunctionDefinition:
     if isinstance(fn, PrimitiveDefinition) and BL.is_boolean(fn):
         if family is not None and _base(fid) != family:
             raise NoBooleanVersion({fid: f"a Boolean primitive is its own Boolean version, and it is no {family}"})
         return fn
-    exact, by_name, errors = _load()
+    exact, by_name, errors = _load(opt_in)
     cands = [bind(d) for d in exact.get(fid, ())]
     if not cands and (d := made_on_demand(fid)) is not None:
         cands.append(d)

@@ -244,6 +244,12 @@ WINDOW_VERDICT = {"undecided": "pending"}
 #: ``record``'s exit by the window's verdict, as composite.py's by its Lean's: 0 only for the compiled Lean check's
 #: accept; 1 for a reject (or a refused composite, or a block record its own check refuses), 2 for pending
 RECORD_EXIT = {"accept": 0, "reject": 1, "pending": 2}
+
+
+def hold_placement(env: Mapping[str, str] | None = None) -> bool:
+    """``VERITY_HOLD_PLACEMENT=1`` in ``env`` (default the process's): the holds that rest only on where coins are
+    flipped or a composite made are restored; unset, empty or anything else, they are lifted."""
+    return (os.environ if env is None else env).get("VERITY_HOLD_PLACEMENT") == "1"
 #: SPOT's owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
