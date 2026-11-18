@@ -273,8 +273,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
 def cuts(protocol: str, scheme: str) -> bool:
     """Whether an execution phase's circuit can be cut at ``scheme``'s sites, reading the tables each executed call
     commits in place of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES
-    return protocol == "pouw" and scheme in PEARL_C_SCHEMES
+    return protocol == "pouw" and scheme in _pouw().PEARL_C_SCHEMES
 
 
 def keeps_weight_copy(protocol: str, scheme: str) -> bool:
@@ -282,9 +281,15 @@ def keeps_weight_copy(protocol: str, scheme: str) -> bool:
     Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
     each weight's first call and reused (`NcpCircuitRun.sides`), and the lead's, which its backend loads once per install
     (`lead.LeadBackend.load`).  ncp-v1 forms its operands per call from the weight it is handed."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (LEAD_SCHEME, NCP_CIRCUIT_SCHEMES,
-                                                                                    PEARL_C_SCHEMES)
-    return protocol == "pouw" and scheme in {*PEARL_C_SCHEMES, *NCP_CIRCUIT_SCHEMES, LEAD_SCHEME}
+    if protocol != "pouw":
+        return False
+    pouw = _pouw()
+    return scheme in {*pouw.PEARL_C_SCHEMES, *pouw.NCP_CIRCUIT_SCHEMES, pouw.LEAD_SCHEME}
+
+
+def _pouw() -> ModuleType:
+    """PoUW's adapter, imported only when a caller asks about a PoUW scheme, so asking about another loads none of it."""
+    return importlib.import_module(f"{__name__}.pouw")
 
 
 def _uncut(ctx: Context) -> list[str]:
