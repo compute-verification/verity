@@ -6,7 +6,7 @@ commitment is the docket's digest, the verdict the audit record's, and on accept
 `audit.profile` as `Core.Integrity` (δ an exact ratio) and the public outputs are the five `Spot.OneStage.check` makes
 public (the sampled proof blocks and ``proved``, the proved ones; ``bound``, the bound on incorrect ones at δ;
 ``per_template``, each template's under a stratified or work sampling design; ``complete``, the audit record's own:
-whether every verdict ran, which `audit.answer_complete` reads) and two the Lean's answer doesn't have,
+whether every verdict ran) and two the Lean's answer doesn't have,
 ``coins`` and ``case_v2``. A refusal before the
 sample (the records, a check on the docket, the sample) rejects with its codes; an audit record that doesn't accept,
 with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names

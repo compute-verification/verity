@@ -566,8 +566,8 @@ One-stage's answer of an accepted record (`audit.answer`, as Lean's `OneStage.ch
 "complete", "per_template", "proved"}` and the sample's units under the integrity profile's key for them. `complete`
 is the record's own: whether every verdict ran. An accept waits on the verdicts of record and on those that ran, so an
 accept can say `complete` is false, and then a verdict that is not of record did not run. A reader that wants a
-complete audit reads `audit.answer_complete`, never the verdict alone: it is true only of an accept whose `complete`
-is true, so an answer without the field (one written before it, a reject, an undecided) is not complete. A two-stage
+complete audit reads `complete`, never the verdict alone; the stop audit's verdict record (`verdict_record`) words
+an accept whose record is not complete `not complete`. A two-stage
 outcome says it only under `second_stage.complete`, which raises until its Lean is written (`verifier.not_written`,
 goal `proofs/spot-two-stage-sound`); its twin `complete_twin` holds when the two-stage form is allowed, the replay block
 is the registered request Definition, and each audit record accepted and is complete. A two-stage outcome's accept is

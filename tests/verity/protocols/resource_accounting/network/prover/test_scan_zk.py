@@ -842,7 +842,6 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     assert "rests_on_period_check" not in a["public"]
     whole = SA.window_answer(reg, {**record, "complete": True}, sz.Fraction(1, 100), "unused")
     assert whole["public"] == {**a["public"], "complete": True} and a["public"]["complete"] is False
-    assert sz.AU.answer_complete(whole) and not sz.AU.answer_complete(a)
     tied = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused", ["prog0", "prog1"])
     assert CC.answer_of(tied)["verdict"] == "accept"
     assert tied["public"] == {**a["public"], "rests_on_period_check": ["prog0", "prog1"]}
