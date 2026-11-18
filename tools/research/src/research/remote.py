@@ -534,8 +534,18 @@ def _registered_names() -> dict[str, str]:
     """{address: name} of the register, read only when an error's text may hold an address."""
     try:
         return {a: n for n, a in registered_addresses(load_machines()).items()}
-    except Exception:  # noqa: BLE001  (no register here: every address is then unregistered)
+    except Exception as e:  # noqa: BLE001  (no register here: every address is then unregistered)
+        print(f"research: the machine register is unread ({type(e).__name__}), so an address in ssh's error is given as "
+              f"{REDACTED}", file=sys.stderr)
         return {}
+
+
+def _is_ip(text: str) -> bool:
+    try:
+        ipaddress.ip_address(text)
+    except ValueError:
+        return False
+    return True
 
 
 def name_addresses(text: str, names: dict[str, str] | None = None, *, machine: str | None = None) -> str:
@@ -555,11 +565,7 @@ def name_addresses(text: str, names: dict[str, str] | None = None, *, machine: s
         return given
 
     def name(addr: str) -> str | None:
-        try:
-            ipaddress.ip_address(addr)
-        except ValueError:
-            return None
-        return register().get(addr) or machine or REDACTED
+        return register().get(addr) or machine or REDACTED if _is_ip(addr) else None
 
     def ip(m: re.Match) -> str:
         run = m.group("run")
