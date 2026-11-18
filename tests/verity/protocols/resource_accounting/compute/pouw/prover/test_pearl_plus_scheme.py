@@ -141,6 +141,27 @@ def _attached(monkeypatch) -> tuple[_Exchange, _Run]:
     return ex, run
 
 
+def test_the_memory_hooks_other_events_leave_it_as_it_was(monkeypatch) -> None:
+    """The ``memory`` hook carries the KV cache's ranges as well as the registered values: an engine declares its
+    ranges at start, before or after its weights register, and Pearl+ takes only `RegisteredValues`."""
+    ranges = (H.RangesDeclared(4, 16, 64, 2, ("s0", "s1")), H.RangeAllocated((0, 1), "a"), H.RangeWritten(0, 0, 8, 1),
+              H.RangeFreed((0, 1), 2))
+    ex = _Exchange()
+    on = PS.PEARL_PLUS.attach(ex, CTX)
+    before = dict(vars(on))
+    for event in ranges:
+        ex.emit(event)
+    assert vars(on) == before and on.weights is None
+    ex, run = _attached(monkeypatch)
+    [on] = {fn.__self__ for fn in ex.subscribed["memory"]}
+    before = dict(vars(on))
+    for event in ranges:
+        ex.emit(event)
+    assert vars(on) == before and on.weights == {3: "w"}
+    ex.emit(H.StepBegan(0, ("a",), 8))
+    assert on.run is run
+
+
 def test_attach_computes_each_linear_block_with_its_run(monkeypatch) -> None:
     ex, run = _attached(monkeypatch)
     [(name, req)] = ex.filed

@@ -17,19 +17,20 @@ from typing import Any
 #: what `verity bench prove layers` (`proof_layers.read_prove_path`) reads of each tagged line, by key path, ``*`` any
 #: key, True a scalar. ``population`` is held: on a served scope it counts the execution phase's tokens. ``leak``,
 #: ``charge`` and ``advice_bits`` are held: they are the advice's length or counted against it, not its cap.
+#: ``draw_counts``, ``per_unit``'s ``units`` and its means over them are held: a template proved whole counts every unit
+#: the compiler made of the advice, so the count grows with the advice and the means divide the public totals by it.
 ALLOWED: dict[str, dict[str, Any]] = {
     "PROVE-PATH ": {"forged": True, "ok": True, "proof": True, "coins": True, "ranks": {"*": {
-        "accepted": True, "draw_counts": {"*": True},
-        "per_unit": {"*": dict.fromkeys(("units", "proof_bytes", "prove_s_per_unit", "lean_verify_s_per_unit"), True)}}}},
-    "RECORDS ": {"ok": True, "accepted": True, "negatives_refused": True, "draw_counts": {"*": True}},
+        "accepted": True, "per_unit": {"*": {"proof_bytes": True}}}}},
+    "RECORDS ": {"ok": True, "accepted": True, "negatives_refused": True},
     "A5 ": {"audit": {"accepted": True, "verdicts": {"*": True}}},
 }
 #: what `proof_layers.read_prove_path` reads of an audit's summaries, by the file's path under the audit: the
-#: arm's whether it is plain and whose coins, a rank's (or a records audit's window's) source, its sampled proof blocks
-#: and its members' timing. ``advice``, ``requests``, ``charge``, ``binding`` and the rest are held.
+#: arm's whether it is plain and whose coins, a rank's (or a records audit's window's) source and its members' timing.
+#: ``advice``, ``requests``, ``charge``, ``binding``, ``draw_counts`` (as in `ALLOWED`) and the rest are held.
 SUMMARIES: dict[str, dict[str, Any]] = {
     "summary.json": {"plain": {"*": True}, "coins": {"challenger": True}},
-    "rank*/summary.json": {"source": True, "draw_counts": {"*": True}, "timing": {"*": {
+    "rank*/summary.json": {"source": True, "timing": {"*": {
         "timing": {"proof_bytes": [True], "prove_total_s": True}, "lean_verify_s": True, "gpus": True, "device": True}}},
 }
 SUMMARIES["window/summary.json"] = SUMMARIES["rank*/summary.json"]
