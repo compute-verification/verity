@@ -101,6 +101,7 @@ is 0x7FFF.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
@@ -111,7 +112,6 @@ from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.device import compute_capability, load_card, number
 
-from verity_vllm.config import CARD_FILES
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16
@@ -162,7 +162,7 @@ GLM53_H200_TREE = ((((((0, (1, 2)), 3), 5), 6), 4), 7)
 #: vLLM's batch-invariant mode (``VLLM_BATCH_INVARIANT=1``), the setting under which every TP all-reduce is pynccl's
 BATCH_INVARIANT = "batch-invariant"
 #: (compute capability, SMs) of the RTX PRO 6000 Blackwell Server Edition, its card file's
-_RTX_PRO_CARD = load_card("rtx-pro-6000-server", directory=CARD_FILES)
+_RTX_PRO_CARD = load_card("rtx-pro-6000-server", directory=Path(__file__).resolve().parents[5] / "calibration/hardware/cards")
 RTX_PRO_6000 = ("%d.%d" % compute_capability(_RTX_PRO_CARD), int(number(_RTX_PRO_CARD["sm"]["count"])))
 #: the records of three runs on an RTX PRO 6000 node: Llama-3.1-70B int8's TP4 capture (GPUs 2, 3, 6, 7, NCCL 2.29.7), the replay
 #: of its every all-reduce through `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py replay`: 5152 calls,

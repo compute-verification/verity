@@ -74,7 +74,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.circuits import partition_object as PO
+from verity.circuits import partition_object as PO, refs as RF
 from verity.commitments import hm96, registered_value as RV, row_table as RT
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
@@ -784,11 +784,11 @@ def _referenced(m: Member, kind: str, p: str, words: int, n: int, src: Any) -> b
         raise ValueError(f"{m.port(p)}: given as {WIRED} rows, but no wire writes it")
     if isinstance(src, ValueRows):
         v, have = src.value, len(src.value.rows)
-        if v.word_bits in (16, 32) and value_words(v) != words:
-            raise NotImplementedError(
-                f"{m.port(p)}: reads {v.value!r}'s rows of {value_words(v)} 16-bit words at its width of {words}: a reader's "
-                "part reads the registered leaves' bits cut again at its width, low part first, which waits on circuits and "
-                "lean defining that cut once in the Program's Lean and Python")
+        if v.word_bits in (16, 32) and RF.recut(16 * value_words(v), 16 * words) != 1:
+            raise ValueError(
+                f"recut-rows: {m.port(p)} reads {v.value!r}'s rows of {value_words(v)} 16-bit words as rows of {words}, each "
+                "registered row recut into several of the reader's (refs.recut): opening one leaf as several rows waits on "
+                "the --registered reads naming a recut row")
         why = [reason for reason, bad in (
             (f"{len(src.positions)} rows, not {n}", len(src.positions) != n),
             (f"{v.word_bits}-bit leaves, not 16 or 32", v.word_bits not in (16, 32)),

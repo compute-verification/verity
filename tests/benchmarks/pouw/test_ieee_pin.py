@@ -106,15 +106,15 @@ def test_only_an_sm90_card_runs_the_units_checks():
 
 @pytest.mark.slow
 def test_ieee_pin_cu_pins_the_entry_of_the_toolkit_that_builds_it(tmp_path):
-    """The CPU stage with the toolkit the gate finds (CUDA_HOME, POUW_CUDA_BIN or the PATH): its entry in
+    """The CPU stage with the machine's toolkit at 13.0 (`kit.toolkit`), read with its own tools: its entry in
     sass_pins.json is what ieee_pin.cu's pinned builds pin, those builds pass the gate covering every sequence and pinned
     body, and the controls fail it. It catches an edit to ieee_pin.cu, the pins or the gate after which the numeric run
     would test other sequences than the pinned ones, which no listing can show. Skipped without a pinned toolkit."""
     try:
-        tools = SG.find_tools()
-    except SG.SassGateFailed as ex:
+        home = Path(IP.kit.toolkit("13.0"))
+        SG.find_tools(home / "bin")
+    except (SystemExit, SG.SassGateFailed) as ex:
         pytest.skip(str(ex))
-    home = Path(tools["cuobjdump"]["path"]).parent.parent
     if not (home / "bin" / "nvcc").exists():
         pytest.skip(f"no nvcc in {home / 'bin'}")
     version = subprocess.run([str(home / "bin" / "nvcc"), "--version"], capture_output=True, text=True, check=True).stdout

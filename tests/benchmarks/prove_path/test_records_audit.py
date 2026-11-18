@@ -1769,7 +1769,8 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r})
 import records_audit as RA
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, docket as R
+from verity.commitments import randomness as RND
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, RND.parse_design({SAMPLING_DESIGN!r}), None)

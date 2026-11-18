@@ -642,3 +642,23 @@ def test_a_layers_sh_results_commit_is_the_sha_after_source_never_one_printed_be
     assert PL.read("zk", str(tmp_path)).commit == SHA
     (d / "job.log").write_text(f"21:30:00Z fetch: main at {'1' * 40}\n")
     assert PL.read("zk", str(tmp_path)).commit is None
+
+
+def test_a_recursion_run_says_how_many_of_a_served_members_proof_blocks_its_inner_statement_holds(tmp_path):
+    """stage.sh's ``staged`` record: N of the member's M proof blocks, and that the served values were committed again,
+    so the outer proof is not tied to the served registration; seeded inputs say so."""
+
+    def read(name: str, staged: dict) -> str:
+        root = recursion(tmp_path / name)
+        f = root / "out" / "recursion_e2e.json"
+        f.write_text(json.dumps({**json.loads(f.read_text()), "staged": staged}))
+        return PL.read("recursion", str(root)).workload
+
+    st = {"subcircuit": "rope-head/d64/neox-bf16", "n": 16, "window": {"run": "ab" * 64, "member": 0}}
+    tail = ("the served values committed again under plain leaves for the recursion, not the served commitment; "
+            "the outer proof is not tied to the served registration")
+    assert read("subset", {**st, "subset": {"member": 0, "n": 880, "units": list(range(16))}}).startswith(
+        f"rope-head/d64/neox-bf16: 16 of 880 proof blocks of a served window's member 0, {tail}")
+    assert read("whole", st).startswith(f"rope-head/d64/neox-bf16: 16 of 16 proof blocks of a served window's member 0, {tail}")
+    assert read("seeded", {"subcircuit": "rope-head/d64/neox-bf16", "n": 16}).startswith(
+        "rope-head/d64/neox-bf16 x 16, seeded inputs, not served values")

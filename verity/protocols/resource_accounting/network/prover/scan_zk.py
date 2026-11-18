@@ -1999,7 +1999,7 @@ def answers(ats: Sequence[SimpleNamespace], out: Path, results: Mapping[str, dic
         windows.append({"window": at.number, "registration": reg, "answer": answer,
                         "registrations": [at.sides[s].registration for s in ("ingress", "egress")]})
         said[at.number] = {"verdict": answer["verdict"], "bound": (answer["public"] or {}).get("bound"),
-                           "reason": answer["reason"], "commitment": answer["commitment"]}
+                           "reason": answer["reason"], "commitment": answer["commitment"], "public": answer["public"]}
     doc = {"format": ANSWERS, "delta": str(delta), "audits": audits, "windows": windows}
     (out / "answers.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
     return said

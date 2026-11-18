@@ -50,6 +50,7 @@ from typing import Any, NamedTuple
 from verity import config as K
 from verity.config import Component, Workload
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
+from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.scheme import settings
@@ -191,7 +192,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
               channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("SignedRun",), after=("End",))),
-              needs=frozenset({"store"}), params=_pous, default_params={"challenges": 320}),
+              needs=frozenset({"store"}), params=_pous, default_params=dict(schemes.get("pous").settings)),
     Component("bandwidth", SP.IDS["bandwidth"], parties=(*_P2_PARTIES, _VERIFIER),
               channels=(*_P2_CHANNELS, Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
               needs=frozenset({"receipts"})),
@@ -258,7 +259,7 @@ def configuration(commit: str, demo: str = "onsite_full",
     cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
     if "pous" in protocols:
-        cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
+        cfg["params"] = {SP.IDS["pous"]: dict(MANIFESTS["pous"].default_params)}
     for p in cfg["party"]:
         remote = demo == "remote" and p["principal"] == "auditor"
         p["machine"] = AUDITOR_REMOTE if remote else PLACEMENT[p["name"]]
