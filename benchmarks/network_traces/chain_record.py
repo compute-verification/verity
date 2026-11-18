@@ -69,6 +69,8 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
+from verity.protocols.resource_accounting.network.prover import released_keys as RK
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
@@ -298,24 +300,10 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
 ENDPOINT_PUBLIC_FORMAT = "network-attester-endpoint-step/1"
 
 #: The endpoint step's public document (`served_session.py endpoint`'s art): each field it may hold, by its path, with
-#: its public kind. `endpoint_public` writes these and nothing else, so a field not here is never published.
-ENDPOINT_PUBLIC = {
-    "format": "structure",
-    "verdict": "output",
-    "why": "output",
-    "warden_run": "structure",
-    "at": "structure",
-    "in_the_clear": "structure",
-    "io/accepted": "output",
-    "io/violations": "output",
-    "advice/bound": "output",
-    "advice/rebuilt": "output",
-    "advice/commit_windows": "output",
-    "advice/bound_windows": "output",
-    "advice_bits/T": "structure",
-    "advice_bits/v0_total": "output",
-    "advice_bits/derived": "output",
-}
+#: its public kind, as released_keys.json's list of that name declares it. `endpoint_public` writes these and nothing
+#: else, so a field not there is never published.
+ENDPOINT_LIST = "the endpoint step's public document"
+ENDPOINT_PUBLIC = next(x for x in RK.load().lists if x.name == ENDPOINT_LIST).keys
 
 
 def endpoint_public(step: dict) -> dict:

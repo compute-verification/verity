@@ -92,6 +92,13 @@ def test_the_attach_refuses_by_name_before_any_session(tmp_path, monkeypatch, se
         WIPE.attach(None, _ctx(tmp_path, settings, **launcher))
 
 
+def test_a_context_without_the_party_is_refused_by_name(tmp_path) -> None:
+    """The party comes from the scheme (its attach, or a launcher's check reading `MEMORY_ATTESTER`): a context without it
+    is refused by name, never a KeyError."""
+    ctx = {k: v for k, v in _ctx(tmp_path, BOUND).items() if k != "party"}
+    assert "no party was handed to it (ctx['party'], the memory challenger's, which the scheme hands)" in WS.refusals(ctx)
+
+
 def test_run_keys_needs_no_pin_and_no_binding() -> None:
     assert WS.refusals({k: v for k, v in _ctx("p", {"run_keys": True}).items() if k != "pins"}) == ()
 
