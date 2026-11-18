@@ -840,11 +840,11 @@ class TransferBlocks:
         return {"accepted": out["accepted"], "digest": out["digest"], "public": out["public"]}
 
     def verify(self, sample: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
-               delivered: Delivered, *, circuit_sha512: str, opening: Hidden | None = None) -> dict[str, Any]:
+               delivered: Delivered, *, opening: Hidden | None = None) -> dict[str, Any]:
         """The verdict of record on the execution phase's delivered proof, from public inputs and the proof alone: accepted
         when
-        - the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
-          `circuit_sha512`) accepts every session, and they prove this link's registered proof block (`proved`) and the
+        - the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit it derives from the Program, the
+          partition and the sampled proof block) accepts every session, and they prove this link's registered proof block (`proved`) and the
           sampled proof block;
         - the proof's public row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the
           registered root, the public fields and both attestations' signed digests), and its output row to the word
@@ -859,8 +859,8 @@ class TransferBlocks:
         `OF_RECORD` names whose verdict is the record's (`by`); the other's accept bit is `reference`'s. Where the two
         differ in the accept bit, the public outputs or the digest, or the Lean refuses the case, the execution phase is
         rejected, with deadline 0."""
-        findings, refused = PF.verify(delivered.proof, program=self.program,
-                                      partition=self._partition)
+        findings, refused = PF.verify(delivered.proof, program=self.program, partition=self._partition,
+                                      units=[(u, u + 1) for u in sample.units])
         findings = None if refused is not None else findings
         sessions = delivered.sessions()
         python = self.python_verdict(sample, certificates, syncs, delivered, findings, sessions)
@@ -894,10 +894,10 @@ class TransferBlocks:
                 "window": reg["window"]["window"], "root": reg["roots"][0]["root"]}
 
     def outcome(self, stream: S.Stream, sample: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
-                delivered: Delivered, *, circuit_sha512: str, opening: Hidden | None = None) -> S.Outcome:
+                delivered: Delivered, *, opening: Hidden | None = None) -> S.Outcome:
         """`stream.outcome` on the verifier's verdict (`verify`), with the registered root as the session's:
         the root the proof's public row names, which it opens only to the verifier's own copy."""
-        verdict = self.verify(sample, certificates, syncs, delivered, circuit_sha512=circuit_sha512, opening=opening)
+        verdict = self.verify(sample, certificates, syncs, delivered, opening=opening)
         return stream.outcome(sample, {VERIFIER: verdict}, self.statement(sample),
                               session_roots={VALUE: sample.docket.record["roots"][0]["root"]})
 

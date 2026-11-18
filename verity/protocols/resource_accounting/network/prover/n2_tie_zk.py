@@ -383,8 +383,7 @@ def stager(M, tie: TS.IngressTie, out: Path) -> SimpleNamespace:
     if not 25 <= k_log + nbl <= 35:
         raise SystemExit(f"m = {k_log} + {nbl} is outside 25 .. 35 (--zk and flock-circuit's shape)")
     return SimpleNamespace(st=st, out=out, circuit=out / "circuit.txt", partition_file=out / "partition.json",
-                           program_file=out / "program.json", lower_s=round(time.time() - t, 1), k_log=k_log, nbl=nbl,
-                           circuit_sha512=M.PF.file_sha512(out / "circuit.txt"))
+                           program_file=out / "program.json", lower_s=round(time.time() - t, 1), k_log=k_log, nbl=nbl)
 
 
 def known(tie: TS.IngressTie, x: SimpleNamespace) -> dict:
@@ -489,8 +488,8 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
                                  x.statement.salts, x.statement.outputs)
         late = stream.deliver(sample, delivered.sessions())
         t = time.time()
-        outcome = late or tie.outcome(stream, sample, delivered, circuit_sha512=sg.circuit_sha512, inputs=rd.inputs,
-                                      releases=rd.releases, head=x.head, opening=x.cells if a.debug_clear else None)
+        outcome = late or tie.outcome(stream, sample, delivered, inputs=rd.inputs, releases=rd.releases, head=x.head,
+                                      opening=x.cells if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
         verdict = (body.get("audit") or {}).get("verdicts", {}).get(TS.VERIFIER) or {}
@@ -631,7 +630,7 @@ def prove(a) -> int:
     Z._record_lean_runs(M.PF)
     sg = stager(M, tie, out / "stager")
     summary["stager"] = {"unit": tie.proof_block.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "nbl": sg.nbl,
-                         "pin": sg.st.pin, "circuit_sha512": sg.circuit_sha512,
+                         "pin": sg.st.pin,
                          "ands": sg.st.low.layout.counts["ands"]}
     log(f"stager: {tie.proof_block.id}, {sg.lower_s} s, k_log {sg.k_log} + {sg.nbl}, {summary['stager']['ands']} ANDs, "
         f"pin {sg.st.pin[:16]}")

@@ -329,8 +329,7 @@ def stager(M, lw: TransferBlocks, out: Path) -> SimpleNamespace:
     if not 25 <= k_log + 3 <= 35:
         raise SystemExit(f"m = {k_log} + 3 is outside 25 .. 35 (--zk and flock-circuit's shape)")
     return SimpleNamespace(st=st, lw=lw, out=out, circuit=out / "circuit.txt", partition_file=out / "partition.json",
-                           program_file=out / "program.json", lower_s=round(time.time() - t, 1), k_log=k_log,
-                           circuit_sha512=M.PF.file_sha512(out / "circuit.txt"))
+                           program_file=out / "program.json", lower_s=round(time.time() - t, 1), k_log=k_log)
 
 
 def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], out: Path) -> dict:
@@ -474,7 +473,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
         late = stream.deliver(sample, delivered.sessions())
         t = time.time()
         outcome = late or lw.outcome(stream, sample, x.certificates, rd.syncs, delivered,
-                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None)
+                                     opening=x.opening if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
         verdict = (body.get("audit") or {}).get("verdicts", {}).get(SVC.VERIFIER) or {}
@@ -640,7 +639,7 @@ def prove(a) -> int:
     _record_lean_runs(M.PF)
     sg = stager(M, lw0, out / "stager")
     summary["stager"] = {"unit": lw0.proof_block.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
-                         "circuit_sha512": sg.circuit_sha512, "bits": {p: lw0.bits(p) for p in SVC.PORTS},
+                         "bits": {p: lw0.bits(p) for p in SVC.PORTS},
                          "ands": sg.st.low.layout.counts["ands"]}
     log(f"stager: {lw0.proof_block.id}, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, pin {sg.st.pin[:16]}")
     wlog(a, f"stager: lowered in {sg.lower_s} s")

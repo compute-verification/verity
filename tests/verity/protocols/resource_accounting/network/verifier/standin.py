@@ -19,7 +19,7 @@ from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.resource_accounting.network.verifier import service as SVC, tie_service as TS, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC, proofs as PF
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
 
@@ -132,10 +132,6 @@ def prove_tie(tie: Any, cells: Any, sample: S.Draw, lanes: Any, out: Path, *, pr
     return TS.Delivered(PF.Proof(circuit, public, (session,)), delivered, outputs)
 
 
-def circuit_sha512(delivered: SVC.Delivered) -> str:
-    return PF.file_sha512(delivered.proof.circuit)
-
-
 def _known(registered: dict) -> str | None:
     """The stand-in for Lean's check of the ports a `--registered` file names at known content
     (`Flock.Registered.checkKnownAll`, which refuses the file before any statement): each port's root the root of its
@@ -181,15 +177,18 @@ def _registered(public: Path, registered: dict) -> str | None:
     return None
 
 
-def lean(proof: PF.Proof, *, circuit_sha512: str, program: bytes, partition: dict,
+def lean(proof: PF.Proof, *, program: bytes, partition: dict, units: Sequence[tuple[int, int]],
          registered: dict | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
-    """`proofs.verify`'s stand-in: its refusal of a circuit file other than the committed one, or of a `registered`
-    file whose known content isn't its roots' (`_known`), then each session's finding as its session file says
-    (`prove`), with the units the public file's indices name, each rejected when the verifier's `registered` reads
-    don't hold (`_registered`)."""
+    """`proofs.verify`'s stand-in: the door's own C_S of `units` (`one_circuit.restrict`, its ``circuit`` refusal), its
+    refusal of a `registered` file whose known content isn't its roots' (`_known`), then, for the base argument's
+    circuit and Flock's Lean verifier, each session's finding as its session file says (`prove`), with the units the
+    public file's indices name, each rejected when the verifier's `registered` reads don't hold (`_registered`). The
+    delivered circuit file is never read."""
     assert isinstance(program, bytes) and "program" in partition
-    if PF.file_sha512(proof.circuit) != circuit_sha512:
-        return None, ("circuit", "the statement's circuit file is not the one the auditor committed")
+    try:
+        OC.restrict(program, partition, units)
+    except (OC.NotDerived, OC.Refused) as e:
+        return None, ("circuit", str(e))
     if registered is not None and (bad := _known(registered)) is not None:
         return None, ("registered", bad)
     why = None if registered is None else _registered(proof.public, registered)
@@ -211,8 +210,7 @@ def decide(lw: SVC.TransferBlocks, stream: S.Stream, sample: S.Draw, opening: SV
     delivered = prove(lw, opening, sample, syncs, out, **kw)
     assert stream.deliver(sample, delivered.sessions()) is None
     certificates = [r.certificate for r in opening.records] if certificates is None else certificates
-    outcome = lw.outcome(stream, sample, certificates, syncs, delivered, circuit_sha512=circuit_sha512(delivered),
-                         opening=opening)
+    outcome = lw.outcome(stream, sample, certificates, syncs, delivered, opening=opening)
     verdict = stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
     assert verdict["decided_by"] == "proof" and verdict["accepted"] == outcome.accepted
     if not kw:
