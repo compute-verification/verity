@@ -83,10 +83,10 @@ def test_the_build_record_lists_the_sent_cubin_and_declares_the_verifier(tmp_pat
     assert v["control"] == "negative/{arm}/{shape}/manifest.json"
     twin, lean = v["commands"]
     assert twin[:3] == ["{python}", "benchmarks/pouw/pearl_c_vllm/served_passes.py", "verify"] and (ROOT / twin[1]).is_file()
-    assert twin[3:] == ["--passes", "{dir}", "--manifest", "{transcript}", "--coin-record", "{dir}/coin.json",
-                        "--out", "{dir}/pearlplus-verify.json", "--draws", "3", "--commit", "{commit}"]
+    assert twin[3:] == ["--passes", "{dir}", "--manifest", "{transcript}", "--coin-record", "{verdicts}/coin.json",
+                        "--out", "{verdicts}/pearlplus-verify.json", "--draws", "3", "--commit", "{commit}"]
     assert lean == ["{python}", twin[1], "lean", "--passes", "{dir}", "--manifest", "{transcript}",
-                    "--verify", "{dir}/pearlplus-verify.json", "--exe", "build", "--out", "{dir}/pearlplus-lean.json"]
+                    "--verify", "{verdicts}/pearlplus-verify.json", "--exe", "build", "--out", "{verdicts}/pearlplus-lean.json"]
 
 
 @pytest.mark.slow
