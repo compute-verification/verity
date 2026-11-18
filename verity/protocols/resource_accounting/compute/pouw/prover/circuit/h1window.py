@@ -1,7 +1,7 @@
 """H1's execution phase as one public Program: every R × C tile of an execution phase's calls is one call of its call's contraction K's
 template (`template`: one call of the tile unit, `h1zy.PouwH1TileZy` over `h1tile.PouwH1Tile`, at that K), so the verifier
 derives the execution phase's units from its own copy of the Program under the `Q_template_instances` query of its templates
-(`query`), and a served path registers the trees it commits as the Program's parameters (`one_stage.served.register_served`).
+(`query`), and a served path registers the trees it commits as the Program's parameters (`prover.served.register_served`).
 
 * **The tile** is a parameter: ``tile`` is its R × C, the served path's 32 × 32 (`pouw_h1.TILE`) or h1_prove's 4 × 8
   smoke, and the execution phase binds the tile unit once per K its linears have (`tile_unit`; ``unit`` gives another), so
@@ -97,6 +97,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1d
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 #: the tile unit's parameters, in order: its R A rows, its C B rows, its z/y record, the salt, its position, the roots
 TILE_PARAMS = ("a", "b", "zy", "salt", "position", "roots")
@@ -552,7 +553,7 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     B row at the weights' ``b/<K>``. ``roots`` ``{value: root}`` holds those two tables' roots, as its round's record names
     them before that round's coin, and the weights'; ``ports`` names a key's circuit port when they differ
     (`window_ports`); ``prog`` the Program's digest when the caller holds it. Every table is a ``row/v2`` value of 16-bit
-    leaves under `registered.domain` of its own name, rows and width: an A table is M rows of the parameter's width for
+    leaves under `registered_value.domain` of its own name, rows and width: an A table is M rows of the parameter's width for
     each of its step's calls of K, a z table one record a unit of the call. ``window``, a served execution phase's open root,
     binds the two tables' domains, the execution phase's own rows (`credit.domain_of`), and never the weights', which are
     held across execution phases. When ``roots`` holds the call's receipt table, its units' receipts are the statement's output
@@ -590,22 +591,22 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         leaves, words = shape[r["value"]]
         port = {OUTPUTS[0]: RECEIPT_PORT, **(ports or {})}.get(key, key)
         out[port] = {**({G.PARAM_KEY: key} if key in (ports or {}) and port != key else {}),
-            "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
-            "domain": G.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
-            **G.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, r["rows"])}
+            "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": RV.WORD_BITS,
+            "domain": RV.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
+            **RV.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, r["rows"])}
     if salt is not None:
         if window is None:
             raise ValueError("a call's public rows are committed under salts of the window's open root: give window")
         pv = table(program, PUBS, call)
         rows, salts, reg = public_table(prog, pv, salt, window, u0, n, (roots[table(program, "a", call, steps)], roots[b]),
                                         call_blocks(program, call) if is_j10r(program) else None)
-        out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": n, "words": len(rows[0]), "word_bits": G.WORD_BITS,
-                         "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+        out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": n, "words": len(rows[0]), "word_bits": RV.WORD_BITS,
+                         "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
                          **CC.call_reads(u0, list(range(n))), "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
         ov = f"{S.PREFIX}{OUTPUTS[1]}"
         rows, salts, reg = ok_table(prog, ov, window, tp.population)
         out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": tp.population, "words": len(CC.OK_ROW),
-                        "word_bits": G.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                        "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
                         **CC.call_reads(u0, list(range(u0, u0 + n))),
                         "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
     return {"format": G.READS_V1, "ports": out}
@@ -631,7 +632,7 @@ def j10r_inputs(program: Program) -> tuple[list[int], list[tuple[int, int]]]:
 
 
 def public_table(prog: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str],
-                 blocks: list[tuple[int, int]] | None = None) -> tuple[list[list[int]], list[bytes], G.Registered]:
+                 blocks: list[tuple[int, int]] | None = None) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """A call's public rows ``value`` (`PUBS`) over its ``n`` units from unit ``u0``, their salts and their registration:
     unit u's row the execution phase's Program salt ``salt``, its position u and its call's ``roots`` (`core_check.public_words`,
     each hex), and with ``blocks`` (a J10-R execution phase's `call_blocks`) the call's first position ``u0`` and the unit's
@@ -640,18 +641,18 @@ def public_table(prog: str, value: str, salt: str, window: str, u0: int, n: int,
     s, rs = bytes.fromhex(salt), (bytes.fromhex(roots[0]), bytes.fromhex(roots[1]))
     rows = [CC.public_words(s, u0 + t, rs, None if blocks is None else (u0, blocks[t])) for t in range(n)]
     salts = [CC.public_row_salt(window, u) for u in range(u0, u0 + n)]
-    return rows, salts, G.Registered.commit(prog, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
+    return rows, salts, RV.Registered.commit(prog, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
 @functools.lru_cache(maxsize=8)
-def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
+def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """The execution phase's ok rows ``value`` (``<prefix>ok``, `OUTPUTS`) over its ``population`` units, their salts and their
     registration (h1_prove's `register_ok`): row u the one word 1 (`core_check.OK_ROW`) under
     `core_check.ok_salt` of the execution phase's open root ``window`` and u, registered under the execution phase Program's digest
     ``prog`` binding ``window``."""
     rows = [list(CC.OK_ROW) for _u in range(population)]
     salts = [CC.ok_salt(window, u) for u in range(population)]
-    return rows, salts, G.Registered.commit(prog, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
+    return rows, salts, RV.Registered.commit(prog, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
 # -- a sampled leaf's lanes and combine -----------------------------------------------------------------------------------------
@@ -838,7 +839,7 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
     or the combine), in `leaf_lanes.registered_file`'s form: each of its `leaf_reads` at its table's row under ``roots``
     ``{value: root}`` (the call's tables' roots as the round log names them, the weights' and the produced record's
     ``partials``), each table's entry the verifier's own (`_shapes`: a ``row/v2`` value of 16-bit leaves under
-    `registered.domain` of its name, rows and width, binding ``window``, the served execution phase's open root, except the
+    `registered_value.domain` of its name, rows and width, binding ``window``, the served execution phase's open root, except the
     weights' ``b/<K>``), ``partials``' entry ``partials`` and a J10-R leaf's carries' and ok rows' theirs in
     ``produced`` (each `produced.entry` under the execution phase's registration). A read of an A row, a B row, a partials row,
     a carry or an ok row is marked `READ_IN_FULL` (`leaf_lanes.read_in_full`), never an ``o0``. Then ``known_ports``
@@ -863,9 +864,9 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
             e = after[logical[port][0]]
         else:
             leaves, words = shape[value]
-            e = {"leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
-                 "domain": G.domain(prog, value, words, leaves, window=None if value == b else window).domain_id.hex()}
-        out[port] = PR.port(value, e, roots[value], [row], G.SCHEMA_V2)
+            e = {"leaves": leaves, "words": words, "word_bits": RV.WORD_BITS,
+                 "domain": RV.domain(prog, value, words, leaves, window=None if value == b else window).domain_id.hex()}
+        out[port] = RV.port(value, e, roots[value], [row], G.SCHEMA_V2)
         if LL.read_in_full(logical[port][0]) and port != LL.OK:
             out[port][READ_IN_FULL] = True
     if both := sorted(set(out) & set(known_ports)):

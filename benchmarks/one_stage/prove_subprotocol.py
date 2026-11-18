@@ -84,7 +84,9 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
+from verity.ports import free_port  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
@@ -290,7 +292,7 @@ def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, le
     opened after the docket (``coins == "lean"``, `a0.challenger_sample`), or the caller's."""
     if coins == "lean":
         p = a0.challenger_sample(lean, ["--program", str(program_file), "--partition", str(partition_file),
-                                      "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
+                                      "--stratified", str(k)], rec["law"], rec["population"], DD.digest(rec),
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
@@ -359,10 +361,8 @@ def _session(m: Member, s: dict, h: Any, local: list[int], tools: Tools, sdir: P
         env = {"FC_ZK_SERVER": "1", "FC_ZK_SERVER_LEAN": tools.zk_server, **a0.zk_server_env(s)} if tools.zk_server else {}
         if m.forge:
             env["FC_ZK_SELF_CHECK"] = "skip"
-        from verity_bench import kit
-
         t = time.time()
-        record, live = a0.session(tools.bin, s, s["n"], f"subset:{len(local)}", kit.free_port(), sdir,
+        record, live = a0.session(tools.bin, s, s["n"], f"subset:{len(local)}", free_port(), sdir,
                                   sample_file=sdir / "draw.json", zk=True, env=env)
         session_s = round(time.time() - t, 1)
         return record, live, a0.lean_verify(tools.lean, s, s["n"], sdir, zk=True), session_s
@@ -444,7 +444,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     for s in staged:
         checks[f"statement/{s['name']}"] = a7.statement_checks(s, rec, want)
     receipt = R.receipt(rec, "prove-leg verifier (prove_leg.py)")
-    subprotocol["registration"] = R.digest(rec)
+    subprotocol["registration"] = DD.digest(rec)
     subprotocol["checks_before_draw"] = {c: {"ok": v["ok"], "codes": v.get("codes")} for c, v in checks.items()}
     if not all(v["ok"] for v in checks.values()):
         subprotocol.update(accepted=False, refused="before the draw", seconds=round(time.time() - t0, 1))
@@ -686,7 +686,7 @@ def out_words(fn, *args: np.ndarray) -> np.ndarray:
 
 def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int = 20261024):
     """The stand-in with registered weights: a Program whose ``weights`` parameter (``table_rows`` bf16 rows of K, a
-    registered value committed once, `registered.Registered.commit`) unit i reads row ``positions[i]`` of as its ``w``,
+    registered value committed once, `registered_value.Registered.commit`) unit i reads row ``positions[i]`` of as its ``w``,
     and whose ``x`` (unit i's row i, the input the verifier holds) and output rows ``o0`` (unit i's row i) are registered
     values too, so every port of the statement is a port of the verifier's registered reads, which the Lean verifier opens
     (`Flock.Registered.checkComplete`). Returns ``(member, program, query, registered file)``: the verifier's own
@@ -694,6 +694,7 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     ``out``."""
     from circuit_check import targets as TG
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments import registered_value as RV
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.program import Program
     from verity.circuits.refs import coll_concat
@@ -716,12 +717,12 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     query = P.template_instance_query(fn)
     x, weights = bf16(rng.normal(0, 1, (n, K))), bf16(rng.normal(0, 0.02, (table_rows, K)))
     prog = P.program_digest(program)
-    reg = G.Registered.commit(prog, "weights", weights.tolist(), None, G.WORD_BITS, V2)
-    reg_x = G.Registered.commit(prog, xn, x.tolist(), None, G.WORD_BITS, V2)
-    reg_o = G.Registered.commit(prog, "dot", out_words(fn, x, weights[positions]).tolist(), None, G.WORD_BITS, V2)
+    reg = RV.Registered.commit(prog, "weights", weights.tolist(), None, RV.WORD_BITS, V2)
+    reg_x = RV.Registered.commit(prog, xn, x.tolist(), None, RV.WORD_BITS, V2)
+    reg_o = RV.Registered.commit(prog, "dot", out_words(fn, x, weights[positions]).tolist(), None, RV.WORD_BITS, V2)
     own = G.reads_file(program, query, {xn: K, "weights": K}, {xn: reg_x.root.hex(), "weights": reg.root.hex()},
                        schemas={xn: V2, "weights": V2})
-    own["ports"]["o0"] = {**reg_o.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(V2), "reads": list(range(n))}
+    own["ports"]["o0"] = {**reg_o.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(V2), "reads": list(range(n))}
     out.mkdir(parents=True, exist_ok=True)
     (out / "registered.json").write_text(json.dumps(own, sort_keys=True))
     table, refs = G.table(positions)

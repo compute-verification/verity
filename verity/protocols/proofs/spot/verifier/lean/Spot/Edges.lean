@@ -44,7 +44,7 @@ nothing per unit or per block beyond the description.
 
 namespace Spot.Edges
 
-open Flock.Program (Prog Node Arg Part Ref Ty Defn fieldsOf isInputId)
+open Flock.Program (Prog Node Arg Part Ref Ty Defn Lane fieldsOf isInputId)
 open Flock.TemplateQuery (TRange)
 open Spot.Bits (bitsOf)
 
@@ -135,16 +135,6 @@ def membersIn (x0 L len M s0 c : Nat) : Except String (Nat × Nat) :=
     let on := if olo ≤ ohi then ohi - olo + 1 else 0
     if cn != on then .error "edge-rows" else .ok (clo.toNat, cn.toNat)
 
-/-- A lane of a part (`circuits/PROTOCOL.md` §3): its collection `(p, i)`, base `b`, inner stride `e` and levels
-`(radix, step)`, innermost first. -/
-structure Lane where
-  p : Bool
-  i : Nat
-  b : Int
-  e : Int
-  lv : List (Nat × Int)
-  deriving Inhabited
-
 /-- A part's run and lanes, the grid it spells; an explicit part none. -/
 def partLanes : Part → Nat × List Lane
   | .affine p i b c => (max c 1, [⟨p, i, b, 1, []⟩])
@@ -152,6 +142,7 @@ def partLanes : Part → Nat × List Lane
     let T := max 1 ((c + inner - 1) / inner)
     (inner, [⟨p, i, b, is, if T > 1 then [(T, os)] else []⟩])
   | .explicit _ => (0, [])
+  | .grid run lanes => (run, lanes.toList)
 
 /-- The digits of period `t` in levels `lv`, innermost first, the last unbounded. -/
 def digitsOf (t : Nat) : List (Nat × Int) → List Nat

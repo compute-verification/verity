@@ -98,16 +98,22 @@ from typing import Any
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import reference
-
-from verity.protocols.resource_accounting.memory.pous.verifier import setup, verifier
-from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
-from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (P2, POINT, SHA512_CTR, P2Params, decode_segment, encode_segment,
-                                                    expand_prefix, stream)
 from verity.circuits import requirement
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.commitments.rowleaf import sha512_row_v2_prefix
+from verity.protocols.resource_accounting.memory.pous.verifier import setup, verifier
+from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout
+from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import reference
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
+    P2,
+    POINT,
+    SHA512_CTR,
+    P2Params,
+    decode_segment,
+    encode_segment,
+    expand_prefix,
+    stream,
+)
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE / "store-layout.json"
@@ -161,12 +167,12 @@ class Shape:
     def tensors(self) -> list[tuple[str, int, int, int]]:
         """`(name, layer, N, K)` in `W`'s order."""
         out = []
-        for l in range(self.layers):
-            at = f"model.layers.{l}."
-            out += [(at + "self_attn.qkv_proj.weight", l, (self.heads + 2 * self.kv_heads) * self.head_dim, self.d),
-                    (at + "self_attn.o_proj.weight", l, self.d, self.heads * self.head_dim),
-                    (at + "mlp.up_proj.weight", l, self.ff, self.d),
-                    (at + "mlp.down_proj.weight", l, self.d, self.ff)]
+        for layer in range(self.layers):
+            at = f"model.layers.{layer}."
+            out += [(at + "self_attn.qkv_proj.weight", layer, (self.heads + 2 * self.kv_heads) * self.head_dim, self.d),
+                    (at + "self_attn.o_proj.weight", layer, self.d, self.heads * self.head_dim),
+                    (at + "mlp.up_proj.weight", layer, self.ff, self.d),
+                    (at + "mlp.down_proj.weight", layer, self.d, self.ff)]
         return out + [("lm_head.weight", self.layers, self.vocab, self.d)]
 
 
@@ -225,9 +231,9 @@ class StoreLayout:
     def to_json(self) -> dict:
         p, layers = self.params, sorted({t.layer for t in self.tensors})
         rows = []
-        for l in layers:
-            ts = self.layer(l)
-            rows.append([l, ts[0].first_block, sum(t.blocks for t in ts), self.staging_bytes(l)])
+        for layer in layers:
+            ts = self.layer(layer)
+            rows.append([layer, ts[0].first_block, sum(t.blocks for t in ts), self.staging_bytes(layer)])
         return {"schema": SCHEMA, "scheme": p.codec.name, "model": asdict(self.shape) | {"dtype": "int8",
                 "order": "[N, K] row-major"}, "params": p.manifest(), "block_bytes": p.block_bytes,
                 "payload_bytes": p.payload_bytes, "blocks": p.blocks, "used_blocks": sum(t.blocks for t in self.tensors),
@@ -245,11 +251,11 @@ def build(shape: Shape, blocks_per_segment: int = PER_SEGMENT, w: int = W_BITS, 
     params = P2Params(w, c0, blocks_per_segment)
     pb = params.payload_bytes
     tensors, block, layer, staging = [], 0, None, 0
-    for name, l, n, k in shape.tensors():
-        if l != layer:
-            layer, staging = l, 0
+    for name, t_layer, n, k in shape.tensors():
+        if t_layer != layer:
+            layer, staging = t_layer, 0
         blocks = -(-n * k // pb)
-        tensors.append(Tensor(name, l, n, k, block * pb, block, blocks, staging))
+        tensors.append(Tensor(name, t_layer, n, k, block * pb, block, blocks, staging))
         block += blocks
         staging += -(-n * k // STAGING_ALIGN) * STAGING_ALIGN
     layout = TensorLayout.of_ranges(params, [(t.name, t.offset, t.size) for t in tensors])
@@ -344,7 +350,7 @@ def toy_tensors(store: StoreLayout) -> dict[str, bytes]:
 def toy_plain(store: StoreLayout) -> dict[str, bytes]:
     """The toy's `w.bin` (W) and `staging.bin` (every layer's staging buffer, in layer order), from the generator alone."""
     w = store.layout.pack(toy_tensors(store))
-    return {"w.bin": w, "staging.bin": b"".join(staging_of(store, w, l) for l in sorted({t.layer for t in store.tensors}))}
+    return {"w.bin": w, "staging.bin": b"".join(staging_of(store, w, layer) for layer in sorted({t.layer for t in store.tensors}))}
 
 
 def spot_payload(i: int, used: int, payload_bytes: int) -> bytes:
@@ -408,7 +414,7 @@ class Generated:
     weights (its `model_id`, its manifest's `"model"`), named as `setup.json` and the tie hold it."""
 
     def __init__(self, generator: str, shape: str, seed: bytes, point: tuple[int, int, int] = POINT) -> None:
-        self.generator, self.shape_name, self.seed = generator, shape, seed
+        self.generator, self.seed = generator, seed
         self.mod = load_generator(generator)
         self.shape = g = getattr(self.mod, "ALIASES", {}).get(shape) or self.mod.SHAPES[shape]
         w, c0, bps = point
@@ -644,12 +650,11 @@ def row_digests(data: bytes | memoryview, width: int) -> bytes:
 
 
 def segment_root(params: P2Params, salt: bytes, s: int, rows: bytes) -> bytes:
-    """The subtree root over segment `s`'s leaves (`verifier.row_leaf` of each row digest), a perfect tree."""
-    n, sha = params.blocks_per_segment, hashlib.sha512
+    """The subtree root over segment `s`'s leaves (`verifier.row_leaves` of its row digests), a perfect tree."""
+    n = params.blocks_per_segment
     if len(rows) != 64 * n:
         raise ValueError(f"segment {s} has {n} row digests")
-    tag_s = b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little")
-    level = [sha(tag_s + v.to_bytes(2, "little") + rows[64 * v:64 * v + 64]).digest() for v in range(n)]
+    level = verifier.row_leaves(salt, s, rows)
     while len(level) > 1:
         level = [verifier.node_hash(level[i], level[i + 1]) for i in range(0, len(level), 2)]
     return level[0]
@@ -691,7 +696,6 @@ class GpuEncoder:
 
     def __init__(self, params: P2Params, salt: bytes, lib: str, device: int) -> None:
         import torch
-
         from p2_store.gpu import Kernels
 
         torch.cuda.set_device(device)
@@ -929,7 +933,6 @@ def _decoder(params: P2Params, salt: bytes, lib: str | None) -> Any:
         return lambda s, c: decode_segment(params, None, salt, s,
                                            [c[i * params.block_bytes:(i + 1) * params.block_bytes] for i in range(params.blocks_per_segment)])
     import torch
-
     from p2_store.gpu import Kernels
 
     K = Kernels(lib, "", reference.Params.of(params), expand_prefix(params, salt))
@@ -971,13 +974,12 @@ def verify_cmd(a: argparse.Namespace) -> int:
     with mp.get_context("fork").Pool(max(1, a.workers)) as pool:
         checks = pool.map_async(_check_segment, jobs, chunksize=1)
         if a.decode:
-            h, wroots, n = setup._commitment_hash(params), [], 0
+            h, wroots = setup._commitment_hash(params), []
             dec = _decoder(params, salt, a.p2_lib)
-            for s in range(params.segments):
+            for n, s in enumerate(range(params.segments), 1):
                 w_seg = dec(s, seg_path(store, s, "c").read_bytes())
                 h.update(w_seg)
                 wroots.append(segment_root(params, salt, s, row_digests(w_seg, params.payload_bytes)))
-                n += 1
                 if n % max(1, params.segments // 20) == 0:
                     print(f"verify: decoded {n}/{params.segments} in {time.perf_counter() - t0:.0f} s", file=sys.stderr, flush=True)
             report["decode"] = {"commitment": h.digest().hex() == doc["commitment"],
@@ -1012,7 +1014,6 @@ def spot_cmd(a: argparse.Namespace) -> int:
     gpu = None
     if a.p2_lib:
         import torch
-
         from p2_store.gpu import Kernels
 
         gpu = (torch, Kernels(a.p2_lib, "", reference.Params.of(params), prefix))
@@ -1127,11 +1128,11 @@ def toy(shape: Shape, blocks_per_segment: int, workers: int | None = None) -> di
     spot_c = b"".join(blocks[:len(spots)])
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt, segments)
     layers, start = [], 0
-    for l in sorted({t.layer for t in store.tensors}):
-        buf = decode_layer(store, c_star, salt, l)
+    for layer in sorted({t.layer for t in store.tensors}):
+        buf = decode_layer(store, c_star, salt, layer)
         if buf != staging[start:start + len(buf)]:
-            raise RuntimeError(f"layer {l} doesn't decode to its tensors")
-        layers.append([l, start, len(buf), _sha(buf)])
+            raise RuntimeError(f"layer {layer} doesn't decode to its tensors")
+        layers.append([layer, start, len(buf), _sha(buf)])
         start += len(buf)
     negatives = [{"id": "padding", "layer": 0, "block": last, "flag": 3, "c": blocks[-1].hex(),
                   "why": "the true payload with its last byte, past the tensor's end, xor 1"},

@@ -77,11 +77,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
 from types import MappingProxyType
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from verity.hooks import HOOKS
-from verity.channel import Schema
-from verity.protocol import Channel, Role
 
 
 def _no_requests(ctx: Any) -> tuple[Any, ...]:
@@ -105,8 +103,13 @@ class Lacks:
 
 
 UNDECLARED = Lacks()
-#: the party every scheme's answer goes to: the auditor's verifier, which combines the schemes' verdicts
-VERIFIER = Role("verifier", "auditor", needs=("audit", "component", "product"))
+
+
+class Kernels(Protocol):
+    """A scheme's ``kernels``: the kernel scheme it runs on the card whose short name is ``card`` and whose card file's
+    ``arch`` is ``arch`` (its caller reads the card file), with registration pinning the weights or not."""
+
+    def __call__(self, card: str, *, pinned: bool, arch: str) -> str: ...
 
 
 #: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`); a row may publish its amount in
@@ -236,6 +239,31 @@ class Term:
 
 
 @dataclass(frozen=True)
+class Launch:
+    """What the served runner launches for one developer-side party of a scheme (its piece), as data: the bindings of
+    the party it reaches that it takes, ``binds`` each required and ``optional`` each taken where bound; ``development``,
+    the one of them whose absence makes it a development run that starts the party it reaches on its own machine; and
+    ``reaches``, that party, said only where no declared channel joins it to one auditor party."""
+
+    binds: tuple[str, ...] = ()
+    optional: tuple[str, ...] = ()
+    development: str = ""
+    reaches: str = ""
+
+
+@dataclass(frozen=True)
+class Reading:
+    """What a scheme's ``reader`` reads of the row its run left: its certified quantity's ``value``, in the unit it
+    publishes (``published``); the ``error`` the run established it except with, and ``error_from``, the key of the
+    row it is read from; and the quantity's other public ``figures`` by name, as the record writes them."""
+
+    value: int
+    error: Fraction
+    error_from: str
+    figures: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class Scheme:
     """What a resource scheme supplies. ``settings`` are its settings with their defaults, which a configuration's
     ``[params."<protocol>"]`` overrides (`settings`), and ``check_settings`` what it refuses of their values beyond their
@@ -251,33 +279,43 @@ class Scheme:
 
     What a configuration, a launcher and the combined record read of it, each a `Lacks` (refused by `declared`, with
     the field's name) until the declaration fills it: ``parties`` and ``channels`` (`verity.protocol.Role`, `Channel`;
-    `VERIFIER` is the party its answer goes to) and ``channel_schemas``, the `verity.channel.Schema` of each message its
-    channels carry that has one, by its type; ``colocated``, the pairs of its parties on one machine; ``needs``, what
+    `verity.protocol.VERIFIER` is the party its answer goes to) and ``channel_schemas``, the `verity.channel.Schema` of
+    each message its channels carry that has one, by its type, which this module types by name only, so it loads
+    neither module; ``colocated``, the pairs of its parties on one machine; ``needs``, what
     the workload provides it (``windows``, ``noise``, ``store``, ``receipts``, ``ingress-relay``: provisions, which
     ``requests`` doesn't state, since it answers only for a serve); ``depends``, the schemes a configuration must run
     beside it (a scheme's names, unlike ``requires``, the proof layer's requirements); ``record``, its row's name in
     the record; ``symbol``, its certified quantity's symbol; ``published``, the unit the record publishes it in and
     the exact factor from ``unit`` (``("bytes", 1/8)`` for an amount in bits published in bytes, ``(unit, 1)`` where
-    it is the same); and ``record_owner``, the lane the record names as answering for its row. ``composed_protocol``
-    is the protocol id it carries inside a composite where that differs from ``protocol``, None where it is the same.
+    it is the same); ``check``, its verifier of record, the entry its Lean port is held to, with that entry's own
+    arguments (a run's record and what the verifier is registered with, its trusted keys among them), which answers
+    accept or names its refusal; ``reader``, which takes its row as the runner read it from what its piece wrote
+    (``answer``, the answer, and ``quantity``, the figures read of it) and returns its `Reading`; and ``premises``,
+    each Lean `Prop`, by name, that its charge or bound is proved under, empty where its instance takes none (an
+    empty tuple claims that), which `bound` carries and the record writes beside the scheme's figure.
     ``tables``, the names of the value tables its run registers in the window record, a value of table ``t`` named
     ``t/...``; ``output_format``, the number format the output y leaves its blocks in for the served model
     (``bf16``), not the format of the arithmetic that made it; ``product_family``, the number family of its useful
     products, the operands' format and scaling (``fp8-e4m3-rowwise``: E4M3 operands, one scale per row of each, an
     FP32 accumulator), named as the harness names a stock kernel's family; ``y_committed``, whether each of its calls
     commits that y; ``salt_open_root``, the root its salt coin is opened after, a function of the weights' root
-    and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card, of the card's short name and
-    ``pinned=`` (whether registration pins the weights), `LookupError` naming the cards and pinnings it runs on
-    otherwise.
+    and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card (`Kernels`), of the card's short
+    name, ``pinned=`` (whether registration pins the weights) and ``arch=`` (its card file's), `LookupError` naming the
+    cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
+    against the committed root once at build. ``pieces``, by developer-side party, what the served runner launches for
+    it (`Launch`), a `Lacks` where it launches nothing.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
-    is a `Lacks` saying so: it is in the one table with its parties and record, and `bound` and `credited` refuse it by
-    name. A declaration that names a resource is held to every check below."""
+    and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
+    its resource, blocks, unit and `bound` each refuse by name, and `credited`, which goes over every attached scheme,
+    passes over it and gives it no block. A declaration that names a resource places at least one block, or says with
+    ``blocks=Lacks(why)`` why no block of the circuit carries its cost (an audit proved outside the workload's
+    circuit), and is held to every check below."""
 
     name: str
     protocol: str
     resource: str | Lacks
-    blocks: tuple[Block, ...]
+    blocks: tuple[Block, ...] | Lacks
     assumptions: tuple[str, ...]
     log: tuple[Order, ...]
     charges: tuple[Charge, ...]
@@ -296,23 +334,26 @@ class Scheme:
     messages: tuple[Any, ...] = ()
     framings: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
     provides: tuple[str, ...] = ()
-    parties: tuple[Role, ...] | Lacks = UNDECLARED
-    channels: tuple[Channel, ...] | Lacks = UNDECLARED
+    parties: tuple[Any, ...] | Lacks = UNDECLARED
+    channels: tuple[Any, ...] | Lacks = UNDECLARED
     colocated: tuple[tuple[str, str], ...] | Lacks = UNDECLARED
     needs: frozenset[str] | Lacks = UNDECLARED
     depends: tuple[str, ...] | Lacks = UNDECLARED
     record: str | Lacks = UNDECLARED
     symbol: str | Lacks = UNDECLARED
-    channel_schemas: tuple[Schema, ...] | Lacks = UNDECLARED
+    channel_schemas: tuple[Any, ...] | Lacks = UNDECLARED
     published: tuple[str, Fraction] | Lacks = UNDECLARED
-    record_owner: str | Lacks = UNDECLARED
-    composed_protocol: str | None = None
+    check: Callable[..., Mapping[str, Any]] | Lacks = UNDECLARED
+    reader: Callable[[Mapping[str, Any]], Reading] | Lacks = UNDECLARED
+    premises: tuple[str, ...] | Lacks = UNDECLARED
     tables: tuple[str, ...] | Lacks = UNDECLARED
     output_format: str | Lacks = UNDECLARED
     product_family: str | Lacks = UNDECLARED
     y_committed: bool | Lacks = UNDECLARED
     salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
-    kernels: Callable[..., str] | Lacks = UNDECLARED
+    kernels: Kernels | Lacks = UNDECLARED
+    keeps_weight_copy: bool | Lacks = UNDECLARED
+    pieces: Mapping[str, Launch] | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -328,7 +369,13 @@ class Scheme:
             raise ValueError(f"{self.name} names a charge twice: {names}")
         if unknown := sorted({o.assumption for o in self.log if o.assumption} - set(self.assumptions)):
             raise ValueError(f"{self.name}: its deadlines name {unknown}, which are not among its assumptions")
-        if unknown := sorted({p.definition for p in self.ports} - {b.definition for b in self.blocks}):
+        if isinstance(self.resource, Lacks) and not isinstance(self.blocks, Lacks):
+            raise ValueError(f"{self.name}: a scheme that charges nothing says why it has no blocks with Lacks(why)")
+        if not isinstance(self.blocks, Lacks) and not self.blocks:
+            raise ValueError(f"{self.name}: it names a resource and places no block; where no block of the circuit "
+                             "carries its cost, its blocks say why with Lacks(why)")
+        placed = () if isinstance(self.blocks, Lacks) else self.blocks
+        if unknown := sorted({p.definition for p in self.ports} - {b.definition for b in placed}):
             raise ValueError(f"{self.name}: its ports lie in {unknown}, which are not its blocks' Definitions")
         said = not isinstance(self.delta_scheme, Lacks)
         if said and not isinstance(self.delta_scheme, Term) and not 0 <= self.delta_scheme < 1:
@@ -345,6 +392,18 @@ class Scheme:
             if not unit or type(per) is not Fraction or per <= 0:
                 raise ValueError(f"{self.name}: published is (the record's unit, a positive Fraction from its own "
                                  f"unit), not {self.published!r}")
+        if not isinstance(self.pieces, Lacks):
+            principal = {} if isinstance(self.parties, Lacks) else {r.name: r.principal for r in self.parties}
+            for party, p in self.pieces.items():
+                if principal.get(party) != "developer":
+                    raise ValueError(f"{self.name}: its pieces are its declared developer-side parties' "
+                                     f"{sorted(n for n, k in principal.items() if k == 'developer')}, not {party!r}")
+                if p.development and p.development not in (*p.binds, *p.optional):
+                    raise ValueError(f"{self.name}: {party}'s development binding {p.development!r} is one of its "
+                                     "binds or optional")
+                if p.reaches and principal.get(p.reaches) != "auditor":
+                    raise ValueError(f"{self.name}: {party} reaches a declared auditor party, not {p.reaches!r}")
+            object.__setattr__(self, "pieces", MappingProxyType(dict(self.pieces)))
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
 
@@ -378,7 +437,8 @@ class Bound:
     probability above ``delta``, plus each of its charges' bounds, with probability at most ``delta`` plus ``epsilon``,
     the audit's own error (its knowledge and binding errors, the audit's to give), plus ``delta_scheme``, the scheme's own
     term: where that is a `Term`, ``term`` names its Lean constant and
-    ``parameters`` the values it was evaluated at."""
+    ``parameters`` the values it was evaluated at; all of it under ``premises``, each Lean `Prop`, by name, the
+    scheme's guarantee is stated under, which whatever writes the bound writes beside it."""
 
     scheme: str
     delta: Fraction
@@ -388,6 +448,7 @@ class Bound:
     epsilon: Fraction = Fraction(0)
     term: str = ""
     parameters: Mapping[str, Any] = field(default_factory=dict)
+    premises: tuple[str, ...] = ()
 
     @property
     def excess(self) -> int:
@@ -401,6 +462,34 @@ class Bound:
         return self.delta + self.epsilon + self.delta_scheme
 
 
+class Unbounded(ValueError):
+    """`bound`'s refusal of a declaration whatever its caller gives: the sentence, and ``terms``, the name of each
+    term it lacks (each charge nothing bounds, by its name; ``Verity.Scheme.δscheme``; ``premises``)."""
+
+    def __init__(self, why: str, terms: tuple[str, ...]) -> None:
+        super().__init__(why)
+        self.terms = terms
+
+
+def unbounded(scheme: Scheme) -> Unbounded | None:
+    """Why ``scheme``'s declaration lets `bound` give no bound at any inputs, None where it can: a known charge
+    nothing bounds yet, its own term not said, or its premises not said, the first of these."""
+    if open_ := [c for c in scheme.charges if not c.bounded]:
+        return Unbounded(f"{scheme.name} has known charges nothing bounds yet: "
+                         f"{', '.join(f'{c.name} ({c.bound})' for c in open_)}; a bound without them would read as "
+                         "complete", tuple(c.name for c in open_))
+    if isinstance(scheme.delta_scheme, Lacks):
+        return Unbounded(f"{scheme.name}: its delta_scheme (Verity.Scheme.δscheme) is not said: a declaration says its "
+                         "own term by name, zero where none of its assumptions can fail"
+                         + (f"; it says why not: {scheme.delta_scheme.why}" if scheme.delta_scheme.why else ""),
+                         ("Verity.Scheme.δscheme",))
+    if isinstance(scheme.premises, Lacks):
+        return Unbounded(f"{scheme.name}: its premises are not said, so a bound would read as unconditional; a "
+                         "declaration names each Lean Prop its guarantee is stated under, () where none"
+                         + (f"; it says why not: {scheme.premises.why}" if scheme.premises.why else ""), ("premises",))
+    return None
+
+
 def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, int],
           parameters: Mapping[str, Any] | None = None, *, epsilon: Fraction | None = None) -> Bound:
     """``scheme``'s `Bound`, carrying its own term, evaluated at ``parameters`` where it is a `Term` (``N`` read from
@@ -408,15 +497,10 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
     scheme with a known charge nothing bounds yet or whose own term is not said, parameters other than exactly the
     term's, and an audit's error ``epsilon`` not given (`GetsBack`'s ε, which the audit supplies, never the scheme)."""
     declared(scheme, "resource")
+    if (refused := unbounded(scheme)) is not None:
+        raise refused
     if sorted(charges) != sorted(c.name for c in scheme.charges):
         raise ValueError(f"{scheme.name}'s charges are {sorted(c.name for c in scheme.charges)}, not {sorted(charges)}")
-    if unbounded := [f"{c.name} ({c.bound})" for c in scheme.charges if not c.bounded]:
-        raise ValueError(f"{scheme.name} has known charges nothing bounds yet: {', '.join(unbounded)}; a bound "
-                         "without them would read as complete")
-    if isinstance(scheme.delta_scheme, Lacks):
-        raise ValueError(f"{scheme.name}: its delta_scheme (Verity.Scheme.δscheme) is not said: a declaration says its "
-                         "own term by name, zero where none of its assumptions can fail"
-                         + (f"; it says why not: {scheme.delta_scheme.why}" if scheme.delta_scheme.why else ""))
     if not 0 < delta < 1 or missable < 0 or any(v < 0 for v in charges.values()):
         raise ValueError(f"{scheme.name}: δ lies in (0, 1) and every amount is at least 0")
     if epsilon is None or not 0 <= epsilon < 1:
@@ -428,7 +512,7 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
         if given:
             raise ValueError(f"{scheme.name}: its own term is the number {term}, which takes no parameters {sorted(given)}")
         return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), Fraction(term),
-                     Fraction(epsilon))
+                     Fraction(epsilon), premises=scheme.premises)
     if missing := [p for p in term.parameters if p not in given]:
         raise ValueError(f"{scheme.name}: its own term {term.lean} is evaluated at {list(term.parameters)}, and "
                          f"{missing} were not given")
@@ -438,7 +522,7 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
     if not 0 <= value < 1:
         raise ValueError(f"{scheme.name}: its own term {term.lean} at {given} is {value}, outside [0, 1): no bound")
     return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), value, Fraction(epsilon),
-                 term.lean, MappingProxyType(given))
+                 term.lean, MappingProxyType(given), scheme.premises)
 
 
 #: the registered schemes, by name: a scheme's module registers it when imported, and a reader gets it through
@@ -517,9 +601,9 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     query (`verity.protocols.proofs.spot.verifier.one_stage.partition.strata`). A declared `Block` places on the
     templates whose descriptor id is its Definition id, bare or followed by its statics (``Name_vN{...}``). Refuses a
     declared Definition id that resolves to no block, and a template two blocks would place on, of one scheme or two
-    (`Placed.inj`, and one credited set for all)."""
-    for scheme in schemes:
-        declared(scheme, "resource")
+    (`Placed.inj`, and one credited set for all). It passes over a scheme that charges nothing, or whose blocks say
+    why none is in the circuit: neither places a block."""
+    schemes = [s for s in schemes if not isinstance(s.resource, Lacks) and not isinstance(s.blocks, Lacks)]
     strata = [(tid, rs) for tid, rs in strata]
     placed: dict[str, str] = {}
     out: set[int] = set()
@@ -537,6 +621,8 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "VERIFIER", "Block", "Bound",
-           "Charge", "Circuits", "Lacks", "Layout", "Order", "Port", "Scheme", "Term", "bound", "credited", "declared",
-           "layout", "register", "register_circuits", "register_process", "settings"]
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
+           "Charge", "Circuits", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
+           "bound",
+           "credited", "declared", "layout", "register", "register_circuits", "register_process", "settings",
+           "unbounded"]

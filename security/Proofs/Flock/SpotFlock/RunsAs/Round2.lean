@@ -127,7 +127,7 @@ theorem parts_of_check {h : Held} {own : Spot.SecondStage.Own} {st : Roots} {rec
 theorem lt_of_check {h : Held} {own : Spot.SecondStage.Own} {ss : Array Json} {st : Roots} {rec draw : Json}
     {c₀ : FlockDeploy.Coin} (hA : OwnAgrees h own st rec draw c₀)
     (hc : (Spot.SecondStage.check own (some ss)).codes = #[]) {t : ℕ} (ht : t < ss.size) : t < h.ms.length := by
-  obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := Spot.SecondStage.check_ok hc
+  obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := Spot.SecondStage.check_ok hc
   obtain rfl := parts_of_check hA hp
   obtain ⟨s, -, -, -, -, hi, -⟩ := hst t ht
   exact (partsAt_template hi).1
@@ -137,7 +137,7 @@ theorem lt_of_check {h : Held} {own : Spot.SecondStage.Own} {ss : Array Json} {s
 theorem interiorOrder_of_check : InteriorOrderOfCheck := by
   intro h own ss st rec draw c₀ hA hc
   rw [← show core own = ownOf h st rec draw c₀ from hA]
-  exact (Spot.SecondStage.check_ok hc).2.1
+  exact (Spot.SecondStage.check_ok hc).1
 
 theorem namesOk_of_check : NamesOkOfCheck := by
   intro h own ss st rec draw c₀ hA hc
@@ -147,7 +147,7 @@ theorem namesOk_of_check : NamesOkOfCheck := by
 
 theorem codesOk_of_check : CodesOkOfCheck := by
   intro h own ss st rec draw c₀ hA hc t ht S hS
-  obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := Spot.SecondStage.check_ok hc
+  obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := Spot.SecondStage.check_ok hc
   obtain rfl := parts_of_check hA hp
   obtain ⟨s, p, hs, hf, hd, hi, hcodes⟩ := hst t ht
   rw [show S = s from Option.some.inj (hS.symm.trans hs)]
@@ -202,7 +202,7 @@ theorem codesOk_of_check : CodesOkOfCheck := by
 
 theorem count_of_check : CountOfCheck := by
   intro h own ss st rec draw c₀ hA hN hc
-  obtain ⟨-, -, ps, hp, -, -, -, hcov, -⟩ := Spot.SecondStage.check_ok hc
+  obtain ⟨-, ps, hp, -, -, -, hcov, -⟩ := Spot.SecondStage.check_ok hc
   obtain rfl := parts_of_check hA hp
   apply Nat.le_antisymm
   · by_contra hlt
@@ -224,7 +224,7 @@ theorem designOk_of_check {h : Held} {own : Spot.SecondStage.Own} {ss : Array Js
     {c₀ : FlockDeploy.Coin} (hA : OwnAgrees h own st rec draw c₀)
     (hc : (Spot.SecondStage.check own (some ss)).codes = #[]) :
     Spot.SecondStage.designOk (partsAt h (ownOf h st rec draw c₀).sample.size) (ownOf h st rec draw c₀) = true := by
-  obtain ⟨-, -, ps, hp, hl, hw, -⟩ := Spot.SecondStage.check_ok hc
+  obtain ⟨-, ps, hp, hl, hw, -⟩ := Spot.SecondStage.check_ok hc
   obtain rfl := parts_of_check hA hp
   rw [← show core own = ownOf h st rec draw c₀ from hA]
   unfold Spot.SecondStage.designOk
@@ -275,7 +275,7 @@ theorem inputsNone_of_emptied {own : Spot.SecondStage.Own}
 theorem readsOk_of_check : ReadsOkOfCheck := by
   intro h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hRN hP hc t ht
   obtain ⟨xs, hxs, hlen, hw⟩ := hS
-  obtain ⟨-, -, ps, -, -, -, hst, -, -⟩ := Spot.SecondStage.check_ok hc
+  obtain ⟨-, ps, -, -, -, hst, -, -⟩ := Spot.SecondStage.check_ok hc
   obtain ⟨s, -, hs, -, -, -, -⟩ := hst t ht
   have htm := lt_of_check hA hc ht
   obtain ⟨w, hdw, hjw⟩ := hw t (by omega)
@@ -343,7 +343,7 @@ theorem roundTwo_of_check {h : Held} (hN : NamesDistinct h) {own : Spot.SecondSt
   have hts : t < ss.size := by
     rw [count_of_check h own ss st rec draw c₀ hA hN hc]
     exact ht
-  obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := Spot.SecondStage.check_ok hc
+  obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := Spot.SecondStage.check_ok hc
   obtain rfl := parts_of_check hA hp
   obtain ⟨s, -, hs, -, -, hi, -⟩ := hst t hts
   have hg : ss.getD t .null = ss.toList.getD t .null := by

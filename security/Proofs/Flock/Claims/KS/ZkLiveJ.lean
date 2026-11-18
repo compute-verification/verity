@@ -234,7 +234,7 @@ no column of table `j` off `C` by their verdict `pL`, the decoder is right for a
 each implying its table accepted and table `j`'s also no level-0 opening off `C` unless it self-clashes, and table `j`'s events bound
 the simulated strategies' `Adv`s and self-clash after `Commit` at table `j` (`simAtJZ`). -/
 def ZkLiveAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
-    (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
+    (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Hash.Msg → ℕ → List 𝔽 → Prop) (x : Hash.Msg) {mPts : ℕ}
     (T : ℕ → TabZK 𝔽 mPts) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
     ∃ (rd : (j : ℕ) → Claims.Flock.IZ (T j).sch.levels.length → Fin ((V true).k x))
@@ -292,7 +292,7 @@ def ZkLiveAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D
 /-- **The live sessions' bound gives the masked sessions' after `Commit`** (`ZkSessJ`), the mixture at table `j` the
 simulated strategies after `Commit` there (`simAtJZ`) of live strategies whose roots agree. -/
 theorem zkSessJ_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
-    {A : Model.Arith 𝔽 K} {Hs : Hashes 𝔽 D Sl} {Ok : Claims.Msg → ℕ → List 𝔽 → Prop} {x : Claims.Msg} {mPts : ℕ}
+    {A : Model.Arith 𝔽 K} {Hs : Hashes 𝔽 D Sl} {Ok : Hash.Msg → ℕ → List 𝔽 → Prop} {x : Hash.Msg} {mPts : ℕ}
     {T : ℕ → TabZK 𝔽 mPts} (hl : ZkLiveAtJ A Hs Ok x T) : ZkSessJ A Hs Ok x T := by
   intro Ω _ _ P
   obtain ⟨rd, hrd, ev, ev₁, tied, tied₁, hω⟩ := hl Ω P
@@ -316,7 +316,7 @@ theorem zkSessJ_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
 (`zk_tableBoundJAt_of_sessions` at `zkSessJ_of_liveJ`). -/
 theorem zk_tableBoundJAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
-    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
+    (rel : Readable.Parsed → Readable.Relation) (Ok : Hash.Msg → ℕ → List 𝔽 → Prop) {x : Hash.Msg}
     (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
@@ -359,7 +359,7 @@ def stJ {sts : Array Stmt} (h0 : 0 < sts.size) (j : ℕ) : Stmt :=
 /-- **The live sessions' bound at a masked statement of any number of tables**: `ZkLiveAtJ` at the deployed hashes
 (`hs512`) and tables of full-width columns, at Flock ZK's padded tables of the setup (`zkTabs`), wherever the
 verifier sets up the tables `sts`, at their every layout and link layout at `PT_LOCAL`. -/
-def ZkLiveJ (x : Claims.Msg) : Prop :=
+def ZkLiveJ (x : Hash.Msg) : Prop :=
   ∀ (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
@@ -377,7 +377,7 @@ accepts its `m` (`zk_schedule_ok`), so `zkTabs` there has every property `zk_tab
 masked tables: table `j` of the setup is `stJ h0 j`, `zkTab` is at Flock ZK's parameters (`zkTab_m1`), and a table
 of full-width columns that does not extract table `j` is not committed to it (`zk_not_committedJ`,
 `zkTab_committed`). -/
-theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem zk_atTabs {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     {B : (ℕ → TabZK 𝔽 spec.mPts) → Prop}
@@ -432,7 +432,7 @@ accepts its `m` (`zk_schedule_ok`), so `zkTabs` there has every property `zk_tab
 masked tables: table `j` of the setup is `stJ h0 j`, `zkTab` is at Flock ZK's parameters (`zkTab_m1`), and a table
 of full-width columns that does not extract table `j` is not committed to it (`zk_not_committedJ`,
 `zkTab_committed`). -/
-theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem zk_atTabs {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     {B : (ℕ → TabZK 𝔽 spec.mPts) → Prop}
@@ -458,7 +458,7 @@ theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
 /-- **Every masked table's bound at a statement in scope, from the live sessions' bound**: at tables of full-width
 columns, where the statement parses in scope and sets up at least one table, `zk_tableBoundJAt_of_liveJ` at Flock
 ZK's padded tables (`zk_atTabs`). -/
-theorem zk_tableBoundJAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem zk_tableBoundJAt_live {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (hl : ZkLiveJ x) :

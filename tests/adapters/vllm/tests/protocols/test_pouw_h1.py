@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
+from verity import hooks as H
 from verity.circuits.refs import runs
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
@@ -373,6 +374,16 @@ def _rounds(n=3, seed=0):
 
 def _settings(**kw):
     return {"pouw": {**H1, "coins": Challenger(0, random.Random(0).randbytes), "runner": Runner(), "rounds": _rounds(), **kw}}
+
+
+def test_h1_is_refused_by_name_beside_a_scheme_that_releases_the_weights(monkeypatch):
+    ex = messages.Exchange()
+    monkeypatch.setattr(messages, "_CURRENT", ex)
+    serve = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings())
+    assert PO.refusals(serve) == ()
+    ex.request("pous", H.ReleaseValue("l0.weight", lambda: None))
+    assert PO.refusals(serve) == (f"{_entry()}: commits its weights from each layer's weight at install "
+                                  "(READS_LAYER_WEIGHT), which pous releases on this build (ReleaseValue): they don't run in one process",)
 
 
 def test_h1_is_admitted_beside_spot_and_executes_nowhere():
@@ -1424,7 +1435,7 @@ def test_the_challenger_setting_is_where_h1s_coins_come_from(tmp_path, monkeypat
     assert any("from one source" in r for r in refused(_remote(coins=Challenger(0, CH.entropy(0)))))
     assert any("from one source" in r for r in refused(_remote(rounds=_rounds())))
     assert any("opens no session" in r for r in refused(_remote(), stage="capture"))
-    assert any("'challenger' is for eps1-sm120-h1fx1, ncp-v2, pearl-c-sm120-v1-h3" in r
+    assert any("'challenger' is for eps1-sm120-h1fx1, ncp-v2 only" in r
                for r in refused({"pouw": {"challenger": AUDITOR, "session": SESSION}}, entry="pouw:ncp-v1"))
     assert any("needs 'session'" in r for r in refused(_remote(session=None)))
     assert any("'session' is the session of the challenger" in r for r in refused(_settings(session=SESSION)))

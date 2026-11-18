@@ -119,7 +119,7 @@ theorem repStreams_sum (spec : SessionSpec) (K : ℕ → ℕ) :
   exact sum_range_two _ K
 
 /-- **The masked session after the link** sends at most each table's two masked reps' rounds. -/
-theorem afterLinkPZk_sendsJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
+theorem afterLinkPZk_sendsJ (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Stmt) (words : Array (List ℕ)) (schs : Array (Schedule × ℕ)) (trs : Array Trace) (tape : TapeZk)
     (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = sts.size)
     (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m)
@@ -164,7 +164,7 @@ theorem afterLinkPZk_sendsJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteA
     omega
 
 /-- **The masked session sends at most `1 + rounds`**, whether it returns or stops, at any answers. -/
-theorem sessionPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
+theorem sessionPZk_sends (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Stmt) (words : Array (List ℕ)) (trs : Array Trace) (ω : TapeZk)
     (hspec : spec.tables.size = sts.size) (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m) :
     sendsC.P (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs ω)
@@ -183,10 +183,10 @@ theorem sessionPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
   exact sendsC.bind (sendsC_link _ _ _) fun c1 =>
     afterLinkPZk_sendsJ _ _ spec sts _ schs _ _ _ cms c1 hspec hm hschs
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The masked sends fit the masked verifier's rounds**, at any number of tables: the goal `SendCountZk`. -/
-theorem sends_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem sends_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     SendCountZk H rel := by
   intro o
   obtain ⟨-, -, hspec, hall⟩ := o.tables

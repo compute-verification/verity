@@ -44,10 +44,12 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
 
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.challenger.challenger import ChallengerKey
-from verity.protocols.proofs.spot.verifier.one_stage import audit as A, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A
 
-PROTOCOL = R.PROTOCOL
+PROTOCOL = DM.ONE_STAGE_PROTOCOL
 
 
 def _refusal(reason: str, commitment: str | None, verdict: str = "reject") -> dict[str, Any]:
@@ -152,7 +154,7 @@ def answer(out: Path, docket: Mapping[str, Any] | None) -> dict[str, Any]:
     (`whose_coins`) and its public ``case_v2`` whether the audit wrote the case for the compiled check (`case_said`). An
     accepted audit record that says neither, or beside a case for the compiled check that names another challenger key
     (`case_key`), is undecided (module docstring)."""
-    commitment = R.digest(docket) if docket is not None else None
+    commitment = DD.digest(docket) if docket is not None else None
     try:
         summary = json.loads((out / "summary.json").read_text())
     except (OSError, ValueError) as e:
@@ -184,28 +186,28 @@ def answer(out: Path, docket: Mapping[str, Any] | None) -> dict[str, Any]:
     coins = whose_coins(rec)
     if coins is None:
         return _refusal("the audit record names no challenger key and session a check verified its coins under "
-                        "(coins.verified): its acceptance says nothing of whose coins the sample is on", R.digest(reg),
+                        "(coins.verified): its acceptance says nothing of whose coins the sample is on", DD.digest(reg),
                         "undecided")
     kind = case_said(rec)
     if kind is None:
         return _refusal("the audit record doesn't say whether its audit wrote the case for the compiled check (case_v2): "
-                        "its acceptance doesn't say which kind of accept it is", R.digest(reg), "undecided")
+                        "its acceptance doesn't say which kind of accept it is", DD.digest(reg), "undecided")
     try:
         named = case_key(out)
     except ValueError as e:
         return _refusal(f"the case for the compiled check (window/case-v2.json) isn't read for the challenger it names: {e}",
-                        R.digest(reg), "undecided")
+                        DD.digest(reg), "undecided")
     if named is not None and named != coins["key_sha512"]:
         return _refusal(f"the case for the compiled check (window/case-v2.json) names a challenger key with SHA-512 {named}, "
                         f"and the audit's coins verified under the key with SHA-512 {coins['key_sha512']} (coins.verified)",
-                        R.digest(reg), "undecided")
+                        DD.digest(reg), "undecided")
     delta = exact_delta(wrong["delta"])
     profile = A.profile(reg, draw, wrong["delta"]).to_json()
     profile["delta"] = str(delta)
     per_template = wrong.get("per_template")
     public = {"bound": wrong["bound"], "case_v2": kind, "coins": coins, A.COMPLETE: rec.get("complete") is True,
               "drawn": sorted(draw["units"]), "per_template": per_template, "proved": sorted(rec["proved_units"])}
-    return {"commitment": R.digest(reg), "profile": profile, "protocol": PROTOCOL, "public": public, "reason": None,
+    return {"commitment": DD.digest(reg), "profile": profile, "protocol": PROTOCOL, "public": public, "reason": None,
             "verdict": "accept"}
 
 

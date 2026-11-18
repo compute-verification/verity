@@ -282,7 +282,7 @@ def registered (j : Json) : V Json := do
   return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson))) (Docket.ownEntries v)
 
 /-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, and an optional
-`"window"`, to `registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32, a window that is
+`"window"`, to `registered_value.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32, a window that is
 not lowercase hex of 64 bytes). -/
 def domain (j : Json) : V Json := do
   let (.str program, .str value) := (getD j "program", getD j "value") | throw "program or value is not a string"

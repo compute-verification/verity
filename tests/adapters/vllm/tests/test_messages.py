@@ -3,25 +3,44 @@ before, and its reader reads what it read before."""
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import re
 from types import SimpleNamespace as NS
 
 import pytest
 from verity import hooks as H
-from verity.channel import Refused
 from verity.protocols.resource_accounting import scheme as schemes
 
+from verity.channel import Body, MessageTypes, Refused
 from verity_vllm import messages as M
+from verity_vllm.config import UsageError
 from verity_vllm.pipeline import advice as A
+from verity_vllm.pipeline import serve_day as SD
+from verity_vllm.pipeline import serve_h1 as SH
 
 
 def test_every_declared_message_is_a_type():
-    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUSStore"} <= M.types().types
+    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows"} <= M.types().types
 
 
 def test_a_type_no_protocol_declares_is_refused():
     with pytest.raises(Refused, match="unknown-type"):
         M.body("Summary", b"{}")
+
+
+@pytest.mark.parametrize("entry", ["serve_h1.config_of", "serve_day.declare"])
+def test_a_body_its_declaration_refuses_is_a_usage_error_naming_the_bound(tmp_path, monkeypatch, entry):
+    type_ = "MonitoringPeriodDeclaration" if entry == "serve_day.declare" else "PoUWScheme"
+    narrowed = MessageTypes(dataclasses.replace(s, body=Body(max=8)) if s.type == type_ else s
+                            for s in M.types().schemas.values())
+    monkeypatch.setattr(M, "types", lambda: narrowed)
+    (big := tmp_path / "big.json").write_text(json.dumps({"pouw": {}}))
+    day = SD.DayOptions(day=0, day_log=str(tmp_path / "log.json"), day_program="5a" * 64, day_params=str(big))
+    call = {"serve_h1.config_of": lambda: SH.config_of(str(big)),
+            "serve_day.declare": lambda: SD.declare(NS(day=day), tmp_path)}[entry]
+    with pytest.raises(UsageError, match=f"oversized: {type_}'s body is at most 8 bytes, not 12"):
+        call()
 
 
 def test_run_totals_bytes_unchanged(tmp_path):
@@ -184,8 +203,8 @@ def test_exchange_nests_kernels_and_hands_inputs_inward():
     ex = M.Exchange()
     seen = []
     ex.subscribe("s", "blocks", seen.append)
-    ex.request("inner", H.ComputeBlockWith(lambda due, original: ("inner", due.inputs["weight"], original(None))))
     ex.request("outer", H.ComputeBlockWith(lambda due, original: original({"weight": "decoded"})))
+    ex.request("inner", H.ComputeBlockWith(lambda due, original: ("inner", due.inputs["weight"], original(None))))
     due = H.BlockDue("layers.0.mlp", 1, {"n": 2, "k": 2}, "bf16", {"x": "x", "weight": "stored"})
     assert ex.compute(due, lambda given: ("stock", given)) == ("inner", "decoded", ("stock", {"weight": "decoded"}))
     assert seen == [due] and ex.computes()
@@ -230,10 +249,12 @@ def test_one_exchange_a_build_and_the_build_in_scope_is_current():
     assert M.current() is not ex
 
 
-def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_entries_and_its_requests_filed_once(tmp_path):
+def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_entries_and_its_requests_filed_once(tmp_path, monkeypatch):
     """`Exchange.attach` hands ``attach`` and ``requests`` one ``ctx``, files each request ``attach`` did not, and keeps
     the scheme's settings under its name for the build's `Declared` and what ``attach`` returns for the run's record; a
     setting it does not have is refused."""
+    for name in ("VERITY_PINS", "VERITY_CONFIGURATION"):
+        monkeypatch.delenv(name, raising=False)
     seen: list = []
     eager = H.RequireProperty("eager", True, "its kernels")
     world = H.RequireProperty("world", 1, "its passes")
@@ -247,7 +268,7 @@ def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_ent
     ex = M.Exchange()
     assert ex.attach(pearl, {"coins": "live"}, submit=print) == "front"
     assert seen == [{"settings": {"coins": "live", "tie": False}, "build": ex.key, "gate": None, "private": None,
-                     "submit": print}]
+                     "submit": print, "pins": None, "configuration": None}]
     assert ex.requests == [("pearl", eager), ("pearl", world)] and ex.attached == {"pearl": {"coins": "live", "tie": False}}
     assert ex.reports == {"pearl": "front"}
     assert M.Exchange().key != ex.key
@@ -255,6 +276,86 @@ def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_ent
         ex.attach(pearl, {"salt": 1})
     ex.attach(pearl, private=tmp_path)
     assert seen[-1]["private"] == tmp_path / "pearl" and (tmp_path / "pearl").is_dir()
+
+
+PIN = {"party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0", "key-sha512": "ab" * 64}
+
+
+def _seeing(name="probe"):
+    seen: list = []
+    return seen, NS(name=name, settings={}, check_settings=lambda s: None, attach=lambda ex, ctx: seen.append(ctx),
+                    requests=lambda ctx: ())
+
+
+@pytest.fixture
+def unset(monkeypatch):
+    for name in ("VERITY_PINS", "VERITY_CONFIGURATION"):
+        monkeypatch.delenv(name, raising=False)
+    return monkeypatch
+
+
+def test_handed_pins_reach_the_scheme_exactly_and_read_only(unset):
+    """The launcher's ``pins`` reach ``ctx["pins"]`` entry for entry, as mappings the scheme can't change; ``()`` is
+    an application that pins nothing, distinct from None, none handed."""
+    seen, probe = _seeing()
+    M.Exchange().attach(probe, pins=[PIN], configuration="c" * 64)
+    got = seen[0]["pins"]
+    assert got == (PIN,) and seen[0]["configuration"] == "c" * 64
+    with pytest.raises(TypeError):
+        got[0]["key-sha512"] = "cd" * 64
+    M.Exchange().attach(probe, pins=[])
+    M.Exchange().attach(probe)
+    assert seen[1]["pins"] == () and seen[2]["pins"] is None and seen[2]["configuration"] is None
+
+
+def test_the_setting_alone_reaches_the_attach(unset):
+    unset.setenv("VERITY_PINS", json.dumps([PIN]))
+    unset.setenv("VERITY_CONFIGURATION", "c" * 64)
+    seen, probe = _seeing()
+    M.Exchange().attach(probe)
+    assert seen[0]["pins"] == (PIN,) and seen[0]["configuration"] == "c" * 64
+    M.Exchange().attach(probe, pins=[dict(PIN)], configuration="c" * 64)
+    assert seen[1]["pins"] == (PIN,)
+
+
+@pytest.mark.parametrize("key, name, given", [
+    ("pins", "VERITY_PINS", [PIN | {"key-sha512": "cd" * 64}]), ("configuration", "VERITY_CONFIGURATION", "d" * 64)])
+def test_a_keyword_and_a_setting_that_differ_are_refused_by_name(unset, key, name, given):
+    unset.setenv("VERITY_PINS", json.dumps([PIN]))
+    unset.setenv("VERITY_CONFIGURATION", "c" * 64)
+    seen, probe = _seeing()
+    with pytest.raises(ValueError, match=rf"probe: the launcher's {key} differ from {name}"):
+        M.Exchange().attach(probe, **{key: given})
+    assert seen == []
+
+
+def test_an_engine_attach_after_the_weights_are_registered_is_refused():
+    """An engine's attach after `RegisteredValues` is refused by name; one that names no engine process (admission on
+    the loaded engine's exchange) still attaches."""
+    seen, probe = _seeing()
+    ex = M.Exchange()
+    ex.attach(probe, process=H.ENGINE)
+    ex.emit(H.RegisteredValues((("w", "W"),), operands={"w": 0}))
+    with pytest.raises(RuntimeError, match="probe attached after the model's weights were registered: an attach in "
+                                           "the engine runs before the load"):
+        ex.attach(probe, process=H.ENGINE)
+    ex.attach(probe)
+    assert len(seen) == 2 and M.Exchange().registered is False
+
+
+def test_a_scheme_that_reads_its_pin_gets_the_settings_and_refuses_by_name_without_one(unset):
+    """A stand-in for the wipe's attach, which reads its memory challenger's key from ``ctx["pins"]``: the setting's
+    pin reaches it through the exchange alone, and with none handed it refuses by name."""
+    def attach(ex, ctx):
+        if not ctx["pins"]:
+            raise ValueError("wipe: no pin was handed to it (ctx['pins'], the application's [[pin]] entries)")
+        return [p["key-sha512"] for p in ctx["pins"] if p["party"] == "memory-challenger"]
+
+    wipe = NS(name="wipe", settings={}, check_settings=lambda s: None, attach=attach, requests=lambda ctx: ())
+    with pytest.raises(ValueError, match=re.escape("wipe: no pin was handed to it")):
+        M.Exchange().attach(wipe, process=H.ENGINE)
+    unset.setenv("VERITY_PINS", json.dumps([PIN]))
+    assert M.Exchange().attach(wipe, process=H.ENGINE) == [PIN["key-sha512"]]
 
 
 def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
@@ -307,3 +408,93 @@ def test_the_scheme_that_provides_admission_is_found_by_its_role():
     assert M.providing("admission").name == "network-attester"
     with pytest.raises(LookupError, match="one declared scheme provides 'nothing', not 0"):
         M.providing("nothing")
+
+
+def _declared(name: str, **declared) -> NS:
+    attached = []
+    return NS(**{"name": name, "settings": {}, "check_settings": lambda own: None, "requests": lambda ctx: (),
+                 "attach": lambda ex, ctx: attached.append(name), "attached": attached, "resource": "compute",
+                 "needs": frozenset(), "keeps_weight_copy": schemes.UNDECLARED, **declared})
+
+
+STORE = {"resource": "memory", "needs": frozenset({"store"})}
+
+
+@pytest.mark.parametrize("order", [("store", "copy"), ("copy", "store")])
+def test_storage_beside_a_scheme_keeping_a_weight_copy_is_refused_by_both_names_before_any_attaches(order):
+    made = {"store": _declared("storage", **STORE), "copy": _declared("keeps-copy", keeps_weight_copy=True)}
+    listed = [made[k] for k in order]
+    assert M.listed_refusals(listed) == [
+        "storage is storage (it needs the workload's store) and keeps-copy keeps a weight-derived copy "
+        "(keeps_weight_copy), so the weights would be resident outside storage's store: the two are "
+        "not attached in one process while the pairing awaits a decision"]
+    with pytest.raises(Refused, match="storage is storage .* and keeps-copy keeps a weight-derived copy"):
+        M.attach_listed(M.Exchange(), [(s, {}) for s in listed])
+    assert made["store"].attached == made["copy"].attached == []
+
+
+def _state(ex: M.Exchange) -> tuple:
+    return (dict(ex.attached), dict(ex.schemes), list(ex.requests), dict(ex.reports),
+            {h: list(s) for h, s in ex.subscribers.items()}, ex.declared, ex.fixed)
+
+
+@pytest.mark.parametrize("keeps", [True, schemes.UNDECLARED], ids=["keeps-copy", "undeclared"])
+@pytest.mark.parametrize("first", ["store", "other"])
+def test_a_bare_attach_beside_an_attached_scheme_is_refused_by_the_same_sentence_and_installs_nothing(first, keeps, tmp_path):
+    made = {"store": _declared("storage", **STORE), "other": _declared("other", keeps_weight_copy=keeps)}
+    second = "other" if first == "store" else "store"
+    ex = M.Exchange()
+    ex.attach(made[first])
+    before = _state(ex)
+    with pytest.raises(Refused) as e:
+        ex.attach(made[second], private=tmp_path)
+    assert str(e.value) == f"{made[second].name}: " + "; ".join(M.listed_refusals([made["store"], made["other"]]))
+    assert _state(ex) == before and made[second].attached == [] and not (tmp_path / made[second].name).exists()
+
+
+def test_a_bare_attach_of_storage_beside_one_that_declares_no_copy_is_attached_either_way():
+    for first, second in ((_declared("storage", **STORE), _declared("plain", keeps_weight_copy=False)),
+                          (_declared("plain", keeps_weight_copy=False), _declared("storage", **STORE))):
+        ex = M.Exchange()
+        ex.attach(first)
+        ex.attach(second)
+        assert list(ex.attached) == [first.name, second.name] and first.attached == [first.name]
+
+
+def test_a_bare_attach_of_pearl_plus_on_an_exchange_holding_pous_is_refused_before_its_attach_runs():
+    pous, pearl = M.named("pous"), M.named("pearl-plus")
+    ex = M.Exchange()
+    ex.schemes[pous.name] = pous
+    with pytest.raises(Refused, match="pous is storage .* and pearl-plus keeps a weight-derived copy"):
+        ex.attach(pearl)
+    assert pearl.name not in ex.attached and ex.requests == []
+
+
+@pytest.mark.parametrize("order", [("store", "other"), ("other", "store")])
+def test_storage_beside_a_scheme_that_has_not_declared_whether_it_keeps_a_copy_is_refused_naming_the_declaration(order):
+    made = {"store": _declared("storage", **STORE), "other": _declared("other")}
+    assert M.listed_refusals([made[k] for k in order]) == [
+        "storage is storage (it needs the workload's store) and other's declaration does not say whether it keeps a "
+        "weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it until it declares "
+        "that, and a scheme that keeps one beside storage awaits a decision"]
+
+
+def test_storage_beside_one_that_declares_no_copy_and_a_copy_without_storage_are_attached():
+    store, plain, copy = _declared("storage", **STORE), _declared("plain", keeps_weight_copy=False), _declared("keeps-copy", keeps_weight_copy=True)
+    wipe = _declared("wipe", resource="memory")
+    for listed in ([store, plain], [plain, store], [copy, plain], [copy, wipe]):
+        assert M.listed_refusals(listed) == []
+        M.attach_listed(M.Exchange(), [(s, {}) for s in listed])
+    assert store.attached == ["storage", "storage"] and copy.attached == ["keeps-copy", "keeps-copy"]
+
+
+def test_storage_beside_the_network_attester_is_not_refused_for_a_weight_copy():
+    pous, attester = M.named("pous"), M.named("network-attester")
+    assert attester.keeps_weight_copy is False and M.storage(pous)
+    assert M.weight_copy_refusals([pous, attester]) == M.weight_copy_refusals([attester, pous]) == []
+
+
+def test_the_declared_storage_and_weight_copy_schemes_are_refused_together():
+    pous, pearl = M.named("pous"), M.named("pearl-plus")
+    assert pearl.keeps_weight_copy is True and M.storage(pous) and not M.storage(M.named("wipe"))
+    assert M.listed_refusals([pous, pearl]) == M.listed_refusals([pearl, pous]) != []

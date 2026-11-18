@@ -69,6 +69,7 @@ PART=${A5_PARTITION:-$TREE/benchmarks/one_stage/llama32_1b_rope_d64_l0.json}
 ROOT=${A5_ROOT:-$WORK/a5-llama1b}
 BASE=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
 D=$BASE/$ROW WD=$BASE/serving-rows FW=${A5_FLOCK_WORK:-$ROOT/flock-work} KEPT=$BASE/unpublished
+export VERITY_PROTOCOLS_CONFIG=${VERITY_PROTOCOLS_CONFIG:-"{\"private\": \"$ROOT/private\"}"}  # where a replay bundle's keys and salts go
 VENV=${VENV:-$WORK/venv312} HF_HOME=${HF_HOME:-$WORK/hf} A5_COINS=${A5_COINS:-dev} A5_PLAIN=${A5_PLAIN:-}
 CLEAN_PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 BOOT="(cd adapters/vllm && WORK=$WORK bash verity_vllm/ops/pod_bootstrap.sh --cases $ROLE)"

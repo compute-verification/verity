@@ -382,7 +382,7 @@ open FlockSoundness.Discharge.Recursion (HClass)
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass)
 
 /-- **Row R's `hsched`**: at row G's table `i`, where `structureOf` returns at its shape, the schedule's coin counts

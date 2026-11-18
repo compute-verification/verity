@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import docket_digest as DD
 from verity.commitments import salt_file as SF
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.periods import interface as IF
@@ -64,7 +65,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.checkpoint_index import read_safetensors_header
@@ -204,7 +205,7 @@ class Tie:
                           registered=IF.Registered(params, tables, reads=tuple(IF.coalesce(reads))),
                           order=IF.ordered({IF.descriptor_id(fn): n for fn, n in templates}, runs, starts) if runs else None)
 
-    def window(self, design: dict[str, Any], cap: int, values: dict[str, G.Registered] | None = None) -> IF.Window:
+    def window(self, design: dict[str, Any], cap: int, values: dict[str, RV.Registered] | None = None) -> IF.Window:
         """The tie's window under ``design`` in members of at most ``cap`` units, ``values`` the committed weights (the
         committer's; none for the verifier's empty window), and its supplied values (`supplied_values`). Under a ``work:K``
         design every template is credited alike (work 1), each floor the one the audit's stream reproduces at the rate
@@ -218,10 +219,10 @@ class Tie:
         win.registered = {**(values or {}), **self.supplied_values(win.window.partition_digest)}
         return win
 
-    def supplied_values(self, program: str) -> dict[str, G.Registered]:
-        """Each chain's supplied values committed as core's ``registered.Registered`` under ``program`` (the window's
+    def supplied_values(self, program: str) -> dict[str, RV.Registered]:
+        """Each chain's supplied values committed as core's ``registered_value.Registered`` under ``program`` (the window's
         partition digest) at their public salts, so the committer and the verifier make the same value."""
-        return {n: G.Registered.commit(program, n, [row], G.supplied_salts(program, n, 1), schema=SCHEMA_HM96_SHA512_ROW_V2)
+        return {n: RV.Registered.commit(program, n, [row], RV.supplied_salts(program, n, 1), schema=SCHEMA_HM96_SHA512_ROW_V2)
                 for c in self.chains for n, row in c.supplied().items()}
 
     def digest(self, design: dict[str, Any], cap: int) -> str:
@@ -474,7 +475,7 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
         win.write(win.close(), a.out, {"tie": TIE_TAG, "program": t.program, "model": t.model, "shards": t.shards}, registrar=R)
         rec = json.loads((Path(a.out) / "registration.json").read_text())
         print(json.dumps({"circuit": rec["window"]["circuit"], "run": t.run, "units": t.units(), "members": len(win.window.members),
-                          "mismatched": {k: len(v) for k, v in bad.items()}, "registration": R.digest(rec),
+                          "mismatched": {k: len(v) for k, v in bad.items()}, "registration": DD.digest(rec),
                           "roots": WeightsRegistration.of(registration, a.registration_out).roots}))
         return 0
     record = WW.weights_record(registered, x.checkpoint_dir, manifest, grain=grain)

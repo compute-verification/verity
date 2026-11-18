@@ -8,6 +8,7 @@ import math
 
 import budget as B
 import pytest
+from verity_machine_model.model import DATA, data_device, device
 
 FAM = {f.name: f for f in B.FAMILIES}
 #: 1 + γ at y = 0, the machine model's ratio on each family's measured kernel (budget_fill.json's first point)
@@ -198,3 +199,9 @@ def test_a_card_no_family_prices_is_refused_with_where_its_price_goes():
     with pytest.raises(SystemExit, match=r"no family of budget.FAMILIES prices NVIDIA H100 80GB HBM3 \(h100\): add a "
                                          r"Family with card='h100', its gpu_usd_h"):
         B.main(["--card", "NVIDIA H100 80GB HBM3"])
+
+
+def test_the_machine_models_own_familys_data_is_data():
+    """`budget_fill` reads every family's data with `device`, which gives `DATA` for the machine model's own family."""
+    own = [f for f in B.FAMILIES if f.device == data_device()]
+    assert own and all(device(f.device) == DATA for f in own)

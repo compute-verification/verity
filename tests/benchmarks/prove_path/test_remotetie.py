@@ -70,13 +70,15 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_class import Tables, WindowClass
 from verity_vllm.pipeline import serve_tie as TIE
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.words import chunk_words, ids_words
 
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as REG
 from verity.commitments import randomness as RND
 from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
 from verity.circuits.codec import canonical_json, program_digest
@@ -291,11 +293,11 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     ``registration.json``), and the verifier's own window from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
     win = IF.Window(c, RUN, SAMPLING_DESIGN, 64, registered={**toy.values, **_reuse(toy, toy.h1.W)}, forms=WRS.FORMS)
-    win.supply(G)
+    win.supply()
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0}}
-    win.write(committed, out, prov, registrar=REG, previous=REG.digest(toy.h1.W))
+    win.write(committed, out, prov, registrar=REG, previous=DD.digest(toy.h1.W))
     mine, _doc = IF.of_records(out, SAMPLING_DESIGN, WT.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine,
@@ -304,7 +306,7 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
 
 def _by_hand(toy, written, W: dict) -> dict:
     """The window's record R chained after ``W`` instead and registering ``W``'s tables, written by hand."""
-    return {**written.R, "previous": REG.digest(W), "registered": [
+    return {**written.R, "previous": DD.digest(W), "registered": [
         {**{e["value"]: e for e in W["registered"]}[_names()[p]], "value": p} if p != SS.SCAN_STATE else
         written.own[p] for p in toy.low.circuit.registered.values]}
 
@@ -324,7 +326,7 @@ def _words(c) -> dict[str, int]:
 
 def _check(written, toy, W: dict, R: dict):
     """R1-R7 on ``R`` against the verifier's own window, with the log [W] and each table an output value reusing W's."""
-    mine, dW, words = written.mine, REG.digest(W), _words(toy.low.circuit)
+    mine, dW, words = written.mine, DD.digest(W), _words(toy.low.circuit)
     fresh = {v: int(e["words"]) for v, e in written.own.items()}
     return REG.check(R, mine.program, mine.query, SAMPLING_DESIGN, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (), [W],
                      registered={**words, **fresh}, outputs={p: {"record": dW, "value": _names()[p]} for p in words}, window_root=OPEN)
@@ -337,7 +339,7 @@ def test_r_is_the_commit_record_credit_reads_and_the_registration_one_stage_acce
     it to the verifier's own) samples a reader of every table, each table's readers templates of their own; ROOTS1 holds
     W's tables to it, H1 names it as its Commit record, credit's digest of it is one-stage's, and R1-R7 accept it."""
     run, R, W = toy.h1, written.R, toy.h1.W
-    assert R["format"] == REG.FORMAT_V2 and R["previous"] == REG.digest(W)
+    assert R["format"] == DM.REGISTRATION and R["previous"] == DD.digest(W)
     assert sorted(e["value"] for e in R["registered"]) == sorted(toy.low.circuit.registered.values)
     strata, readers = {s["template"]: s for s in R["law"]["strata"]}, {}
     for (tid, _port, _u), (table, _row) in _reads(toy.low.circuit).items():
@@ -347,9 +349,9 @@ def test_r_is_the_commit_record_credit_reads_and_the_registration_one_stage_acce
     assert CR._arow(_rounds(run), W["registered"], R["registered"], _layout(), SV.PREFIX) is None
     assert CT.reused(run, W, R) is None
     named, details = CT.named(SimpleNamespace(**vars(run), commit_record=lambda _run: (W, R)))
-    assert details == {"named": True, "registration": REG.digest(W), "record": REG.digest(R)}
+    assert details == {"named": True, "registration": DD.digest(W), "record": DD.digest(R)}
     (digest, _entries), why = CR.commit_of(named)
-    assert why is None and digest.hex() == REG.digest(R) == REG.digest(json.loads((written.dir / "registration.json").read_text()))
+    assert why is None and digest.hex() == DD.digest(R) == DD.digest(json.loads((written.dir / "registration.json").read_text()))
     assert list(_check(written, toy, W, R).codes) == []
 
 
@@ -415,7 +417,7 @@ def _v1_case(one, toy, written, W: dict, R: dict) -> dict:
                 "verdicts": {"lean": {"accepted": True, "of_record": True, "registered": opened}}}
     params = one.RP.params(program, query, SAMPLING_DESIGN, CS.expected_ports(mine), written.leaf_layer, "1/20", log=[W],
                            registered={**words, **{v: int(e["words"]) for v, e in written.own.items()}}, scheme=CS.SCHEME)
-    params |= {"outputs": {p: {"record": REG.digest(W), "value": _names()[p]} for p in words}, "window_root": OPEN,
+    params |= {"outputs": {p: {"record": DD.digest(W), "value": _names()[p]} for p in words}, "window_root": OPEN,
                "parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]]}
     return {"commitment": canonical_json(R).hex(), "evidence": canonical_json(evidence).hex(),
             "params": json.loads(json.dumps(params))}
@@ -442,7 +444,7 @@ def _serve(one, root: Path, v1: dict, W: dict, R: dict, period_exe: Path) -> Pat
     lines = []
     for kind, name, r in (("registration", TIE.W_FILE, W), ("record", TIE.R_FILE, R)):
         (root / "h1" / "w0" / name).write_text(json.dumps(r, indent=1) + "\n")
-        lines.append({"window": 0, "kind": kind, "file": f"w0/{name}", "digest": REG.digest(r)})
+        lines.append({"window": 0, "kind": kind, "file": f"w0/{name}", "digest": DD.digest(r)})
     (root / "h1" / TIE.LOG).write_text("".join(json.dumps(x) + "\n" for x in lines))
     _period(one, period_exe, root / one.SC.PERIOD_PIECE, [R])
     return root
@@ -495,7 +497,7 @@ def test_one_stage_and_the_policy_accept_r_on_the_log_w_and_the_period_names_r(t
     Remote, on the policy's case and the period's, rejects naming SPOT missing: it reads no subprotocol's case
     while one has none. So its answer here is that refusal and not the period's, and this test does not check that remote
     carries a subprotocol's refusal or holds its own tie."""
-    SC, d = lean.one.SC, REG.digest(written.R)
+    SC, d = lean.one.SC, DD.digest(written.R)
     assert (lean.rc, [(head, c["protocol"], c.get("verdict")) for head, c in lean.lines]) == (1, [
         ("CASE", SC.V1, "accept"), ("NOT_WRITTEN", SC.SAMPLED, None), ("CASE", SC.INFERENCE_ONLY, "accept"),
         ("CASE", SC.PERIOD, "reject")]), lean.lines
@@ -523,7 +525,7 @@ def test_a_period_naming_w_is_refused_before_any_composite(toy, written, lean, t
     period = tmp_path / "pouw-period"
     _period(lean.one, lean.exes.period, period, [toy.h1.W])
     with pytest.raises(SC.Refused, match="remote's record tie rejects it"):
-        SC.period_case(period, REG.digest(written.R))
+        SC.period_case(period, DD.digest(written.R))
     rc, got, missing = _remote(lean, tmp_path / "remote", period)
     assert (rc, got["verdict"], got["reason"], missing) == (1, "reject", f"params: {SC.SAMPLED} is missing",
                                                             [SC.SAMPLED]), got
@@ -537,6 +539,6 @@ def test_one_stage_s_lean_accepts_a_flipped_w_s_record_only_on_its_own_log(toy, 
     SC, W2 = lean.one.SC, _flipped(toy.h1).W
     R2 = _by_hand(toy, written, W2)
     got, _ = SC.lean_answer(lean.exes.v1, _v1_case(lean.one, toy, written, W2, R2), tmp_path)
-    assert (got["verdict"], got["commitment"]) == ("accept", REG.digest(R2)), got
+    assert (got["verdict"], got["commitment"]) == ("accept", DD.digest(R2)), got
     got, _ = SC.lean_answer(lean.exes.v1, _v1_case(lean.one, toy, written, toy.h1.W, R2), tmp_path)
     assert got["verdict"] == "reject" and got["reason"].startswith("registration: "), got

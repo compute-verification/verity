@@ -253,10 +253,9 @@ def serve(a: argparse.Namespace) -> int:
     plan_file.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in plan))
     arm = S.ARMS["record"]
     site = edge_site(scratch / ".site", arm)
-    S.kit()
-    from verity_bench import kit
+    from verity.ports import free_port
 
-    port = kit.free_port()
+    port = free_port()
     argv = served_argv(a, checkpoint, port)
     srv = out / "server"
     srv.mkdir(exist_ok=True)

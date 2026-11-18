@@ -451,7 +451,7 @@ theorem target_unbounded (k : Verity.Registration.Composite) (a : Subprotocol) :
   exact le_top
 
 /-- The idle finder outputs no collision. -/
-theorem finder_pr (H : Claims.Msg → Claims.Msg) : finder.Pr H = 0 := by
+theorem finder_pr (H : Hash.Msg → Hash.Msg) : finder.Pr H = 0 := by
   unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   simp [finder]
   exact Or.inl rfl

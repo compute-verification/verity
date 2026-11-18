@@ -20,17 +20,6 @@ served-rows tie's runs on a sealed served execution phase:
   (with `WINDOW=served`, the in-Commit hook's), and the circuit prover and Lean built from the run's tree. With `A5_ROW_DIR` it takes a
   single-GPU deferred Commit's row dir and sealed bundle in place of the fixture, and with `WINDOW=served` the execution phase its C2
   site committed (`A5_WINDOW`).
-- `../one_stage/prove_bundle.sh`: a sampled-proof-block replay bundle (`benchmarks/one_stage/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
-  `../one_stage/prove_bundle.py`: `PB_BUNDLE` of the execution phase `PB_WINDOW`, else `BUNDLE_WINDOW`, the registered fixture `bundle-window` (a W8A8 MLP's execution phase under a
-  test key, its tampered twin and the interfaces' bundle of four sampled proof blocks under its registered `subset:4`).
-  `../../tests/benchmarks/one_stage/test_prove_bundle.py` holds that bundle to the execution phase's public part (`../../tests/benchmarks/one_stage/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's sample to be live. The bundle is held to the prover's execution phase: its own check (the sample's
-  sampling design the registered one among it), its run, docket and partition, each sampled member's public body and a live
-  sample's receipt and record. Each sampled member is one `prove --zk` session (behind the Lean ZK server with `ZK_SERVER=1`), one at a time, served the bundle's
-  sample, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `verity/protocols/proofs/flock/prover/agreement/zk_mutants.py`'s one-bit
-  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered execution phase's member, refused by Lean (and with
-  `ZK_SERVER=1` stopped by the ZK server as well). `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and ZK server into its `out/bin`, stamped
-  with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
-  source, so M3's reserved time isn't spent on the build.
 
 ## The prove path
 
@@ -145,7 +134,8 @@ What doesn't change:
 ## What an accepted audit means
 
 Each guarantee below is listed in the lock (`security/lean-audit.json`), which records its statement, the definitions it
-reads and its named assumptions.
+reads and its named assumptions. On a served execution phase, an accept holds each sampled block on its own inputs; the wires
+between blocks are not held, a limit that stands until the registered circuit carries its wires as edges.
 
 **A `--zk` session's acceptance, read in the sampling relation.** `Flock.SecurityProofs.SampledKSLiveV3`
 (`security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `verity-verify-proof verify --zk` accepts the transcript and the

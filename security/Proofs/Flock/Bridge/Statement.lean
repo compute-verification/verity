@@ -91,7 +91,7 @@ def SampledKSLive : Prop :=
     -- the population's strata
     (ns : List ℕ) (_hns : ns.sum = n)
     -- what the sampling statement carries and `RelS` doesn't read
-    (desc : Claims.Msg) (q : Claims.Sampling.Query),
+    (desc : Hash.Msg) (q : Claims.Sampling.Query),
     let L := SamplingDesign.execOS (n := n) src (.subset kd) n
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
@@ -170,7 +170,7 @@ def _root_.Flock.Bridge.TransportsLive : Prop :=
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
     ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
-      ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
+      ∃ d : Hash.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 /-- **`SampledKSLive` is stated**: it, and the definitions it reads, equal to itself. -/
 def SampledKSLiveStated : Prop :=

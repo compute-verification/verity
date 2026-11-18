@@ -7,6 +7,7 @@ the e2e slice's o_proj operand A, 8192 x 4096 int8, beside cuBLASLt's int8 GEMM 
 
 Files:
 
+- `salts_check.h`: what `Committer::salts` refuses on the host before a salt kernel has its buffer's address.
 - `commit_gpu.cuh`: the committer (device code, constants, `Committer`); its header has the construction. A kernel that
   commits rows it produces includes it (see Tile leaves). The frame's leaf, pad and node, the hm96 leaf's mask, salt
   digest and value, and the code that builds the constants are the GPU's one row commitment, `verity/commitments/cuda/row_commit.cuh`;
@@ -180,7 +181,7 @@ rows; tile leaves make it hash exactly the tile's bytes, with R times fewer leav
   aligned subtree when 128/R divides ceil(M/R) (M a multiple of 128). At R = 128 the tile is one leaf.
 - **Statement and code.** `reference.permute(A, M, K, R)` is the layout; the reference commits the permuted operand with
   `verity.commitments`, unchanged. The GPU reads A in place (`TileGeom`, `TileSrc`: a leaf's 16-byte loads gathered
-  from its R rows, zero past M): `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)`, `salts(salts, stream)` before the operand
+  from its R rows, zero past M): `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)`, `salts(salts, bytes, stream)` before the operand
   exists, `tiles(A, M, K, R, seg, stream)`, `nodes(stream)`. `commit_gpu check|bench PARAMS tile|tileseg M K R …` and
   `gpu.sh`'s tile sweep (`TILE_M`, `TILE_R`, `TILESEG_R`) run it.
 
@@ -235,7 +236,8 @@ cost to the stage when the root isn't needed before the GEMM ends.
 ### For a producer's epilogue
 
 Include `commit_gpu.cuh`. Before the producer runs: `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)` and
-`salts(salts, stream)`, salts the device buffer of fresh salts (192 bytes a leaf in leaf order, 16-byte aligned). In the
+`salts(salts, bytes, stream)`, salts the device buffer of fresh salts (192 bytes a leaf in leaf order, 16-byte aligned) and
+bytes its length, refused on the host unless it is exactly the leaves' (`salts_check.h`). In the
 epilogue, for each whole block a CTA holds
 (R divides its rows, 32 divides its columns): `hash_after_block(C.mid_P, src, 32 * R, x)` with `src` any type whose
 `ld16(off)` returns the block's bytes [off, off + 16) in row-major order (from shared memory, or `TileGeom::block(pos)` from
@@ -250,7 +252,7 @@ the outer hash, as `seg_kernel` and `RowBytes` do, `SX = 4`; on the small path p
 CTA is 128 threads with no shared memory (a CTA's 7 levels pass through global memory between `__syncthreads`) and at
 most 102 registers a thread (`SMALL_MINB`, 5 CTAs an SM; the leaf kernel then takes 96
 without spilling, where it took 156 uncapped), and a consumer sets their preferred carveout to the GEMMs'.
-- `salts(salts, stream, s0, ns)`: slots s0 .. s0 + ns - 1 of the domain's commitments, each slot's S (M_key y, c) from its
+- `salts(salts, bytes, stream, s0, ns)`: slots s0 .. s0 + ns - 1 of the domain's commitments, each slot's S (M_key y, c) from its
   own n salts (slot s0 + j's at `salts + 192 n j`);
   with slot 0, the frame leaf's first block per position (`F`: it holds the position but not h, so it compresses ahead;
   r2's precomputed first blocks, applied to this format) and the pads with every 128-leaf subtree that holds only pads.

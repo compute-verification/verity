@@ -1,5 +1,5 @@
 """charge_rows: `ChargeLink_v2`'s carry rows committed window to window under `window_charge.VALUE`, and the verifier's
-chain check over their openings (`network.verifier.charge_check.window_check_chain`)."""
+chain check over their openings (`network.prover.charge_check.window_check_chain`)."""
 from __future__ import annotations
 
 import json
@@ -10,8 +10,8 @@ import pytest
 from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.interface.charge import window_charge as WC
-from verity.protocols.proofs.spot.verifier.one_stage import produced
-from verity.protocols.resource_accounting.network.verifier import charge_check as CK
+from verity.protocols.proofs.spot.prover import produced as PP
+from verity.protocols.resource_accounting.network.prover import charge_check as CK
 from verity.protocols.resource_accounting.network.prover import charge_rows as CR
 
 FIXTURE = Path(__file__).parents[1] / "verifier" / "fixtures" / "arith_encode_vectors.json"
@@ -75,7 +75,7 @@ def test_rows():
     assert v0.salts[0] != CR.start_salt(PROGRAM) and v0.bcs[0] != CK.start_opening(PROGRAM, book)
     assert (v1.rows[0], v1.salts[0], v1.bcs[0]) == (v0.rows[1], v0.salts[1], v0.bcs[1])
     assert WC.reads() == {WC.VALUE: {"carry_in": 0, "carry_out": 1}}
-    forged = produced.commit(PROGRAM, WC.VALUE, [WC.CC.row(WC.encode(WC.WindowCarry())), v0.rows[1]], REGISTRATION,
+    forged = PP.commit(PROGRAM, WC.VALUE, [WC.CC.row(WC.encode(WC.WindowCarry())), v0.rows[1]], REGISTRATION,
                              [hm96.SHA512.fresh_salt(), hm96.SHA512.fresh_salt()], WC.CC.WORD_BITS, SCHEMA)
     assert CK.window_check_chain([list(forged.bcs)], PROGRAM, book).startswith("CH-first")
 

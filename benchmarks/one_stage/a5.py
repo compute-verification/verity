@@ -4,7 +4,7 @@ docket is over serving rows of the Commit's own values, and the sampled proof bl
 A deferred Commit's window is committed after serving from its sealed replay bundle opened against its record and bound to its run
 root. Serving's commitment is the record's roots, under the scheme the record was committed in (rows-sha512 by default, vllm-v1 an
 older record's), and the window's roots are a fresh commitment, so the window is core's `stand-in`, its link to them provenance (`of`:
-the record's commitment and run root, the bundle's manifest digest and `verity-vllm serving-rows`): that the rows hold the values under
+the record's commitment and run root and `verity-vllm serving-rows`): that the rows hold the values under
 the record's roots is the committer's opening, not proved. A SHA-512 record does not make it `served`; it becomes `served` once a
 circuit opens the record's own leaves (`pipeline.deferred_rows`).
 
@@ -16,7 +16,7 @@ under a SHA-512 TP run root, as it takes a deferred Commit's: a TP Commit's rank
 SHA-512 (`tp.run_root`, ``verity/tp-run-root/v2``), and an old record's SHA-256 v1 root is refused by name before the sample
 (`source`: `sha512`). A TP Commit that wrote no window and deferred its ranks' replay to sealed bundles has each rank's window
 from its bundle afterwards (`verity-vllm tp-serving-rows`, `tp.serving_rows.from_bundle`), under the same run and `tp`: a
-`stand-in`, its `of` the rank's rows-sha512 root under the TP run root and the bundle's manifest digest, made after the Commit and
+`stand-in`, its `of` the rank's rows-sha512 root under the TP run root, made after the Commit and
 before the sample (`a5_tp.sh` with `A5_WINDOWS=bundles`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
@@ -64,7 +64,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   root, in its check before the sample and in the stream's dockets its run of record reads (a root both its verifiers
   refuse is `registration.HISTORY`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
   either kind names the record's commitment, and it is a stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the
-  run root of record, the digest of the bundle's manifest it opened and that commitment, or a served window whose run is the run
+  run root of record and that commitment, or a served window whose run is the run
   root of record, a SHA-512 root, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose
   `of` and `link` are
   `tp.serving_rows.stand_in` over the bundle the record names for the rank, under a SHA-512 TP run root, its run, `tp` and served
@@ -230,6 +230,7 @@ HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.verifier import levels as LV  # noqa: E402
 import a5_memo as AM  # noqa: E402
@@ -251,6 +252,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     verifier as V,
 )  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 from verity.commitments.periods import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
 
 RANK_PORTS = 16
@@ -362,7 +364,7 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
               *([("leaf_layer", "the leaf layer over the public bodies")] if leaf_layer is not None else []),
               *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain")),
               *((f"{x}:{v}", "a registered value's layout") for v, _n, w in taken
-                for x in ("leaves", "words", "domain", *(("word_bits",) if w != REG.WORD_BITS else ())))]
+                for x in ("leaves", "words", "domain", *(("word_bits",) if w != RV.WORD_BITS else ())))]
     values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")
                    for p in sorted(want)) + tuple(S.Value(v, None, "serve", registered=True) for v, _n, _w in taken)
     spec = S.Spec(values, S.SamplingDesign(a.rule),
@@ -492,7 +494,7 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     holds, which the evidence verified under, and the id of the one session the auditor's ledger opens on the window's
     root under that key and the stream's copy of main's history (`challenger.pinned_session`, the read `coins_reason`
     makes)."""
-    after, root = bytes.fromhex(R.digest(rec)), a.window_root
+    after, root = bytes.fromhex(DD.digest(rec)), a.window_root
     published = a.coins.evidence()
     ev = AC.evidence(published, segment)
 
@@ -914,7 +916,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
     receipt = R.receipt(rec, "one-stage-e2e verifier (a5.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
+    summary.update(registration=DD.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
                    circuits={mm["m"].template: {"pin": mm["pin"], "class": mm["class"], "compose_s": mm["compose_s"],
                                                 "k_log": mm["st"]["meta"].get("k_log"), "unit_log": mm["st"]["meta"].get("unit_log"),
                                                 "vus_per_block": mm["st"]["meta"].get("vus_per_block"),
@@ -957,7 +959,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             a.stage["coins"].release(0)
     elif not streamed(a):
         p = a0.challenger_sample(a.lean, ["--population", str(n_all), "--k", str(sampling_design["k"])],
-                               {"law": "subset", "k": sampling_design["k"]}, n_all, R.digest(rec), out / "draw.log")
+                               {"law": "subset", "k": sampling_design["k"]}, n_all, DD.digest(rec), out / "draw.log")
         union_sample = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     else:
         trees = window_trees(a, members)
@@ -2344,17 +2346,15 @@ def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | No
 
 
 def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
-    from verity_vllm.pipeline import deferred_rows as DRW, replay_bundle as RB
+    from verity_vllm.pipeline import deferred_rows as DRW
 
     t0 = time.time()
     r = DRW.of_record(a.bundle, a.row_dir)
     mine = DRW.window_of(r, a.partition)
-    manifest = hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest()
-
     weights_root = str((r.row["commit"].get("weight_registration") or {}).get("root") or "")
 
     def source(w: dict) -> dict:
-        src = DRW.source(w, mine.run, manifest, r.commitment, weights_root)
+        src = DRW.source(w, mine.run, r.commitment, weights_root)
         return {"ok": all(src.values()), "codes": [c for c, v in src.items() if not v],
                 "detail": {"kind": w.get("kind"), "run": w.get("run"), "commitment": w.get("commitment"), "of": w.get("of")}}
 

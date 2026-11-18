@@ -28,6 +28,8 @@ ENV = {"VERITY_PROTOCOLS": "stand-in", "VERITY_PROTOCOLS_CONFIG": json.dumps({**
 @pytest.fixture(autouse=True)
 def in_tmp(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    for name in ("VERITY_PINS", "VERITY_CONFIGURATION"):
+        monkeypatch.delenv(name, raising=False)
     return tmp_path
 
 
@@ -75,7 +77,7 @@ def test_the_engine_attaches_each_scheme_with_its_context_and_answers_what_vllms
     ex, cfg = messages.Exchange(), vllm_config()
     assert SP.attach(ex, cfg, *SP.config(ENV)) == [held]
     assert got == [(ex, {"settings": {"k": 1}, "build": ex.key, "gate": None, "private": Path(PRIVATE, "stand-in"),
-                         "process": H.ENGINE, "feed": FEED})]
+                         "process": H.ENGINE, "feed": FEED, "pins": None, "configuration": None})]
     assert Path(PRIVATE, "stand-in").is_dir()
     assert cfg.cache_config.num_gpu_blocks_override == 64
     assert ex.declared.properties == {"model": "m", "execution": None, "eager": True, "world": 1, "dtype": "bfloat16",
@@ -299,7 +301,7 @@ def test_the_front_answers_a_schemes_route_with_the_body_as_it_streams_in(front_
     assert answer(sent) == (200, "fed") and not app_calls
     assert front_scheme["bodies"] == [("POST /feed HTTP/1.1", "ab", [b"0 1\n", b"1 2\n"])]
     assert front_scheme["ctx"] == [{"settings": {"k": 0}, "build": front.ex.key, "gate": None, "private": None, "process": H.FRONT,
-                                    "feed": FEED}]
+                                    "feed": FEED, "pins": None, "configuration": None}]
 
 
 def test_an_input_a_scheme_refuses_on_arrival_is_answered_400_and_never_reaches_the_server(front_scheme):
@@ -309,6 +311,14 @@ def test_an_input_a_scheme_refuses_on_arrival_is_answered_400_and_never_reaches_
     arrived, done = front_scheme["events"]
     assert (arrived.input, arrived.length, arrived.first_line, done) == (
         "r1", len(GREEDY["body"]), "POST /v1/completions HTTP/1.1", H.OutputsComplete("r1", 0))
+
+
+@pytest.mark.parametrize("body,user", [(b'{"temperature": 0, "user": "u-7"}', "u-7"), (b'{"temperature": 0}', None),
+                                       (b'{"temperature": 0, "user": 7}', None)])
+def test_an_arrival_carries_the_user_its_body_names_and_none_without_one(front_scheme, body, user):
+    front = SP.Front(lambda *a: pytest.fail("the server saw a refused input"), FRONT_ENV)
+    drive(front, http("/v1/completions", [("x-bad", "1"), ("x-request-id", "r1")]), [{"type": "http.request", "body": body}])
+    assert front_scheme["events"][0].user == user
 
 
 @pytest.mark.parametrize("path,body,why", [
@@ -424,7 +434,7 @@ def test_a_lost_releases_request_in_the_server_is_given_its_disconnect_and_answe
     the client gets the stream's end, with no later chunk. Where a whole answer's head had gone with its length, which
     takes an open gate, its body goes on, and the front adds nothing."""
     from verity.protocols.resource_accounting.network.prover import admission as NA
-    from verity.protocols.resource_accounting.network.verifier import release as REL
+    from verity import release as REL
 
     name = NA.scheme_name()
     late = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else

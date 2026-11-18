@@ -1862,11 +1862,8 @@ def source_commit() -> str | None:
 
 
 def file_digest(p: Path, algorithm: str = "sha256") -> str:
-    h = hashlib.new(algorithm)
     with open(p, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 24), b""):
-            h.update(chunk)
-    return h.hexdigest()
+        return hashlib.file_digest(f, algorithm).hexdigest()
 
 
 #: the ranks that copy their KV pool to host memory at an edge (`boundary.KV_COPY`, which this module doesn't import)
@@ -1939,21 +1936,22 @@ def outside(private: Path, out: Path, flag: str = "--private") -> Path:
 
 #: the run's statement of what its launchers keep on the node, at its directory's root (`stated`)
 PRIVATE_PATHS = "private-paths.json"
-#: the names of what the launchers keep only in a private directory: no file or directory of a run's own has one
-PRIVATE_NAMES = ("plan.jsonl", "plan.base.jsonl", "capture/", "edges/", "step_trace.*.jsonl*", "ids.*.jsonl*",
-                 "outputs.jsonl", "outputs.*.jsonl*", "replay_steps.jsonl*", "replay_tokens.jsonl*",
-                 "replay_logprobs.jsonl*", "*.state.pkl", "*.fp.npy", "*.kv")
 
 
 def stated(private: Path) -> None:
     """``private`` added to the run's `PRIVATE_PATHS`, under research run where its directory is made:
-    ``{"schema": "private-paths/v1", "private": [each private directory, absolute], "names": PRIVATE_NAMES}``."""
+    ``{"schema": "private-paths/v1", "private": [each private directory, absolute], "names": [...]}``, the names
+    the adapter's list (`verity_vllm.pipeline.research_outputs.PRIVATE`) calls private."""
     held = SHARED.RESEARCH_RUN_DIR
     if not held or not Path(held).is_dir():
         return
+    if str(ROOT / "adapters/vllm") not in sys.path:
+        sys.path.insert(0, str(ROOT / "adapters/vllm"))
+    from verity_vllm.pipeline.research_outputs import PRIVATE
+
     f = Path(held) / PRIVATE_PATHS
     was = json.loads(f.read_text())["private"] if f.is_file() else []
-    doc = {"schema": "private-paths/v1", "private": sorted({*was, str(private)}), "names": list(PRIVATE_NAMES)}
+    doc = {"schema": "private-paths/v1", "private": sorted({*was, str(private)}), "names": list(PRIVATE)}
     f.write_text(json.dumps(doc, indent=1) + "\n")
 
 
@@ -2035,10 +2033,9 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    kit()
-    from verity_bench import kit as bench
+    from verity.ports import free_port
 
-    port = bench.free_port()
+    port = free_port()
     front = front_end(arm, getattr(a, "published_frontend", None))
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front,
                        published_args(getattr(a, "published_args", None)), limits=held is None)
@@ -2437,10 +2434,9 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
     srv = out / "server"
     srv.mkdir(parents=True, exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    kit()
-    from verity_bench import kit as bench
+    from verity.ports import free_port
 
-    port = bench.free_port()
+    port = free_port()
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context_of(loads, a.max_model_len))
     front = front_argv(port, a.front, cell_payload(cells), srv / "front.jsonl")
     try:
@@ -4459,11 +4455,23 @@ def components() -> dict:
     return MANIFESTS
 
 
+def settings_of(name: str, params: dict[str, Any]) -> dict[str, Any] | Exception:
+    """Component ``name``'s settings at ``params`` as its own check returns them, its defaults filled; the check's
+    refusal where it refuses them: `verity.config`'s `verity.channel.Refused`, or the ValueError of a protocol's own
+    parameters check (SPOT's `spot_params_of`)."""
+    from verity.channel import Refused
+
+    try:
+        return dict(components()[name].params(params))
+    except (Refused, ValueError) as e:
+        return e
+
+
 def feature_of(words: Sequence[str]) -> Feature:
     """``--feature NAME [KEY=VALUE ...]`` as an application states it: NAME one of its components (`components`),
     each KEY=VALUE a line of that component's ``[params."<id>"]``, VALUE read as TOML (a bare word that isn't TOML is a
-    string), the settings as the component's own check returns them, its defaults filled. Refused by name for a name no
-    component has or a setting the component doesn't declare."""
+    string), the settings as the component's own check returns them (`settings_of`). Refused by name for a name no
+    component has or a setting the component refuses."""
     name, *given = words
     table = components()
     if name not in table:
@@ -4476,12 +4484,11 @@ def feature_of(words: Sequence[str]) -> Feature:
             raise SystemExit(f"--feature {name}: {w!r} is no KEY=VALUE")
         try:
             params[key] = tomllib.loads(f"v = {text}")["v"]
-        except tomllib.TOMLDecodeError:
+        except tomllib.TOMLDecodeError as e:
+            print(f"[serve-tax] --feature {name}: {key}={text!r} is no TOML ({e}), read as that string", file=sys.stderr)
             params[key] = text
-    try:
-        settings = table[name].params(params)
-    except Exception as e:  # noqa: BLE001 - the component's check refuses in its own words (`verity.channel.Refused`)
-        raise SystemExit(f"--feature {name}: {e}") from None
+    if isinstance(settings := settings_of(name, params), Exception):
+        raise SystemExit(f"--feature {name}: {settings}")
     return Feature(name, tuple(sorted(settings.items())))
 
 
@@ -4492,11 +4499,8 @@ def feature(words: Sequence[str], stock: str) -> str:
     want = feature_of(words)
     for n in profile_features(stock):
         if (f := ARMS[n].feature) is not None and f.name == want.name:
-            try:
-                if feature_of([f.name, *(f"{k}={json.dumps(v)}" for k, v in f.settings)]) == want:
-                    return n
-            except SystemExit:
-                continue
+            if feature_of([f.name, *(f"{k}={json.dumps(v)}" for k, v in f.settings)]) == want:
+                return n
     raise NotImplementedError(f"benchmarks/serving-profiles-first-number: no arm over {stock} serves {want}")
 
 

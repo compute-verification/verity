@@ -1,4 +1,4 @@
-"""machine.py toolkit [VERSION] | arch [NAME] | gencode ARCH | sku [NAME] | session-node NAME SLOT: the kit's readers of the machine's record and the card's (`verity_bench.kit`),
+"""machine.py toolkit [VERSION] | arch [NAME] | card-arch SHORT | gencode ARCH | sku [NAME] | session-node NAME SLOT: the kit's readers of the machine's record and the card's (`verity_bench.kit`),
 printed for a shell script, or refused by name before the script takes a card.
 
     toolkit VERSION  `kit.toolkit`: $CUDA_HOME where it is set and not another version, else the directory the run's
@@ -8,6 +8,8 @@ printed for a shell script, or refused by name before the script takes a card.
     toolkit          `kit.machine_toolkit`: the toolkit the run's machine's `[properties]` list first.
     arch NAME        `kit.card_arch`: the `arch` of the card record whose `driver` holds NAME, the name nvidia-smi reports.
     arch             `kit.machine_arch`: the `arch` of the run's machine's card, with no card needed.
+    card-arch SHORT  The `arch` of the one GPU card file whose `short` is SHORT (`verity.device.gpu_card_called`), for a
+                     build whose caller names its card.
     gencode ARCH     `kit.arch_gencode`: nvcc's -gencode value for the target ARCH (sm_90a), from its architecture file.
     sku NAME         `kit.card_sku`: the `sku` of the card record whose `driver` holds NAME.
     sku              `kit.run_card_sku`: the `sku` of the card the run is on, `kit.card_sku` of the name
@@ -39,6 +41,13 @@ def main(argv: list[str]) -> int:
             print(kit.card_arch(name))
         case ["arch"]:
             print(kit.machine_arch())
+        case ["card-arch", short]:
+            from verity.device import gpu_card_called
+
+            try:
+                print(gpu_card_called(short, directory=kit.cards_directory())["arch"])
+            except KeyError as e:
+                raise SystemExit(e.args[0]) from None
         case ["gencode", arch]:
             print(kit.arch_gencode(arch))
         case ["sku", name]:

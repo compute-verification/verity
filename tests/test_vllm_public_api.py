@@ -283,6 +283,8 @@ PUBLIC = {
                                          "Pearl-C arm take their coins from",
     "verity_vllm.pipeline.replay_bundle": "I1: the replay bundle a Commit with --replay-deferred leaves for its C2 replay on CPU "
                                           "(MANIFEST, open_bundle), which benchmarks/one_stage opens",
+    "verity_vllm.pipeline.research_outputs": "I1: the names a run's public outputs never hold (PRIVATE), which "
+                                             "benchmarks/serve_tax states and refuses a public write by",
     "verity_vllm.pipeline.tp.rank_replay": "I1: the C2 of record on one rank of a TP Commit, and a rank's manifest (load, "
                                            "manifest_of_rank), which benchmarks/one_stage reads",
     "verity_vllm.program.model": "I7: what a model configuration is, and the roots that are functions of it (config_of, "
@@ -305,9 +307,6 @@ PUBLIC = {
                                         "LinearSite), which benchmarks/pouw's Pearl-C arms build",
     "verity_vllm.protocols.linear.vllm_site": "I1: the linear sites of a vLLM model, each called through the exchange (discover, "
                                               "attach), which benchmarks/pouw's Pearl-C arms attach",
-    "verity_vllm.protocols.poub.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
-                                                     "stands in for the process memory-accounting registers as poub-session and "
-                                                     "benchmarks/poub_session serves under",
     "verity_vllm.query.manifest.format": "I7: the required-value manifest's format, the vocabulary every manifest producer and "
                                          "consumer shares (load_program), which benchmarks/prove_path reads",
 }
@@ -328,7 +327,6 @@ KNOWN = frozenset({
     "verity_vllm.compiler.served_statics",
     "verity_vllm.compiler.served_tie",
     # the served circuits (`verity_vllm.definitions`), which code outside the adapter imports
-    "verity_vllm.definitions.encoding",
     "verity_vllm.definitions.numerics._jit",
     "verity_vllm.definitions.numerics.cublas_gemm_rows",
     "verity_vllm.definitions.numerics.deepgemm_twins",
@@ -356,7 +354,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.boolean_fp8_moe",
     "verity_vllm.definitions.registry.boolean_int8",
     "verity_vllm.definitions.registry.boolean_io_shell",
-    "verity_vllm.definitions.registry.boolean_silu",
     "verity_vllm.definitions.registry.boolean_stop_rule",
     "verity_vllm.definitions.registry.cublas_bf16",
     "verity_vllm.definitions.registry.cuda_rmsnorm",
@@ -384,7 +381,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.ref_prims",
     "verity_vllm.definitions.registry.sampling",
     "verity_vllm.definitions.registry.sampling_boolean",
-    "verity_vllm.definitions.registry.sampling_rows",
     "verity_vllm.definitions.registry.sparse_mla",
     "verity_vllm.definitions.registry.sparse_mla_split",
     "verity_vllm.definitions.registry.stop_rule",
@@ -452,8 +448,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.definitions.registry.hopper', '_BoundPrims'),
     ('verity_vllm.definitions.registry.lifted', '_LIFTED_COMPOSITES'),
     ('verity_vllm.definitions.registry.lifted', '_UNLIFTED_OF'),
-    ('verity_vllm.definitions.registry.prims', '_silu_f32_bits'),
-    ('verity_vllm.definitions.registry.sampling', '_f'),
     ('verity_vllm.pipeline.serving_rows', '_bind'),
     ('verity_vllm.pipeline.serving_rows', '_operand'),
     ('verity_vllm.pipeline.serving_rows', '_read_s8'),

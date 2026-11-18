@@ -128,6 +128,10 @@ path = "verity/channel.py"
 means = "what two parties exchange messages over: a message and its types, and the configuration's Channel"
 
 [[tree]]
+path = "verity/release.py"
+means = "the formats of a network attester's release of a request: its headers and its watermark"
+
+[[tree]]
 path = "verity/device.py"
 means = "the registered hardware"
 
@@ -265,6 +269,10 @@ means = "PoUB as a resource scheme, registered as bandwidth"
 path = "verity/protocols/resource_accounting/network/"
 means = "network attestation: the network attester and its guarantee"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/resource_accounting/network/scheme.py"
+means = "the network attester as a resource scheme, registered as network-attester"
 
 [[tree]]
 path = "verity/protocols/workload_classification/training_detection/inference_only/"

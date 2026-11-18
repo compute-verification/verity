@@ -143,7 +143,7 @@ theorem sched_entry {sched : Array (ByteArray × ℕ)} {A : ℕ} {q : List ByteA
   simp only [List.getElem_drop, List.getElem_map, Array.getElem_toList]
 
 /-- A schedule's entry past `A`, from the rounds past `A` and their first `N + 1` bodies. -/
-theorem sched_bytes {sched : Array (ByteArray × ℕ)} {A N : ℕ} {q : List ByteArray} {B : ℕ → Claims.Msg}
+theorem sched_bytes {sched : Array (ByteArray × ℕ)} {A N : ℕ} {q : List ByteArray} {B : ℕ → Hash.Msg}
     (h : (sched.toList.map Prod.fst).drop A = q)
     (hq : (q.take (N + 1)).map Claims.toMsg = (List.range (N + 1)).map B) (hlen : N < q.length) {i : ℕ}
     (hi : i ≤ N) : (sched.getD (A + i) (.empty, 0)).1.data.toList = B i := by
@@ -217,7 +217,7 @@ theorem sched_count {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : By
 /-- **The cut ring switch, cut at `γ`'s squeeze**: from `l`, cut at its last ask, it stops having sent `rsBody` after
 `t`'s pending bytes, `γ`'s squeeze its last body. -/
 theorem ringSwitchCut_gamma (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128)
-    (claims : Array _root_.Flock.Claim) (hN : claims.size ≠ 0) (t : Flock.Transcript) (l : Array Claims.Msg)
+    (claims : Array _root_.Flock.Claim) (hN : claims.size ≠ 0) (t : Flock.Transcript) (l : Array Hash.Msg)
     (hl : n = l.size + claims.size) :
     ∃ L', ((ringSwitchCut (asksCut coin n) sv claims).run t).go l = (.error "past the openings", L') ∧
       L'.toList = l.toList ++ (List.range (claims.size + 1)).map (rsBody sv claims.size t.pending.data.toList) := by
@@ -268,7 +268,7 @@ theorem openStep_switch (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom 
     simpa only [claimsOf, Array.size_map] using h'
   have hpe : r.1.2.pending = ByteArray.empty := Switch.endE_repPiop _ _ _ _ _ _ _ _ _ _ hp
   refine ⟨fun k => switchVec t.g r.1.1.2.2[k]!, fun k => by simp [switchVec], ?_⟩
-  have hc : CoinAt (fun j i => (cs.getD j #[])[i]!) (#[] : Array Claims.Msg).size cs := by
+  have hc : CoinAt (fun j i => (cs.getD j #[])[i]!) (#[] : Array Hash.Msg).size cs := by
     intro j hj
     funext i
     simp [List.getD_eq_getElem?_getD, hj]
@@ -394,7 +394,7 @@ theorem repState_opened {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[
 /-! ## Level 0's binding in the schedule -/
 
 theorem coinAt_getD (cs : List (Array F128)) :
-    CoinAt (fun j i => (cs.getD j #[])[i]!) (#[] : Array Claims.Msg).size cs := by
+    CoinAt (fun j i => (cs.getD j #[])[i]!) (#[] : Array Hash.Msg).size cs := by
   intro j hj
   funext i
   simp [List.getD_eq_getElem?_getD, hj]

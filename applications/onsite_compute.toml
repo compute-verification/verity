@@ -1,10 +1,10 @@
-# The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory
+# The served window under SPOT, PoUW, the inference-only policy, the network attester and the memory
 # wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,
 # each party on its machine, and the key the auditor pinned for its memory attester.
 # `verity run` records each period's verdict under that id, undecided unless the line says who
 # combined it: no composite takes it.
 format = "verity/config/v0"
-protocols = ["sampled-proofs", "pouw", "inference-only", "certifier", "wipe"]
+protocols = ["sampled-proofs", "pouw", "inference-only", "network-attester", "wipe"]
 
 [workload]
 name = "served-window"
@@ -22,6 +22,15 @@ law = "rate:1/3481648"
 
 [program]
 commit = "b041d20d6f80892ab43dc88994e41c9f4b3a4002"
+
+[params."verity/certifier/v0"]
+order = "arrival"
+hold_ms = 5000
+bucket_us = 100000
+sat_us = 0
+free_us = 0
+token_ns = 0
+log = ""
 
 [[party]]
 name = "workers"
@@ -44,7 +53,7 @@ machine = "auditor-host"
 principal = "auditor"
 
 [[party]]
-name = "network-certifier"
+name = "network-attester"
 machine = "gate-host"
 principal = "auditor"
 
@@ -91,12 +100,12 @@ to = "workers"
 messages = ["H1Coins"]
 
 [[channel]]
-from = "network-certifier"
+from = "network-attester"
 to = "workers"
 messages = ["out-opening", "records", "cells-salts"]
 
 [[channel]]
-from = "network-certifier"
+from = "network-attester"
 to = "verifier"
 messages = ["out-record", "certificate", "registration", "deployment", "groups"]
 

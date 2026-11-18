@@ -117,7 +117,7 @@ def fit(steps: int | None, pass_ms: int, windows: int | None = None, window_ms: 
 def row_steps(path: Path) -> int:
     """The engine steps of the row file ``path``'s run, its ``expected_engine_steps``; `Refused` for a file that
     states none, or whose target does not declare synchronous scheduling, which a Commit's session refuses once its
-    engine is about to be built (`verity_vllm.protocols.poub.remote.CommitSession.target`)."""
+    engine is about to be built (`verity.protocols.resource_accounting.memory.poub.prover.commit_session.CommitSession.target`)."""
     try:
         row = json.loads(Path(path).read_text())
     except (OSError, ValueError) as e:
@@ -261,11 +261,10 @@ def engine(work: Path):
 
 
 def provers():
-    """PoUB's prover's serving loop and its store, which serving proves by; none of it the adapter's, vLLM's or a
-    GPU's (the adapter's `Binder` is imported where the engine is built)."""
+    """PoUB's prover's serving loop, which proves by the store PoUB's attach makes (the binder's ``store``); none of it
+    the adapter's, vLLM's or a GPU's."""
     from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
-    from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
-    return serving, NodeMemory
+    return serving
 
 
 def backend_class(serving):
@@ -291,9 +290,9 @@ def backend_class(serving):
 
 
 def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) -> None:
-    from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier
-
     import sheets
+
+    from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier
 
     sock, _ = lsock.accept()
     lsock.close()
@@ -409,16 +408,15 @@ def main(argv: list[str] | None = None) -> int:
 
     from verity_vllm import messages
     from verity_vllm.engine.build import hooked
-    from verity.protocols.resource_accounting.memory.poub.prover.binder import Binder
+    from verity.protocols.compose import schemes
 
-    serving, NodeMemory = provers()
-    store = NodeMemory()
-    binder = Binder(store, passes=False).install(messages.current())
+    serving = provers()
+    binder = messages.current().attach(schemes.get("poub"), {"passes": False})
     with tempfile.TemporaryDirectory() as work:
         built, _, detach = hooked(lambda: engine(Path(work)))
         trace = Trace(built)
         clock = PassClock() if a.local else None
-        backend = backend_class(serving)(store, trace, clock=clock)
+        backend = backend_class(serving)(binder.store, trace, clock=clock)
         result, th = {}, None
         if a.local:
             lsock = wire.listen("127.0.0.1", 0)

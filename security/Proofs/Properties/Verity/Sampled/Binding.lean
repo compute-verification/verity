@@ -506,7 +506,7 @@ theorem accepted_lines {s : Sent} {p : Spot.OneStageZk.Params} {c : Spot.OneStag
 run accepted as a `same` composition whose sampled component accepts its own case, where v2's check reads a log
 (`Verity.Sampled.coinsRead`), that log is what `readLog` reads from the lines of a run of the device under the
 challenger's key, a run the device's own ledger opens withheld on the sample's window, whose release log reads as its
-coin commitment's (`releasedRootsOf`), with that run's released coins as the sample's, on the records the evidence
+coin commitment's (`releasedLogOf`), with that run's released coins as the sample's, on the records the evidence
 names, which give each round the run's log opens the coins its line shows (`coinTreesOf`, `Lines.TreeLines`), in
 either form of v2's check (`accepted_lines`); or one of the run's v2 records under the parameters' key carries a
 break. -/
@@ -516,7 +516,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
     (∃ x ∈ records s, keyOf s.params = some x.1.key ∧ Break dev x.1.key x.1.label x.2) ∨
       ∃ (d : Draws) (e : Spot.OneStageZk.Evidence) (recs : List Json), ∃ r ∈ dev.runs d.key.pub,
         OpensOn dev d.key.pub d.window r.id ∧
-        (∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) ∧
+        (∃ c entries, r.commitment = some c ∧ releasedLogOf c r.log = .ok entries) ∧
         Verity.Sampled.recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs ∧
         Verity.Sampled.readLog d.label d.after recs (r.released d.label d.after) r.log = some l ∧
         ∃ ts, coinTreesOf r.log = .ok ts ∧ Lines.TreeLines recs r.log := by
@@ -671,7 +671,7 @@ theorem breakCalls_le (dev : History) (s : Sent) :
     omega
 
 /-- A finding's collision, as two messages. -/
-def collisionOf : Finding → Option (Claims.Msg × Claims.Msg)
+def collisionOf : Finding → Option (Hash.Msg × Hash.Msg)
   | .collision x y => some (x.data.toList, y.data.toList)
   | .forgery _ _ => none
 
@@ -684,7 +684,7 @@ open Classical in
 /-- **A pinned table v2 reads on the blobs sent at other bytes than its registered file**, of one SHA-512 with it: the
 first pinned table whose first blob sent with its digest (`tableFile`) and registered file (`PinnedTables.file`, the
 deployment's `T`) differ. -/
-noncomputable def tableCollision (T : PinnedTables) (s : Sent) : Option (Claims.Msg × Claims.Msg) :=
+noncomputable def tableCollision (T : PinnedTables) (s : Sent) : Option (Hash.Msg × Hash.Msg) :=
   Flock.MUFU_TABLES.findSome? fun t =>
     match tableFile t.sha512 s.blobs, T.file t.sha512 with
     | some a, some b => if a ≠ b ∧ Flock.Sha512.hash a = Flock.Sha512.hash b then
@@ -781,7 +781,7 @@ theorem lmsVerify_of_verifies {key : ChallengerKey} (hk : key.params = Lms.deplo
 /-- The first collision among findings that are each valid where they are collisions is a collision of
 `sha512Msg`. -/
 theorem findSome_collisionOf_valid {l : List Finding}
-    (hl : ∀ x y, Finding.collision x y ∈ l → x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) {u v : Claims.Msg}
+    (hl : ∀ x y, Finding.collision x y ∈ l → x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) {u v : Hash.Msg}
     (h : l.findSome? collisionOf = some (u, v)) : Claims.Collision Verity.sha512Msg u v := by
   obtain ⟨w, hw, hc⟩ := List.exists_of_findSome?_eq_some h
   cases w with
@@ -804,7 +804,7 @@ theorem findSome_collisionOf {l : List Finding}
     exact ⟨u, v, rfl, findSome_collisionOf_valid hl hf⟩
 
 /-- `findSome_collisionOf` ahead of any other output: the first collision among valid findings comes first. -/
-theorem findSome_collisionOf_or {l : List Finding} {o : Option (Claims.Msg × Claims.Msg)}
+theorem findSome_collisionOf_or {l : List Finding} {o : Option (Hash.Msg × Hash.Msg)}
     (hl : ∀ x y, Finding.collision x y ∈ l → x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) {x y : ByteArray}
     (hxy : Finding.collision x y ∈ l) :
     ∃ u v, (l.findSome? collisionOf).or o = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v := by
@@ -933,7 +933,7 @@ theorem finders_of_break (V : Vocab d α) (T : PinnedTables) (dev : Exchange →
       exact hv
 
 /-- What `tableCollision` outputs is a collision of `sha512Msg`. -/
-theorem tableCollision_valid {T : PinnedTables} {s : Sent} {u v : Claims.Msg} (h : tableCollision T s = some (u, v)) :
+theorem tableCollision_valid {T : PinnedTables} {s : Sent} {u v : Hash.Msg} (h : tableCollision T s = some (u, v)) :
     Claims.Collision Verity.sha512Msg u v := by
   obtain ⟨t, -, ht⟩ := List.exists_of_findSome?_eq_some h
   split at ht

@@ -56,9 +56,11 @@ verity_vllm.pipeline.cut_plugin       # the carried pool's cut at each window ed
 verity_vllm.pipeline.scheme_plugin    # schemes by name inside vLLM's own server: vLLM imports its general plugin (register) and its middleware by name
 verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a library entry point, read by benchmarks/prove_path
 verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
+verity_vllm.program.predict.class_masked   # a decode step's key-block units masked by its bit: a library entry point (`masked`), for a class's window
 verity_vllm.pipeline.window_replay      # a window's circuit as one replay Definition: a library entry point (`replay`), for a class's replay block
 verity_vllm.pipeline.node_window_rows   # a rank's node window on the served path: a library entry point (`commit_rank_window`), no serve calls it yet
-verity_vllm.program.predict.class_window   # a request's Program at its size class and its node window: a library entry point (`class_request`, `class_window`), not built
+verity_vllm.program.predict.class_window   # a request's Program at its size class and its node window: a library entry point (`class_request`, `class_window`, `rank_window`)
+verity_vllm.program.predict.class_select   # a class's selects and length check, the Definitions `class_window` delegates to: a library entry point
 verity_vllm.commit.row_tables_device      # a step's row tables hashed on the GPU: a library entry point (`step_roots`, `host_step`), read by benchmarks/commitments/step_root_gpu.py
 verity_vllm.pipeline.serve_h1      # a served window's PoUW H1 release: a library entry point (`config_of`), read by benchmarks/one_stage/served_verdicts.py
 verity_vllm.engine.profiles.stand_in      # GLM-5.3's one-card stand-in: a library entry point (`stand_in`), read by benchmarks/serve_tax's standin
@@ -71,11 +73,9 @@ verity_vllm.engine.stock      # a stock engine at the pin with no protocol on
 # (protocol_options.adapter)
 verity_vllm.protocols
 verity_vllm.protocols.interface
-verity_vllm.protocols.pous
 verity_vllm.protocols.pouw
 verity_vllm.protocols.pouw.h1_hooks
 verity_vllm.protocols.pouw.h1_ranks
 verity_vllm.protocols.pouw.h1_settings
 verity_vllm.protocols.spot
 tests/regression/
-verity_vllm/protocols/poub/      # PoUB's node store on the engine, imported by the protocol driver and the benchmarks

@@ -306,7 +306,7 @@ def SampledKSLiveV5Accepted : Prop :=
     -- the game's units are the public file's population
     (_hn : pub.n = n)
     -- the statement's descriptor, and the registration's query
-    (desc : Claims.Msg) (qr : Lean.Json)
+    (desc : Hash.Msg) (qr : Lean.Json)
     -- the registration's sampling design object and work table, the sampling design the verifier samples under from them, sampling kd proof
     -- blocks, and that it is no Bernoulli sampling design
     (lj : Lean.Json) (tb : Option Lean.Json) (samplingDesign : Flock.Draw.SamplingDesign) (kd : ℕ)

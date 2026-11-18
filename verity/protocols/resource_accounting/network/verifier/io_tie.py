@@ -80,8 +80,7 @@ from verity.commitments.gates import bits as GB
 from verity.circuits.boolean.benes import IoTieRoute, IoTieSwitch, benes, benes_apply, route_depth
 from verity.protocols.resource_accounting.network.verifier.id_form import EVENT_END, EVENT_HEAD
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
-from verity.protocols.proofs.spot.verifier.one_stage import produced
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 BIT, BYTE = GB.BIT, GB.BYTE
 ID_DIGITS = 10
@@ -503,9 +502,9 @@ def port_reads(steps: Sequence[Sequence[int]], root: bytes, domain_id: bytes, co
     if any(type(x) is not int or not 0 <= x < count for st in steps for x in st):
         raise ValueError(f"a read is a step of the Commit's {count} rows")
     S = widths.pop()
-    e = {"leaves": count, "words": 2 * P, "word_bits": G.WORD_BITS, "domain": bytes(domain_id).hex()}
-    extra = {G.READS_FROM: int(reads_from)} if reads_from else {}
-    return {(PORT if S == 1 else f"{PORT}[{s}]"): produced.port(value, e, bytes(root).hex(), [st[s] for st in steps],
+    e = {"leaves": count, "words": 2 * P, "word_bits": RV.WORD_BITS, "domain": bytes(domain_id).hex()}
+    extra = {RV.READS_FROM: int(reads_from)} if reads_from else {}
+    return {(PORT if S == 1 else f"{PORT}[{s}]"): RV.port(value, e, bytes(root).hex(), [st[s] for st in steps],
                                                                 SCHEMA) | extra for s in range(S)}
 
 

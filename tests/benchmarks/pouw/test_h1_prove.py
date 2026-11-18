@@ -34,6 +34,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import core_chec
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 H1 = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "h1_prove"
 #: by `load`: hidden_zk holds a ``stage.py`` too
@@ -139,7 +140,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     wr = U.window_open_root(com)
     assert com["window_root"] == wr == U.open_root("w", bytes.fromhex(U.registered_of(com)[f"b/{K}"][1]))
     assert [e["domain"] for e in com["registered"]] == [
-        G.domain(win.obj["program"], v, U.value_words(v), n, window=None if v == f"b/{K}" else wr).domain_id.hex()
+        RV.domain(win.obj["program"], v, U.value_words(v), n, window=None if v == f"b/{K}" else wr).domain_id.hex()
         for v, n in tables.items()]
     assert RN.check_registration(win, dict(com, window_root=U.open_root("v", bytes(64)))) != []
     why = RN.check_registration(win, RN.unrooted(com))
@@ -152,14 +153,14 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     for c in range(2):
         assert [bytes(x) for x in priv["bca"][c]] == U.commit_strings(port["a0"], U.row_words(priv["a"], priv["scale_a"]),
                                                                       [bytes(s) for s in priv["sa"][c]])
-    zonly = G.Registered.commit(com["program_sha512"], "zy@0", priv["zyw"][:T // 2, :2 * RC].tolist(),
-                                [bytes(s) for s in priv["szy"][:T // 2]], G.WORD_BITS, U.V2, wr)
+    zonly = RV.Registered.commit(com["program_sha512"], "zy@0", priv["zyw"][:T // 2, :2 * RC].tolist(),
+                                [bytes(s) for s in priv["szy"][:T // 2]], RV.WORD_BITS, U.V2, wr)
     why = RN.check_registration(win, dict(com, registered=[zonly.entry() if e["value"] == "zy@0" else e
                                                            for e in com["registered"]]))
     assert len(why) == 1 and why[0].startswith("its registered entries")
     assert RN.check_registration(win, RN.z_only(com)) != []
-    wide = G.Registered.commit(com["program_sha512"], "zy", priv["zyw"].tolist(), [bytes(s) for s in priv["szy"]],
-                               G.WORD_BITS, U.V2, wr)
+    wide = RV.Registered.commit(com["program_sha512"], "zy", priv["zyw"].tolist(), [bytes(s) for s in priv["szy"]],
+                               RV.WORD_BITS, U.V2, wr)
     assert RN.check_registration(win, dict(com, registered=[*(e for e in com["registered"] if e["value"][:3] != "zy@"),
                                                             wide.entry()])) != []
     reg = U.registered_of(com)
@@ -191,8 +192,8 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 
     okr = RN.ok_registration(win, com)
     assert okr.entry() == {"value": "ok", "root": okr.root.hex(), "leaves": T, "words": 1,
-                           "domain": G.domain(win.obj["program"], "ok", 1, T, window=wr).domain_id.hex()}
-    assert okr.entry()["domain"] != G.domain(win.obj["program"], "ok", 1, T).domain_id.hex()
+                           "domain": RV.domain(win.obj["program"], "ok", 1, T, window=wr).domain_id.hex()}
+    assert okr.entry()["domain"] != RV.domain(win.obj["program"], "ok", 1, T).domain_id.hex()
     assert list(okr.bcs) == U.commit_strings(port["o1"], np.tile(U.OK, (T, 1)), [U.ok_salt("w", u) for u in range(T)])
     assert okr.root == U.register_ok(win.obj["program"], "w", T, wr).root != U.register_ok(win.obj["program"], "v", T, wr).root
     assert okr.root != U.register_ok(win.obj["program"], "w", T, U.open_root("v", bytes(64))).root
@@ -208,11 +209,11 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
         for p, e in reads["ports"].items():
             v = U.unit_reads(win.program, win.tp, first)[p][0]
             assert e.get(G.PARAM_KEY) == params.get(p), "a renamed A or B row names the parameter it reads"
-            assert {x: e[x] for x in e if x not in ("reads", G.READS_FROM, "known", G.PARAM_KEY)} == {
+            assert {x: e[x] for x in e if x not in ("reads", RV.READS_FROM, "known", G.PARAM_KEY)} == {
                 "value": v, "root": roots[v], "leaves": leaves[v], "words": U.value_words(v), "word_bits": 16,
-                "domain": G.domain(win.obj["program"], v, U.value_words(v), leaves[v],
+                "domain": RV.domain(win.obj["program"], v, U.value_words(v), leaves[v],
                                    window=None if v == f"b/{K}" else wr).domain_id.hex(), "row_schema": U.V2}
-            assert (e[G.READS_FROM], e["reads"]) == (first, [U.unit_reads(win.program, win.tp, u)[p][1]
+            assert (e[RV.READS_FROM], e["reads"]) == (first, [U.unit_reads(win.program, win.tp, u)[p][1]
                                                               for u in range(first, first + n)])
         assert reads["ports"]["zy"]["words"] == 3 * RC and reads["ports"]["a0"]["words"] == K // 2 + 2
         assert reads["ports"]["o1"]["value"] == "ok" and reads["ports"]["o1"]["words"] == 1
@@ -250,7 +251,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     assert found[sampled[1]]["o1"] == {"value": "ok", "root": okr.root.hex()}
     entries, ok = com["registered"], {"value": "ok", "root": okr.root.hex()}
     assert RN.credit_registration(desc, sampled, entries, found, wr, ok) is None
-    okd = G.domain(win.obj["program"], "ok", 1, T).domain_id.hex()
+    okd = RV.domain(win.obj["program"], "ok", 1, T).domain_id.hex()
     assert RN.credit_registration(desc, sampled, [*entries, dict(okr.entry(), domain=okd)], found, wr, ok) is None, (
         "the ok rows are the verifier's own, which credit builds and `_verified` holds each session to: registration "
         "reads no entry of them")
@@ -258,7 +259,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     # without it, which the Lean verifier roots its known rows at), and credit's step-5 rule refuses them
     oku = RN.unrooted_ok(win, com)
     assert oku.root != okr.root and oku.domain.domain_id.hex() == okd
-    assert oku.root == G.Registered.commit(win.obj["program"], "ok", [[1]] * T, [U.ok_salt("w", u) for u in range(T)],
+    assert oku.root == RV.Registered.commit(win.obj["program"], "ok", [[1]] * T, [U.ok_salt("w", u) for u in range(T)],
                                            16, U.V2, None).root
     bad_found = {u: dict(f, o1=dict(f["o1"], root=oku.root.hex())) for u, f in found.items()}
     for bad, why in ((bad_found, f"call 0's session of unit {sampled[0]} opened the ok rows at another port, value or root"),
@@ -471,6 +472,7 @@ def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch):
     assert not hasattr(fell.low, "template") and fell.pin == flat.pin
 
 
+@pytest.mark.slow
 def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
     """`h1window.statement_rows`, the rows the auditor's lowering writes K's circuit file on: under h1_prove's ports
     (`h1unit.ports`) the stager's rows as `Shape` sizes them (an A or B row K / 2 + 2 words, the record 3 R C, the public

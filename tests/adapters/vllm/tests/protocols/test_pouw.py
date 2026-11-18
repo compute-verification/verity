@@ -1,6 +1,5 @@
 """The PoUW adapter (`protocol_options.pouw`): it runs H1 only and refuses every other scheme, the settings it refuses, an
-install without the epoch's challenger that leaves the model as it was, the operands' tiles equal to
-`verity.protocols.resource_accounting.compute.pouw.verifier`'s reference bit for bit, and Pearl-C's kernel loader.
+install without the epoch's challenger that leaves the model as it was, and Pearl-C's kernel loader.
 
 CPU only, on numpy stand-ins for a linear layer; the hook site is the same ``quant_method.apply`` vLLM's ``LinearBase``
 calls.
@@ -15,26 +14,12 @@ import types
 import numpy as np
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover import circuit
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as pouw_h1
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import operands as OPS
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PPK
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
-    HM96,
-    activation_binding,
-    fresh_salts,
-    commit_rows,
-)
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import (
     Challenger,
-)
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context as UnitContext
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
-    Matmul,
-    Shape,
-    Tile,
 )
 
 from verity_vllm import protocols as PO
@@ -90,9 +75,16 @@ def _serve(*enabled, settings=None, **kw):
 
 def test_schemes_are_the_protocol_packages_and_only_h1_is_executed():
     assert pouw.schemes() == tuple(sorted({*IDENTIFIED, *circuit.SCHEMES, H1}))
-    assert pouw.EXECUTED == (H1,) and not pouw.keeps_weight_copy(H1)
+    assert pouw.EXECUTED == (H1,)
     for scheme in ("ncp-v1", "ncp-v1-shift24", "ncp-v2", "pearl-fp8-v4", "pearl-c-sm120-v1-h3"):
         assert "executor runs" in pouw.refusals(scheme, _serve(f"pouw:{scheme}"))[0], scheme
+
+
+@pytest.mark.parametrize("scheme", ["ncp-v2", "ncp-v2-shift24"])
+def test_the_selector_refuses_an_arm_that_keeps_weight_sides_by_name(scheme):
+    """ncp-v2's executor reused each weight's side across forwards, so beside storage its GEMMs would read a copy made
+    from the plaintext; the selector refuses its entry by name, whatever else is enabled."""
+    assert PO.refusals(_serve(f"pouw:{scheme}")) == (f"pouw:{scheme}: {scheme}: this adapter's executor runs {H1} only",)
 
 
 def test_pearl_c_sm120_refuses_linears_outside_the_kernels():
@@ -124,26 +116,6 @@ def test_an_install_without_the_epochs_challenger_is_refused_and_leaves_nothing(
         pouw.install(H1, types.SimpleNamespace(context=_serve(f"pouw:{H1}", settings={"pouw": {"retain_steps": 0}}),
                                                model=model))
     assert hooks.live(f"pouw:{H1}") == () and model.layers[0].quant_method.apply == before
-
-
-# --- the operands ------------------------------------------------------------------------------------------------------------
-
-def test_the_operands_tiles_are_the_schemes_reference_bit_for_bit():
-    """`ncp_tiles` gives the digest and output of a tile exactly as `NCP.encode`, `checked` and `digest` do."""
-    rng, s = _rng(2), get("ncp-v1")
-    a = rng.integers(-63, 64, (16, K)).astype(np.int8)
-    b = rng.integers(-63, 64, (N, K)).astype(np.int8)
-    u = Matmul(7, Shape(16, K, N), 3)
-    rows = [r.tobytes() for r in a]
-    ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, HM96, fresh_salts(len(rows))).commitment.root, b"\x22" * 32)
-    noise = s.noise(ctx)
-    got = OPS.ncp_tiles(s, ctx, noise, a, OPS.Operands(np.ones(N, np.float32), *OPS.stack_y(s, ctx.salt, u.weight, b, noise)))
-    tile = Tile(tuple(range(16)), tuple(range(48, 64)))
-    ops = s.encode(ctx, noise, rows, [b[j].tobytes() for j in tile.cols], tile)
-    checked = s.checked(ctx, ops)
-    digest, block = got[(0, 48)]
-    assert digest == s.digest(ctx, noise, checked)
-    assert block.tolist() == s.useful(ctx, noise, ops, checked)
 
 
 def test_kernel_directories_load_as_their_own_modules_named_by_their_sources(tmp_path, monkeypatch):

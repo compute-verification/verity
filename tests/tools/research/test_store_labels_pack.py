@@ -120,6 +120,32 @@ def test_a_fresh_store_takes_the_pack_in_one_fetch_and_pulls_only_the_difference
     assert _hashes(LocalStore(tmp_path / "C")) == _hashes(a)
 
 
+def test_a_syncs_pulled_assertions_are_indexed_in_batches_and_all_before_it_returns(env, remote, tmp_path, monkeypatch):
+    """A commit per pulled assertion took a node's fill of the whole catalog half an hour: the pack's members and the assertions
+    pulled one by one are indexed `INDEX_BATCH` at a time, each batch one transaction, and the last part batch before the sync
+    returns, so the catalog answers for every assertion pulled."""
+
+    a = LocalStore(tmp_path / "A")
+    _assert(a, 12)
+    LS.sync(a)
+    LS.publish_pack(LocalStore(tmp_path / "P"))
+    _assert(a, 3, first=12)
+    LS.sync(a)
+
+    monkeypatch.setattr(LS, "INDEX_BATCH", 5)
+    b = LocalStore(tmp_path / "B")
+    batches: list[int] = []
+    many, one = b.index.index_labels, b.index.index_label
+    monkeypatch.setattr(b.index, "index_labels", lambda rows: (batches.append(len(rows)), many(rows))[1])
+    monkeypatch.setattr(b.index, "index_label", lambda label, path: pytest.fail("a pulled assertion indexed on its own"))
+    rep = LS.sync(b, push=False)
+    assert len(rep["pulled"]) == 15 and rep["pack"] == 12
+    assert batches == [5, 5, 2, 3], "the pack's twelve in batches of five and the rest, then the three pulled one by one"
+    assert len(b.index.labels(ART)) == 7 and sum(len(b.index.labels(f"r20260922-105905-{i:04d}")) for i in range(0, 15, 2)) == 8
+    monkeypatch.setattr(b.index, "index_label", one)
+    assert LS.sync(b, push=False)["pulled"] == []
+
+
 def test_a_store_that_lacks_few_assertions_never_asks_for_the_pack(env, remote, tmp_path):
     a = LocalStore(tmp_path / "A")
     _assert(a, 4)

@@ -5,10 +5,10 @@
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
         [--retain host|device [--retain-device-gb 32] [--release-after spot,pouw_h1 [--draws-dir DIR]]]
         [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
-        [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
+        [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb GB (with --seal)]
         [--copy-records-to $OUT] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
-        [--protocols pouw:pearl-c-h100-v1-h3 --precision bfloat16 --protocols-config JSON
+        [--protocols pearl-plus --precision bfloat16 --protocols-config JSON
          [--challenger-gate CMD --challenger-peer NAME --challenger-lane LANE]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
         [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
@@ -78,7 +78,7 @@ under order ``tick`` is null, with why in its ``no_slice`` and once in ``serve.j
 ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
-`serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
+`serve_loop.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
 and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
 writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them; `serve_seal.scheme_refusal`).
@@ -104,8 +104,9 @@ it is written before the pending seals too, and its ``final`` is true only once 
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor device's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
-``--protocols`` naming a declared scheme's option (``pouw:pearl-c-h100-v1-h3``: ``pearl-plus``, ``--precision bfloat16``)
-attaches that scheme by name on the engine's build (`messages.option`, `scheme_settings`): Pearl+ one epoch a Commit window,
+``--protocols`` listing declared schemes, each by its name (``pearl-plus``, ``--precision bfloat16``; its option
+``pouw:pearl-c-h100-v1-h3`` is refused, naming it), attaches each by name on the engine's build in the list's order, the earlier outer
+(`listed`, `messages.attach_listed`), and releases each at shutdown before its report (`write_reports`): Pearl+ one epoch a Commit window,
 its passes, ``coins.json`` and ``served.json`` under ``pearl/w<k>/``, its report under ``schemes/pearl-plus/``. With
 ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` each epoch's salt comes from a session of its own
 reserved under the lane, its epoch number kept in ``VERITY_PROTOCOLS_CONFIG``'s ``private``; without them it is in-process
@@ -147,9 +148,9 @@ from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_
                                    serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.scheme_plugin import write_reports
 from verity_vllm.pipeline.serve_admit import Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
-from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
-                                               records_mirror, served_statics, user_of)
-from verity_vllm.pipeline.serve_loop import EngineLoop
+from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of, records_mirror,
+                                               served_statics, user_of)
+from verity_vllm.pipeline.serve_loop import EngineLoop, advice_trace
 from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, framings, http_chunk, sse,
                                                  usage_of)
@@ -232,13 +233,13 @@ class Options:
     window_gb: float = option("--window-gb", type=float, default=32.0,
                               help="close a Commit window once its steps have committed this many GB, which bounds its sealed "
                                    "bundle (0: no bound)")
-    disk_floor_gb: float = option("--disk-floor-gb", type=float, default=300.0,
-                                  help="--seal: refuse to start unless OUT's filesystem has this many GB free beyond one window "
-                                       "(--window-gb), and stop cleanly (no new requests) rather than seal a window that would "
-                                       "leave less (0: no floor)")
+    disk_floor_gb: float | None = option("--disk-floor-gb", type=float, default=None,
+                                         help="--seal (required with it: a fact of the machine's disk): refuse to start unless "
+                                              "OUT's filesystem has this many GB free beyond one window (--window-gb), and stop "
+                                              "cleanly (no new requests) rather than seal a window that would leave less (0: no floor)")
     copy_records_to: str | None = option("--copy-records-to", default=None,
-                                         help="copy the public records (serve_commit.MIRRORED; never requests.jsonl or the step "
-                                              "traces) into this directory (the run's $OUT) after each block closes and at the stop")
+                                         help="copy the public records (serve_commit.MIRRORED; never requests.jsonl, its users or the "
+                                              "step traces) into this directory (the run's $OUT) after each block closes and at the stop")
     switch_interval_ms: float = option("--switch-interval-ms", type=float, default=0.1,
                                        help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "
@@ -260,10 +261,11 @@ class Options:
                                             "chunk (default on)")
     protocols: str | None = option("--protocols", default=None,
                                    help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1); "
-                                        "a declared scheme's option: that scheme attached by name (messages.option)")
+                                        "else a configuration's declared schemes in its order, each its name or its option, "
+                                        "attached by name, the earlier outer (messages.attach_listed)")
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file "
-                                               "(serve_h1.config_of, scheme_settings)")
+                                               "(serve_h1.config_of, listed)")
     gate: CC.GateOptions = group(CC.GateOptions)
     h1: SH.H1Options = group(SH.H1Options)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
@@ -282,7 +284,7 @@ class Server:
                  submit: Callable[[Admission], None], abort: Callable[[str], None], model_root: str = "",
                  clock: Callable[[], float] = time.time, order: H.Front | None = None,
                  exchange: M.Exchange | None = None,
-                 arrive: Callable[[str, str, Mapping[str, str]], None] | None = None) -> None:
+                 arrive: Callable[[str, str, Mapping[str, str], str | None], None] | None = None) -> None:
         self.proto, self.served_name, self.max_model_len = proto, served_name, int(max_model_len)
         self.ex, self.arrive = exchange or M.current(), arrive
         self.ex.refuse = self.refuse
@@ -460,7 +462,7 @@ class Server:
         req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release, proto, times)
         created, model = int(self.clock()), self.served_name
         if self.arrive is not None:
-            self.arrive(adm.engine_id, first_line, dict(headers or {}))
+            self.arrive(adm.engine_id, first_line, dict(headers or {}), adm.user)
         self.live[adm.engine_id] = adm
         self.submit(adm)
         self.served += 1
@@ -593,20 +595,30 @@ def admission_order(opts: Any) -> str:
     return admission_settings(opts).get("order", "arrival")
 
 
-def scheme_settings(opts: Any, out: Path) -> dict[str, Any]:
-    """The settings of the scheme ``--protocols`` names (`messages.option`): ``--protocols-config``'s entry under the
-    option's protocol (``pouw``, whose ``device`` is the GPU's, ``cuda``), its passes under ``out/pearl``, its salt a
-    session an epoch reserved under ``--challenger-lane`` as ``--challenger-peer`` (the challenger at this node's
-    127.0.0.1, at the port the gate's open answers), else in-process; which of these go together is the scheme's
-    ``check_settings``."""
+def listed(opts: Any, out: Path) -> list[tuple[Any, dict[str, Any]]]:
+    """``--protocols``' entries in their order, each the declared scheme it names (`messages.named`) with its settings:
+    ``--protocols-config``'s entry under its name (`option_settings`), with what the serve holds of the keys the scheme declares: its passes under
+    ``out/pearl``, its salt a session an epoch reserved under ``--challenger-lane`` as ``--challenger-peer`` (the
+    challenger at this node's 127.0.0.1, at the port the gate's open answers), else in-process.  Empty when no entry
+    names a declared scheme (H1's, `serve_h1`); `UsageError` when only some do, or one is a declared scheme's option
+    (`messages.option`), naming the scheme's name."""
+    entries = [e for e in (x.strip() for x in (opts.protocols or "").split(",")) if e]
+    if spelled := [f"{e} is {s.name}'s option: list it as --protocols {s.name}" for e in entries if (s := M.option(e))]:
+        raise UsageError(f"--protocols {opts.protocols}: {'; '.join(spelled)}, its settings under {s.name!r}")
+    found = [(e, M.named(e)) for e in entries]
+    if all(s is None for _, s in found):
+        return []
+    if bad := [e for e, s in found if s is None]:
+        raise UsageError(f"--protocols {opts.protocols}: {', '.join(bad)} names no declared scheme, and a list of several "
+                         "attaches declared schemes only")
+    g = opts.gate
+    held = {"challenger": "127.0.0.1:0" if g.challenger_gate else "", "coins": "" if g.challenger_gate else "in-process",
+            "lane": g.challenger_lane or "", "peer": g.challenger_peer or "", "transcript_dir": str(out / "pearl")}
     try:
-        own = option_settings(opts.protocols, protocols_doc(opts))
+        return [(s, {**option_settings(e, protocols_doc(opts)), **{k: v for k, v in held.items() if k in s.settings}})
+                for e, s in found]
     except ValueError as e:
         raise UsageError(f"--protocols-config: {e}") from None
-    g = opts.gate
-    coins = {"challenger": "127.0.0.1:0" if g.challenger_gate else "", "coins": "" if g.challenger_gate else "in-process",
-             "lane": g.challenger_lane or "", "peer": g.challenger_peer or ""}
-    return {**own, **coins, "transcript_dir": str(out / "pearl")}
 
 
 def private() -> str | None:
@@ -615,9 +627,10 @@ def private() -> str | None:
     return (settings.get("VERITY_PROTOCOLS_CONFIG") or {}).get("private")
 
 
-def scheme_refusal(opts: Any, scheme: Any) -> str | None:
-    """Why ``opts`` can't serve ``scheme`` (`messages.option`), None when they can: Pearl+ reads the BF16 checkpoint's
-    linears unquantized, under the server's rows-sha512 Commit, and puts no draw into ``--release-after pouw``."""
+def scheme_refusal(opts: Any, found: list[tuple[Any, dict[str, Any]]]) -> str | None:
+    """Why ``opts`` can't serve the schemes `listed` ``found``, None when they can: each one's settings as it checks them,
+    and a scheme with an option (Pearl+'s) reads the BF16 checkpoint's linears unquantized, under the server's
+    rows-sha512 Commit, and puts no draw into ``--release-after pouw``."""
     from verity.protocols.resource_accounting.scheme import settings as checked
 
     g, after = opts.gate, getattr(getattr(opts, "retention", None), "release_after", "") or ""
@@ -626,14 +639,15 @@ def scheme_refusal(opts: Any, scheme: Any) -> str | None:
     if g.challenger_gate and not private():
         return (f"--challenger-gate under {opts.protocols}: VERITY_PROTOCOLS_CONFIG's private, the directory outside the run "
                 "output where each scheme keeps its salt epoch's number, as scheme_plugin's")
-    if opts.precision != "bfloat16":
+    if (pearl := any(s.option for s, _ in found)) and opts.precision != "bfloat16":
         return f"--protocols {opts.protocols} reads the BF16 checkpoint's linears: it needs --precision bfloat16"
-    if not opts.commit or opts.scheme != "rows-sha512" or not opts.required_manifest:
+    if pearl and (not opts.commit or opts.scheme != "rows-sha512" or not opts.required_manifest):
         return f"--protocols {opts.protocols} runs under --commit, --scheme rows-sha512 and the row's --required-manifest"
     if "pouw" in (p.strip() for p in after.split(",")):
         return f"--release-after pouw waits for PoUW H1's draw of each window, and {opts.protocols} puts none"
     try:
-        checked(scheme, scheme_settings(opts, Path(opts.out)))
+        for scheme, given in found:
+            checked(scheme, given)
     except ValueError as e:
         return f"--protocols-config, --challenger-gate, --challenger-lane, --challenger-peer: {e}"
     return None
@@ -751,20 +765,27 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("order tick adds each request at its step; --window-requests would hold it past that")
     if (c := served_class(opts))["R"] < opts.max_num_seqs:
         raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
-    if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
+    if opts.seal and opts.disk_floor_gb is None:
+        raise UsageError("--seal needs --disk-floor-gb: the GB --out's filesystem keeps free beyond one window, which only the "
+                         "machine's disk can say (0: no floor)")
+    if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb or 0, opts.switch_interval_ms) < 0:
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    scheme = M.option(opts.protocols)
-    if why := (SH.refusal(opts) if scheme is None else scheme_refusal(opts, scheme)) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
+    found = listed(opts, Path(opts.out or "."))
+    if why := (scheme_refusal(opts, found) if found else SH.refusal(opts)) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
         raise UsageError(why)
     if opts.commit and which("ninja") is None:
         raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
                          "ninja is) on PATH, or pass --no-commit")
     if why := SG.out_refusal(opts.out, environ):
         raise UsageError(why)
+    from verity_vllm.pipeline.replay_bundle import private_refusal
+
+    if opts.seal and (why := private_refusal(environ)):
+        raise UsageError(f"--seal: {why}")
     if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
         raise UsageError(f"--seal: {why}")
 
@@ -778,11 +799,11 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
     if opts.commit:
         engine_env.apply_target({"VERITY_RETAIN": "host", **SL.settings_of(opts)})
     scope = register_int8(opts.precision)
-    if (scheme := M.option(opts.protocols)) is not None:
+    if found := listed(opts, Path(opts.out)):
         from verity_vllm.pipeline.commit_coins import ChallengerGate
         gate = ChallengerGate(opts.gate.challenger_gate) if opts.gate.challenger_gate else None
-        M.build().attach(scheme, scheme_settings(opts, Path(opts.out)), gate=gate and gate.call, ledger=gate and gate.ledger,
-                         private=private(), process=H.ENGINE)
+        M.attach_listed(M.build(), found, gate=gate and gate.call, ledger=gate and gate.ledger, private=private(),
+                        process=H.ENGINE)
     from verity_vllm.llm import LLM
 
     llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **(dict if session is None else session.engine_args)(engine_options(opts))))
@@ -814,7 +835,7 @@ def main(opts: Options) -> int:
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
-        arm = SH.arm_of(opts, llm, com, out, flush=trace.drain, day=day)
+        arm = None if listed(opts, out) else SH.arm_of(opts, llm, com, out, flush=trace.drain, day=day)
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,

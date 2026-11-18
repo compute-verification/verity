@@ -14,7 +14,7 @@
 #     the benchmark's handle; KEEP_PRIORITY, KEEP_EXPIRES and KEEP_OWNER override them), and the window fails KEEP
 #     without one.
 # The verdicts run after the window, on the CPU (verify.sh <run id>: the Lean's, held to the Python twin); an ACCEPT is
-# replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck).  Needs setup.sh's $WORK.
+# replay-verified (development shortcut; the protocol's check is a ZK proof, PouwVerifier).  Needs setup.sh's $WORK.
 # The venv's tools (ninja, which FlashInfer's JIT calls) come first on PATH, and FLASHINFER_CUDA_ARCH_LIST is setup.sh's, so
 # FlashInfer finds the sampling module setup.sh built, with the same flags, in the build's own cache (flashinfer_env.sh; a
 # ready.json whose library is elsewhere fails SETUP).  jit-built.txt lists every FlashInfer library
@@ -78,7 +78,9 @@ UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}
 export E2E_GPU_UUID=$UUID
 if [ "${STATEMENT:-}" = build ]; then
   CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || fail STATEMENT "no CUDA toolkit 13.0 to build hm96_rows.cu"
-  "$CUDA_HOME/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$OUT/hm96_rows.cubin" \
+  GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") \
+    || fail STATEMENT "no -gencode for this machine's card to build hm96_rows.cu"
+  "$CUDA_HOME/bin/nvcc" -O3 -std=c++17 -gencode "$GENCODE" -cubin -o "$OUT/hm96_rows.cubin" \
     verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
   STATEMENT=$OUT/hm96_rows.cubin
 fi

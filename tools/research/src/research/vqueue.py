@@ -41,7 +41,9 @@ merged onto the chain's top, and its records run, drive's lock run on that tree,
 built on a staged batch and it counts toward no `depth`, so the chain goes on filling with batches of PRs with no Lean change
 while the run runs; only no second Lean batch is staged meanwhile, and no PR changing a Lean input (`Ready.lean_input`) is
 taken until the staged batch is on the chain, so none built beside it changes the Lean inputs of the top it goes onto.  Once
-the run passed and the chain has room, the batch goes onto the chain's top (`Commit`): as staged when that top is still its
+the run passed, the chain has room and every candidate on the chain that lands on the quick tier (its members all
+`Snapshot.plain`) has passed it, so a red under the batch can't cost its check, the batch goes onto the chain's top (`Commit`;
+while one is pending nothing is built on the chain, which drains, `Wait` saying so): as staged when that top is still its
 base, else its members merged again onto it, and checked there with its records included, on a records commit of what the
 run regenerated, whatever its records change of what a guarantee says, or as built when it regenerated nothing.  Records
 regenerated on one tree go onto another only when the two trees' Lean inputs are the same (`vqueue_slim.lean_key`), which
@@ -382,7 +384,8 @@ Action = Build | Advance | Drop | Eject | Retry | Rerun | Ring | Red | Regenerat
 @dataclass(frozen=True)
 class Leave:
     """Ready PR #``number`` at ``head`` is in no candidate once the tick's actions are applied, for ``why`` (`left_out`):
-    ``cause`` names the reason in words that stay the same while it holds, so the loop logs each (number, head, cause) once."""
+    ``cause`` names the reason in words that stay the same while it holds, which the loop's stats count by; the loop logs each
+    (number, head, cause, why) once."""
     number: int
     head: str
     cause: str
@@ -454,7 +457,8 @@ def decide(s: Snapshot) -> list[Action]:
     pool.
 
     A red or a member set aside drops its candidate and every one above it, a refused records run drops its staged batch, and
-    a member others took from the queue drops its own candidate and every one above it, or its staged batch (`_chain`); in
+    a member others took from the queue drops its own candidate and every one above it, or its staged batch (`_chain`); a
+    candidate dropped but on `main` drops the staged batch built on it, whatever its records run's state; in
     the same tick each is built again (`_restack`), in order on what is left of the chain, without the suspects, the ejected,
     the members set aside and the members not ready at the heads they were built at: no other member leaves, and each keeps
     its place.  One with a Lean member is staged again off the chain (`Build.records`) while no other batch stays staged,
@@ -502,9 +506,14 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             acts += [Drop(d.sha, BASE_FAILED) for d in chain[k + 1:]]
             chain, rest = chain[:k], [*chain[k:], *rest]
         break
-    kept, passed = [], []
+    kept, passed, moved = [], [], []
+    dead = {a.sha for a in acts if isinstance(a, Drop) and a.why != ON_MAIN}
     for c in staged:
         first, got = _first(s, c, ready)
+        if got is None and c.base in dead:
+            acts.append(Drop(c.sha, BASE_DROPPED))
+            moved.append(c)
+            continue
         acts += first
         if got is None:
             kept.append(c)
@@ -523,13 +532,15 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             ejected, out = ejected | got[0], out | got[1]
     apart = kept_apart
     n = len(acts)
-    kept += _restack(s, ready, chain, rest, landed | ejected | out, main, acts, kept, hold)
+    kept += _restack(s, ready, chain, [*moved, *rest], landed | ejected | out, main, acts, kept, hold)
     settled = landed | ejected
     base, after, moves = chain[-1].sha if chain else main, None, hold | _moves(chain, built)
     due, committed = passed[:1] or passed_apart[:1], False
-    if due and len(chain) < s.depth and len(acts) == n and all(
-            _crossing(r if (r := ready.get(m)) is not None and r.head == h else None, moves)
-            for m, h in zip(due[0].members, due[0].heads)):
+    ok = bool(due) and len(chain) < s.depth and len(acts) == n and all(
+        _crossing(r if (r := ready.get(m)) is not None and r.head == h else None, moves)
+        for m, h in zip(due[0].members, due[0].heads))
+    quick = [c for c in chain if _reading(c.verdict) != PASS and set(c.members) <= s.plain] if ok and passed[:1] else []
+    if ok and not quick:
         c = due[0]
         (apart if c.apart else kept).remove(c)
         if c.base == base or (lost := _unmarked(c, ready)) is None:
@@ -556,6 +567,11 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
         lean, why = (), (f"no Lean batch is staged while #{inputs[0]}, which changes a Lean input, is built apart: its records "
                          "wouldn't carry onto the chain's top once that lands there")
     free = min(max(s.depth - places, 0), max(s.fill, 1))
+    drain = (f"the staged batch {passed[0].sha[:12]} goes onto main's chain's top once the quick tier of every candidate on "
+             f"it has passed, so a red under it can't cost its check ({', '.join(c.sha[:12] for c in quick)} pending): nothing "
+             "is built on the chain meanwhile") if quick else ""
+    if drain:
+        free, why = 0, drain
     builds = [Build(lean, base, priority, True, after)] if lean and s.records else []
     builds += [Build(lean, main, priority, apart=True)] if lean and lean_apart and free else []
     plain: tuple[int, ...] = ()
@@ -602,7 +618,7 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
         made += 1
     acts += builds or ([Wait(why)] if why and room else [])
     return _leaving(s, leaves, acts, [*chain, *apart], kept, settled, None,
-                    _Tried(lean, why, plain, room, scripts, pool, hold, moves))
+                    _Tried(lean, why, plain, room, scripts, pool, hold, moves, drain))
 
 
 def _pool(ready: dict[int, Ready], busy: set[int], staged: bool) -> list[Ready]:
@@ -627,8 +643,8 @@ MOVE_ON_CHAIN = ("move on chain", "a candidate on main's chain holds a move it d
 class _Tried:
     """What a tick that builds on the chain's top tried (`decide`): its Lean batch and why it opened none, its batch of PRs
     with no Lean change, whether the chain had room, whether it holds a member changing `tools/move/`'s scripts, the
-    pool the Lean batch was sampled from, and the heads of the moves it advanced to (``hold``) and of every move its builds
-    sit on (``moves``)."""
+    pool the Lean batch was sampled from, the heads of the moves it advanced to (``hold``) and of every move its builds
+    sit on (``moves``), and why it built nothing on the chain while a staged batch waits to go onto it (``drain``)."""
     lean: tuple[int, ...]
     why: str
     plain: tuple[int, ...]
@@ -637,6 +653,7 @@ class _Tried:
     pool: list[Ready]
     hold: frozenset[str] = frozenset()
     moves: frozenset[str] = frozenset()
+    drain: str = ""
 
 
 def _leaving(s: Snapshot, leaves: list[Leave] | None, acts: list[Action], chain: list[Candidate], kept: list[Candidate],
@@ -704,6 +721,8 @@ def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Re
         return "Lean waits", "no Lean batch took it"
     if not t.room:
         return full
+    if t.drain:
+        return "staged batch first", t.drain
     if o is not None and o.state == INFRA:
         return aside
     if r.move and any(ready[m].scripts for m in t.plain):
@@ -786,9 +805,9 @@ def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]
     apart kept (`Candidate.apart`), whatever their bases, first in rank first, while no member of one left; and the candidates
     dropped for `_restack` to build again: that first stale candidate with every one above it on the chain, then each
     staged batch with a member that left.  The drops of the other candidates go to ``acts``, each with every candidate above
-    it.  A staged batch another candidate `repairs` is dropped for it, whatever their ranks; one is kept whatever its base,
-    which the batch leaves once it goes onto the chain (`Commit`), while no member of it is in a candidate on the chain, on
-    `main`, in a staged batch first in rank or taken from the queue by others."""
+    it.  A staged batch another candidate `repairs` is dropped for it, whatever their ranks; one is kept, while no member of
+    it is in a candidate on the chain, on `main`, in a staged batch first in rank or taken from the queue by others, and
+    `decide` drops it, built again, once its base is dropped but on `main`."""
     by_sha: dict[str, Candidate] = {}
     for c in sorted(s.candidates, key=lambda c: c.sha):
         by_sha.setdefault(c.sha, c)
@@ -1153,7 +1172,7 @@ def _said(c: Candidate, under: list[Ready], built: dict[int, Ready]) -> Candidat
 
 def _restack(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], rest: list[Candidate], out: set[int], main: str,
              acts: list[Action], staged: list[Candidate], hold: bool = False) -> list[Candidate]:
-    """Build ``rest``, the candidates this tick dropped for a red, a refusal, a member set aside or a leave, lowest first,
+    """Build ``rest``, the candidates this tick dropped for a red, a refusal, a member set aside, a leave or a dropped base, lowest first,
     again in order on ``chain``'s top (``main`` when it is empty), each `Build.replaces` its own, without the members of
     ``out`` (on `main`, ejected, suspected or set aside), those not ready at the heads they were built at, and those a
     candidate below or a staged batch kept (``staged``) holds; one with none left is not built.  ``chain`` gains each, as a
