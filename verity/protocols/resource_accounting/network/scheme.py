@@ -17,7 +17,6 @@ from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Po
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay
 from verity.protocols.resource_accounting.network.prover.admission import Admitter
-from verity.protocols.resource_accounting.scheme import register_process
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,
                ResponseTieStop, ResponseTieNoStop, LengthsRow)
@@ -28,7 +27,8 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     the configuration ``admit`` with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``, ``pull``, ``log`` and
     ``clock``), installed and returned; without, the id relay beside the workload (`START_ID_RELAY`)."""
     if "admit" not in ctx:
-        exchange.request(NETWORK_ATTESTER.name, START_ID_RELAY)
+        for r in requests(ctx):
+            exchange.request(NETWORK_ATTESTER.name, r)
         return None
     kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock") if k in ctx}
     return Admitter(ctx["admit"], **kw).install(exchange, NETWORK_ATTESTER.name)
@@ -39,8 +39,17 @@ def output_bits(definition: Any) -> Callable[[Mapping[str, int]], int]:
     return lambda shape: sum(bind(definition, **shape).signature()[1].leaf_widths())
 
 
+#: the scheme's request that starts the id relay beside the workload
+START_ID_RELAY = H.StartBeside("id-relay", id_relay.READERS)
+
+
+def requests(ctx: Mapping[str, Any]) -> tuple[Any, ...]:
+    """The id relay beside the workload where ``ctx`` configures no admission (``admit``), else nothing."""
+    return () if "admit" in ctx else (START_ID_RELAY,)
+
+
 NETWORK_ATTESTER = register(Scheme(
-    name="certifier",
+    name="network-attester",
     protocol="verity/certifier/v0",
     resource="egress",
     blocks=tuple(Block(d.id, output_bits(d)) for d in DEFINITIONS),
@@ -58,11 +67,9 @@ NETWORK_ATTESTER = register(Scheme(
     requires={"one-labelling": "the network attester's rows (`verifier.network_attester_rows`)",
               "one-design": "each scan's own sample at its δ (`prover.scan_zk`)"},
     ports=(Port("scan-state", "input", IngressScanStart.id, "sin"), Port("released", "output", EgressBucket.id, "o1")),
+    requests=requests,
     attach=attach,
+    processes={"id-relay": id_relay.process},
 ))
 
-register_process("id-relay", id_relay.process)
-#: the scheme's request that starts the id relay beside the workload, for the adapter to file under the scheme's name
-START_ID_RELAY = H.StartBeside("id-relay", id_relay.READERS)
-
-__all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "output_bits"]
+__all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "START_ID_RELAY", "attach", "output_bits", "requests"]
