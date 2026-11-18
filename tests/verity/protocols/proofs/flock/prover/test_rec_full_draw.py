@@ -16,6 +16,7 @@ import pytest
 from verity_flock import rec_live as RL
 
 import test_rec_live as T
+from verity.circuits import population as PN
 
 HERE = Path(__file__).resolve().parent
 LEAN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier"
@@ -49,7 +50,7 @@ def _programs():
 
     t = SA._templates(2)
     for members in ([(t[0], 5)], [(t[0], 2), (t[1], 3), (t[0], 1)]):
-        prog = P.mixed_population_program(members)
+        prog = PN.mixed_population_program(members)
         tids = list(dict.fromkeys(P.template_id(x) for x, _ in members))
         q = P.template_instance_query(tids[0]) if len(tids) == 1 else P.template_instances_query(tids)
         yield prog, q

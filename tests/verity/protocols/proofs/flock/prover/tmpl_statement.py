@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from verity.circuits import population as PN
 
 N = 8
 SEED = 20261022
@@ -57,7 +58,7 @@ def template(out: Path) -> dict:
     s = _set(out)
     low = FC.lowering_for_set(s)
     definition = s.subcircuit.definition(**FC.set_statics(s))
-    program = P.population_program(definition, N)
+    program = PN.population_program(definition, N)
     part = P.partition(program, P.template_instance_query(definition))
     text = FC.compose(low, s.subcircuit, partition=P.digest(part), program=part["program"], statics=FC.set_statics(s))
     (out / "partition.json").write_text(json.dumps(part))

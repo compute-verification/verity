@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from test_pouw_rows import PC4_TESTS, STAGED_TILES, V
+from verity.circuits import population as PN
 from verity.circuits import evaluation as EV
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import add
@@ -167,7 +168,7 @@ def test_a_bound_stager_names_its_definition_and_the_partition_and_its_rounds_th
     from verity.circuits.program import Program
 
     args, rows, _kw = _toy(0)
-    program = P.mixed_population_program([(TOY, 3), (TOY, 5)])
+    program = PN.mixed_population_program([(TOY, 3), (TOY, 5)])
     query = P.template_instances_query([TOY])
     obj = P.partition(program, query)
     bind = {"partition": P.digest(obj), "program": obj["program"]}
@@ -267,7 +268,7 @@ def _bound_toy() -> tuple:
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     args, rows, _kw = _toy(2)
-    obj = P.partition(P.mixed_population_program([(TOY, 3), (TOY, 5)]), P.template_instances_query([TOY]))
+    obj = P.partition(PN.mixed_population_program([(TOY, 3), (TOY, 5)]), P.template_instances_query([TOY]))
     return args, rows, {"bind": {"partition": P.digest(obj), "program": obj["program"]}}, {"indices": range(3, 8)}
 
 
