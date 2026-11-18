@@ -419,7 +419,7 @@ def _preserve(run_dir: Path, custody_dir: Path, req: dict[str, Any]) -> dict[str
         raise Refusal(f"{e}: nothing of the run is stored while its own private paths aren't known") from None
     if rule := rule_for(rel, Path(os.path.realpath(run_dir)) / rel, rules=rules):
         os.close(fd)
-        raise Refusal(f"{rel} is private ({rule.what}: {rule.reason}; {rule.owner}), and a private file is never stored; the run's "
+        raise Refusal(f"{rel} is private ({'; '.join(filter(None, (rule.what, rule.reason, rule.owner)))}), and a private file is never stored; the run's "
                       f"custody refuses it too and leaves it on the machine")
     run_id, root = CU.run_id_of(run_dir), custody_dir / STORE
     tmp = root / "scratch" / f".preserve-{run_id}-{secrets.token_hex(4)}"

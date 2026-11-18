@@ -22,13 +22,14 @@ there when the workload exits and publishes to the store:
 - other files in path order up to 256 MiB in all (`custody.UNDECLARED_LIMIT_BYTES`, kept for older launches; it drops to 0
   once lanes declare their outputs). The rest are listed in `meta.trimmed` by path, size and sha256, and custody prints
   `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`;
-- never a private file, whatever names it (`research/store/private.py`: salt keys, salts, a Pearl+ pass's `pass-NNNNN/` retain
+- never a private file, whatever names it (`research/store/private_names.json` and `private.py`: salt keys, salts, a Pearl+ pass's `pass-NNNNN/` retain
   directory, a JSON file holding `hm96_salt_key`). Custody stores the rest, prints `custody REFUSED N private file(s)`, lists
   each in `custody-refused.json` and `.custody`, and leaves it on the machine, never evicted; `research status RUN` says so, and
   `research fetch --all` copies none. Keep such files out of the run dir; to change the list, add a line there in a reviewed
-  change. A job whose own paths are private names them in `$RESEARCH_RUN_DIR/private-paths.json`
-  (`{"schema": "research/private-paths/v1", "rules": [{"path": "out/x/*.bin", "reason": "...", "owner": "@lane"}]}`; `name` or
-  `under` in place of `path`); custody refuses those the same way, and stores nothing of a run whose file it can't read.
+  change. A job whose own paths are private states them in `$RESEARCH_RUN_DIR/private-paths.json`
+  (`{"schema": "private-paths/v1", "private": [absolute directories outside the run dir], "names": [globs; "dir/" for a
+  directory]}`), and the run's shipped tree's `private_names.json` (the vLLM adapter's) adds its names; custody refuses those
+  the same way, and stores nothing of a run whose statement it can't read.
 
 A run that ended without custody preserving it (the upload failed, custody was off, its runner died) is only its directory
 on the machine: the retention collector lists such runs apart, and where a machine's collector takes them

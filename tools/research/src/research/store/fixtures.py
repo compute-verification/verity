@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from . import fetchset, ids
+from . import private as P
 from .local import REPLICA_MAP as REPLICA_MAP, LocalStore, _rel_files, manifest_key, object_key, replica_map_file, sha256_file
 from .model import ArtifactManifest, Payload, TreeFile
 from .remote import HttpRemote, Remote
@@ -353,7 +354,10 @@ def _ensure_local(store: LocalStore, repo: Path, doc: dict[str, Any], want: list
     for a in want:
         p = repo / paths[a] if a in paths else None
         if not store.manifest_path(ids.hex_of(a)).exists() and p is not None and p.exists() and fixture_id(p) == a:
-            store.put_artifact(FIXTURE_KIND, {}, None, file=p if p.is_file() else None, tree=p if p.is_dir() else None)
+            try:
+                store.put_artifact(FIXTURE_KIND, {}, None, file=p if p.is_file() else None, tree=p if p.is_dir() else None)
+            except P.PrivateFiles:
+                pass                                                # `private_fixtures` refuses it by name, with the fix
     ms = fetchset.fetch_manifests(store, want, srcs, jobs=jobs, report=fetchset._report())
     lost = set(want) - set(ms)
     for new, olds in previous(doc).items():
@@ -370,6 +374,24 @@ def _split_missing(fr: dict[str, Any], doc: dict[str, Any]) -> tuple[list[str], 
     old = {x for olds in previous(doc).values() for x in olds} - current
     names = [x.get("id") or x.get("sha256") for x in fr["missing"]]
     return [n for n in names if n in old], [n for n in names if n not in old]
+
+
+def private_fixtures(repo: Path, doc: dict[str, Any], ms: dict[str, ArtifactManifest]) -> tuple[list[str], set[str]]:
+    """(one refusal each, their ids) for the registered fixtures whose files' paths name a private file (store.private, by name
+    and place) and that the registry's `toys` map does not mark as public on purpose."""
+    out, private = [], set()
+    for a, rel in entries(doc).items():
+        m = ms.get(a)
+        if m is None or P.toy(repo / rel) is not None:
+            continue
+        files = [f"{rel}/{f.path}" for f in m.payload.files or []] if m.payload.type == "tree" else [rel]
+        bad = [P.refusal(f, r) for f in files if (r := P.rule_for(f, repo / f))]
+        if bad:
+            private.add(a)
+            out.append(f"{rel} ({a}) holds {len(bad)} private-named file(s), so the export refuses it: {P.summary(bad)}. A fixture "
+                       f"public on purpose (a toy circuit's store on made-up inputs) is marked in {P.REGISTRY}'s `{P.TOYS}`: "
+                       f"{{\"{rel}\": \"why it is public\"}}; else remove the files and re-register it")
+    return out, private
 
 
 def landed_path(store: LocalStore, dest: Remote) -> Path:
@@ -392,6 +414,8 @@ def export(store: LocalStore, repo: Path, dest: Remote, *, srcs: Sequence[Remote
     want = list(dict.fromkeys([*export_ids(doc, include_previous=include_previous), *arts]))
     fr = fetchset._report()
     ms = _ensure_local(store, repo, doc, want, srcs, jobs, fr)
+    refused, private = private_fixtures(repo, doc, ms)
+    ms = {a: m for a, m in ms.items() if a not in private}
     fetchset.fetch_blobs(store, blobs, srcs, jobs=jobs, report=fr)
     objs = list(dict.fromkeys([b for m in ms.values() for b in m.blobs()] + [(h, int(n)) for h, n in blobs]))
     rep: dict[str, Any] = {"dest": dest.describe(), "ids": len(want), "manifests": len(ms), "blobs": len(objs), "dry_run": dry_run,
@@ -399,6 +423,7 @@ def export(store: LocalStore, repo: Path, dest: Remote, *, srcs: Sequence[Remote
                            "fetch": fr}
     lost, current = _split_missing(fr, doc)
     rep["errors"] += [f"not local and not on any source: {x}" for x in current]
+    rep["errors"] += refused
     rep["warnings"] += [f"superseded id in neither the store nor git history (no commit can name it): {x}" for x in lost]
     items = [(object_key(h), store.object_path(h), n) for h, n in objs if store.object_path(h).exists()]
     mans = [(manifest_key(ids.hex_of(a)), store.manifest_path(ids.hex_of(a)), store.manifest_path(ids.hex_of(a)).stat().st_size) for a in ms]

@@ -247,10 +247,11 @@ def cmd_put(argv: list[str]) -> int:
         return 1
     except PrivateFiles as e:
         for r in e.refused:
-            print(f"research data put: {r['path']}: private ({r['rule']}, {r['owner']})", file=sys.stderr)
+            print(f"research data put: {r['path']}: private ({', '.join(x for x in (r['rule'], r.get('owner')) if x)})", file=sys.stderr)
         print(f"research data put: REFUSED, nothing stored: {len(e.refused)} private file(s) under {ns.tree or ns.file}. A private file is "
-              "never stored: move it out and put the rest; a lane that needs one stored changes research/store/private.py in a "
-              "reviewed change", file=sys.stderr)
+              "never stored: move it out and put the rest; a lane that needs one stored changes research/store/private.py or "
+              "private_names.json in a reviewed change, and a registered fixture public on purpose is marked in artifacts.json's "
+              "`toys` ({path: reason})", file=sys.stderr)
         return 1
     rep, why, gone = None, None, ""
     if ns.preserve:

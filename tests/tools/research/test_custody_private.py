@@ -66,6 +66,9 @@ def _private_run(runs: Path) -> Path:
 
 
 def test_every_rule_has_a_one_line_reason_and_an_owning_lanes_handle():
+    doc = json.loads(P.NAMES_FILE.read_text())
+    assert doc["schema"] == "verity/private-names/v1" and set(doc["why"]) == set(doc["private"]), "each name has its why, and no more"
+    assert all(len(w) == 2 for w in doc["why"].values()), "why: {glob: [owner, reason]}"
     assert len({r.what for r in P.RULES}) == len(P.RULES), "two rules print alike"
     for r in P.RULES:
         assert r.reason.strip() and "\n" not in r.reason, f"{r.what}: a one-line reason"
@@ -200,32 +203,41 @@ def test_run_preserve_refuses_a_private_file_before_it_reads_the_key(tmp_path):
     assert os.path.exists(p)
 
 
-def _paths(d: Path, rules: list[dict]) -> None:
-    (d / P.PATHS_FILE).write_text(json.dumps({"schema": P.PATHS_SCHEMA, "rules": rules}))
+def _stated(d: Path, private: list[str], names: list[str]) -> None:
+    (d / P.PATHS_FILE).write_text(json.dumps({"schema": "private-paths/v1", "private": private, "names": names}))
 
 
-def test_a_runs_private_paths_are_refused_like_the_list_and_the_file_itself_is_stored(tmp_path, capsys):
+def test_a_runs_statement_refuses_its_names_and_its_private_directories(tmp_path, capsys):
     vault = tmp_path / "vault"
-    runs = tmp_path / "root" / "runs"
-    d = _fixture_run(runs)
-    _write(d, "out/model/w.npy", b"w")
-    _write(d, "out/model/w.json", b"{}")
-    _write(d, "out/scratch/deep/k.bin", b"k")
-    _paths(d, [{"path": "out/model/*.npy", "reason": "the job's own weights", "owner": "@vllm"},
-               {"under": "scratch", "reason": "the job's key scratch", "owner": "@vllm"}])
+    d = _fixture_run(tmp_path / "root" / "runs")
+    priv = tmp_path / "private"
+    secret = _write(priv, "secret.bin", b"s")
+    _write(d, "out/plan.jsonl", b"p")
+    _write(d, "out/capture/a.bin", b"c")
+    _write(d, "out/ids.3.jsonl.gz", b"i")
+    _write(d, "out/note/capture", b"a file, not a directory")
+    (d / "out" / "held").symlink_to(secret)
+    _stated(d, [str(priv)], ["plan.jsonl", "capture/", "ids.*.jsonl*"])
     rep = CU.runner_publish(d, _custody_dir(tmp_path, FIXTURE_RID, vault), sleep=lambda s: None, tries=1)
     assert rep["preserved"], rep.get("error")
-    assert ("custody REFUSED 2 private file(s), not uploaded and left on this machine: out/model/w.npy (private-paths.json: path "
-            "out/model/*.npy, @vllm), out/scratch/deep/k.bin (private-paths.json: under scratch/, @vllm)") in capsys.readouterr().err
-    assert [r["path"] for r in json.loads((d / CU.MARKER).read_text())["refused"]] == ["out/model/w.npy", "out/scratch/deep/k.bin"]
+    err = capsys.readouterr().err
+    assert ("custody REFUSED 4 private file(s), not uploaded and left on this machine: out/capture/a.bin (private-paths.json: name "
+            "capture/), out/held (private-paths.json: inside " + str(priv) + "), out/ids.3.jsonl.gz (private-paths.json: name "
+            "ids.*.jsonl*) and 1 more") in err
+    marker = json.loads((d / CU.MARKER).read_text())["refused"]
+    assert {r["path"]: r["rule"] for r in marker} == {"out/capture/a.bin": "private-paths.json: name capture/",
+                                                      "out/held": f"private-paths.json: inside {priv}",
+                                                      "out/ids.3.jsonl.gz": "private-paths.json: name ids.*.jsonl*",
+                                                      "out/plan.jsonl": "private-paths.json: name plan.jsonl"}
+    assert all("owner" not in r for r in marker), "a statement's rule has no lane owner"
     kept, _, _ = CU.choose(d)
-    assert P.PATHS_FILE in kept and "out/model/w.json" in kept
-    assert (d / "out/model/w.npy").read_bytes() == b"w"
+    assert P.PATHS_FILE in kept and "out/note/capture" in kept, "a trailing / names a directory only"
 
 
-@pytest.mark.parametrize("doc", ['{"schema": "research/private-paths/v1", "rules": [{"path": "out/*"}]}', "not json",
-                                 '{"schema": "research/private-paths/v1", "rules": [{"path": "a", "name": "b", "reason": "r", "owner": "@x"}]}'])
-def test_an_unreadable_private_paths_file_stores_nothing_of_the_run(tmp_path, capsys, doc):
+@pytest.mark.parametrize("doc", ['{"schema": "research/private-paths/v1", "rules": [{"path": "out/*", "reason": "r", "owner": "@x"}]}',
+                                 "not json", '{"schema": "private-paths/v1", "private": ["relative/dir"], "names": []}',
+                                 '{"schema": "private-paths/v1", "private": [], "names": [""]}'])
+def test_an_unreadable_statement_stores_nothing_of_the_run(tmp_path, capsys, doc):
     vault = tmp_path / "vault"
     d = _fixture_run(tmp_path / "root" / "runs")
     (d / P.PATHS_FILE).write_text(doc)
@@ -236,26 +248,65 @@ def test_an_unreadable_private_paths_file_stores_nothing_of_the_run(tmp_path, ca
     assert data_main(["put", "--store", str(tmp_path / "s"), "--kind", "x/v1", "--tree", str(d / "out")]) == 1
 
 
-def test_a_put_under_a_run_dir_obeys_its_private_paths(tmp_path, capsys):
+def test_a_put_under_a_run_dir_obeys_its_statement(tmp_path, capsys):
     d = _fixture_run(tmp_path / "runs")
-    _write(d, "out/model/w.npy", b"w")
-    _paths(d, [{"path": "out/model/*.npy", "reason": "the job's own weights", "owner": "@vllm"}])
+    _write(d, "out/model/plan.jsonl", b"p")
+    _stated(d, [], ["plan.jsonl"])
     assert data_main(["put", "--store", str(tmp_path / "s"), "--kind", "x/v1", "--tree", str(d / "out" / "model")]) == 1
-    assert "w.npy: private (private-paths.json: path out/model/*.npy, @vllm)" in capsys.readouterr().err
+    assert "plan.jsonl: private (private-paths.json: name plan.jsonl)" in capsys.readouterr().err
+
+
+def test_the_runs_shipped_tree_adds_its_private_names(tmp_path):
+    d = _fixture_run(tmp_path / "runs")
+    src = tmp_path / "src" / ("0" * 40)
+    _write(src, P.TREE_NAMES, json.dumps({"schema": "verity/private-names/v1", "kept_apart": [], "private": ["requests.jsonl"]}))
+    _write(d, "out/requests.jsonl", b"r")
+    assert CU.choose(d)[2] == [], "without the run's tree, requests.jsonl is no bare name"
+    job = json.loads((d / "job.json").read_text())
+    job.setdefault("run", {}).setdefault("remote", {})["source_dir"] = str(src)
+    (d / "job.json").write_text(json.dumps(job))
+    assert P.source_dir(d) == src
+    assert CU.choose(d)[2] == [{"path": "out/requests.jsonl", "rule": "the run's tree: private_names.json: requests.jsonl"}]
+    (src / P.TREE_NAMES).write_text('{"schema": "other"}')
+    with pytest.raises(P.PathsUnread, match="private_names.json"):
+        CU.choose(d)
+
+
+def _registry(repo: Path, rel: str, toys: dict | None = None) -> None:
+    doc = {"art:" + "0" * 64: rel, **({"toys": toys} if toys is not None else {})}
+    (repo / "artifacts.json").write_text(json.dumps(doc))
+
+
+def test_a_registered_toy_fixture_is_put_with_its_private_named_files_and_nothing_else_is(tmp_path, capsys):
+    from research.store import fixtures as FX
+
+    repo = tmp_path / "repo"
+    toy = _write(repo, "fx/toy/keys.bin", b"k").parent
+    _registry(repo, "fx/toy")
+    assert data_main(["put", "--store", str(tmp_path / "s"), "--kind", "x/v1", "--tree", str(toy)]) == 1
+    assert "artifacts.json's `toys`" in capsys.readouterr().err
+    errs, private = FX.private_fixtures(repo, json.loads((repo / "artifacts.json").read_text()), {"art:" + "0" * 64: FX.fixture_manifest(toy)})
+    assert private == {"art:" + "0" * 64} and "fx/toy (art:" in errs[0] and '{"fx/toy": "why it is public"}' in errs[0]
+    _registry(repo, "fx/toy", {"fx/toy": "a toy circuit's prover store on made-up inputs"})
+    assert data_main(["put", "--store", str(tmp_path / "s"), "--kind", "x/v1", "--tree", str(toy)]) == 0
+    assert "is a registered toy fixture (artifacts.json toys: a toy circuit's prover store" in capsys.readouterr().err
+    assert FX.private_fixtures(repo, json.loads((repo / "artifacts.json").read_text()), {"art:" + "0" * 64: FX.fixture_manifest(toy)}) == ([], set())
+    _registry(repo, "fx/other", {"fx/toy": "a toy, but not registered"})
+    assert P.toy(toy) is None, "only a registered path is a toy"
 
 
 def test_fetch_all_copies_no_private_file_and_preserves_the_rest(tmp_path, monkeypatch):
     from research import remote
 
     d = _private_run(tmp_path / "machine" / "runs")
-    _paths(d, [{"path": "out/model/*.npy", "reason": "the job's own weights", "owner": "@vllm"}])
-    _write(d, "out/model/w.npy", b"w")
+    _stated(d, [], ["plan.jsonl"])
+    _write(d, "out/model/plan.jsonl", b"p")
     here = tmp_path / "here" / FIXTURE_RID
     here.mkdir(parents=True)
     (here / "remote.json").write_text(json.dumps({"remote_run_dir": str(d), "host": "h", "port": 22, "run_id": FIXTURE_RID}))
     monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **kw: ["sh", "-c"])
     rec = remote.fetch(here, everything=True)
-    refused = sorted([*(r for r, _ in PRIVATE), "out/b/salts_t", "out/model/w.npy"])
+    refused = sorted([*(r for r, _ in PRIVATE), "out/b/salts_t", "out/model/plan.jsonl"])
     assert [r["path"] for r in rec["refused"]] == refused and rec["preserved"], rec.get("preserve_error")
     assert not any((here / r).exists() for r in refused), "no private file reached the launcher"
     assert (here / "out/proof.bin").exists() and (here / P.PATHS_FILE).exists() and (here / UNDECIDED[0]).exists()

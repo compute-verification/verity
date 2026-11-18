@@ -381,7 +381,7 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
     outputs: dict[str, str | None] = {"result": None, "run_files": None}
     res = result.check(run_dir, run_id)
     if res.valid and res.doc is not None and (rule := rule_for("result.json", run_dir / "result.json", rules=rules)):
-        print(f"research: result.json not stored as the run's result: it is private ({rule.what}, {rule.owner}); the run record lists it "
+        print(f"research: result.json not stored as the run's result: it is private ({', '.join(filter(None, (rule.what, rule.owner)))}); the run record lists it "
               "as refused", file=sys.stderr)
     elif res.valid and res.doc is not None:
         doc = res.doc

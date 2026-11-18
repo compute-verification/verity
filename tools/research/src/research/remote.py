@@ -2578,12 +2578,14 @@ def _remote_status(ssh: list[str], rd: str, *, timeout: float = 120) -> dict[str
     return doc if isinstance(doc, dict) else {}
 
 
-#: what `fetch --all` runs on the machine as `python3 -c PROGRAM MODE .` in the run dir, after `SRC = ...` (store/private.py): `list`
+#: what `fetch --all` runs on the machine as `python3 -c PROGRAM MODE .` in the run dir, after `SRC = ...` (store/private.py) and
+#: `NAMES = ...` (its private_names.json): `list`
 #: prints {"refused": [...]} (or {"unread": why}, exit 3); `keep` prints, NUL-separated, every file and symlink tar may copy
 PRIVATE_PROGRAM = '''
 import json, os, sys, types
 P = types.ModuleType("research_private")
 P.__file__ = "research/store/private.py"
+P.NAMES_TEXT = NAMES
 sys.modules[P.__name__] = P
 exec(compile(SRC, P.__file__, "exec"), P.__dict__)
 mode, root = sys.argv[1], sys.argv[2]
@@ -2608,7 +2610,7 @@ for base, dirs, files in os.walk(root):
 def private_program() -> str:
     from .store import private
 
-    return f"SRC = {Path(private.__file__).read_text()!r}\n" + PRIVATE_PROGRAM
+    return f"SRC = {Path(private.__file__).read_text()!r}\nNAMES = {private.NAMES_FILE.read_text()!r}\n" + PRIVATE_PROGRAM
 
 
 def _refused_on_machine(ssh: list[str], rd: str, timeout: float) -> list[dict[str, Any]]:

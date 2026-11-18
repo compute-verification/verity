@@ -307,7 +307,8 @@ class LocalStore:
         if not private_checked and (file is not None or tree is not None):
             from .private import check_payload
 
-            check_payload([Path(file)] if file is not None else _rel_files(Path(tree)) if Path(tree).is_dir() else [])
+            check_payload([Path(file)] if file is not None else _rel_files(Path(tree)) if Path(tree).is_dir() else [],
+                          Path(file if file is not None else tree))
         blobs: list[tuple[Path, str]] = []
         payload = None
         if file is not None:

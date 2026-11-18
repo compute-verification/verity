@@ -546,18 +546,18 @@ now in the run dir is in the record by content. From the record on, the runner's
 not launcher.log, so nothing it prints makes the run dir differ from its record. An expired key is named in the marker's
 `error`. `--no-custody-r2` leaves attempts with no `run_record`.
 
-- **Private files are never stored.** `private.py` lists them, one rule a line with its reason and owning lane, by name
-  (only where no public file shares it), by place and by text; a lane adds a line in a reviewed change. A run adds its own in
-  its run dir's `private-paths.json` (`{"schema": "research/private-paths/v1", "rules": [{"path"|"name"|"under": GLOB,
-  "reason", "owner"}]}`, relative to the run dir); an unreadable one stores and copies nothing of the run
-  (`private.PathsUnread`). Nothing removes a rule at run time. Custody stores the rest of the record and refuses loudly:
-  `custody REFUSED N private file(s)` on launcher.log and custody's output, each path with its rule in `custody-refused.json`,
-  the record's `meta.refused`, and `.custody`'s `refused`; `research status RUN` and `research data
-  preserved RUN` say `N private file(s) refused`. A refused file stays in the run dir, never evicted. No
-  `--declared-output` glob, run-file name or typed output brings one in. A symlink is never followed or uploaded; one whose
-  name or target is private is listed as refused. `research data put --file|--tree` and `research run-preserve` refuse a
-  payload holding one and store nothing (`private.PrivateFiles`, exit 1), judging a put's symlink by its target.
-  `research fetch --all` judges the run dir on the machine and copies none (`refused` in `remote.json` and `preserved.json`).
+- **Private files are never stored.** By name, `private_names.json` (`verity/private-names/v1`, owner and reason in
+  `why`; no name a public file has); by place and text, `private.py`'s `PLACES`.
+  Custody adds a run's statement, `private-paths.json` at its run dir's root (`private-paths/v1`: `private` directories outside the run, `names` none of its paths may have, a trailing `/` a directory's), and its shipped tree's
+  `adapters/vllm/verity_vllm/pipeline/private_names.json` (job.json's `run.remote.source_dir`); an unreadable one stores and
+  copies nothing of the run. Custody stores the rest, loudly: `custody REFUSED N private file(s)` on launcher.log
+  and custody's output, each path with its rule in `custody-refused.json`, the record's `meta.refused` and `.custody`'s
+  `refused`; `research status` and `data preserved` say `N private file(s) refused`. A refused file stays,
+  never evicted. No glob or typed output brings one in; a symlink is never followed or uploaded, and
+  one whose name or target is private is listed. `research data put` and `research run-preserve` refuse a
+  payload holding one (exit 1), but a path `artifacts.json` registers and marks in `toys`
+  (`{path: reason}`); `research data export` refuses an unmarked registered fixture holding one. `research fetch --all`
+  judges the run dir on the machine and copies none (`refused` in `remote.json` and `preserved.json`).
 - The workload's `research run-preserve PATH` has the runner put one file of `$OUT` before the run ends: a `run-file/v1`
   artifact with the run id, verified the same way, whose art id it prints, or why not (`run_preserve.py`). The key stays the
   runner's.
