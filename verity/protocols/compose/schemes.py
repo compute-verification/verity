@@ -23,8 +23,8 @@ _MEMORY = "verity.protocols.resource_accounting.memory"
 #: each scheme's name, the name an application lists, to the module that registers it when imported
 DECLARATIONS: Mapping[str, str] = MappingProxyType({
     "bandwidth": f"{_MEMORY}.poub.scheme",
-    "certifier": "verity.protocols.resource_accounting.network.scheme",
     "dither": "verity.protocols.experimental.dither.scheme",
+    "network-attester": "verity.protocols.resource_accounting.network.scheme",
     "pearl-plus": f"{_COMPUTE}.pouw.scheme",
     "pous": f"{_MEMORY}.pous.scheme",
     "wipe": f"{_MEMORY}.pous.scheme",
