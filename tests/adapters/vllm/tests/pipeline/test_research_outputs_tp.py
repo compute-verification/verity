@@ -16,6 +16,7 @@ PRIVATE_FILES = {"match/capture/tokens.json": {"prompt_token_ids": [[1, 2]], "ge
                  "match_stoch.json": {"rows": [{"served": 3, "recomputed": 3}]},
                  "commit/sampled_replay_p0.json": {"facts_of_record": {"served": [3]}},
                  "commit/sampled_replay.json": {"facts_of_record": {"served": [3]}},
+                 "commit/memory_map.jsonl": '{"step": 0, "freed": [], "written": [[0, 0, "00"]], "withdrawn": []}\n',
                  "serve/requests.jsonl": '{"engine_id": "0", "prompt_ids": [1, 2], "output_ids": [3]}\n',
                  "serve/step_trace.jsonl": '{"step": 0, "rows": {"0": 2}}\n',
                  "serve/advice_trace.jsonl": '{"kind": "arrive", "request": "0", "prompt": 2, "params": {"seed": 1}}\n',
