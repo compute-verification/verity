@@ -559,7 +559,7 @@ def launch_case(case: str, lay: dict[str, Any], ctx: dict[str, Any], outdir: Pat
         want = np.array([m.words() for m in want_m], dtype=np.int32)
         return bool(tsm.shape[0] == want.shape[0] and np.array_equal(tsm[:, :7], want) and ns.tolist() == list(want_ns))
 
-    parts = T.num_sm_parts(H_Q, s_q=t)
+    parts = T.num_sm_parts(H_Q, s_q=t, num_sms=D.SMS)
     again = rerun()
     rec = {"case": case, "tokens": t, "num_sm_parts": parts, "num_splits": ns.tolist(),
            "call": {k: (list(v.shape) if hasattr(v, "shape") else v) for k, v in kw.items() if k != "tile_scheduler_metadata"},
@@ -883,7 +883,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", required=True, help=f"directory for sass/, capture/ and {RECORD}")
     ap.add_argument("--min-driver", type=int, default=575)
     ap.add_argument("--want-cc", default="9.0")
-    ap.add_argument("--want-sms", type=int, default=132)
+    ap.add_argument("--want-sms", type=int, default=D.SMS)
     ap.add_argument("--workers", type=int, default=C.cpu_workers(), help="comparison processes; 0 compares in this one")
     ap.add_argument("--quick", action="store_true", help="fewer requests and cases: a first signal in a few minutes")
     ap.add_argument("--definition", type=int, default=0, metavar="N",

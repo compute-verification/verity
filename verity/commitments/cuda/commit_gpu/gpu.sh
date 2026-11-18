@@ -11,7 +11,8 @@
 # stand-in producer kernel, the operand's last write. Clocks are read, never set.
 #
 #   research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-#     -- bash verity/commitments/cuda/commit_gpu/gpu.sh
+#     --env CUDA_HOME=TOOLKIT -- bash verity/commitments/cuda/commit_gpu/gpu.sh
+# CUDA_HOME names a CUDA 13.0 toolkit (the launcher's to give; refused by name where unset): nvcc and nsys are its bin's.
 # CHECK=quick|full (default full); REPS (default 9); BUILDS (default a0r0l; tags a<SHA_ADD>r<SHA_ROT>[l][nomask][merged][quad], l for
 # SHA_ROLL=1);
 # SWEEP and SEG_SWEEP (int8 values a leaf); TILE_M, TILE_R, TILESEG_R; GENCODE (default arch=compute_120a,code=sm_120a; H200:
@@ -19,7 +20,7 @@
 # (default gpu-lease 1 --wait --max-min 20 --; empty when the whole script already runs under a lease).
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+export PATH=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}/bin:$PATH
 export D=verity/commitments/cuda/commit_gpu PY=${PY:-python3} PYTHONPATH=. GENCODE=${GENCODE:-arch=compute_120a,code=sm_120a}
 W=$(mktemp -d /dev/shm/commit-gpu.XXXXXX)
 export W
@@ -115,7 +116,7 @@ $LEASE bash -c '
   done
   kill $smi
   # the kernels'"'"' launch shapes (registers a thread, shared memory, blocks): can a commit kernel sit beside a GEMM CTA?
-  N=$(command -v nsys || ls /usr/local/cuda-13.0/bin/nsys 2>/dev/null)
+  N=$(command -v nsys)
   if [ -n "$best" ] && [ -n "$N" ]; then
     "$N" profile -o "$W/trace" -t cuda --force-overwrite true "$W/commit_gpu_$best" bench "$W/p-rows-4096.bin" rows 8192 32768 2 \
       8192 4096 4096 > /dev/null 2> "$O/nsys.err"

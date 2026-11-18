@@ -22,7 +22,7 @@ kernels, from the source tree's root:
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-  -- bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/run.sh
+  -- bash benchmarks/pouw/edited_gemm/run.sh
 ~~~
 
 It exits 4 when the build fails and 5 when a gate fails.

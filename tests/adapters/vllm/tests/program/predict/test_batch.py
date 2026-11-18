@@ -106,7 +106,7 @@ def test_the_registered_split_count_keeps_one_nucleus_at_every_batch_size_and_po
 def test_the_frozen_v0_models_templates_hold_their_declared_verdicts():
     """The frozen v0 registration's own kinds (Llama-3.2-1B, V 128,256, on the RTX PRO 6000): a vocabulary change that moves one of
     them (a launch static on a GEMM at its N, a sampler construction at its V) shows only at the model's shapes (about 60 s)."""
-    vs = _verdicts(registered_phi("LLAMA32_1B", "rtxpro6000"))
+    vs = _verdicts(registered_phi("LLAMA32_1B", "rtx-pro-6000-server"))
     assert sum(1 for v in vs if v.got == (True, True)) == 13
 
 
