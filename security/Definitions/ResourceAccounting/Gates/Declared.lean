@@ -13,7 +13,7 @@ is budgeted. A run input narrower than its type gets its bound only through such
 derived (`Proven`), never declared.
 
 Two circuits of the exact-int8 profile (`verity_vllm/program/registry/int8_exact.py`) whose window then holds by
-theorem: `int8Linear`, one coordinate of `Int8Linear{K,N}` (`Int8RowQuant`, then `ScaledMmS8_v1`'s s8·s8 dot), and
+theorem: `int8Linear`, one coordinate of `Int8Linear{K,N}` (`Int8RowQuant`, then `ScaledMmS8_v3`'s s8·s8 dot), and
 `lutPv`, one channel of `Int8LutAttentionRow`'s `P V'` (P from `LutIndex`, `Exp2Lut127` and `S32LowByte`, V' an s8
 code, both zero-padded to `32·S` keys). The 32-bit primitives whose value no bound reads (`F32Div`, `F32Rint`, the
 clamp's `F32Fmaxf` and `F32Fminf`, the row scale's fold, each reading the row's `Bf16ToF32` widening, an affine

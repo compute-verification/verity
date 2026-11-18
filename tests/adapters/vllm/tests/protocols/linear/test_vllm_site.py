@@ -101,7 +101,8 @@ def test_attach_patches_each_quant_method_once_through_hooks_and_sets_nothing_on
         messages.current().subscribe("s", "blocks", seen.append)
         messages.current().request("pouw:test", H.ComputeBlockWith(stack))
         assert layers[0].quant_method.apply(layers[0], "x") == ("stock", "qkv", "x", None)       # inactive: vLLM's own
-        assert [(d.block, d.key, d.shape, d.format) for d in seen] == [("model.layers.0", 0, {"n": 6144, "k": 4096}, "bf16")]
+        assert [(d.block, d.key, d.shape, d.format, d.weights) for d in seen] == [
+            ("model.layers.0", 0, {"n": 6144, "k": 4096}, "bf16", {"weight": "model.layers.0.weight"})]
         stack.activate(Arm("pearlc", "bf16", ex.name))
         with stack.pass_(PassSpec(index=3)):
             assert layers[1].quant_method.apply(layers[1], "x1", "b") == ("pearl", 1)

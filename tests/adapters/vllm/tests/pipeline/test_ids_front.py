@@ -462,7 +462,7 @@ def test_the_launcher_starts_each_process_a_named_scheme_files_with_this_servers
         F.launch(messages.Exchange(), ["other"])
     with pytest.raises(UsageError, match="no scheme starts a process"):
         F.launch(messages.Exchange(), [])
-    with pytest.raises(NotImplementedError, match="vllm/adapter-names-no-scheme"):
+    with pytest.raises(NotImplementedError, match="vllm/adapter-imports-no-protocol"):
         monkeypatch.setattr(schemes, "SCHEMES", {"bare": SimpleNamespace()})
         F.launch(messages.Exchange(), ["bare"])
 

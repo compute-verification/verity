@@ -204,7 +204,7 @@ def test_nvfp4_coordinate_replays_every_recorded_rtx5090_vector() -> None:
 
 def test_the_s8_coordinate_scales_as_steps_int8_linear_and_the_row_is_its_coordinates() -> None:
     """`ScaledMmS8Coordinate_v1` is bf16_rn((f32_rn(acc) * sx) * sw) on the exact integer sum, `benchmarks/ppl/steps.py`'s
-    `int8_linear` order (numpy's float32 products), and `ScaledMmS8_v1` is the coordinates over W's rows. Some rows' scales
+    `int8_linear` order (numpy's float32 products), and `ScaledMmS8_v3` is the coordinates over W's rows. Some rows' scales
     are searched for so that `sw` first (CUTLASS c2x's order) rounds to another bf16 word: random scales almost never tell
     the two orders apart."""
     import numpy as np
@@ -237,7 +237,8 @@ def test_the_s8_coordinate_scales_as_steps_int8_linear_and_the_row_is_its_coordi
     coord = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
     got = E.evaluate_batch(coord, u8(x), u32(sx), u8(w[:, 0]), u32(sw[:, 0]), kernel="reference")
     assert np.array_equal(got.astype(np.uint64), want[:, 0])
-    row = E.evaluate_batch(bind(G.ScaledMmS8, K=K, N=N, **G.GEMM_SM120_S8), u8(x), u32(sx), u8(w), u32(sw), kernel="reference")
+    row = E.evaluate_batch(bind(G.ScaledMmS8V3, K=K, N=N, **G.GEMM_SM120_S8), u8(x), u32(sx), w.view("<u2"),
+                           np.ascontiguousarray(sw).view("<u2").reshape(n, N, 2), kernel="reference")
     assert np.array_equal(row.astype(np.uint64), want)
     accw = E.evaluate_batch(bind(G.GemmAccumulatorS8, K=K, **G.GEMM_SM120_S8), u8(x), u8(w[:, 0]), kernel="reference")
     assert np.array_equal(accw.astype(np.uint32).view(np.int32), acc[:, 0])
@@ -259,8 +260,9 @@ def test_the_s8_row_on_u16_words_is_the_row_on_the_codes_and_scales_they_hold() 
         b = np.ascontiguousarray(a).view(np.uint8).reshape(n, N, m, 2).astype(np.uint16)
         return b[..., 0] | b[..., 1] << 8
 
-    want = E.evaluate_batch(bind(G.ScaledMmS8, K=K, N=N, **G.GEMM_SM120_S8), x.view(np.uint8), sx.view(np.uint32),
-                            w.view(np.uint8), sw.view(np.uint32), kernel="reference")
+    coord = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
+    want = np.stack([E.evaluate_batch(coord, x.view(np.uint8), sx.view(np.uint32), w[:, j].view(np.uint8), sw[:, j].view(np.uint32),
+                                      kernel="reference") for j in range(N)], axis=1)
     got = E.evaluate_batch(bind(G.ScaledMmS8V3, K=K, N=N, **G.GEMM_SM120_S8), x.view(np.uint8), sx.view(np.uint32),
                            words(w, K // 2), words(sw[:, :, None], 2), kernel="reference")
     assert np.array_equal(got, want)
@@ -497,7 +499,7 @@ FAMILIES = [(G.DotBf16, 16, G.GEMM_HOPPER), (G.GemmCoordinate, 16, G.GEMM_AMPERE
             (G.PvRowPad, 16, {"T": 1, "D": 2, **G.GEMM_HOPPER}), (G.Gemm, 16, {"N": 3, **G.GEMM_AMPERE}),
             (G.GemmCoordinateE4m3, 32, G.GEMM_SM120_E4M3), (G.GemmCoordinateNvf4, 64, G.GEMM_SM120_NVF4),
             (G.GemmCoordinateMxf4, 64, G.GEMM_SM120_MXF4), (G.GemmAccumulatorS8, 32, G.GEMM_SM120_S8),
-            (G.ScaledMmS8Coordinate, 32, G.GEMM_SM120_S8), (G.ScaledMmS8, 32, {"N": 2, **G.GEMM_SM120_S8}),
+            (G.ScaledMmS8Coordinate, 32, G.GEMM_SM120_S8), (G.ScaledMmS8V3, 32, {"N": 2, **G.GEMM_SM120_S8}),
             (G.ScaledMmS8CoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8}),
             (G.ScaledMmS8ResidualCoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8})]
 S8_FAMILIES = FAMILIES[9:]
@@ -541,7 +543,6 @@ VALID = {
     bind(G.GemmCoordinateMxf4, K=2048, **G.GEMM_SM120_MXF4): (34, "26e9e86cb631488f8531c90d6f5e60eaa90ca3e488d43633fdfbe80a884cca7d7198984bb5573fbe4d24e49c9110e40c2748f0300e8ac4ebbd171a6399f92bbc"),
     bind(G.GemmAccumulatorS8, K=131040, **G.GEMM_SM120_S8): (4096, "6c58a4fdb90b9e4029279a9a762e9370f102143753eaa4d262be60a456a8abb3c1a941ab01051f71eb8b5f089d1f3a5f996c67c9ea2b8e6eeb1746d54f662991"),
     bind(G.ScaledMmS8Coordinate, K=131040, **G.GEMM_SM120_S8): (4100, "dfa0738a72365f7920185ffdb6da23d8d17ffd6fb4ba384c5c5cb1f0833cf16e1ca1c14cd78c75c8e3199d531cb438ecaa1cba5b0a1e328fed08ed29314fcabd"),
-    bind(G.ScaledMmS8, K=131040, N=2, **G.GEMM_SM120_S8): (8200, "5eaef04a9fbb5fea1e993d98afb123c640c232b2b7ff44536f4966cff6aa481c3898b0210fc1e4e9c710aaddbf2411f7fa29c084bf4c27d07931959ac25bdc90"),
 }
 
 
@@ -572,7 +573,7 @@ def test_s8_gemm_binds_the_registered_step_for_every_card_that_computes_it_and_r
     for model in (HOPPER_SM90_S8_K32, BLACKWELL_SM100_S8_K32, BLACKWELL_SM120_S8_M16N8K32):
         assert G.s8_gemm(model) == G.GEMM_SM120_S8 == {"DOT": P.BlackwellS8ImmaDot32}
     assert G.GEMM_SM90_S8 == G.GEMM_SM120_S8
-    for defn, rest in ((G.GemmAccumulatorS8, {}), (G.ScaledMmS8Coordinate, {}), (G.ScaledMmS8, {"N": 2})):
+    for defn, rest in ((G.GemmAccumulatorS8, {}), (G.ScaledMmS8Coordinate, {}), (G.ScaledMmS8V3, {"N": 2})):
         assert bind(defn, K=512, **rest, **G.GEMM_SM90_S8).id == bind(defn, K=512, **rest, **G.GEMM_SM120_S8).id
     for model in (BLACKWELL_SM120_S8_M16N8K32_WRAP, replace(HOPPER_SM90_S8_K32, satfinite=False),
                   BLACKWELL_SM120_U8S8_M16N8K32, replace(HOPPER_SM90_S8_K32, k_per_instruction=16)):

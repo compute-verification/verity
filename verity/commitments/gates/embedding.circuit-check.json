@@ -14,7 +14,7 @@
   }
  },
  "digests": {
-  "EmbeddingRead_v1{V=131072,H=576}": {
+  "EmbeddingRead_v2{V=131072,H=576}": {
    "sha512": "bbfe1d1a16bce1f539358c10d390e32a170213363df527e1f219d0a22bc2dc6bfea72f74459fadade9f7cd88bc832379547d965e8587eeca7ecb1334c07cdad6"
   }
  }

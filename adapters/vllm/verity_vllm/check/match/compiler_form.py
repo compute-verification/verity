@@ -69,7 +69,7 @@ def _swapped(d: str) -> bool:
     """Whether the component's Program (its `result.json` `spec_histogram`, one entry per root node) names a dead-free version
     `prune.dead_free_versions` binds and none of the Definitions they replace.  `prune` swaps only inside `dead_free`, so such a
     Program is in the form whatever dead gates it counts: those no rule of the form removes (an int8 linear read in part:
-    `ScaledMmS8_v1` is no `prune.COLUMNS` linear, so the last layer's qkv on the prompt rows before the last keeps its query columns)."""
+    `ScaledMmS8_v3` is no `prune.COLUMNS` linear, so the last layer's qkv on the prompt rows before the last keeps its query columns)."""
     try:
         with open(os.path.join(d, "result.json")) as f:
             hist = json.load(f)["spec_histogram"]

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 #: the row Definitions whose Calls are cut into template instances (their bodies batch the template), the rest being the row itself
-CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
+CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v3")
 #: the row Definitions whose Calls are split into coordinates of themselves: coordinate n of a row is its Definition at N = 1
 #: (the expert-indexed pair GEMMs, `fp8_moe_experts.pair_rows` at one column; FlashInfer's FP8 linear, `deepgemm`, one output
 #: word with the row's quantisation of its own, where its ``PARTS`` quantise the row once; the block-scaled FP8 GEMM,
