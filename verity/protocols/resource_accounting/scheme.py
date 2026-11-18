@@ -20,7 +20,7 @@ spelt ``delta``), and a change to either names the other's line in its message. 
 `ports` and `requires` are read by the adapter and the runner, by no guarantee, and have no Lean field.
 
 **Declaring a scheme.** One module, ``<protocol>/scheme.py``, calls `register(Scheme(...))` and is listed in
-`MODULES` under each name it registers, one line each; `get` imports it on first use. Its fields, with the Lean they mirror
+`verity.protocols.compose.schemes.DECLARATIONS`, which every reader loads (`load`). Its fields, with the Lean they mirror
 (`Verity.Scheme`):
 
 - ``blocks``: `Block(definition, cost)`, `Block` and `cost`; ``cost`` reads public values logged before the sample's coin.
@@ -48,7 +48,6 @@ about, as `Core.Account.Part` names it.
 from __future__ import annotations
 
 import re
-from importlib import import_module
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -56,16 +55,6 @@ from types import MappingProxyType
 from typing import Any, Literal
 
 from verity.hooks import HOOKS
-
-#: each scheme's name and the module that registers it when imported: the one place a scheme's package path is written
-MODULES: Mapping[str, str] = MappingProxyType({
-    "bandwidth": "verity.protocols.resource_accounting.memory.poub.scheme",
-    "certifier": "verity.protocols.resource_accounting.network.scheme",
-    "dither": "verity.protocols.experimental.dither.scheme",
-    "pearl-plus": "verity.protocols.resource_accounting.compute.pouw.scheme",
-    "pous": "verity.protocols.resource_accounting.memory.pous.scheme",
-    "wipe": "verity.protocols.resource_accounting.memory.pous.scheme",
-})
 
 
 def _no_requests(ctx: Any) -> tuple[Any, ...]:
@@ -295,14 +284,11 @@ def register_circuits(name: str, circuits: Circuits) -> Circuits:
 
 
 def get(name: str) -> Scheme:
-    """The scheme registered under ``name``, its module (`MODULES`) imported on first use; `KeyError` names the known
-    ones."""
-    if name not in SCHEMES and name in MODULES:
-        import_module(MODULES[name])
+    """The scheme registered under ``name``; `KeyError` names the registered ones."""
     try:
         return SCHEMES[name]
     except KeyError:
-        raise KeyError(f"no scheme {name!r}; known: {', '.join(sorted(set(SCHEMES) | set(MODULES))) or 'none'}") from None
+        raise KeyError(f"no scheme {name!r}; registered: {', '.join(sorted(SCHEMES)) or 'none'}") from None
 
 
 def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Sequence[int]]]]) -> frozenset[int]:
@@ -330,5 +316,5 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["CIRCUITS", "MODULES", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Order",
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Order",
            "Port", "Scheme", "bound", "credited", "get", "register", "register_circuits", "register_process", "settings"]

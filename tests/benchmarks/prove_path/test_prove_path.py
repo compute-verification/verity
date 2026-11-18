@@ -2161,7 +2161,7 @@ class OfRecord(Listing):
 def _fused_args(c: dict, **over) -> argparse.Namespace:
     return argparse.Namespace(**{"bundle": c["served"]["bundle"], "row_dir": c["served"]["row_dir"], "partition": c["partition"],
                                  "workers": 1, "serving_rows_tables": c["tables"]["registration"],
-                                 "serving_rows_tables_key": c["tables"]["key"], "checkpoint_dir": c["checkpoint"], **over})
+                                 "checkpoint_dir": c["checkpoint"], **over})
 
 
 def _same_commitment(a: Path, b: Path) -> None:
@@ -2219,16 +2219,14 @@ def test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpo
     compiler = PP.Capped(OfRecord(program_dir=fused["program_dir"]))
     with pytest.raises(ValueError, match=r"is not among the committer's tables \(commit_tables\)"):
         PP.commit1(_fused_args(fused, serving_rows_tables=None), compiler, [], {}, tmp_path / "w1")
-    with pytest.raises(ValueError, match=r"read under its committer's key file \(--tables-key\)"):
-        PP.commit1(_fused_args(fused, serving_rows_tables_key=None, bundle="no-bundle"), compiler, [], {}, tmp_path / "w2")
     with pytest.raises(LookupError, match=r"registered tensor \S+\.experts\.w\S+ \(checkpoint\) does not open against the committed "
                                           r"weights root: no checkpoint given"):
         PP.commit1(_fused_args(fused, checkpoint_dir=None), compiler, [], {}, tmp_path / "w3")
-    assert not any((tmp_path / d / "registration.json").exists() for d in ("w1", "w2", "w3"))
+    assert not any((tmp_path / d / "registration.json").exists() for d in ("w1", "w3"))
 
 
 def test_a_tp_ranks_window_is_handed_the_tables_and_the_checkpoint(monkeypatch, tmp_path):
-    assert PP.tables_of(argparse.Namespace(serving_rows_tables=None, serving_rows_tables_key="k")) is None
+    assert PP.tables_of(argparse.Namespace(serving_rows_tables=None)) is None
     assert PP.checkpoint_of(argparse.Namespace(checkpoint_dir=None)) is None
     got = {}
     monkeypatch.setattr(PP, "compiler_of_args", lambda a: "compiler")
@@ -2236,7 +2234,7 @@ def test_a_tp_ranks_window_is_handed_the_tables_and_the_checkpoint(monkeypatch, 
     monkeypatch.setattr(AW, "commit_window", lambda commit, r, partition, out, compiler, requests, bound, **kw:
                         got.update(kw, at=(commit, r, partition, str(out), compiler)) or {"run": "x"})
     a = argparse.Namespace(tp_commit="c", partition="p", out=str(tmp_path), workers=1, forge=None, checkpoint_dir="ck",
-                           serving_rows_tables="t-rank{rank}.json", serving_rows_tables_key="k")
+                           serving_rows_tables="t-rank{rank}.json")
     assert PP.commit_rank((a, 3, [], {})) == {"run": "x", "forged": None}
     assert got == {"at": ("c", 3, "p", str(tmp_path / "rank3"), "compiler"), "workers": 1,
-                   "tables": {"key": "k", "registration": "t-rank{rank}.json"}, "checkpoint": ("checkpoint", "ck")}
+                   "tables": {"registration": "t-rank{rank}.json"}, "checkpoint": ("checkpoint", "ck")}

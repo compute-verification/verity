@@ -22,6 +22,7 @@
 #   ab     ROUNDS rounds, order rotating, of one warm process (warm 1 + 3 Flock ZK dev sessions) per build, AB_BASE and AB_NEW
 #          (default base and new: the builds of AS=base and AS=new); PHASE's median a rep and a session
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 D=${RESEARCH_RUN_DIR:?run under research run}; O=$D/out; mkdir -p $O
 REPO=$(pwd); W=${KW:-/workspace/jobs/phase}; mkdir -p $W; AS=${AS:-new}; STEPS=${STEPS:-setup,build,stage,ident,tl}
 W13='census:MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}}'
@@ -124,7 +125,7 @@ run_dev() {  # run_dev DIR BIN RUNS: one warm process of RUNS timed Flock ZK dev
   timeout -k 20 1200 $PY benchmarks/one_stage/zk_cost.py prove --bin $bin --out $z --points $DEVP --arms dev --cold 0 --warm 1 \
     --runs $runs 2>&1 | grep ZKCOST | cut -c1-400 | sed "s/^/$dir /" | tee -a $O/job.log
   (cd $z && find . -type f \( -name prove.err -o -name prove.out -o -name session.json -o -name '*.jsonl' \) -size -8M -print0 \
-    | xargs -0 -r -I{} cp --parents {} $O/$dir/)
+    | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} $O/$dir/)
 }
 if has tl; then
   [ -x $NSYS ] || { log "no nsys at $NSYS"; exit 1; }
