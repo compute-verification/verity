@@ -31,7 +31,6 @@
 // wall clock; clock64 over %globaltimer for the kernel and for each mode's steps (thread 0's, step start to step
 // start); the first FP32 warp's own adding time (fp32_share, of the kernel's) and its clock64 MHz.
 //
-// Build: python3 gen_wgmma.py && nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -I. -o duty duty.cu
 // Run:   duty ARM CLASS FILL BURST SECS DUTY...    (BURST in SM-cycles, DUTY in percent)
 //        duty A|B|C|D CLASS SECS X...               (X: C's MACs an add, D's phase in ms; A and B a point each X)
 // One JSON line for the calibration, then one a point, on stdout (arms A to D: one a point).
