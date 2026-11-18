@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics.moe_twins import nv_expf_bits
 from verity_vllm.definitions.registry import merge_attn_states as M

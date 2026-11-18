@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from verity import hooks as H
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.linear.api import (
     Arm,
@@ -17,6 +18,7 @@ from verity_vllm.protocols.linear.api import (
     LinearSite,
     PassSpec,
     Stack,
+    WithWeight,
 )
 
 SITES = (LinearSite(0, 0, "model.layers.0.self_attn.qkv_proj", 6144, 4096, "bf16"),
@@ -78,6 +80,18 @@ def original(layer, x, bias):
     return ("stock", layer.weight, layer.quant_config, x, bias)
 
 
+def call(stack, site, x, bias):
+    """The stack as the kernel of ``site``'s due call, vLLM's own apply on `Layer` innermost (`vllm_site.attach`)."""
+    due = H.BlockDue(site.qualname, site.weight_id, {"n": site.n, "k": site.k}, site.weight_format,
+                     {"x": x, "weight": Layer.weight, "bias": bias})
+
+    def own(given):
+        given = given or {}
+        return original(Layer() if "weight" not in given else WithWeight(Layer(), given["weight"]), x, bias)
+
+    return stack(due, own)
+
+
 PEARLC = Arm("pearlc", "bf16", "pouw:pearl-c-sm120-v1-h3")
 
 
@@ -105,10 +119,10 @@ def test_a_control_or_schedule_nothing_implements_is_refused_by_name():
 
 
 def test_an_inactive_stack_is_vllms_own_apply_with_the_sources_weight():
-    assert Stack(SITES, Executor()).apply(SITES[0], Layer(), "x", None, original) == ("stock", "plaintext", "the layer's own", "x", None)
+    assert call(Stack(SITES, Executor()), SITES[0], "x", None) == ("stock", "plaintext", "the layer's own", "x", None)
     stack = Stack(SITES, None, Source())
     with stack.forward():
-        got = stack.apply(SITES[1], Layer(), "x", "b", original)
+        got = call(stack, SITES[1], "x", "b")
     assert got == ("stock", ("decoded", 1, 0), "the layer's own", "x", "b")
 
 
@@ -121,7 +135,7 @@ def test_the_executor_computes_inside_a_pass_with_the_sources_weight():
             with stack.forward() as fwd:
                 assert fwd == Forward(f, 7)
                 for s in SITES:
-                    stack.apply(s, Layer(), f"x{f}", None, original)
+                    call(stack, s, f"x{f}", None)
     assert [c[:3] for c in p.calls] == [(0, "x0", ("decoded", 0, 0)), (1, "x0", ("decoded", 1, 0)),
                                         (0, "x1", ("decoded", 0, 1)), (1, "x1", ("decoded", 1, 1))]
     assert stack.passes == [{"pass": 7, "units": 4}] and src.ended == [0, 1]
@@ -131,7 +145,7 @@ def test_an_active_executor_outside_a_pass_fails_closed():
     stack = Stack(SITES, Executor())
     stack.activate(PEARLC)
     with pytest.raises(RuntimeError, match="active outside a pass"):
-        stack.apply(SITES[0], Layer(), "x", None, original)
+        call(stack, SITES[0], "x", None)
 
 
 def test_a_forward_that_raises_still_ends_at_the_source_and_its_pass_is_ended_unrecorded():
@@ -139,7 +153,7 @@ def test_a_forward_that_raises_still_ends_at_the_source_and_its_pass_is_ended_un
     stack = Stack(SITES, ex, src)
     stack.activate(PEARLC)
     with pytest.raises(ZeroDivisionError), stack.pass_() as p, stack.forward():
-        stack.apply(SITES[0], Layer(), "x", None, original)
+        call(stack, SITES[0], "x", None)
         raise ZeroDivisionError("the forward raises")
     assert src.ended == [0] and p.ended == 1 and stack.passes == []
 
@@ -150,7 +164,7 @@ def test_arms_switch_only_between_passes_and_name_the_stacks_executor():
     with stack.pass_(), pytest.raises(RuntimeError, match="arms switch between passes"):
         stack.activate(None)
     stack.activate(Arm("bf16", "bf16"))
-    assert stack.apply(SITES[0], Layer(), "x", None, original)[0] == "stock"
+    assert call(stack, SITES[0], "x", None)[0] == "stock"
     with pytest.raises(ValueError, match="this stack's executor is pouw:pearl-c-sm120-v1-h3"):
         stack.activate(Arm("ncp", "bf16", "pouw:ncp-v2"))
 
@@ -172,7 +186,7 @@ def test_a_pass_inside_a_pass_is_refused_and_the_open_one_goes_on():
         with pytest.raises(RuntimeError, match="a pass is already open"), stack.pass_(PassSpec(index=2)):
             pass
         assert stack.open_pass is p and ex.opened == [p] and p.ended == 0
-        stack.apply(SITES[0], Layer(), "x", None, original)
+        call(stack, SITES[0], "x", None)
     assert p.ended == 1 and stack.passes == [{"pass": 1, "units": 1}] and stack.open_pass is None
 
 
@@ -185,7 +199,7 @@ def test_a_pass_of_a_stack_that_executes_nothing_is_none_and_is_not_recorded():
         stack.activate(arm)
         with stack.pass_(PassSpec(index=3)) as p:
             assert p is None and stack.open_pass is None
-            assert stack.apply(SITES[0], Layer(), "x", None, original)[0] == "stock"
+            assert call(stack, SITES[0], "x", None)[0] == "stock"
     assert ex.opened == [] and stack.passes == []
 
 
@@ -219,8 +233,8 @@ def test_an_arm_set_past_activate_is_answered_as_an_activated_one():
     with pytest.raises(Refused, match="schedule 'deferred': vLLM own apply runs serial"), stack.pass_(PassSpec(schedule="deferred")):
         pass
     with pytest.raises(RuntimeError, match="^pouw:pearl-c-sm120-v1-h3 is active outside a pass"):
-        stack.apply(SITES[0], Layer(), "x", None, original)
+        call(stack, SITES[0], "x", None)
     stack = Stack(SITES, Executor(name="pouw:other"))
     stack.active = PEARLC
     with pytest.raises(RuntimeError, match="^pouw:other is active outside a pass"):
-        stack.apply(SITES[0], Layer(), "x", None, original)
+        call(stack, SITES[0], "x", None)

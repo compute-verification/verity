@@ -82,11 +82,8 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         # Needs: network attestation's release and io-tie headers and ids, the replay step's
         # reference; PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
         "verity_vllm/pipeline/advice_code/window_code.py": ("resource_accounting.network.verifier.arith_encode.CW",),
-        "verity_vllm/pipeline/ids_front.py": ("resource_accounting.network.verifier.release",),
         "verity_vllm/pipeline/serve_admit.py": ("resource_accounting.network.verifier.release.read_watermark",),
         "verity_vllm/pipeline/serve_commit.py": ("resource_accounting.network.verifier.charge_chain",),
-        "verity_vllm/pipeline/serve_head.py": ("resource_accounting.network.verifier.release",),
-        "verity_vllm/pipeline/serve_protocol.py": ("resource_accounting.network.verifier.release",),
         "verity_vllm/program/predict/scan_state.py": ("resource_accounting.network.verifier.blocks",),
         # The compiler's (`verity_vllm/compiler/`): the replay step's and chain's circuits and row forms, the charge's
         # book and code (`charge_chain`, `arith_encode`), the IO tie's routing and head_check's circuit helpers

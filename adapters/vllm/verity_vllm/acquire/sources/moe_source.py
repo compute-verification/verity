@@ -94,10 +94,9 @@ from collections.abc import Mapping
 from functools import partial
 from typing import Any
 
-from verity_vllm.definitions.registry.moe import router_kernel
-
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.partial_source import _moe_reduces
+from verity_vllm.definitions.registry.moe import router_kernel
 from verity_vllm.engine import hooks
 from verity_vllm.log import init_logger
 from verity_vllm.query.manifest.bind import Port

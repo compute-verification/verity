@@ -5,13 +5,13 @@
 # of the cubin `cuobjdump -xelf` unpacks from the object, which is the test's ZSTD_CUBIN_SHA256, and fails unless the
 # same nvcc's --no-compress build holds that cubin byte for byte.
 #
-#   CUDA_HOME=/usr/local/cuda-13.3 verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/zstd_entry.sh [OUT]
+#   CUDA_HOME=DIR tests/verity/protocols/resource_accounting/compute/pouw/prover/fixtures/sass_gate/zstd_entry.sh [OUT]
 #
 # Needs nvcc (CUDA_HOME/bin), cuobjdump (POUW_CUDA_BIN, else beside nvcc) and objcopy. OUT defaults to the fixture.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 out=$(realpath "${1:-$here/zstd_entry.fatbin}")
-nvcc=${CUDA_HOME:-/usr/local/cuda}/bin/nvcc
+nvcc=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.3 toolkit}/bin/nvcc
 cuobjdump=${POUW_CUDA_BIN:-$(dirname "$nvcc")}/cuobjdump
 "$nvcc" --version | grep -q 'release 13\.3' || { echo "zstd_entry.sh: the fixture is CUDA 13.3's; $nvcc is $("$nvcc" --version | tail -1)" >&2; exit 2; }
 w=$(mktemp -d); trap 'rm -rf "$w"' EXIT

@@ -65,11 +65,7 @@ from verity_vllm.pipeline.advice_code.format import (
     MalformedAdvice,
     _Reader,
 )
-from verity.protocols.resource_accounting.network.verifier.head_check import (
-    _coll,
-    _Consts,
-    ands,
-)
+from verity.commitments.gates.bits import _coll, _Consts, ands
 
 #: the refusals of `advice.decode` the circuit doesn't make yet, by the start of decode's message for each
 DEFERRED = {
