@@ -145,7 +145,6 @@
   "benchmarks/one_stage/network_attester_replay.py": 2,
   "benchmarks/one_stage/pearlplus_local_e2e.py": 2,
   "benchmarks/one_stage/pouw_piece.py": 5,
-  "benchmarks/one_stage/prove_subprotocol.py": 1,
   "benchmarks/one_stage/rehearsal_window.py": 1,
   "benchmarks/one_stage/replay.py": 3,
   "benchmarks/one_stage/served_cases.py": 2,
