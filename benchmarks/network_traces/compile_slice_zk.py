@@ -7,7 +7,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
       [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--plain] [--dry]
     python benchmarks/network_traces/compile_slice_zk.py rescan --from PROVE_OUT --out DIR
 
-* **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice_v7.demo`, 59,613 ANDs a
+* **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice_v7.demo`, 59,634 ANDs a
   unit, max_tokens 8, 16 and 255), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven
   steps (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit, each
   arrival's max_tokens its request's), which `prove` first checks is the corpus's (`replay_vectors.vectors` on
@@ -63,7 +63,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
   (`window_charge.check_chain` on the earlier windows' openings and the unit's two).
 * **The verifier** opens each unit's ``pub`` row to its own copy (the declared charge and the registered book,
   `compile_slice_v7.pub`) and its verdict ``o0``, under the salts the prover sends for those two rows; never ``adv``,
-  ``cert``, ``srv``, ``cin``, ``cout`` or ``wit``. A unit passes when its verdict is `compile_slice.ACCEPT` and its
+  ``cert``, ``srv``, ``cin``, ``cout``, ``wit`` or the prompt lengths ``o1``, committed as a row of its own. A unit passes when its verdict is `compile_slice.ACCEPT` and its
   bindings hold. What the verifier received is scanned (`received`) for every piece of each unit's witness row, its
   ``srv`` rows and every row's salt (`scan_pieces`: each row cut whole, `leak_scan.public_pieces`, less the pieces the
   staged circuit holds, and each row shorter than the scan's 16-byte piece whole, an ``srv`` row of a few steps: 10
@@ -411,7 +411,7 @@ def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
     (out / "program.json").write_bytes(M.canonical_json(M.encode_program(program)))
     bound = {"partition": M.P.digest(part), "program": part["program"]}
     t = time.time()
-    st = M.CS.UnitStager(defn, "unit/compile-slice", rows, [(M.V2, (0,))], circuit=out / "circuit.txt", bind=bound)
+    st = M.CS.UnitStager(defn, "unit/compile-slice", rows, [(M.V2, (0,)), (M.V2, (1,))], circuit=out / "circuit.txt", bind=bound)
     _ = st.pin
     (tid, base, cnt), = M.P.ranges(program, query)
     assert tid == M.P.template_id(defn) and cnt == n
