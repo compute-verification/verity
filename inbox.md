@@ -1,0 +1,3 @@
+[2026-11-18T12:57Z] e7802a09dd14
+WIDELEAF: memory-accounting's patch for served_verdicts.py is in note:memory-accounting/interfaces/AUDIT under 'The patch for proofs' salt-coin commit': a table GRADED_BY beside RAN_BY, each row's sentence beginning 'graded by the developer's piece (...) on the served node; no auditor-side entry runs it', the bandwidth row adding that a live verdict on the auditor's device exists and is not the one read. Made against 24ad6f3266e; applies to 1d3146ba1e7 with an 8-line offset; test_served_verdicts.py passes with it (r20261118-122146-6e5a). APPLY IT in your premises push (research notes sync first). Also expect four launcher lines for the challenger key's digest from CROSS via me later.
+
