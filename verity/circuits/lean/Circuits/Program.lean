@@ -1489,11 +1489,10 @@ private theorem decodeDefs_plain {desc : Desc} {rootId programFn : String} {root
       split at h
       · cases h
       · rename_i hne
-        injection h with h
-        have h1 : root' = root := congrArg Prod.fst h
-        have h2 : st' = st := congrArg Prod.snd h
-        subst h1 h2
-        rw [hr] at hne
+        have h0 := Except.ok.inj h
+        have h1 : root' = root := congrArg Prod.fst h0
+        have h2 : st' = st := congrArg Prod.snd h0
+        rw [h1, h2, hr] at hne
         exact absurd rfl hne
     next => cases h
 
