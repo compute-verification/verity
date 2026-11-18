@@ -34,7 +34,8 @@
 //   cpv bench REPS S H REP          hot items interleaved across PV_ARMS, one JSON line
 //   cpv one ARM S H REP             three warm-up calls, then one between cudaProfilerStart and Stop (for ncu)
 // Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a cpv.cu -lcuda -lcublasLt -lnvidia-ml
-// Run: cpvrun.sh (build, SASS gate, device gates, cpv_ref.py, then bench, ncu and eps_profile.py)
+// Run: benchmarks/pouw/edited_gemm/cpvrun.sh (build, SASS gate, device gates, cpv_ref.py, then bench, ncu and
+// eps_profile.py)
 #define CGEMM_LIB
 #include "cgemm.cu"
 
