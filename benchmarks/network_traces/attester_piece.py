@@ -188,7 +188,7 @@ ROWS = "verity/network-rows/v1"
 UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"
 #: the front's refusal without ``--peer``
 NO_PEER = ("--peer is unset: the served node's name in the gate's peers file, which `verity run` passes from the "
-           "binding network-certifier.certifier.peer")
+           "binding network-attester.network-attester.peer")
 #: the machine of a chain step whose `CHAINED` names none
 UNNAMED = "a machine the chain step did not name"
 #: the front's public outcome, copied beside the kept fetch
