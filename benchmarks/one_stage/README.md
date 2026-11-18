@@ -286,7 +286,8 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   a gap with the reason; a `COLS` row or slot, and the block-scaled FP8 GEMM's coordinates (`WIDE_COORDS`), at its fitting
   width of least leakage-weighted proving cost, `width_pick`),
   and per proof-block Definition its count in the prefill step and the decode steps, output bits
-  and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
+  and size class, estimated ANDs, served MACs and opened row bytes, the Definition on bits its proof is (`proved_as`, and
+  `bounded_by` its kind's largest block in the census where that bounds it), with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
   `calibration/sampling_plan/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
   `census-rank<r>.json`) with this tree's proof-block templates, sizing and `block_census.py`, for a change to the cut or to a

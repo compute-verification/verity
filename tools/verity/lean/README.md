@@ -45,6 +45,9 @@ python tools/verity/lean/upstream.py PKG [--lean]
 python tools/verity/lean/unread.py --out DIR --build
   the Lean nothing reads; lean-audit runs its ratchet on the audits' facts (its docstring: the seeds, the limits, the
   Properties gap)
+python tools/verity/lean/lean_changed.py --records security --unread-facts
+  the same with no build of its own: the records run's audits of security and security/Proofs leave the facts, and it
+  ends with the `unread.py --facts F --facts G` line that reads them
 uv run tools/verity/lean/claim_ids.py [--write]
   the claim ids' table from the ids the locks' premise entries carry: exit 1 naming each row it would change, or write it
 python tools/verity/lean/merge.py --install
