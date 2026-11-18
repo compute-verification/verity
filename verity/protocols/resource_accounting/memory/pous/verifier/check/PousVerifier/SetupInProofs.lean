@@ -6,21 +6,22 @@ public import PousVerifier.SetupProtocol
 /-!
 # PoUS's setup as a sampled proof about the store
 
-`verity/pous/p2/v4/setup-in-proofs` is the setup check that reads no block of `C*`. The store's blocks are committed and
-their root registered; the auditor's challenger then samples `SAMPLE` of them on its live coins (`samplingDesign`); each sampled
-block is proved to decode to the registered rows of `W` at its place, one instance of the setup unit
-`PousP2SetupCheck_v1` a block (`verity/protocols/accounting/pous/prover/window.py`). The check takes the parameters
-and the commitment as `SetupProtocol` does, and in place of `C*` the claim (`Claim`, the Python `setup_proof.Claim`'s
-last four fields):
+`verity/pous/p2/v4/setup-in-proofs` is the setup check that reads no block of `C*`. The setup is one circuit `C`, the
+setup unit `PousP2SetupCheck_v1` over every block of the store, one proof block a block
+(`verity/protocols/resource_accounting/memory/pous/prover/window.py`, `Setup`); the store's blocks and `W`'s rows are
+its registered values, committed before the run, and the proof system samples `SAMPLE` of the blocks on its live coins
+after that (`samplingDesign`). The check takes the parameters and the commitment as `SetupProtocol` does, and in place of
+`C*` the claim (`Claim`, the Python `setup_proof.Claim`'s last three fields):
 
 ~~~text
-evidence  {"law":"rate:8828/B"|null,"outcome":hex,"store":hex,"unit":hex}   canonical JSON
+evidence  {"law":"rate:8828/B"|null,"outcome":hex,"store":hex}   canonical JSON
 ~~~
 
-It decides the parameters' validity, the salt's size and that the claim's sampling design is `samplingDesign q`. Reading SPOT's
-outcome, that the sampled audit accepted over the unit `unit` at that design on the store's root, is not built: until it
-is, the check rejects every claim, naming the goal. On acceptance it publishes `SetupProtocol.Public` with the store's
-root as `root`, so the timed audit's input keeps its form.
+It decides the parameters' validity, the salt's size and that the claim's sampling design is `samplingDesign q`. Its
+acceptance is to be the door's acceptance of the sampled blocks of `C`, and two places stop it, each refused by name:
+`C`'s base and slot inputs are bound to the salt and to the unit's position by no input kind yet (`notBound`), and the
+door's statement of a block is not derived (`Flock.OneCircuit.notDerived`, at `Spot.OneStageZkStatement.restrict`). On
+acceptance it publishes `SetupProtocol.Public` with the store's root as `root`, so the timed audit's input keeps its form.
 -/
 
 @[expose] public section
@@ -43,11 +44,9 @@ more than `SAMPLE`. -/
 def samplingDesign (q : P2.Params) : Option String :=
   if q.blocks ≤ SAMPLE then none else some s!"rate:{SAMPLE}/{q.blocks}"
 
-/-- What the check reads in place of `C*`: the store's registered root, the setup unit's Program digest, the sampling
-design and SPOT's outcome record. -/
+/-- What the check reads in place of `C*`: the store's registered root, the sampling design and SPOT's outcome record. -/
 structure Claim where
   store : ByteArray
-  unit : ByteArray
   samplingDesign : Option String
   outcome : ByteArray
 
@@ -58,17 +57,23 @@ def claim (b : ByteArray) : V Claim := do
     | .ok .null => pure none
     | .ok (.str s) => pure (some s)
     | _ => throw s!"{ctx}: law is a string or null"
-  return ⟨← Flock.unhex (← Flock.J.str j "store" ctx), ← Flock.unhex (← Flock.J.str j "unit" ctx), samplingDesign,
-    ← Flock.unhex (← Flock.J.str j "outcome" ctx)⟩
+  return ⟨← Flock.unhex (← Flock.J.str j "store" ctx), samplingDesign, ← Flock.unhex (← Flock.J.str j "outcome" ctx)⟩
 
-/-- The setup check in proofs. -/
+/-- Where `C`'s base and slot inputs wait on an input kind bound to the verifier's coins and to a unit's position: the
+Python `setup_proof.NotBound`'s message. -/
+def notBound : String :=
+  "pous setup: no coin-bound input kind yet: base(u) = expand_prefix(params, salt) || u64be(u / S) || u64be(u mod S), " ++
+    "the salt the verifier's coin after W is committed; slot(u) = u mod n, of unit u's position in C"
+
+/-- The setup check in proofs: the door's acceptance of the sampled blocks of the setup's `C`, refused where `C`'s
+inputs are bound to nothing (`notBound`). -/
 def check (q : P2.Params) (c : SetupProtocol.Commitment) (cl : Claim) : Core.Outcome SetupProtocol.Public Unit :=
   match q.validate with
   | .error m => .reject s!"params: {m}"
   | .ok _ =>
     if c.salt.size != 24 then .reject "the salt is 24 bytes, drawn by the verifier after W is committed"
     else if cl.samplingDesign != samplingDesign q then .reject s!"the sampling design is {samplingDesign q}, not {cl.samplingDesign}"
-    else .reject s!"the sampled audit's check is not built: {GOAL}"
+    else .reject notBound
 
 def protocol : Core.Protocol where
   id := ID
