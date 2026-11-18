@@ -49,7 +49,7 @@ abbrev unitOf : Fin 4 → Option (Fin 2) := ![none, some 0, some 1, some 0]
 
 abbrev P : Partition C 2 where
   unit := unitOf
-  input_iff := by decide
+  input_iff := (by decide : ∀ g : Fin C.N, unitOf g = none ↔ (C.op g).isInput = true)
 
 def D : Finset (Fin C.N) := {2}
 def B : Finset (Fin 2) := {0}
