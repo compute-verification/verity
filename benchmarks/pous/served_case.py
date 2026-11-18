@@ -222,23 +222,18 @@ def reencode(repo: str, rev: str, published: R.Setup, point: R.Point, digests: b
     _need(not wrong, "the snapshot is not the pinned checkpoint's: " + "; ".join(wrong))
     model, _ = SP.linears(ck, torch.device(device))
     del ck
-    pous, types = SP.pous, SP.pous.linear_types
-    pous.linear_types = SP._linear_types
+    tensors = {name: m.weight for name, m in model.layers.items()}
+    layout, commitment = ws.commit(SP.ENTRY.partition(":")[2], tensors)
+    _need(commitment == published.commitment, "the snapshot's W is not the one setup committed to")
+    store = ws.encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
     try:
-        _, _, tensors = pous._plaintext(SP.ENTRY, model)
-        layout, commitment = ws.commit(pous.DEFAULT_SCHEME, tensors)
-        _need(commitment == published.commitment, "the snapshot's W is not the one setup committed to")
-        store = ws.encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
-        try:
-            _need((store.point.params, store.point.limit_ns) == (point.params, point.limit_ns),
-                  f"C* is at {store.point}, not at the run's point {point} (the challenge count aside)")
-            _need(store.root == published.root, "C* encoded at the kept salt has another root than setup published")
-            _need(store.digests == digests, "C* encoded at the kept salt is not the memory attester's table")
-            return commitment, published.salt, store.segments()
-        finally:
-            store.free()
+        _need((store.point.params, store.point.limit_ns) == (point.params, point.limit_ns),
+              f"C* is at {store.point}, not at the run's point {point} (the challenge count aside)")
+        _need(store.root == published.root, "C* encoded at the kept salt has another root than setup published")
+        _need(store.digests == digests, "C* encoded at the kept salt is not the memory attester's table")
+        return commitment, published.salt, store.segments()
     finally:
-        pous.linear_types = types
+        store.free()
 
 
 def pous_piece(window: Path, private: Path | None = None, *, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
