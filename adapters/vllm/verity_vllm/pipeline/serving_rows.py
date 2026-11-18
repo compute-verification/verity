@@ -131,7 +131,7 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
@@ -770,7 +770,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     (Path(out_dir) / "circuit.json").write_bytes(body)
     prov["circuit"] = hashlib.sha512(body).hexdigest()
     res = CS.write(c, out_dir, prov, IX.index_doc(ms, idx, window.run), kind="stand-in" if stand_in else "served",
-                   registered=entries, registrar=R)
+                   registered=entries, registrar=DK)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"[serving-rows] {window.population} units in {len(ms)} members committed ({CS.SCHEME}): "

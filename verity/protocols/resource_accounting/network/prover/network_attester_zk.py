@@ -233,9 +233,10 @@ def _statement():
 
 def _one_stage():
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
+    from verity.protocols.proofs.spot.prover import docket as DK
 
     d = proof_drivers.drivers()
-    return SimpleNamespace(**vars(_statement()), a0=d.a0, a7=d.a7, a8=d.a8, prove_subprotocol=d.prove_subprotocol, D=D, R=R, V=V)
+    return SimpleNamespace(**vars(_statement()), a0=d.a0, a7=d.a7, a8=d.a8, prove_subprotocol=d.prove_subprotocol, D=D, DK=DK, R=R, V=V)
 
 
 def check_shape(M, sg: SimpleNamespace) -> None:
@@ -344,7 +345,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     """Member m registered (its frame ports and its committed value's root, `committed_roots`), sampled by the
     verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean with the verifier's own registered
     reads. Writes what the verifier received under ``out / "verifier"``."""
-    a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
+    a0, a7, P, R, V, DK = M.a0, M.a7, M.P, M.R, M.V, M.DK
     out.mkdir(parents=True, exist_ok=True)
     n, name = m["n"], m["name"]
     want, roots = committed_roots(m)
@@ -360,7 +361,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
            "units": {"cells": [list(c) for c in at.units.cells], "digest": at.units.digest().hex()},
            "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the network certifier's signed root; "
                    f"{', '.join(m['committed'])} the member's committed value at its registered root"}
-    rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
+    rec = DK.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
               f"statement/{name}": a7.statement_checks(m, rec, want), "registered": registered_roots(m, rec)}

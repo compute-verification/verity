@@ -102,7 +102,7 @@ import numpy as np
 
 from verity.circuits import population as PN
 from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
@@ -649,7 +649,7 @@ def record(pub: Mapping[str, Any], check: SpecializedDefinition, design: Mapping
     roots = [{"port": p, "root": c.values[p]["root"], **e} for p, e in L.ports().items()]
     w = {"kind": "served", "run": L.run, "row": c.window, **L.provenance(), "index": c.index, "boundary": FORMAT,
          **(window or {})}
-    return R.record(L.program, L.grain, design, CS.SCHEME, roots, w, previous=previous)
+    return DK.record(L.program, L.grain, design, CS.SCHEME, roots, w, previous=previous)
 
 
 def commit(spans: Sequence[Span], layout: Layout, window: int, *, salts: Mapping[str, bytes] | None = None,

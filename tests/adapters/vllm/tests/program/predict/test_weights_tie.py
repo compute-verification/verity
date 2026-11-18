@@ -24,7 +24,7 @@ from verity.commitments.gates.sha512 import IV
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
@@ -165,7 +165,7 @@ def test_the_honest_registration_is_accepted(x, tmp_path):
     assert win.mismatches(kernel="auto") == {}
     assert _ends(win) == {f"{c.name}/sha512": IF.digest_words(c.digest) for c in t.chains}
     c = win.close()
-    win.write(c, tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
+    win.write(c, tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=DK)
     rec = json.loads((tmp_path / "w" / "registration.json").read_text())
     roots = rec["window"]["registered_roots"]
     assert {p: roots[p] for p in registration["values"]} == WW.WeightsRegistration.of(registration, "r").roots
@@ -200,14 +200,14 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     pins = _pins(WT.audit_inputs(registration, record, t, DESIGN, CAP))
     ends = {(m.key, "o0") for m in win.window.members if m.template in _ends_of(win)}
     c = win.close()
-    win.write(c, tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
+    win.write(c, tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=DK)
     assert len(ends) == len(t.chains) and _unopened(win, c, tmp_path / "w", pins) == ends
     _r, _t, forged = WT.commit(reg, tmp_path / "forged.salts", d, man, design=DESIGN, cap=CAP, grain=GRAIN, served=served,
                                forge_digest=True)
     assert _ends(forged) == digests
     assert forged.mismatches(kernel="auto") == {t: [0] for t in _ends_of(forged)}
     fc = forged.close()
-    forged.write(fc, tmp_path / "f", {"tie": WT.TIE_TAG}, registrar=R)
+    forged.write(fc, tmp_path / "f", {"tie": WT.TIE_TAG}, registrar=DK)
     assert _unopened(forged, fc, tmp_path / "f", pins) == set()
     roots = WW.WeightsRegistration.of(registration, "r").roots
     refused: list[tuple[dict[str, object], str]] = [
@@ -238,7 +238,7 @@ def test_a_registration_that_roots_the_rotary_table_is_refused_at_the_pins(x, tm
     rope = sorted(set(rooted["values"]) - set(registration["values"]))
     assert rope == sorted(t.unrooted) and {p: v for p, v in _shapes(rooted)["values"].items() if p in registration["values"]} \
         == _shapes(registration)["values"]
-    win.write(win.close(), tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
+    win.write(win.close(), tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=DK)
     roots = json.loads((tmp_path / "w" / "registration.json").read_text())["window"]["registered_roots"]
     with pytest.raises(ValueError, match=re.escape(f"the records audit's roots for {rope} aren't the registration's roots")):
         WT.checked_pins(rooted, record, t, _summary(t, rooted, record, roots), DESIGN, CAP)

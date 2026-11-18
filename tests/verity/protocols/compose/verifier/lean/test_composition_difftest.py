@@ -100,7 +100,7 @@ def _sessionless_audit(i: int, after: str | None = None) -> tuple[dict, dict, di
     s, sampling_design = OS.SETUPS[i], {"k": 1, "law": "subset"}
     part = {"program": s.sha512, "query": s.query}
     log = [json.loads(after)] if after else []
-    rec = OS.R.record(s.program, s.query, sampling_design, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = OS.DK.record(s.program, s.query, sampling_design, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
                       OS.WINDOW, leaf_layer=OS.LEAF, previous=DD.digest(log[-1]) if log else None, partition=part)
     ch, d, coins = OS._challenger_sample(random.Random(f"composition/sessionless/{i}"), s, sampling_design, rec, trees=0)
     proved = OS.DR.proved(d)
@@ -790,7 +790,7 @@ def reusing(made: list[dict]):
         s = OS.RegisteredSetup(OS._registered_program("CoreRemoteReuse", 1, params, tuple(n for n, _ in named)),
                                [{n: true[v]["words"] for n, v in named}])
         OS.PROGRAMS[s.sha512] = s.program
-        rec = OS._json(OS.R.record(s.program, s.query, REUSING_SAMPLING_DESIGN, OS.SCHEME,
+        rec = OS._json(OS.DK.record(s.program, s.query, REUSING_SAMPLING_DESIGN, OS.SCHEME,
                                    [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports], OS.WINDOW,
                                    registered=[{**true[v], "value": n} for n, v in named], leaf_layer=OS.LEAF,
                                    anchors=[], previous=DD.digest(w),

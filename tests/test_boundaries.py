@@ -1098,10 +1098,8 @@ SPOT_VERIFIER = ("verity.protocols.proofs.spot.verifier",)
 #: the verifier.
 SPOT_VERIFIER_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
-    "adapters/vllm/verity_vllm/pipeline/boundary_stop.py",
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
     "adapters/vllm/verity_vllm/pipeline/interior_links.py",
-    "adapters/vllm/verity_vllm/pipeline/interior_rows.py",
     "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
     "adapters/vllm/verity_vllm/program/predict/weights_tie.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
