@@ -19,6 +19,21 @@ Scheme.lean`); `Scheme`, `Block`, `Order`, `Charge` and `Bound` mirror the field
 spelt ``delta``), and a change to either names the other's line in its message. `hooks`, `settings`, `option`,
 `ports` and `requires` are read by the adapter and the runner, by no guarantee, and have no Lean field.
 
+**Declaring a scheme.** One module, ``<protocol>/scheme.py``, calls `register(Scheme(...))` and is listed in
+`verity.protocols.compose.schemes.DECLARATIONS`, which every reader loads (`load`). Its fields, with the Lean they mirror
+(`Verity.Scheme`):
+
+- ``blocks``: `Block(definition, cost)`, `Block` and `cost`; ``cost`` reads public values logged before the sample's coin.
+- ``charges``: `Charge(name, bound)`, summed in `charges`; a known channel with no bound yet is ``bounded=False``.
+- ``log``: `Order`s, `logOK`; a deadline (``within_ns``) names one of ``assumptions``, the names `breaks` ranges over.
+- ``delta_scheme``: `δscheme`, said by name, zero included; unsaid, `bound` refuses.
+- code only: ``name`` (the configuration's), ``protocol`` (`Core.Protocol.id`), ``resource`` (`Core.Account.Part`),
+  ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`), ``hooks``, ``ports``,
+  ``option``, ``requires``.
+
+What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks
+the integrity profile's ``credited`` takes.
+
 A served run offers every scheme the same five hooks (`verity.hooks.HOOKS`), and a scheme names those it attaches
 through (`Scheme.hooks`).
 
@@ -232,6 +247,26 @@ def register_process(name: str, start: Callable[..., Any]) -> Callable[..., Any]
     return start
 
 
+@dataclass(frozen=True)
+class Circuits:
+    """What a scheme's executed computation is traced as: ``schemes``, the schemes with a circuit, and ``traced_as(scheme,
+    m, k, n)``, one executed call's circuit (None without one)."""
+
+    schemes: Mapping[str, Any]
+    traced_as: Callable[[str, int, int, int], Any]
+
+
+#: the circuits of each scheme's executed computation, by the name a configuration lists it under
+CIRCUITS: dict[str, Circuits] = {}
+
+
+def register_circuits(name: str, circuits: Circuits) -> Circuits:
+    if name in CIRCUITS:
+        raise KeyError(f"circuits named {name!r} are registered already")
+    CIRCUITS[name] = circuits
+    return circuits
+
+
 def get(name: str) -> Scheme:
     """The scheme registered under ``name``; `KeyError` names the registered ones."""
     try:
@@ -265,5 +300,5 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Order", "Port", "Scheme",
-           "bound", "credited", "get", "register", "register_process", "settings"]
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Order",
+           "Port", "Scheme", "bound", "credited", "get", "register", "register_circuits", "register_process", "settings"]

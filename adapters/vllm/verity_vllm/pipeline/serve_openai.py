@@ -143,8 +143,8 @@ from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL,
                                    serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
                                    serve_seal as SS)
-from verity_vllm.pipeline.serve_admit import (ADMIT, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
-                                              engine_id_of, keep_scheduler_rows, new_http_id)
+from verity.protocols.resource_accounting.network.prover.admission import ReleaseOrder, Tick, TickAdmit, TickGate
+from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
                                                records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop

@@ -23,6 +23,7 @@ from dataclasses import replace
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 
 from test_network_attester_io_tie import BIG, _cell_tampers, busiest, busy, commit, serve, network_attesters, with_cells
+import standin
 
 
 def _witness_matching(inst: IT.Instance, cells) -> IT.Instance:
@@ -40,7 +41,7 @@ def _witness_matching(inst: IT.Instance, cells) -> IT.Instance:
             ids += [p.id] if p.data else []
         for s in range(sh.S):
             rows[t * sh.S + s] = IT.port_row(ids[s * sh.P:(s + 1) * sh.P], sh.P)
-    salts = [IT.fake_salt(b"prover", s) for s in range(len(rows))]
+    salts = [standin.fake_salt(b"prover", s) for s in range(len(rows))]
     levels = IT.rows_levels(inst.port_domain, rows, salts)
     steps = tuple(tuple(range(t * sh.S, (t + 1) * sh.S)) for t in range(sh.T))
     opened = [IT.open_port(levels, rows, salts, st) for st in steps]

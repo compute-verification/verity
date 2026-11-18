@@ -23,8 +23,8 @@ is defaulted.  The package imports nothing else from `verity_vllm`, so every sta
 * `weights_registration` -- the committer's weights registration (`verity-vllm/weights-registration/v1`): each weight
   parameter's hiding root, as the verifier's pins and a window's registration read it; its `of` refuses an unknown field
   and `dump` writes it back.
-* `expert_tables` -- the committer's registration of a TP rank's per-expert tables (`verity-vllm/expert-tables/v1`): each
-  table's entry and salt nonce, as the verifier's pins and a window's committer read it; its `of` refuses an unknown field
+* `expert_tables` -- the committer's registration of a TP rank's per-expert tables (`verity-vllm/expert-tables/v2`): each
+  table's entry, as the verifier's pins and a window's committer read it; its `of` refuses an unknown field
   and `dump` writes it back.
 * `boundary_tables` -- a two-stage window's two private messages between its boundary commitment and rank 0: a class's
   assignment of its spans' slots (`verity-vllm/boundary-tables/assign/v1`) and rank 0's history tables' entries

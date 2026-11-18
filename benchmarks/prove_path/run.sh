@@ -98,6 +98,7 @@
 # advice or its opening (the prover's, private: the verifier is handed the opening, the named gap), a prover's file (inst-*,
 # *-private.bin: the rows and their salts), a circuit (its pin is) nor a request value (the stand-in's workload.json, its prompts).
 set -uxo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../one_stage/public_files.py
 for v in PP_LLAMA PP_SERVE_RUN PP_SERVE_ROWS; do
   case "${!v:-}" in art:*) echo "$v=${!v}: a published row dir or serve run holds request values; give $v the serve" \
     "directory on this node (a DIR)"; exit 2;; esac
@@ -190,9 +191,9 @@ PP="$PY benchmarks/prove_path/prove_path.py"
 
 keep() {  # NAME: $W/NAME's records into $O/NAME, among them the circuit each drawn member was proved on (window/m<k>/circuit.txt)
   mkdir -p $O/$1
-  (cd $W/$1 && find . -type f \( ! -name circuit.txt -o -path './window/m*/circuit.txt' \) ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
+  (cd $W/$1 && find . -type f \( ! -name circuit.txt -o -path './window/m*/circuit.txt' \) ! -name 'inst-*' ! -name 'm*-inst-*' ! -path './*/archive/*' \
     ! -path './builds/*' ! -path './proof-edits/*/sessions/*' ! -path './proof-edits/mutants/*/*' ! -path './proof-edits/*/member/*' -print0 \
-    | xargs -0 -r -I{} cp --parents {} $O/$1/)
+    | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} $O/$1/)
   # a case's blobs name its files in $W, which the EXIT trap removes: name the kept copies instead
   (cd $O/$1 && find . -name '*.json' -print0 | xargs -0 -r grep -lZ '"blobs"' \
     | xargs -0 -r $PY -c 'import json,sys
@@ -317,8 +318,9 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
                   --grain $($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["grain"])' $O/tie-fixture.json)
                   --cap $TCAP --run-id $id)
     mkdir -p $O/$name
-    $WT commit "${common[@]}" --key-file $W/$name-key --registration-out $O/$name/registration.json --out $W/$name-window \
+    $WT commit "${common[@]}" --registration-out $W/$name-registration.json --out $W/$name-window \
       "${commit[@]}" | tee $O/$name/commit.json || return 1
+    cp $W/$name-registration.json $O/$name/registration.json
     $WT verify "${common[@]}" --registration $O/$name/registration.json --out $O/$name/verifier | tee $O/$name/verify.json || return 1
     c=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["circuit"])' $O/$name/verifier/tie.json) || return 1
     run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/verifier/tie.json) || return 1
@@ -344,7 +346,7 @@ else
   S=$W/served
   (cd tests/adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $SAMPLING_DESIGN:1/2 --deferred) \
     > $O/standin.json 2> $O/standin.err || { tail -20 $O/standin.err; exit 8; }
-  mkdir -p $O/standin && find $S/commit -maxdepth 1 -type f -exec cp {} $O/standin/ \;
+  mkdir -p $O/standin && (cd $S/commit && find . -maxdepth 1 -type f -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp {} $O/standin/)
   $PP advice --workload $S/workload.json --out $W/advice.bin | tee $O/advice.log || exit 8
   echo "{\"templates\": [\"SiluMul_v2{I=256}\"], \"law\": \"$SAMPLING_DESIGN:1/1\"}" > $W/all.json
   SI="--tp-commit $S/commit --build-root $S/build"

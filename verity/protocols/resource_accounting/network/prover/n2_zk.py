@@ -359,9 +359,9 @@ def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], out: Path
         lw = members[name].lw
         d = out / name / f"w{x.window:03d}" / "statement"
         iset = SimpleNamespace(**{**vars(st.iset), "name": f"{st.iset.name}-{name}-w{x.window}"})
-        salts = M.FC.stage_salts(iset, 0, 1, st.ports, None)
+        salts = M.FC.stage_salts(0, 1, st.ports)
         d.mkdir(parents=True, exist_ok=True)
-        M.FC.write(st.text, iset, 0, 1, d / "inst-1.bin", d / "pub-1.bin", None,
+        M.FC.write(st.text, iset, 0, 1, d / "inst-1.bin", d / "pub-1.bin",
                    rows={r: rows[r][k:k + 1] for r in SVC.ROWS}, outs={"o0": o0[k:k + 1]}, salts=salts,
                    public_words={}, digests=(st.pin, st.class_sha512), indices=[0], meta=st.meta)
         (d / "tables").mkdir(exist_ok=True)

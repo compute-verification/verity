@@ -571,7 +571,7 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
         st = U.statement_tables(z, ins, outs)
         d.mkdir()
         FC.write(text, SimpleNamespace(name="s", subcircuit=SimpleNamespace(id="sub")), 0, n, d / "inst.bin", d / "pub.bin",
-                 None, indices, share_rows=True, outs={p: z[f"w_{p}"] for p in outs}, tables=st["tables"], refs=st["refs"],
+                 indices, share_rows=True, outs={p: z[f"w_{p}"] for p in outs}, tables=st["tables"], refs=st["refs"],
                  salts=st["salts"], registered=st["registered"], digests=(head["pin"], head["class"]))
         return (d / "pub.bin").read_bytes()
 

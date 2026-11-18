@@ -19,6 +19,10 @@ blocks, a uniform coin's sample misses it with probability the sampling design's
 Its witnesses: `SampleAfterRecorded_honest`, a log that releases coins around a recorded commitment and meets every
 premise, where the bound holds; and `SampleAfterRecorded_nontrivial`, at a log that flips before it records and meets the
 other two premises (`SampleAfterRecorded_nontrivial_log`), where the bound fails.
+
+The log's order: what is recorded before coin `i` (`Log.recordedBefore_congr`) and a value derived from the log's
+prefix before it (`DerivedBefore.congr`) are fixed before coin `i`, by `FlipsAfterRecorded`; the set
+`SampleAfterRecorded` samples against is such a value (`derivedBefore_before`).
 -/
 
 @[expose] public section
@@ -88,7 +92,29 @@ theorem released_in_order {n : Nat} :
   simp only [List.getElem?_take, List.getElem?_ofFn]
   split_ifs with h1 h2 <;> first | rfl | simp [h ⟨j, h2⟩ h1]
 
+/-- **What the log records before coin `i` is fixed before coin `i`**: under `FlipsAfterRecorded`, two runs whose
+flips agree before `i` record the same commitments before it. -/
+theorem recordedBefore_congr {n : Nat} {log : (Fin n → C) → Log R C} (hflip : FlipsAfterRecorded log) {i : Nat}
+    {ω ω' : Fin n → C} (h : ∀ j : Fin n, j.val < i → ω j = ω' j) (r : R) :
+    (log ω).RecordedBefore r i ↔ (log ω').RecordedBefore r i := by
+  unfold RecordedBefore
+  rw [hflip i ω ω' h]
+
 end Log
+
+/-- **A value derived from the log's prefix before coin `i` is fixed before coin `i`**: under `FlipsAfterRecorded`,
+it is the same on two runs whose flips agree before `i`, so it reads no coin from `i` on. -/
+theorem DerivedBefore.congr {R C V : Type} {n : Nat} {log : (Fin n → C) → Log R C} {v : (Fin n → C) → V} {i : Nat}
+    (hflip : FlipsAfterRecorded log) (hv : DerivedBefore log v i) {ω ω' : Fin n → C}
+    (h : ∀ j : Fin n, j.val < i → ω j = ω' j) : v ω = v ω' := by
+  obtain ⟨f, hf⟩ := hv
+  rw [hf, hf, hflip i ω ω' h]
+
+/-- What `SampleAfterRecorded` samples against, a set `bad` reads off the log before coin `i`, is a value derived
+from the log's prefix. -/
+theorem derivedBefore_before {R C V : Type} {n : Nat} (log : (Fin n → C) → Log R C) (bad : Log R C → V) (i : Nat) :
+    DerivedBefore log (fun ω => bad ((log ω).before i)) i :=
+  ⟨bad, fun _ => rfl⟩
 
 end Challenger
 

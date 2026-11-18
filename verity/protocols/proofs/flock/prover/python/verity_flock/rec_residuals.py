@@ -526,7 +526,7 @@ def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir
     RB.check({"format": RG.READS, "ports": entries}, st.defn.id, n)
     (d / "registered.json").write_text(json.dumps({"format": RG.READS, "ports": entries}))
     ds = getattr(st, "digests", None) or (FC.digest(text), FC.class_digest(text))
-    FC.write(text, SimpleNamespace(name=st.zero_value, subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None, list(range(n)),
+    FC.write(text, SimpleNamespace(name=st.zero_value, subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", list(range(n)),
              share_rows=True, outs={"out": np.asarray(out_rows, np.uint16)}, tables=tables, refs={nm: list(range(n)) for nm in tables},
              salts=salts, registered=registered, digests=ds)
     meta = FC.meta_of(text)
