@@ -379,10 +379,10 @@ def test_prod_tick_is_prod_all_ons_tick_alone_and_takes_a_rule_other_than_the_re
             for a in ("prod", "prod-tick")]
     assert line[1] == [*line[0], "--middleware", "verity_vllm.pipeline.scheme_plugin.Front"]
     tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485}
-    plain = tick_settings(S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0))
+    plain = tick_settings(S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0, private=tmp_path / "p"))
     assert "token_ns" not in plain and "catch_up" not in plain
     ruled = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick | {"rule": {"token_ns": 18_500, "catch_up": "marks"}},
-                         1.0, 1.0)
+                         1.0, 1.0, private=tmp_path / "p")
     assert tick_settings(ruled) == plain | {"token_ns": 18_500, "catch_up": "marks"}
 
 
@@ -394,7 +394,7 @@ def test_only_an_arm_that_names_the_open_gate_takes_it_and_its_server_hears_whic
     rule = S.tick_rule("prod-tick", '{"catch_up": "open"}')
     assert rule == {"catch_up": "open", "arm": "prod-tick"}
     tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485, "rule": rule}
-    env = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0)
+    env = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0, private=tmp_path / "p")
     assert NA.tick_config(tick_settings(env), "the settings", feed=False)["catch_up"] == "open"
 
 

@@ -677,9 +677,9 @@ def records(arm: Arm) -> bool:
 
 def keeps_private(arm: Arm) -> bool:
     """Whether an arm keeps files on the node: it records (`records`), it has a boundary commitment, whose classes'
-    directories hold their requests' tokens and their salts, or its environment or its boundary commitment's object
-    names `PRIVATE`."""
-    return records(arm) or "boundary_rows" in arm.plugin or PRIVATE in json.dumps([arm.env, arm.rows])
+    directories hold their requests' tokens and their salts, it turns schemes on by name (the tick), each keeping its
+    own under the private directory, or its environment or its boundary commitment's object names `PRIVATE`."""
+    return records(arm) or "boundary_rows" in arm.plugin or arm.tick or PRIVATE in json.dumps([arm.env, arm.rows])
 
 
 def private_of(d: Path) -> Path | None:
@@ -845,7 +845,7 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
         from verity.protocols.resource_accounting.network.prover.admission import scheme_name
         env["VERITY_PROTOCOLS"] = scheme_name()
-        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps({"feed": str(d), scheme_name(): {
+        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps({"feed": str(d), "out": str(d), "private": str(private), scheme_name(): {
             k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | tick.get("rule", {}) | {"hold_ms": 5000, "log": str(d)}})
     return env
 
