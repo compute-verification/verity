@@ -137,10 +137,10 @@ def test_a_table_reads_key_holds_the_verifiers_executable(monkeypatch):
     read = SimpleNamespace(fn=SimpleNamespace(base_id=CC.RT.READ))
     stmt = {"layout": "iv/hybrid/4", "structural": True}
     monkeypatch.setattr(CC.RT, "digest", lambda: "d1")
-    k = CC.template_inputs("EmbeddingRead_v1{V=7,H=3}", read, stmt)
-    assert k == ["unit/serving-rows", "EmbeddingRead_v1{V=7,H=3}", json.dumps(stmt, sort_keys=True), "d1"]
+    k = CC.template_inputs("EmbeddingRead_v2{V=7,H=3}", read, stmt)
+    assert k == ["unit/serving-rows", "EmbeddingRead_v2{V=7,H=3}", json.dumps(stmt, sort_keys=True), "d1"]
     monkeypatch.setattr(CC.RT, "digest", lambda: "d2")
-    assert CC.template_inputs("EmbeddingRead_v1{V=7,H=3}", read, stmt) != k
+    assert CC.template_inputs("EmbeddingRead_v2{V=7,H=3}", read, stmt) != k
     monkeypatch.setattr(CC.RT, "digest", lambda: pytest.fail("a template reading no table asked for the verifier's executable"))
     assert CC.template_inputs("Toy", SimpleNamespace(fn=TOY), {"reads": "slots"}) == ["unit/serving-rows", "Toy", "slots"]
 

@@ -103,14 +103,14 @@ def test_a_full_block_needs_more_keys_than_one_block():
 
 
 def test_an_embedding_read_is_the_windows_unit_with_a_token_inside_the_vocabulary():
-    """``embedding-read`` is the window's `EmbeddingRead_v1{V, H}` (no serving row commits its one-bit leaves): its words are
+    """``embedding-read`` is the window's `EmbeddingRead_v2{V, H}` (no serving row commits its one-bit leaves): its words are
     its arguments' bits, little-endian, the token's below V. (Each stand-in row opens at its token: the generator holds
     `embedding.reference` to it, and the bit-sliced evaluator gives ok = 1 on these words, too slow for a test.)"""
     from verity.circuits.codec import descriptor_id
     from verity.commitments.periods import interface as IF
 
     fn, gen = L.served("embedding-read:1b:300")
-    assert descriptor_id(fn) == descriptor_id(IF.resolve("EmbeddingRead_v1{V=300,H=2048}")) == "EmbeddingRead_v1{V=300,H=2048}"
+    assert descriptor_id(fn) == descriptor_id(IF.resolve("EmbeddingRead_v2{V=300,H=2048}")) == "EmbeddingRead_v2{V=300,H=2048}"
     v = gen(np.random.default_rng(0), 3)
     assert {nm: a.shape for nm, a in v.items()} == {nm: (3, w) for nm, w in IF.layout(fn).rows}
     tok = v["tok"].astype(np.uint32)
