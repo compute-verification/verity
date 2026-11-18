@@ -19,7 +19,7 @@ from verity_config import sha256
 
 from verity_bench import kit, settings
 from verity_bench.vllm.arms import resolve_arms
-from verity_bench.vllm.presets import expand_sweep, load_spec, local_checkpoint, resolve_spec, served
+from verity_bench.vllm.presets import expand_sweep, load_spec, resolve_spec, served
 from verity_bench.vllm.result import record, write
 from verity_bench.vllm.engine import ProcessEngineFactory
 from verity_bench.vllm.runner import run_benchmark
@@ -28,8 +28,6 @@ from verity_bench.vllm.table import render
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--preset", required=True, help="a spec under benchmarks/harness/specs, by name; NAME@CARD names its card, else the one it lists or the card here")
-    parser.add_argument("--model-path", type=Path, default=None,
-                        help="machine-local checkpoint override; every file is hashed into the result identity")
     parser.add_argument("--arms", default=None,
                         help="comma-separated arm ids; include every arm's control (default: the spec's)")
     parser.add_argument("--arm-module", action="append", default=None,
@@ -50,8 +48,6 @@ def run(a: Any) -> int:
     if reps < 1:
         raise ValueError("--reps must be positive")
     preset = resolve_spec(a.preset).preset
-    if a.model_path is not None:
-        preset = local_checkpoint(preset, a.model_path)
     preset, eager = served(preset, a.eager or spec.eager)
     modules = spec.arm_modules if a.arm_module is None else tuple(a.arm_module)
     names = spec.arms if a.arms is None else tuple(x.strip() for x in a.arms.split(","))
