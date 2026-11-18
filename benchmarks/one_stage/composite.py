@@ -58,16 +58,14 @@ import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
-from verity.commitments.domains import (
-    CERTIFIER_PROTOCOL, ONSITE_PROTOCOL, POUB_P2, POUS_P2_RUN, REMOTE_PROTOCOL, WIPE_PROTOCOL,
-)
 
-PRODUCTS = {"onsite": ONSITE_PROTOCOL, "remote": REMOTE_PROTOCOL, "remote-v1": "verity/remote/v1"}
+# `served_composite.sh` runs this file with an interpreter that may not import `verity`: the standard library only.
+PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0", "remote-v1": "verity/remote/v1"}
 #: Each product's subprotocols, as `Core.Onsite.components`, `Core.Remote.components` and `Core.Remote.V1.components`
 #: list them; read only to name the missing ones.
 COMPONENTS = {
-    "onsite": (CERTIFIER_PROTOCOL, "verity/inference-only/v0", POUS_P2_RUN, "verity/pouw/period/v1",
-               POUB_P2, "verity/sampled-proofs/v1", WIPE_PROTOCOL),
+    "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+               "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"),
     "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"),
     "remote-v1": ("verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"),
 }
