@@ -9,6 +9,7 @@ public import Definitions.Poub.Remote.Fork
 public import Definitions.Poub.Remote.Sketch
 public import Definitions.Poub.Remote.SketchLine
 public import Definitions.Poub.Remote.SketchToy
+public import Definitions.Poub.Remote.Scheme
 
 /-! PoUB's vocabulary: the node, the audit's parameters and the γ terms, a run and its routes,
 the node's memory as a trace (`Remote.Held`) and what devices outside it compute on (`Remote.Outside`), the verifier's
