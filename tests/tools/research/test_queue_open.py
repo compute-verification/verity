@@ -196,7 +196,7 @@ def test_open_needs_an_issue_and_refuses_a_bad_one_before_anything_is_sent(tmp_p
     assert "none:REASON needs the reason" in capsys.readouterr().err
     with pytest.raises(SystemExit):
         research_main(["queue", "status", "--issue", "ENG-1"])
-    assert "--issue is for open and link only" in capsys.readouterr().err
+    assert "--issue is for open, link only, not status" in capsys.readouterr().err
 
 
 def test_open_resolves_the_key_opens_the_pr_with_its_refs_and_goal_lines_then_links_it_through_the_linear_app(opening, capsys):
@@ -341,10 +341,11 @@ def test_link_links_an_open_pr_and_fails_on_an_unknown_key_or_a_refused_link(ope
     fake.fail = "refused"
     assert research_main([*link, "--issue", "ENG-123"]) == 1
     assert "(Linear: refused); link it with `research queue link 6859 --issue ENG-123`" in capsys.readouterr().err
-    for bad in (["--issue", "none:x"], [], ["--issue", "ENG-1", "--dry-run"]):
+    for bad, why in ((["--issue", "none:x"], "link needs the PR number and --issue KEY"), ([], "link needs the PR number"),
+                     (["--issue", "ENG-1", "--dry-run"], "--dry-run is for open, edit only, not link")):
         with pytest.raises(SystemExit):
             research_main([*link, *bad])
-        assert "link needs the PR number and --issue KEY" in capsys.readouterr().err
+        assert why in capsys.readouterr().err
 
 
 AGENT = "bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3"

@@ -332,8 +332,7 @@ def test_targets_sit_at_the_section_vertices():
 
 def _cuda_tools() -> bool:
     try:
-        probe.nvcc()
-        probe.G.H.find_tools()
+        probe.G.H.find_tools(Path(probe.nvcc()).parent)
     except (SystemExit, probe.G.H.SassGateFailed, OSError):
         return False
     return True

@@ -8,7 +8,7 @@ Definition that the walk holds whole is lowered by the Definition's builder inst
 :func:`units` splits a template instance into identical units read off its IR graph: the connected components of the gate
 graph (with the input leaves) must all compute the same function of their inputs; the unit is one component, and the
 arrangement lists which input and output leaves of the instance each unit takes. :func:`circuit_description` lays a unit circuit out as
-``flock-ir-unit/v2`` (see its docstring), the format the block statement ``verity/flock-ir-block/v1`` reads.
+``flock-ir-unit/v2`` (see its docstring), the unit format ``flock-live``'s ``ir_block::IrUnitNet`` reads.
 """
 from __future__ import annotations
 
@@ -1428,9 +1428,6 @@ def write_tables(out_dir) -> dict:
 
 # --- instance files ----------------------------------------------------------------------------------------------------------
 
-INSTANCES_FORMAT = "flock-ir-instances/v1"
-
-
 def flat_ports(input_set, ports, lo: int, hi: int) -> np.ndarray:
     """``(hi - lo, leaves)``: each instance's words of ``ports`` (in order), concatenated."""
     return np.concatenate([np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint64).reshape(hi - lo, -1) for p in ports], axis=1)
@@ -1449,56 +1446,3 @@ def _pack_words(ports: Sequence[np.ndarray], widths: Sequence[int], words: int, 
             buf[:, at + b] = ((p >> np.uint64(b)) & np.uint64(1)).astype(np.uint8)
         at += w
     return np.packbits(buf, axis=1, bitorder="little").tobytes()
-
-
-def write_instances(low: Lowering, flat_in: np.ndarray, flat_out: np.ndarray, path, meta: dict, cuts: np.ndarray | None = None) -> dict:
-    """``flock-ir-instances/v1``: one JSON header line, then every unit's input words (``in_words`` x 16 bytes, the circuit
-    description's input columns), then every unit's output words (``out_words`` x 16 bytes, the circuit description's output
-    columns); units are instance-major. Cut words (``cut_words``) are public words of the units that read or compute them; which
-    ports hold them and the tail that relates them are the circuit description's (:attr:`Lowering.cut`), never the header's."""
-    n = flat_in.shape[0]
-    lay, U = low.layout, low.units
-    if U.cut and cuts is None:
-        raise ValueError(f"{low.name}: the units read or compute cut words; pass cuts=cut_words(...)")
-    head = {"format": INSTANCES_FORMAT, "unit": low.name, "unit_sha256": low.sha256, "instances": n, "units_per_instance": U.n,
-            "units": n * U.n, "in_words": lay.in_words, "in_bits": lay.in_bits, "out_words": lay.out_words, "out_bits": lay.out_bits,
-            "cut_words": len(U.cut), **meta}
-    body = _pack_words(low.unit_inputs(flat_in, cuts), lay.in_bits, lay.in_words, lay.in_port_cols)
-    body += _pack_words(low.unit_outputs(flat_out, cuts), lay.out_bits, lay.out_words, [c - lay.out_col * WORD for c in lay.out_port_cols])
-    with open(path, "wb") as f:
-        f.write(json.dumps(head, sort_keys=True).encode() + b"\n")
-        f.write(body)
-    return head
-
-
-def check_staged(low: Lowering, input_set, path) -> list[str]:
-    """What differs between the instance file at ``path`` and the verifier's own staging of the same range of ``input_set``
-    (empty: byte-identical). A verifier proves against a file it staged itself, never a producer's."""
-    import tempfile
-    from pathlib import Path
-
-    head = json.loads(Path(path).read_bytes().split(b"\n", 1)[0])
-    lo, hi = head.get("range") or [0, head.get("instances", 0)]
-    with tempfile.TemporaryDirectory() as d:
-        mine = stage(low, input_set, lo, hi, d)
-        if mine.read_bytes() == Path(path).read_bytes():
-            return []
-        a, b = mine.read_bytes().split(b"\n", 1), Path(path).read_bytes().split(b"\n", 1)
-        return [f"{what} differs from the verifier's own staging of {input_set.name} [{lo}, {hi})"
-                for what, x, y in (("header", a[0], b[0]), ("body", a[1], b[1])) if x != y]
-
-
-def stage(low: Lowering, input_set, lo: int, hi: int, out_dir):
-    """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/inst-<n>.bin`` and the unit circuit description as ``<out_dir>/net.txt``."""
-    from pathlib import Path
-
-    sub = input_set.subcircuit
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "net.txt").write_text(low.text)
-    meta = {"set": input_set.name, "subcircuit": sub.id, "content_digest": input_set.content_digest, "range": [lo, hi]}
-    path = out / f"inst-{hi - lo}.bin"
-    fin = flat_ports(input_set, sub.inputs, lo, hi)
-    cuts = cut_words(low, fin) if low.units.cut else None
-    write_instances(low, fin, flat_ports(input_set, sub.outputs, lo, hi), path, meta, cuts)
-    return path

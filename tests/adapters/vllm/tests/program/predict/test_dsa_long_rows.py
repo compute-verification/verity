@@ -137,6 +137,31 @@ def test_a_row_past_index_topk_selects_its_top_k_from_its_logits(phi):
     assert src[0] == [6] and len(src) == len(params) - 1, "the SRC inputs are the wrapper's, without the weights"
 
 
+def test_an_indexer_layers_calls_are_its_launchs_logits_then_each_rows_selection(phi):
+    """A step of 6 rows is one launch (`sparse_attn_indexer`: one MQA-logits kernel over its rows, then one top-k): on each full
+    indexer layer every row's DsaMqaLogits, then in row order rows 0-3's DsaTopKShortRow and rows 4-5's DsaTopKMask and
+    DsaButterflySettings, not each row's logits beside its selection."""
+    r = build_program(phi, "step", M=6, pos0=0, with_desc=False)
+    tag = {"DsaMqaLogits_v3": "L", "DsaTopKShortRow_v1": "S", "DsaTopKMask_v1": "M", "DsaButterflySettings_v1": "B"}
+    seq = "".join(tag.get(n.fn.id.split("{", 1)[0], "") for n in r.program.fn.body.nodes)
+    assert seq == ("L" * 6 + "S" * 4 + "MB" * 2) * 3
+
+
+def test_a_request_past_the_logits_budget_is_launched_in_runs_of_rows(monkeypatch):
+    """vLLM cuts a request whose rows × keys pass its logits budget into launches of max(1, budget // keys) rows
+    (`split_indexer_prefill_chunks`), each its rows' logits and then their selections; a block's rows select in the launch that
+    holds them, at the block's keys."""
+    import verity_vllm.program.frontend.rules.vllm_dsa as V
+
+    monkeypatch.setattr(V, "MAX_LOGITS", 12)
+    seen: list[tuple] = []
+    V.emit_indexer([1, 2, 3, 4, 5, 6], [(6, [3, 4, 5])], lambda i, n: seen.append(("logits", i, n)) or i,
+                   lambda i, n, lg: seen.append(("alone", i, n)), lambda N, rows, lgs: seen.append(("block", N, rows, lgs)))
+    assert seen == [("logits", 0, 1), ("logits", 1, 2), ("alone", 0, 1), ("alone", 1, 2),
+                    ("logits", 2, 3), ("logits", 3, 6), ("alone", 2, 3), ("block", 6, [3], [3]),
+                    ("logits", 4, 6), ("logits", 5, 6), ("block", 6, [4, 5], [4, 5])]
+
+
 def test_the_shared_layer_reads_the_last_indexer_layers_settings(phi):
     """Layer 3 (`shared`) selects no top-k of its own: its DsaButterflyRowsPad read the settings layer 2 computed at each row, as
     the Build's IndexShare layer reads the last indexer layer's selection."""
