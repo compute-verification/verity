@@ -171,6 +171,15 @@ def test_a_registered_window_with_no_outcome_rejects_the_link(tmp_path):
     assert not verdict["accepted"] and verdict["refused"] == [2] and verdict["records"][2] is None
 
 
+def test_a_run_that_proves_nothing_rejects_the_link_by_its_windows(tmp_path):
+    """A period with nothing registered, proved or delivered is the link's reject, every window refused, with no
+    record."""
+    run = Run(tmp_path)
+    verdict = run.lw.network_verdict(run.stream)
+    assert not verdict["accepted"] and verdict["refused"] == list(range(run.lw.windows))
+    assert verdict["records"] == [None] * run.lw.windows
+
+
 def test_a_gap_in_the_registration_order_rejects_the_link(tmp_path):
     """Window 2 registered second, past `TransferBlocks.register`'s order check, and accepted on its own: window 1 is never
     registered, so the link is a reject, as it is with a registration past the windows asked for."""

@@ -257,8 +257,8 @@ One execution phase's attestations are registered through the proof system
   each end's head check accepts (`head_check.reference`, which the tests hold to the circuit), the opening's two
   attestations hold under the network attester's key in its session (`TransferBlocks.certified`), and both heads met their
   deadline. It is a debug comparison (`verify(…, opening=…)`, off by default, which
-  decides nothing) and the tests' reference. `TransferBlocks.unproved_outcome` decides a run that proves nothing (a
-  rehearsal, the simulator) on it, its verdict ``"decided_by": "clear"``, never zero-knowledge.
+  decides nothing) and the tests' reference. A run that proves nothing (a rehearsal, the simulator) has no outcome of
+  record, so `TransferBlocks.network_verdict` rejects its link, every window it didn't prove refused.
 
 What this establishes: the outcome is accept exactly when the Lean verifier accepts a proof of the registered proof
 block whose public row is the verifier's own and whose output word is 0b11 and the attestations verify; the outcome record binds the root, the sample and the delivered sessions. The claim is counts only: on every
