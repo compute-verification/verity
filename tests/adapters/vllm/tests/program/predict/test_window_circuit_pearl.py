@@ -227,7 +227,7 @@ def test_the_census_counts_each_cut_linear_by_shape_and_ties_none(low):
     n = {call: fn.bindings["N"] for (table, call), fn in reads if table == "pearl-y"}
     assert sum(r["macs"] for r in cen) == sum(fn.bindings["K"] * n[call] for (table, call), fn in reads
                                               if table == "pearl-a") == 737280
-    assert WK.census(WC.lower(_registered(), CLASS, None, GRAIN, wired=False)) == []
+    assert WK.census(WC.lower(_registered(), CLASS, None, GRAIN, provable=False)) == []
 
 
 def test_a_fixed_load_window_is_the_cut_class_circuit_and_any_other_window_is_refused():
@@ -253,7 +253,7 @@ def test_a_circuit_pearls_tables_cant_cut_is_refused(registered, grain, tables, 
     """Refused by name: an int8 linear (TINY's exact-int8 checkpoint), a class of two boundaries (its slots aren't all
     admitted at round 0), and y rows of a width no doubling of which divides a linear's N."""
     with pytest.raises(Unexpressible, match=why):
-        WC.lower(registered(), cls, None, grain, wired=False, tables=tables)
+        WC.lower(registered(), cls, None, grain, tables=tables)
 
 
 def test_the_cut_at_the_smallest_provable_class_is_proof_blocks_c_flock_proves():
@@ -447,7 +447,7 @@ def test_the_tiny_pearl_class_circuit_is_one_wired_program_of_registered_rows(pe
     circuit, prog, query = pearl_wired
     assert prog.annotations["free"] == []
     assert root_kinds(circuit, prog) == {"read": 41, "table read": 2, "opening": 3}
-    assert prog.fn.gates == 110_433_824
+    assert prog.fn.gates == 110_433_268
     assert query["params"]["templates"][len(circuit.ids):] == [
         descriptor_id(t) for t in (*(bind(BitsWord, W=w) for w in (16, 32)), *(bind(WordBits, W=w) for w in (16, 32)))]
 

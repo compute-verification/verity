@@ -159,7 +159,7 @@ def main() -> int:
     backend = device.from_arguments(a, log=log)
     rng = np.random.default_rng(a.seed)
     source, node = rng.bytes(32), a.node.encode()
-    backend.set_payload_key(rng.bytes(32))
+    rng.bytes(32)  # the draw that once made the payload key: the nonces after it stay as they were
     root = backend.payload_root(node)
     out = {"schema": "verity/remote-session/rows/v0", "blocks": backend.blocks, "bytes": backend.blocks * device.BLOCK,
            "rows": []}

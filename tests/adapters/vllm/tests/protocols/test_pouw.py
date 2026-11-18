@@ -51,6 +51,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 )
 from verity_torch.pouw.pearl_c import run_device as PPDR
 
+from verity_vllm import config
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
@@ -306,12 +307,12 @@ def _fake_pous(monkeypatch):
         return PO.Option(name=f"pous:{scheme}", hooks=h)
     vars(mod)["install"] = install
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
-    monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
+    monkeypatch.setitem(config.PROTOCOLS, "pous", "fake_pous")
 
 
 def test_ncp_v1_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monkeypatch):
     _fake_pous(monkeypatch)
-    assert not pouw.keeps_weight_copy("ncp-v1", _serve("pouw:ncp-v1"))
+    assert not PO.keeps_weight_copy("pouw", "ncp-v1")
     assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == ()
 
 
@@ -321,7 +322,7 @@ def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, sc
     from the plaintext, not what POUS decodes."""
     _fake_pous(monkeypatch)
     settings = {"pouw": {"coins": _coins(), **({"device": "cuda", "kernel": "k"} if scheme.startswith("pearl") else {})}}
-    assert pouw.keeps_weight_copy(scheme, _serve(f"pouw:{scheme}", settings=settings))
+    assert PO.keeps_weight_copy("pouw", scheme)
     assert PO.refusals(_serve(f"pouw:{scheme}", settings=settings)) == ()
     got = PO.refusals(_serve(f"pouw:{scheme}", "pous:band-chain/d12/v1", settings=settings))
     assert [r for r in got if "weight-derived copy" in r] == [

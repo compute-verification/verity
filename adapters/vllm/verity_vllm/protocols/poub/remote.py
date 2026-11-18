@@ -24,6 +24,7 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.serving 
     Lockstep,
     StoreBackend,
 )
+from verity.protocols.resource_accounting.memory.poub.scheme import POUB
 from verity.protocols.resource_accounting.memory.poub.verifier import audit
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec
 
@@ -96,10 +97,8 @@ class CommitSession:
         self._thread: threading.Thread | None = None
 
     def requests(self) -> list[H.Request]:
-        return [H.RequireProperty("world", 1, "a store is one GPU's: a TP Commit's session is not wired yet"),
-                H.RequireProperty("async_steps", False, "a pass follows each step's schedule and its output in turn"),
-                H.RequireProperty("prefix_cache", False, "a prefix hit brings a page back with its KV"),
-                *([] if self.kv_pages is None else [H.FixRanges(self.kv_pages)])]
+        """The session's requests of the run, its declaration's (`poub.scheme.POUB.requests`); the binder files its own."""
+        return list(POUB.requests({"fifo": False, "session": True, "ranges": self.kv_pages}))
 
     def target(self, target: Any) -> None:
         """Before the build: the row's target declares synchronous scheduling, so its Program is the one the engine
