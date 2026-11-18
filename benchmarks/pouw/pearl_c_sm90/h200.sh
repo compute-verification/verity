@@ -33,14 +33,13 @@
 # With LOCK_MHZ the timing steps run with the leased card's SM clock locked there (`sudo -n nvidia-smi -lgc`, reset with
 # -rgc when the lease ends), where the node allows it: the lock's outcome goes to $OUT/clock.txt, not rc.txt, so a node
 # that refuses it times unlocked; either way $OUT/smi.csv samples the card's clocks every 200 ms through the timing.
-# VERITY_BENCH_VENV names the Python with torch and vLLM (default /workspace/cp/venv312), CUDA the toolkit (default
-# /usr/local/cuda-13.0).  Every step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
+# VERITY_BENCH_VENV names the Python with torch and vLLM (default /workspace/cp/venv312), CUDA_HOME the toolkit (else
+# the machine's 13.0, benchmarks/kernels/machine.py's).  Every step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/pouw/pearl_c_sm90 K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90
-CUDA=${CUDA:-/usr/local/cuda-13.0}
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
-export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
 MODEL=${MODEL:-glm53}
 case $MODEL in
   glm53) NKS="2624x6144 2048x2048 6144x2048 4096x2048 3072x6144 6144x1536 512x6144 6144x256 4096x6144"; LAYERS=${LAYERS:-1} ;;
@@ -73,6 +72,8 @@ cp "$S/pearl_c_sm90.cubin" "$K/" && rm -rf "$K/check" && cp -r "$S/check" "$K/ch
 export DEBIT=$S/debit/debit_sm90.cubin
 cp "$S/source.txt" "$S/toolchain.txt" "$S/sass.json" "$S/MANIFEST.sha256" "$O/"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || { echo "toolkit rc 2" | tee -a "$O/rc.txt"; exit 2; }
+export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
 nvcc --version > "$O/nvcc.txt" 2>&1
 nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$O/gpus.txt" 2>&1
 "$PY" -c 'import torch, vllm; print(torch.__version__, vllm.__version__)' > "$O/python.txt" 2>&1
@@ -105,7 +106,7 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" -- bash -c '
   kill "$smi"'
 echo "lease rc $?" >> "$O/rc.txt"
 if [ "${PIN:-1}" = 1 ]; then
-  bash benchmarks/pouw/harness/jobs/pin_target.sh "${TK:-13.0.1-sm_90a}" "$CUDA" > "$O/pin.log" 2>&1
+  bash benchmarks/pouw/harness/jobs/pin_target.sh "${TK:-13.0.1-sm_90a}" > "$O/pin.log" 2>&1
   echo "pin rc $?" >> "$O/rc.txt"
 fi
 if [ "$VOLUNTEER" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then

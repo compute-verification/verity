@@ -51,7 +51,8 @@ from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
 from verity.protocols.resource_accounting.network.verifier.arith_encode import Carry, ChargeBook
-from verity.protocols.resource_accounting.network.verifier.head_check import BIT, _part
+from verity.commitments.gates.bits import BIT
+from verity.circuits.boolean.trace import part as _part
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 

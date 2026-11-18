@@ -6,6 +6,13 @@
 - `card_short(name)`: the card's name in a measurement's member, from the one card record under `cards_directory()` whose
   `driver` holds the stamp's `card` exactly; `is_card(card, short)` says whether a stamp's card is the one a workload
   names, and `wrong_card(workload, short, card)` why not.
+- `machine_properties(name, directory=...)`: a machine record's `[properties]` (what a job may do there: its toolkit, profiler,
+  clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field;
+  with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
+- `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set and not another, else the run's machine's
+  `[properties]`'; `card_arch(name)`: the `arch` of the card `card_short` finds, and
+  `machine_arch()` the run's machine's card's.
+  `benchmarks/kernels/machine.py` prints both for a shell script.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
@@ -74,6 +81,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import tomllib
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -236,17 +244,137 @@ def _card_named(name: str, directory: Path) -> dict:
     return found[0]
 
 
+def card_arch(name: str, *, directory: Path | None = None) -> str:
+    """The ``arch`` of the card record `card_short` finds for ``name``: the target (``sm_90a``) machine code is built for."""
+    return _card_named(name, directory or cards_directory())["arch"]
+
+
+def machine_arch(*, directory: Path | None = None) -> str:
+    """The ``arch`` of the run's machine's card: `machine_properties()`'s ``card``, a card record's name in ``directory``,
+    with no card needed; refused by name where it is unread."""
+    from verity.device import load_card
+
+    card = machine_properties()["card"]["value"]
+    if card == "unread":
+        raise SystemExit(f"machine {settings.RESEARCH_MACHINE!r}: its [properties] have card unread: read it there")
+    return load_card(card, directory=directory or cards_directory())["arch"]
+
+
+def _text(v: Any) -> bool:
+    return isinstance(v, str) and v != ""
+
+
+def _count(v: Any) -> bool:
+    return type(v) is int and v > 0
+
+
+def _texts(v: Any, *keys: str) -> bool:
+    return isinstance(v, dict) and all(_text(v.get(k)) for k in keys)
+
+
+#: a machine record's `[properties]`, each field with the check its value passes unless it is ``"unread"``
+MACHINE_PROPERTIES: dict[str, Any] = {
+    "kind": _text, "card": _text, "cards": _count, "cpus": _count, "threads_per_core": _count,
+    "numa": lambda v: isinstance(v, list) and all(
+        isinstance(e, dict) and set(e) == {"card", "node", "cpus"} and type(e["card"]) is int and type(e["node"]) is int
+        and _text(e["cpus"]) for e in v),
+    "toolkit": lambda v: v == "none" or _texts(v, "directory", "version", "loader") and isinstance(v.get("others", []), list)
+    and all(_texts(o, "directory", "version") for o in v.get("others", [])),
+    "compiler": lambda v: type(v) is bool, "profiler": lambda v: v in ("allowed", "needs-root", "refused"),
+    "clock_lock": lambda v: type(v) is bool, "root": lambda v: type(v) is bool, "lease": _text,
+    "launcher": lambda v: _texts(v, "start") and isinstance(v.get("sets"), list) and all(_text(s) for s in v["sets"]),
+    "python": _text, "job_cap_minutes": lambda v: v == "none" or _count(v)}
+
+
+def machine_properties(name: str | None = None, *, directory: Path | None = None) -> dict:
+    """The `[properties]` of machine `name`'s record, ``directory/<name>.toml`` (the notes' `machines.d`), as written: each
+    field of `MACHINE_PROPERTIES` ``{ value, read }``, `read` the command that read `value`, and `value` ``"unread"`` or one
+    its check takes: a `toolkit` is ``{ directory, version, loader }`` (`others`: more ``{ directory, version }``) or
+    ``"none"``, `numa` a list of ``{ card, node, cpus }``, `launcher` ``{ start, sets }``, `profiler` ``"allowed"``,
+    ``"needs-root"`` or ``"refused"``, `job_cap_minutes` minutes or ``"none"``. Refused by name otherwise.
+    Unnamed, the machine is ``$RESEARCH_MACHINE`` and the directory ``$RESEARCH_RUN_DIR/inputs``, where `research run --on`
+    puts the copy; a run with no ``RESEARCH_MACHINE`` (a local one) is refused."""
+    run_copy = directory is None
+    if name is None:
+        if not settings.is_set("RESEARCH_MACHINE"):
+            raise SystemExit("no machine named: RESEARCH_MACHINE is unset, which `research run --on` sets; outside such a run, "
+                             "name the machine and the directory of its record")
+        name = settings.RESEARCH_MACHINE
+    path = (Path(settings.RESEARCH_RUN_DIR) / "inputs" if run_copy else directory) / f"{name}.toml"
+
+    def refuse(why: str) -> SystemExit:
+        return SystemExit(f"machine {name!r}: {path} {why}")
+
+    if run_copy and not path.is_file():
+        raise refuse("is not there: the launch copies a machine's [properties] into the run only where its record has the table")
+    try:
+        table = tomllib.loads(path.read_text()).get("properties")
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        raise refuse(f"is unreadable ({type(e).__name__}: {e})") from None
+    if not isinstance(table, dict):
+        raise refuse("has no [properties] table")
+    if missing := sorted(MACHINE_PROPERTIES.keys() - table.keys()):
+        raise refuse(f"lacks {', '.join(missing)} in [properties]: give each {{ value, read }}, value \"unread\" if not read")
+    if extra := sorted(table.keys() - MACHINE_PROPERTIES.keys()):
+        raise refuse(f"has {', '.join(extra)} in [properties], which are none of {', '.join(MACHINE_PROPERTIES)}")
+    for field_, check in MACHINE_PROPERTIES.items():
+        entry = table[field_]
+        if not isinstance(entry, dict) or set(entry) != {"value", "read"} or not _text(entry["read"]):
+            raise refuse(f"gives {field_} as {entry!r}, not {{ value, read }} with read the command that read it")
+        if entry["value"] != "unread" and not check(entry["value"]):
+            raise refuse(f"gives {field_} the value {entry['value']!r}, which its check refuses (machine_properties' docstring)")
+    return table
+
+
+class NotListed(SystemExit):
+    """The run's machine's `[properties]` are read and list no CUDA toolkit at the version asked for."""
+
+
+def toolkit(version: str) -> str:
+    """The directory of CUDA toolkit `version` (major.minor, as a machine's `[properties]` write it): ``$CUDA_HOME`` where it
+    is set and its ``version.json``, where it has one, is that version; else the one the run's machine's properties
+    (`machine_properties()`) list at exactly that version, the version asked for and not the first listed. Refused by name
+    otherwise, as `NotListed` where the properties list none."""
+    from verity_config.settings import SHARED
+
+    if home := SHARED.get("CUDA_HOME"):
+        try:
+            said = json.loads((Path(home) / "version.json").read_text())["cuda"]["version"]
+        except (OSError, ValueError, KeyError, TypeError):
+            return home
+        if said == version or said.startswith(f"{version}."):
+            return home
+    try:
+        found = machine_properties()["toolkit"]["value"]
+    except SystemExit as e:
+        raise SystemExit(f"no CUDA toolkit {version}: set CUDA_HOME to its directory, or run on a machine `research run --on` "
+                         f"names: {e}") from None
+    name = settings.RESEARCH_MACHINE
+    if found == "unread":
+        raise SystemExit(f"machine {name!r}: its [properties] have toolkit unread: read it there, or set CUDA_HOME")
+    listed = [] if found == "none" else [found, *found.get("others", [])]
+    at = [t["directory"] for t in listed if t["version"] == version]
+    if not at:
+        raise NotListed(f"machine {name!r}: its [properties] list no CUDA toolkit {version} under toolkit (they list "
+                        f"{', '.join(t['version'] for t in listed) or 'none'}): set CUDA_HOME")
+    return at[0]
+
+
 def gpu_target(sku: str, *, directory: Path | None = None) -> dict[str, Any]:
-    from verity.device import load_card, number
+    from verity.device import compute_capability, load_card, number
+    from verity.errors import InvalidArtifact
 
     directory = directory or cards_directory()
     card = load_card(sku, directory=directory)
     names = [d["value"] for d in card.get("driver", ())]
-    arch = re.fullmatch(r"sm_(\d+)(\d)a?", str(card.get("arch", "")))
-    if card["kind"] != "gpu" or len(names) != 1 or not arch:
+    try:
+        cc = compute_capability(card)
+    except InvalidArtifact:
+        cc = None
+    if len(names) != 1 or cc is None:
         raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: it needs kind \"gpu\", one `driver` name "
-                         f"and an `arch` sm_<major><minor>[a], and has kind {card['kind']!r}, driver {names}, arch {card.get('arch')!r}")
-    return {"device_name": names[0], "compute_capability": [int(arch[1]), int(arch[2])], "num_sms": int(number(card["sm"]["count"]))}
+                         f"and an `arch` sm_<major><minor>[a|f], and has kind {card['kind']!r}, driver {names}, arch {card.get('arch')!r}")
+    return {"device_name": names[0], "compute_capability": list(cc), "num_sms": int(number(card["sm"]["count"]))}
 
 
 def is_card(card: str, short: str, *, directory: Path | None = None) -> bool:

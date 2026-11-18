@@ -1,0 +1,28 @@
+# A request's head as the network attester reads it: what `tools/move/layout.py --map
+# tools/move/network_serve_head_map.toml` moves and rewrites. `serve_head` reads a request's first line and its header
+# fields exactly as the network attester's `release.with_release` does, and imports nothing of the vLLM adapter's, so it
+# is the network attester's and goes to its package's prover side, beside what reads its releases.
+
+[roots]
+old = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+
+[paths]
+"adapters/vllm/verity_vllm/pipeline/serve_head.py" = "verity/protocols/resource_accounting/network/prover/serve_head.py"
+
+[retired]
+paths = ["adapters/vllm/verity_vllm/pipeline/serve_head.py"]
+
+[drop]
+paths = []
+
+[rewrite]
+words = []
+keep = []
+exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/*.lock", "uv.lock",
+           "tools/move/**", "tests/tools/move/**", "archive/**", "tools/research/src/research/store/moves.json",
+           "**/lean-audit.json"]
+include = []
+
+[modules]
+"verity_vllm.pipeline.serve_head" = "verity.protocols.resource_accounting.network.prover.serve_head"

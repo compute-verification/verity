@@ -10,7 +10,7 @@
 # STAGE=build|gate|all (default all); REPS (default 15); SHAPES (name:m:n:k:C ..., C the tile config P, Q, W or D); NCU_SHAPES (same).
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+export PATH=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}/bin:$PATH
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm
 export B; B=$(mktemp -d /tmp/floored-gemm.XXXXXX); trap 'rm -rf "$B"' EXIT
 STAGE=${STAGE:-all}

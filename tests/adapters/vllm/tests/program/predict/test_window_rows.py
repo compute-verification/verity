@@ -45,6 +45,7 @@ from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.pipeline.tp.grain import GROUP
 from verity_vllm.program.instances_file import read_instances
+from verity_vllm.program.predict import inference_blocks as IB
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
@@ -911,7 +912,7 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
     low, _f, values, _w, slots = window
     c, words = low.circuit, SS.words(CLASS.scan)
     assert c.registered.values == (SS.SCAN_STATE,)
-    program, digest = c.program()[0], WC.population_digest(c)
+    program, digest = c.program()[0], IB.program_digest(c)
     assert dict(program.fn.signature()[0])[SS.SCAN_STATE].leaves == CLASS.buckets * words
     state = WR.standin_state(digest, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], window=RUN)
     vals = {**values, SS.SCAN_STATE: state}

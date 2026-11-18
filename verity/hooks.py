@@ -226,10 +226,27 @@ class HoldResident:
     until: int
 
 
-type Request = RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
+@dataclass(frozen=True)
+class ReuseOldestFreed:
+    """A scheme's request that a freed range be handed out again only after every range freed before it, so a freed
+    range keeps its values as long as the workload has other ranges to hand out."""
+
+
+@dataclass(frozen=True)
+class StartBeside:
+    """A scheme's request to start the process it registered as ``process``
+    (`verity.protocols.resource_accounting.scheme.register_process`) beside the workload, called with the workload's
+    readers it names by what they do (``server-request``, ``stream-token-ids``), in that order."""
+
+    process: str
+    readers: tuple[str, ...] = ()
+
+
+type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
+                | StartBeside | ReuseOldestFreed)
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
            "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
-           "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "StartOnBoundary",
-           "StepBegan", "StepEnded", "ValueProduced"]
+           "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "ReuseOldestFreed",
+           "StartBeside", "StartOnBoundary", "StepBegan", "StepEnded", "ValueProduced"]

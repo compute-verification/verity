@@ -151,14 +151,14 @@ from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates.frame_v3 import _part
 from verity.protocols.resource_accounting.network.prover import egress as EG
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.prover import io_ids as II
 from verity.protocols.resource_accounting.network.verifier import io_request as Q
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES
 from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams
 
-BIT, BYTE = HC.BIT, HC.BYTE
+BIT, BYTE = GB.BIT, GB.BYTE
 #: the state's head: `now`, `phase`, `last`
 HEAD = (("now", 32), ("phase", 32), ("last", 32))
 #: a ratio field's seven digits' value: below 10^7
@@ -675,7 +675,7 @@ def _eq(C, x: Sequence, y: Sequence):
 
 
 def _eqk(C, x: Sequence, k: int):
-    return and_reduce(C, [HC._same(b, k >> j & 1) for j, b in enumerate(x)]) if k < 1 << len(x) else ZERO
+    return and_reduce(C, [GB._same(b, k >> j & 1) for j, b in enumerate(x)]) if k < 1 << len(x) else ZERO
 
 
 def _lt(C, x: Sequence, y: Sequence):
