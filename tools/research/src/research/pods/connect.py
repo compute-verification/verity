@@ -196,7 +196,7 @@ def _ship_rsync(src: Path, files: list[str], dest: str, transport: SshTransport 
     finally:
         os.unlink(fl.name)
     if r.returncode != 0:
-        raise remote.Refused(f"rsync failed (rc {r.returncode}): {r.stderr.strip()[-400:]}")
+        raise remote.Refused(f"rsync failed (rc {r.returncode}): {remote.name_addresses(r.stderr).strip()[-400:]}")
 
 
 def _ship_tar(src: Path, files: list[str], dest: str, transport: SshTransport | LocalTransport, timeout: float = 1800) -> None:
@@ -214,7 +214,7 @@ def _ship_tar(src: Path, files: list[str], dest: str, transport: SshTransport | 
         print(f"connect: the tar on {dest} closed its input before every file was sent; its stderr says why", file=sys.stderr)
     finally:
         p.stdin.close()
-    err = p.stderr.read().decode(errors="replace")
+    err = remote.name_addresses(p.stderr.read().decode(errors="replace"))
     if p.wait(timeout=timeout) != 0:
         raise remote.Refused(f"tar stream to {dest} failed (rc {p.returncode}): {err.strip()[-400:]}")
 

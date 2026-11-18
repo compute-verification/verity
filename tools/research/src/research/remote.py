@@ -138,8 +138,10 @@ import errno
 import fcntl
 import hashlib
 import io
+import ipaddress
 import json
 import os
+import re
 import secrets
 import select
 import shlex
@@ -156,7 +158,7 @@ from typing import IO, Any, Callable
 
 from . import clone
 from .telemetry.events import utc_now_ms
-from .telemetry.job import address_names, hide_addresses, write_json_atomic
+from .telemetry.job import ADDRESS_MIN, REDACTED, address_names, hide_addresses, write_json_atomic
 
 REQUEST_SCHEMA = "research/request/v0.1"
 #: the request's {address: machine name} for the registered addresses it holds, which the machine's records name instead
@@ -470,7 +472,7 @@ def wake_on_control(iid: str, *, run=None) -> str | None:
     except Exception as e:  # noqa: BLE001  (no RunPod key or API, a timeout: the pod can't be asked)
         raise Refused(f"the control pod {host} can't be reached ({type(e).__name__}: {str(e)[:200]})") from None
     if r.returncode != 0:
-        why = (r.stderr or r.stdout).strip().splitlines()
+        why = name_addresses(r.stderr or r.stdout).strip().splitlines()
         raise Refused(f"the control pod {host} refused: {why[-1][:400] if why else f'rc {r.returncode}'}{door.hint(host, r.stderr)}")
     return json.loads(r.stdout.strip().splitlines()[-1]).get("was")
 
@@ -520,10 +522,76 @@ def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, control=None, 
     raise Refused(f"{machine['name']} ({iid}) was started from {state} but its ssh didn't answer in {WAKE_WAIT_S / 60:g} min")
 
 
+#: a whole run of the characters an IPv4 or IPv6 address is written in, `user@` before it, which `name_addresses` checks
+_IP_WORD = re.compile(r"(?:[A-Za-z0-9._-]+@)?(?<![0-9A-Fa-f.:\[\]])(?P<run>[0-9A-Fa-f.:\[\]]*[.:][0-9A-Fa-f.:\[\]]*)(?![0-9A-Fa-f.:\[\]])")
+#: an address inside a run that isn't one whole: `ADDRESS:PORT`, `[ADDRESS]:PORT`
+_IP_INNER = re.compile(r"(?<![0-9.])(?P<a>\d{1,3}(?:\.\d{1,3}){3})(?![0-9]|\.[0-9])|(?<=\[)(?P<a6>[0-9A-Fa-f:.]+)(?=\])")
+#: where ssh's own messages put a host by name (`user@HOST:`, `connect to host`, `resolve hostname`, `Connection closed by`)
+_HOST_HINT = re.compile(r"@|\bhost|Connection (?:closed by|to)", re.I)
+
+
+def _registered_names() -> dict[str, str]:
+    """{address: name} of the register, read only when an error's text may hold an address."""
+    try:
+        return {a: n for n, a in registered_addresses(load_machines()).items()}
+    except Exception:  # noqa: BLE001  (no register here: every address is then unregistered)
+        return {}
+
+
+def name_addresses(text: str, names: dict[str, str] | None = None, *, machine: str | None = None) -> str:
+    """`text` (what ssh or a remote command wrote on stderr) with each machine address in it, `user@` included, given as the
+    machine's registered name: an IPv4 or IPv6 address, or a registered host (`names`, address -> name; default the
+    register's); an address no machine registers is given as `machine` (the one ssh was asked to reach), else `<redacted>`.
+    Every message or record that carries ssh's stderr off this machine (a refusal, request.json, job.json, a placement
+    record, the stranded report, a Slack post) takes it from here."""
+    if not text:
+        return text
+    given = names
+
+    def register() -> dict[str, str]:
+        nonlocal given
+        if given is None:
+            given = _registered_names()
+        return given
+
+    def name(addr: str) -> str | None:
+        try:
+            ipaddress.ip_address(addr)
+        except ValueError:
+            return None
+        return register().get(addr) or machine or REDACTED
+
+    def ip(m: re.Match) -> str:
+        run = m.group("run")
+        core = next((c for c in (run.strip("[]"), run.strip("[]").rstrip(".:"), run.strip(".:[]")) if name(c) is not None), "")
+        if core and (n := name(core)) is not None:
+            start = run.index(core)
+            return run[:start].lstrip("[") + n + run[start + len(core):].lstrip("]")
+        inner = _IP_INNER.sub(lambda i: name(i.group("a") or i.group("a6")) or i.group(), run)
+        return m.group() if inner == run else inner
+
+    text = _IP_WORD.sub(ip, text)
+    if given is None and not _HOST_HINT.search(text):
+        return text
+    names = register()
+    if hosts := sorted((a for a in names if len(a) >= ADDRESS_MIN), key=len, reverse=True):
+        alt = "|".join(re.escape(h) for h in hosts)
+        text = re.sub(rf"(?<![A-Za-z0-9_.-])(?:[A-Za-z0-9._-]+@)?({alt})(?![A-Za-z0-9_-]|\.[A-Za-z0-9])",
+                      lambda m: names[m.group(1)], text)
+    return text
+
+
+def _named(r: subprocess.CompletedProcess) -> subprocess.CompletedProcess:
+    if r.stderr:
+        r.stderr = name_addresses(r.stderr.decode(errors="replace")).encode()
+    return r
+
+
 def ssh_run(ssh: list[str], remote_argv: list[str], *, stdin: bytes | None = None, timeout: float = 120) -> subprocess.CompletedProcess:
-    """Run one remote argv (quoted per-arg with shlex; no eval on the far side)."""
+    """Run one remote argv (quoted per-arg with shlex; no eval on the far side). Its stderr names machines, never their
+    addresses (`name_addresses`)."""
     cmd = [*ssh, " ".join(shlex.quote(a) for a in remote_argv)]
-    return subprocess.run(cmd, input=stdin, capture_output=True, timeout=timeout)
+    return _named(subprocess.run(cmd, input=stdin, capture_output=True, timeout=timeout))
 
 
 def ssh_stream(ssh: list[str], remote_argv: list[str], feed: Callable[[IO[bytes]], None], *, timeout: float) -> subprocess.CompletedProcess:
@@ -566,7 +634,7 @@ def ssh_stream(ssh: list[str], remote_argv: list[str], feed: Callable[[IO[bytes]
         t.join()
     if failed:
         raise failed[0]
-    return subprocess.CompletedProcess(cmd, proc.returncode, b"".join(out), b"".join(err))
+    return _named(subprocess.CompletedProcess(cmd, proc.returncode, b"".join(out), b"".join(err)))
 
 
 def ssh_read(ssh: list[str], remote_argv: list[str], consume: Callable[[IO[bytes]], None], *, timeout: float) -> subprocess.CompletedProcess:
@@ -590,7 +658,7 @@ def ssh_read(ssh: list[str], remote_argv: list[str], consume: Callable[[IO[bytes
             rc = proc.wait()
             err.seek(0)
             stderr = err.read()[-8000:]
-    return subprocess.CompletedProcess(cmd, rc, b"", stderr)
+    return _named(subprocess.CompletedProcess(cmd, rc, b"", stderr))
 
 
 # ---- snapshots --------------------------------------------------------------------------------------------------------------------------

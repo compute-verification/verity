@@ -85,7 +85,9 @@ def api(method: str, path: str, body: dict[str, Any] | None = None, *, no_key: s
     except (OSError, subprocess.TimeoutExpired) as e:
         raise runpod.PodError(f"{method} {path} through {host}'s door: {type(e).__name__}: {e}", pod_id=pod_id) from None
     if r.returncode != 0:
-        why = ((r.stderr or r.stdout).strip().splitlines() or [f"rc {r.returncode}"])[-1][:400]
+        from ..remote import name_addresses
+
+        why = (name_addresses(r.stderr or r.stdout).strip().splitlines() or [f"rc {r.returncode}"])[-1][:400]
         code = re.search(r"-> HTTP (\d{3})\b", why)
         raise runpod.PodError(f"{method} {path} through {host}'s door: {why}", code=int(code[1]) if code else None, pod_id=pod_id)
     return json.loads(r.stdout) if r.stdout.strip() else None
