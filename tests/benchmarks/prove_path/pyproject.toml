@@ -20,7 +20,7 @@ untraced = [
 # network_attester_zk, which it imports), whose --v3c reads the scan state window-commit opens for it (`scan_state_opening`); of
 # `research`, what the served compiler's identity imports (`code_identity`: `research_tools` and `source_identity`);
 # `deployments.json`: the census's reference deployment window_cost (and one_stage's block record) read.
-inputs = ["calibration/hardware/cards", "calibration/hardware/nodes/rtx-pro-6000-server-x8.toml", "verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/one_stage", "verity/protocols/resource_accounting/network/prover/leak_scan.py",
+inputs = ["calibration/hardware/cards", "verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/one_stage", "verity/protocols/resource_accounting/network/prover/leak_scan.py",
           "verity/protocols/resource_accounting/network/prover/scan_zk.py", "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
@@ -47,6 +47,9 @@ inputs = ["calibration/hardware/cards", "calibration/hardware/nodes/rtx-pro-6000
           "benchmarks/pouw/pearl_c_vllm/verify_run.py", "benchmarks/pouw/pearl_c_vllm/fast_tile.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear", "benchmarks/pouw/settings.py", "tests/benchmarks/pouw/pyproject.toml",
           "tools/config/verity_config",
+          # `verity_bench.kit_report`: the words served_tie_window's result says who checked it in
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit_report.py",
+          "benchmarks/harness/verity_bench/settings.py",
           # verity_difftest, which test_prove_path imports: under `verity` until the difftest map moved it
           "tools/difftest", "benchmarks/prove_path"]
 

@@ -647,8 +647,9 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
     """A member's wired port, held in its writer template's output tree: its header entry (`rows.shared_ports`,
     `rows.shared_entries`) is that tree's value, one position and one path per row of its table, the leaves it reads
     (`rows.Binding.leaves`), each path climbing to the tree's root, and the verifier's read of it (`rows.own_reads`, seeded
-    with no port) names the same value and root as a tree port of the writer template's field, its reads the verifier's
-    program's. A member with no wired port gets no ``x`` entry."""
+    with no port) names the same value and root, its reads those leaves from the member's first unit, as the served
+    route's Program has the wire cut to an input row (`interface.served_program`). A member with no wired port gets no
+    ``x`` entry."""
     w, c, doc = _held_window(tmp_path, monkeypatch)
     ms, tree = w.members, WI.tree(GID, "o0")
     roots = {q: {"root": r.hex(), "domain": c.domains[q].domain_id.hex(), "leaves": c.domains[q].count} for q, r in c.roots.items()}
@@ -660,7 +661,7 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
         e, read = CS.shared_entries(tmp_path, doc, k)["x"], files[m.key]["ports"]["x"]
         assert e["value"] == read["value"] == CS.own_value(tree) and read["root"] == c.roots[tree].hex()
         assert e["positions"] == w.leaves(m, "x").tolist()
-        assert read["tree"] == {"template": GID, "field": "o0"} and read["reads"] == [] and "reads_from" not in read
+        assert read["reads"] == w.reads(m, "x").tolist() and read["reads_from"] == m.base and "tree" not in read
         for i, path in zip(e["positions"], e["paths"], strict=True):
             leaf = row_leaf(dom, i, CS.INST.tree_leaf(CS.INST.default_key, bc[CS.BC_BYTES * i:CS.BC_BYTES * (i + 1)]), m.schema("x"))
             assert _climb(dom, i, leaf, bytes.fromhex(path)) == c.roots[tree]
@@ -679,8 +680,9 @@ def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_the
     assert "members" not in doc and doc["cap"] == 2 and tuple(I.Wire.of(w) for w in doc["wires"]) == chain().wires
     mine = I.window_of_record(doc, SAMPLING_DESIGN, by_id)
     assert mine.members == win.window.members and mine.partition_digest == win.window.partition_digest
-    with pytest.raises(ValueError, match=r"\['partition', 'program'\] are not the ones its templates make"):
-        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [0]}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
+    stepped = I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [0]}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
+    assert stepped.partition_digest == mine.partition_digest and (
+        [stepped.reads(m, "x").tolist() for m in stepped.members if m.wired] != [mine.reads(m, "x").tolist() for m in mine.members if m.wired])
     with pytest.raises(ValueError, match="order: wire 0"):
         I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 2}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
     for bad, why in [({k: v for k, v in doc.items() if k != "cap"}, "one or the other"), ({**doc, "members": []}, "one or the other"),

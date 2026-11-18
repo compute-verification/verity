@@ -53,7 +53,7 @@ def test_the_cut_is_the_wired_builder_with_no_wires_and_its_positions_are_the_me
     the same root batches in the same order, none reading another. Each member's wired port reads, unit by unit, the
     writer units the cut's positions give (`rows.Binding.reads`), and the positions are the wires' rows, one each."""
     circuit = make()
-    wired, _ = circuit.program()
+    wired, _ = wired_population_program(list(circuit.templates), record(circuit))
     cut, query, positions = cut_wires(wired, record(circuit))
     want, want_query = wired_population_program(list(circuit.templates), {**record(circuit), "wires": []})
     assert (program_digest(cut), query) == (program_digest(want), want_query)
@@ -76,7 +76,7 @@ def test_a_cut_program_has_nothing_to_cut_and_another_record_is_refused():
     it with no positions; under the wired record, or any record its root does not name by digest, it is refused
     (cut-record), as is a root that is no wired population (cut-input)."""
     circuit = chain()
-    wired, _ = circuit.program()
+    wired, _ = wired_population_program(list(circuit.templates), record(circuit))
     cut, _, _ = cut_wires(wired, record(circuit))
     again, _, positions = cut_wires(cut, {**record(circuit), "wires": []})
     assert (program_digest(again), positions) == (program_digest(cut), {})
