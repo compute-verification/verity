@@ -18,7 +18,7 @@ from typing import Any, NamedTuple
 import numpy as np
 from verity.commitments.periods import rows as CS
 
-from verity_vllm.pipeline import slice_rows as SL
+from verity_vllm.pipeline import chain_rows as CH, slice_rows as SL
 from verity_vllm.pipeline.serving_templates import (
     COORDS,
     PART_STATICS,
@@ -419,7 +419,8 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
             c = code[lo:lo + m.n]
             cuts = [0, *(np.flatnonzero(c[1:] != c[:-1]) + 1).tolist(), m.n]
             for a, b in zip(cuts, cuts[1:]):
-                wired = tuple((port, o, tuple(writers[port][lo + a:lo + b].tolist())) for port, o in kinds[int(c[a])])
-                pieces.append(replace(m, base=m.base + a, n=b - a, wired=m.wired + wired))
+                x = replace(m, base=m.base + a, n=b - a)
+                pieces.append(replace(x, wired=m.wired + tuple(w for port, o in kinds[int(c[a])]
+                                                              for w in CH.pieces(ms, x, port, o, writers[port][lo + a:lo + b]))))
         out += pieces if len(pieces) == len(mine) else [replace(x, name=f"{t}/c{j}") for j, x in enumerate(pieces)]
     return out

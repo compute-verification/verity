@@ -17,7 +17,6 @@
 // CASES: "S8MMAPR1", u32 ntiles, u16 M, u16 N, then A (ntiles M 32 bytes), B (ntiles N 32 bytes, k contiguous: the ".col"
 // operand, B[j][k]) and C (ntiles M N u32 words, row-major), little-endian. D is C's shape. The shared-memory operands of
 // wgmma and tcgen05 are dc.cuh's K-major no-swizzle layout (dgemm.cu's, whose gate is exact on both cards).
-// Build: nvcc -O2 -std=c++17 -gencode arch=compute_90a,code=sm_90a s8_mma.cu -o s8_mma_sm90 (or compute_100a / sm_100a)
 // Each form is its own extern "C" kernel, so cuobjdump -sass shows each one's tensor instruction by name.
 
 #include <cuda_runtime.h>

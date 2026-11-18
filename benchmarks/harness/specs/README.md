@@ -50,20 +50,21 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 - `llama31-8b-1gpu-pouw-protocol-served`: Pearl-C against batch-invariant eager and compiled stock FP8, in one run.
 - `llama31-8b-1gpu-pouw-protocol-served-b32`: the same at batch 32 alone, with 6 reps.
-- `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm beside the protocol arm and both stocks.
-- `llama31-8b-1gpu-pearl-c-whole-served-h200`: the whole-step arm on one H200, against compiled stock FP8.
+- `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm beside the protocol arm and both stocks on one
+  RTX PRO 6000, and against compiled stock FP8 alone on one H200.
 - `llama32-1b-1gpu-pouw-protocol-served`: Pearl+ (`pouw:pearl-c-h100-v1-h3`, `pearl_c_sm90`'s kernel from its setup)
   on Llama-3.2-1B's BF16 checkpoint on one H200 or H100, against eager and compiled stock FP8 at batch 32, 8,192 tokens a
   step (`served_pearlplus.sh`'s step).
+- `llama32-1b-1gpu-pearl-c-whole-served`: the same on one H100 with the whole-step arm beside its three arms: the ceiling
+  of the served Pearl-C arm under one CUDA graph a decode step, not the protocol arm.
 - `llama32-1b-1gpu-stock-served-h100`: its two stock arms alone, with no setup: a served point on an H100 whose machine
   has no CUDA toolkit to build Pearl-C with (`verity-bench run SPEC` on VCF's node).
 
 ## PoUS's bandwidth audit
 
-- `llama31-8b-fp8-1gpu-bandwidth-served-r6`: the bandwidth audit's encoded, receipted stack against its plain stack,
-  stock FP8 on the same graph path and compiled stock FP8, at 6 reps.
-- `llama31-8b-fp8-1gpu-bandwidth-served-h200`: the same on one H200.
-- `llama32-1b-fp8-1gpu-bandwidth-served-h200`: the same on Llama-3.2-1B on one H200.
+- `llama31-8b-fp8-1gpu-bandwidth-served-reps6`: the bandwidth audit's encoded, receipted stack against its plain stack,
+  stock FP8 on the same graph path and compiled stock FP8, at 6 reps, on one RTX PRO 6000 or H200.
+- `llama32-1b-fp8-1gpu-bandwidth-served`: the same on Llama-3.2-1B on one H200.
 - `llama31-8b-fp8-1gpu-bandwidth-ablation`: where the audit's time goes, by part and with the top-up off
   (`verity-bench breakdown`).
 

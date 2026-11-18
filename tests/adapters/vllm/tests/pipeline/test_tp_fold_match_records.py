@@ -219,7 +219,8 @@ def _stand_ins(tmp_path: Path, monkeypatch, *, logs=(0, 1), recorders=(0, 1), li
             (capture / f"coll.rank{r}.jsonl").write_text(json.dumps({"rank": r}) + "\n")
         if r in links:
             (build / "tp_links.json").write_text(json.dumps(dict(LINKS, rank=r)))
-    (tmp_path / "tp2_match.json").write_text(json.dumps({"provenance": {"recorder_sha256": {"0": "aa"}}}))
+    (tmp_path / "tp2_match.json").write_text(json.dumps({"provenance": {}}))
+    (tmp_path / "recorder_sha256.json").write_text(json.dumps({"0": "aa"}))
 
     def fold_rank(py, log, profile, rank_dir, timeout, reuse=False, construction=()):
         rank = int(rank_dir.name[4:])

@@ -444,6 +444,6 @@ def test_pearl_cs_schedule_is_a_setting_checked_against_the_scheme():
     scheme, on = "pearl-c-sm120-v1-h3", {"coins": _coins(), "device": "cuda", "kernel": "k"}
     for name in ("serial", "deferred", "deferred-caller"):
         assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": name}})) == ()
-    assert any("'schedule' is one of" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": "h3o"}})))
+    assert any("schedule is one of" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": "h3o"}})))
     assert any("Pearl-C's; this executor runs serially" in r
                for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"coins": _coins(), "schedule": "deferred"}})))
