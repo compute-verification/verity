@@ -7538,15 +7538,29 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
     python = (f"case \"$*\" in *NETWORK_ATTESTER*) exec {sys.executable} \"$@\" ;; esac; printf '%s\\n' \"$*\" >> {tmp_path}/calls; case \"$*\" in *prove_path.py\\ class-circuit*) "
               f"while [ $# -gt 0 ]; do [ \"$1\" = --out ] && printf '{{}}\\n' > \"$2\"; shift; done; exit 0;; "
               f"*prove_path.py\\ serve-phi*|*served_verdicts.py\\ pearlplus-period*) exit 0;; esac; "
+              "case \"$*\" in *serve-openai*) [ -z \"$SERVE_SAYS\" ] || printf '%s\\n' \"$SERVE_SAYS\";; esac; "
               f"printf '%s\\n' \"$@\" > {tmp_path}/argv; exit 1")
     for path, body in ((venv / "python", python), (bin_ / "sleep", "exit 0")):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
            "OUT": str(tmp_path / "out"), "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, **env}
-    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
-                        capture_output=True).returncode
-    return rc, (tmp_path / "argv").read_text().splitlines() if (tmp_path / "argv").exists() else []
+    run = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
+                         capture_output=True)
+    (tmp_path / "run.log").write_bytes(run.stdout + run.stderr)
+    return run.returncode, (tmp_path / "argv").read_text().splitlines() if (tmp_path / "argv").exists() else []
+
+
+def test_a_serve_that_never_listens_is_said_by_its_exception_and_exit_and_no_line_of_its_log_leaves(tmp_path):
+    """A serve that exits before listening is said by its last exception's class and its exit status: no line of its
+    log, which holds the host's address and paths, reaches the run's output or its stdout and stderr."""
+    log = ["distributed_init_method=tcp://10.1.2.3:41234 backend=nccl", "/workspace/hf/models--secret/snapshots/abc",
+           "verity_vllm.pipeline.cli.UsageError: --day-log /workspace/secret-day.log"]
+    rc, _ = _serve_argv(tmp_path, {"H1_GATE": "", "SERVE_SAYS": "\n".join(log)})
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert rc == 10 and "SERVE: not listening (UsageError, exit 1): its log is in the run's private directory" in said, said
+    left = (tmp_path / "run.log").read_text() + "".join(f.read_text(errors="replace") for f in (tmp_path / "out").rglob("*") if f.is_file())
+    assert not [x for x in ("10.1.2.3", "secret", "--day-log") if x in left], left
 
 
 NO_HOST = ("PREFLIGHT: VY_CHALLENGER_1_HOST is unset, the address of the host the default gate command reaches (ssh -i "

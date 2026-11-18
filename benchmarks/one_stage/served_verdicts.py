@@ -842,6 +842,17 @@ def front_line(session: Mapping[str, Any]) -> str:
     return json.dumps({k: session[k] for k in FRONT_PUBLIC if k in session})
 
 
+#: a traceback's last line: its exception's class, dotted or not, then its message
+EXCEPTION = re.compile(r"^(?:[A-Za-z_]\w*\.)*([A-Za-z_]\w*(?:Error|Exception))(?::|$)")
+
+
+def not_listening(log: Path, rc: int) -> str:
+    """A serve that never listened, by its last exception's class and its exit status alone: its log holds paths and the
+    host's address, so no line of it is said."""
+    found = [m[1] for line in log.read_text(errors="replace").splitlines() if (m := EXCEPTION.match(line))]
+    return f"not listening ({found[-1] if found else 'no exception'}, exit {rc}): its log is in the run's private directory"
+
+
 def _unset(comp: str, what: str) -> str:
     return f"{comp.upper()}_CMD unset: {what}"
 
@@ -2738,6 +2749,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         ct.add_argument("--summary", type=Path, required=True)
     fl = sub.add_parser("front-line")
     fl.add_argument("session", type=Path)
+    nl = sub.add_parser("not-listening")
+    nl.add_argument("log", type=Path)
+    nl.add_argument("rc", type=int)
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
@@ -2835,6 +2849,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (OSError, ValueError) as e:
             print(f"no session ({type(e).__name__})")
             return 1
+        return 0
+    if a.cmd == "not-listening":
+        print(not_listening(a.log, a.rc))
         return 0
     if a.cmd == "public-lines":
         public_lines(sys.stdin, sys.stdout, a.private)
