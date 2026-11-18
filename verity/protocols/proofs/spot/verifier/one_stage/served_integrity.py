@@ -44,10 +44,11 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
 
+from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.challenger.challenger import ChallengerKey
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, docket as R
 
-PROTOCOL = R.PROTOCOL
+PROTOCOL = DM.ONE_STAGE_PROTOCOL
 
 
 def _refusal(reason: str, commitment: str | None, verdict: str = "reject") -> dict[str, Any]:

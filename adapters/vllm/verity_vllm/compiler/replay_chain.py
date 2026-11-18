@@ -839,7 +839,7 @@ def size(S: Shape) -> dict[str, int]:
             "ands_close": _counted("close", key),
             "ands_per_window": S.P * step + window, "rows_per_window": S.P + 2, "window_rows_per_window": 2,
             "reads_per_window": 3 * S.P + 4, "path_depth": (S.P + 1).bit_length(),
-            "record_bytes_per_window": (S.P + 4) * produced.BC_BYTES}
+            "record_bytes_per_window": (S.P + 4) * hm96.SHA512.proven_bytes}
 
 
 __all__ = ["Arrival", "MalformedRow", "QueueRow", "Row", "STATICS", "Shape", "VALUE", "WINDOW", "advance",
