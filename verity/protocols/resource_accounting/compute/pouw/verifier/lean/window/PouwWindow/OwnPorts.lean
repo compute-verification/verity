@@ -68,7 +68,7 @@ def readFull (T : Tile) (k : Option Nat) : Array String :=
 def portEq (p q : Flock.Registered.Port) : Bool :=
   p.name == q.name && p.value == q.value && p.root.data == q.root.data && p.leaves == q.leaves && p.words == q.words &&
     p.wordBits == q.wordBits && p.domain.data == q.domain.data && p.readsRel == q.readsRel && p.schema == q.schema &&
-    p.readsFrom == q.readsFrom && p.tree == q.tree
+    p.readsFrom == q.readsFrom && p.param == q.param
 
 theorem eq_of_portEq {p q : Flock.Registered.Port} (h : portEq p q = true) : p = q := by
   obtain ⟨n, v, ⟨r⟩, l, w, b, ⟨d⟩, rd, s, f, wi⟩ := p

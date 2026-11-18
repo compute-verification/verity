@@ -167,7 +167,7 @@ NCCL_TREE_CARD = "rtx-pro-6000-server"
 
 
 def _rtx_pro_6000() -> tuple[str, int]:
-    from verity_vllm.config import CARD_FILES
+    from verity_torch.pouw.row_table_device import CARD_FILES
 
     card = load_card(NCCL_TREE_CARD, directory=CARD_FILES)
     return "%d.%d" % compute_capability(card), int(number(card["sm"]["count"]))

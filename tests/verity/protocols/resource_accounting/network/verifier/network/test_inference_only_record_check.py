@@ -46,13 +46,14 @@ MORE = "unknown"
 #: the two refusals the reference states as the Lean's rule and then expands leaf by leaf, unless form-only
 EXPANDED = ("own-rows", "leaf-widths")
 #: the shaped cases the compiled command is run on beside the script's: a refusal of each expanded rule, with its message
-REFUSED = ("a leaf that reads sixteen gates through one row", "2x3 one input run handed to two rows")
+REFUSED = ("an edge from an output of two widths into a row of the same two widths",
+           "2x3 one input run handed to two rows")
 LINE = re.compile(r"\[\d+ s\] (check|count): (.*)")
 
 
 @pytest.fixture(scope="module")
 def shaped() -> dict[str, dict]:
-    return {m["shape"]: m for m in vectors.shaped()}
+    return {m["shape"]: m for m in vectors.shaped() + vectors.edged()}
 
 
 def _files(case: dict, where: Path) -> list[str]:
@@ -212,7 +213,7 @@ def test_form_only_is_the_whole_references_verdict_and_walks_no_leaf(shaped, mon
     ways = {s: vectors.WAYS[k % len(vectors.WAYS)] for s, k in turns.items()}
     seeds = [s for s, (stage, _) in ways.items() if stage in EXPANDED] + [s for s in range(40) if s not in turns]
     made = {**shaped, **{f"random {s}": vectors.case(s) for s in seeds}}
-    assert {ways[s] for s in seeds if s in ways} == {(stage, how) for stage in EXPANDED for how in vectors.BROKEN[stage]}
+    assert {ways[s] for s in seeds if s in ways} == {(stage, how) for stage in EXPANDED for how in vectors.BROKEN.get(stage, ())}
     whole = {what: (ref.check_detail(m["case"]["instance"], m["case"]["trusted"]),
                     ref.count(m["case"]["instance"], m["case"]["trusted"], m["case"]["count"]))
              for what, m in made.items()}

@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from research import vqueue
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -26,6 +27,7 @@ def _module(name: str, path: Path):
 CHECK = _module("repo_check_for_shards", ROOT / "tools" / "check" / "check.py")
 D = CHECK.DECLARATION
 LA = _module("repo_lean_audit_for_shards", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
+RESERVE = _module("repo_reserve_for_shards", ROOT / "tools" / "verity" / "lean" / "reserve.py")
 PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
 #: the packages that build security/Proofs: it, and the specs whose `proved_in` names it
 SECURITY = tuple(f"lean-audit:{p}" for p in ("security", "security/Proofs", "security/Properties"))
@@ -77,13 +79,13 @@ def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
 def test_the_plans_are_the_documented_ones():
     build = ("lean-build", "lean-unit-cut")
     assert D.plans() == {
-        3: ((*NAMED, "pytest:*", *BESIDE_AUDIT),
+        3: ((*NAMED, "landing-gates", "pytest:*", *BESIDE_AUDIT),
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", *PYTEST_BESIDE_BUILD),
             ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST)),
-        4: ((*NAMED, "circuit-check:1/4", *BESIDE_AUDIT),
+        4: ((*NAMED, "landing-gates", "circuit-check:1/4", *BESIDE_AUDIT),
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "circuit-check:2/4"),
             ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", *WITH_RUST)),
-        5: ((*NAMED, "pytest:adapters/vllm/verity_vllm/definitions", *BESIDE_AUDIT),
+        5: ((*NAMED, "landing-gates", "pytest:adapters/vllm/verity_vllm/definitions", *BESIDE_AUDIT),
             ("flock-circuit-build", "flock-rust-tests", "lean-audit:*", *WITH_RUST, "ratchet-gate", "added-lines"),
             (*build, *BESIDE_BUILD, "lean-agreement"), ("pytest:*",), ("circuit-check",))}
 
@@ -139,7 +141,9 @@ def test_the_3_pod_plan_runs_pytest_in_two_shards_by_suite_neither_beside_a_buil
     for k, jobs in ((1, "16"), (2, "16")):
         [argv] = [argv for g in CHECK.groups(tmp_path, 16, only=shards[k - 1]) for name, argv, _ in g if name == "pytest"]
         assert argv[2:2 + len(held[k - 1])] == held[k - 1] and argv[argv.index("--jobs") + 1] == jobs, argv
-    assert CHECK.shard_ask_gib(shards[0], []) == 330 and CHECK.shard_ask_gib([p for p in shards[0] if "lean-audit" not in p], []) == 290
+    assert CHECK.shard_ask_gib(shards[0], []) == 330 and CHECK.shard_ask_gib([p for p in shards[0] if "lean-audit" not in p], []) == 230
+    assert CHECK.shard_ask_gib(shards[0], [], lean=False) == 230
+    # the lean-build shard holds verity-vllm's third, so its row stays the measured 330, and the agreement the measured 470
     assert CHECK.shard_ask_gib(shards[1], []) == 330 and CHECK.shard_ask_gib(shards[1], ["lean-agreement"]) == 470
 
 
@@ -684,7 +688,7 @@ def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
         assert CHECK.record(["--base", "HEAD", "--on", "pod", *args]) == 0
     pytest = sorted(f"pytest:{s.name}" for s in CHECK.SUITES.discover() if s.name not in CHECK.AFTER_LEAN)
-    assert parts == [[["pytest:adapters/vllm/verity_vllm/definitions", *SECURITY, *sorted(BESIDE_AUDIT)]],
+    assert parts == [[["pytest:adapters/vllm/verity_vllm/definitions", *SECURITY, "landing-gates", *sorted(BESIDE_AUDIT)]],
                      [[p for p in pytest if p != "pytest:adapters/vllm/verity_vllm/definitions"]], [[]], []], "an unsharded check sends none"
 
 
@@ -863,8 +867,10 @@ def test_record_of_the_records_step_launches_it_alone_with_circuit_checks_memory
 def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch):
     """Each train shard asks for its kind's memory (`check.SHARD_ASKS_GIB`) as the run's ask beside the train slot's minimum,
     so slot.py books it over a lowered book= (`slot.booked`): the 5-shard plan's pytest shard, whose parts are by suite, asks
-    too, a reused audit lowers its shard's ask, lean-agreement raises one only where it runs, and a lane's check and a whole
-    train check, which no shard row measures, ask nothing."""
+    too, a reused audit lowers its shard's ask, and so does a change that meets no Lean input, lean-agreement raises one only
+    where it runs, and a lane's check and a whole train check, which no shard row measures, ask nothing. No shard of any plan,
+    gated or after landing, asks over 230 GiB, so three fit a machine's check slice, but where it replays security/Proofs,
+    runs the agreement, or holds `lean-suites:verity-flock:3/6` (verity-vllm's third, measured at 330)."""
     real, launched = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -887,17 +893,31 @@ def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch
 
     steps = "flock-circuit-build,lean-build,lean-audit,lean-suites,pytest,circuit-check,flock-rust-tests"
     reused = steps.replace("lean-audit,", "")
-    for args, gib in ((["--deferred", steps, "--shard", "1/3"], 330), (["--deferred", reused, "--shard", "1/3"], 290),
-                      (["--deferred", steps, "--shard", "1/5"], 330), (["--deferred", reused, "--shard", "1/5"], 290),
-                      (["--deferred", steps, "--shard", "2/5"], 250), (["--deferred", reused, "--shard", "2/5"], 250),
-                      (["--deferred", steps, "--shard", "4/5"], 160),
-                      (["--deferred", steps, "--shard", "3/5"], 330), (["--deferred", steps, "--shard", "2/3"], 330),
-                      (["--deferred", steps, "--shard", "3/3"], 340), (["--deferred", "lean-audit"], 330)):
+    for args, gib, lean in ((["--deferred", steps, "--shard", "1/3"], 330, True), (["--deferred", reused, "--shard", "1/3"], 230, True),
+                            (["--deferred", steps, "--shard", "1/3"], 230, False),
+                            (["--deferred", steps, "--shard", "1/5"], 330, True), (["--deferred", reused, "--shard", "1/5"], 230, True),
+                            (["--deferred", steps, "--shard", "2/5"], 230, True), (["--deferred", reused, "--shard", "2/5"], 230, True),
+                            (["--deferred", steps, "--shard", "4/5"], 160, True),
+                            (["--deferred", steps, "--shard", "3/5"], 330, True), (["--deferred", steps, "--shard", "2/3"], 330, True),
+                            (["--deferred", steps, "--shard", "3/3"], 230, True), (["--deferred", "lean-audit"], 330, True)):
+        monkeypatch.setattr(vqueue, "meets", lambda files, inputs, lean=lean: lean)
         sent = env("--priority", *args)
         assert sent[CHECK.SLOT.MIN_MEM_ENV] == str(CHECK.TRAIN_GB), args
         assert sent[CHECK.SLOT.RUN_MEM_ENV] == CHECK.ask_gb(gib) and CHECK.SLOT.gib(float(CHECK.ask_gb(gib))) == gib, args
+    monkeypatch.setattr(vqueue, "meets", lambda files, inputs: False)
+    assert CHECK.SLOT.RUN_MEM_ENV not in env("--priority", "--deferred", "lean-audit"), "an audit that replays nothing"
     assert CHECK.SLOT.RUN_MEM_ENV not in env("--deferred", steps, "--shard", "1/3"), "a lane's check books its slot line alone"
     assert CHECK.SLOT.RUN_MEM_ENV not in (whole := env("--priority")) and CHECK.SLOT.MIN_MEM_ENV in whole
     build = ["lean-build", "lean-audit:security/Properties", "lean-agreement"]
     assert CHECK.shard_ask_gib(build, ["lean-agreement"]) == 470 and CHECK.shard_ask_gib(build, []) == 130
     assert all(CHECK.SLOT.gib(float(CHECK.ask_gb(g))) == g for _, g in CHECK.SHARD_ASKS_GIB)
+    for n in D.plans():
+        for k in range(1, n + 1):
+            for gated in (True, False):
+                parts = CHECK.shard(f"{k}/{n}", gated=gated)["parts"]
+                # flock 3/6 holds verity-vllm's third and stays at the measured 330; every other non-floor row is capped at 230
+                over = "lean-suites:verity-flock:3/6" in parts
+                assert (CHECK.shard_ask_gib(parts, [], lean=False) or 0) <= 230 or over, (k, n, gated, parts)
+                assert ((CHECK.shard_ask_gib(parts, []) or 0) <= 230 or "lean-audit:security/Proofs" in parts or over), (
+                    k, n, gated, parts)
+    assert dict(CHECK.SHARD_ASKS_GIB)[("lean-audit:security/Proofs",)] >= RESERVE.REPLAY_ARKLIB_GIB

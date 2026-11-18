@@ -19,8 +19,8 @@ def test_the_check_refuses_what_its_parsers_refuse_in_either_form_and_exits_1():
     """Parameters naming no proofs, and per-member parameters naming nothing else, are rejected under ``params:``;
     the line is the interface's outcome, its verdict ``reject``, with exit 1 and nothing published."""
     assert M.check({}, b"", b"") == (
-        "reject", "params: the parameters name no proofs (the auditor's circuit and public files' digests and the "
-                  "verifier's registered reads)")
+        "reject", "params: the parameters name no proofs (the auditor's public file's digest and the verifier's "
+                  "registered reads)")
     verdict, why = M.check({"proofs": {"members": {}}}, b"", b"")
     assert verdict == "reject" and why.startswith("params: "), why
     p = subprocess.run([str(PF.v2_executable()), "check", "/dev/null", "/dev/null", "/dev/null"], capture_output=True,
