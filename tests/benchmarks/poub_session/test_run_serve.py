@@ -585,7 +585,9 @@ def test_a_cards_session_builds_kv_cu_and_registers_at_codec(node, codec, define
     program(node.bin / "nvidia-smi", '#!/bin/bash\ncase " $* " in *compute_cap*) echo 9.0 ;; esac\nexit 0\n')
     port = str(free_port())
     (node.stub / "busy").write_text(f"{port}\n")
+    # a card's line takes CUDA_HOME, else /usr/local/cuda-13.0, whose real nvcc a node with that toolkit would run
     p = node.run(ROLE="prover", PORT=port, CODEC=codec, PY=str(node.ws / "venv312/bin/python"),
+                 CUDA_HOME=str(node.tmp / "cuda" / "cuda-13.0"),
                  PROVER_CPUS=",".join(map(str, sorted(os.sched_getaffinity(0)))))
     assert p.returncode == 0, said(p)
     kv = "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu"
