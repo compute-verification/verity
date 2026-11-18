@@ -43,16 +43,16 @@ import time
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity import config as K
 from verity.config import Component, Workload
-from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
+from verity.protocol import Channel, ProtocolDef, Role, Starter
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.scheme import settings
+from verity.protocols.resource_accounting.scheme import declared, settings
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
@@ -165,18 +165,18 @@ _VERIFIER = Role(VERIFIER, "auditor", needs=("audit", "component", "product"))
 _PROVER = Role(PROVER, "developer", per="server", needs=("store",))
 
 
-def _named(manifest: Manifest, names: Mapping[str, str]) -> tuple[tuple[Role, ...], tuple[Channel, ...]]:
-    """``manifest``'s parties and channels with each of its roles as the configuration names its party (``names``)."""
-    def n(role: str) -> str:
-        return names.get(role, role)
+def _declared(name: str, **launch: Any) -> Component:
+    """The `Component` of the scheme ``name`` declares (`schemes.get`): its parties, channels, colocated pairs, needs,
+    and as ``requires`` its ``depends``; ``launch`` is what the table adds (a parameters' checker). Its id is the one
+    `SP.IDS` gives, the key of its ``[params]``, which may differ from the declared ``protocol``."""
+    s = schemes.get(name)
+    return Component(name, SP.IDS.get(name, s.protocol), parties=declared(s, "parties"),
+                     channels=declared(s, "channels"), colocated=declared(s, "colocated"), needs=declared(s, "needs"),
+                     requires=declared(s, "depends"), **launch)
 
-    return (tuple(replace(r, name=n(r.name)) for r in manifest.parties),
-            tuple(replace(c, sender=n(c.sender), receiver=n(c.receiver)) for c in manifest.channels))
 
-
-#: PoUB's P2 parties and channels, its verifier the configuration's bandwidth verifier (its ``verifier`` is onsite's)
-_P2_PARTIES, _P2_CHANNELS = _named(P2.MANIFEST, {P2.VERIFIER: BANDWIDTH_VERIFIER})
-MANIFESTS: dict[str, Component] = {c.name: c for c in (
+#: the components no scheme declares yet, which only shrinks (`tests/tools/verity/cli/test_undeclared_rows.py`)
+UNDECLARED: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
               needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="rate:1/3481648"),
     Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
@@ -184,23 +184,17 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
-    Component("pearl-plus", SP.IDS["pearl-plus"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
-                                                           Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
-              channels=(Channel(CHALLENGER, WORKERS, ("PearlSalt",), carries_coins=True),),
-              needs=frozenset({"windows"}), params=_pearlplus_params),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
-    Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
-              channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("SignedRun",), after=("End",))),
-              needs=frozenset({"store"}), params=_pous, default_params=dict(schemes.get("pous").settings)),
-    Component("bandwidth", SP.IDS["bandwidth"], parties=(*_P2_PARTIES, _VERIFIER),
-              channels=(*_P2_CHANNELS, Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
-              needs=frozenset({"receipts"})),
     Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=((CHALLENGER, NETWORK_ATTESTER),)),
-    Component("wipe", "verity/wipe/v0", parties=(*WP.MANIFEST.parties, _VERIFIER),
-              channels=(*WP.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("WipeReport",), after=("End",)))),
 )}
+MANIFESTS: dict[str, Component] = {**UNDECLARED, **{c.name: c for c in (
+    _declared("pearl-plus", params=_pearlplus_params),
+    _declared("pous", params=_pous, default_params=dict(schemes.get("pous").settings)),
+    _declared("bandwidth"),
+    _declared("wipe"),
+)}}
 SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receipts", "ingress-relay"}),
                   (Role(WORKERS, "developer", needs=("serve",)),), _served,
                   {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800",
