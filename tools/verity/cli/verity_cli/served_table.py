@@ -455,7 +455,7 @@ def _wipe(cfg, params, bound):
 
 POUS_SCRIPT, ONSITE_PIECES = "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh"
 ATTESTER_SCRIPT = "benchmarks/pous/run_attester.sh"
-BANDWIDTH_SCRIPT = "benchmarks/one_stage/served_bandwidth.py"
+BANDWIDTH_SCRIPT = "benchmarks/pous/served_piece.py"
 #: served_piece.py's flag for each binding of PoUS's memory attester, and of PoUB's bandwidth verifier
 _POUS = {"address": "--challenger-address", "host": "--challenger-host", "command": "--challenger-command"}
 _BANDWIDTH = {"host": "--bw-host", "command": "--bw-party"}
@@ -486,7 +486,7 @@ def _bandwidth_piece(cfg, params, bound):
     words = [*(["--bw-trusted-sha512", *pin] if pin else []),
              *(w for k, flag in _BANDWIDTH.items() if k in bound for w in (flag, bound[k]))]
     return {**({"POUS_ARGS": shlex.join(words)} if words else DEVELOPMENT),
-            "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect --serve-dir "$1" --window "$2" --out "$3"'}
+            "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect-bandwidth --serve-dir "$1" --window "$2" --out "$3"'}
 
 
 _PEARLPLUS_LIVE = {"gate": "PEARLC_CHALLENGER_GATE", "peer": "PEARLC_CHALLENGER_PEER", "key-sha512": "H1_KEY_SHA512"}
