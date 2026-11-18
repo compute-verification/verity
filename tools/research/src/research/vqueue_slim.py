@@ -83,7 +83,7 @@ from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, 
                       NOT_STARTED, OWN_TRAIN, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
                       _suite_log, elsewhere, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps,
                       step_named, step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root, unread_suites)
-from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git, allowed, judge_report, tier_report
+from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, NotStarted, QueueError, _git, allowed, judge_report, tier_report
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
 from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, MACHINE_KINDS, PASS, PENDING, STATES, Failed, Verdict, meets
@@ -473,7 +473,7 @@ def _quick(driver: Landing, rec: dict) -> Verdict:
     status, on = {"state": st, "rc": rc}, rec.get("on") or driver.on
     res, why = tier_report(got[0], ids[0], on, status)
     if why is not None:
-        return _keep(_erred(rec), _down(rec, f"{why}"))
+        return _keep(_erred(rec), _down(rec, f"{why}", launch=isinstance(why, NotStarted)))
     covers = allowed(driver.repo, base)
     if (why := judge_report(res, ids[0], on, tip, status, covers)) is None:
         return _keep(rec, Verdict(PASS), [QUICK_STEP])

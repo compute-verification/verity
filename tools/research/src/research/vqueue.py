@@ -913,9 +913,13 @@ def _tree(v: Verdict) -> tuple[Failed, ...]:
     return tuple(f for f in v.infra if f.tree)
 
 
+NEVER_RAN = "waited for a check slot until its --wait-max and never ran the tier"
+
+
 def _unlaunched(v: Verdict) -> bool:
-    """Whether ``v`` erred only in launches that started none of the candidate's steps (`Failed.launch`)."""
-    return bool(erred := _erred(v)) and all(f.launch for f in erred)
+    """Whether ``v`` erred only in launches that started none of the candidate's steps (`Failed.launch`, or a quick tier's run
+    that left its slot line unrun, `NEVER_RAN`, as verdicts recorded before that flag was set for it say)."""
+    return bool(erred := _erred(v)) and all(f.launch or NEVER_RAN in f.task for f in erred)
 
 
 def _passed(c: Candidate) -> Outcome:
