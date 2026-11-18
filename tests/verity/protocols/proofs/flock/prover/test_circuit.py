@@ -93,7 +93,7 @@ def test_rope_composes_private_by_default(tmp_path):
     assert [r["net"] for r in meta["ranges"] if r.get("packed")] == [FC.SHA_NET], "only the compressions are packed"
     assert meta["program_digests"] and meta["partition"]["rule"] == FC.PARTITION_RULE
     FC.stage(low, s, 0, 4, tmp_path / "st")
-    with pytest.raises(ValueError, match="salt key"):
+    with pytest.raises(ValueError, match="prover's salts"):
         FC.stage(low, s, 0, 4, tmp_path / "v", public_only=True)
     prover, verifier = (tmp_path / "st" / "inst-4.bin").read_bytes(), (tmp_path / "st" / "pub-4.bin").read_bytes()
     hp, hv = (json.loads(b.split(b"\n", 1)[0]) for b in (prover, verifier))

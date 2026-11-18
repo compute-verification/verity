@@ -180,8 +180,6 @@ OS_RANDOMNESS = {
     "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": "the commit's hiding salts, and its own pick "
                                                                            "of the calls it measures (recorded as "
                                                                            "``call_draw``), which credits nothing",
-    "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/stage_tile.py": "the staged tile's hiding key, no coin",
-    "protocols/resource_accounting/compute/pouw/prover/lowering/live.py": "the staged unit's hiding key, no coin",
     "protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py": "the prover's hm96 salt keys (`WEIGHT_KEY`, a run's "
                                                                "table key), no coin",
     "protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py": "the stager's hiding keys (`_random`), no coin",

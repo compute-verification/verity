@@ -215,11 +215,17 @@ def test_exchange_starts_through_every_gate_and_holds():
     assert ex.resident(7, 2) and not ex.resident(7, 3)
 
 
-def test_one_exchange_a_process():
+def test_one_exchange_a_build_and_the_build_in_scope_is_current():
     M.close()
     ex = M.current()
     try:
-        assert M.current() is ex and not ex.wants("values")
+        assert M.current() is ex and M.build() is ex and not ex.wants("values")
+        ex.answer(H.Declared("", {}))
+        later = M.build()
+        assert later is not ex and M.current() is later and M.build() is later
+        with M.using(ex):
+            assert M.current() is ex
+        assert M.current() is later
     finally:
         M.close()
     assert M.current() is not ex
