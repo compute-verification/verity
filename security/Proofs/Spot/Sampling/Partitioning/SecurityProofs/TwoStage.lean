@@ -211,7 +211,7 @@ theorem nested_escape (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) (hab : a ≤ b
       Disjoint ((nested R N k a b hk).draw ω) B ↔
         ∀ i ∈ (univ : Finset (Fin R)), (ω.1 i).val < a → Disjoint (ω.2 i).1 (Bi i) := by
     intro ω
-    simp only [Finset.disjoint_left, nested, Verity.SamplingDesign.subset, SamplingDesign.bernoulli, mem_filter, mem_univ, true_and, Bi]
+    simp only [Finset.disjoint_left, nested, Verity.SamplingDesign.subset, Verity.SamplingDesign.bernoulli, mem_filter, mem_univ, true_and, Bi]
     constructor
     · intro h i _ hi j hj hjB
       exact h (a := finProdFinEquiv (i, j)) (by simpa using And.intro hi hj) hjB
