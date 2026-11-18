@@ -30,6 +30,9 @@ Twins (twin_id -> the registered body it reproduces, and how it computes it):
     attention.fa2.bf16.v3        Attention_v3         fa2_model.cpp `fa2_rows` (online softmax, blocks last -> first); declines
                                                       non-finite operands and rows with a non-finite intermediate (flags)
 
+`tc_model.cpp`'s step, which `fa2_model.cpp` includes, is defined on finite inputs only: the words with a non-finite operand are
+computed by the registered primitives, through the GEMM twin's fallback or the attention twin's refusal.
+
 Equivalence evidence is machine-checked by `--check` against the gate evaluator and written as `verity-gen/twins/v1` JSON.
 """
 from __future__ import annotations
