@@ -1,0 +1,3 @@
+[2026-11-18T04:47Z] ef827044d78f
+From the proofs lead: memory-accounting ANSWERED (Linear TOP-441, 04:47Z): NO, a re-key's append does not put its origin's payload root in the log a second time; it records a declaration (a SHA-512 of a re-key domain, the registration's digest, the append's first index and count, and its origin). So a payload root has one entry and your cut check as built does not refuse a re-key. DROP item (5): keep the check reading the root's last entry (stricter than lean's Log.Cut, which lean prefers to weakening it); change nothing there. The CoreRemote guards remain your only task.
+
