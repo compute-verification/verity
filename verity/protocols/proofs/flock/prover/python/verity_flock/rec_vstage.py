@@ -82,7 +82,9 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+from verity.circuits.codec import descriptor_id
 from verity.circuits.ops.boolean import gf2k as G
+from verity.circuits.population import wired_population_program
 
 from . import rec_algebra as A
 from . import rec_cap as RC
@@ -309,7 +311,7 @@ def opening_messages(public: dict, private: dict, sh: A.Shape, program: str) -> 
 
 
 def stage_stacked(public: dict, private: dict, program: str, sr: SimpleNamespace, chain: O.Chain, coefs: dict, claim, out: Path,
-                  evaluate: bool = True, claim_own: dict | None = None, version: int = 1) -> dict:
+                  evaluate: bool = True, claim_own: dict | None = None, version: int | str = "wired") -> dict:
     """R's levels as RecOpen statements on the chain (their units `rec_outer.stacked_name`, their tops
     ``rec-top-stacked-L<level>``, their population programs at ``version``) and its registered opening
     (`rec_residuals.stage_opening`): the stacked stream's messages (`opening_messages`), ``claim`` the prover's
@@ -541,8 +543,8 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     table = RLK.table(links)
     N = len(table)
     defn = LK.definition(UB, PB)
-    program_ = P.population_program(defn, N)
-    part = P.partition(program_, P.template_instance_query(defn))
+    program_, query = wired_population_program([(defn, N)], {"templates": [[descriptor_id(defn), N]]})
+    part = P.partition(program_, query)
     prog = P.program_sha512(program_)
     reg = RLK.register(prog, links, salts)
     rin = RR.verifier_value(prog, LK.IN_VALUE, [LK.expected(tin.root)] * N)
@@ -724,7 +726,7 @@ def _copy_verifier(src: Path, dst: Path) -> None:
 @_without_gc
 def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, algebra: bool = True, forge: str | None = None,
           evaluate: bool = True, pts: dict | None = None, salts: Path | None = None, cap=None, sparse: tuple | None = None,
-          version: int = 1, part_jobs: int = 1) -> dict:
+          version: int | str = "wired", part_jobs: int = 1) -> dict:
     """V*'s statements over the inner session ``inner``: the levels ``levels`` (None: every level) and, with ``algebra``, the
     algebra, honest under ``out``; with ``forge``, that forgery's statements alone under ``out/forged-<forge>`` (the module
     docstring). ``salts``: the running sums' salts file (`acc_salts`; None: fresh ones). ``cap`` (`rec_shape.Cap`): refuse a

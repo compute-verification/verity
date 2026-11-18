@@ -4,8 +4,8 @@ prover's registrations of them.
 
 A level's openings share one shape (its rows' lanes, ``H = depth - c`` siblings below its top of ``2^c`` nodes), so each level
 is one template, ``RecOpen{LANES, H}``, and one statement over that level's openings of both reps, in rep and query order
-(M0 proves one template per statement). Its program is `population_program` of the template over the level's openings, its
-partition that program's ``Q_template_instance`` v0. Every instance reads seven registered rows: the opened row ``row`` and
+(M0 proves one template per statement). Its program is `wired_population_program` of the template over the level's openings, its
+partition that program's ``Q_template_instances`` v0. Every instance reads seven registered rows: the opened row ``row`` and
 its ``aux`` (its siblings: `rec_open.pack`), its coefficients ``coef`` and the position's low bits ``dirs``, which the
 verifier registers itself, ``out``, ``acc`` in and ``acc_out`` out (`HmOut`). The statement has no public input.
 
@@ -211,12 +211,23 @@ class Chain:
         return min(ps), max(ps) + 1
 
 
+def population(defn, n: int, version: int | str):
+    """A level's population program and its template query: a new level's wired one, or a recorded level's at 1 or 0."""
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.population import wired_population_program
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+
+    if version == "wired":
+        return wired_population_program([(defn, n)], {"templates": [[descriptor_id(defn), n]]})
+    return P.population_program(defn, n, version=version), P.template_instance_query(defn)
+
+
 def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, int], list[int]], tops: TopValue,
-          name: str | None = None, version: int = 1) -> dict:
+          name: str | None = None, version: int | str = "wired") -> dict:
     """One level's statement, the verifier's own files beside the prover's (``out_dir``), and what it costs. ``chain``: the
     prover's running sums; ``coefs``: each opening's ``coef`` words (the verifier's); ``tops``: the level's committed tops;
-    ``name``: its unit's name (default `unit_name`; R's levels `stacked_name`); ``version``: its population program's
-    (`partition.population_program`; 0 restages a level recorded before v1). The openings' positions are the ones the
+    ``name``: its unit's name (default `unit_name`; R's levels `stacked_name`); ``version``: its population program's,
+    `wired_population_program`'s ("wired"), or 1 or 0 to restage a level recorded under `partition.population_program`. The openings' positions are the ones the
     verifier's query coins give (`rec_vstage.coefficients` checks them), so ``dirs`` is the verifier's too."""
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
@@ -227,8 +238,7 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
         raise ValueError(f"level {level['level']}: openings of hm96-sha512/v1 leaves; RecOpen opens plain SHA-512 leaves "
                          f"(flock-leaf/sha512-unsalted)")
     defn = R.definition(LANES, H)
-    program_ = P.population_program(defn, n, version=version)
-    query = P.template_instance_query(defn)
+    program_, query = population(defn, n, version)
     part = P.partition(program_, query)
     prog = P.program_sha512(program_)
     keys = [(q.rep, q.level, q.j) for q in qs]
