@@ -73,12 +73,14 @@ workers = 14
 # verity_config: conftest.py reads the session's variables through the suite's registry (settings.py), built on its registry.
 # spot/prover/__init__.py, produced.py and served.py: pouw's h1 rows and network's charge rows import produced, and the
 # catalog's records digest served.py as an import site.
+# spot/prover/docket.py: verity_vllm's boundary rows, which a process the cache and superseded-versions tests start imports,
+# build the docket's record with it.
 inputs_only = true
 inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "tools/config/verity_config",
           "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/prover/__init__.py", "verity/protocols/proofs/spot/prover/produced.py",
-          "verity/protocols/proofs/spot/prover/served.py",
+          "verity/protocols/proofs/spot/prover/served.py", "verity/protocols/proofs/spot/prover/docket.py",
           "verity/channel.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/circuits/kernels", "verity/circuits/private_circuits",
           "verity/commitments/randomness", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover/python/verity_flock", "verity/commitments/periods",

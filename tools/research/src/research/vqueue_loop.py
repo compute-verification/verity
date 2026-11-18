@@ -150,7 +150,9 @@ The actions.  Build merges its members in order onto its base (`Queue._merge`), 
 rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`) or named (`vqueue.Build.name`: a tick builds several
 batches, each on the one before), onto what that build pushed (`Tick.rebuilds`), leaving
 out one that doesn't merge (`skip`, its owner told once per head and base, a conflict with members merged above `main`
-naming them where it merges onto `main`;
+naming them where it merges onto `main`; beside a staged batch, also one after which that batch's members, merged again onto
+main's chain's top by its `Commit`, no longer merge, its line naming the batch, `staged`, which keeps it out of the batches
+beside that batch at that head, `vqueue.Ready.staged_conflict`;
 nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does), pushes `queue/<sha12>` (or takes
 as its own one no line names that is the same build made before, as a tick cut off after its push leaves: `adopted`), logs
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
@@ -914,14 +916,16 @@ def _off_mark(files: Iterable[str], flags: DriveFlags) -> str:
 class Skip:
     """A PR a build left out (`World.build`) and why: ``held`` names what of the build holds its head already (the member
     whose head does, else the candidate it is built on), and ``by`` the members above `main` it conflicts with where it merges
-    onto `main` alone.  A move PR's (`World._move`) ``waits`` for the members below it to land, its owner told nothing, or
-    has ``fix``, what its owner is told to do."""
+    onto `main` alone, or, with ``staged``, the staged Lean batch's member it conflicts with (`World._under_staged`).  A
+    move PR's (`World._move`) ``waits`` for the members below it to land, its owner told nothing, or has ``fix``, what its
+    owner is told to do."""
     pr: PR
     why: str
     held: str = ""
     by: tuple[int, ...] = ()
     waits: bool = False
     fix: str = ""
+    staged: str = ""
 
 
 class _Seen:
@@ -2037,11 +2041,13 @@ class World:
 
     # -- effects
 
-    def build(self, prs: list[PR], base: str, main: str | None = None) -> tuple[str, list[Member], list[Skip]]:
+    def build(self, prs: list[PR], base: str, main: str | None = None,
+              staged: tuple[str, list[PR]] | None = None) -> tuple[str, list[Member], list[Skip]]:
         """``prs`` merged in order onto ``base`` (`Queue._merge`), which is ``main`` or stands on it (``base`` when not given):
         (the tip, the members merged, each left out).  A skip names what holds its head already (`Skip.held`), and one that
         conflicts with what is merged above ``main`` but merges onto ``main`` names the members it conflicts with
-        (`Skip.by`), not `main`."""
+        (`Skip.by`), not `main`.  With ``staged``, a staged Lean batch and its members' PRs, a member after which they no
+        longer merge, as `Commit` merges them again onto the chain's top, is left out (`_under_staged`)."""
         main = main or base
         tip, merged, left = base, [], []
         self.certified = {}
@@ -2061,11 +2067,33 @@ class World:
                 left.append(Skip(p, f"its head {p.head[:12]} is already in what it merges onto: {held} holds it", held=held))
             elif commit is None:
                 left.append(self._unmerged(p, why, tip, base, main, merged))
+            elif staged and (skip := self._under_staged(p, tip, commit, *staged)) is not None:
+                left.append(skip)
             else:
                 merged.append(Member(p.number, p.head, p.owner or "", commit))
                 tip = commit
         self._keep_moves(main)
         return tip, merged, left
+
+    def _under_staged(self, p: PR, tip: str, commit: str, sha: str, staged: list[PR]) -> Skip | None:
+        """``p``, merged onto ``tip`` as ``commit``, left out when staged batch ``sha``'s members (``staged``) merge in order
+        onto ``tip`` but not onto ``commit``: that batch goes onto main's chain's top above it (`Commit`), and the conflict
+        would be found only then, dropping the candidates built on it.  The skip names the member it conflicts with and the
+        files, and says which batch (`Skip.staged`)."""
+        def onto(at: str) -> tuple[PR, str] | None:
+            for s in staged:
+                got, _ = self.q._merge(at, s, [])
+                if got is None:
+                    return s, at
+                at = got
+            return None
+
+        if (bad := onto(commit)) is None or onto(tip) is not None:
+            return None
+        s, at = bad
+        files = self.q._recorded(at, s.head).get("conflict") or []
+        return Skip(p, f"conflicts with #{s.number}, of the Lean batch staged at {sha[:12]}, which goes onto main's chain's "
+                       f"top above it" + (f", in {', '.join(files)}" if files else ""), by=(s.number,), staged=sha)
 
     def _move(self, p: PR, tip: str, main: str) -> tuple[str | None, Skip | None]:
         """Move PR ``p`` regenerated last in a build on ``tip``, landing tip ``main`` (`Queue._regenerate`, with ``main``'s
@@ -2675,6 +2703,9 @@ class Tick:
     fetched: str | None = None
     #: whether a detached job of the steps after an advance runs (`Loop._moved`)
     after_running: bool = False
+    #: the batches staged off main's chain as this tick's actions leave them, {sha: members}: the snapshot's, less those a
+    #: `Drop` or `Commit` took, with those a build or a `Commit` staged (`Loop._staged`)
+    staged: dict[str, list[int]] = field(default_factory=dict)
 
 
 class Loop:
@@ -2822,6 +2853,9 @@ class Loop:
         left.update(taken := w.taken({(m, h) for m, h in flying if m not in w.pulled}, main))
         ready = w.crossing(main, ready, {h: p.move for m, h in sorted(at | flying)
                                          if (p := w.open().get(m)) is not None and p.move})
+        staged = {c.sha for c in cands if c.waits}
+        under = {(r.get("number"), h) for r in past.of("skip") if r.get("staged") in staged for h in r.get("heads") or ()}
+        ready = [replace(x, staged_conflict=True) if (x.number, x.head) in under else x for x in ready]
         snap = Snapshot(main, tuple(sorted((x for x in ready if x.number not in riding), key=lambda x: x.rank)), tuple(cands),
                         history, self.batch, self.depth, lean=self.lean, now=self.now(), pending_s=self.pending_s,
                         tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)), wide=wide,
@@ -2834,7 +2868,7 @@ class Loop:
                         plain=frozenset(self.plain), apart=self.apart, cured=past.cured())
         steps.lap("chain")
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried),
-                    dict(w.unauthenticated), riding=riding)
+                    dict(w.unauthenticated), riding=riding, staged={c.sha: list(c.members) for c in cands if c.waits})
 
     def _reading(self, past: Past, whole: Past, main: str, mine: set[str], older: set[str]):
         """The tick's reads of the runs its judging reads (`Landing.reading`): every run of a record not yet decided (or a
@@ -3326,6 +3360,8 @@ class Loop:
             raise QueueError(f"{a}: no such candidate")
         if isinstance(a, Advance):
             return [self._advance(c, t)]
+        if isinstance(a, (Drop, Commit)):
+            t.staged.pop(c.sha, None)
         if isinstance(a, Drop):
             return [self._drop(a, c, t), *self._reached(a, c, t)]
         if isinstance(a, Retry):
@@ -3357,7 +3393,9 @@ class Loop:
         if self.slim is not None or a.records:
             w.slim_driver()                                 # before anything is pushed
         again = {"replaces": a.replaces} if a.replaces is not None else {}
-        tip, merged, recs = self._merged(t, a.members, base)
+        staged = None if a.records or a.apart else next(
+            ((sha, [w.prs[n] for n in members if n in w.prs]) for sha, members in sorted(t.staged.items())), None)
+        tip, merged, recs = self._merged(t, a.members, base, staged)
         if not merged:
             t.rebuilds.update((k, base) for k in (a.replaces, a.name) if k is not None)
             recs.append(self.record(t, "build", base=base, priority=a.priority, why="no member merges onto its base", **again,
@@ -3386,17 +3424,19 @@ class Loop:
         failed = self.world.cancel_runs(ids, f"vqueue: candidate {old.sha[:12]} was dropped: {vqueue.BASE_DROPPED}")
         return None, {"records_cancelled": ids, **({"records_cancel_failed": failed} if failed else {})}
 
-    def _merged(self, t: Tick, members: Iterable[int], base: str) -> tuple[str, list[Member], list[dict]]:
-        """PRs ``members`` merged in order onto ``base`` (`World.build`): (the tip, the members merged, the skip records of
-        those left out, each owner told once a head and base)."""
+    def _merged(self, t: Tick, members: Iterable[int], base: str, staged: tuple[str, list[PR]] | None = None
+                ) -> tuple[str, list[Member], list[dict]]:
+        """PRs ``members`` merged in order onto ``base`` (`World.build`, beside ``staged``'s batch): (the tip, the members
+        merged, the skip records of those left out, each owner told once a head and base)."""
         w = self.world
         if unknown := [n for n in members if n not in w.prs]:
             raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
-        tip, merged, left = w.build([w.prs[n] for n in members], base, t.advanced or t.main)
+        tip, merged, left = w.build([w.prs[n] for n in members], base, t.advanced or t.main, staged)
         recs = []
         for s in left:
             p, key = s.pr, f"{s.pr.head}@{base}"
-            line = dict(base=base, members=[p.number], heads=[p.head], number=p.number)
+            line = dict(base=base, members=[p.number], heads=[p.head], number=p.number,
+                        **({"staged": s.staged} if s.staged else {}))
             if s.held or s.waits:                           # it reaches `main` with what holds it, or is built once that has
                 recs.append(self.record(t, "skip", **line, why=s.why, **({"held": True} if s.held else {"waits": True}),
                                         done=False))
@@ -3440,6 +3480,7 @@ class Loop:
         started and its check not, so the planner builds nothing on it (`vqueue.decide`).  With ``kept``, the record of the
         records run of the staged batch it rebuilds on another base, every member merged and its Lean inputs that batch's
         (`_restaged`), that run is its own, still running or passed, and none is started."""
+        t.staged[line["sha"]] = list(line["members"])
         if kept is None:
             return [self.record(t, "build", **line, why=why, enqueued=False, records_first=True, done=True),
                     *self._regenerate(t, line)]

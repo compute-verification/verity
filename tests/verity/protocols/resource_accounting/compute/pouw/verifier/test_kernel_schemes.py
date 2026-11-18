@@ -81,7 +81,7 @@ def test_a_family_only_an_experimental_package_builds_is_registered_only_by_it()
 def test_the_serving_facade_exports_the_tables_families_as_the_vllm_adapter_reads_them():
     from verity.protocols.resource_accounting.compute.pouw.prover import serving
 
-    assert serving.NCP_CIRCUIT_SCHEMES == ("ncp-v2", "ncp-v2-shift24")
+    assert not hasattr(serving, "NCP_CIRCUIT_SCHEMES")
     assert serving.PEARL_C_SCHEMES == ("pearl-c-sm120-v1-h3", "pearl-c-sm120-unpromoted-v1-h3", "pearl-c-h100-v1-h3")
     assert serving.NCP_SCHEMES == ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4", "pearl-c-sm120-v1-h3", "pearl-c-h100-v1-h3",
                                    "pearl-c-nvfp4-v0")

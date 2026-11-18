@@ -99,9 +99,11 @@
 # *-private.bin: the rows and their salts), a circuit (its pin is), a request value (the stand-in's workload.json, its prompts)
 # nor a serve's own records (serve.json, windows.jsonl: only vLLM's mirror publishes them, through serve_mirror.PUBLIC).
 # The rest goes to PP_KEEP=DIR (0700, refused under $OUT or the run dir; without it, scratch removed at exit): a window's
-# partition and the files beside it, the advice's length, the tools' logs and error output, the machine's shape.
+# partition and the files beside it, the advice's length, the tools' logs and error output, the machine's shape, and the
+# commit's and audits' logs whole: $OUT and stdout get their lines as public_log.py lets them go.
 set -uxo pipefail
 PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../one_stage/public_files.py
+PL=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_log.py  # a log as it may leave: the fields its reader reads, errors by their class
 for v in PP_LLAMA PP_SERVE_RUN PP_SERVE_ROWS; do
   case "${!v:-}" in art:*) echo "$v=${!v}: a published row dir or serve run holds request values; give $v the serve" \
     "directory on this node (a DIR)"; exit 2;; esac
@@ -227,7 +229,10 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   mkdir -p $O/$name $K/$name
   $TIME $PP commit $src $adv $op --partition $part \
     ${ranks:+--ranks $ranks} "${TG[@]}" \
-    --jobs ${PP_JOBS:-1} --out $W/$name-windows "$@" > $O/$name/commit.log 2>&1 || { tail -30 $O/$name/commit.log; return 1; }
+    --jobs ${PP_JOBS:-1} --out $W/$name-windows "$@" > $K/$name/commit.log 2>&1
+  local crc=$?
+  python3 "$PL" $K/$name/commit.log > $O/$name/commit.log
+  [ $crc = 0 ] || { tail -30 $O/$name/commit.log; return 1; }
   for d in $W/$name-windows/rank*; do   # its registration public; its partition and the files beside it kept
     mkdir -p $O/$name/windows/$(basename $d) $K/$name/windows/$(basename $d) && cp $d/registration.json $O/$name/windows/$(basename $d)/ \
       && cp $d/{window,partition,index}.json $d/m*-public.bin $K/$name/windows/$(basename $d)/
@@ -247,9 +252,10 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
     ${ranks:+--ranks $ranks} ${PP_JOBS:+--jobs $PP_JOBS} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
-    ${PP_VLLM_PYTHON:+--vllm-python $PP_VLLM_PYTHON} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $K/$name/audit.err
+    ${PP_VLLM_PYTHON:+--vllm-python $PP_VLLM_PYTHON} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $K/$name/audit.log 2> $K/$name/audit.err
   local rc=$?
-  grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; tail -25 $K/$name/audit.err
+  python3 "$PL" $K/$name/audit.log > $O/$name/audit.log
+  grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; python3 "$PL" $K/$name/audit.err | tail -25
   keep $name
   return $rc
 }
@@ -268,9 +274,10 @@ print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["w
   $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-windows/rank0 --sampling-design $sampling_design --run $root \
     --opening $REC_RUN/advice/w$REC_K/private/opening.json --compilers $K/$name/compilers.json --template-sets $W/sets \
     ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
-    --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $K/$name/audit.err
+    --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $K/$name/audit.log 2> $K/$name/audit.err
   local rc=$?
-  grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $K/$name/audit.err
+  python3 "$PL" $K/$name/audit.log > $O/$name/audit.log
+  grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; python3 "$PL" $K/$name/audit.err | tail -25
   return $rc
 }
 
@@ -343,9 +350,10 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
     $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --sampling-design work-rate:$units/$units --circuit $c --run $run \
       --registered $O/$name/verifier/registered.json \
       ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
-      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $K/$name/audit.err
+      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $K/$name/audit.log 2> $K/$name/audit.err
     rc=$?
-    grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $K/$name/audit.err
+    python3 "$PL" $K/$name/audit.log > $O/$name/audit.log
+    grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; python3 "$PL" $K/$name/audit.err | tail -25
     keep $name
     $WT pins "${common[@]}" --registration $O/$name/registration.json --summary $W/$name/summary.json --out $O/$name/pins.json \
       | tee $O/$name/pins-verdict.json

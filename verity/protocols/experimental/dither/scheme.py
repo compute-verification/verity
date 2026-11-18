@@ -36,4 +36,5 @@ DITHER = register(Scheme(
     **dict.fromkeys(("parties", "channels", "colocated", "needs", "depends", "record", "symbol", "published",
                      "channel_schemas", "check", "reader", "premises", "tables", "output_format", "product_family",
                      "y_committed", "salt_open_root", "kernels", "keeps_weight_copy"), _NOT_RUN),
+    answers=Lacks("has no piece that answers outside an exchange"),
 ))

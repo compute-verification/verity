@@ -34,7 +34,9 @@ TABLE = (Path(__file__).parent, "step0")
 REG = R.registry(TABLE)
 D = sys.modules[TABLE[1]]
 COMMIT = "a" * 40
-ONSITE = ("sampled-proofs", "network-attester", "pouw", "pous", "bandwidth", "inference-only", "wipe")
+ONSITE = ("sampled-proofs", "network-attester", "pearl-plus", "pous", "bandwidth", "inference-only", "wipe")
+#: onsite with H1's period as its work, which no composite takes
+ONSITE_H1 = tuple("pouw" if p == "pearl-plus" else p for p in ONSITE)
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
 
@@ -141,7 +143,7 @@ def test_a_requirement_listed_after_its_dependent_is_refused_naming_both():
 
 @pytest.mark.parametrize("protocols", [("sampled-proofs",), ("sampled-proofs", "network-attester"), ("pouw",), ONSITE[:-1],
                                        ("sampled-proofs", "network-attester", "pouw"), ("sampled-proofs", "wipe"),
-                                       ("sampled-proofs", "pouw"), ONSITE[:-2]])
+                                       ("sampled-proofs", "pouw"), ONSITE[:-2], ONSITE_H1])
 def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
     assert refused(edit(lambda c: c.update(protocols=list(protocols)))) == "composite"
     with pytest.raises(K.Refused) as e:
@@ -150,16 +152,17 @@ def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
 
 
 def test_the_composites_are_remote_and_onsite():
-    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE)} == {"verity/onsite/v0", "verity/remote/v1"}
-    assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v0"
+    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE)} == {"verity/onsite/v1", "verity/remote/v1"}
+    assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v1"
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SP.SUBPROTOCOLS.items()}
     assert SP.SUBPROTOCOLS["verity/remote/v1"] == {"inference-only": "verity/inference-only/v0",
                                                    "pearl-plus": "verity/pouw/pearl-plus/v1",
                                                    "sampled-proofs": "verity/sampled-proofs/v1"}
-    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"] == "verity/sampled-proofs/v1"
-    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["pouw"] == "verity/pouw/period/v1"
-    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["wipe"] == "verity/wipe/v0"
+    assert SP.SUBPROTOCOLS["verity/onsite/v1"]["sampled-proofs"] == "verity/sampled-proofs/v1"
+    assert SP.SUBPROTOCOLS["verity/onsite/v1"]["pearl-plus"] == "verity/pouw/pearl-plus/v1"
+    assert SP.SUBPROTOCOLS["verity/onsite/v1"]["wipe"] == "verity/wipe/v0"
+    assert "verity/onsite/v0" not in K.COMPOSITES and "verity/onsite/v0" not in SP.SUBPROTOCOLS
 
 
 def test_a_workload_that_lacks_a_need_is_refused_by_name():
@@ -203,8 +206,8 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
 
 #: The onsite configuration's hash with neither the network attester's bound on a response's tokens nor its lengths
 #: rows' form set: a configuration that sets neither keeps it.
-UNBOUNDED_ONSITE = ("8daf0ab60a5eb01beed4dfb36480f9c7987ee64cd42a5cb16d5b67a62e9ad76c"
-                    "327a964b93f8e0a222dc9ff9b2e32d4900ca516410e3fc42857fa06c19ba697b")
+UNBOUNDED_ONSITE = ("9b4816cf6ec07897e4625e3e5bf44f782af8d0826d587fa988f048bcf4bf1315"
+                    "0097f52430810a5afbcdb79e4abca85b03389c4cecce4b8518d6a38e10e37d0a")
 
 
 def bounded(tokens):
@@ -445,7 +448,7 @@ def test_every_party_here_accepts(tmp_path, capsys):
     assert rc == 0 and [x["verdict"] for x in lines] == ["accept"]
     line = lines[0]
     assert line["components"] == dict.fromkeys(ONSITE, "accept")
-    assert line["product"] == "verity/onsite/v0" and line["coins"] == "simulated" and line["block"] == 0
+    assert line["product"] == "verity/onsite/v1" and line["coins"] == "simulated" and line["block"] == 0
     assert line["registration"] == DD.digest({"period": 0})
     assert any("Faithful" in u for u in line["simulated"]) and any(COMMIT in u for u in line["simulated"])
     assert said(out, "VERDICT") == lines
@@ -516,7 +519,7 @@ def test_onsites_smaller_sets_are_read_and_hashed_and_their_verdict_is_undecided
     """Each of onsite's two smaller sets is a deployment with an id of its own, never onsite's: `check` reads it, and
     `verity run` runs its parties and records each period's verdict under that id, undecided, since no composite
     takes it, even where every subprotocol's verifier accepts."""
-    cfg = config([p for p in ONSITE if p in K.UNACCEPTED[cid]])
+    cfg = config([p for p in ONSITE_H1 if p in K.UNACCEPTED[cid]])
     assert K.composite(cfg["protocols"], REG.components) == cid and K.digest(cfg) != K.digest(config())
     rc, lines = run(tmp_path, verifier_says(accepting(cfg, cid)), cfg=cfg)
     assert rc == 2 and [(x["product"], x["verdict"]) for x in lines] == [(cid, "undecided")]
@@ -526,7 +529,7 @@ def test_onsites_smaller_sets_are_read_and_hashed_and_their_verdict_is_undecided
 
 @pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
 def test_a_smaller_sets_record_never_carries_onsites_id(tmp_path, capsys, cid):
-    cfg = config([p for p in ONSITE if p in K.UNACCEPTED[cid]])
+    cfg = config([p for p in ONSITE_H1 if p in K.UNACCEPTED[cid]])
     rc, lines = run(tmp_path, verifier_says(accepting(cfg, "verity/onsite/v0")), cfg=cfg)
     out = capsys.readouterr().out
     assert rc == 2 and [(x["product"], x["verdict"]) for x in lines] == [(cid, "undecided")]
@@ -538,7 +541,7 @@ def test_a_smaller_sets_record_never_carries_onsites_id(tmp_path, capsys, cid):
 @pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
 def test_a_smaller_sets_verdict_the_table_combined_is_passed_through_with_who_combined_it(tmp_path, capsys, cid,
                                                                                           verdict, rc):
-    cfg = config([p for p in ONSITE if p in K.UNACCEPTED[cid]])
+    cfg = config([p for p in ONSITE_H1 if p in K.UNACCEPTED[cid]])
     by = f"python: no Lean verifier takes {cid}"
     line = {**accepting(cfg, "verity/onsite/v0"), "verdict": verdict, "combined_by": by}
     got, lines = run(tmp_path, verifier_says(line), cfg=cfg)

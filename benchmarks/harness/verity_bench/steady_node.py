@@ -58,7 +58,7 @@ from typing import Any
 from verity_config import sha256
 
 from verity_bench import jobs, kit, settings, steady, steady_cards, steady_spec
-from verity_bench.checked_by import PIECE, words
+from verity_bench.kit_report import PIECE, checked_by as words
 from verity_bench.steady_cards import Asker, Refused
 from verity_bench.steady_lease import (
     LEASE_SOURCE,

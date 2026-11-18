@@ -3,17 +3,15 @@ from a device buffer as data (the recorded runs are check.py's, at the frozen sh
 from __future__ import annotations
 
 import shutil
-from pathlib import Path
 import weakref
 
 import numpy as np
 import pytest
 
-from conftest import BUILD, salts_of
+from conftest import BUILD, salts_of, target
 
 from verity.commitments.cuda.commit_slots import slots as S
 from verity.commitments.cuda.commit_slots import slots_gpu as G
-from verity.device import compute_capability, gpu_card_reporting
 
 torch = pytest.importorskip("torch")
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available() or shutil.which("nvcc") is None,
@@ -27,24 +25,13 @@ class _Engine(G.Plan.ENGINE):
         return torch
 
 
-#: the GPU card files (`verity.device`), whose ``arch`` is the target the device library is built for
-CARD_FILES = Path(__file__).resolve().parents[5] / "calibration/hardware/cards"
-
-
-def arch(name: str) -> str:
-    """The target a library is built for on the device reporting ``name`` (torch's ``get_device_name``): its card file's
-    ``arch`` (`verity.device.gpu_card_reporting`) without ``sm_``, such as ``90a``; a device no card file names is refused."""
-    card = gpu_card_reporting(name, directory=CARD_FILES)
-    compute_capability(card)
-    return card["arch"].removeprefix("sm_")
-
-
 class Plan(G.Plan):
-    """``slots_gpu.Plan`` on torch, which verity doesn't import, built for the target its device's card file names."""
+    """``slots_gpu.Plan`` on torch, which verity doesn't import, built for the target its device's card file names
+    (`conftest.target`: none on the host)."""
     ENGINE = _Engine
 
     def __init__(self, context: bytes, layout: S.CommitShape, device: str, **kw: object) -> None:
-        super().__init__(context, layout, device, arch(torch.cuda.get_device_name(device)), **kw)
+        super().__init__(context, layout, device, target(torch, device), **kw)
 
 
 def _cuda(out: list[list[np.ndarray]]) -> list[list[object]]:

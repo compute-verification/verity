@@ -269,7 +269,7 @@ def test_a_row_says_who_ran_its_results_gates_and_not_recorded_for_a_result_that
     cells = {point: line.split(" | ")[7] for point in rows for line in markdown.splitlines()
              if line.startswith("| Commit |") and f"| {point} |" in line}
     assert cells == {"b8-p512-mixed": "not recorded", "b32-p512-mixed": "piece"}
-    assert "`gates checked by` is who ran them as the result says (`piece`: run by the developer's side" in markdown
+    assert "`gates checked by` is who ran them as the result says (`piece`: run by the developer's piece; no auditor-side" in markdown
     assert "its record doesn't say who ran its gates, so `checked by` is `not recorded` until it does" in markdown
     assert " verified" not in markdown
 

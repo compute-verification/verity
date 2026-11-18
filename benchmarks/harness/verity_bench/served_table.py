@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs, kit
-from verity_bench.checked_by import of as checked_by_of
+from verity_bench.kit_report import checked_by_of
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import (FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, current_spec, expand_sweep,
                                        former_arm, former_specs, load_spec, resolve_spec, spec_file, split_card)
@@ -212,7 +212,7 @@ class Found:
     caveats: list[dict[str, Any]]
     device: str | None = None
     card: str | None = None
-    #: who ran the result's gates (`checked_by.of`), None for a result that predates the field
+    #: who ran the result's gates (`kit_report.checked_by_of`), None for a result that predates the field
     checked_by: str | None = None
 
 

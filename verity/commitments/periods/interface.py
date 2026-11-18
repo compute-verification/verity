@@ -623,15 +623,20 @@ def coalesce(patterns: Sequence[Any]) -> list[Any]:
 
 
 def ordered(units: Mapping[str, int], wires: Sequence[Wire],
-            starts: Mapping[str, Sequence[int]]) -> tuple[tuple[str, int, int], ...]:
+            starts: Mapping[str, Sequence[int]],
+            ranks: Mapping[str, Sequence[int]] | None = None) -> tuple[tuple[str, int, int], ...]:
     """An order for ``wires`` (`Circuit.order`, `check_order`): each template's units cut into ranges at its ``starts``
     (``units``: each template's, by descriptor id), in a topological order of what the wires' closed forms need, every
     range meeting a wire's box on the writers it reads in a range (`Wire.box`) before that range, and each template's
     ranges in rising order (a (template, output field) tree's leaf i is the template's unit i in root order), the next at
-    each step the first ready range by template and unit. The work is per range and per wire's ranges, never per unit.
+    each step the first ready range by template and unit. A circuit joined from ranks (`Ranks`) gives each template's
+    first unit of each rank (``ranks``): each rank commits its own trees, so its ranges are cut there too and rise only
+    inside one rank. That each rank commits its own is `Window`'s refusal of a circuit that states ranks ("a circuit
+    joined from ranks is no period"), which `test_a_joined_circuit_states_its_ranks_and_names_its_free_rows` pins. The work is per range and per wire's ranges, never per unit.
     Refused (ValueError) where those needs have a cycle, naming a wire on it: a unit then reads itself or a later unit of
     its template, or a range holds units on both sides of a chain of reads."""
-    cut = {t: sorted({0, *(s for s in starts.get(t, ()) if 0 < s < n)}) for t, n in units.items()}
+    bounds = {t: {s for s in (ranks or {}).get(t, ()) if 0 < s < n} for t, n in units.items()}
+    cut = {t: sorted({0, *(s for s in starts.get(t, ()) if 0 < s < n), *bounds[t]}) for t, n in units.items()}
     nodes = sorted((t, k) for t, ss in cut.items() for k in range(len(ss)))
     idx = {x: i for i, x in enumerate(nodes)}
     end = {t: [*ss[1:], units[t]] for t, ss in cut.items()}
@@ -647,6 +652,8 @@ def ordered(units: Mapping[str, int], wires: Sequence[Wire],
                 why.setdefault(a, i)
     for t, ss in cut.items():
         for k in range(1, len(ss)):
+            if ss[k] in bounds[t]:
+                continue
             indeg[idx[(t, k)]] += 1
             outs[idx[(t, k - 1)]].append(idx[(t, k)])
     ready = [i for i in range(len(nodes)) if indeg[i] == 0]
@@ -1689,9 +1696,8 @@ class Circuit:
                                       "wires": [w.doc() for w in self.wires], **self.declared()}))
 
     def program(self) -> tuple[Any, dict[str, Any]]:
-        """The circuit the period registers and its template query: its wired Program (`wired_population_program`), each
-        range of its order one batch and each wire an edge of it."""
-        return wired_population_program(list(self.templates), {**self.description(), "external": list(self.external)})
+        """The circuit the period registers and its template query, as the served route proves it (`served_program`)."""
+        return served_program(list(self.templates), {**self.description(), "external": list(self.external)})
 
     def template(self, tid: str) -> Any:
         """The template of descriptor id ``tid``."""
@@ -2554,11 +2560,25 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
     return w
 
 
+def served_program(templates: Sequence[tuple[Any, int]], record: Mapping[str, Any]) -> tuple[Any, dict[str, Any]]:
+    """The Program and template query the served route registers, commits and proves for the circuit record ``record``
+    over ``templates``: its wired Program (`wired_population_program`) with every wire cut to an input row of the same
+    leaves, the builder over ``record`` with no wires, so its root nodes, order, templates and counts, and so the members'
+    bases, are the wired Program's. The inference-only reader reads the same record's wires. Ends when the cut-wire rule
+    takes a registered tree port (cure 1); the served route then takes the wired Program. `population.cut_wires` is this
+    transform, but it builds the wired Program's body, which a registered value the Program takes, read at another leaf
+    width, refuses (E_REINTERPRET), as this Program's body does once built; once the builder takes such a read, this body
+    is ``return cut_wires(wired_population_program(templates, record)[0], record)[:2]``."""
+    # the wired build refuses a record whose wires don't fit its templates (wire-width), which the cut never sees
+    wired_population_program(templates, record)
+    return wired_population_program(templates, {**record, "wires": []})
+
+
 def program_of_record(doc: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[Any, dict[str, Any]]:
-    """The wired Program and template query a period's ``circuit.json`` registers (`Circuit.program`; a record that lists
-    its members, `listed_program`), each template's Definition by ``resolve``."""
+    """The Program and template query a period's ``circuit.json`` registers (`Circuit.program`, `served_program`; a
+    record that lists its members, `listed_program`), each template's Definition by ``resolve``."""
     defs = _templates_of(doc, resolve)
-    return wired_population_program(defs, doc) if "cap" in doc else listed_program(defs, doc["external"])
+    return served_program(defs, doc) if "cap" in doc else listed_program(defs, doc["external"])
 
 
 def listed_program(templates: Sequence[tuple[Any, int]], external: Sequence[str]) -> tuple[Any, dict[str, Any]]:

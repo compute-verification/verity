@@ -3,7 +3,7 @@ module
 public import Flock.Draw
 
 /-!
-The rate sampling design's count (`draw.rate_count`): a public rate `q = NUM/DEN` over `T` tables samples a uniform `k`-subset of a
+The rate sampling design's count (`rate.rate_count`): a public rate `q = NUM/DEN` over `T` tables samples a uniform `k`-subset of a
 registration's `n` units at `k = T·⌈NUM·n/(DEN·T)⌉`, `⌈q·n⌉` rounded up to a multiple of `T`. Every unit is sampled with
 probability `k/n ≥ q` whatever `n` the prover registers (`count_ge`), each of the `T` tables proves `k/T` of them
 (`count_dvd`), `k ≥ 1` once `q > 0` and `n ≥ 1` (`count_pos`), and `k ≤ n` whenever `T` divides `n` (`count_le`).
@@ -12,7 +12,7 @@ The stratified rate sampling design's `K` (`draw.strat_k`): the stratified sampl
 `K` a stratum needs to sample at least `⌈q·n_s⌉` of them (`need`), at most `N` (`stratK`), so every unit of every stratum
 is sampled with probability `k_s/n_s ≥ q` whatever strata the prover registers (`stratK_ge`).
 
-The work rate sampling design's floor (`draw.rate_floor`): a stratum of `n` units samples at least `⌈q·n⌉` of them, the verifier's own
+The work rate sampling design's floor (`rate.rate_floor`): a stratum of `n` units samples at least `⌈q·n⌉` of them, the verifier's own
 floor `f` where that is more, and never more than `n` (`floor`). A work sampling design sizes each stratum at its floor or above
 (`Flock.Draw.workK`), so under any `K`, any works and any population work, every unit of every stratum is sampled with
 probability `k_s/n_s ≥ q` whatever strata the prover registers (`workK_ge`), and `1 ≤ k_s ≤ n_s` (`floor_pos`,

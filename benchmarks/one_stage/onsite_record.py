@@ -143,7 +143,7 @@ it, only how it tightens (``tight``, `TIGHT`), conditional on the coins and on e
 tied to a phase's scan: free, its whole free inputs, as the tree's period check charges it, refusing a scan state that
 is not its wired audit's (RowsStateTied); stateFree, its free inputs with its reads of the scan's state held, only where
 RowsStateHeld is in the lock at the statement and definitions `STATE_PINS` pins, which the tree's locks don't hold. Beside the bound, ``advice_charge``: the served run's
-realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
+realized advice charge stays out of the record (`ADVICE`, which says where its length is public); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
 audits' unregistered inputs, read off the period's parameters, with no advice length and no cap in them); ``cap`` is
 each audit's ℓ_a, the cap of the advice the run registered (its published advice registration's, `REGISTRATION`), stated
@@ -240,10 +240,12 @@ TERMS = {"k_{sched}": ("schedules",), "k_{fail}": ("cells",)}
 #: K's terms of each execution phase j, each summing its scan's public fields
 PHASE_TERMS = {"\\ell_{a,j}": ("free",), "k_{skip,j}": ("faulty_sets", "faulty_bits", "faulty_entries"),
                "T_j \\log_2 d_{jit}": ("jitter",)}
-ADVICE = ("not in this record: the realized advice length |a_j| is a value. The run's published registration copies state "
-          "the compiler's cap in its place (`served_verdicts.py public_registration`), but each window's advice is "
-          "committed and compiled at its own length, so |a_j| is hidden only once it is padded to ℓ_a before it is "
-          "committed; the bound's ℓ_{a,j} holds no advice length (`CHARGED`)")
+ADVICE = ("not in this record: the realized advice length |a_j| is a value, and it is public: no advice is padded. Each "
+          "window's advice is committed and compiled at its own length, as many 256-bit rows as its bytes need "
+          "(`advice_rows`), so the advice tree's row count, which its root and every opening take, and the window's "
+          "registration record state it. The run's published registration copies state the compiler's cap in its "
+          "place (`served_verdicts.py public_registration`), which hides nothing while the row count is public; the "
+          "bound's ℓ_{a,j} holds no advice length (`CHARGED`)")
 OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the "
              "schedule can carry (`Schedule.rowsCells`), whatever the traffic, and each connection's cell count twice, in "
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
@@ -828,8 +830,8 @@ TIGHT = ("how the figure tightens, each in place of the figure of record and nev
          "period check refusing a tied audit's padding reads, and the unread-column lemma) and nothing else is open. "
          "Until then the record states no figure of either")
 CAP = ("ℓ_a, the cap of the advice the run registered: its published advice registration's compiler cap_bits "
-       "(`REGISTRATION`, its advice's length padded to it), the length each Commit period's advice is padded to before "
-       "it is committed, the same for each tied audit, whose own registration in the case's commitment binds no advice "
+       "(`REGISTRATION`, which states it in place of its advice's length; no advice is padded to it, each is committed "
+       "at its own length), the same for each tied audit, whose own registration in the case's commitment binds no advice "
        "or compiler (`records_audit.py period` refuses one that does). A cap, in no term of MonitoringPeriodLeakAccepted's K: it "
        "enters the figure of record only while a check of `CHECKS` or a premise is open, as ℓ_a + 1 bits for each tied "
        "audit (`OPEN`)")
@@ -1409,15 +1411,15 @@ def charged(b: Mapping[str, Any]) -> dict[str, Any]:
 
 def advice_cap(reg: Any) -> int:
     """ℓ_a (`CAP`) of the run's published advice registration: its compiler's cap_bits, a whole number of at least 1
-    bits. ValueError, by name, where it states none (an ℓ_a of 0 would charge a tied audit's advice nothing) or its
-    advice's length isn't padded to it."""
+    bits. ValueError, by name, where it states none (an ℓ_a of 0 would charge a tied audit's advice nothing) or isn't
+    the published copy, whose advice length field states the cap."""
     cap = ((reg.get("compiler") if isinstance(reg, Mapping) else None) or {}).get("cap_bits")
     if not isinstance(cap, int) or isinstance(cap, bool) or cap < 1:
         raise ValueError(f"its compiler states no cap_bits of at least 1 bit ({cap!r}), the ℓ_a the figure of record "
                          "charges each tied audit while a check or a premise is open, so it charges none rather than 0")
     bits = reg["binding"]["advice"]["bits"]
     if bits != cap:
-        raise ValueError(f"its advice's length {bits} isn't padded to its compiler's cap {cap}")
+        raise ValueError(f"its advice length field states {bits}, not its compiler's cap {cap}: not the published copy")
     return cap
 
 

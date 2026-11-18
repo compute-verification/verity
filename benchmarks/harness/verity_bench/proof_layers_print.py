@@ -17,7 +17,7 @@ from verity_bench.proof_layers_result import (
     SCHEMA,
     Result,
 )
-from verity_bench.checked_by import LEAN, words
+from verity_bench.kit_report import LEAN, checked_by as words
 from verity_bench.spot_status import WIRES
 
 # ---- printing and writing ------------------------------------------------------------------------------------------------

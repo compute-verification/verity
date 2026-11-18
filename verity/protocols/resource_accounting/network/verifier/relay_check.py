@@ -3,16 +3,18 @@ directory and refused by name where they don't hold."""
 from __future__ import annotations
 
 import json
+import tempfile
 
 from pathlib import Path
 from verity.protocols.resource_accounting.network.verifier import (blob_files as bf, connection_rows_check as CRC,
-    load_check as LK, record_files as RF, network_attester_rows as WR)
+    lean_audit as LA, load_check as LK, period_check, record_files as RF, network_attester_rows as WR)
 from verity.protocols.resource_accounting.network.verifier.certificate import (CertifiedRecord, CertifiedStart, Direction, LmsKey,
     record_head)
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.record_files import certified_from_json, unpack_record
-from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, REFUSED, NetworkAttesterParams, audit
+from verity.protocols.resource_accounting.network.verifier.network_attester import (END, FAIL, INTEGER_FIELDS,
+    OPTIONAL_FIELDS, REFUSED, NetworkAttesterParams, audit)
 
 PROOF_DEADLINE_S = 600.0
 
@@ -35,6 +37,13 @@ DEVICE_KEYS = ("origin_raw",)
 CELLS_TIMING = "cells-timing.jsonl"
 #: the device's timings, which a registration (`cells.jsonl`) never carries: a commit's time varies with what it commits
 TIMINGS = ("commit_ms", "sign_ms")
+#: the compiled rows audit (`NetworkVerifier.RowsAudit`) where `lake build network-rows` writes it
+ROWS_EXE = Path(__file__).resolve().parent / "lean" / ".lake" / "build" / "bin" / "network-rows"
+ROWS = "verity/network-rows/v1"
+#: the Python audit's refusal of an egress cell no id-form reading takes, which `network-rows` doesn't hold
+ID_FORM = "a cell out of the id egress form"
+#: `lean` of a run whose deployment isn't the one the check was handed: no key of it reaches `network-rows`
+UNHELD = "not-covered: the deployment record is not the one the check was handed, so network-rows is not run"
 
 
 def _quantiles(xs: list[float]) -> dict:
@@ -61,6 +70,65 @@ def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], Certifi
             record = certified_from_json(doc)
             got[(record.link, record.direction, record.window)] = record
     return got, refused
+
+
+def rows_audit_case(run: Path, dep: dict, params: NetworkAttesterParams) -> dict:
+    """The run's ``network-rows`` case (`NetworkVerifier.RowsAudit`) as `period_check.lean_check` writes it: the
+    params of the deployment ``dep`` at its schedule ``params``, the commitment of the records and certified records
+    in ``run``, and no evidence (``{}``). ValueError naming an execution phase's record or certified record the run
+    lacks, a schedule in another egress form than the id form, or one with an optional field but `max_tokens_cap`,
+    which the case doesn't carry, so that its digest would not be the run's."""
+    if params.egress != "id":
+        raise ValueError(f"the rows audit's schedule is the id egress form's, not {params.egress!r}'s")
+    if carried := [f for f in OPTIONAL_FIELDS if f != "max_tokens_cap" and getattr(params, f) is not None]:
+        raise ValueError(f"the rows audit's case carries no {', '.join(carried)}, which the schedule has")
+    key = RF.read_public(dep["key"])
+    certified, _ = read_certified(run / "certified.jsonl")
+    raw = {(name, r.window): r for name, rs in read_records(run, params).items() for r in rs}
+    body = []
+    for w in range(dep["windows"]):
+        for name, (link, direction) in CERTIFIED.items():
+            r, c = raw.get((name, w)), certified.get((link, direction, w))
+            if r is None or c is None:
+                raise ValueError(f"{name} window {w} has no {'record' if r is None else 'certified record'}")
+            body += [LA.encode(r), LA.encode(c)]
+    p, limit = key.params, params.max_tokens_cap
+    schedule = {k: dep["params"][k] for k in INTEGER_FIELDS} | ({} if limit is None else {"max_tokens_cap": limit})
+    return {"params": {"key": key.public.hex(), "link": dep["link"], "lms": {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy},
+                       "schedule": schedule, "session": dep["session"], "windows": dep["windows"]},
+            "commitment": b"".join(body).hex(), "evidence": b"{}".hex()}
+
+
+def lean_rows(run: Path, dep: dict, params: NetworkAttesterParams, held: list[str], exe: Path) -> tuple[str, list[str]]:
+    """``network-rows``' verdict on the run (`rows_audit_case`) and the problems it adds: ``accepted``, ``refused:
+    REASON``, ``not-covered: WHY`` where the run is outside what it checks, or ``absent: WHY`` where ``exe`` isn't
+    built. ``held`` is the Python check's refusals of the statement it checks; a verdict that isn't theirs, the
+    id-form refusals aside, is the problem ``lean-disagrees``, also where the run is refused anyway for what ``held``
+    doesn't list (the start, the load, the cells' registrations)."""
+    if params.max_tokens_cap is not None:
+        return ("not-covered: the schedule has a max_tokens_cap, and network-rows holds no response to its request's "
+                "max_tokens"), []
+    try:
+        case = rows_audit_case(run, dep, params)
+    except ValueError as e:
+        return f"not-covered: {e}", []
+    if not exe.is_file():
+        return f"absent: network-rows is not built on this device (no {exe})", []
+    with tempfile.TemporaryDirectory(prefix="rows-") as d:
+        try:
+            got = period_check.lean_check(str(exe), case, Path(d))
+        except (SystemExit, OSError, ValueError) as e:
+            return f"refused: network-rows gave no verdict ({type(e).__name__}: {e})", [
+                f"network-rows gave no verdict ({type(e).__name__})"]
+    if got.get("protocol") != ROWS or got.get("verdict") not in ("accept", "reject"):
+        return f"refused: network-rows answered no {ROWS} accept or reject", [
+            f"network-rows answered no {ROWS} accept or reject"]
+    lean = "accepted" if got["verdict"] == "accept" else f"refused: {got['reason']}"
+    python = [p for p in held if not p.endswith(ID_FORM)]
+    if (got["verdict"] == "accept") == (not python):
+        return lean, []
+    said = "accepts" if not held else f"refuses ({held[0]})"
+    return lean, [f"lean-disagrees: network-rows {lean}; the Python check {said}"]
 
 
 def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
@@ -180,10 +248,17 @@ def failed_words(outcomes: object) -> list[str]:
                    for o in (outcomes if not isinstance(outcomes, (str, bytes)) else [outcomes])})
 
 
-def check(run: Path, registrations: Path | None = None, under: tuple[bytes, bytes] | None = None) -> dict:
+def check(run: Path, registrations: Path | None = None, under: tuple[bytes, bytes] | None = None,
+          rows_exe: Path = ROWS_EXE) -> dict:
     """The offline check of a served run (the module docstring's `check`). `audit_windows` is the audit's verdict of
     each execution phase that has a record, whole: whether the audit accepted it, and its problems, which `problems`
-    gives as ``audit: PROBLEM`` without their execution phase, among its first 50. ``under`` is what the auditor hands
+    gives as ``audit: PROBLEM`` without their execution phase, among its first 50. `lean` is ``network-rows``'
+    (``rows_exe``) verdict on the same records (`lean_rows`): ``accepted`` only where it ran and accepted, and the
+    check accepts only where the Python check does and ``network-rows`` didn't refuse; ``not-covered`` and ``absent``
+    say it decided nothing. ``absent`` is no problem only until the device's pin builds ``network-rows``: the change
+    that adds the build makes it a problem on the device's entry. Where ``under`` is given, ``network-rows`` is
+    handed the deployment's key only once the deployment is held to it, and a deployment that isn't refuses the run
+    with ``network-rows`` not run. ``under`` is what the auditor hands
     it: the SHA-512 of the network attester's public key (`connection_rows_check.key_sha512`) and its session, which the
     run's deployment record is held to, a problem of it the first of the problems. With ``registrations`` it leaves
     the registrations' file there: what it was checked under and each registration of connection rows it held,
@@ -196,7 +271,8 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
     certified, refused = read_certified(run / "certified.jsonl")
     records = read_records(run, params)
     # first what the whole check is held under: a reader that cuts the problems' list must not lose it
-    problems = [] if under is None else CRC.not_under(dep, under)
+    unheld = [] if under is None else CRC.not_under(dep, under)
+    problems = list(unheld)
     if params.digest.hex() != dep["digest"]:
         problems.append("the deployment's digest isn't its parameters'")
     problems += [f"the deployment holds {k}, an address: it goes in {ENDPOINTS}, which is never published"
@@ -205,7 +281,7 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
     problems += start_problems
     load, load_problems = check_load(run, dep, key, session)
     problems += load_problems
-    windows = []
+    windows, held = [], []
     for name, (link, direction) in CERTIFIED.items():
         got = {r.window: r for r in records[name]}
         grid = params.fails_grid if name == FAILS else params.grid
@@ -217,15 +293,19 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
                             "status": None if r is None else r.status.reason and r.status.reason.value,
                             "cells": None if r is None else sum(f is not None for row in r.grid for f in row)})
             if not ok:
-                problems.append(f"{name} window {w} isn't certified")
+                held.append(f"{name} window {w} isn't certified")
             elif r.status.reason is not None:
-                problems.append(f"{name} window {w}: {r.status.reason.value}")
+                held.append(f"{name} window {w}: {r.status.reason.value}")
+    problems += held
     cells_summary, cells_problems = check_cells(run, dep, params, records)
     problems += cells_problems
     rows_at = len(problems)
     verdict = audit(params, records[INGRESS], records[EGRESS], records[FAILS])
-    if not verdict["accepted"]:
-        problems += [f"audit: {p}" for w in verdict["windows"] for p in w["problems"]]
+    audited_problems = [] if verdict["accepted"] else [f"audit: {p}" for w in verdict["windows"] for p in w["problems"]]
+    held += audited_problems
+    problems += audited_problems
+    lean, lean_problems = (UNHELD, []) if unheld else lean_rows(run, dep, params, held, rows_exe)
+    problems += lean_problems
     audited = {c["ordinal"]: c for c in verdict["connections"]}
     schedule = egress_cells(records[EGRESS], params)
     client_doc = json.loads((run / "client.json").read_text()) if (run / "client.json").exists() else {}
@@ -286,5 +366,5 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
     problems[rows_at:rows_at] = rows_problems
     if rows_summary is not None:
         summary["connection_rows"] = rows_summary
-    return {"accepted": not problems, "problems": problems[:50], "summary": summary, "windows": windows,
+    return {"accepted": not problems, "lean": lean, "problems": problems[:50], "summary": summary, "windows": windows,
             "audit_windows": verdict["windows"], "connections": rows}

@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity_bench import kit, settings
-from verity_bench.checked_by import CHECKED_BY, NOT_RECORDED, PIECE
+from verity_bench.kit_report import CHECKED_BY, NOT_RECORDED, PIECE
 from verity_bench.breakdown import AUDIT, AUDIT_SPANS, DECODE_ROWS, PLAIN, PLAIN_SPANS, ms_cell
 from verity_bench.served_table import CAVEAT_KEYS, LIVE_CAVEAT_KEYS, PER_DECODE, PER_OUTPUT, SERVED
 from verity_bench.vllm.presets import current_spec
