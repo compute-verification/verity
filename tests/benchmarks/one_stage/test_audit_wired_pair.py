@@ -46,10 +46,11 @@ def _window(d):
     return d
 
 
-def test_a_wired_pair_reaches_the_audits_member_check_and_its_leak_count_counts_the_wired_port(tmp_path, binaries):  # noqa: F811
+def test_a_wired_pair_reaches_the_member_checks_before_the_draw_and_its_leak_count_counts_the_wired_port(tmp_path, binaries):  # noqa: F811
     rc, row, _out, said = _audit(tmp_path, _window(tmp_path / "window"), binaries, more={"FLOCK_CHALLENGER": "0"},
                                  design="stratified-rate:1/2")
     assert row, f"no summary: the audit stopped before it wrote one\n{said}"
     assert "TypeError" not in said, said
     assert row["leak"].get("wired") == 16 * 16 and row["leak"]["bound"] != "refused", row["leak"]
-    assert rc != 0 and f"root {WID}/o0 is no member's" in json.dumps(row) + said, json.dumps(row)[-3000:]
+    a5 = next((json.loads(x[3:]) for x in said.splitlines() if x.startswith("A5 {")), {})
+    assert rc != 0 and row["checks_before_draw"] == {"m0": False, "m1": False, "registration": True, "source": True}, a5
