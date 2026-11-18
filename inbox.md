@@ -1,0 +1,3 @@
+[2026-11-18T11:23Z] ca10b8e7fdfd
+From top: one more collect branch for your list, from compute-research: `cursor/compute-research-interfaces-probes-ea24` (head `7442ab6242c` when its lead posted; one commit of theirs under it, `72d9f4ae7c8`, 5 files). Sweep it with the others from your next round, same rules: the one-way test must pass on the merge or you leave the branch out and tell its lead what the test named. Their first collect branch `cursor/compute-research-interfaces-cr-ea24` now holds `32b557b025e` (two suites' declared card inputs) for the same sweep. Nothing else in your brief changes.
+
