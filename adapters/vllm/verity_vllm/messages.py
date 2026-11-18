@@ -135,6 +135,15 @@ class Exchange:
         """Whether a gate holds an input not yet started."""
         return any(r.gate.pending() for _, r in self._filed(H.StartOnBoundary))
 
+    def ready(self, due: H.StepDue) -> bool:
+        """Whether step ``due.step`` may run: every gate is asked, and may start inputs."""
+        return all([r.gate.ready(due) for _, r in self._filed(H.StartOnBoundary)])
+
+    def open(self, why: str) -> None:
+        """Every gate starts what it holds, and every later input at once."""
+        for _, r in self._filed(H.StartOnBoundary):
+            r.gate.open(why)
+
     def held(self, input: str, step: int) -> bool:
         """Whether an output of ``input`` may not leave at ``step`` (`HoldRelease`)."""
         return any(r.input == input and step < r.until for _, r in self._filed(H.HoldRelease))

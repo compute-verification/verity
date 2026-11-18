@@ -1,9 +1,15 @@
-"""The KV block hook: vLLM's KV cache manager, block pool and scheduler patched once, through `hooks`, emitting to the
-process's exchange (`messages.current`) its ``memory`` and ``steps`` events (`verity.hooks`) in the order vLLM acts, and
-taking its schemes' `HoldResident` and `ReuseOldestFreed`: a KV block is a range, a request an input, a scheduler step a
-step.  It names no scheme, and builds no event no scheme reads.
+"""The memory hook: vLLM's model runner, KV cache manager, block pool and scheduler patched once, through `hooks`,
+emitting to the process's exchange (`messages.current`) its ``memory`` and ``steps`` events (`verity.hooks`) in the
+order vLLM acts, and taking its schemes' `HoldResident` and `ReuseOldestFreed`: a model parameter is a registered
+value, a KV block a range, a request an input, a scheduler step a step.  It names no scheme, and builds no event no
+scheme reads.
 
 ~~~text
+GPUModelRunner.load_model       after: RegisteredValues, each parameter of the loaded model once (tied ones once)
+GPUModelRunner.initialize_kv_cache
+                                after, unless profiling: RangesDeclared, the pool's blocks as ranges of the manager's
+                                block size in slots, each layer's KV cache a store (refused where a kernel block size
+                                is another)
 KVCacheManager.allocate_slots   around: the request the pool's allocations inside it are for
 BlockPool.get_new_blocks        after: RangeAllocated, at the step being scheduled, for that request
 BlockPool.touch                 before: RangeAllocated reused, the blocks it takes back off the free queue (a
@@ -33,14 +39,48 @@ from verity import hooks as H
 from verity_vllm import messages
 from verity_vllm.engine.hooks import Hooks
 
-__all__ = ["attach", "writes"]
+__all__ = ["attach", "ranges_declared", "registered_values", "writes"]
 
 TAG = "kv-blocks"
+RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
+#: What a `RUNNERS` runner calls its kernel block sizes, one per KV cache group, set in `initialize_kv_cache`: Model Runner
+#: V2's name (`vllm.v1.worker.gpu.model_runner`), then the first runner's (`vllm.v1.worker.gpu_model_runner`).
+KERNEL_BLOCK_SIZES = ("kernel_block_sizes", "_kernel_block_sizes")
 
 
 def attach() -> Callable[[], None]:
     """Put the patches on (once for every attachment); returns the detach, the last of which takes them off."""
     return _HOOK.attach()
+
+
+def registered_values(runner: Any, step: int = 0) -> H.RegisteredValues:
+    """Every parameter of the runner's model once (tied ones once), by its name, as the model holds it."""
+    model, seen, out = runner.model, set(), []
+    while not hasattr(model, "named_parameters") and hasattr(model, "runnable"):
+        model = model.runnable
+    for name, p in model.named_parameters():
+        if p.numel() == 0 or p.data_ptr() in seen:
+            continue
+        seen.add(p.data_ptr())
+        out.append((name, p.data))
+    return H.RegisteredValues(tuple(out), step)
+
+
+def ranges_declared(runner: Any, kv_cache_config: Any, step: int = 0) -> H.RangesDeclared:
+    """The KV pool as the runner bound it: its blocks, each the manager's block size in slots, a slot all of a layer's
+    KV for one token in one plane (where K and V sit is the store's to read), each layer's cache a store."""
+    caches = tuple(getattr(runner, "kv_caches", None) or ())
+    if not caches:
+        raise RuntimeError("the model runner bound no KV caches")
+    slots = int(runner.cache_config.block_size)
+    kbs = next((v for v in (getattr(runner, name, None) for name in KERNEL_BLOCK_SIZES) if v), None)
+    if kbs is None:
+        raise RuntimeError(f"the model runner names no kernel block sizes ({' or '.join(KERNEL_BLOCK_SIZES)}) to hold to "
+                           f"the manager's {slots}")
+    if any(int(k) != slots for k in kbs):
+        raise NotImplementedError(f"kernel block sizes {kbs} other than the manager's {slots}")
+    pages, t = int(kv_cache_config.num_blocks), caches[0]
+    return H.RangesDeclared(pages, slots, t.numel() * t.element_size() // (pages * slots), 1, caches, step)
 
 
 def writes(sched: Any, so: Any, step: int) -> tuple[H.RangeWritten, ...]:
@@ -108,6 +148,9 @@ class _Hook:
         from vllm.v1.core.kv_cache_manager import KVCacheManager
         from vllm.v1.core.sched.scheduler import Scheduler
 
+        import importlib
+        import importlib.util
+
         h, hook = Hooks(tag=TAG), self
         self.hooks, self.step, self.next, self.request, self.held = h, 0, 0, None, []
 
@@ -171,6 +214,27 @@ class _Hook:
                 return orig(sched, so, out)
             return update_from_output
 
+        def load(orig):
+            def load_model(runner, *a, **kw):
+                r = orig(runner, *a, **kw)
+                if (ex := messages.current()).wants("memory"):
+                    ex.emit(registered_values(runner, hook.step))
+                return r
+            return load_model
+
+        def init_kv(orig):
+            def initialize_kv_cache(runner, kv_cache_config, *a, **kw):
+                r = orig(runner, kv_cache_config, *a, **kw)
+                if not kw.get("is_profiling", a[0] if a else False) and (ex := messages.current()).wants("memory"):
+                    ex.emit(ranges_declared(runner, kv_cache_config, hook.step))
+                return r
+            return initialize_kv_cache
+
+        for mod in RUNNERS:
+            if importlib.util.find_spec(mod) is not None:
+                cls = importlib.import_module(mod).GPUModelRunner
+                h.wrap(cls, "load_model", load)
+                h.wrap(cls, "initialize_kv_cache", init_kv)
         h.wrap(KVCacheManager, "allocate_slots", allocate)
         h.wrap(BlockPool, "get_new_blocks", get_new)
         h.wrap(BlockPool, "touch", touch)

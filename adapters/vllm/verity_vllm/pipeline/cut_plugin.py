@@ -39,7 +39,7 @@ engine emitted, so the hold is the drain alone. Refused at the engine core's fir
 FCFS, a KV connector, and more than one data-parallel engine.
 
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
-stdlib, `verity_vllm.settings`, `verity_vllm.errors`, `serve_admit` and `tick_plugin`, and `register` imports the seam,
+stdlib, `verity_vllm.settings`, `verity_vllm.errors`, `verity_vllm.engine.admission` and `tick_plugin`, and `register` imports the seam,
 and through it vLLM, only once ``VERITY_CUT`` is set.
 """
 from __future__ import annotations
@@ -55,7 +55,7 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.errors import Refused
-from verity_vllm.pipeline.serve_admit import request_key
+from verity_vllm.engine.admission import request_key
 from verity_vllm.pipeline.tick_plugin import SAMPLED_PATHS, FeedReader, route_of
 
 __all__ = ["CUT_ENV", "Cut", "Sent", "SentFeed", "cut_config", "make", "register"]

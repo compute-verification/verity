@@ -16,11 +16,12 @@ def test_each_entry_pouw_builds_names_itself_as_the_table_does(name):
     assert schemes.get(name).name == name
 
 
-def test_pearl_plus_on_the_h100_is_its_option():
-    entry = K.resolve("pearl-plus", "h100", True)
-    assert entry is K.resolve("pearl-plus", "h100", False)
+@pytest.mark.parametrize("card", ["h100", "h200"])
+def test_pearl_plus_on_the_h100_or_h200_is_its_option(card):
+    entry = K.resolve("pearl-plus", card, True)
+    assert entry is K.resolve("pearl-plus", card, False)
     assert pouw_scheme.PEARL_PLUS.option == f"pouw:{entry.name}"
-    assert schemes.of("pearl-plus", "h100", True).name == entry.name
+    assert schemes.of("pearl-plus", card, True).name == entry.name
 
 
 @pytest.mark.parametrize(("scheme", "card"), [("pearl-plus", "rtx-pro-6000"), ("pearl-plus", "b200"), ("nope", "h100")])

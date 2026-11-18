@@ -19,7 +19,7 @@ from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.types import Array, Value
 from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import SCHEMES
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
     ROW_ALIGN,
 )
@@ -111,7 +111,7 @@ def test_pearls_tables_are_named_by_round_and_call_at_the_rows_its_calls_commit(
     of Pearl+'s `ROW_ALIGN` (its m₁₆). Its y is handed on in rows of a positive number of words, and its scheme is one of
     PoUW's."""
     assert (PEARL.a(1, 3), PEARL.y(0, 5)) == ("pearl-a/1/3", "pearl-y/0/5")
-    assert [PEARL.rows(CLASS, s) for s in range(3)] == [8, 2, 2] and PEARL.scheme in SCHEMES
+    assert [PEARL.rows(CLASS, s) for s in range(3)] == [8, 2, 2] and PEARL.scheme in IDENTIFIED
     assert [PEARL.a_rows(cls, 0) for cls in (CLASS, WindowClass(4, 4, 2), WindowClass(2, 9, 2))] == [16, 16, 32] == [
         -(-m // ROW_ALIGN) * ROW_ALIGN for m in (8, 16, 18)]
     with pytest.raises(ValueError, match="a positive number of words, not 0"):

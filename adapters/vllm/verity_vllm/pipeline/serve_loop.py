@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from verity_vllm.engine.admission import Hook
 from verity_vllm.engine.served_seed import SeedCoins, served
 from verity_vllm.pipeline.serve_admit import Admission, Delta, TickGate
 from verity_vllm.pipeline.serve_commit import CommitWindows, ingress_of
@@ -18,8 +19,9 @@ class EngineLoop:
     ``deliver``. ``engine`` is vLLM's ``LLMEngine`` (``add_request``, ``abort_request``, ``step``,
     ``has_unfinished_requests``); ``commit`` a `CommitWindows` or None. With ``cap`` (``--window-requests``), at most ``cap``
     requests are in the engine at once: later ones wait in ``held``, in admission order, and go in as running ones finish.
-    With ``gate`` (``--admit tick``, a `serve_admit.TickGate` installed on ``sched``, the engine's scheduler), its records
-    come through `tick`, in queue order with the admissions, and the loop steps only once the gate is ready.
+    With ``hook`` (the admission hook on the engine's scheduler, `engine.admission`), the loop steps only once it is
+    ready, and a drain opens it; with ``gate`` (``--admit tick``, a `serve_admit.TickGate` among the hook's holds), the
+    gate's records come through `tick`, in queue order with the admissions.
 
     Each request goes into the engine with the seed `engine.served_seed.served` gives it: a stochastic one that sent none is
     seeded from the current seed coin of ``coins`` (the Commit's, else its own) and its ``user``, a fresh coin when it comes
@@ -28,9 +30,9 @@ class EngineLoop:
     _STOP = object()
 
     def __init__(self, engine: Any, commit: CommitWindows | None = None, cap: int = 0,
-                 clock: Callable[[], float] = time.time, gate: TickGate | None = None, sched: Any = None,
+                 clock: Callable[[], float] = time.time, gate: TickGate | None = None, hook: Hook | None = None,
                  coins: SeedCoins | None = None) -> None:
-        self.engine, self.commit, self.cap, self.clock, self.gate, self.sched = engine, commit, int(cap), clock, gate, sched
+        self.engine, self.commit, self.cap, self.clock, self.gate, self.hook = engine, commit, int(cap), clock, gate, hook
         own = getattr(commit, "coins", None)
         if own is not None and coins is not None and coins is not own:
             raise ValueError("the engine loop seeds from its Commit's seed coins, whose windows record them: pass them to the Commit")
@@ -68,8 +70,8 @@ class EngineLoop:
             return True
         if isinstance(item, tuple) and item[0] == "drain":
             self.draining = self.draining or str(item[1])
-            if self.gate is not None:
-                self.gate.open(f"draining: {self.draining}")
+            if self.hook is not None:
+                self.hook.open(f"draining: {self.draining}")
             return True
         if isinstance(item, tuple):
             eid = item[1]
@@ -140,9 +142,9 @@ class EngineLoop:
                     item = self._poll()
                 if not running or not self.engine.has_unfinished_requests():
                     continue
-                if self.gate is not None and not self.gate.ready(self.sched):
+                if self.hook is not None and not self.hook.ready():
                     try:
-                        running = self._take(self.q.get(timeout=self.gate.poll_s))
+                        running = self._take(self.q.get(timeout=self.hook.poll_s))
                     except queue.Empty:
                         pass
                     continue
