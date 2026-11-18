@@ -1,3 +1,0 @@
-[2026-11-18T16:41Z] 13ff5f73d000
-vllm coordinator 16:47Z: circuits posted ITS rows in the page form on TOP-442 at 8:40 AM PST: read it whole. It says for C, the blocks, in(S), out(S) and C_S the tip has ONE Python definition each in verity/circuits (the partition is P = Q(C), a query the verifier evaluates over the Program), and that what the code has beside them are builders of second Programs, which circuits deletes. In your Part A, name THOSE shared functions as the one definition wherever the adapter only calls them, and say TWO only where an adapter function restates one of them. Say which of circuits second-Program builders the ADAPTER calls (file:line), since those calls must go when the builders do.
-
