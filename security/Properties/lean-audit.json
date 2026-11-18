@@ -80,7 +80,7 @@
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
   "Properties.Verity.Committed",
-  "Properties.Verity.GateARow",
+  "Properties.Flock.Circuit.GateARow",
   "Properties.Ties",
   "Properties.Flock.Nets",
   "Properties.Assumptions",
@@ -892,12 +892,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.GateARow": {
-   "owner": "@lean",
-   "digest": "8ed5fd9ffdd456a4dde757fd6bb97e8cd95bfd186b3569b3dde7525d52094526",
-   "issue": "LEAN-238",
-   "due": "2026-11-24"
-  },
   "Verity.Vocab.BandwidthAuditSound": {
    "owner": "@memory-accounting",
    "digest": "0ba14a8edc194d4a0149201841d2bb1f8546486d4829928a3f14a2193301d417",
@@ -1037,7 +1031,7 @@
    "ResourceAccounting.Compose.PrefixOf",
    "ResourceAccounting.Compose.Scope"
   ],
-  "Verity.remote_soundness_of_subprotocols": ["Verity.GateARow", "Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound", "Verity.Vocab.WiresSound"]
+  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound", "Verity.Vocab.WiresSound"]
  },
  "meaning": [
   "Properties.Flock.Circuit.CircuitOf",
@@ -1045,6 +1039,7 @@
   "Properties.Flock.Circuit.Outs",
   "Properties.Flock.Circuit.Keys",
   "Properties.Flock.Circuit.Rows",
+  "Properties.Flock.Circuit.GateARow",
   "Definitions.Flock.Circuit",
   "Definitions.Flock.Lowering",
   "Definitions.Spot.Dataflow",
@@ -2447,7 +2442,7 @@
   },
   "Properties.Flock": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Flock", "Flock", "Properties.Flock", "VStar.Unit"],
-   "except": [],
+   "except": ["Properties.Flock.Circuit.GateARow"],
    "why": "the circuit a parsed C-Flock circuit file is built into (`Placed.keyProg`, `Layout.outsOf`, `Built`) is defined over the verifier's own types and checks (`Flock.Circuit`, `Flock.Net`) and C-Flock's circuit vocabulary (`Definitions.Flock.Circuit`), and is core's circuit and partition (`Definitions.Core`) at the parsed and the committed file (`Flock.Bridge.circuitOf`, `circuitOfFile`), never a proof; the verifier's fixed nets' lines are the circuit file's own text format (`VStar.header`, `VStar.rowLine`)"
   },
   "Properties.Verity": {
@@ -2477,7 +2472,6 @@
     "Properties.Verity.ExecutionPhaseFiles",
     "Definitions.Core.Compiler",
     "Properties.Verity.Committed",
-    "Properties.Verity.GateARow",
     "Properties.Spot.Wires",
     "Spot.FilePart",
     "Spot.RecordText",
@@ -2890,6 +2884,11 @@
    ],
    "except": [],
    "why": "the read session proved in zero knowledge is stated against the verifier's span check (Poub.Span) and the read session's own statements (Properties.Poub.Remote), the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction), and SHA-512 as the code computes it (Properties.Verity.Sha512) for the rows' collision event; never a proof"
+  },
+  "Properties.Flock.Circuit.GateARow": {
+   "imports": ["Properties.Flock.Circuit.CircuitOf", "Spot.FilePart"],
+   "except": [],
+   "why": "`Γ`'s unit is stated against the game's circuit of a committed file (`Flock.Bridge.circuitOfFile`, `Properties.Flock.Circuit.CircuitOf`) and the rows SPOT's summary of the parsed file counts (`Spot.FilePart.ofCircuit`), never a proof"
   }
  },
  "reads_exempt": {
@@ -2899,6 +2898,19 @@
   "PouwVerifier.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.MonitoringPeriodJ10R.ExecutionPhaseAccepts`: the window's round coins read through the challenger's session; PouwVerifier's lock declares no spec layer for `PouwVerifier.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
  },
  "guarantees": {
+  "Flock.Bridge.gateARow": {
+   "owner": "@lean",
+   "signature": ["Flock.Bridge.gateARow : Flock.Bridge.GateARow"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "7b4111cc25192d1589a6fa7b4d4048850da3772390db68c0de2fc1346aa7d3a9",
+   "unfolded_hash": "e7175f079887ec9994ca6e66aec9f63e7cfbe6f76da0ed94323d643397389d66"
+  },
   "InferenceOnlyVerifier.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
    "signature": [
@@ -12815,7 +12827,7 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Verity.GateARow", "Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound", "Verity.Vocab.WiresSound"],
+    "open": ["Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound", "Verity.Vocab.WiresSound"],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
@@ -12831,7 +12843,7 @@
     ]
    },
    "type_hash": "10dde9d4b2b9d2eaa2bca9c3a6c1f61e31838c8444eb7cd4a10e06fcc47b0686",
-   "unfolded_hash": "01b92f65e5a861032872d59a17d0990cd7ca2f7aaf9eb654c6aada6ff0f099b3"
+   "unfolded_hash": "7b8b8b33f6936ad3fc5166787c9a4c0d025d2f41752e588eef4e24fdf945a845"
   },
   "Verity.remote_soundness_of_subprotocols_honest": {
    "owner": "@soundness",
@@ -14901,6 +14913,10 @@
    "Properties.NetworkPeriod.rowsStartCharged": {
     "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
+   },
+   "Flock.Bridge.gateARow": {
+    "function": "Flock.Bridge.parsedOf",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -25990,6 +26006,12 @@
     "Verity.Partition.ofAudit": "222dcfe7d517f58968b87d5481815c8d0fb8a632ad4446b0d11c14a4db28ff5f"
    }
   },
+  "Properties.Flock.Circuit.GateARow": {
+   "digest": "71040adab19804c4cd87c973641bc644690a591a1248376e8357f7842495a190",
+   "definitions": {
+    "Flock.Bridge.GateARow": "f879d798b4ba4abccd55a61a2f717f885051cb307b26cef73dae000c1469a83c"
+   }
+  },
   "Properties.Flock.Circuit.Keyed": {
    "digest": "d39d5dcb61310c558fe41790cfec237791975cabdc526c3709dd7d9f88d69d58",
    "definitions": {
@@ -27839,12 +27861,6 @@
     "Verity.verifier": "5b4c7ed90188f8df92961c2c26b3dcfeafd1e00d512cc762000205102168bae0"
    }
   },
-  "Properties.Verity.GateARow": {
-   "digest": "9b6686b55263d0ff5ef29072a3b770c00b21b57f2e97bb11d9ec30dd6d57540d",
-   "definitions": {
-    "Verity.GateARow": "8ed5fd9ffdd456a4dde757fd6bb97e8cd95bfd186b3569b3dde7525d52094526"
-   }
-  },
   "Properties.Verity.Idle": {
    "digest": "246c506c452045d05709da54b2410667b3a6719138249d07149af874a386b234",
    "definitions": {
@@ -27872,10 +27888,10 @@
    }
   },
   "Properties.Verity.Soundness": {
-   "digest": "d0dbaf8047252b5265c037aa2140fe2c99c72a0632c4532a6fdb6791f361722a",
+   "digest": "b8baf9144fc79ac5061b2493dc35271ad061ce1f335b0b847e136a61e5f3a5a6",
    "definitions": {
     "Verity.PlainSoundness": "9104fc530ffe677f06448f91c06e19f1f200c14b82fedcadeef9bb2fea50cf1f",
-    "Verity.RemoteSoundness": "ddf28d745944ffdea5e5f2c4f1e20f692e8e3baba07692d520391cdec8bd3eb2",
+    "Verity.RemoteSoundness": "2da61b57123fde833c7574f764be1c85eb8f0eeb37c766db3364434aa4876921",
     "Verity.Soundness": "12257220e784d2615b4f6e417908d229201dbb9e67615d051d0d8b4c2989d84e",
     "Verity.SoundnessOf": "c597f9e3fa596b92f13549c8df6428ab398891df2e9f433094b0bcba9e56a183"
    }
