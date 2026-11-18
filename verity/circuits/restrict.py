@@ -271,6 +271,16 @@ def _binding(bits: Bits, g: int) -> str:
     return v if k == "input" else RUN
 
 
+def _param_names(D: Any) -> dict[int, str]:
+    """Each input gate of C's root, by the name of C's parameter whose node it is (`inputs`)."""
+    body, out, k = D.root.body, {}, 0
+    for name, n in D.inputs:
+        for _ in range(n):
+            out.update(dict.fromkeys(range(body.offsets[k], body.offsets[k + 1]), name))
+            k += 1
+    return out
+
+
 def _nodes(bits: Bits, words: Sequence[tuple[int, int]]) -> list[tuple[int, int, int]]:
     """The root nodes of C the gates ``words`` are, each ``(k, first member, end member)``."""
     body, out = bits.D.root.body, []
@@ -376,9 +386,15 @@ def listing_of(c: bytes) -> bytes:
 def _build(bits: Bits, words: Sequence[tuple[int, int]], ins: list[int], outs: list[int]) -> Any:
     D, C = bits.D, bits.C
     body, scope = D.root.body, C.root_scope
-    in_runs = _runs(ins, lambda g: (bits.width[g], _binding(bits, g)))
+    named = _param_names(D)
+
+    def reg(g: int) -> str | None:
+        return named[g] if _binding(bits, g) == REGISTRATION else None
+
+    in_runs = _runs(ins, lambda g: (bits.width[g], _binding(bits, g), reg(g)))
     out_runs = _runs(outs, lambda g: bits.width[g])
-    params = tuple((f"p{i}", Array(len(r), Value(bits.width[r[0]]))) for i, r in enumerate(in_runs))
+    params = tuple((f"{reg(r[0])}/p{i}" if reg(r[0]) else f"p{i}", Array(len(r), Value(bits.width[r[0]])))
+                   for i, r in enumerate(in_runs))
     ret = Tuple(*[Array(len(r), Value(bits.width[r[0]])) for r in out_runs])
     kept = _nodes(bits, words)
 

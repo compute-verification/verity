@@ -237,6 +237,7 @@ def test_a_registered_value_is_a_registered_input_of_the_block():
     b = R.restrict(c, TOY_PARTITION, [(1, 3)], bits)
     d = json.loads(b.descriptor)
     assert any(k.startswith("RegisteredInput1_v1") for k in d["definitions"])
+    assert d["inputs"] == [["k/p0", 1], ["p1", 1]]
     assert [x for x in b.listing().split(b"\n")[2:2 + len(b.input_bits)]].count(b"registration") == 4
 
 
