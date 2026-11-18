@@ -1,4 +1,4 @@
-"""serve-openai's ``--admit release-order`` (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`) on CPU: requests reach the engine in the network attester's
+"""serve-openai under order ``release-order`` (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`) on CPU: requests reach the engine in the network attester's
 release order (``x-verity-release``) whatever order the frontend reads their bodies in, a missing earlier release holds the
 later ones, and a release that never comes (the network attester dropped it) or is refused holds them only until its skip, never for
 good. The gate's skip is driven by hand (an injected ``schedule``), so nothing here waits on the clock.
@@ -275,7 +275,7 @@ class OrderedEngine(Engine):
 
 
 class OrderedServing:
-    """`test_serve_openai.Serving` under ``--admit release-order``: `held` counts the requests the gate has taken."""
+    """`test_serve_openai.Serving` under order ``release-order``: `held` counts the requests the gate has taken."""
 
     def __init__(self, out: Path) -> None:
         self.runner, self.timers = Runner(), Timers()
@@ -389,19 +389,17 @@ def test_a_refused_release_and_an_unnumbered_request_hold_nothing(tmp_path):
     assert dup_raw.startswith(b"HTTP/1.1 400") and b"came twice" in dup_raw
 
 
-def test_the_flag_defaults_off_and_takes_release_order():
+def test_the_order_defaults_to_arrival_and_is_the_schemes_own_setting():
     base = ["--model", "m", "--revision", "r", "--no-commit"]
-    assert cli.parse("serve-openai", base, environ={}).admit == "arrival"
+    assert so.admission_order(cli.parse("serve-openai", base, environ={})) == "arrival"
     name = messages.providing("admission").name
-    opts = cli.parse("serve-openai", [*base, "--admit", "release-order", "--protocols-config",
-                                      json.dumps({name: {"hold_ms": 2500}})], environ={})
-    assert so.admission_settings(opts) == {"hold_ms": 2500, "order": "release-order"}
+    given = {"order": "release-order", "hold_ms": 2500}
+    opts = cli.parse("serve-openai", [*base, "--protocols-config", json.dumps({name: given})], environ={})
+    assert so.admission_settings(opts) == given and so.admission_order(opts) == "release-order"
     so.preflight(opts, which=lambda _: None)
-    with pytest.raises(SystemExit):
-        cli.parse("serve-openai", [*base, "--admit", "boundary"], environ={})
-    with pytest.raises(cli.UsageError, match="hold_ms a positive number"):
-        so.preflight(cli.parse("serve-openai", [*base, "--admit", "release-order", "--protocols-config",
-                                                json.dumps({name: {"hold_ms": 0}})], environ={}), which=lambda _: None)
+    for bad, why in (({"order": "boundary"}, "order one of"), ({**given, "hold_ms": 0}, "hold_ms a positive number")):
+        with pytest.raises(cli.UsageError, match=why):
+            so.preflight(cli.parse("serve-openai", [*base, "--protocols-config", json.dumps({name: bad})], environ={}), which=lambda _: None)
 
 
 def test_without_the_flag_a_release_header_changes_nothing(tmp_path):

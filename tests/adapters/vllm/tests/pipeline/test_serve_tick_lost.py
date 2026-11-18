@@ -1,4 +1,4 @@
-"""`verity-vllm serve-openai` under ``--admit tick`` with a Commit, when the watermark names a release lost: what the
+"""`verity-vllm serve-openai` under order ``tick`` with a Commit, when the watermark names a release lost: what the
 Commit, the scheduler's trace and each window's advice hold of its request, and that the run still encodes under the
 certified tick. The stand-in server of `test_serve_advice` (its HTTP side, engine loop and Commit as `main` runs them),
 the gate over its advice trace as `main` puts it, serves one run whose watermark the test sends as the network attester
@@ -70,7 +70,7 @@ class TickEngine(SchedEngine):
 
 
 class TickServer(Server):
-    """`Server` under ``--admit tick``, as `serve_openai.main` wires it: the gate over the advice trace's wrappers, the
+    """`Server` under order ``tick``, as `serve_openai.main` wires it: the gate over the advice trace's wrappers, the
     engine loop waiting on it, and the frontend's `TickAdmit`. ``added`` counts the requests the engine loop has added,
     each in the engine (through the gate) and then in the Commit, and ``lines`` the watermark lines the frontend has
     read."""

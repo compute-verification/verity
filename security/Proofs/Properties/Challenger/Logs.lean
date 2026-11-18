@@ -14,14 +14,15 @@ Two logs a session's reader reads line by line, each line the canonical text of 
 * the pins log, whose line names the commit the auditor's device ran: the text of a plain value of the line's form
   reads as its commit (`pinOf_of_canon`);
 * the release log of a session that released one challenge of one family: under the head the commitment writes, the
-  root's line (`rootLine`) and the release's line (`releaseLine`) read as the family's one root (`released_one`).
+  root's line (`rootLine`) and the release's line (`releaseLine`) read as the family's one root and its release
+  (`released_one`).
 -/
 
 @[expose] public section
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open private isDigest strOf isTime from Spot.ChallengerSession
+open private isDigest strOf from Spot.ChallengerSession
 
 namespace Properties.Challenger.Logs
 
@@ -61,9 +62,24 @@ def releaseLine (label : String) (after : ByteArray) : Json :=
   Json.mkObj [("after", .str (Flock.hexOf after)), ("event", .str "release"), ("index", Lean.toJson (0 : Nat)),
     ("label", .str label), ("released_at", Lean.toJson (0 : Nat))]
 
-theorem jsonStrIs_str (s : String) : jsonStrIs (.str s) s = true := by simp [jsonStrIs]
+/-- The log of the one root and its release: the family `label`'s root `after` at coin 0, received and released at 0,
+on the lines after the head. -/
+def oneLog (label : String) (after : ByteArray) : Log :=
+  [⟨.recorded, label, 0, after, 0, 1⟩, ⟨.released, label, 0, after, 0, 2⟩]
 
-theorem isTime_nat (n : Nat) : isTime (.num ⟨n, 0⟩) = true := by simp [isTime, nat?, int?]
+theorem byFamily_oneLog {c : LiveCommitment} {label : String} {after : ByteArray} {n : Nat}
+    (hf : c.families = [(label, n)]) : byFamily c (oneLog label after) = [(label, [after])] := by
+  simp [byFamily, oneLog, hf]
+
+theorem oneLog_roots (label : String) (after : ByteArray) :
+    ((oneLog label after).filter (·.label == label)).all (·.root == after) = true := by
+  simp [oneLog, Steps.bytes_beq]
+
+theorem releasedAfter_oneLog (label : String) (after : ByteArray) :
+    releasedAfter (oneLog label after) label after = [0] := by
+  simp [releasedAfter, oneLog, Steps.bytes_beq]
+
+theorem jsonStrIs_str (s : String) : jsonStrIs (.str s) s = true := by simp [jsonStrIs]
 
 theorem canon_zero : ∃ t, Flock.canon (Lean.toJson (0 : Nat)) = .ok t ∧ t.length ≤ 1 :=
   ⟨_, canon_num 0, by decide⟩
@@ -111,12 +127,14 @@ theorem good_releaseLine (label : String) (after : ByteArray) : Good (releaseLin
     all_goals first | exact Good.str _ | exact Good.num _)
 
 /-- **The log of one root and one release gives the family its root**: under the head a commitment of the one family
-`label` writes, the root's line and the release's line, each the text of its value, read as the family's one root. -/
+`label` with at least one coin writes, the root's line and the release's line, each the text of its value, read as the
+family's root at coin 0 and its release. -/
 theorem released_one {c : LiveCommitment} {label : String} {after : ByteArray} {n : Nat}
-    (hf : c.families = [(label, n)]) (hl : PlainStr label) (hll : label.length ≤ 128) (ha : after.size = 64) :
+    (hf : c.families = [(label, n)]) (hn : 0 < n) (hl : PlainStr label) (hll : label.length ≤ 128)
+    (ha : after.size = 64) :
     ∃ a b, Flock.canon (rootLine label after) = .ok a ∧ Flock.canon (releaseLine label after) = .ok b ∧
-      releasedRootsOf c ["{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}", a, b] =
-        .ok [(label, [after])] := by
+      releasedLogOf c ["{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}", a, b] =
+        .ok (oneLog label after) := by
   have hx : (Flock.hexOf after).length = 128 := by rw [hexOf_len, ha]
   obtain ⟨a, hca, hla⟩ := canon_rootLine after hl
   obtain ⟨b, hcb, hlb⟩ := canon_releaseLine after hl
@@ -144,9 +162,8 @@ theorem released_one {c : LiveCommitment} {label : String} {after : ByteArray} {
   have h8 : getD s "index" = .num ⟨(0 : Nat), 0⟩ := read_num hss rfl
   have h9 : getD s "label" = .str label := read_str hss rfl
   have h10 : getD s "after" = .str (Flock.hexOf after) := read_str hss rfl
-  exact ⟨a, b, hca, hcb, Steps.releasedRootsOf_one hf hta htb hr hs hkr hks (by rw [h1]; exact jsonStrIs_str _)
-    (by rw [h2]; exact jsonStrIs_str _) (by rw [h3]; exact isTime_nat 0) (by rw [h4]; exact isTime_nat 0) h5 h6
-    (Flock.Hex.unhex_hexOf after) (by rw [h7]; rfl) (by rw [h8]; rfl) (by rw [h9]; exact jsonStrIs_str _)
-    (by rw [h10]; exact jsonStrIs_str _) hx⟩
+  exact ⟨a, b, hca, hcb, Steps.releasedLogOf_one hf hn hta htb hr hs hkr hks h1 h2 (by rw [h3]; simp [nat?, int?])
+    (by rw [h4]; simp [nat?, int?]) (Nat.le_refl 0) h5 h6 hx (Flock.Hex.unhex_hexOf after)
+    (by rw [h7]; simp [nat?, int?]) (by rw [h8]; rfl) h9 h10⟩
 
 end Properties.Challenger.Logs

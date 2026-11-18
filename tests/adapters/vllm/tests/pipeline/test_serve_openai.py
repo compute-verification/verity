@@ -1005,16 +1005,17 @@ def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp
 
 
 def test_a_window_the_tick_admitted_names_no_slice_and_says_why(tmp_path):
-    """No compile slice replays the certified tick's admission. So under ``--admit tick`` (`serve_openai.no_slice`) each
+    """No compile slice replays the certified tick's admission. So under order ``tick`` (`serve_openai.no_slice`) each
     window's served rows record has a null ``slice`` and says why in ``no_slice``, and serve.json says it once
     (`serve_openai.no_slice_record`). Its rows are committed as under any other admission, where the record is, byte
     for byte, the commitment's with the statics and `SERVED_SLICE`, and serve.json has no field more."""
-    def opts(*more: str) -> so.Options:
+    def opts(order: str | None = None) -> so.Options:
+        more = ["--protocols-config", json.dumps({so.M.providing("admission").name: {"order": order}})] if order else []
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
 
-    why = so.no_slice(opts("--admit", "tick"))
+    why = so.no_slice(opts("tick"))
     assert why == sc.NO_TICK_SLICE and sc.SERVED_SLICE in why
-    assert [so.no_slice(o) for o in (opts(), opts("--admit", "arrival"), opts("--admit", "release-order"))] == [None] * 3
+    assert [so.no_slice(o) for o in (opts(), opts("arrival"), opts("release-order"))] == [None] * 3
     statics = served_statics()
     for name, no_slice, named in (("named", None, {"slice": "CompileSlice_v7"}), ("tick", why, {"slice": None, "no_slice": why})):
         (out := tmp_path / name).mkdir()
