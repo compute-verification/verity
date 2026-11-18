@@ -202,19 +202,20 @@ class PearlCArm:
         self.coins: dict[str, Any] = {"source": "in-process"}
 
     def kernel(self, card: str | None = None) -> tuple[str, Path]:
-        """The kernel scheme and kernel directory the arm serves with, fixed at the first call: the scheme
-        `verity_bench.schemes.kernel_scheme` derives from the arm's useful-work scheme and the card ``card`` (its short
-        name; where None, the leased card's, `kit.card_short` of the run's stamp), for the served model's weights, which
+        """The kernel scheme and kernel directory the arm serves with, fixed at the first call: the scheme the arm's
+        served useful-work scheme's declaration runs (its ``kernels``, `scheme.declared`; `verity_bench.schemes.served`) on the card ``card`` (its short name;
+        where None, the leased card's, `kit.card_short` of the run's stamp), for the served model's weights, which
         registration pins, and its directory ``PEARLC_KERNEL`` or the tree's (`kernel_directory`)."""
         if self._kernel is None:
+            from verity.protocols.resource_accounting.scheme import declared
             from verity_bench import kit
-            from verity_bench.schemes import kernel_scheme
+            from verity_bench.schemes import arch, served, useful_work
 
             if self.protocol is None:
                 raise ValueError(f"{self.id} names no useful-work scheme: build it as {type(self).__name__}(NAME), NAME "
                                  "a registered compute scheme's name")
             card = card or kit.card_short(kit.host_stamp()["card"])
-            scheme = kernel_scheme(self.protocol, card, pinned=True)
+            scheme = declared(served(useful_work(self.protocol)), "kernels")(card, pinned=True, arch=arch(card))
             self._kernel = scheme, Path(settings.PEARLC_KERNEL or kernel_directory(scheme, card))
         return self._kernel
 

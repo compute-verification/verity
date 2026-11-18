@@ -267,6 +267,23 @@ def test_a_gamma_of_record_says_whether_its_run_timed_y_s_commitment(tmp_path, s
     del row["commits_y"]
     if commits_y is not None:
         row["commits_y"] = commits_y
-    own = next(m for m in R.measurements(table, {"m": "pearl-plus/h200/C"}) if "member" not in m)
+    own = next(m for m in R.measurements(table, {"m": "pearl-plus/h200/C own"}) if "member" not in m)
     assert (own["value"], own["target"], own["verdict"]) == (row["gamma"]["gamma"], O.GAMMA_MAX, "within target")
     assert own["extra"].get("commits_y", "none written") == ("none written" if commits_y is None else commits_y)
+
+
+def test_a_metrics_row_says_whether_it_has_an_own_reading_whatever_the_doors_order(monkeypatch):
+    """A metric's own reading is the kernel model's on its row's card where the row says ``own``, every reading a member
+    where it says ``members``, whichever card the door lists first; a row saying neither is refused."""
+    table = {"rows": [], "covers": O.covers()}
+
+    def members(row: str) -> list:
+        return [m.get("member") for m in R.measurements(table, {"m": row})]
+
+    for door in (O.DOOR, O.DOOR[::-1]):
+        monkeypatch.setattr(O, "DOOR", door)
+        assert members("pearl-plus/h100/C own") == [None, "llama-3.2-1b-h100"]
+        assert members("pearl-plus/h200/C members") == ["llama-3.1-70b-h200", "llama-3.2-1b-h200"]
+    for bad in ("pearl-plus/h200/C", "pearl-plus/h200 own", "pearl-plus/h200/C mine"):
+        with pytest.raises(ValueError, match="is not 'scheme/card/point own or members'"):
+            R.measurements(table, {"m": bad})

@@ -220,6 +220,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
         out.append(f"the protocols config names {stray}, which this run does not enable")
     executors: dict[str, str] = {}
     sampled = ctx.scheme("sampled-proofs") is not None
+    releasing = sorted({n for n, r in messages.current().requests if isinstance(r, H.ReleaseValue)})
     for entry, name in zip(ctx.enabled, names):
         scheme = entry.partition(":")[2]
         if (declared := messages.option(entry)) is not None:
@@ -230,6 +231,10 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             mod = adapter(name)
         except _refused() as r:
             out.extend(r.reasons)
+            continue
+        if name == "pouw" and releasing:
+            out.append(f"{entry}: the first-stage hash scheme commits its weights from each layer's weight, which "
+                       f"{', '.join(releasing)} releases on this build (ReleaseValue): they don't run in one process")
             continue
         known = tuple(mod.schemes())
         if scheme not in known:
