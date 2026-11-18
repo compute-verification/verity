@@ -76,6 +76,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier import ledger
 from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER
 
 HERE = Path(__file__).resolve().parent
+PRIVATE = "its log is in the run's private directory"
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import served_verdicts as S
 from verity_e2e_demo import block_record as BR
@@ -3294,7 +3295,7 @@ def test_the_weights_step_writes_the_serves_first_registration_record_and_says_w
     assert "printf '%s\\n' weights_registration.json deployment-registration.json " in script
     rc, lines = _weights(tmp_path / "refused", REFUSE="1")
     assert rc == 1 and len(lines) == 1 and lines[0].startswith("NO WEIGHTS REGISTRATION: "), lines
-    assert "the checkpoint is not of record" in lines[0]
+    assert lines[0].endswith(f"(weights-registration (no exception, exit 2): {PRIVATE})") and "of record" not in lines[0]
     assert not [f.name for f in (tmp_path / "refused" / "serve").iterdir() if f.is_file()]
 
 
@@ -3313,7 +3314,7 @@ def test_a_class_that_counts_passes_and_the_class_of_record_is_not_counted_unask
 
 
 @pytest.mark.parametrize("classes, answers, refused", [
-    ("4,32,4 8,64,4", {"4,32,4": "count", "8,64,4": "refuse", "record": "count"}, "WINDOW-CIRCUIT class 8,64,4 refused (exit 2): "),
+    ("4,32,4 8,64,4", {"4,32,4": "count", "8,64,4": "refuse", "record": "count"}, f"WINDOW-CIRCUIT class 8,64,4 refused (no exception, exit 2): {PRIVATE}"),
     ("4,32,4", {"4,32,4": "expire", "record": "count"}, "WINDOW-CIRCUIT class 4,32,4 timed out after WC_TIMEOUT=30m"),
     ("record", {"record": "expire"}, "WINDOW-CIRCUIT class record timed out after WC_TIMEOUT=30m"),
 ])
@@ -3322,7 +3323,7 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     under WC_TIMEOUT, and no class CLASSES doesn't name is counted."""
     rc, lines, limits = _circuits(tmp_path, classes, answers)
     assert rc != 0 and sum(line.startswith(refused) for line in lines) == 1, lines
-    assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
+    assert not any("prove_path.py window-circuit" in line for line in lines)
     assert len(lines) == len(classes.split()) and limits == ["30m"] * len(classes.split()), (lines, limits)
 
 
@@ -3341,7 +3342,7 @@ def test_under_h1_tie_step_3_writes_v3cs_record_reading_h1s_tables_after_the_cla
     assert [x[x.index("--window-registration") + 1] if "--window-registration" in x else None for x in argv] == [
         None, str(d / "h1" / "w0" / "registration.json")]
     head = "WINDOW-CIRCUIT class 4,32,4 reading H1's tables"
-    assert lines[1].startswith(f"{head}: registered 7 bits" if tied == "count" else f"{head} refused (exit 2): "), lines
+    assert lines[1].startswith(f"{head}: registered 7 bits" if tied == "count" else f"{head} refused (no exception, exit 2): {PRIVATE}"), lines
 
 
 FAKE_INFERENCE_ONLY = '''import json, os, sys
@@ -3495,7 +3496,7 @@ def test_an_inference_only_verdict_that_fails_says_so_and_keeps_its_log_in_the_s
     assert (rc, lines) == (2, ["INFERENCE-ONLY failed (exit 2): its log in the serve dir, on the node"])
     assert (tmp_path / "serve" / "inference-only.err").read_text() == "inference_only.py: no torch\n"
     rc, lines, _calls = _inference_only(tmp_path / "policy", "inference-policy", IO_FAIL="1")
-    assert (rc, lines) == (2, ["INFERENCE-ONLY POLICY failed (exit 2): inference_only.py: no torch"])
+    assert (rc, lines) == (2, [f"INFERENCE-ONLY POLICY failed (no exception, exit 2): {PRIVATE}"])
 
 
 @pytest.mark.parametrize("n, said", [
@@ -3738,7 +3739,7 @@ def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
     rc, lines, order, _limits = _v3c(tmp_path, FAIL_PERIOD="1")
     assert rc == 1 and order[:2] == ["window-circuit", "window-commit"]
     assert sorted(order[2:]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
-    assert any("the audit under it wrote no Program" in x for x in lines[-3:-1])
+    assert any(x.startswith("V3C-PERIOD (records_audit.py period exit 1): ") and x.endswith(PRIVATE) for x in lines[-3:-1]), lines
     assert lines[-1] == "CERTIFIER-PERIOD: not run: V3c wrote no period.json"
     pieces = tmp_path / "out" / "pieces" / "certifier"
     assert not (pieces / "answer.json").exists() and not (pieces / "chain.log").exists()
@@ -3752,8 +3753,7 @@ UNREAD = "so the split network attester's chain and period check, which read it,
     ("timeout", f"V3c's window commit at class {W63K4} did not finish within V3C_TIMEOUT=7m (exit 124), {UNREAD}: the "
                 "commit is processor work, off the GPU, that grows with the class's units; set V3C_TIMEOUT to cover it "
                 "(`served_verdicts.sh v3c` defaults to 120m)"),
-    ("refused", f"V3c's window commit at class {W63K4} refused (exit 2): prove_path.py window-commit: the row dir holds no "
-                f"window K, {UNREAD}"),
+    ("refused", f"V3c's window commit at class {W63K4} refused (no exception, exit 2): {PRIVATE}, {UNREAD}"),
 ])
 def test_a_commit_out_of_time_or_refused_leaves_the_network_attesters_row_refused_saying_which(tmp_path, cut, said):
     """A window commit that `timeout` stops (a stub of it exiting 124) or that is refused leaves the split network
@@ -3852,7 +3852,7 @@ def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_cha
     ({"ADVICE_RC": "3"}, 14, ["compiler", "advice"],
      "TIE: the window's advice is pending: a request of it runs on past its close, with no Commit record yet"),
     ({"FAIL_COMMIT": "1"}, 16, ["compiler", "advice", "window-commit"],
-     f"TIE: window-commit class {W63K4} refused (exit 2): prove_path.py window-commit: the row dir holds no window 7"),
+     f"TIE: window-commit class {W63K4} refused (no exception, exit 2): {PRIVATE}"),
 ])
 def test_a_tie_whose_advice_is_pending_or_whose_commit_is_refused_writes_no_record_r(tmp_path, extra, rc, steps, said):
     """A request carried past the window's close has no Commit record until a later close, so its advice can't be written
@@ -4018,7 +4018,7 @@ def test_v3c_on_an_existing_serve_dir_needs_no_row_dir_taps_or_gpu_lease(tmp_pat
     rc, lines, order, _limits = _v3c(tmp_path, lease=False, **gone)
     assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
     rc, lines, _order, _limits = _v3c(tmp_path / "no-venv", lease=False, VENV=str(tmp_path / "no-venv" / "none"), **gone)
-    assert rc == 3 and lines[-1].startswith(f"PREFLIGHT: no {tmp_path / 'no-venv' / 'none'}/bin/python"), lines
+    assert rc == 3 and lines[-1].startswith("PREFLIGHT: no python under VENV"), lines
 
 
 @pytest.mark.parametrize("extra, linked", [({}, False), ({"V3C_ARCHIVE_LINK": "1"}, True), ({"V3C_ARCHIVE_LINK": "0"}, False)])
@@ -4276,7 +4276,7 @@ def test_v3c_reserves_no_session_on_a_run_root_the_gate_opened_or_while_its_lane
 
 def _not_development(challenger: str) -> str:
     return ("PREFLIGHT: V3c's audit is the sampled-proofs audit of record, and V3C_CHALLENGER (default PP_CHALLENGER) is "
-            f"{challenger}, a development session, which only a development run takes: set PP_CHALLENGER=gate:USER@HOST "
+            "a development session, which only a development run takes: set PP_CHALLENGER=gate:USER@HOST "
             "with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1")
 
 
@@ -4285,11 +4285,11 @@ def _not_development(challenger: str) -> str:
     ({"DEVELOPMENT": None, "V3C_CHALLENGER": "loopback:127.0.0.1:7000"}, _not_development("loopback:127.0.0.1:7000")),
     ({"DEVELOPMENT": "yes"}, "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not yes"),
     ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or "
-                                         "gate:USER@HOST, not gate:auditor"),
-    ({"PP_CHALLENGER": LIVE}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} listens on its peer's 127.0.0.1, and V3C_PEER "
+                                         "gate:USER@HOST, and it is none of them"),
+    ({"PP_CHALLENGER": LIVE}, "PREFLIGHT: V3c's audit's session on its gate listens on its peer's 127.0.0.1, and V3C_PEER "
                               "(default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"),
-    ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} is held to the "
-                                                       "challenger key record PP_CHALLENGER_KEY, which is unset and not a "
+    ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, "PREFLIGHT: V3c's audit's session on its gate is held to the "
+                                                       "challenger key record PP_CHALLENGER_KEY, which is unset or not a "
                                                        "readable file"),
 ])
 def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_development_run_or_a_live_one_it_cannot_hold(
@@ -4310,7 +4310,7 @@ def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a
                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **NO_V3C)
     assert (rc, lines, order) == (3, [
         "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER "
-        f"is {challenger or 'local'}, a development session, which only a development run takes: set "
+        "is a development session, which only a development run takes: set "
         "PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1"], [])
 
 
@@ -4323,7 +4323,7 @@ def test_the_preflight_refuses_a_v3c_peer_other_than_the_one_the_runs_other_live
     H1_PEER), each listen on their peer's 127.0.0.1, the node the run serves on: a V3C_PEER naming another is refused
     before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), **_live(tmp_path, [], hosts=True), HOST="vy-dc-h200", **extra)
-    assert (rc, lines, order) == (3, [f"PREFLIGHT: V3C_PEER (default PP_PEER) is vy-dc-h200, and {other} is vy-dc-h200-3: "
+    assert (rc, lines, order) == (3, [f"PREFLIGHT: V3C_PEER (default PP_PEER) and {other} differ: "
                                       "each names the node the run serves on, where V3c's audit's session listens as the "
                                       "other one does"], [])
 
@@ -4540,7 +4540,7 @@ def test_under_pearlplus_tie_the_pieces_tie_commits_the_window_cut_at_pearls_lin
 
 @pytest.mark.parametrize("extra, rc, said", [
     ({"FAIL_COMMIT": "1"}, 16,
-     f"PEARL-TIE: window-commit class {W63K4} refused (exit 2): prove_path.py window-commit: the row dir holds no window 7"),
+     f"PEARL-TIE: window-commit class {W63K4} refused (no exception, exit 2): {PRIVATE}"),
     ({"BREAK_CHAIN": "1"}, 16, f"PEARL-TIE: window-commit's registration R is chained after {'ef' * 8}…, not right after "
                                f"Pearl+'s W {DD.digest(PEARL_WREC)[:16]}…"),
     ({"PEARLPLUS_TIE": ""}, 3, "PEARL-TIE: PEARLPLUS_TIE or V3C_CLASS is empty"),
@@ -4613,8 +4613,7 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
         "--revision": "ccf98f3652864935e2973dd22fe15fffd514f865"})
     published = tmp_path / "out" / "served-compare" / "served_compare.json"
     if case == "died":
-        assert (run.returncode, lines) == (2, ["SERVED-COMPARE: NOT EQUAL (served_compare.py exit 2: served_compare.py: died "
-                                               "before a verdict)"]), run.stderr
+        assert (run.returncode, lines) == (2, [f"SERVED-COMPARE: NOT EQUAL (served_compare.py (no exception, exit 2): {PRIVATE})"]), run.stderr
         assert not stale.exists() and not published.exists()
         return
     said = f"SERVED-COMPARE: {'NOT EQUAL' if rc else 'EQUAL'} (the serve against row {PEARL_ROW}'s Build of record)"
@@ -4636,9 +4635,9 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
     at = {f: argv[argv.index(f) + 1] for f in ("--protocols", "--protocols-config", "--model", "--revision", "--precision",
                                                "--window-steps")}
-    assert at == {"--protocols": "pouw:pearl-c-h100-v1-h3", "--model": "unsloth/Llama-3.2-1B",
+    assert at == {"--protocols": "pearl-plus", "--model": "unsloth/Llama-3.2-1B",
                   "--revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "--precision": "bfloat16", "--window-steps": "4",
-                  "--protocols-config": json.dumps({"pouw": {"device": "cuda", "kernel": "pearl_c_sm90",
+                  "--protocols-config": json.dumps({"pearl-plus": {"device": "cuda", "kernel": "pearl_c_sm90",
                                                              "cubin": "/c/pearl_c_sm90.cubin"},
                                                     **json.loads(RELEASE_ORDER)})}
     assert argv.count("--protocols") == argv.count("--protocols-config") == 1 and "--h1-prover" not in argv and "--h1-window-commit" not in argv
@@ -4648,9 +4647,9 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
     assert {f: gated[gated.index(f) + 1] for f in ("--challenger-gate", "--challenger-peer", "--challenger-lane")} == {
         "--challenger-gate": GATE, "--challenger-peer": "vy-dc-h200", "--challenger-lane": "compute-accounting"}
     assert gated.count("--protocols") == 1 and "--h1-prover" not in gated
-    assert "users" not in json.loads(gated[gated.index("--protocols-config") + 1])["pouw"]
+    assert "users" not in json.loads(gated[gated.index("--protocols-config") + 1])["pearl-plus"]
     _rc, fronted = _serve_argv(tmp_path / "fronted", {**PEARL_TIES, **cubin, **live, "CERTIFIER_FRONT": "true"})
-    assert json.loads(fronted[fronted.index("--protocols-config") + 1])["pouw"]["users"] == r"fixed\.[0-9]+"
+    assert json.loads(fronted[fronted.index("--protocols-config") + 1])["pearl-plus"]["users"] == r"fixed\.[0-9]+"
     assert "--pearl-users" not in fronted and fronted.count("--protocols-config") == 1
     calls, d = (tmp_path / "calls").read_text().splitlines(), tmp_path / "serve" / "pearlplus"
     assert [c.split("prove_path/prove_path.py ", 1)[-1] for c in calls[-4:-2]] == [
@@ -4976,7 +4975,7 @@ def test_the_preflight_refuses_a_step_3_partition_it_cant_read_where_the_compile
     rc, lines, order, _limits = _partition_preflight(tmp_path, True)
     assert (rc, order) == (3, []) and len(lines) == 1, lines
     assert lines[0].startswith("PREFLIGHT: step 3's partition PP_PARTITION benchmarks/prove_path/llama32_1b_tg_l0_step1.json "
-                               "can't be read: FileNotFoundError"), lines
+                               "can't be read (FileNotFoundError, exit 1)"), lines
 
 
 @pytest.mark.parametrize("extra, line", [
@@ -5020,7 +5019,7 @@ def test_the_preflight_refuses_pearlplus_tie_under_a_live_gate_without_main_file
 #: `df` on a toy filesystem: its arguments in $ORDER.df, the line under its header DF_LINE
 FAKE_DF = 'echo "$@" > "$ORDER.df"\necho "Inodes IFree Mounted on"\necho "$DF_LINE"'
 #: the preflight's refusal of a serve dir short of inodes: ``{short}`` short of ``{inodes}``, ``{held}`` what holds them
-SHORT_OF_INODES = ("PREFLIGHT: the serve dir's filesystem /workspace has 100 inodes free, {short} short of PEARLPLUS_INODES "
+SHORT_OF_INODES = ("PREFLIGHT: the serve dir's filesystem has 100 inodes free, {short} short of PEARLPLUS_INODES "
                    "({inodes}), two commits of the tied window at three files a member. {held}. Remove enough, each with "
                    "its retention record's owner's yes and none that a deferred V3c audit still reads: `research "
                    "retention rm DIR --approved-by @OWNER --ref WHERE-THEY-SAID-YES` is the dry run, and `--apply` "
@@ -5545,10 +5544,10 @@ def test_a_follow_on_of_a_deferral_of_record_samples_on_the_challenger_it_record
 
 
 @pytest.mark.parametrize("extra, line", [
-    ({"V3C_PEER": "vy-dc-h200"}, "PREFLIGHT: V3C_PEER (default PP_PEER) is vy-dc-h200, the served node's (SERVED_PEER), "
+    ({"V3C_PEER": "vy-dc-h200"}, "PREFLIGHT: V3C_PEER (default PP_PEER) is the served node's (SERVED_PEER), "
      "which deferred the audit: its session would listen on that node's 127.0.0.1, not this one's; name this node as the "
      "gate's /etc/vy/peers does"),
-    ({"V3C_PEER": None}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} listens on its peer's 127.0.0.1, and V3C_PEER "
+    ({"V3C_PEER": None}, "PREFLIGHT: V3c's audit's session on its gate listens on its peer's 127.0.0.1, and V3C_PEER "
      "(default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"),
     ({"DEVELOPMENT": "1"}, f"{CLASH} DEVELOPMENT: unset it"),
     ({"V3C_CHALLENGER": "local"}, f"{CLASH} V3C_CHALLENGER: unset it"),
@@ -5586,7 +5585,7 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
     and neither the serve root nor Flock's work dir is made."""
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
-    assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
+    assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed, {said}. {ONLY}"], [], [])
     assert not (tmp_path / "root").exists() and not (tmp_path / "fw").exists()
 
 
@@ -5595,7 +5594,7 @@ def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_pa
     node's tree) and stops before its copy's check or V3c's audit."""
     assert _deferred(tmp_path).returncode == 0
     rc, lines, order, _limits = _follow(tmp_path, PREFLIGHT_ONLY="1")
-    assert (rc, lines, order) == (0, ["PREFLIGHT passed on cpu-6, 755 GB: the follow-on of vy-dc-h200's deferral, its "
+    assert (rc, lines, order) == (0, ["PREFLIGHT passed, 755 GB: the follow-on of vy-dc-h200's deferral, its "
                                       f"compose hand-off for COMPOSE_NODE (vy-auditor-2). {ONLY}"], [])
 
 
@@ -5634,9 +5633,9 @@ HANDED_READS = ("h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", 
                 f"v3c-w7-{VTAG}/audit/window/case.json")
 HANDED_OWN = ("private/compose/compose.env", "private/compose/inference-only.json",
               "private/compose/pieces/pouw/answer.json", "private/compose/pieces/pouw/served.json")
-HANDOFF_LINE = ("HANDOFF the final record and the composite, composed off this node: on COMPOSE_NODE (vy-auditor-2), "
+HANDOFF_LINE = ("HANDOFF the final record and the composite, composed off this node: on COMPOSE_NODE, "
                 "from the serve dir's verifier-side files and no witness, each file its private/compose/inputs.txt lists, "
-                "copied to the same path there: D={d} bash benchmarks/one_stage/served_verdicts.sh compose")
+                "copied to the same path there: D=<that path> bash benchmarks/one_stage/served_verdicts.sh compose")
 
 
 def _env_of(f: Path, names: str) -> dict[str, str]:
@@ -5807,11 +5806,11 @@ def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its
 
 
 @pytest.mark.parametrize("blob, said", [
-    ("sampled-proofs-served/window/m0/inst-0.bin", "it would carry the served run's witness (WITNESS "
+    ("sampled-proofs-served/window/m0/inst-0.bin", ": it would carry the served run's witness (WITNESS "
      "sampled-proofs-served/window/m0/inst-0.bin: a prover's instance file (its rows))"),
-    ("sampled-proofs-served/window/m0/prover/rows.bin", "it would carry the served run's witness (WITNESS "
+    ("sampled-proofs-served/window/m0/prover/rows.bin", ": it would carry the served run's witness (WITNESS "
      "sampled-proofs-served/window/m0/prover/rows.bin: a prover's input file (its rows and salts))"),
-    ("/elsewhere/pub-0.bin", "{case} names a blob outside the serve dir: /elsewhere/pub-0.bin"),
+    ("/elsewhere/pub-0.bin", f" (no exception, exit 1): {PRIVATE}"),
 ])
 def test_a_hand_off_that_would_carry_a_witness_or_a_blob_outside_the_serve_dir_is_refused(tmp_path, blob, said):
     """No witness leaves the served node: a case naming a prover's file as a blob, or a blob outside the serve dir, refuses
@@ -5820,7 +5819,7 @@ def test_a_hand_off_that_would_carry_a_witness_or_a_blob_outside_the_serve_dir_i
     case = tmp_path / "serve" / "sampled-proofs-served" / "window" / "case-v2.json"
     assert run.returncode == 1
     assert (tmp_path / "served-out" / "verdicts.txt").read_text().splitlines() == [
-        "HANDOFF refused: " + said.replace("{case}", str(case))]
+        "HANDOFF refused" + said]
     assert not (tmp_path / "serve" / "private" / "compose" / "inputs.sha256").exists()
 
 
@@ -5893,8 +5892,8 @@ def _compose(tmp_path: Path, keep: tuple[str, ...] = (), link: tuple[str, Path] 
     return rc, said.read_text().splitlines() if said.exists() else [], order.read_text().split() if order.exists() else []
 
 
-COMPOSED = ("COMPOSE on vy-auditor-2 (COMPOSE_NODE vy-auditor-2): the final record and the composite of the served "
-            "node vy-dc-h200, from its compose hand-off (verifier-side files, no witness; {audit}; the record's sampled "
+COMPOSED = ("COMPOSE on COMPOSE_NODE: the final record and the composite of the served "
+            "node, from its compose hand-off (verifier-side files, no witness; {audit}; the record's sampled "
             "proofs {sampled}), each file as it hashed it (the serve dir's private/compose/inputs.sha256): {verdict}")
 STEP3 = "sampled-proofs-served"
 
@@ -5937,8 +5936,8 @@ COMPOSE_CLASH = ("PREFLIGHT: the compose follow-on runs at the hand-off's settin
 @pytest.mark.parametrize("keep, change, extra, line", [
     ((), "sampled-proofs-served/window/m0/pub-0.bin", {}, COMPOSED.format(
         audit="no V3c audit", sampled=STEP3, verdict="FAIL (the serve dir's private/compose/check.log)")),
-    ((), None, {"HOST": "vy-dc-h200"}, "PREFLIGHT: this is the served node vy-dc-h200, which the prover controls, so "
-     "nothing composed here claims a record: compose on COMPOSE_NODE (vy-auditor-2)"),
+    ((), None, {"HOST": "vy-dc-h200"}, "PREFLIGHT: this is the served node (SERVED_NODE), which the prover controls, so "
+     "nothing composed here claims a record: compose on COMPOSE_NODE"),
     (("advice/w7/private/advice.bin",), None, {}, "PREFLIGHT: the compose follow-on holds no witness of the served run, "
      "and this node's serve dir does (WITNESS advice/wK/private/advice.bin: the advice and its opening): compose on a "
      "node that holds the hand-off alone"),
@@ -5949,7 +5948,7 @@ COMPOSE_CLASH = ("PREFLIGHT: the compose follow-on runs at the hand-off's settin
     ((), None, {"RESEARCH_SOURCE_SHA": "cd" * 20}, "PREFLIGHT: the compose follow-on composes with the served node's "
      f"tree {SHA}, and this tree is {'cd' * 20}: run it at that commit, or set FOLLOW_ANY_TREE=1"),
     ((), "private/compose/compose.env", {}, "PREFLIGHT: the compose follow-on composes from the served node's hand-off, "
-     "and the serve dir {d} holds none (private/compose/compose.env): copy each file its private/compose/inputs.txt "
+     "and the serve dir D holds none (private/compose/compose.env): copy each file its private/compose/inputs.txt "
      "lists to the same path here first"),
 ])
 def test_a_compose_follow_on_refuses_the_served_node_a_witness_a_changed_copy_another_setting_or_tree(
@@ -6108,8 +6107,8 @@ def test_a_compose_follow_on_refuses_a_case_blob_that_isnt_a_file_of_the_copy(tm
     _forged(tmp_path, case, json.dumps({"blobs": [str(d / BLOBS[0]), blob.format(d=d)]}) + "\n")
     rc, lines, order = _compose(tmp_path)
     assert (rc, lines[1:], order) == (3, [
-        "COMPOSE refused: the cases' blobs don't rebase from the served node's serve dir to this copy (REBASE refused: "
-        f"ValueError: {case} {why.format(d=d)})"], []), lines
+        f"COMPOSE refused: the cases' blobs don't rebase from the served node's serve dir to this copy (no exception, exit 1): "
+        f"{PRIVATE}"], []), lines
     assert lines[0] == COMPOSED.format(audit="no V3c audit", sampled=STEP3, verdict="PASS")
 
 
@@ -6560,7 +6559,7 @@ def test_copy_sends_each_file_a_list_names_and_nothing_else_to_the_same_path_on_
     listed = (d / "private" / kind / "inputs.txt").read_text().splitlines()
     rc, lines, there = _copy(tmp_path, kind, to, HOST=host)
     assert rc == 0 and there == sorted(listed), (lines, there)
-    assert lines == [f"COPY {what} list's {len(listed)} files to {to.split('@')[-1]}, each to the same path there: PASS"]
+    assert lines == [f"COPY {what} list's {len(listed)} files to its node, each to the same path there: PASS"]
     assert kind == "deferred" or S.witness(there) == []
     args = json.loads((tmp_path / "copied.args").read_text())
     assert args[-2:] == [f"{d}/", f"{to}:{d}/"] and f"--rsync-path=mkdir -p {d} && rsync" in args
@@ -6578,7 +6577,7 @@ def test_copy_to_a_write_only_rsync_sends_the_list_under_the_serve_dirs_name_mak
     rc, lines, _ = _copy(tmp_path, "deferred", to)
     there = tmp_path / "copied" / "vy-nebius-cpu-6" / sub
     assert rc == 0 and sorted(str(p.relative_to(there)) for p in there.rglob("*") if p.is_file()) == sorted(listed), lines
-    assert lines == [f"COPY the deferral's prover-side list's {len(listed)} files to vy-nebius-cpu-6, under {sub}/ in its "
+    assert lines == [f"COPY the deferral's prover-side list's {len(listed)} files to its node, under its "
                      "rsync's directory, which its node moves to the serve dir's path: PASS"]
     args = json.loads((tmp_path / "copied.args").read_text())
     assert args[-2:] == [f"{d}/", f"research@vy-nebius-cpu-6:{sub}/"] and not any(a.startswith("--rsync-path") for a in args)
@@ -6601,7 +6600,7 @@ def test_copy_to_a_write_only_rsync_sends_the_list_under_the_serve_dirs_name_mak
      "(private/compose/inputs.txt and compose.env)"),
     ("handed", "values", "vy-auditor-2", {}, 3, "COPY refused: served_verdicts.sh copy deferred|compose HOST[:DIR], not values"),
     ("handed", "compose", "vy-auditor-2", {"RSYNC_EXIT": "23"}, 23, "COPY the hand-off's verifier-side list's 22 files "
-     "to vy-auditor-2, each to the same path there: FAIL (exit 23, the serve dir's private/copy-compose.log)"),
+     "to its node, each to the same path there: FAIL (exit 23, the serve dir's private/copy-compose.log)"),
 ])
 def test_copy_never_sends_a_deferrals_witness_to_compose_node_nor_a_hand_off_to_the_served_node_or_with_a_witness(
         tmp_path, made, kind, to, extra, rc, line):
@@ -6768,7 +6767,7 @@ POUS_PIECE = 'bash benchmarks/pous/served_piece.sh "$@"'
      f"pins this one, or {NO_PIECE}"),
     (POUS_PIECE, 'echo "ModuleNotFoundError: No module named torch" >&2; exit 1',
      "PREFLIGHT: PoUS's piece can't be asked whether it pins some/model@abc, the checkpoint this run serves "
-     "(onsite_pous_pins exit 1: ModuleNotFoundError: No module named torch): the piece would not start on this node "
+     f"(onsite_pous_pins (ModuleNotFoundError, exit 1): {PRIVATE}): the piece would not start on this node "
      f"either. Mend what it names, or {NO_PIECE}"),
     ("", 'exit 3', None),
     ("another-piece", 'exit 3', None),
@@ -6821,7 +6820,7 @@ def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
            "ONSITE_PIECES": "nowhere/pieces.sh"}
     got = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                          check=False, capture_output=True, text=True)
-    assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: ONSITE_PIECES={tree}/nowhere/pieces.sh is not a file")
+    assert (got.returncode, got.stderr.strip()) == (3, "PREFLIGHT: ONSITE_PIECES is not a file")
 
 
 @pytest.mark.parametrize("files, keys, want", [
@@ -6867,7 +6866,7 @@ def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused
     assert (rc, said) == (3, ["PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"])
     got = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree,
                          env={**env, "SETTINGS": str(tmp_path / "missing.env")}, check=False, capture_output=True, text=True)
-    assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: SETTINGS={tmp_path / 'missing.env'} is not a readable file")
+    assert (got.returncode, got.stderr.strip()) == (3, "PREFLIGHT: SETTINGS is not a readable file")
 
 
 @pytest.mark.parametrize("product, extra, line", [
@@ -7556,7 +7555,7 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "adapters" / "vllm", bin_, venv):
         d.mkdir(parents=True)
-    python = (f"case \"$*\" in *NETWORK_ATTESTER*) exec {sys.executable} \"$@\" ;; esac; printf '%s\\n' \"$*\" >> {tmp_path}/calls; case \"$*\" in *prove_path.py\\ class-circuit*) "
+    python = (f"case \"$*\" in *compose.schemes*|*\"import json, sys; v, n =\"*) exec {sys.executable} \"$@\" ;; esac; printf '%s\\n' \"$*\" >> {tmp_path}/calls; case \"$*\" in *prove_path.py\\ class-circuit*) "
               f"while [ $# -gt 0 ]; do [ \"$1\" = --out ] && printf '{{}}\\n' > \"$2\"; shift; done; exit 0;; "
               f"*prove_path.py\\ serve-phi*|*served_verdicts.py\\ pearlplus-period*) exit 0;; esac; "
               "case \"$*\" in *serve-openai*) [ -z \"$SERVE_SAYS\" ] || printf '%s\\n' \"$SERVE_SAYS\";; esac; "
@@ -7582,6 +7581,21 @@ def test_a_serve_that_never_listens_is_said_by_its_exception_and_exit_and_no_lin
     assert rc == 10 and "SERVE: not listening (UsageError, exit 1): its log is in the run's private directory" in said, said
     left = (tmp_path / "run.log").read_text() + "".join(f.read_text(errors="replace") for f in (tmp_path / "out").rglob("*") if f.is_file())
     assert not [x for x in ("10.1.2.3", "secret", "--day-log") if x in left], left
+
+
+def test_a_tool_that_fails_is_said_by_its_exception_and_exit_and_no_line_of_its_log_leaves(tmp_path):
+    """A refused window commit is said by its last exception's class and its exit status (`failed`): no line of its
+    stderr, which can name the row dir and the tool's inputs, reaches the run's output or its stdout and stderr; a tool
+    that passed has its own last line said whole (`tool_said`)."""
+    rc, lines, _order, _limits = _v3c(tmp_path, FAIL_COMMIT="1")
+    left = (tmp_path / "run.log").read_text() + "".join(f.read_text(errors="replace") for f in (tmp_path / "out").rglob("*") if f.is_file())
+    assert rc == 16 and any(x.endswith(f"refused (no exception, exit 2): {PRIVATE}") for x in lines), lines
+    assert "the row dir holds no window" not in left, left
+    log = tmp_path / "tool.log"
+    log.write_text('Traceback (most recent call last):\n  File "/workspace/secret.py"\nOSError: /workspace/secret\n')
+    assert (S.failed(3, [str(log)]), S.tool_said(3, [str(log)])) == (f"(OSError, exit 3): {PRIVATE}", f"OSError; {PRIVATE}")
+    log.write_text("PERIOD served: 7 windows\n\n")
+    assert S.tool_said(0, [str(log)]) == "PERIOD served: 7 windows"
 
 
 NO_HOST = ("PREFLIGHT: VY_CHALLENGER_1_HOST is unset, the address of the host the default gate command reaches (ssh -i "
@@ -7668,7 +7682,7 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
         d.mkdir(parents=True)
     for fifo in ("ready", "hold"):
         os.mkfifo(tmp_path / fifo)
-    python = (f"case \"$*\" in *NETWORK_ATTESTER*) exec {sys.executable} \"$@\" ;;\nesac\nprintf '%s\\n' \"$*\" >> {tmp_path}/calls\n"
+    python = (f"case \"$*\" in *compose.schemes*|*\"import json, sys; v, n =\"*) exec {sys.executable} \"$@\" ;;\nesac\nprintf '%s\\n' \"$*\" >> {tmp_path}/calls\n"
               "case \"$*\" in\n"
               f"  '-c '*) echo {RELEASE_RUN}; exit 0 ;;\n"
               "  *'verity_vllm.pipeline.cli serve-openai'*)\n"
