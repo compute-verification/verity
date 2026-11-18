@@ -20,7 +20,7 @@ it (`pipeline.config_record`).  Torch-free: vLLM is imported only inside a servi
 The collectives' switches are among them: which of `CudaCommunicator.all_reduce`'s routes are on, FlashInfer's all-reduce backend, and
 NCCL's own (`NCCL_ENVS`, those that change its algorithm, protocol, channels or chunking).  What vLLM resolved from them on a rank, which
 the node decides too (FlashInfer's ``auto`` backend falls back to ``trtllm`` without NVSwitch multicast), is read back beside the
-switches as ``collectives`` (`collectives`) and recorded, not judged: two engines' records compare with `collectives_differ`.
+switches as ``collectives`` (`collectives`) and recorded, not judged.
 """
 from __future__ import annotations
 
