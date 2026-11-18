@@ -162,8 +162,8 @@ WIPE = register(Scheme(
     assumptions=("Verity.Vocab.WipeSound", TRUSTED_DEVICE),
     log=(Order("fill", "reveal"),),
     charges=(),
-    settings={"store": "cuda", "reserve_bytes": wipe_run.CONFIG["reserve_bytes"], "limit_ns": wipe_period.LIMIT_NS}
-    | {k: wipe_served.UNSET[k] for k in ("segments", "tier", "reads")},
+    settings={"store": "cuda", "segments": wipe_served.UNSET["segments"], "reserve_bytes": wipe_run.CONFIG["reserve_bytes"],
+              "tier": wipe_served.UNSET["tier"], "limit_ns": wipe_period.LIMIT_NS, "reads": wipe_served.UNSET["reads"]},
     check_settings=_wipe_check_settings,
     attach=_wipe_attach,
     over="the prior content's bits kept through an accepted wipe, in bits",
