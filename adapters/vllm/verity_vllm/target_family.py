@@ -6,8 +6,8 @@ step.target) must all be that class: otherwise a Hopper-target Program (cc 9.0, 
 `__l40s__` workload has its Match compare an L40S capture against it.  The check is a PREFLIGHT: it runs before Build and
 before any engine, and fails by name `PRECHECK_FAIL_TARGET_FAMILY`.
 
-Family = compute capability (major, minor), the same reading the finalizer applies (l40s 8.9 / a100 8.0 / h100 9.0 /
-b200 10.0).  Three facts are compared with the workload's family:
+Family = compute capability (major, minor), the same reading the finalizer applies (h100 9.0 / b200 10.0 /
+rtxpro6000 12.0).  Three facts are compared with the workload's family:
   declared  -- the manifest's `target.compute_capability` when the workload declares one, else the id's device class when its SM
                count is fixed (`declared_profile`; Build gets it as --target, and a Build-only stage then needs no device)
   device    -- the pod GPU's compute capability (nvidia-smi compute_cap; torch as fallback) when a GPU stage runs here or the Build

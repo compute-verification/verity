@@ -85,7 +85,8 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
 from verity.circuits.population import wired_population_program  # noqa: E402
@@ -437,7 +438,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         publics[s["name"]] = a0.sha512_file(s["dir"] / f"pub-{s['n']}.bin")
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
     k = population if k is None else k
-    sampling_design = D.parse_design(f"stratified:{k}")
+    sampling_design = RND.parse_design(f"stratified:{k}")
     window = window or {"kind": "stand-in", "of": "the proof subprotocol's members (prove_subprotocol.py)",
                         "members": {s["name"]: {"template": P.template_id(s["defn"]), "units": [s["base"], s["base"] + s["n"]]}
                                     for s in staged}, "link": "none"}

@@ -2825,10 +2825,13 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (LINKS_FIRST, links_first_case, LINKS_FIRST_NAMES, 200)]
 
 
+ACCEPTED = {"honest", "slot-order"}
+
+
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])
 def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
-    """Each piece agrees on sampled cases and on every mutation over a few seeds, the honest ones accepted (no reason, no
-    refusal) and each mutation refused."""
+    """Each piece agrees on sampled cases and on every mutation over a few seeds, those `ACCEPTED` names accepted (no
+    reason, no refusal: a release log's slots in any order are no fault) and each other mutation refused."""
     stats = D.run(port, examples=examples, server=pieces)
     outcomes = Counter()
     for name in names:
@@ -2836,7 +2839,7 @@ def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
             kind, text = D.replay(port, make(random.Random(f"{name}/{seed}"), name), pieces)
             clean = kind == "output" and '"refused"' not in text and '"reason":"' not in text
             outcomes[name, clean] += 1
-            assert clean == (name == "honest"), (port.fn, name, seed, kind, text)
+            assert clean == (name in ACCEPTED), (port.fn, name, seed, kind, text)
             assert name not in FAMILY_ROOTS or json.loads(text) == {"reason": T.FAMILY_ROOT}, (port.fn, name, seed, text)
             assert name != "link-tables" or f": {Ch.LINK_TABLES}" in text, (port.fn, seed, text)
             assert name != "link-root-len" or f": {Ch.LINK_ROOT_LEN}" in text, (port.fn, seed, text)
