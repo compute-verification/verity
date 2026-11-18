@@ -142,8 +142,8 @@ from verity.protocols.resource_accounting.network.prover import serve_head as HD
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL,
                                    serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
                                    serve_seal as SS)
-from verity_vllm.pipeline.serve_admit import (ADMIT, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
-                                              engine_id_of, keep_scheduler_rows, new_http_id)
+from verity.protocols.resource_accounting.network.prover.admission import WATERMARK_PATH, ReleaseOrder, Tick, TickAdmit, TickGate
+from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
                                                records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop
@@ -701,7 +701,7 @@ def main(opts: Options) -> int:
         loop.gate = TickGate(Tick.of_ms(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms), hold_s=opts.admit_hold_ms / 1000)
         loop.gate.attach(messages.current())
         ticked = loop.hook = admission.install(scheduler(engine), key=external_id)
-        order = TickAdmit(loop.submit, loop.abort, loop.tick)
+        order = TickAdmit(loop.submit, loop.abort, loop.tick, refuse=lambda adm, why: adm.deliver(Delta([], "", error=why)))
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
                     defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order)
     http = HttpThread(server, opts.host, opts.port)

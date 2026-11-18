@@ -21,6 +21,7 @@ from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.prover import io_ids as I
 from verity.protocols.resource_accounting.network.verifier import io_request as Q
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.circuits.boolean import benes as BN
 from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
@@ -463,6 +464,6 @@ def test_the_unit_is_its_reference():
     rq = sh.request
     parts = (rq.N * (a(bind(Q.IoTieRequestFrame, B=sh.B)) + a(bind(Q.IoTieRequestStep)) + a(bind(I.IoTieIdsSlots, B=B)))
              + rq.L * a(bind(Q.IoTieRequestEnd))
-             + a(bind(IT.IoTieRoute, W=sh.CB + sh.D1, D=sh.D1)) + a(bind(I.IoTieIdsKeys, NK=sh.NK, CB=sh.CB, D1=sh.D1))
-             + a(bind(IT.IoTieRoute, W=sh.CB + 33, D=sh.D2)) + a(bind(I.IoTieIdsChain, CB=sh.CB, D2=sh.D2)) + rq.L + 1)
+             + a(bind(BN.IoTieRoute, W=sh.CB + sh.D1, D=sh.D1)) + a(bind(I.IoTieIdsKeys, NK=sh.NK, CB=sh.CB, D1=sh.D1))
+             + a(bind(BN.IoTieRoute, W=sh.CB + 33, D=sh.D2)) + a(bind(I.IoTieIdsChain, CB=sh.CB, D2=sh.D2)) + rq.L + 1)
     assert a(fn) == parts

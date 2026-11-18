@@ -1629,7 +1629,7 @@ AsyncScheduler, 1,021,302 ANDs, and 857,866 at the sync class), and its `--zk` r
 
 ## The replay at the served shape
 
-In [protocol/served-shape.md](protocol/served-shape.md): a served execution phase as the slice's input (vLLM 8eb1's w212), and
+In the adapter's [served-shape.md](../../../../../adapters/vllm/verity_vllm/compiler/served-shape.md): a served execution phase as the slice's input (vLLM 8eb1's w212), and
 the replay's cost at served shapes and its split into proof blocks.
 
 ## Tests

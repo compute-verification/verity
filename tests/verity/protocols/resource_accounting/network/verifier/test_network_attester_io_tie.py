@@ -26,6 +26,7 @@ from verity.commitments.gates.frame_v3 import _part, opens
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import row_leaf
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT, network_attester as W, network_attester_rows as WR
+from verity.circuits.boolean import benes as BN
 from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
@@ -566,13 +567,13 @@ def test_the_benes_network_routes_every_permutation():
         for _ in range(20):
             perm = list(range(n))
             rng.shuffle(perm)
-            bits, D = IT.benes(perm), n.bit_length() - 1
+            bits, D = BN.benes(perm), n.bit_length() - 1
             assert len(bits) == (2 * D - 1) << (D - 1)
-            out = IT.benes_apply(list(range(n)), bits)
+            out = BN.benes_apply(list(range(n)), bits)
             assert all(out[perm[i]] == i for i in range(n))
     for bad in ([0], [0, 0, 1, 2], [0, 1, 2]):
         with pytest.raises(ValueError, match="permutation"):
-            IT.benes(bad)
+            BN.benes(bad)
 
 
 def _bits(rows):
@@ -616,12 +617,12 @@ def test_the_route_circuit_is_its_reference():
     for _ in range(3):
         perm = list(range(1 << D))
         rng.shuffle(perm)
-        cases.append(IT.benes(perm))
+        cases.append(BN.benes(perm))
     cases.append([rng.randrange(2) for _ in range(len(cases[0]))])
-    fn = bind(IT.IoTieRoute, W=W_, D=D)
+    fn = bind(BN.IoTieRoute, W=W_, D=D)
     out = np.asarray(evaluate_bits(fn, _bits([[b for x in xs for b in x]] * len(cases)), _bits(cases)))
     for bits, o in zip(cases, out.reshape(len(cases), 1 << D, W_)):
-        assert o.tolist() == IT.benes_apply(xs, bits)
+        assert o.tolist() == BN.benes_apply(xs, bits)
 
 
 def _build_flat_route(C, S, *e):
@@ -649,7 +650,7 @@ def _build_flat_route(C, S, *e):
     return run([list(x) for x in e[:-1]])
 
 
-FLAT_ROUTE = _part("IoTieRouteFlat", ("W", "D"), IT._sig_route, _build_flat_route, "IoTieRoute's flat trace")
+FLAT_ROUTE = _part("IoTieRouteFlat", ("W", "D"), BN._sig_route, _build_flat_route, "IoTieRoute's flat trace")
 
 
 def test_the_recursive_route_is_the_flat_one():
@@ -658,13 +659,13 @@ def test_the_recursive_route_is_the_flat_one():
     nodes, so a deep network is built once a depth (IoTieRequestIds{4096, 16, 1, 512, 6}'s sort is D = 14)."""
     rng = random.Random(7)
     for W_, D in ((1, 1), (5, 1), (3, 2), (8, 3), (9, 4), (36, 4), (44, 5), (2, 6)):
-        new, flat = bind(IT.IoTieRoute, W=W_, D=D), bind(FLAT_ROUTE, W=W_, D=D)
+        new, flat = bind(BN.IoTieRoute, W=W_, D=D), bind(FLAT_ROUTE, W=W_, D=D)
         n = (2 * D - 1) << (D - 1)
         assert GB.ands(new) == GB.ands(flat) == W_ * n
         xs = _bits([[rng.randrange(2) for _ in range(W_ << D)] for _ in range(16)])
         bits = _bits([[rng.randrange(2) for _ in range(n)] for _ in range(16)])
         assert np.array_equal(np.asarray(evaluate_bits(new, xs, bits)), np.asarray(evaluate_bits(flat, xs, bits)))
-    deep = bind(IT.IoTieRoute, W=46, D=14)
+    deep = bind(BN.IoTieRoute, W=46, D=14)
     assert [nd.form for nd in deep.body.nodes] == ["batch", "call", "call", "batch"]
     assert GB.ands(deep) == 46 * (27 << 13)
 
@@ -712,7 +713,7 @@ def test_two_ids_swapped_with_the_routing_that_matches_them_are_refused():
     ea, eb = inst.map[a].e, inst.map[b].e
     perm[ea], perm[eb] = perm[eb], perm[ea]
     assert not IT.bucket_reference(swapped, t)
-    assert _content([(inst, t, IT.switches(inst, t)), (swapped, t, IT.benes(perm)),
+    assert _content([(inst, t, IT.switches(inst, t)), (swapped, t, BN.benes(perm)),
                      (swapped, t, IT.switches(swapped, t))]) == [1, 0, 0]
 
 
@@ -723,7 +724,7 @@ def _tz(x: int) -> int:
 def test_the_parts_ands():
     """Each composite is its parts: what the cost table in PROTOCOL.md extrapolates from."""
     sh, a = SMALL, GB.ands
-    route, cell = a(bind(IT.IoTieRoute, W=sh.W, D=sh.D)), a(bind(IT.IoTieCell, B=sh.B))
+    route, cell = a(bind(BN.IoTieRoute, W=sh.W, D=sh.D)), a(bind(IT.IoTieCell, B=sh.B))
     assert route == sh.W * sh.switches
     for N, D, E in ((sh.R, sh.D, sh.E), (12, 5, 20), (100, 7, 96)):
         assert a(bind(IT.IoTieMatch, N=N, D=D, E=E)) == N * (131 + D - _tz(E)) - 1
