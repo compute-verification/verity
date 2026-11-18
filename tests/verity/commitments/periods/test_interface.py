@@ -2738,7 +2738,7 @@ def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
         (0, 2, (("tok", 2), ("root", 1), ("domain", 1), ("row", 2), ("salt", 2), ("path", 2))),
         (2, 1, (("tok", 1), ("root", 1), ("domain", 1), ("row", 1), ("salt", 1), ("path", 1)))]
     root, opened = win.registered["embed/root"], win.registered["embed/opened"]
-    assert root.rows.tolist() == [I.digest_words(table.tree.root)] and opened.rows.tolist() == [[1]]
+    assert [list(r) for r in root.rows] == [I.digest_words(table.tree.root)] and [list(r) for r in opened.rows] == [[1]]
     assert np.array_equal(c.rows[m0.port("root")], root.rows) and c.salts[m0.port("root")] == root.salts[0]
     assert c.salts[m0.port("o1")] == opened.salts[0] * 2 and c.salts[m1.port("o1")] == opened.salts[0]
     assert table.salts[3] not in c.salts[m0.port("row")]
