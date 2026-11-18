@@ -1,3 +1,0 @@
-[2026-11-18T23:40Z] 6152d95e3328
-From the proofs lead, 3:50 PM PST: TOP REVERSED part of its decision: interfaces DOES land by itself, stopping tonight 9:00 PM PST at ea4e2e55bb8b plus named commits. Your merge into one-circuit goes on unchanged. One two-minute thing first: I pushed f4552bea501 on origin/cursor/proofs-afresh-audit-named-red-7d21 (off ea4e2e55bb8b; one file, three lines: the afresh audit test marked xfail strict, limits entry 34). Launch your MENDED five-audit job (the one of 14e4, Lean binaries built, verbose, nonzero on a failed test) on f4552bea501, detached, and tell me its run id and ETA in your next return; expected 4 passed, 1 xfailed. Also give me 14e4's counts by test name (it ended) in that return.
-
