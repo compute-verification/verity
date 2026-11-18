@@ -5841,12 +5841,12 @@ def walk_graphs(jobs: dict[tuple[str, str], tuple[str, dict[str, Path]]], walked
     n = max(1, min(len(jobs), int(cores() * WALK_CORE_SHARE)))
     size = {k: sum(f.stat().st_size for f in files.values()) for k, (_, files) in jobs.items()}
     chunks: list[list] = [[] for _ in range(n)]
-    load = [0] * n
+    weight = [0] * n
     # a walk's time grows with its parts' size, which spans orders of magnitude: largest first, onto the least loaded
     for item in sorted(jobs.items(), key=lambda it: (-size[it[0]], it[0])):
-        i = load.index(min(load))
+        i = weight.index(min(weight))
         chunks[i].append(item)
-        load[i] += size[item[0]]
+        weight[i] += size[item[0]]
 
     def walk(chunk) -> dict:
         doc = [[source, {p: str(f) for p, f in files.items()}] for _, (source, files) in chunk]
