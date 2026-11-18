@@ -30,8 +30,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   execution phase's tables, or under `--lengths 2` of the network attester's word that it has none, their check, which
   is handed the SHA-512 of the network attester's public key and its session (`check --key-sha512 HEX --session HEX`),
   holds the run's deployment record to them and, with `--registrations FILE` and no problem found, writes what it was
-  checked under and then each registration it held, and `cost`, which measures a close); `network_attester_chain.py` is
-  the chain's reads of a relay run, and network attestation's `prover/network_attester_zk.py` reads the relay's bucket rows
+  checked under and then each registration it held, and `cost`, which measures a close); network attestation's
+  `verifier/network_attester_chain.py` is the chain's reads of a relay run, and network attestation's `prover/network_attester_zk.py` reads the relay's bucket rows
   in the proof system.
 - **Proofs in zero knowledge.** Each driver, in network attestation's `prover/`, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
@@ -328,7 +328,7 @@ A JSON file under no list and no `not_yet` glob fails as an undeclared key does.
 free text) can't be read this way and is only counted. The check is linear in the bytes it reads.
 
 **The relay path** (`CR_PATH=warden`, `chain_record.NETWORK_ATTESTER`). Every step reads the relay's own run (the gate's
-`warden-rehearse`, its witness under `witness/`; `network_attester_chain.py`), and a proxy rehearsal's run, whose records came
+`warden-rehearse`, its witness under `witness/`; network attestation's `verifier/network_attester_chain.py`), and a proxy rehearsal's run, whose records came
 through the network attester's older proxy in front of the endpoint, is refused by name wherever it is given: that code is
 gone, and kept records of its runs are refused by the form that stays. The attestations step reruns
 the relay's own offline check on its witness (`relay_check.check`) and holds the public `certificates.jsonl` to the
