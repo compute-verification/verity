@@ -45,7 +45,7 @@ VERIFY = PF.PACKAGE / ".lake" / "build" / "bin" / PF.EXE
 
 def _templates(t) -> dict[str, SpecializedDefinition]:
     """The long row ``t``'s templates but its read, by id, in body order."""
-    return {descriptor_id(d): d for _k, d in LR.units(t) if spec_base(descriptor_id(d)) != "EmbeddingRead_v1"}
+    return {descriptor_id(d): d for _k, d in LR.units(t) if spec_base(descriptor_id(d)) != "EmbeddingRead_v2"}
 
 
 def _cut(N: int, TOPK: int, BLOCK: int):
@@ -87,7 +87,7 @@ def test_every_unit_of_the_long_row_but_its_read_is_a_bits_template_on_its_defin
         assert [(bits, ps) for _nm, _schema, bits, ps in rows] == [(ty.leaves, [nm]) for nm, ty in d.signature()[0]], tid
     assert {spec_base(x) for x in _templates(t)} == {
         "DsaTopKDigitCount_v1", "DsaTopKDigitPick_v2", "DsaTopKMaskBlock_v2", "DsaMaskPositions_v2", "DsaPositionsMerge_v2",
-        "DsaPositionsChunk_v1", "DsaPositionsSlot_v1"}
+        "DsaPositionsChunk_v1", "DsaPositionsSlot_v2"}
     read = descriptor_id(t.bindings["READ"])
     assert ST.template(read).layout == ("history" if ST.history_read(read) else "read")
     assert ST.history_read(descriptor_id(LR.served().bindings["READ"]))
@@ -115,7 +115,7 @@ def test_the_small_units_but_the_pick_stage_in_the_proved_form(tmp_path) -> None
         got = _staged(tid, tmp_path / str(k))
         assert got["why"] is None and got["k_log"] <= FC.K_MAX and got["regions"] <= REGIONS_MAX, (tid, got)
     assert {f for f, _b in seen} == {"DsaTopKDigitCount_v1", "DsaTopKMaskBlock_v2", "DsaMaskPositions_v2",
-                                     "DsaPositionsMerge_v2", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1"}
+                                     "DsaPositionsMerge_v2", "DsaPositionsChunk_v1", "DsaPositionsSlot_v2"}
 
 
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_LONG_ROW_UNITS"),

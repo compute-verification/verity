@@ -11,8 +11,9 @@ import json
 import pytest
 
 import identifier_vectors as V
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import EXPERIMENTAL, SCHEMES, get
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
 from verity.protocols.resource_accounting.compute.pouw.verifier import identifier as I
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED, named
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError, Matmul, Shape
 
@@ -78,11 +79,14 @@ def test_every_case_recomputes_from_its_inputs_byte_for_byte(case):
 
 
 def test_the_vectors_cover_every_named_scheme():
-    assert {c["scheme"] for c in PINNED["cases"]} == set(SCHEMES)
+    assert {c["scheme"] for c in PINNED["cases"]} == set(IDENTIFIED)
 
 
-def test_the_identifier_names_exactly_the_registered_schemes():
-    assert tuple(SCHEMES) == I.SCHEMES
+def test_the_identifier_names_exactly_the_schemes_it_has_vectors_for():
+    """A kernel scheme the table adds is outside identifier v1 unless it is pinned here: the unpromoted record, the circuit
+    schemes and Dither are."""
+    assert IDENTIFIED == ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4", "pearl-c-sm120-v1-h3", "pearl-c-h100-v1-h3",
+                          "pearl-c-nvfp4-v0")
 
 
 def test_the_64_bit_fields_are_exact_decimal_strings():
@@ -95,7 +99,7 @@ def test_the_64_bit_fields_are_exact_decimal_strings():
 def variants():
     """(what changed, scheme, execution phase): the base, and the base with exactly one thing changed."""
     yield "base", "pearl-c-h100-v1-h3", build()
-    for name in SCHEMES:
+    for name in IDENTIFIED:
         if name != "pearl-c-h100-v1-h3":
             yield f"scheme {name}", name, build()
     for byte in (0, 17, 31):
@@ -125,7 +129,7 @@ def test_changing_any_one_field_changes_the_bytes():
         b = I.identifier_bytes(scheme, epoch)
         assert b not in seen, f"{what} gives the same identifier as {seen.get(b)}"
         seen[b] = what
-    assert len(seen) == 1 + (len(SCHEMES) - 1) + 6 + len(BASE) * len(FIELDS) + 3 + 3
+    assert len(seen) == 1 + (len(IDENTIFIED) - 1) + 6 + len(BASE) * len(FIELDS) + 3 + 3
 
 
 @pytest.mark.parametrize("case", list(BY_CASE))
@@ -148,9 +152,9 @@ def test_the_bytes_are_canonical_written_out():
 
 
 def test_a_scheme_is_named_by_its_registered_name():
-    """Each scheme PoUW brings; an experimental package's (`schemes.EXPERIMENTAL`) is its own tests'."""
+    """Each scheme PoUW brings; an experimental package's (its kernel scheme's ``seam``) is its own tests'."""
     epoch = build()
-    for name in (n for n in SCHEMES if n not in EXPERIMENTAL):
+    for name in (n for n in IDENTIFIED if not named(n).seam):
         assert I.identifier_bytes(get(name), epoch) == I.identifier_bytes(name, epoch)
 
 

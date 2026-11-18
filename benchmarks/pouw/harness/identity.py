@@ -86,21 +86,31 @@ def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_
             "cuda_visible_devices": cvd, "cuda_device_order": env["CUDA_DEVICE_ORDER"]}
 
 
-#: what the card must be (the pods' bootstrap check), by its name within the device's: its compute capability, its card
-#: file (calibration/hardware/cards/), whose `sm.count` is the SMs it must have, its oldest driver and its build target. An RTX PRO
-#: 6000 Blackwell, sm_120, driver 575 or later; or an H200 (`verity bench overhead`'s card), sm_90, driver 550 or later
-CARDS = {"RTX PRO 6000": ("12.0", "rtx-pro-6000-server", 575, "sm_120a"),
-         "H200": ("9.0", "h200-sxm-141gb", 550, "sm_90a")}
+#: the oldest driver that runs each build target
+MIN_DRIVER = {"sm_120a": 575, "sm_90a": 550}
 
 
 def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
-    known = next((c for c in CARDS if c in name), None)
-    if known is None:
-        raise IdentityError(f"not the card: name {name!r} is none of {', '.join(map(repr, CARDS))}")
-    from verity.device import load_card, number  # here: loading the harness needs the standard library alone
+    """Refuses the run unless the device is the card its card file (calibration/hardware/cards/) records for `name`, the
+    name the device gives: that file's `arch` as compute capability, its `sm.count` SMs, and a driver of `MIN_DRIVER`'s
+    for its `arch`. The build target is the file's `arch`."""
+    # here: loading the harness needs the standard library alone
+    from verity.device import load_card, number, skus
+    from verity_bench.kit import card_short
 
-    want_capability, sku, min_driver, arch = CARDS[known]
-    want_sms = int(number(load_card(sku, directory=CARD_FILES)["sm"]["count"]))
+    try:
+        short = card_short(name, directory=CARD_FILES)
+    except SystemExit as e:
+        raise IdentityError(f"not the card: {e}") from None
+    card = next(c for c in (load_card(s, directory=CARD_FILES) for s in skus("gpu", directory=CARD_FILES))
+                if c.get("short") == short)
+    arch = card["arch"]
+    if arch not in MIN_DRIVER:
+        raise IdentityError(f"not the card: {name} ({card['sku']}) builds for {arch}, and identity.MIN_DRIVER has no "
+                            f"oldest driver for {arch}: add it")
+    digits = arch.removeprefix("sm_").rstrip("a")
+    want_capability, min_driver = f"{digits[:-1]}.{digits[-1]}", MIN_DRIVER[arch]
+    want_sms = int(number(card["sm"]["count"]))
     problems = []
     if capability != want_capability:
         problems.append(f"compute capability {capability}, not {want_capability}")

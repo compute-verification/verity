@@ -17,7 +17,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.commitments import advice as ADV
 from verity.commitments.gates.frame_v3 import _part
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.prover import io_ids as I
 from verity.protocols.resource_accounting.network.verifier import io_request as Q
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
@@ -276,7 +276,7 @@ def test_the_slots_circuit_is_its_reference():
         slots = [o[32 + I.SLOT * k:32 + I.SLOT * (k + 1)] for k in range(sh.K)]
         got.append((_int(o[:32]), [(int(s[0]), _int(s[1:33]), _int(s[33:]) if s[0] else None) for s in slots]))
     assert sum(f for _, slots in want for f, _, _ in slots) == sum(PL) and got == want
-    assert HC.ands(bind(I.IoTieIdsSlots, B=B)) == 24_670
+    assert GB.ands(bind(I.IoTieIdsSlots, B=B)) == 24_670
 
 
 def test_the_keys_circuit_is_its_reference():
@@ -296,8 +296,8 @@ def test_the_keys_circuit_is_its_reference():
         cases.append((slots, routed))
         ok = all(not f or (routed[s][1] == o and routed[s][0] != 7) for s, (f, o, _) in enumerate(slots))
         want.append((int(ok), [routed[s][0] if f else 7 for s, (f, _, _) in enumerate(slots)]))
-    args = [[[b for f, o, v in sl for b in [f] + HC._int_bits(o, 32) + HC._int_bits(v, 32)] for sl, _ in cases],
-            [[b for k, x in ro for b in HC._int_bits(k, CB) + HC._int_bits(x, D1)] for _, ro in cases]]
+    args = [[[b for f, o, v in sl for b in [f] + GB._int_bits(o, 32) + GB._int_bits(v, 32)] for sl, _ in cases],
+            [[b for k, x in ro for b in GB._int_bits(k, CB) + GB._int_bits(x, D1)] for _, ro in cases]]
     out = np.asarray(evaluate_bits(bind(I.IoTieIdsKeys, NK=NK, CB=CB, D1=D1), *[_bits(a) for a in args]))
     got = [(int(o[0]), [_int(o[1 + CB * s:1 + CB * (s + 1)]) for s in range(NK)]) for o in out.reshape(len(cases), -1)]
     assert got == want and 40 < sum(w[0] for w in want) < 160
@@ -333,7 +333,7 @@ def test_the_chain_circuit_is_its_reference():
             prev = k
         cases.append(ms)
     want = [ref(ms) for ms in cases]
-    args = [[[b for k, kind, v in ms for b in HC._int_bits(k, CB) + [kind] + HC._int_bits(v, 32)] for ms in cases]]
+    args = [[[b for k, kind, v in ms for b in GB._int_bits(k, CB) + [kind] + GB._int_bits(v, 32)] for ms in cases]]
     out = np.asarray(evaluate_bits(bind(I.IoTieIdsChain, CB=CB, D2=D2), *[_bits(a) for a in args]))
     assert [int(b) for b in out.reshape(-1)] == want and 60 < sum(want) < 240
 
@@ -380,7 +380,7 @@ def _chains(rng, CB: int, D2: int, count: int) -> list[list[list[int]]]:
 
 
 def _chain_out(fn, CB: int, chains) -> list[int]:
-    rows = [[b for k, kind, v in ms for b in HC._int_bits(k, CB) + [kind] + HC._int_bits(v, 32)] for ms in chains]
+    rows = [[b for k, kind, v in ms for b in GB._int_bits(k, CB) + [kind] + GB._int_bits(v, 32)] for ms in chains]
     return [int(b) for b in np.asarray(evaluate_bits(fn, _bits(rows))).reshape(-1)]
 
 
@@ -393,7 +393,7 @@ def test_the_batched_chain_is_the_flat_one():
     rng, refused = random.Random(11), 0
     for CB, D2 in ((1, 1), (3, 1), (2, 2), (3, 3), (6, 4), (1, 5), (9, 6), (13, 8)):
         new, flat = bind(I.IoTieIdsChain, CB=CB, D2=D2), bind(FLAT_CHAIN, CB=CB, D2=D2)
-        assert HC.ands(new) == HC.ands(flat) == _chain_ands(CB, D2)
+        assert GB.ands(new) == GB.ands(flat) == _chain_ands(CB, D2)
         chains = _chains(rng, CB, D2, 16)
         want = [_chain_reference(ms, (1 << CB) - 1) for ms in chains]
         assert _chain_out(new, CB, chains) == _chain_out(flat, CB, chains) == want and all(want[0::2])
@@ -401,7 +401,7 @@ def test_the_batched_chain_is_the_flat_one():
     assert refused >= 20
     deep = bind(I.IoTieIdsChain, CB=13, D2=14)
     assert [nd.form for nd in deep.body.nodes] == ["call", "batch", "primitive"]
-    assert HC.ands(deep) == _chain_ands(13, 14) == 1_228_738
+    assert GB.ands(deep) == _chain_ands(13, 14) == 1_228_738
     chains = _chains(rng, 13, 14, 4)
     assert _chain_out(deep, 13, chains) == [_chain_reference(ms, (1 << 13) - 1) for ms in chains]
 
@@ -457,7 +457,7 @@ def test_the_unit_is_its_reference():
     args = [I.arguments(sh, i, r, s) for i, r, s in cases]
     out = evaluate_bits(fn, *[_bits([a[k] for a in args]) for k in range(len(args[0]))])
     assert [int(b) for b in np.asarray(out).reshape(-1)] == want + [0, 0]
-    a = HC.ands
+    a = GB.ands
     rq = sh.request
     parts = (rq.N * (a(bind(Q.IoTieRequestFrame, B=sh.B)) + a(bind(Q.IoTieRequestStep)) + a(bind(I.IoTieIdsSlots, B=B)))
              + rq.L * a(bind(Q.IoTieRequestEnd))

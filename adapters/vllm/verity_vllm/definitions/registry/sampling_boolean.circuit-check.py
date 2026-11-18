@@ -10,6 +10,7 @@ def _boolean_roots() -> list[Any]:
     merge shape (a full group, a remainder, the first group, the root group); the f32 argmax tree's stages at two and three
     levels reach its other shapes.  The argmax step is static-free."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import sampling_boolean as SB
 
     return [

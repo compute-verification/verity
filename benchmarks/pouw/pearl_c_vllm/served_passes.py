@@ -275,16 +275,11 @@ def seeded(label: str):
 
 
 def seed_install(pouw: dict) -> None:
-    """`serve --seeded`: the PoUW settings' in-process challenger sampling from `seeded` coins, and the hm96 salt key the
-    install's commitment of the fixed operands takes (`pearl_c.new_salt_key`, which the vLLM option binds by name as
-    ``pearl_c_salt_key``) a `seeded` one, in this process."""
+    """`serve --seeded`: the PoUW settings' in-process challenger sampling from `seeded` coins, in this process. The
+    leaves' salts are fresh bytes from the OS all the same: nothing seeds them."""
     from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-    from verity_vllm.protocols import pouw as PO
 
     pouw["coins"] = Challenger(0, seeded("coins"))
-    key = seeded("salt key")(32)
-    PPD.new_salt_key = PO.pearl_c_salt_key = lambda scheme: key
 
 
 def serve(args: argparse.Namespace) -> int:

@@ -363,7 +363,8 @@ attester"), and it charges a `format` failure the same.
 **Either side of the network attester.**
 - **The server's side.** What makes the id form from the engine's output is the developer's, and isn't trusted. It
   needn't be, because the gate refuses every other form and the tie checks the ids. An example is serve-openai's
-  `--protocol ids`, `IdsProtocol` in `adapters/vllm/verity_vllm/pipeline/serve_protocol.py`.
+  `--protocol ids`, `IdsProtocol` in `verity/protocols/resource_accounting/network/prover/ids_protocol.py`, and the id
+  relay (`network/prover/id_relay.py`) before vLLM's own server.
 - **The client's side.** A client's shim may rebuild OpenAI fields from the record by a public rule:
   - a response id from the run and the stream;
   - `created` from the request's release bucket;
@@ -638,15 +639,17 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   cell, whether it ends the request, the bytes left after it and its prompt fields. The step keeps (left, fields,
   over, padded, ok); the count's carry past 2^32 is kept, so a sum that wraps is refused. Public: the lanes, each
   (q, left, fields, left_out, fields_out). Witness: the row.
-- **The verdict** (`tie_service.IoTieVerdict`) is `IoTieVerdict(link, registrations, advice, accepted)`: the link,
-  its ingress execution phases' registrations (each one's `registration.digest`, in order), the advice's digest
-  (`tie_service.digest`) and one bit a registration, set when every bucket row of that execution phase is accepted. It
-  is built only from IoTieRequest proofs the verifier verified on its own lanes (`lanes` from that advice's prompt
-  lengths and order and the network attester's release) and given only by the verifier's own tie source
+- **The verdict** (`tie_service.IoTieVerdict`) is `IoTieVerdict(link, registrations, inputs, accepted)`: the link,
+  its ingress execution phases' registrations (each one's `registration.digest`, in order), the inputs' digest
+  (`tie_service.digest`) and one bit a registration, set when every bucket row of that execution phase is accepted. The
+  inputs (`tie_service.IngressInputs`) are each input's place in the order and its length, public outputs of the
+  registered compiler's circuit; the tie never reads the advice's bytes. It
+  is built only from IoTieRequest proofs the verifier verified on its own lanes (`lanes` from those lengths and places
+  and the network attester's release) and given only by the verifier's own tie source
   (`tie_service.Ties`), which gives none on another link or another stream than its own. An accepted verdict on every
-  execution phase says that connection order[i] + 1 is an id request of `prompt_lens[i]` prompt ids. The advice carries no
+  execution phase says that connection `places[i]` + 1 is an id request of `lengths[i]` prompt ids. The inputs carry no
   tie, and none the prover states or delivers is taken: the phase-7 attack stated the swapped split, and the phase-10
-  attack delivered a verdict built for the forged advice's digest, every execution phase accepted.
+  attack delivered a verdict built for the forged inputs' digest, every execution phase accepted.
 - **Through the proof system** (`tie_service.IngressTie`). A registration is one ingress execution phase, the
   network attester's salted root of its T bucket rows, held to the execution phase's order, and T proof blocks, proof block t bucket
   row t. The proof block is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
@@ -654,9 +657,9 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   the verifier's own registered read (`network_attester_rows.bucket_port`). The statement is a shared-row file every port of
   which is one of the verifier's registered reads (Flock's `Registered.checkComplete`): `wit` at the network
   attester's root, and `pub` and `o0` at known content the verifier registers itself (`IngressTie.known`), each
-  proof block's lanes (`io_request.lanes`, from the advice it holds and the network attester's release, taken in the clear)
+  proof block's lanes (`io_request.lanes`, from the inputs it holds and the network attester's release, taken in the clear)
   and the output word 1, under public salts, which hide nothing since both rows are public. The verifier
-  decides each execution phase on the proof alone, each proof block's `pub` row opened to its own lanes, and reports the advice's
+  decides each execution phase on the proof alone, each proof block's `pub` row opened to its own lanes, and reports the inputs'
   digest. `IngressTie.tie` reads the verdict from the stream's outcomes of record
   alone, on the link and the stream's registrations. Execution phase w is accepted when its outcome is, decided on the proof
   for the advice's digest. Every one is refused unless the stream registers exactly the advice's execution phases in order,
@@ -1038,7 +1041,7 @@ step proof blocks), and that they agree with the attested I/O (the tie proof blo
 the ingress counts and the advice; no N2 proof block does yet. The advice's length is the leak, charged as `A_c` in the
 accepted-runs bound.
 
-This section attacks that claim through its parts: the advice codec (`advice.py`, with `encode`,
+This section attacks that claim through its parts: the advice codec (the adapter's `verity_vllm.pipeline.advice_code.format`, with `encode`,
 `decode` and `bits`), the I/O tie proof block (`io_tie`) and the compiler
 (`verity_vllm.program.predict.compile_steps`). It gives the argument, every assumption the argument rests on, what
 each attack costs under the design, and the adversarial cases each part's tests must carry.

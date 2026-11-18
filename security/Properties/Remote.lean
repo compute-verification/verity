@@ -35,7 +35,8 @@ the check of record, `InferenceOnlyCheck.Theta.evaluate`: the policy check at th
   (`InferenceOnly.CompliesRate Γ α`), and with its constants registered it has a `(Γ, ⌊αΓ⌋)`-partition when its gates are one
   bit wide, its bit-level expansion a `(ΓW, ⌊αΓW⌋)`-partition when they are at most `W` bits wide, with no assumption
   that it is Boolean or of positive fan-in; and the record SPOT's case commits to names, by its SHA-512, the program
-  one-stage v2's verifier verifies the sessions against (`StageHeld`; SPOT refuses the recursive form by name). With one
+  one-stage v2's verifier verifies the sessions against, or, in the two-stage form, keeps the caller's facts against the
+  boundary's verifier (`StageHeld`; SPOT refuses the recursive form by name). With one
   digest for the two records, the registered circuit the policy checked and the program SPOT verifies have one SHA-512.
 * `AcceptComplies`: its corollary in the form `Slowdown.Guarantees.SlowdownThreaded` reads, `InferenceOnly.CompliesRate Γ α d` from
   acceptance, on a declaration acceptance exhibits and on every other. `Slowdown.Guarantees.SlowdownRemote` reads the count
@@ -134,14 +135,18 @@ verifier (the v1 part of its params, `Spot.OneStageZk.Params.base`), which it ve
 (`Properties.Spot.R2`). The record keeps the caller's facts against that verifier (`Properties.Spot.CallerHeld`): it names its day's declared program, its window names the stream, the
 prover, the seed salt, the registered compiler and the pool's reset the verifier holds, it opens the pool the previous
 window of record left, and no output value reads a port of a record the verifier's verdict log names refused. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
-verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. It has no
-clause for the two-stage form, which the verifier refuses while `SecondStage.FORM` is false; switching it on needs the
-two-stage clause first. -/
+verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. The
+verifier accepts the two-stage form ahead of its proof (`SecondStage.FORM` is on), so SPOT's case may instead decode in
+that form, and its clause is the caller's facts against the boundary record's verifier alone: nothing is said of the
+two-stage form's soundness. -/
 def StageHeld (k : Case) : Prop :=
-  ∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
+  (∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧
     Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record p.base.verifier ∧
-    Properties.Spot.CallerHeld c.record p.base.verifier
+    Properties.Spot.CallerHeld c.record p.base.verifier) ∨
+  ∃ (q : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment),
+    (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr q) ∧
+    Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.CallerHeld c.record q.boundary.verifier
 
 /-- What remote's acceptance establishes about its cases `ev`: they are the three subprotocols' cases in order, the
 policy's `kI`, PoUW's period's `kW` and SPOT's `kS`; the policy's and SPOT's commitments decode,
@@ -153,7 +158,8 @@ refusal, `PouwCheck.Period.check`, which this doesn't read); the policy's case i
 registered circuit by its SHA-512, θ holds what the log's first record registers, the instance checked has a parse, a
 declaration the registered circuit lays out and a division, every parse carries the policy's `program`, `Γ` and `α`,
 and every declaration the registered circuit lays out, with the declared division, meets the policy; and SPOT's case is `StageHeld`: it is in the one-stage form, its record names, by its SHA-512, the program of one-stage
-v2's verifier, and keeps the caller's facts against that verifier. -/
+v2's verifier, and keeps the caller's facts against that verifier, or it is in the two-stage form and keeps the caller's
+facts against the boundary's verifier. -/
 def InferenceOnlyHeld (ev : List Case) : Prop :=
   ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
     Properties.Composition.digestOf InferenceOnlyVerifier.Protocol.protocol kI.commitment = some r ∧

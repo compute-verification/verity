@@ -1,6 +1,6 @@
-"""Pearl-C on the RTX PRO 6000 (sm_120) and the H100/H200 (sm_90a) at a served linear: the schemes this
-device path runs (`SCHEMES`, `scheme_of`), the linears outside them (`refusals`), the kernels' buffers and steps by name, the
-prover's hm96 salt key (`new_salt_key`), and the readers a verifier and the option need: the kernel's directory (`Kernel`),
+"""Pearl-C on the RTX PRO 6000 (sm_120) and the H100/H200 (sm_90a) at a served linear: the schemes this device path
+runs (`SCHEMES`, `scheme_of`: the kernel schemes' ``pearl-c`` family), the linears outside them (`refusals`), the kernels' buffers
+and steps by name, a registered weight row's salt (`weight_row_salt`), and the readers a verifier and the option need: the kernel's directory (`Kernel`),
 the schedule (`schedule_of`, `pearl_c.lanes`), the manifest (`manifest_epoch`, `epoch_of`), a call's served y
 (`served_y`) and a window (`window`).
 
@@ -9,19 +9,15 @@ weights' roots ``weight_roots``), is the workload's, which hands it to the servi
 """
 from __future__ import annotations
 
-import os
 from typing import Any
 
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import (
-    DEVICES,
-    H100,
-    SM120,
-    SM120_UNPROMOTED,
-)
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import named, names
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SERIAL, SchemeId
+from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SERIAL
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.kernel import (
     Kernel,
@@ -46,17 +42,15 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.ma
 )
 
 __all__ = ["CALL_CAPACITY", "CALL_STEPS", "EPOCH_STEPS", "FLAG_ROWS", "JOB_STEPS", "Kernel", "LEAF_CAPACITY", "ROW_ALIGN",
-           "SCHEDULES", "SCHEMES", "SERIAL", "epoch_of", "manifest_epoch", "manifest_schema", "new_salt_key", "refusals",
-           "rotated", "schedule_of", "scheme_of", "splits"]
+           "SCHEDULES", "SCHEMES", "SERIAL", "epoch_of", "manifest_epoch", "manifest_schema", "no_salt_key", "refusals",
+           "rotated", "schedule_of", "scheme_of", "splits", "weight_row_salt"]
 
-#: the Pearl-C schemes this device path runs, by name (`verity.protocols.resource_accounting.compute.pouw.verifier.serving.SchemeId`: forming, device record, hashing format);
-#: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
-#: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it); ``h100`` (G = 4,
-#: a served model's FP8 form on the H200) is pearl_c_sm90's.  The format is -h3, SHA-512 throughout (its seeds, lines,
-#: tile leaves and HM96 trees: the one hash), each row's E_A line from its own seed (the work sampling design capping each
-#: credited row too); its tree hash comes from `verity.protocols.resource_accounting.compute.pouw.verifier.serving.HASH_FORMATS` through the scheme.
-SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED, H100))
-#: each record's kernels' (k, n) grain past its domain: pearl_c_sm120's (1,024, 128); pearl_c_sm90's (256, 64), 1 KiB row segments, 64-wide tiles
+#: the schemes this device path runs, in the kernel schemes' order
+SCHEMES = names("pearl-c")
+#: each device record's kernels' (k, n) grain past its domain, the record being GPU 1's pipeline variant too: ``sm120``
+#: (G = 4, the panel's ``pearl-c-sm120`` v1) and ``sm120-unpromoted`` (no promotion, the panel's v2), pearl_c_sm120's
+#: (1,024, 128); ``h100`` (G = 4, a served model's FP8 form on the H200), pearl_c_sm90's (256, 64), 1 KiB row segments,
+#: 64-wide tiles
 KERNEL_GRAIN = {SM120.name: (1024, 128), SM120_UNPROMOTED.name: (1024, 128), H100.name: (256, 64)}
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
@@ -81,14 +75,11 @@ HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", 
 
 
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
-    """The scheme `name` names (`SCHEMES`); `instance` (``k_min``, ``tile``) makes a test instance."""
-    if name not in SCHEMES:
+    """The scheme `name` names, one of the kernel schemes' ``pearl-c`` family; `instance` (``k_min``, ``tile``) makes a
+    test instance."""
+    if named(name).family != "pearl-c":
         raise KeyError(f"{name!r}: this device path runs {', '.join(SCHEMES)}")
-    sid = SchemeId.parse(name)
-    s = C.PearlC(forming=sid.forming, device=DEVICES[sid.device], hashing=sid.hashing, **instance)
-    if s.name != name:
-        raise ValueError(f"the scheme built for {name!r} names itself {s.name!r}")
-    return s
+    return schemes.get(name, **instance)
 
 
 def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
@@ -106,7 +97,17 @@ def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
     return out
 
 
-def new_salt_key(scheme: str) -> bytes:
-    """A fresh prover hm96 salt key for `scheme`'s trees (their salts, kept by the prover and never in a record)."""
+def no_salt_key(scheme: str) -> bytes:
+    """Pearl+ draws no salt key: every leaf's salt is fresh bytes from the OS, B's rows' those of the weights' registration
+    (`weight_row_salt`)."""
     scheme_of(scheme)
-    return os.urandom(32)
+    raise NotImplementedError("Pearl+'s install with no salt key: the vLLM adapter's weights' commit under the salts of "
+                              "the salt file beside the model's registration, which it hands the device run")
+
+
+def weight_row_salt(weight: int, row: int) -> bytes:
+    """Row ``row`` of weight ``weight``'s B rows' salt, `audit.HM96_SALT` bytes: the salt the weights' registration committed
+    the row under, kept in the salt file beside the model's registration. B's rows are weights, so Pearl+ keeps no salt of
+    its own for them."""
+    raise NotImplementedError("a registered weight row's salt: the vLLM adapter's reader of the salt file beside a model's "
+                              f"registration (weight {weight}, row {row})")

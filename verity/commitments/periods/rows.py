@@ -45,8 +45,8 @@ member's rows at a time, each run written at its place in the member's bodies an
 
 A period may carry row tables (:class:`RowTable`, ``Binding.row_tables``): shared tables of rows several units read, each a tree
 of ``hm96-sha512/row-seg/v1`` leaves, committed in segments, each segment's root given before that segment's live coin: a
-segment's tables in the order the integration gives them, under the ``table_domain`` of the period's ``context``, salted by
-``segment_salts`` under the run's row key, and the segment's root the tree over their roots.  The period registers one port for
+segment's tables in the order the integration gives them, under the ``table_domain`` of the period's ``context``, each row under
+192 fresh bytes from the OS, and the segment's root the tree over their roots.  The period registers one port for
 them, ``row-table``: the tree over its segments' roots (window-domain rule, leaf schema ``ROOTS_SCHEMA``), so no row is committed
 twice.  Its linked members (``Member.links``) are shared-row chunks whose ``x`` table holds the distinct rows they read, each
 under its row table row's salt (so the same ``b || c``), read by offset; the integration's verifier side ties them to the
@@ -170,12 +170,6 @@ def salts(key: bytes, port_index: int, n: int, first: int = 0) -> bytes:
     """The ``n`` rows' salts of port ``port_index`` from its row ``first`` (192 bytes each, concatenated): nonce = the
     port's index."""
     return _stream(key, port_index, n, first)
-
-
-def segment_salts(key: bytes, segment: int, n: int) -> bytes:
-    """The salts of ``segment``'s ``n`` table rows under the run's row key (192 bytes each, concatenated): its tables in order,
-    each table's rows in rank order, one stream per segment (nonce = the segment)."""
-    return _stream(key, segment, n)
 
 
 def _width(n: int) -> int:
@@ -734,19 +728,19 @@ def _shaped(m: Member, kind: str, p: str, words: int, n: int, shape: tuple[int, 
 
 def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *, salt_key: bytes | None = None,
            carried: Mapping[str, bytes] | None = None,
-           row_salt_key: bytes | None = None, segment_roots: Mapping[int, bytes] | None = None, workers: int = 1,
+           table_salts: Mapping[int, bytes] | None = None, segment_roots: Mapping[int, bytes] | None = None, workers: int = 1,
            chunk: int = CHUNK, salts_of: Mapping[str, bytes] | None = None,
            strings_of: Mapping[str, bytes] | None = None, into: str | Path | None = None) -> Committed:
     """Commit every member's rows (``data``, a sequence: ``data[k]["rows"][port]``: (n, words) u16) and output words
     (``data[k]["outs"][port]``, each
     port's committed as its output row); and each row table, its rows read off its linked members' ``x`` tables, whose rows take
-    their row table row's salt.  Salts: 192 fresh OS bytes a row of a member's port; a segment's tables', ``segment_salts`` under
-    ``row_salt_key``.  The row tables' roots make each segment's root and the ``row-table`` port is the tree over those; with
+    their row table row's salt.  Salts: 192 fresh OS bytes a row of a member's port and of a segment's tables.  The row tables' roots make each segment's root and the ``row-table`` port is the tree over those; with
     ``segment_roots`` (what the integration recorded before each segment's coin, by segment), each must be the period's, or the
     commit is refused.
 
-    ``salt_key``: tests only: ChaCha20 under it, as `salts` gives it.  ``row_salt_key``: the run's row key the recorded segment
-    roots were salted under (32 bytes); fresh OS bytes when ``None``, which no recorded segment root can match.
+    ``salt_key``: tests only: ChaCha20 under it, as `salts` gives it.  ``table_salts``: by segment, the salts the integration
+    drew for its tables' rows when it recorded the segment's root (`row_tables.StepRoots.salts`: its tables in order, each
+    table's rows in rank order), which ``segment_roots`` requires.
     ``salts_of``: by port, an outside registered value's salts, one a row, so its rows' ``b || c`` are the value's (`write`).
     ``strings_of``: by port of ``salts_of``, its rows' ``b || c`` under those salts, already made (a history table's, whose
     leaves they are), so the period hashes only their leaves and tree; a wrong string is a leaf no opening of the row matches.
@@ -805,8 +799,8 @@ def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *, salt_k
                                      "is its writer's row (Binding.held_leaves)")
             own = np.repeat(np.arange(m.n, dtype=np.int64)[:, None], len(m.outs), axis=1)
             refs[k] = np.concatenate([r, own], axis=1).astype(np.uint32)
-    if segment_roots is not None and row_salt_key is None:
-        raise ValueError("recorded segment roots are checked under the run's row key: give row_salt_key")
+    if segment_roots is not None and table_salts is None:
+        raise ValueError("recorded segment roots are checked under the salts their rows were committed under: give table_salts")
     if any(p not in rows or len(s) != len(rows[p]) * SALT_BYTES for p, s in (salts_of or {}).items()):
         raise ValueError(f"salts_of {sorted(salts_of)}: not one {SALT_BYTES}-byte salt for each row of one of the period's ports "
                          "given in full")
@@ -818,14 +812,16 @@ def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *, salt_k
     ys = {p: (salts_of or {}).get(p) or (os.urandom(n * SALT_BYTES) if salt_key is None else salts(bytes(salt_key), k, n))
           for k, (p, n) in enumerate(counts.items()) if p not in refd}
     domains = {p: window.domain(p, schemas[p], n) for p, n in counts.items() if p not in held}
-    rk = os.urandom(32) if row_salt_key is None else bytes(row_salt_key)
     for k, (t, a) in enumerate(zip(window.row_tables, _table_rows(window, rows), strict=True)):
         rows[t.port], schemas[t.port], domains[t.port] = a, TABLE_SCHEMA, window.table_domain(k)
     for s, ks in window.segments:
-        ss, at = segment_salts(rk, s, sum(window.row_tables[k].n for k in ks)), 0
+        n = sum(window.row_tables[k].n for k in ks)
+        ss = os.urandom(n * SALT_BYTES) if table_salts is None else bytes(table_salts[s])
+        if len(ss) != n * SALT_BYTES:
+            raise ValueError(f"segment {s}: {len(ss)} bytes of table salts for its {n} table rows, not {SALT_BYTES} a row")
+        at = 0
         for t in (window.row_tables[k] for k in ks):
             ys[t.port], at = ss[at:at + t.n * SALT_BYTES], at + t.n * SALT_BYTES
-    del rk
     for m in ms:
         if m.links:
             ys[m.port(LINKED)] = b"".join(ys[window.row_tables[t].port][r * SALT_BYTES:(r + 1) * SALT_BYTES] for t, r in m.links)
@@ -1529,8 +1525,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous``, registering
     the values' ``entries`` and naming the roots of the values it ``outputs``; the period's provenance gets the index's hiding
     leaf (`index_leaf`), so the registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt
-    are prover only: the salt is ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the
-    OS.  ``registered``: by member key, an outside value's reads (``salts_of``), each a header entry
+    are prover only: the salt is ``index_salt`` (192 fresh bytes from the OS the committer already holds, a recommit's
+    read back from ``index-salt.bin``) or else fresh bytes from the OS.  ``registered``: by member key, an outside value's reads (``salts_of``), each a header entry
     (``{port: {"value", "positions", "paths"}}``), whose paths ``window.json`` gives once for the period
     (``registered_paths``, by value and position; `registered_header`).  A member's ``m<k>-private.bin`` is its prover body
     less two kinds of port, rows and salts: a port given as a registered value's rows (`Committed.by_value`) its entry names

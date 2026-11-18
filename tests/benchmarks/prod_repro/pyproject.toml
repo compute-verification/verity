@@ -9,7 +9,8 @@ testpaths = ["."]
 # the report is made of the serving cost benchmark's functions (its metrics, its cost and the replay's window and
 # comparison), which read the run's id through verity_config's SHARED settings; a cost by vLLM's client is the
 # benchmark kit's paired ratio
-inputs = ["benchmarks/prod_repro", "benchmarks/serve_tax/serve_tax.py",
+inputs = ["benchmarks/prod_repro", "calibration/hardware/cards", "verity/__init__.py", "verity/channel.py", "verity/device.py", "verity/errors.py",
+    "benchmarks/serve_tax/serve_tax.py", "benchmarks/production.toml",
     "benchmarks/serve_tax/replay.py",
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/nsys.py",
@@ -20,7 +21,6 @@ inputs = ["benchmarks/prod_repro", "benchmarks/serve_tax/serve_tax.py",
     "benchmarks/harness/verity_bench/settings.py",
     "benchmarks/harness/verity_bench/overhead_node.py",
     "tools/config/verity_config",
-    "verity/__init__.py",
     "tools/config/verity_config/verity_settings.py",
     # the advice line is the scheduler replay's loader's, which reads the adapter's advice code
     "benchmarks/network_e2e/encodings/replay.py",

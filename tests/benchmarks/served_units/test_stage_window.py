@@ -10,16 +10,16 @@ import pytest
 
 from conftest import load
 
-W13 = ('MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=%s,'
+W13 = ('MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v2{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=%s,'
        'DOT={"fn":"HopperE4m3%sDot32_v2"}}')
-W2 = ('MoeExpertFp8ReadGemmW_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=4096}"},K=256,N=32,G=128,KB=128,SWAP=%s,'
+W2 = ('MoeExpertFp8ReadGemmW_v1{READ={"fn":"EmbeddingRead_v2{V=256,H=4096}"},K=256,N=32,G=128,KB=128,SWAP=%s,'
       'DOT={"fn":"HopperE4m3%sDot32_v2"}}')
-MEMBERS = [{"template": "EmbeddingRead_v1{V=256,H=96}", "n": 287},
+MEMBERS = [{"template": "EmbeddingRead_v2{V=256,H=96}", "n": 287},
            {"template": W13 % ("true", "Qgmma"), "n": 256},
            {"template": W13 % ("false", "MmaV2"), "n": 31},
            {"template": W2 % ("false", "MmaV2"), "n": 31},
            {"template": W13 % ("true", "Qgmma"), "n": 256},
-           {"template": "EmbeddingRead_v1{V=256,H=4}", "n": 287}]
+           {"template": "EmbeddingRead_v2{V=256,H=4}", "n": 287}]
 BODY = b"\x00\x01the member's public body"
 
 

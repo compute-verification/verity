@@ -323,12 +323,9 @@ MEASURED = {
 def coverage(seqlen_q: int, seqlen_k: int, H: int, KVH: int, D: int, consts: dict, *, arch: str | None = None) -> str | None:
     """None when the call is inside the measured family, else the reason it is ``unresolved`` (the gate is what was
     measured, as in :func:`fa2_model.coverage`)."""
-    a = arch or consts.get("arch")
+    a = _fa2.arch_of(consts, arch)
     if a is None:
-        name = str(consts.get("gpu") or consts.get("gpu_name") or "")
-        a = "sm_90" if ("H100" in name or "H200" in name or "H800" in name) else None
-    if a is None:
-        return "arch not declared (consts.arch / consts.gpu); measured only on sm_90"
+        return "arch not declared (consts.arch); measured only on sm_90"
     if a not in MEASURED["arch"]:
         return f"arch {a} not measured (measured: {MEASURED['arch']})"
     if D not in SUPPORTED_HEAD_DIMS:

@@ -17,13 +17,15 @@ Commitments are `verity.commitments.merkle` trees under the scheme's frame hash,
 hashing format h3's; a scheme on SHA-256 trees, Pearl-C's h0 or NCP, names ``"sha256"``).  `HM96` is
 ``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
 followed by a 192-byte salt, a row's leaf ``hm96-sha512/row-seg/v1`` over the row's ``sha512/row-seg/v1`` digest and a tile's
-over its 64-byte digest itself; the prover's salts are a ChaCha20 stream under its own key (`hm96_salt`), and an opening's
-value carries its salt, so `opened_value` strips it before a scheme reads the value.
+over its 64-byte digest itself; `commit_rows`' salts are a ChaCha20 stream under the prover's key (`hm96_salt`), Pearl+'s
+served rows' fresh bytes from the OS a leaf (`fresh_salts`), and an opening's value carries its salt, so `opened_value`
+strips it before a scheme reads the value.
 """
 
 from __future__ import annotations
 
 import functools
+import os
 import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -76,6 +78,12 @@ def hm96_salt(key: bytes, nonce: int, i: int) -> bytes:
     """Leaf i's 192-byte salt in the tree with salt nonce `nonce`: ChaCha20 blocks 3i, 3i + 1 and 3i + 2 under the prover's
     32-byte `key` (Flock's ``hm96_salt``)."""
     return b"".join(chacha20_block(key, 3 * i + j, nonce) for j in range(3))
+
+
+def fresh_salts(n: int) -> list[bytes]:
+    """``n`` leaves' salts, each `HM96_SALT` fresh bytes from the OS: the prover keeps them, and an opening carries the
+    opened leaf's alone."""
+    return [os.urandom(HM96_SALT) for _ in range(n)]
 
 
 @functools.lru_cache(maxsize=1)
@@ -252,5 +260,5 @@ def transcript_domain(epoch: Epoch, count: int, hash: str = HM96) -> CommitmentD
 
 __all__ = ["EPOCH_SALT_DOMAIN", "HM96", "HM96_KEY", "HM96_SALT", "HM96_TRANSCRIPT", "HM96_WEIGHTS", "ROW_SCHEMA", "SALT_DOMAIN",
            "TILE_SCHEMA", "Epoch", "Hm96Domain", "TileRef", "Workload", "activation_binding", "chacha20_block", "commit_rows",
-           "hm96_kernel_constants", "hm96_salt", "opened_value", "rows_domain", "salt_of", "tile_refs", "transcript_binding",
+           "fresh_salts", "hm96_kernel_constants", "hm96_salt", "opened_value", "rows_domain", "salt_of", "tile_refs", "transcript_binding",
            "transcript_domain", "weight_binding", "weights_root"]

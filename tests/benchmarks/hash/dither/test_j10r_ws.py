@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 DITHER = (Path(__file__).resolve().parents[4] / "benchmarks" / "hash" / "dither")
 
 #: the frozen shape's up and down (kraqwxsc's served shapes on the H200) and Llama-3.1-8B's four linears
-#: at served_h1's 64-row slot, (M, N, K)
+#: at a 64-row slot, (M, N, K)
 SHAPES = [(m, n, k) for m in (4096, 16384) for n, k in ((65536, 16384), (16384, 65536))] + \
     [(64, n, k) for n, k in ((6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336))]
 
@@ -135,9 +135,8 @@ def test_a_build_with_half_of_the_query_is_refused() -> None:
 
 
 def test_no_loader_in_dither_sizes_a_workspace_itself() -> None:
-    """Every dither loader that allocates J10-R's workspace (dither_so's tables) takes
-    j10r_ws.workspace_bytes: none calls a build's kh_j10r_*_bytes, so none sizes an H1U_JW build by its rows. served_h1's
-    producer is held to the same in the pouw suite."""
+    """Every dither loader that allocates J10-R's workspace takes
+    j10r_ws.workspace_bytes: none calls a build's kh_j10r_*_bytes, so none sizes an H1U_JW build by its rows."""
     call = re.compile(r"\bkh_j10r_(?:rows|jw|ws|workspace)_bytes\s*\(")
     hits = [f"{p.name}:{i}" for p in sorted(DITHER.glob("*.py")) if p.name != "j10r_ws.py"
             for i, line in enumerate(p.read_text().splitlines(), 1) if call.search(line)]

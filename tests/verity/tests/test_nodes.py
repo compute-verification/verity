@@ -5,9 +5,9 @@ gives a node's ways out: its interfaces, each with its line rate or with none wh
 path, at the rate that bounds its disks together. A node whose file states its host's DRAM and disks and an interface
 gives a log accepted for `remote` against the auditor the card files give; a file without them gives no entry. Every
 entry holds a link for each way out, none of which a network attester splits. The storage path's link and that of an interface
-that reads no line rate say why (`Link.unmediated`), so neither node's site is mediated; an interface with a rate says
+that reads no line rate say why (`Link.unmediated`), so no node's site is mediated; an interface with a rate says
 nothing, so `onsite` refuses the eight-card node by `uncertified`, with a network attester standing in front of the
-node or without one, and takes the H200 node once a challenger reaches its host. An auditor's device's time base card
+node or without one, and takes the H100 and H200 nodes once a challenger reaches the host. An auditor's device's time base card
 gives the host's clock drift, a premise or the auditor's figure by its mark, and a number marked `premise` never
 becomes `Auditor.drift`."""
 
@@ -89,8 +89,8 @@ def reached(entry: Entry) -> Entry:
 
 def test_the_nodes_we_run() -> None:
     """Each states its host's DRAM and disks, so the acceptance tests below hold each one's log. Each states one
-    interface: the eight-card node's reads a line rate, and the H200 node's reads none."""
-    assert S.node_kinds(directory=NODE_FILES) == READ == ["h200-sxm-141gb-x1", "rtx-pro-6000-server-x8"]
+    interface: the eight-card node's reads a line rate, and the H100 and H200 nodes' read none."""
+    assert S.node_kinds(directory=NODE_FILES) == READ == ["h100-sxm-80gb-x1", "h200-sxm-141gb-x1", "rtx-pro-6000-server-x8"]
     assert WIRED == ["rtx-pro-6000-server-x8"]
     assert all(list(S.load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES)["interface"]) == ["eth0"] for kind in READ)
 
@@ -184,7 +184,7 @@ def test_remote_accepts_a_nodes_log(kind: str) -> None:
 
 @pytest.mark.parametrize("kind", sorted(set(READ) - set(WIRED)))
 def test_a_node_whose_interface_reads_no_rate_says_why_no_attester_splits_it(kind: str) -> None:
-    """The H200 node's one interface reads no line rate, so its link states no capacity and says so, and the storage
+    """The H100 and H200 nodes' one interface reads no line rate, so its link states no capacity and says so, and the storage
     path's link says it is the storage path. Each says why no certifier splits it, so `onsite` refuses neither: it
     refuses the node by `challenger-reach` alone, and accepts it once a challenger reaches the host, with a site that
     is not mediated. A network attester named on the node is refused under either composite: its links would have
@@ -439,7 +439,7 @@ def test_a_directory_without_the_sheet_names_itself(tmp_path) -> None:
     there, card_files = sheets(tmp_path)
     kind = "rtx-pro-6000-server-x8"
     (there / "h200-sxm-141gb-x1.toml").unlink()
-    with pytest.raises(KeyError, match=re.escape(f"the nodes are ['{kind}'] ({there}/<kind>.toml)")):
+    with pytest.raises(KeyError, match=re.escape(f"the nodes are ['h100-sxm-80gb-x1', '{kind}'] ({there}/<kind>.toml)")):
         S.load_node("h200-sxm-141gb-x1", directory=there, cards_directory=card_files)
     node = S.load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES)
     host = node["host"]["sku"]

@@ -15,7 +15,6 @@ from verity_bench import jobs
 from verity_bench.cli import main
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import (
-    GPUS,
     expand_sweep,
     resolve_spec,
 )
@@ -24,7 +23,7 @@ from verity_bench.vllm.runner import (
 )
 
 COMMITTED = calendar.timegm((2026, 10, 21, 12, 0, 0))
-RTX = GPUS["rtx-pro-6000"].nvidia_smi_name
+RTX = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
 
 
 def _repo(tmp_path):
@@ -82,19 +81,24 @@ def test_resume_counts_only_a_clean_exited_passing_run_of_the_same_identity_and_
     assert identity != jobs.point_identity("0" * 64, pins, point)
 
 
-def test_a_trial_is_never_a_points_passing_run_and_a_trial_launch_says_so(tmp_path, monkeypatch):
+def test_a_trial_is_never_a_points_passing_run_and_a_trial_run_passes_it_to_its_point(tmp_path, monkeypatch):
+    """A trial is the run's (`research run --env VERITY_BENCH_TRIAL=1`): the point runs in that environment, and its
+    command neither sets nor clears it."""
+
     from research.store.local import LocalStore
 
     (repo, commit), ident = _repo(tmp_path), "f" * 64
     store, config = _stores(tmp_path, [_attempt("r20261021-130000-0001", ident, repo),
                                        _attempt("r20261021-140000-0002", ident, repo, run_env={"VERITY_BENCH_TRIAL": "1"})])
     assert jobs.StoreCompletion(LocalStore(store, config_path=config), root=repo)(ident, commit) == "r20261021-130000-0001"
-    spec = resolve_spec("llama31-8b-fp8-1gpu")
-    monkeypatch.delenv("VERITY_BENCH_TRIAL", raising=False)
-    assert "VERITY_BENCH_TRIAL=1" not in jobs._env_flags(spec)
-    monkeypatch.setenv("VERITY_BENCH_TRIAL", "1")
-    flags = jobs._env_flags(spec)
-    assert flags[flags.index("VERITY_BENCH_TRIAL=1") - 1] == "--env"
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.setattr(jobs, "lease_host", lambda: False)
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    for trial in (None, "1"):
+        if trial:
+            monkeypatch.setenv("VERITY_BENCH_TRIAL", trial)
+        command = jobs.point_command(plan, "llama31-8b-fp8-1gpu", plan.points[0], root)
+        assert not any(token.startswith("VERITY_BENCH_TRIAL") for token in command)
 
 
 def _stores(tmp_path, remote_attempts):

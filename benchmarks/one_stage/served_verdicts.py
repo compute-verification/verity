@@ -1455,8 +1455,9 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
         d, c = tree / sid / "out", rec["commitment"]
         ck = PHC.pinned_key(d / remote.KEY, key)
         lines = remote.ledger_lines(out / "ledger.jsonl")
-        trusted, received = Ch.trusted_session_of(lines, {"root": c}, ck, remote.ledger_lines(out / "pins.jsonl"),
-                                                  remote.main_lines(main), remote.session_files(d), PHC.lms_verify)
+        trusted, log = Ch.trusted_session_of(lines, {"root": c}, ck, remote.ledger_lines(out / "pins.jsonl"),
+                                             remote.main_lines(main), remote.session_files(d), PHC.lms_verify)
+        received = Ch.by_family(trusted, log)
         opening = Ch.LiveOpening.from_json(draw.get("opening"))
         if not Ch.withheld_on(lines, c):
             raise ValueError(f"the run's draw session: {Ch.WITHHELD}")

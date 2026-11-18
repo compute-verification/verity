@@ -113,7 +113,7 @@ def test_the_committer_commits_each_read_by_reference_as_the_lean_verifier_opens
     entries); the window writes them as its members' ``registered`` and ``value_rows`` and records each value's root."""
     window, _rows, doc = served(PARTITION)
     values, data = values_and_rows(window, doc)
-    got, entries, roots, salts = WT.by_reference(window, IF.declarations(doc)[2], data, values)
+    got, entries, roots, salts = WT.by_reference(window, IF.declarations(doc)[2], data, values, IF.ranges_of(doc["templates"], IF.order_of(doc)))
     assert salts == {}
     assert roots == {p: v.root.hex() for p, v in values.items()}
     assert {k: e["in1"]["positions"] for k, e in entries.items()} == {f"{T}/c{j}": [3 * (j % 3 == 2) + i for i in range(3)]

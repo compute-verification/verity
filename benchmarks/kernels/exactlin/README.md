@@ -9,17 +9,16 @@ an H200 (sm_90) and a B200 (sm_100).
 The kernels are the vLLM integration's: `adapters/vllm/verity_vllm/engine/int8_fused.py`, the CUDA bodies
 `engine.int8_ops` registers for both ops, with their config table in `engine.profiles.int8_gemm_configs`. Every gate
 and bench here imports that module, so a gate's pass and a timing describe the kernels vLLM serves. This directory holds
-no kernel or table of its own. `benchmarks/hash/dither/dither_a.py` inlines `int8_fused`'s public Triton helpers
-(`rni_s32`, `membar_gl`, `epilogue`) into its kernels; `tests/test_dither_a_helpers.py` holds each name it reads to
-one `int8_fused` binds. Nothing a verifier runs reads this directory.
+no kernel or table of its own. Nothing a verifier runs reads this directory.
 
 ## The metric
 
 From the tree's root on one card, in the pinned-vLLM Python `benchmarks/harness/env.sh` finds (made by
-`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`) with CUDA 13 at `/usr/local/cuda-13.0`:
+`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`), with CUDA 13.0 from the machine's `[properties]` (`../machine.py`: the
+copy `research run --on` puts in the run's `inputs/`), or `CUDA_HOME` where given, as on a local run:
 
 ~~~text
-RESEARCH_RUN_DIR=DIR bash benchmarks/kernels/exactlin/kbench.sh --models llama-3.2-1b
+RESEARCH_RUN_DIR=DIR CUDA_HOME=DIR bash benchmarks/kernels/exactlin/kbench.sh --models llama-3.2-1b
 ~~~
 
 It gates, then times, and writes `kernels/exact-linear-decode-over-stock` (`metrics.toml`) into the run's `result.json`:
@@ -31,14 +30,11 @@ With no `gpu-lease` on PATH it runs on the visible card and says so.
 ## Entry points
 
 Each launcher takes one leased GPU for a bounded time, writes under `$RESEARCH_RUN_DIR/out`, and passes extra arguments to
-its script:
+its script. Each takes CUDA 13.0 as above, refusing by name before its lease without `[properties]` that list it or `CUDA_HOME`:
 
 ~~~text
 RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/kbench.sh                 # gate, then kbench.py
 RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO KSCRIPT=kgate.py bash benchmarks/kernels/exactlin/kbench.sh  # the gate alone
-RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/served.sh \
-  --arms stock,exact,exact-fused --gate --ops decode --t 64                                       # served
-RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/share.sh                  # uncredited share
 ~~~
 
 A failed gate times nothing and exits 4.
@@ -80,19 +76,12 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32:
     copies to stream from DRAM. `--arms` also takes single kernels.
   - `ksweep.py`: the fused GEMM's configs swept at the decode shapes, each gated before it is timed, and the
     quantizer's warps.
-- Served:
-  - `served.sh`: `benchmarks/hash/dither/sbench.py`'s stock and exact arms (`stock`, `stock-percall`, `exact`,
-    `exact-fused`, and `stock-cutlass` on sm_90) on the leased GPU's NUMA node. With `exact-fused` it runs `kgate.py` in the same lease first.
-    `DITHER_NSYS=1` captures the decode step's kernels for `steps.py`.
-  - `percall.py`: sbench's `stock-percall` arm, stock's `triton_scaled_mm` behind a custom op
-    (`exactlin_stock::scaled_mm`), so its tile heuristic runs on each call's M.
 - Analysis:
-  - `steps.py`: a served decode step's kernels by category, from an sbench `prof` capture's nsys SQLite export.
+  - `steps.py`: a served decode step's kernels by category, from a `prof` capture's nsys SQLite export.
     `--compare` puts arms side by side.
-  - `share.py` and `share.sh`: the share of a served step that PoUW doesn't credit. Each arm runs under nsys through
+  - `share.py`: the share of a served step that PoUW doesn't credit. Each arm runs under nsys through
     decode and prefill scenarios, and `--analyse` splits a forward's GPU time into the credited int8 GEMMs, the
     quantizer, lm_head, attention, norms and elementwise, sampling and the gaps.
 
-Outside this directory, `benchmarks/hash/dither/sbench.py`'s `exact` and `exact-fused` arms are one engine, the ops'
-CUDA bodies as registered, and `benchmarks/kernels/s8_linear` times `int8_fused` with `kbench.py`'s helpers (`timed`,
+Outside this directory, `benchmarks/kernels/s8_linear` times `int8_fused` with `kbench.py`'s helpers (`timed`,
 `copies_for`, `nvml`).

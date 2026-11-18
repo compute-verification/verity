@@ -155,6 +155,9 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    default, by its product and `VERITY_HOLD_PLACEMENT`. An application's command takes no bindings: every party runs on node A, the challenger with coins of its own. For a run
    on the auditor's coins, `uv run bash run.sh bindings applications/X.toml` prints `verity run --bindings` for that application:
    node A's `bindings` values, each to every party whose piece reads its key, the addresses such `${NAME}`s.
+   With `CARD=N`, every `gpu-lease` CMD starts leases card N alone, by a `gpu-lease` first on its PATH (`pin_card.sh`,
+   the window's too), and `PORT` reaches CMD as given, so two applications on one node each keep their own card and
+   endpoint port; with no `CARD`, a lease takes any free card.
 
 6. `CARD=N CORES=A-B run.sh device-pin --env NODE=<node>`: `device-pin.sh`, the node's cuBLAS device pin probed on that
    card under its lease (`verity-vllm device-pin probe`, the H200's shapes): its routes and the route conditions the
