@@ -50,10 +50,10 @@ AND limits, which keep it within the GPU prover's slot types, a form ``verify --
 its unit name, so the statement is the served one but for its binding: its ``class_sha512`` is the served composer's. The
 circuit is streamed to circuit.txt once, every input's outputs checked against the Program's reference (``twin`` null).
 ``census:NAME`` stages any other block type of the serving rows the same way, its values seeded by the same rule and its
-seeds keyed by the name. One whose statement is templated (a table read's, ``census:EmbeddingRead_v1{V,H}``) writes its
+seeds keyed by the name. One whose statement is templated (a table read's, ``census:EmbeddingRead_v2{V,H}``) writes its
 template and layout mode beside the circuit as a READS type does, and stage.json's ``statement.id`` names it.
 
-A type of `READS` is a table read, ``EmbeddingRead_v1{V, H}`` on its served rows (`interface.unit_rows`), staged as serving
+A type of `READS` is a table read, ``EmbeddingRead_v2{V, H}`` on its served rows (`interface.unit_rows`), staged as serving
 stages a read (`chunk_rows.statement`): the templated statement at the read layout on the verifier's own read template
 (``structural``, `verity_flock.read_tmpl`, so ``flock-read-tmpl`` is built first). Its inputs are honest reads of one table of
 V ranks whose first L hold filled rows and every later one the zero row under the zero salt, as a history table pads to its
@@ -89,7 +89,7 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
     dsa-q-row   `CENSUS`: DsaIndexerQ_v2{H=32,D=128,ROPE=64}, DSA's indexer query row as served, its EX2 reads in gates.
     mla-split-part  `CENSUS`: SparseMlaSplitPart_v1 at T = 64, one query's sparse MLA over one split's 64 keys (FA3's).
     rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
-    table-read  `READS`: EmbeddingRead_v1{V,H}, one read of a request's history table for sparse MLA: V = 131072 ranks (the
+    table-read  `READS`: EmbeddingRead_v2{V,H}, one read of a request's history table for sparse MLA: V = 131072 ranks (the
                 table's capacity), H = 576 words (a kv row's 512 latent and 64 rope bf16 words), L = 8192 rows filled.
     dsa-chunk   DsaPositionsChunk_v1{K,W}: chunk c of the long row's index, the merge's K = 2048 slots in chunks of W = 32,
                 each port its own row; its slots below N = 131072 (the longest row's class) but a tenth of any u32.
@@ -275,7 +275,7 @@ CENSUS: dict[str, Census] = {
 
 @dataclass(frozen=True)
 class Read:
-    """A table read type: ``EmbeddingRead_v1{V, H}`` at statics ``V``, ``H`` and ``L``, the rows its table holds."""
+    """A table read type: ``EmbeddingRead_v2{V, H}`` at statics ``V``, ``H`` and ``L``, the rows its table holds."""
 
     defaults: dict
 

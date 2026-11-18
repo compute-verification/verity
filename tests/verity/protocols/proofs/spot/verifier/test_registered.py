@@ -268,7 +268,7 @@ def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, wo
 
 
 def test_a_row_seg_table_one_token_a_row_is_what_the_embedding_read_opens():
-    """`gates.embedding`'s read at a hidden position (`EmbeddingRead_v1`) reads a table registered here under
+    """`gates.embedding`'s read at a hidden position (`EmbeddingRead_v2`) reads a table registered here under
     ``hm96-sha512/row-seg/v1`` with one token a row (``words = H``): each row opens at its token's position under the
     docket's root and domain id, and at no other token's."""
     from verity.commitments.gates import embedding as E

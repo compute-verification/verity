@@ -17,7 +17,7 @@ from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 def test_a_specialized_definition_valued_static_binds_to_its_family_at_its_own_record():
     want = bind(BM.MoeExpertFp8ReadGemmWV1, READ=EMB.read(8, 64), K=64, N=2, G=32, KB=32, SWAP=True, DOT=BG.HopperE4m3QgmmaDot32)
     t = descriptor_id(want)
-    assert spec_statics(t)["READ"] == "EmbeddingRead_v1{V=8,H=64}"
+    assert spec_statics(t)["READ"] == "EmbeddingRead_v2{V=8,H=64}"
     got = specialization(spec_base(t), spec_statics(t), load()[0])
     assert descriptor_id(bind(got) if isinstance(got, CompositeDefinition) else got) == t
 

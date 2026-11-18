@@ -150,7 +150,7 @@ def test_joined_with_select():
         (f"r{c}", descriptor_id(G.plan(V)[c].defn), 1) for c in range(K - 1)}
     assert not [f for f in w.free if f.tid == stop and f.port != "logits"]
     assert not [f for f in w.free if f.family == "TokenSelect"]
-    (read,) = [t for t in circuit.units if t.startswith("EmbeddingRead_v1{")]
+    (read,) = [t for t in circuit.units if t.startswith("EmbeddingRead_v2{")]
     blocks = 6144 // NE.WIDTH
     tok = [(x.writer, x.out, x.at, x.radix, x.base, x.step, x.cut)
            for x in circuit.wires if x.reader == read and x.port == "tok"]

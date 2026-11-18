@@ -64,7 +64,7 @@ SCHEME = "pearl-plus"
 SERVED = "pearl-c-h100-v1-h3"
 #: the stock scaling the door times beside it, its useful output's (`baselines.FAMILIES`)
 FAMILY = "fp8-e4m3-rowwise"
-#: the build target the kernel's cubin is for (`identity.CARDS`)
+#: the build target the kernel's cubin is for (its card file's `arch`, `identity.check_card`)
 ARCH = "sm_90a"
 #: where the door's cubin arrives (`verity_bench.overhead_node.CUBIN_ENV`)
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
