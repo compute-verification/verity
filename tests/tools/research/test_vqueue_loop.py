@@ -158,10 +158,11 @@ class Env:
         self.graph2.list_graph(f"ready:{sha}", graph)
         return {t["id"]: t.get("key", "") for t in graph["tasks"]}
 
-    def result(self, key: str, task: str, status: str, infra: bool = False, tests: list[str] | None = None) -> None:
+    def result(self, key: str, task: str, status: str, infra: bool = False, tests: list[str] | None = None,
+               run: str | None = None) -> None:
         detail = {**({"infra": True} if infra else {}), **({"failed_tests": tests} if tests is not None else {})}
         self.graph2.finish_result({"key": key, "task": task, "status": status, "outputs": {"out": "sha512:o"},
-                                   **({"detail": detail} if detail else {})})
+                                   **({"run": run} if run else {}), **({"detail": detail} if detail else {})})
 
     def graph2_script(self, loop: Loop, verdict: dict | None = None) -> Path:
         """A graph2 with `verdict`, `cancel` and `rerun` for ``loop``: its verdict on a check `<script>.verdict.<check>`'s,
@@ -2345,6 +2346,60 @@ def test_a_lone_member_s_failure_its_files_dont_meet_is_rerun_once_afresh_and_th
         assert (eject["action"], eject["number"], env.withdrawn, drop["outcome"]["suspects"]) == ("eject", 1, [(1, one)], [1])
     assert loop.tick() == [] or again == "pass"
     assert script is None or Path(f"{script}.rerun").read_text().count("\n") == 1
+
+
+def test_an_unreached_failure_of_several_members_is_rerun_and_a_pass_is_recorded_and_rung(env):
+    """A pass is a `cured` line (the test, the candidate, the run ids) and a ring to the test's owner, and the candidate
+    lands.  The same test failing again within 24 hours is not rerun: it is red, and the owner is told to delete it."""
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    loop = env.loop(vqueue.decide, batch=2)
+    env.graph2_script(loop)
+    (built,) = loop.tick()
+    sha = built["sha"]
+    assert built["members"] == [1, 2]
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:b": ["b.txt"], "pytest:z": ["z.txt"]},
+                      suites={"pytest:z": "tools/zz"})
+    z = keys["pytest:z"]
+    test = "tests/test_z.py::test_once"
+    fail_run, pass_run = "r20261118-090000-aaa1", "r20261118-090500-bbb2"
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    env.result(keys["pytest:b"], "pytest:b", "pass")
+    env.result(z, "pytest:z", "fail", tests=[test], run=fail_run)
+    (rerun,) = loop.tick()
+    assert (rerun["action"], rerun["sha"], rerun["keys"], rerun["done"]) == ("rerun", sha, [z], True), rerun
+    assert loop.tick() == []
+    env.result(z, "pytest:z", "pass", run=pass_run)
+
+    def own() -> None:
+        loop.world.driver()._reg = {"handles": [{"handle": "zz", "owns": ["tools/zz/"]}]}
+
+    own()
+    logged = loop.tick()
+    cured = next(r for r in logged if r["action"] == "cured")
+    ring = next(r for r in logged if r["action"] == "ring")
+    assert (cured["test"], cured["sha"], cured["runs"]) == (test, sha, [fail_run, pass_run])
+    assert ring["to"] == ["@zz"] and ring["test"] == test and "cures or deletes it within 24 hours" in ring["text"]
+    assert _acts(logged) == ["cured", "ring", "advance", "on_main", "drop"] and env.main() == sha
+    assert "deleted" not in ring["text"] and env.withdrawn == []
+    env.clock = T0 + 3600
+    env.put(3, {"c.txt": "3\n"})
+    env.put(4, {"d.txt": "4\n"})
+    (again,) = loop.tick()
+    assert again["members"] == [3, 4]
+    keys = env.listed(again["sha"], {"pytest:c": ["c.txt"], "pytest:d": ["d.txt"], "pytest:z": ["z.txt"]},
+                      suites={"pytest:z": "tools/zz"}, keys={"pytest:z": "sha512:z2"})
+    env.result(keys["pytest:c"], "pytest:c", "pass")
+    env.result(keys["pytest:d"], "pytest:d", "pass")
+    env.result(keys["pytest:z"], "pytest:z", "fail", tests=[test], run="r20261118-100000-ccc3")
+    own()                                               # main moved, so the loop read the registry again
+    logged = loop.tick()
+    assert "rerun" not in _acts(logged)
+    ring = next(r for r in logged if r["action"] == "ring")
+    drop = next(r for r in logged if r["action"] == "drop" and r.get("outcome"))
+    assert ring["to"] == ["@zz"] and ring["test"] == test and "flakes and must be deleted" in ring["text"]
+    assert drop["outcome"]["state"] == "fail" and drop["outcome"]["suspects"] == [3, 4]
+    assert not any(r["action"] == "cured" for r in logged)
 
 
 def test_a_rerun_sets_its_key_s_results_aside_for_the_candidate_above_too_as_graph2_drops_its_cached_result(env):

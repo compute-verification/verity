@@ -187,7 +187,9 @@ Retry enqueues again (graph2 lists a check whose listing failed, reruns what end
 infra, and leaves a pending one as it is), reruns those keys itself while graph2's verdict is another (a task still runs, or
 one failed), sets the infra results aside, and starts a run beside it that ended in infra again.  Rerun runs the keys afresh
 (graph2's `rerun`), their results set aside, a key of the run beside starting that run again; without graph2's `rerun` it is
-logged `absent`, and counts as done.  Ring tells whom it names (`to`), else `landing.INFRA` (or its `pr`'s owner), once a
+logged `absent`, and counts as done.  A passing rerun of a test no member of several reached is logged (`cured`: the test,
+the candidate, the run ids) and its owner rung to cure or delete it within 24 hours; a second such pass within 24 hours is
+not rerun.  Ring tells whom it names (`to`), else `landing.INFRA` (or its `pr`'s owner, or an unreached test's owner), once a
 candidate and why; a ring to an owner is held, only logged, while another candidate's check or the run beside `main`'s reads
 infra in the same tick, as in an outage (`Loop._outage`); a base candidates wait on for want of its graph or of graph2's word
 on it is rung to `CI` and `landing.INFRA`, once a base and why: at once when its listing failed or its graph can't be read, and
@@ -600,6 +602,18 @@ class Past:
 
     def reruns(self, sha: str) -> int:
         return sum(1 for r in self.of("rerun", sha) if r.get("done") or r.get("absent"))
+
+    def cured(self) -> tuple[tuple[str, float], ...]:
+        """Passing reruns of an unreached test (`Loop._ring`): (test id, when), oldest first."""
+        return tuple((r["test"], at) for r in self.of("cured") if isinstance(r.get("test"), str)
+                     and (at := unstamp(r.get("at"))) is not None)
+
+    def reran(self, sha: str, state: str) -> tuple[Failed, ...]:
+        """The failures ``sha``'s newest done rerun covered, once its verdict passed."""
+        if state != PASS:
+            return ()
+        recs = [r for r in self.of("rerun", sha) if r.get("done")]
+        return tuple(_as_failed(f) for f in (recs[-1].get("failed") or ()) if isinstance(f, dict)) if recs else ()
 
     def since(self, sha: str) -> dict[str, int]:
         """How many results each key had when a retry of ``sha``, or a rerun of any candidate's, set them aside: its verdict
@@ -2770,7 +2784,7 @@ class Loop:
                                              on_main=below[0], again=again)
                     judged[sha] = j
                     cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
-                                           enqueued=p.enqueued(sha),
+                                           enqueued=p.enqueued(sha), reran=p.reran(sha, j.verdict.state),
                                            records=self._records_run(p, n, main, origin, sha, b, wrote, regen),
                                            repairs=b.get("repairs") if isinstance(b.get("repairs"), str) else None,
                                            waits=waits, apart=apart, held=p.held(sha) if waits else None))
@@ -2797,7 +2811,7 @@ class Loop:
                                            move=bool(getattr(w.open().get(m), "move", "")),
                                            scripts=vqueue.meets(f, MOVE_SCRIPTS)) for m, h in sorted(flying)),
                         records=self.records is not None, fill=self.fill,
-                        plain=frozenset(self.plain), apart=self.apart)
+                        plain=frozenset(self.plain), apart=self.apart, cured=past.cured())
         steps.lap("chain")
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried),
                     dict(w.unauthenticated), riding=riding)
@@ -3924,7 +3938,8 @@ class Loop:
         stopped = list(_running(j).get("ids") or ()) if set(a.keys) & beside else []
         stop_failed = w.cancel_runs(stopped, f"vqueue: candidate {c.sha[:12]}'s failure is rerun afresh") if stopped else {}
         again = self._start(t, c.sha, c.base, line, "started again: its failure is rerun") if set(a.keys) & beside else []
-        return [self.record(t, "rerun", **line, why=f"the lone member's own failures, afresh: {said or 'the run beside'}",
+        whose = "the lone member's own failures" if len(c.members) == 1 else "no member's files meet the failures"
+        return [self.record(t, "rerun", **line, why=f"{whose}, afresh: {said or 'the run beside'}",
                             failed=failed, keys=list(a.keys), counts=counts, done=True,
                             **({"beside_cancelled": stopped} if stopped else {}),
                             **({"beside_cancel_failed": stop_failed} if stop_failed else {})), *again]
@@ -3958,11 +3973,13 @@ class Loop:
 
     def _flaky(self, t: Tick) -> list[dict]:
         """Ring the owners of each test graph2 says flaked (its verdict's `flaky`: a fail a rerun replaced), once a key: a test
-        that flakes is deleted, not rerun.  With --shadow, logged only."""
+        that flakes is deleted, not rerun.  A key this tick records as a passing unreached rerun (`cured`) is that ring's,
+        not this one's.  With --shadow, logged only."""
         w, recs, rung = self.world, [], t.past.flaked()
+        cured = {f.key for c in t.snap.candidates if len(c.members) > 1 and c.verdict.state == PASS for f in c.reran if f.key}
         for c in t.snap.candidates:
             for e in (t.judged[c.sha].theirs or {}).get("flaky") or ():
-                if not isinstance(e, dict) or not isinstance(key := e.get("key"), str) or key in rung:
+                if not isinstance(e, dict) or not isinstance(key := e.get("key"), str) or key in rung or key in cured:
                     continue
                 rung.add(key)
                 task, tests = str(e.get("task")), sorted(w.failing_tests(key))
@@ -4344,9 +4361,41 @@ class Loop:
                        and x.get("at") == at and "verdict" in x), None)
         return None if judged is None else round(judged - at)
 
+    def _cured(self, a: Ring, c: Candidate, t: Tick) -> dict | None:
+        """The decision-log line of a passing rerun of unreached test ``a.test``, once a candidate: the test, the candidate
+        and the run ids.  None when this ring is not that pass, or the line is already there."""
+        if not a.test or not a.passed or any(r.get("test") == a.test and r.get("sha") == c.sha for r in t.past.of("cured")):
+            return None
+        return self.record(t, "cured", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, test=a.test,
+                           runs=self._run_ids(t, c))
+
+    def _run_ids(self, t: Tick, c: Candidate) -> list[str]:
+        """The run ids of ``c``'s check and of the results its rerun covered."""
+        rec = (t.judged[c.sha].record if c.sha in t.judged else None) or {}
+        ids = [i for i in rec.get("ids") or () if isinstance(i, str)]
+        ids += [i for shard in rec.get("shards") or () if isinstance(shard, dict)
+                for i in shard.get("ids") or () if isinstance(i, str)]
+        keys = [f.key for f in c.reran if f.key]
+        for docs in (self.world.tasks.transport.results(keys).values() if keys else ()):
+            for d in docs:
+                if not isinstance(d, dict):
+                    continue
+                run = d.get("run")
+                detail = d.get("detail")
+                if not isinstance(run, str) and isinstance(detail, dict):
+                    run = detail.get("run")
+                if isinstance(run, str):
+                    ids.append(run)
+        return list(dict.fromkeys(ids))
+
+    def _test_owner(self, c: Candidate, test: str) -> tuple[str, ...]:
+        task = next((f.task for f in (*c.reran, *c.verdict.failed) if test in f.tests or test == f.task), "")
+        return self.world.test_owners(c.sha, task, [test]) or (CI,)
+
     def _ring(self, a: Ring, c: Candidate, t: Tick) -> list[dict]:
+        cured = self._cured(a, c, t)
         if (c.sha, a.why) in t.past.rung():
-            return []
+            return [cured] if cured is not None else []
         erred = vqueue._erred(c.verdict)
         infra = "; ".join(f"{f.task} (key {f.key})" for f in erred)
         members = " ".join(f"#{n}" for n in c.members)
@@ -4354,16 +4403,18 @@ class Loop:
         text = (f"the verified queue's candidate queue/{c.sha[:12]} ({members}), whose check waits for its records run: {a.why}"
                 if c.waits else f"the verified queue's candidate ready:{c.sha} ({members}) is {state} after "
                 f"{c.tries} enqueues: {a.why}" + (f". Infra: {infra}" if infra else ""))
-        line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=erred, text=text)
+        line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=erred, text=text,
+                    **({"test": a.test} if a.test else {}))
         if a.pr is not None and (held := self._outage(c, t)) is not None:
-            return [self.record(t, "ring", **line, done=True, posted=False, held=held)]
+            return [*(() if cured is None else (cured,)), self.record(t, "ring", **line, done=True, posted=False, held=held)]
         if self.shadow:
-            return [self.record(t, "ring", **line, done=False)]
-        to = a.to or ((INFRA_HANDLE,) if a.pr is None else self.owner(a.pr))
+            return [*(() if cured is None else (cured,)), self.record(t, "ring", **line, done=False)]
+        to = a.to or (self._test_owner(c, a.test) if a.test else (INFRA_HANDLE,) if a.pr is None else self.owner(a.pr))
         if not self._say(t, "ring", text, to, sha=c.sha, why=a.why):
-            return [self.record(t, "ring", **line, done=False, posted=False,
+            return [*(() if cured is None else (cured,)),
+                    self.record(t, "ring", **line, to=list(to), done=False, posted=False,
                                 error=f"ringing {', '.join(to)} about {c.sha[:12]} failed: the next tick rings again")]
-        return [self.record(t, "ring", **line, done=True, posted=True)]
+        return [*(() if cured is None else (cured,)), self.record(t, "ring", **line, to=list(to), done=True, posted=True)]
 
     def _outage(self, c: Candidate, t: Tick) -> str | None:
         """Why a ring to the owner of ``c``'s lone member about its check erring is held, logged and not posted: in the same
