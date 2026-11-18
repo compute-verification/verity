@@ -164,7 +164,7 @@ WIPE = register(Scheme(
     assumptions=("Verity.Vocab.WipeSound", TRUSTED_DEVICE),
     log=(Order("fill", "reveal"),),
     charges=(),
-    settings={"store": "cuda", "segments": 0, "reserve_bytes": 1 << 30, "tier": "", "limit_ns": 20_000_000,
+    settings={"store": "cuda", "segments": 0, "reserve_bytes": 1 << 30, "tier": "", "limit_ns": wipe_period.LIMIT_NS,
               "reads": 0},
     check_settings=_wipe_check_settings,
     attach=_wipe_attach,
