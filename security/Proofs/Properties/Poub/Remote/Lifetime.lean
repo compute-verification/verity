@@ -153,17 +153,17 @@ theorem lifeOn_filling {N L ws appends joined filling} (h : LifeOn N L ws append
     (hf : filling ≤ f') : LifeOn N L ws appends joined f' :=
   { h with le := fun k hk => Nat.le_trans (h.le k hk) hf }
 
-theorem lifeOn_add {N L ws appends joined filling} {below now : Nat} (h : LifeOn N L ws appends joined filling)
+theorem lifeOn_add {N L ws appends joined filling} {below now : Nat} {pr : Array Nat → Array Nat} (h : LifeOn N L ws appends joined filling)
     (root : ByteArray) (plan : Plan) (post : Nat) (st : Int) (head : Option ByteArray)
     (hav : ∀ p, p < plan.length → N ≤ plan.block p → ∃ k, ∃ hk : k < joined.size, ∃ hk' : k < appends.size,
       appends[k].first ≤ plan.block p ∧ plan.block p < appends[k].first + appends[k].count ∧
       joined[k] ≤ filling ∧ filling < joined[k] + L) :
-    LifeOn N L (ws.modify filling (addPass root plan post st head below now)) appends joined filling := by
-  have get : ∀ t (ht : t < (ws.modify filling (addPass root plan post st head below now)).size),
-      (ws.modify filling (addPass root plan post st head below now))[t] =
-        if filling = t then addPass root plan post st head below now (ws[t]'(by simpa using ht)) else ws[t]'(by simpa using ht) :=
+    LifeOn N L (ws.modify filling (addPass root plan post st head below now pr)) appends joined filling := by
+  have get : ∀ t (ht : t < (ws.modify filling (addPass root plan post st head below now pr)).size),
+      (ws.modify filling (addPass root plan post st head below now pr))[t] =
+        if filling = t then addPass root plan post st head below now pr (ws[t]'(by simpa using ht)) else ws[t]'(by simpa using ht) :=
     fun t ht => Array.getElem_modify ht
-  have hsz : (ws.modify filling (addPass root plan post st head below now)).size = ws.size := Array.size_modify
+  have hsz : (ws.modify filling (addPass root plan post st head below now pr)).size = ws.size := Array.size_modify
   refine ⟨h.size, h.le, h.mono, fun t ht i hi => ?_⟩
   revert hi
   rw [get t ht]
@@ -300,8 +300,8 @@ theorem life_boundary {s : State} {now : Nat} {r : Result} {s' : State} (h : Lif
     | exact life_releaseCoin (life_boundaryNs h _ _) _ _
     | exact life_boundaryNs h _ _
 
-theorem life_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s' : State} (h : Life s)
-    (he : append s root count = .ok (r, s')) : Life s' := by
+theorem life_append {s : State} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat} {r : Result} {s' : State} (h : Life s)
+    (he : append s root count origin slot = .ok (r, s')) : Life s' := by
   unfold append at he
   repeat' split at he
   all_goals (try dsimp only at he)
@@ -405,7 +405,7 @@ theorem step_life {s : State} {e : Event} {r : Result} {s' : State} (hi : Inv s)
   cases e with
   | start now => injection he with he; exact life_start h he
   | boundary now => injection he with he; exact life_boundary h he
-  | append root count => exact life_append h he
+  | append root count origin slot => exact life_append h he
   | release runs withdrawn => injection he with he; exact life_release h he
   | receive t i root runs change st now => injection he with he; exact life_receive hi h he
   | close t now => exact life_close h he
