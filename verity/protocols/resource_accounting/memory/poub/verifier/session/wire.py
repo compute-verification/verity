@@ -182,6 +182,22 @@ def registration_of(d: dict) -> audit.Registration:
     return r
 
 
+def origin_json(origin: audit.Origin) -> dict:
+    """A re-key's origin as an append message names it: {"registered": lo} or {"append": k}, k a slot."""
+    return {origin[0]: origin[1]}
+
+
+def origin_of(d: object) -> audit.Origin | None:
+    """`origin_json`'s inverse, None for an absent or null origin; any other form is refused."""
+    if d is None:
+        return None
+    if type(d) is dict and d.keys() == {"registered"}:
+        return ("registered", d["registered"])
+    if type(d) is dict and d.keys() == {"append"}:
+        return ("append", d["append"])
+    raise ValueError(f"an append's origin is {{'registered': lo}} or {{'append': k}}, not {d!r}")
+
+
 def commitment_of(d: dict) -> coins.LiveCommitment:
     return coins.LiveCommitment.from_json(d)
 
@@ -206,4 +222,4 @@ def openings_of(body: bytes) -> list[coins.LiveOpening]:
 
 
 __all__ = ["Closed", "Conn", "HEADER", "MAX_HEAD", "codec_named", "coin_of", "commitment_of", "connect", "listen",
-           "openings_of", "registration_json", "registration_of"]
+           "openings_of", "origin_json", "origin_of", "registration_json", "registration_of"]
