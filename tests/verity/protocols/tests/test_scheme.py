@@ -342,9 +342,8 @@ def test_every_reason_a_list_cannot_attach_in_its_order_is_given_from_its_declar
     base, store = _toy("base", depends=()), _toy("store", resource="memory", needs=frozenset({"store"}), depends=())
     over = _toy("over", depends=("base", "absent"))
     work = _toy("work", resource="compute", depends=("base",))
-    assert S.order_refusals([base, store, work]) == []
+    assert S.order_refusals([base, store, work]) == S.order_refusals([base, over]) == []
     assert S.order_refusals([over, work, base, store, _toy("unsaid")]) == [
-        "requires: over requires absent, which protocols doesn't list",
         "order: over requires base, so protocols lists base before over",
         "order: work requires base, so protocols lists base before work",
         "depends: unsaid's declaration does not say which schemes it depends on (depends is undeclared)",

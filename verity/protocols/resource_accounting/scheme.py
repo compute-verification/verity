@@ -597,18 +597,16 @@ def register_circuits(name: str, circuits: Circuits) -> Circuits:
 def order_refusals(listed: Sequence[Scheme]) -> list[str]:
     """Every reason ``listed``, a configuration's schemes in its order, can't attach in that order, from what each
     declares, each as `verity.channel.Refused` prints it; empty: it attaches in its own order, which nothing reorders.
-    A scheme is listed after each it ``depends`` on (``requires`` and ``order``, as `verity.config.check` names them),
-    and storage (``needs`` the workload's ``store``) before useful work (``resource`` compute): where two listed
-    schemes wrap one site the earlier listed is the outer, and storage hands useful work the weight (``outer``)."""
+    A scheme is listed after each listed one it ``depends`` on (``order``, as `verity.config.check` names it; one not
+    listed is the configuration's ``requires``, since a serve attaches only part of it), and storage (``needs`` the
+    workload's ``store``) before useful work (``resource`` compute): where two listed schemes wrap one site the
+    earlier listed is the outer, and storage hands useful work the weight (``outer``)."""
     names = [s.name for s in listed]
     out = []
     for i, s in enumerate(listed):
         if isinstance(s.depends, Lacks):
             out.append(f"depends: {s.name}'s declaration does not say which schemes it depends on (depends is undeclared)")
-            continue
-        if missing := [d for d in s.depends if d not in names]:
-            out.append(f"requires: {s.name} requires {', '.join(missing)}, which protocols doesn't list")
-        if later := [d for d in s.depends if d in names and names.index(d) > i]:
+        elif later := [d for d in s.depends if d in names and names.index(d) > i]:
             out.append(f"order: {s.name} requires {', '.join(later)}, so protocols lists {', '.join(later)} before {s.name}")
     work = [i for i, s in enumerate(listed) if s.resource == "compute"]
     for i, s in enumerate(listed):
