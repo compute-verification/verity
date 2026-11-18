@@ -34,12 +34,12 @@ def test_an_applications_list_attaches_in_its_own_order(name: str) -> None:
 
 def test_onsite_lists_storage_before_useful_work() -> None:
     names = _raw("onsite_full")["protocols"]
-    assert names.index("pous") < names.index("pouw")
+    assert names.index("pous") < names.index("pearl-plus")
     names.remove("pous")
-    names.insert(names.index("pouw") + 1, "pous")
+    names.insert(names.index("pearl-plus") + 1, "pous")
     assert S.order_refusals(_declared(names)) == [
-        "outer: pous is storage (it needs the workload's store) and is listed after pouw, useful work (resource compute); "
-        "where both wrap one site the earlier listed is the outer, so protocols lists pous before pouw"]
+        "outer: pous is storage (it needs the workload's store) and is listed after pearl-plus, useful work (resource "
+        "compute); where both wrap one site the earlier listed is the outer, so protocols lists pous before pearl-plus"]
 
 
 def test_a_dependence_listed_late_is_refused_by_the_name_and_words_config_check_gives() -> None:
