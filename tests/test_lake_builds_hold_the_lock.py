@@ -31,19 +31,18 @@ ALLOWED: dict[str, str] = {
     "tools/check/pins.py": "a pin's regeneration command, run by hand (`pins.py --write`), never by a suite",
     "adapters/vllm/tools/served_run/local_gate.py": "builds in the tree it extracts for the gate, which nothing else builds in",
     **{f"tests/verity/protocols/proofs/flock/prover/{f}": FLOCK_SUITE for f in (
-        "test_flock_rows.py", "test_flock_rows_vectors.py", "test_inner_registered.py", "test_lean_coin_open.py",
-        "test_lean_coin_tree.py", "test_lean_forged_proofs.py", "test_lean_hello.py", "test_lean_hidden_outputs.py",
-        "test_lean_identifier.py", "test_lean_ks_form.py", "test_lean_out_group_slot.py", "test_lean_plain_hidden_tables.py",
+        "test_flock_rows_vectors.py", "test_inner_registered.py", "test_lean_coin_open.py", "test_lean_coin_tree.py",
+        "test_lean_forged_proofs.py", "test_lean_hello.py", "test_lean_hidden_outputs.py", "test_lean_identifier.py",
+        "test_lean_ks_form.py", "test_lean_out_group_slot.py", "test_lean_plain_hidden_tables.py",
         "test_lean_plain_leaves.py", "test_lean_plain_tree.py", "test_lean_public_inputs.py", "test_lean_rec_coins.py",
         "test_lean_record_checks.py", "test_lean_region_words.py", "test_lean_registered_bit_rows.py",
         "test_lean_registered_reads.py", "test_lean_served_registered.py", "test_lean_session_tables.py",
-        "test_lean_shared_reads.py", "test_lean_typed_reads.py", "test_lean_typed_statement.py",
-        "test_lean_typed_template.py", "test_lean_verifier.py", "test_lean_verify_members.py",
-        "test_lean_width_refusals.py", "test_lean_witness.py", "test_lean_zk_mask.py", "test_lean_zk.py",
-        "test_pouw_rows.py", "test_read_tmpl.py", "test_read_tmpl_stager.py", "test_rec_algebra.py",
+        "test_lean_shared_reads.py", "test_lean_typed_reads.py", "test_lean_typed_template.py",
+        "test_lean_verify_members.py", "test_lean_width_refusals.py", "test_lean_witness.py", "test_lean_zk_mask.py",
+        "test_lean_zk.py", "test_pouw_rows.py", "test_read_tmpl.py", "test_read_tmpl_stager.py", "test_rec_algebra.py",
         "test_rec_full_draw.py", "test_rec_links.py", "test_rec_opening_unit.py", "test_stream_zk_server.py",
-        "test_tmpl_statement.py", "test_universal_same_shape.py", "test_wired_links.py", "test_zk_server_agreement.py",
-        "test_zk_server_contract.py", "test_zk_server_frame.py")},
+        "test_universal_same_shape.py", "test_wired_links.py", "test_zk_server_agreement.py", "test_zk_server_contract.py",
+        "test_zk_server_frame.py")},
 }
 
 

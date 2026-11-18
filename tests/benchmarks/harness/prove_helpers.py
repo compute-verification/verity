@@ -307,8 +307,8 @@ def _sha512(prefix: bytes, obj: object) -> str:
 #: statement's circuit states as `program_sha512`: the digest of its `program_digests`, which no program file has
 PROGRAM_SHA512 = _sha512(b"", {k: v for k, v in PROGRAM.items() if k != "annotations"})
 UNIT_SHA512 = _sha512(b"", {"unit/made-up": hashlib.sha256(b"the staged Definition's id and the row layout").hexdigest()})
-#: a made-up partition object, naming `PROGRAM` as a bound statement's names its Program
-PARTITION = {"format": "made-up", "program": PROGRAM_SHA512, "query": {"name": "Q_made_up", "version": 1, "params": {"X": 16}}}
+#: a `verity/partition/v1` object, naming `PROGRAM` as a bound statement's names its Program
+PARTITION = {"format": "verity/partition/v1", "program": PROGRAM_SHA512, "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}
 
 
 def circuit_text(rule: str = L.PARTITION_V1, size: int = 4000) -> bytes:

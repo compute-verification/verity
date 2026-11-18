@@ -101,7 +101,6 @@ is 0x7FFF.
 """
 from __future__ import annotations
 
-from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
@@ -110,8 +109,9 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.ops.prims import ZERO32, const
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.device import compute_capability, load_card, number
+from verity.device import compute_capability, load_card, load_node, number
 
+from verity_vllm.config import CARD_FILES
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16
@@ -122,7 +122,7 @@ __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "Al
            "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
            "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",
            "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "MULTIMEM_REPLAY_RUN", "MULTIMEM_VECTOR",
-           "NCCL_TREE_RUNS", "RTX_PRO_6000", "RmsNormMnnvl", "SETTINGS", "SYMM_MEM_MAX_BYTES", "TREE_UNRECORDED", "TREE_UNSTATED",
+           "NCCL_TREE_NODE", "NCCL_TREE_RUNS", "RTX_PRO_6000", "RmsNormMnnvl", "SETTINGS", "SYMM_MEM_MAX_BYTES", "TREE_UNRECORDED", "TREE_UNSTATED",
            "UNSTATED_NODE", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits",
            "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "nccl_chain", "node_refusal",
            "offset_free", "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters"]
@@ -161,8 +161,11 @@ _DEFAULT_RUNS = CAPTURE_RUNS[2:]
 GLM53_H200_TREE = ((((((0, (1, 2)), 3), 5), 6), 4), 7)
 #: vLLM's batch-invariant mode (``VLLM_BATCH_INVARIANT=1``), the setting under which every TP all-reduce is pynccl's
 BATCH_INVARIANT = "batch-invariant"
-#: (compute capability, SMs) of the RTX PRO 6000 Blackwell Server Edition, its card file's
-_RTX_PRO_CARD = load_card("rtx-pro-6000-server", directory=Path(__file__).resolve().parents[5] / "calibration/hardware/cards")
+#: the node `NCCL_TREE_RUNS` ran on, the TP4 capture's own target: its node file names its card
+NCCL_TREE_NODE = "rtx-pro-6000-server-x8"
+#: (compute capability, SMs) of that node's card, its card file's
+_RTX_PRO_CARD = load_card(load_node(NCCL_TREE_NODE, directory=CARD_FILES.parent / "nodes", cards_directory=CARD_FILES)["device"]["sku"],
+                          directory=CARD_FILES)
 RTX_PRO_6000 = ("%d.%d" % compute_capability(_RTX_PRO_CARD), int(number(_RTX_PRO_CARD["sm"]["count"])))
 #: the records of three runs on an RTX PRO 6000 node: Llama-3.1-70B int8's TP4 capture (GPUs 2, 3, 6, 7, NCCL 2.29.7), the replay
 #: of its every all-reduce through `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py replay`: 5152 calls,
