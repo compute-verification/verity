@@ -28,12 +28,12 @@ from verity_config.settings import VALUE, WHERE, Registry, Setting
 S = Setting
 REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
     # ---- the dispatcher and a point's job (jobs.py, run_point.sh, env.sh, setup/)
-    S("VERITY_BENCH_VENV", str, None, WHERE, "the node's pinned-vLLM Python a point runs under (env.sh), which the dispatcher "
-      "forwards when set: an interpreter, whose vLLM and torch versions the result's identity records"),
+    S("VERITY_BENCH_VENV", str, None, WHERE, "the node's pinned-vLLM Python a point runs under (env.sh), which "
+      "the launch gives (a point refuses without it): an interpreter, whose vLLM and torch versions the result's identity records"),
     S("VERITY_BENCH_SETUP", str, None, VALUE, "the spec's setup script, which run_point.sh sources before the point's Python "
       "(the dispatcher sets it from the spec; a point refuses any other)"),
     S("VERITY_BENCH_LIB_CACHE", str, None, WHERE, "the node's cache of the libraries setup/vllm_encoded.sh builds, each under its "
-      "recipe's and sources' digest; unset, /workspace/research/cache/verity-bench-libs"),
+      "recipe's and sources' digest; unset, verity-bench-libs under $XDG_CACHE_HOME (~/.cache)"),
     # ---- a steady-state point's node side (steady_point.sh, steady_node.py)
     S("VERITY_BENCH_STEADY_PY", str, None, WHERE, "the Python (3.12 with numpy and blake3) the spec's setup made on the "
       "node, which runs a steady-state point's node side, the stager and the script that times the provers"),

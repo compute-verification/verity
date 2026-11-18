@@ -12,6 +12,8 @@ import pytest
 
 from verity.protocols.resource_accounting import scheme as S
 
+EPS = Fraction(1, 2**40)
+
 
 def _toy(name: str = "toy-bandwidth", **kw) -> S.Scheme:
     return S.Scheme(**{
@@ -59,6 +61,14 @@ def test_settings_toggle() -> None:
         S.settings(s, {"refresh": 1})
 
 
+def test_a_settings_values_are_checked_by_its_declaration() -> None:
+    s = _toy(settings={"challenges": 320},
+             check_settings=lambda v: None if v["challenges"] >= 1 else f"challenges is at least 1, not {v['challenges']}")
+    assert S.settings(s, {}) == {"challenges": 320} and S.settings(s, {"challenges": 1}) == {"challenges": 1}
+    with pytest.raises(ValueError, match="toy-bandwidth: challenges is at least 1, not 0"):
+        S.settings(s, {"challenges": 0})
+
+
 def test_block_cost_and_unit() -> None:
     s = _toy()
     assert s.unit == "bits" and s.blocks[0].cost({"bytes": 4096}) == 32_768
@@ -66,12 +76,14 @@ def test_block_cost_and_unit() -> None:
 
 def test_bound() -> None:
     s = _toy()
-    b = S.bound(s, Fraction(1, 100), 65_536, {"on-chip": 10, "rebuilt": 6})
+    b = S.bound(s, Fraction(1, 100), 65_536, {"on-chip": 10, "rebuilt": 6}, epsilon=EPS)
     assert b.excess == 65_552
     with pytest.raises(ValueError, match="charges are"):
         S.bound(s, Fraction(1, 100), 0, {"on-chip": 0})
     with pytest.raises(ValueError, match="δ lies"):
         S.bound(s, Fraction(1), 0, {"on-chip": 0, "rebuilt": 0})
+    with pytest.raises(ValueError, match="the audit's error ε .* is given by the audit"):
+        S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0})
 
 
 @pytest.mark.parametrize("bad, match", [
@@ -100,6 +112,10 @@ def test_time_only_through_an_assumption() -> None:
         S.Order("value roots", "seeds", "after", assumption="SAKMatmul")
     with pytest.raises(ValueError, match="positive time"):
         S.Order("value roots", "seeds", "after", within_ns=0, assumption="SAKMatmul")
+    per_session = S.Order("receipts", "pass seed", within_ns="deadline_ns", assumption="SquaringCeiling")
+    assert per_session.within_ns == "deadline_ns"
+    with pytest.raises(ValueError, match="names its logged parameter"):
+        S.Order("receipts", "pass seed", within_ns="10 s", assumption="SquaringCeiling")
     with pytest.raises(ValueError, match="not among its assumptions"):
         _toy(log=(S.Order("value roots", "seeds", "after", within_ns=30 * 10**9, assumption="SAKMatmul"),))
 
@@ -114,9 +130,10 @@ def test_order_direction() -> None:
 
 def test_scheme_term_carried() -> None:
     s = _toy(delta_scheme=Fraction(1, 2**64))
-    b = S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0})
-    assert b.delta_scheme == Fraction(1, 2**64) and b.probability == Fraction(1, 100) + Fraction(1, 2**64)
-    assert S.bound(_toy(), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}).delta_scheme == 0
+    b = S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, epsilon=EPS)
+    assert b.delta_scheme == Fraction(1, 2**64) and b.epsilon == EPS
+    assert b.probability == Fraction(1, 100) + EPS + Fraction(1, 2**64)
+    assert S.bound(_toy(), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, epsilon=EPS).delta_scheme == 0
     with pytest.raises(ValueError, match="δscheme lies"):
         _toy(delta_scheme=Fraction(1))
 
@@ -130,21 +147,21 @@ def test_a_said_term_says_both_sides() -> None:
 
 def test_a_named_term_is_evaluated_at_the_parameters_its_caller_gives() -> None:
     pearl = S.Term("Pouw.PearlC.δPearlC", ("q", "N"), lambda q, N: Fraction(q + N, 2**128))
-    b = S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 2**64, "N": 4096})
+    b = S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 2**64, "N": 4096}, epsilon=EPS)
     assert b.delta_scheme == Fraction(2**64 + 4096, 2**128) and b.term == "Pouw.PearlC.δPearlC"
     assert b.parameters == {"q": 2**64, "N": 4096}
     with pytest.raises(ValueError, match=r"δPearlC is evaluated at \['q', 'N'\], and \['q'\] were not given"):
-        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"N": 4096})
+        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"N": 4096}, epsilon=EPS)
     with pytest.raises(ValueError, match="has no parameters"):
-        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 1, "N": 1, "P": 1})
+        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 1, "N": 1, "P": 1}, epsilon=EPS)
     with pytest.raises(ValueError, match="outside"):
-        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 2**128, "N": 0})
+        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 2**128, "N": 0}, epsilon=EPS)
     with pytest.raises(ValueError, match="takes no parameters"):
-        S.bound(_toy(), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 1})
+        S.bound(_toy(), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 1}, epsilon=EPS)
     sketch = S.Term("ResourceAccounting.Guarantees.Remote.SketchBoundDeployed", ("Q", "P", "N", "ε"),
                     lambda Q, P, N, ε: Fraction((Q + P) ** 2, 2**257) + N * ε)
     four = {"Q": 2**40, "P": 2**10, "N": 64, "ε": Fraction(1, 2**80)}
-    assert S.bound(_toy(delta_scheme=sketch), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, four).parameters == four
+    assert S.bound(_toy(delta_scheme=sketch), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, four, epsilon=EPS).parameters == four
     with pytest.raises(ValueError, match="once each"):
         S.Term("Pouw.PearlC.δPearlC", ("q", "q"), lambda q: Fraction(0))
 

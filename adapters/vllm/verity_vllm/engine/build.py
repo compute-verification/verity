@@ -284,7 +284,8 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     ex.answer(H.Declared(card, {
         "model": kw.get("model"), "execution": execution, "eager": want_eager, "world": world, "dtype": kw.get("dtype"),
         "quantization": kw.get("quantization"), "prefix_cache": bool(kw.get("enable_prefix_caching")),
-        "kernels": served.kernels(engine_args), "async_steps": kw.get("async_scheduling")}))
+        "kernels": served.kernels(engine_args), "async_steps": kw.get("async_scheduling")},
+        tuple(ex.attached), dict(ex.attached)))
     t0 = time.perf_counter()
     llm, admitted, _ = hooked(lambda: LLM(**kw))
     build_s = time.perf_counter() - t0

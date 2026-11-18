@@ -174,14 +174,15 @@ def serve(a: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
     if a.max_model_len:
         S.BASE_ARGS = max_model_len(S.BASE_ARGS, a.max_model_len)
-    own_plan = []
+    private = Path(a.private)
+    plan = private / "plan.jsonl"
     if a.plan:
         C = S.corpus()
         if not getattr(C.request_body, "own_sampling", False):
             C.request_body = own_sampling(C.request_body)
-        (out / "plan.jsonl").write_bytes(Path(a.plan).read_bytes())
-        own_plan = ["--plan", str(out / "plan.jsonl")]
-        plan_len = sum(1 for _ in open(out / "plan.jsonl"))
+        private.mkdir(mode=0o700, parents=True, exist_ok=True)
+        plan.write_bytes(Path(a.plan).read_bytes())
+        plan_len = sum(1 for _ in open(plan))
     cap = out / "capacity"
     real_site = S.plugin_site
 
@@ -198,19 +199,19 @@ def serve(a: argparse.Namespace) -> int:
     S.plugin_site = plugin_site
     base = ["--model-id", a.model, "--checkpoint", str(ck), "--c4", a.c4, "--docs", str(a.docs), "--reps", "1",
             "--warm-s", "10"]
-    if S.main(["run", "--arm", "compiled", *base, *own_plan, "--rates", "burst=1000", "--requests", str(a.burst),
-               "--out", str(cap)]):
+    if S.main(["run", "--arm", "compiled", *base, "--plan", str(plan), "--rates", "burst=1000", "--requests", str(a.burst),
+               "--private", str(private / "capacity"), "--out", str(cap)]):
         return 1
     burst = S.arm_metrics(cap)["loads"]["burst"][0]
     capacity = burst["req_per_s"]
     rate = round(a.over * capacity, 2)
     print(f"[ladder] {a.model}: capacity {capacity:.2f} req/s, {burst['output_tok_per_s']:.0f} out tok/s; "
           f"serving the window at {rate} req/s for {a.span_s:g} s", flush=True)
-    if own_plan and plan_len < S.plan_need({LOAD: rate}, a.span_s, None):
+    if a.plan and plan_len < S.plan_need({LOAD: rate}, a.span_s, None):
         raise SystemExit(f"{a.plan} holds {plan_len} requests, fewer than the window at {rate} req/s for {a.span_s:g} s "
                          f"may send ({S.plan_need({LOAD: rate}, a.span_s, None)}): build a longer one")
     rc = S.main(["run", "--arm", "record", *base, "--rates", f"{LOAD}={rate}", "--span-s", str(a.span_s),
-                 "--plan", str(out / "plan.jsonl"), "--private", str(Path(a.private) / "record"),
+                 "--plan", str(plan), "--private", str(private / "record"),
                  "--out", str(out / "record")])
     rec = S.arm_metrics(out / "record")
     (out / "serve.json").write_text(json.dumps({
@@ -270,7 +271,7 @@ def replay(a: argparse.Namespace) -> int:
     os.environ["LADDER_TILINGS"] = str(out / f"replay-{a.index}")
     P.apply(pin=pin() == "pinned", tilings=ENV.LADDER_TILINGS)
     if ENV.LADDER_TOPK_PROBE:
-        os.environ["LADDER_TOPK_PROBE_OUT"] = str(out / f"replay-{a.index}" / "topk")
+        os.environ["LADDER_TOPK_PROBE_OUT"] = str(Path(a.private) / f"replay-{a.index}" / "topk")
         probe_topk()
     argv = ["--arm-dir", str(out / "record"), "--load", LOAD, "--checkpoint", str(ck), "--out", str(out / f"replay-{a.index}"),
             "--tp", str(LADDER[a.model].tp), *(["--logprobs"] if a.logprobs else []),

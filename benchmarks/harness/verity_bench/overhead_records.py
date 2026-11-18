@@ -40,8 +40,6 @@ from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, records
 POINTS_RECORD, RUN_RECORD = "overhead-points", "overhead"
 POINTS_KIND = "verity-bench-overhead-points/v1"
 BY = "benchmarks"
-#: each card's GPU node, where `--on` names none
-NODES = {"h200": "vy-spot-glm53"}
 NODE_JOB = "benchmarks/harness/overhead_node.sh"
 #: the options the door gives each node job (`launch_points`, `launch_run`); the node job sets the rest itself
 DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
@@ -331,7 +329,7 @@ def census(root: Path) -> dict:
     gates = tomllib.loads((root / GATES).read_text())["units"]
     return {"datacenter": DATACENTER, "gpus": dc["machines"] * dc["gpus_per_machine"], "window_s": dc["window_s"],
             "world": WORLD, "world_flop_per_year": world[WORLD]["total_flop"],
-            "flop_per_s": {c.gpu: hardware[c.datasheet]["flop_per_second"] for c in O.CARDS.values()},
+            "flop_per_s": {c.gpu: hardware[c.datasheet]["flop_per_second"] for c in O.DOOR},
             "gates_per_flop": gates["gates_per_flop"]["value"],
             "gates_basis": f"{GATES} units.gates_per_flop ({gates['gates_per_flop']['status']}, {gates['basis']})"}
 

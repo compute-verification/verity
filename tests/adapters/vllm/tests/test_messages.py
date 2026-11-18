@@ -4,6 +4,7 @@ before, and its reader reads what it read before."""
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace as NS
 
 import pytest
 from verity import hooks as H
@@ -231,6 +232,30 @@ def test_one_exchange_a_build_and_the_build_in_scope_is_current():
     assert M.current() is not ex
 
 
+def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_entries_and_its_requests_filed_once():
+    """`Exchange.attach` hands ``attach`` and ``requests`` one ``ctx``, files each request ``attach`` did not, and keeps
+    the scheme's settings under its name for the build's `Declared` and what ``attach`` returns for the run's record; a
+    setting it does not have is refused."""
+    seen: list = []
+    eager = H.RequireProperty("eager", True, "its kernels")
+    world = H.RequireProperty("world", 1, "its passes")
+
+    def attach(ex, ctx):
+        seen.append(ctx)
+        ex.request("pearl", eager)
+        return "front"
+
+    pearl = NS(name="pearl", settings={"coins": "", "tie": False}, check_settings=lambda s: None, attach=attach, requests=lambda ctx: (eager, world))
+    ex = M.Exchange()
+    assert ex.attach(pearl, {"coins": "live"}, submit=print) == "front"
+    assert seen == [{"settings": {"coins": "live", "tie": False}, "build": ex.key, "submit": print}]
+    assert ex.requests == [("pearl", eager), ("pearl", world)] and ex.attached == {"pearl": {"coins": "live", "tie": False}}
+    assert ex.reports == {"pearl": "front"}
+    assert M.Exchange().key != ex.key
+    with pytest.raises(ValueError, match=r"pearl has no setting \['salt'\]"):
+        ex.attach(pearl, {"salt": 1})
+
+
 def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
     monkeypatch.setattr(schemes, "PROCESSES", {"id-front": lambda request, ids: ("relay", request(), ids())})
     ex = M.Exchange()
@@ -275,3 +300,9 @@ def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():
     assert ex.refused("in-1") == [("network", "no release stamp")] and ex.refused("in-2") == []
     assert told == [("in-1", "no release stamp")]
     assert H.InputArrived("in-1", 3, 0, {"x-release": "4"}, "POST /v1/completions HTTP/1.1").headers["x-release"] == "4"
+
+
+def test_the_scheme_that_provides_admission_is_found_by_its_role():
+    assert M.providing("admission").name == "network-attester"
+    with pytest.raises(LookupError, match="one declared scheme provides 'nothing', not 0"):
+        M.providing("nothing")

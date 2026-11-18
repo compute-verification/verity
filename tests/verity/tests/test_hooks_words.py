@@ -34,8 +34,6 @@ KEPT = {
              "and RangesDeclared.slots (a KV block's token slots, PoUB's binder); neutral: capacity, and a range's words",
     "slot_bytes": "RangesDeclared.slot_bytes, a KV slot's bytes (PoUB's binder); neutral: word_bytes",
     "slot": "ValueProduced.slot, the value's position in its port (the Commit's taps); neutral: index",
-    "linear": "RegisteredValues.linear, the registered values that are a linear layer's weight, for PoUS's weights; "
-              "neutral: operands, the values a block reads as a registered operand",
     "eager": "a Declared property (no compiled graph); PoUW and PoUS require it (their adapter wraps aren't "
              "graph-capturable); neutral: a property a scheme names, its value the adapter's",
     "async_steps": "a Declared property, a step scheduled before the last one's outputs are read (vLLM's async "
