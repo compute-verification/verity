@@ -613,6 +613,12 @@ def coinsReason (v : Docket.Verifier) (samplingDesign rec_ draw : Json) (src : B
         some s!"the draw read {read} bytes of {src.size / Challenger.COIN_BYTES} coins: a coin opened and not read"
       else none
 
+/-- `o`, unless the profile's credited blocks are refused (`Core.Integrity.creditedProblem`): then that refusal. -/
+def creditedGate {α : Type} (prof : Core.Integrity) (o : Core.Outcome α Core.Integrity) : Core.Outcome α Core.Integrity :=
+  match prof.creditedProblem with
+  | some why => .reject why
+  | none => o
+
 /-- R1–R8, the sample's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
 check `checkAt` runs once the coins drew the sample. R1–R8 is SPOT's check alone (`Docket.check`): this audit
 refuses no record for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the
@@ -645,10 +651,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := population, draw := some draw }],
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)], credited := p.credited }
-    match profile.creditedProblem with
-    | some why => .reject why
-    | none =>
-    .accept
+    creditedGate profile <| .accept
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
         bound := Bound.boundOf population draw p.delta, perTemplate, complete := Record.allRan e.verdicts }
       profile

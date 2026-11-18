@@ -52,8 +52,8 @@ verity_vllm.acquire.h1_commit      # pouw_h1_ranks.COMMIT_EXTENSION: vLLM's work
 verity_vllm.pipeline.boundary_rows      # a served window's boundary commitment: a library entry point, read by benchmarks/one_stage/two_stage.py
 verity_vllm.pipeline.boundary_stop      # a serve's stop rule and a stop class's stop record: a library entry point, read by benchmarks/one_stage/two_stage.py
 verity_vllm.pipeline.boundary_windows      # the boundary commitment's hook on the scheduler: a library entry point, installed by benchmarks/serve_tax's plugin
-verity_vllm.pipeline.tick_plugin      # --admit tick under vLLM's own server: vLLM imports its general plugin (register) and its middleware (TickFeed) by name
 verity_vllm.pipeline.cut_plugin       # the carried pool's cut at each window edge under vLLM's own server: vLLM imports its general plugin (register) by name
+verity_vllm.pipeline.scheme_plugin    # schemes by name inside vLLM's own server: vLLM imports its general plugin (register) and its middleware by name
 verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a library entry point, read by benchmarks/prove_path
 verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
 verity_vllm.pipeline.window_replay      # a window's circuit as one replay Definition: a library entry point (`replay`), for a class's replay block

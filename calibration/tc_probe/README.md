@@ -20,7 +20,9 @@ TRUSTED_STABLE), each criterion with its evidence, and a note where the instruct
 the evidence shows. It reads the evidence store; where the store holds no probe evidence, every subject is UNPROBED.
 
 The probes themselves run from the repository root after `uv sync --all-packages`, on a GPU of the instruction's
-architecture with nvcc (and `cuobjdump` for `--sass-check`):
+architecture with nvcc (and `cuobjdump` for `--sass-check`). Each builds for the card the run opened, from its card
+record's `arch` and that architecture's file, and refuses by name an instruction of another architecture; a
+`--compile-only` build on a host with no GPU names its card with `--card`:
 
 ~~~text
 uv run python calibration/tc_probe/tc_probe.py --instruction sm89.mma.m16n8k32.e4m3 --out DIR --sweep --sass-check

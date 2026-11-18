@@ -28,6 +28,8 @@ Every resource accounting protocol states its guarantee through these, and defin
   most `δ` plus the audit's error plus the scheme's own term.
 * `Scheme.AccountingLayer`: the accounting layer's theorem, stated. For every scheme, `AuditBound` at its accepted
   runs and incorrect blocks, with its break event bounded by its own term, gives `GetsBack` at every cutoff.
+* `Scheme.GetsBackPeriod`, `Scheme.PeriodLayer`: the same over a period of execution phases, by the union bound over
+  the phases: the probability is `T` times one phase's, and the phases' provers may adapt to one another.
 * `Scheme.Placed`: a scheme's blocks placed in a circuit, each block its gate set. `Placed.credited` is the credited
   set the levels setting and the integrity profile take, and `Placed.Unsplit` says it is credited unsplit
   (`Levels.CreditedUnsplit`): each block is a block of the first level and of every later one.
@@ -103,6 +105,28 @@ def AccountingLayer : Prop :=
     (∀ p q : S.Run → Prop, (∀ r, p r → q r) → pr p ≤ pr q) →
     (∀ p q : S.Run → Prop, pr (fun r => p r ∨ q r) ≤ pr p + pr q) →
     AuditBound L pr S.accepts S.incorrect ε → pr S.breaks ≤ S.δscheme → ∀ δ, S.GetsBack L pr δ ε
+
+/-- **What a scheme gets back over a period** of `T` execution phases, each a run of the scheme read from the period's
+run `r` by `phase t`: at cutoff `δ`, some phase is accepted with a log that meets the conditions and has `over` above
+`under` by more than the missable cost plus the charges with probability at most `T · (δ + ε + δscheme)`. Outside that
+event, summed over the accepted phases whose logs meet the conditions, `over` exceeds `under` by at most `T` times the
+missable cost plus the charges. -/
+def GetsBackPeriod (S : Scheme) (L : SamplingDesign S.Block) {R : Type} (T : ℕ) (phase : Fin T → R → S.Run)
+    (pr : (R → Prop) → ℝ≥0∞) (δ ε : ℝ≥0∞) : Prop :=
+  pr (fun r => ∃ t, S.accepts (phase t r) ∧ S.logOK (phase t r) ∧
+      S.under (phase t r) + S.missable L δ + S.charges < S.over (phase t r)) ≤ T * (δ + ε + S.δscheme)
+
+/-- **The accounting layer over a period** (stated). For every scheme and probability on a period's runs that is
+monotone, subadditive and zero on the empty event: what the scheme gets back at each execution phase, the probability
+read through that phase, gives what it gets back over the period. The phases' provers may adapt to one another: each
+phase's bound is over every prover, and the period's is their union bound, with no product of the phases' designs. -/
+def PeriodLayer : Prop :=
+  ∀ (S : Scheme) (L : SamplingDesign S.Block) (R : Type) (T : ℕ) (phase : Fin T → R → S.Run)
+    (pr : (R → Prop) → ℝ≥0∞) (δ ε : ℝ≥0∞),
+    (∀ p q : R → Prop, (∀ r, p r → q r) → pr p ≤ pr q) →
+    (∀ p q : R → Prop, pr (fun r => p r ∨ q r) ≤ pr p + pr q) →
+    pr (fun _ => False) = 0 →
+    (∀ t, S.GetsBack L (fun p => pr fun r => p (phase t r)) δ ε) → S.GetsBackPeriod L T phase pr δ ε
 
 /-- **A scheme placed in a circuit** with gates `G`: each block's gate set, two blocks never the same set. -/
 structure Placed (S : Scheme) (G : Type) where

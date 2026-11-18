@@ -30,7 +30,7 @@ LEAN, WARMED = "lean-verify", "flock-warm"
 @dataclass(frozen=True)
 class Workload:
     """A workload the command prices: the model its records name, the card its prover and its serving run on
-    (`overhead.CARDS`), and the fleet whose serving MFU prices a served token (`FLEETS`). A `steady_only` workload's
+    (`overhead.card`), and the fleet whose serving MFU prices a served token (`FLEETS`). A `steady_only` workload's
     census is printed on its own first (`prove_census`), and its totals are given only where every block type with
     blocks is measured at steady state, its census holds no gap and every other slot is labelled; else they are refused
     by name. `member`: the member of each metric's line its measurements are."""

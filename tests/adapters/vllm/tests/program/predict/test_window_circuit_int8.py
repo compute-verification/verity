@@ -5,8 +5,8 @@ pinned on `test_window_circuit`'s TINY class and windows, at 512 weight words a 
 The norm after the attention and the one after the MLP are one `RMSNormFusedCuda_v2` template, whose ``x`` o_proj's 4 slices
 write as 4 rows and down_proj's 8 as 8, and a port is cut once for every writer. So the window holds the first as that
 template, ``x`` cut 4 ways, and cuts the second at its residual add: one `RMSNormFusedCudaAdd_v2{R=8}` part, ``x`` cut 8 ways,
-and its tail. The units and registered reads are pinned on its unwired lowering, the one its weights registration commits
-(`window_circuit.lower`, ``wired=False``).
+and its tail. The units and registered reads are pinned on its lowering, the one its weights registration commits
+(`window_circuit.lower`).
 """
 from __future__ import annotations
 
@@ -53,8 +53,8 @@ def _registered():
     return S.Registered.of(phi, default_seed=7)
 
 
-def _unwired(reg):
-    return WC.lower(reg, CLASS, None, GRAIN, wired=False).circuit
+def _lowered(reg):
+    return WC.lower(reg, CLASS, None, GRAIN, provable=False).circuit
 
 
 def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words():
@@ -65,21 +65,21 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     unit reading ``x`` as its writers' R rows: q/k/v's and gate/up's the norm's row (R = 1), down_proj's the SiLU's (R = 1)
     and o_proj's the attention's 4 heads (R = 4).
     The window holds the norm both o_proj and down_proj write, cut at its residual add after down_proj (module docstring);
-    its unwired lowering registers the weights and the scan state."""
+    its lowering registers the weights and the scan state."""
     reg = _registered()
     window = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False)
     add = "RMSNormFusedCudaAdd_v2{N=64,C=64,AT=0,R=8}"
     assert {t: k for fn, k in window.templates if (t := _label(fn)).startswith("RMSNormFused")} == {
         "RMSNormFusedCuda_v2{N=64}": 20, add: 20, "RMSNormFusedCudaTail_v1{N=64}": 20}
     assert {t: c for t, c in window.cuts.items() if t.startswith("RMSNormFused")} == {NORM: {"x": 4}, add: {"x": 8}}
-    circuit = _unwired(reg)
+    circuit = _lowered(reg)
     n = {_label(fn): k for fn, k in circuit.templates}
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
     assert {t: k for t, k in n.items() if t.startswith(("Int8", "ScaledMmS8", "Gemm"))} == {
         "Int8RowQuant_v3{K=64,R=1}": 40, "Int8RowQuant_v3{K=64,R=4}": 20, "Int8RowQuant_v3{K=128,R=1}": 20,
         "ScaledMmS8_v3{K=64,N=16}": 560, "ScaledMmS8_v3{K=128,N=8}": 160,
         "Gemm_v2{K=64,N=8}": 320, "Gemm_v2{K=64,N=1}": 10}
-    assert (sum(circuit.units.values()), circuit.wires, circuit.cuts) == (1568, (), {})
+    assert (sum(circuit.units.values()), len(circuit.wires)) == (1568, 173)
     mm = ids["ScaledMmS8_v3{K=64,N=16}"]
     reads = {(r.param, r.port, r.base, r.step[-1]) for r in circuit.registered.reads if r.reader == mm}
     layer = "model.layers.0.self_attn.qkv_proj", "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.gate_up_proj"
@@ -89,7 +89,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     assert params.pop(SCAN_STATE) == 16 * 4548 and len(params) == 25
     assert {p.split("/", 1)[0] for p in params} == {WC.WEIGHTS}
     assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit)) == {
-        "units": 1568, "inputs": 10547104, "wired": 0, "registered": 9161856, "ingress": 0, "free": 1385248}
+        "units": 1568, "inputs": 10547104, "wired": 1385248, "registered": 9161856, "ingress": 0, "free": 0}
 
 
 @pytest.mark.parametrize("flip, param", [("model.layers.1.mlp.down_proj.weight", "model.layers.1.mlp.down_proj.weight@512"),
@@ -100,19 +100,19 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
     class circuit registers, each linear's s8 codes and f32 row scales their own, but the rotary table: pinned at them,
     and the scan state at its own root, every weight read but the rotary table's is registered. A committer serving one
     byte changed in a linear's codes, or in its scales, refuses to register that weight, and a window that serves it is
-    refused by that parameter's name alone, publishing nothing of it. Pinned on the unwired lowering
-    (module docstring), whose node-output reads are free for want of a wire."""
+    refused by that parameter's name alone, publishing nothing of it. Pinned on the lowering (module docstring), whose
+    node-output reads are wired."""
     reg = _registered()
-    doc = json.loads(json.dumps(_unwired(reg).description()))
+    doc = json.loads(json.dumps(_lowered(reg).description()))
     d, man = _checkpoint(tmp_path, quant=INT8_EXACT_QUANT)
     registration, rpath = _register(tmp_path / "committer", reg, d, checkpoints_manifest=man, grain=GRAIN)
     pins = WW.registration_pins(registration, WW.weights_record(reg, d, man, grain=GRAIN))
     assert (ADV.registered_weights(registration), len(pins), list(registration["unrooted"])) == (pins, 24, [ROPE])
-    assert set(pins) == set(_unwired(reg).registered.params) - {ROPE, SCAN_STATE}
+    assert set(pins) == set(_lowered(reg).registered.params) - {ROPE, SCAN_STATE}
     rope, both = _alone(doc, ROPE), {**pins, **SCAN_PIN}
     held_ = IF.input_count(doc, pins=both, roots=both)
-    assert held_ == {"units": 1568, "inputs": 10547104, "wired": 0, "registered": 9161856 - rope, "ingress": 0,
-                     "free": 1385248 + rope}
+    assert held_ == {"units": 1568, "inputs": 10547104, "wired": 1385248, "registered": 9161856 - rope, "ingress": 0,
+                     "free": rope}
     served = WW.record_words(reg, *_checkpoint(tmp_path / "served", flip=flip, quant=INT8_EXACT_QUANT))
     refused = {param.rpartition("@")[0]: "served words that aren't the checkpoint's"}
     with pytest.raises(ValueError, match=re.escape(f"no weight registered: {refused} ")):

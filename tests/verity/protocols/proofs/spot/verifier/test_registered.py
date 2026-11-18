@@ -1934,25 +1934,25 @@ def test_a_window_that_restarts_its_pool_still_serves_the_continuations():
 
 #: Pearl+'s y trees' binding tag: PoUW's rows domain over a call's served y, at salt nonce 2^61 + the call's index
 PEARL_Y_ROWS = "verity/pouw/pearl-plus/y-rows/v1"
-PEARL_SALT, PEARL_KEY, PEARL_CALL = bytes(range(64)), bytes(range(32)), 7
+PEARL_SALT, PEARL_CALL = bytes(range(64)), 7
 
 
 def _pearl_plus(rows, y: bool = False):
     """A Pearl+ call's tree of `rows` (each a row of FP32 words) as PoUW commits it, `audit.commit_rows` under
-    hm96-sha512: A's under `activation_binding` at salt nonce u, y's under `PEARL_Y_ROWS` at 2^61 + u. With the domain
+    hm96-sha512 under salts handed in as data: A's under `activation_binding`, y's under `PEARL_Y_ROWS`. With the domain
     as a verifier rebuilds it from that binding, owner and rows, and `bc(i, row)`: one-stage's `b || c` of `row` as a
     `row-seg/v1` row of 32-bit words under row i's salt."""
     u = PEARL_CALL
     binding = tagged(PEARL_Y_ROWS, PEARL_SALT, u) if y else PA.activation_binding(PEARL_SALT, u)
     nonce = (1 << 61) + u if y else u
-    tree = PA.commit_rows(binding, u, [b"".join(w.to_bytes(4, "little") for w in r) for r in rows], PA.HM96,
-                          salt_key=PEARL_KEY, nonce=nonce)
+    salts = [hashlib.shake_256(f"pearl {nonce} {i}".encode()).digest(PA.HM96_SALT) for i in range(len(rows))]
+    tree = PA.commit_rows(binding, u, [b"".join(w.to_bytes(4, "little") for w in r) for r in rows], PA.HM96, salts=salts)
     dom = CommitmentDomain(binding, u, RangeIndexedDomain(0, len(rows)), hash="sha512")
     assert dom.domain_id == tree.domain.domain_id
 
     def bc(i: int, row) -> bytes:
         return hm96.SHA512.commit_string(hm96.SHA512.default_key, G.row_digest(row, 32, G.SCHEMA_SEG),
-                                         PA.hm96_salt(PEARL_KEY, nonce, i))
+                                         salts[i])
     return tree, dom, bc
 
 

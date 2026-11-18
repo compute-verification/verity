@@ -122,7 +122,7 @@ def test_the_committer_commits_each_read_by_reference_as_the_lean_verifier_opens
                                {p: v.entry() for p, v in values.items()}, registered=REG)
     assert {k: (e["ports"]["in1"]["reads"], e["ports"]["in1"]["root"]) for k, e in lean.items()} == {
         k: (e["in1"]["positions"], roots[e["in1"]["value"]]) for k, e in entries.items()}
-    res = CS.write(CS.commit(window, got, salt_key=bytes(32)), tmp_path, {"registered_roots": roots}, {}, registered=entries,
+    res = CS.write(CS.commit(window, got), tmp_path, {"registered_roots": roots}, {}, registered=entries,
                    registrar=R)
     assert [m["registered"]["in1"] for m in res["members"]] == [{"value": e["in1"]["value"], "positions": e["in1"]["positions"]}
                                                                  for e in entries.values()]

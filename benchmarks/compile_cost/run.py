@@ -63,7 +63,7 @@ def target(card: str) -> dict:
     t = kit.gpu_target(card)
     return {"compute_capability": t["compute_capability"], "num_sms": t["num_sms"], "batch_invariant": False, "attention_backend": None,
             "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": t["device_name"],
-            "moe_backend": "triton"}
+            "moe_backend": "triton", "card": card}
 
 
 def scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, seqs: int = 256) -> list[list[tuple[int, int, int]]]:
@@ -130,12 +130,12 @@ def class_cost(m: Meter, card: str) -> dict:
     from verity_vllm.program.predict.steps import Registered
     from verity_vllm.program.predict.window_class import WindowClass
     hf = json.loads(pinned_hf_config(LLAMA32_1B["repo"], LLAMA32_1B["revision"]).read_text())
-    tgt = {k: target(card)[k] for k in ("compute_capability", "num_sms")}
+    tgt = {k: target(card)[k] for k in ("compute_capability", "num_sms", "card")}
     t0 = time.perf_counter()
     with m.phase("Registered.of"):
         reg = Registered.of(Phi(model={**LLAMA32_1B, "hf_config": hf, "dtype": "bfloat16"}, target=tgt), default_seed=DEFAULT_SEED)
     with m.phase("lower"):
-        low = window_circuit.lower(reg, WindowClass(*CLASS_1B), wired=False)
+        low = window_circuit.lower(reg, WindowClass(*CLASS_1B))
     wall = time.perf_counter() - t0
     m.stop.set()
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024

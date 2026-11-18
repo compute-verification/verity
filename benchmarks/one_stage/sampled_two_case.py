@@ -79,8 +79,8 @@ def assemble(run: Mapping[str, Any], members: Mapping[str, Any]) -> dict[str, An
 
 
 def write(case: Mapping[str, Any], out: Path) -> list[Path]:
-    """The case as ``sampled-two check``'s files under ``out``: params.json, commitment.json, evidence.json, then
-    the blobs' paths. -> the files in that order."""
+    """The case as ``vstar-recursive sampled check``'s files under ``out``: params.json, commitment.json,
+    evidence.json, then the blobs' paths. -> the files in that order."""
     out.mkdir(parents=True, exist_ok=True)
     files = [out / "params.json", out / "commitment.json", out / "evidence.json"]
     files[0].write_text(canonical(case["params"]))
