@@ -4,18 +4,18 @@ public import Proofs.Core.Levels
 public import Definitions.Claims.SamplingTwo
 
 /-!
-# Two levels agree with the two-stage design
+# Two levels agree with `Design.Two`
 
-`Claims.Sampling.Design.Two` gives its first stage only by its acceptance probability `P_a` (`Design.Pa`, a formula
-with no coins) and its second stage as a uniform `min(k_t, n_{ρ,t})`-subset of each cell, read through its escape
+`Claims.Sampling.Design.Two` gives its outer sample only by its acceptance probability `P_a` (`Design.Pa`, a formula
+with no coins) and its inner sample as a uniform `min(k_t, n_{ρ,t})`-subset of each cell, read through its escape
 `e_ρ` (`Design.Two.esc`). Its acceptance probability at a footprint is `P̄_a = Σ_T P_a(T)·∏_{ρ∈T}(1 − e_ρ)·∏_{ρ∉T} e_ρ`
 (`Design.Two.Pa`).
 
 `Levels.missProb_two_toReal`: for two levels whose outer blocks are the replay blocks (`ρ`, a bijection onto their
 indices), whose first design misses each set of outer blocks with the probability `P_a` gives it, and whose design in
 each outer block `X` misses `T_X` with the escape `e_{ρ(X)}` at the footprint `fp`, the level-by-level sample misses `T`
-with probability `P̄_a(fp)`. So `Design.Two.Pa` is the miss of `Levels.design` wherever the levels realize its two
-stages.
+with probability `P̄_a(fp)`. So `Design.Two.Pa` is the miss of `Levels.design` wherever the levels realize its outer
+and inner samples; `Levels.missProb_two_toReal_cells` takes the inner designs to be its uniform subsets of each cell.
 -/
 
 @[expose] public section
@@ -32,8 +32,8 @@ theorem SamplingDesign.missProb_le_one {U : Type} (D : SamplingDesign U) (T : Fi
   split_ifs <;> simp
 
 
-/-- A uniform `min(k_t, |C_t|)`-subset of each cell `C_t`, `t < m`, each on coins of its own: the second stage of
-`Design.Two` in one outer block. -/
+/-- A uniform `min(k_t, |C_t|)`-subset of each cell `C_t`, `t < m`, each on coins of its own: `Design.Two`'s inner
+sample in one outer block. -/
 def SamplingDesign.cellSubsets {U : Type} [DecidableEq U] (m : ℕ) (C : ℕ → Finset U) (k : ℕ → ℕ) :
     SamplingDesign U where
   Ω := (t : Fin m) → {S // S ∈ (C t).powersetCard (min (k t) (C t).card)}
@@ -77,14 +77,14 @@ theorem SamplingDesign.missProb_cellSubsets {U : Type} [DecidableEq U] (m : ℕ)
     Disjoint (Finset.univ.biUnion fun t => (ω t).1) T) = _
   simp only [Finset.disjoint_biUnion_left]
   rw [prCoin_pi_forall Finset.univ
-    (fun t (S : {S // S ∈ (C t).powersetCard (min (k t) (C t).card)}) => Disjoint S.1 T)]
+    (fun (t : Fin m) (S : {S // S ∈ (C t).powersetCard (min (k t) (C t).card)}) => Disjoint S.1 T)]
   exact Finset.prod_congr rfl fun t _ => prCoin_subset_disjoint (C t) _ T
 
 namespace Levels
 
 variable {G : Type} [Fintype G] [DecidableEq G]
 
-/-- **Two levels agree with `Design.Two`** where they realize its two stages: the outer blocks are its replay blocks
+/-- **Two levels agree with `Design.Two`** where they realize its outer and inner samples: the outer blocks are its replay blocks
 under `ρ`, the first design's miss is `P_a` (`h₁`), and the design in each outer block misses `T`'s blocks inside it with
 the escape at `fp` (`h₂`). -/
 theorem missProb_two_toReal (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l₁, l₂]) (d : Design.Two)
@@ -166,7 +166,7 @@ theorem missProb_two_toReal (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels 
     · exact Finset.prod_congr rfl fun X hX => by rw [h₂ X (hR hX)]
     · exact Finset.prod_congr rfl fun X hX => by rw [h₂ X (Finset.mem_sdiff.1 hX).1]
 
-/-- **Two levels agree with `Design.Two` at its second stage**: as `missProb_two_toReal`, with the design in each outer
+/-- **Two levels agree with `Design.Two` at its uniform inner subsets**: as `missProb_two_toReal`, with the design in each outer
 block `X` a uniform `min(k_t, n_{ρ(X),t})`-subset of each of its cells `C X t`, which have `Design.Two`'s cell sizes
 and hold `fp(ρ(X), t)` blocks of `T`. -/
 theorem missProb_two_toReal_cells (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l₁, l₂]) (d : Design.Two)
