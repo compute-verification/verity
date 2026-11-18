@@ -223,7 +223,7 @@ verifier evaluates. C names the function in its input's mark, under its digest, 
 /-- Every function a mark may name, the format's closed list (`verity.circuits.supplied.FUNCTIONS` names the same). -/
 def FUNCTIONS : List String :=
   ["pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1", "pous.setup.salt/v1",
-   "poub.read.pub/v1", "poub.read.signs/v1", "window.salt/v1", "pouw.pearlplus.salt/v1", "registered.root/v1",
+   "poub.read.pass_seed/v1", "poub.read.pass_root/v1", "window.salt/v1", "pouw.pearlplus.salt/v1", "registered.root/v1",
    "record.root/v1", "log.base/v1", "const.u16/v1"]
 def LAYOUTS : List String := ["le", "halves", "digest"]
 /-- A supplied value is short: at most this many bits, whatever the population; what grows with it is computed in C. -/

@@ -775,8 +775,7 @@ def test_a_supplied_value_is_one_short_value_committed_under_public_salts_at_its
     rows of its reading port's words and commits them under the public salts at the Program's digest, which the verifier
     recomputes; a mark whose value is not the parameter's whole leaves, of a function the registry lacks or at args it
     doesn't take is refused, and so is a value of another length or a parameter no mark names."""
-    mark = {"supplied": "poub.read.signs/v1", "args": {"draw": 0, "sketch_rows": 1, "bytes": 512}, "layout": "le",
-            "bits": 4096}
+    mark = {"supplied": "pous.session.header/v1", "args": {"head": 512}, "layout": "le", "bits": 4096}
     read = I.Read(GID, "w", "s", 0, (STEPS, LAYERS, REQUESTS), 0, (0, 0, 0))
     reg = I.Registered({"s": 256}, reads=(read,), supplied={"s": mark})
     assert I.Registered.of(reg.doc()) == reg and reg.doc()["supplied"] == {"s": mark}
@@ -789,7 +788,7 @@ def test_a_supplied_value_is_one_short_value_committed_under_public_salts_at_its
     assert got.root == RV.Registered.commit(prog, "s", got.rows, RV.supplied_salts(prog, "s", 1), 16, V2).root
     for bad, why in [({"s": {**mark, "bits": 2048}}, "is not 2048 bits"),
                      ({"s": {**mark, "supplied": "no.such/v1"}}, "a function of the registry"),
-                     ({"s": {**mark, "args": {"draw": 0}}}, "takes the args"),
+                     ({"s": {**mark, "args": {}}}, "takes the args"),
                      ({"t": mark}, "a registered parameter"),
                      (("s",), "an object of a mark by parameter")]:
         with pytest.raises(ValueError, match=why):

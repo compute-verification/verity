@@ -133,11 +133,11 @@ SETUP = {"program": desc([["store", 1], ["salt", 1, SALT], ["one", 1, ONE]], [1,
     ("a function the registry lacks", lambda j: {**j, "program": desc([["one", 1, {**ONE, "supplied": "x/v1"}]], [2])},
      None),
     ("a value that grows with the population", lambda j: {**j, "program": desc(
-        [["pub", 1, {"supplied": "poub.read.pub/v1", "args": {"draw": 0, "K": 4, "masked": 0, "N": 1 << 20},
-                     "layout": "le", "bits": 4320 + 6 * (1 << 20)}]], [2])}, None),
+        [["head", 1, {"supplied": "pous.session.header/v1", "args": {"head": 1 << 20}, "layout": "le",
+                      "bits": 8 << 20}]], [2])}, None),
     ("a function with no body yet: no statement", lambda j: {**j, "program": desc(
-        [["seed", 1, {"supplied": "poub.read.signs/v1", "args": {"window": 0, "sketch_rows": 1},
-                      "layout": "halves", "bits": 4096}]], [2])}, None),
+        [["seed", 1, {"supplied": "poub.read.pass_seed/v1", "args": {"window": 0, "pass": 1},
+                      "layout": "halves", "bits": 512}]], [2])}, None),
     ("the log's base after two records", lambda j: {**j, "log": [{"population": 2}, {"population": 3}], "program": desc(
         [["base", 1, ROOTS[4]]], [2]), "widths": {"base": 16}}, {"base": [[0, 0, 5, 0]]}),
     ("a port the record doesn't name", lambda j: {**j, "program": desc([["r", 1, ROOTS[2]]], [2]),
