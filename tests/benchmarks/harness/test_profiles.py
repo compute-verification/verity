@@ -17,9 +17,9 @@ from verity_config import ConfigError
 
 SERVE_TAX = Path(__file__).resolve().parents[3] / "benchmarks" / "serve_tax" / "serve_tax.py"
 PINS = {
-    "coding-agent": (1, "a24d1318f600e63c49c28dc74451dcd6b31d2e2bb118088909b9924e53a0f923"),
-    "chat": (1, "e20c6329d358ca47456b00c1e5393dabf35983b2b47d7b8f6d351526da03a057"),
-    "fixed-size": (1, "fb3b62a2b5b09d64c0f44837e700852866c02c8c43c5c1eae8ee5a3b5fedd92e"),
+    "coding-agent": (1, "54ef9ec108314bddeaff1f5c8546edf8b00f8cdd32e046be0a3ca8a159578ade"),
+    "chat": (1, "553bc90ac63b177fcd651c58798f764d7e30f26f57dee79688a92b613e3c2a40"),
+    "fixed-size": (1, "93036f84deab9449aa7d8e4f1343c9f23a1918bed489dc5efbcb036d51e1cbc4"),
 }
 CLIENT = (sys.executable, "-m", "vllm.entrypoints.cli.main")
 
@@ -52,7 +52,7 @@ def test_objects_are_frozen(doc):
     with pytest.raises(FrozenInstanceError):
         doc.profiles["chat"].prompts = 1
     with pytest.raises(TypeError):
-        doc.profiles["coding-agent"].users["glm53"] = 8
+        doc.profiles["coding-agent"].users["glm53"]["h200"] = 8
 
 
 @pytest.mark.parametrize(("table", "line"), [
@@ -69,8 +69,10 @@ def test_an_unknown_key_is_refused(tmp_path, table, line):
 
 
 @pytest.mark.parametrize(("old", "new", "refusal"), [
-    ("glm53 = 4\n", "glm53 = 0\n", "a positive count"),
-    ("llama32-1b = \"not found yet\"\n", "llama32-1b = \"unknown\"\n", "a positive count"),
+    ("glm53.h200 = 4\n", "glm53.h200 = 0\n", "a positive count"),
+    ("llama32-1b.h100 = \"not found yet\"\n", "llama32-1b.h100 = \"unknown\"\n", "a positive count"),
+    ("llama32-1b.h100 = \"not found yet\"\n", "", "names cards \\['h200'\\], not its cards \\['h100', 'h200'\\]"),
+    ("glm53.h200 = 4\n", "glm53.h200 = 4\nglm53.h100 = 4\n", "names cards"),
     ("prompts = 200\n", "", "exactly"),
     ("within = [\"token\"]\n", "within = [\"e2e\"]\n", "within names"),
     ("[profiles.coding-agent.cuts.131072]", "[profiles.coding-agent.cuts.65536]", "no cut at llama-3.2-1b"),
@@ -142,10 +144,23 @@ def test_the_client_is_serve_taxs_but_sampling_and_fixed_size_output(doc, S, tmp
 
 
 def test_a_load_not_found_yet_is_refused_unless_given(doc, tmp_path):
-    assert P.load_point(doc, "coding-agent", "glm53") == 4
+    assert P.load_point(doc, "coding-agent", "glm53", "h200") == 4
+    with pytest.raises(ConfigError, match="no load on card h100; its cards are h200"):
+        P.load_point(doc, "coding-agent", "glm53", "h100")
     with pytest.raises(ConfigError, match="not found yet"):
+        P.bench_argv(doc, "chat", "glm53", "/ckpt", port=8000, result_dir=tmp_path, tag="t", card="h200")
+    with pytest.raises(ConfigError, match=r"no load on card \(none named\)"):
         P.bench_argv(doc, "chat", "glm53", "/ckpt", port=8000, result_dir=tmp_path, tag="t")
     argv = P.bench_argv(doc, "chat", "glm53", "/ckpt", port=8000, result_dir=tmp_path, tag="t", in_flight=12)
     assert argv[:3] == ["vllm", "bench", "serve"]
     assert argv[argv.index("--max-concurrency") + 1] == "12"
     assert not {"--temperature", "--top-p", "--top-k"} & set(argv)
+
+
+def test_each_models_cards_are_card_files_shorts(doc):
+    from verity.device import load_card, skus
+
+    cards = Path(__file__).resolve().parents[3] / "calibration" / "hardware" / "cards"
+    shorts = {load_card(sku, directory=cards).get("short") for sku in skus("gpu", directory=cards)}
+    for name, model in doc.models.items():
+        assert set(model.cards) <= shorts, f"models.{name}: cards {model.cards} not all of the card files' {sorted(shorts)}"

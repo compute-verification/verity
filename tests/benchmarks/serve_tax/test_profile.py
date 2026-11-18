@@ -21,6 +21,14 @@ CLIENT = (sys.executable, "-m", "vllm.entrypoints.cli.main")
 #: what a request without a seed gets under the certified tick (`verity_vllm.pipeline.tick_plugin.unseeded`)
 UNSEEDED = ("under the certified tick a request sampled at the server's default temperature needs an integer seed, "
             "not null: send one, or temperature 0")
+SOURCE_COMMIT = S.source_commit
+
+
+@pytest.fixture(autouse=True)
+def an_h200(monkeypatch: pytest.MonkeyPatch):
+    """The host's card as nvidia-smi names it (`card`), read through the card files; the tree's commit given."""
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
+    monkeypatch.setattr(S, "source_commit", lambda: "c0ffee")
 
 
 def test_without_a_profile_the_server_and_client_lines_are_mains():
@@ -262,13 +270,16 @@ def test_the_results_three_lines_come_first_in_order_then_the_profile(tmp_path: 
                             "the job's 120 minutes ran out: prod-record stopped before agentic-256k@4 rep 3")
 
 
-def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+@pytest.mark.parametrize(("name", "card"), [("NVIDIA H200", "h200"), ("NVIDIA H100 80GB HBM3", "h100")])
+def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                           name: str, card: str):
+    monkeypatch.setattr(S, "card", lambda: name)
     plan = S.profile_plan("chat", "llama32-1b", None, True)
-    assert plan == {"STOCK": "compiled", "OURS": "", "CAP_MIN": "20", "ARMS": "compiled",
+    assert plan == {"STOCK": "compiled", "OURS": "", "CAP_MIN": "20", "CARD": card, "ARMS": "compiled",
                     "LOADS": "chat=4+8+12+16+24+32+48", "REPS": "3", "LIFETIMES": "1"}
     assert S.profile_plan("fixed-size", "llama32-1b", None, True)["LOADS"] == "long=4+8+12+16+24"
     assert S.profile_plan("coding-agent", "llama32-1b", None, True)["LOADS"] == "agentic=1+2+4+8"
-    with pytest.raises(SystemExit, match="the load is not found yet: run --find-load first"):
+    with pytest.raises(SystemExit, match=f"on llama32-1b.{card}: the load is not found yet: run --find-load first"):
         S.profile_plan("chat", "llama32-1b", "record", False)
     tok = {4: 100, 8: 190, 12: 260, 16: 300, 24: 300, 32: 298, 48: 295}
     reps = {c: [{**rep(r, v), "concurrency": c} for r in (1, 2, 3)] for c, v in tok.items()}
@@ -280,12 +291,15 @@ def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_pa
     rc, r, text = S.profile_result([tmp_path / "compiled"], "chat", "llama32-1b", None, True, tmp_path / "out")
     text_ = P.PATH.read_text(encoding="utf-8")
     table = text_.index("[profiles.chat.in_flight]")
-    at = text_.index('llama32-1b = "not found yet"', table)
+    old = f'llama32-1b.{card} = "not found yet"'
+    at = text_.index(old, table)
     edited = tmp_path / "production.toml"
-    edited.write_text(text_[:at] + "llama32-1b = 16" + text_[at + len('llama32-1b = "not found yet"'):], encoding="utf-8")
+    edited.write_text(text_[:at] + f"llama32-1b.{card} = 16" + text_[at + len(old):], encoding="utf-8")
     digest = P.digest(P.load(edited), "chat")
-    assert rc == 0 and (r["verdict"], r["peak"], r["raise_version"], r["pin"]) == ("saturated", 16, 2, [2, digest])
-    assert text.splitlines()[2:5] == ["in benchmarks/production.toml, under [profiles.chat.in_flight]: llama32-1b = 16",
+    assert rc == 0 and (r["verdict"], r["peak"], r["raise_version"], r["pin"], r["card"]) == (
+        "saturated", 16, 2, [2, digest], card)
+    assert text.splitlines()[0].startswith(f"llama32-1b stock on {card} at chat: 4 in flight 100 tok/s")
+    assert text.splitlines()[2:5] == [f"in benchmarks/production.toml, under [profiles.chat.in_flight]: llama32-1b.{card} = 16",
                                       "and under [profiles.chat]: version = 2 (from 1)",
                                       f'in tests/benchmarks/harness/test_profiles.py, PINS: "chat": (2, "{digest}"),']
     assert (tmp_path / "out" / "find_load.txt").read_text() == text + "\n"
@@ -332,3 +346,46 @@ def test_run_sh_takes_a_profile_and_refuses_what_it_fixes_before_it_holds_anythi
     assert "cap_at=$((t_leased + CAP_MIN * 60))" in sh
     assert '[ "$arm" != "$STOCK" ] && [ -n "${OURS:-}" ] && profile+=(--ours "$OURS")' in sh
     assert sh.index('profile result "${dirs[@]}"') < sh.index('cost=("$PY" "$here/serve_tax.py" cost')
+
+
+def test_the_card_is_the_driver_names_card_file_and_the_commit_needs_no_git(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H100 80GB HBM3")
+    assert S.profile_card("llama32-1b") == "h100"
+    with pytest.raises(SystemExit, match="this host's card is h100, and production.toml serves glm53 on h200: add h100"):
+        S.profile_plan("coding-agent", "glm53", None, True)
+    monkeypatch.setattr(S, "card", lambda: "none")
+    with pytest.raises(SystemExit, match="nvidia-smi names no card on this host"):
+        S.profile_card("llama32-1b")
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA A100-SXM4-80GB")
+    with pytest.raises(SystemExit, match="0 card records .* have 'NVIDIA A100-SXM4-80GB'"):
+        S.profile_card("llama32-1b")
+    monkeypatch.setattr(S, "source_commit", lambda: None)
+    with pytest.raises(SystemExit, match="no commit names this tree: neither RESEARCH_SOURCE_SHA .* nor "
+                                         "RESEARCH_SOURCE_COMMIT .* and git gives no HEAD here"):
+        S.profile_plan("chat", "llama32-1b", None, True)
+    monkeypatch.delenv("RESEARCH_SOURCE_SHA", raising=False)
+    monkeypatch.setenv("RESEARCH_SOURCE_COMMIT", "abc123")
+    assert SOURCE_COMMIT() == "abc123"
+    monkeypatch.delenv("RESEARCH_SOURCE_COMMIT")
+    monkeypatch.setenv("PATH", "/nonexistent")
+    monkeypatch.setattr(S, "ROOT", Path("/nonexistent"))
+    assert SOURCE_COMMIT() is None
+
+
+def test_run_sh_on_a_machine_not_ours_names_venv_and_takes_the_hubs_own_place(tmp_path: Path):
+    """No /workspace of ours: VENV refused by name where it holds no environment, and HF_HOME the hub's own place under
+    XDG_CACHE_HOME; on our nodes, where /workspace's are, both are as they were."""
+    env = {"RESEARCH_RUN_DIR": str(tmp_path / "run"), "HOME": str(tmp_path / "home"), "XDG_CACHE_HOME": str(tmp_path / "c")}
+    rc, out = run_sh("--model", "llama32-1b", "--profile", "chat", "--find-load", VENV=str(tmp_path / "none"), **env)
+    assert (rc, out) == (2, f"serve-tax: no environment at VENV={tmp_path / 'none'}: on a machine that is not ours (no "
+                            "/workspace/venv312), set VENV to one holding vLLM d9105ea80\n")
+    (tmp_path / "venv" / "bin").mkdir(parents=True)
+    (tmp_path / "venv" / "bin" / "python").symlink_to(sys.executable)
+    rc, out = run_sh("--model", "llama32-1b", "--profile", "chat", "--find-load", VENV=str(tmp_path / "venv"), **env)
+    ours = next((d for d in ("/workspace/cp/hf", "/workspace/hf") if Path(d).is_dir()), None)
+    hub = Path(ours or tmp_path / "c" / "huggingface") / "hub"
+    m = S.MODELS["llama32-1b"]
+    assert (rc, out) == (2, f"serve-tax: no checkpoint at {hub}/models--unsloth--Llama-3.2-1B/snapshots/{m.revision}\n")
+    sh = (S.HERE / "run.sh").read_text()
+    assert "[ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312" in sh
+    assert "[ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf\n[ -d \"$hf\" ] || hf=" in sh

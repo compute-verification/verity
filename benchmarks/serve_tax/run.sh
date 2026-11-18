@@ -121,7 +121,11 @@
 # its stand-in on one, a directory under /tmp of the cut config and that checkpoint's tokenizer; llama8b,
 # qwen3-30b and llama32-1b their pinned snapshots under HF_HOME on one. GPU_LEASE_ON and GPU_LEASE_CORES are the
 # lease's --on and --cores. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
-# pin, unless set.
+# pin, unless set. On a machine that is not ours (a Slurm node, under research run --local-only) there is no gpu-lease:
+# the job waits for its own cards (CUDA_VISIBLE_DEVICES, as Slurm sets it) to be free; VENV must be given; HF_HOME is
+# the hub's own place under XDG_CACHE_HOME unless given; and a profile's job names its commit from research run's
+# --tree-sha (RESEARCH_SOURCE_SHA) or RESEARCH_SOURCE_COMMIT, with no .git, and its card from nvidia-smi's name
+# through the card files, never from the machine's name.
 set -uo pipefail
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
   flag=$1; shift
@@ -193,8 +197,10 @@ else
     TRITON_CACHE_DIR=$venv/cache/triton
 fi
 VENV=${VENV:-$venv}; PY=$VENV/bin/python
+[ -x "$PY" ] || { echo "serve-tax: no environment at VENV=$VENV: on a machine that is not ours (no /workspace/venv312), set VENV to one holding vLLM $SERVE_VLLM"; exit 2; }
 export PATH="$VENV/bin:$PATH"   # the venv's ninja, which FlashInfer's JIT (vLLM's default sampler) runs
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
+[ -d "$hf" ] || hf=${XDG_CACHE_HOME:-$HOME/.cache}/huggingface   # a machine that is not ours: the hub's own place, the job's
 export HF_HOME=${HF_HOME:-$hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 MODEL_ID=${MODEL_ID:-moonlight}
 case $MODEL_ID in

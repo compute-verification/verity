@@ -1726,10 +1726,14 @@ def versions() -> dict:
 
 
 def source_commit() -> str | None:
-    """This tree's commit: the research run's source, else the checkout's HEAD."""
-    if SHARED.RESEARCH_SOURCE_SHA:
-        return SHARED.RESEARCH_SOURCE_SHA
-    p = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True)
+    """This tree's commit: the research run's source, else the commit its caller names (a payload's, sent without
+    `.git`), else the checkout's HEAD; None where none says."""
+    if SHARED.RESEARCH_SOURCE_SHA or SHARED.RESEARCH_SOURCE_COMMIT:
+        return SHARED.RESEARCH_SOURCE_SHA or SHARED.RESEARCH_SOURCE_COMMIT
+    try:
+        p = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True)
+    except OSError:
+        return None
     return p.stdout.strip() if p.returncode == 0 else None
 
 
@@ -4186,6 +4190,22 @@ def profile_stock(profile: str, model_id: str) -> str:
     return stock
 
 
+def profile_card(model_id: str) -> str:
+    """The card a profile's job serves ``model_id`` on: the ``short`` of the card file whose driver name nvidia-smi
+    gives this host's cards (`card`, `card_record`), refused where the profiles' file holds no load of the model on it.
+    Never a flag or a machine's name, so the same command serves an H100 or an H200, ours or a borrowed one."""
+    P = profiles()
+    name = card()
+    if name == "none":
+        raise SystemExit(f"--profile on {model_id}: nvidia-smi names no card on this host, and a profile's job serves on one")
+    short = card_record(name)["short"]
+    cards = P.load().models[model_id].cards
+    if short not in cards:
+        raise SystemExit(f"--profile on {model_id}: this host's card is {short}, and {P.PATH.name} serves {model_id} on "
+                         f"{', '.join(cards)}: add {short} to its cards and a load for it in each profile")
+    return short
+
+
 def profile_load(profile: str, model_id: str) -> str:
     """The load of `LOADS` a profile's job sends ``model_id``: coding-agent's cut at the model's context (its dataset and
     turns), chat's and fixed-size's own."""
@@ -4298,8 +4318,11 @@ def profile_plan(profile: str, model_id: str, feature: str | None, find_load: bo
     P, doc = profile_doc(profile, model_id)
     if (feature is None) == (not find_load):
         raise SystemExit(f"--profile {profile} takes --feature ARM or --find-load, one of them")
-    stock, load = profile_stock(profile, model_id), profile_load(profile, model_id)
-    plan = {"STOCK": stock, "OURS": "", "CAP_MIN": str(doc.models[model_id].cap_minutes)}
+    if source_commit() is None:
+        raise SystemExit(f"--profile {profile}: no commit names this tree: neither RESEARCH_SOURCE_SHA (research run's "
+                         "--tree-sha) nor RESEARCH_SOURCE_COMMIT (a payload's commit) is set, and git gives no HEAD here")
+    stock, load, card_ = profile_stock(profile, model_id), profile_load(profile, model_id), profile_card(model_id)
+    plan = {"STOCK": stock, "OURS": "", "CAP_MIN": str(doc.models[model_id].cap_minutes), "CARD": card_}
     if find_load:
         prompts = doc.profiles[profile].prompts
         ladder = SESSIONS_LADDER if LOADS[load].sessions else tuple(c for c in LADDER if c <= prompts)
@@ -4309,10 +4332,10 @@ def profile_plan(profile: str, model_id: str, feature: str | None, find_load: bo
         raise SystemExit(f"--feature {feature}: one arm of ours over {stock}, {model_id}'s stock under the profiles: "
                          f"{', '.join(profile_features(stock))}")
     try:
-        point = P.load_point(doc, profile, model_id)
+        point = P.load_point(doc, profile, model_id, card_)
     except P.ConfigError:
-        raise SystemExit(f"--profile {profile} on {model_id}: the load is {P.NOT_FOUND}: run --find-load first and "
-                         f"write the line it prints into {P.PATH.name}") from None
+        raise SystemExit(f"--profile {profile} on {model_id}.{card_}: the load is {P.NOT_FOUND}: run --find-load first "
+                         f"and write the line it prints into {P.PATH.name}") from None
     refused = refusals(feature)
     changes = sorted({r["change"] for r in refused if r["change"]}, key=list(OURS_CHANGES).index)
     can = all(r["change"] for r in refused)
@@ -4402,7 +4425,7 @@ def profile_tail(P: object, doc: object, profile: str, model_id: str, served: li
 
 def tail_text(r: dict) -> list[str]:
     return [f"profile {r['profile']} v{r['version']} (digest {r['digest'][:12]}), model {r['model_id']} ({r['model']})"
-            + (", a quick check" if r["quick_check"] else ""),
+            + (f" on {r['card']}" if r.get("card") else "") + (", a quick check" if r["quick_check"] else ""),
             f"vLLM pin {r['vllm']}; served {', '.join(r['served_vllm'])}",
             *(["differences that apply:"] + [f"  {d['command']} -> {d['profile']}: {d['why']}" for d in r["differences"]]
               if r["differences"] else [])]
@@ -4421,18 +4444,18 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, feature: str |
     run.sh's job exits 1 for an arm whose run refuses it, the result written all the same), the result and its
     text."""
     P, doc = profile_doc(profile, model_id)
-    stock, load = profile_stock(profile, model_id), profile_load(profile, model_id)
+    stock, load, card_ = profile_stock(profile, model_id), profile_load(profile, model_id), profile_card(model_id)
     metas = [json.loads((d / "meta.json").read_text()) for d in dirs]
     by = joined([arm_metrics(d) for d in dirs])
     stopped = [f"{m['arm']} stopped before {m['stopped']['before']} rep {m['stopped']['rep']}" for m in metas
                if m.get("stopped")]
     cap = (f"the job's {doc.models[model_id].cap_minutes} minutes ran out: " + "; ".join(stopped)) if stopped else None
     if find_load:
-        r, text = find_load_result(P, doc, profile, model_id, by.get(stock), load, cap)
+        r, text = find_load_result(P, doc, profile, model_id, card_, by.get(stock), load, cap)
         name = "find_load"
         rc = 0
     else:
-        point = P.load_point(doc, profile, model_id)
+        point = P.load_point(doc, profile, model_id, card_)
         refused = refusals(feature)
         if refused:
             changes = [r["change"] for r in refused]
@@ -4456,7 +4479,7 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, feature: str |
         text += [f"{feature} beside {stock} at {load}, {point} {'users' if LOADS[load].sessions else 'in flight'}, "
                  f"{FEATURE_LIFETIMES} lifetimes of {FEATURE_REPS} reps each"]
         name = "serving_profile"
-    r |= profile_tail(P, doc, profile, model_id, [by[a] for a in by])
+    r |= profile_tail(P, doc, profile, model_id, [by[a] for a in by]) | {"card": card_}
     text += tail_text(r)
     if out is not None:
         out.mkdir(parents=True, exist_ok=True)
@@ -4465,18 +4488,18 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, feature: str |
     return rc, r, "\n".join(text)
 
 
-def find_load_result(P: object, doc: object, profile: str, model_id: str, ref: dict | None, load: str,
+def find_load_result(P: object, doc: object, profile: str, model_id: str, card_: str, ref: dict | None, load: str,
                      cap: str | None) -> tuple[dict, list[str]]:
     """``--find-load``'s result: stock's output tokens a second at each rung it served, and where they stop rising (the
     rung of the most, `peak`, with a rung served above it): the line of `benchmarks/production.toml` that names it,
     the profile's version raised by one, and the digest the pin test then holds (`profiles.digest` of the file with
-    that line). Where stock still rises at its highest rung served it cannot tell, and prints no line. It edits no
+    that line), the model's load on ``card_``. Where stock still rises at its highest rung served it cannot tell, and prints no line. It edits no
     file."""
     rungs = bench_rungs(ref, load) if ref else {}
     each = {c: statistics.fmean(r.get("output_tok_per_s") or 0.0 for r in rungs[c]) for c in sorted(rungs)}
     key = "users" if doc.profiles[profile].users else "in_flight"
     r: dict = {"load": load, "key": key, "output_tok_per_s": {str(c): v for c, v in each.items()}, "cap": cap}
-    text = [f"{model_id} stock at {load}: " + ", ".join(f"{c} {key.replace('_', ' ')} {v:.0f} tok/s"
+    text = [f"{model_id} stock on {card_} at {load}: " + ", ".join(f"{c} {key.replace('_', ' ')} {v:.0f} tok/s"
                                                          for c, v in each.items())]
     if not rungs:
         return r | {"verdict": "cannot tell", "why": cap or "stock served no rung"}, text + ["cannot tell: no rung served"]
@@ -4485,9 +4508,10 @@ def find_load_result(P: object, doc: object, profile: str, model_id: str, ref: d
         why = f"stock still rises at its highest rung served ({top})" + (f"; {cap}" if cap else "")
         return r | {"verdict": "cannot tell", "why": why}, text + [f"cannot tell: {why}: no line"]
     old = doc.profiles[profile]
-    new = replace(old, **{key: MappingProxyType({**getattr(old, key), model_id: top})})
+    loads = getattr(old, key)
+    new = replace(old, **{key: MappingProxyType({**loads, model_id: MappingProxyType({**loads[model_id], card_: top})})})
     digest = P.digest(replace(doc, profiles=MappingProxyType({**doc.profiles, profile: new})), profile)
-    line = f"{model_id} = {top}"
+    line = f"{model_id}.{card_} = {top}"
     r |= {"verdict": "saturated", "peak": top, "line": line, "table": f"profiles.{profile}.{key}",
           "raise_version": old.version + 1, "pin": [old.version + 1, digest]}
     return r, text + [f"saturated: output tokens a second stop rising at {top} ({'+'.join(map(str, each))} served)",
