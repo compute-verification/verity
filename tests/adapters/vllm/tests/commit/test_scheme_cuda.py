@@ -79,8 +79,10 @@ def test_fa2_tap_thread_leaf(tmp_path: Path) -> None:
         pytest.skip(f"no FA2 source tree at {FA2_CSRC} (the tap tree of pod_fa2_tap.sh; VERITY_FA2_CSRC names another)")
     from torch.utils.cpp_extension import CUDA_HOME, include_paths
 
+    if not CUDA_HOME:
+        pytest.skip("no CUDA toolkit: set CUDA_HOME")
     tap = PKG / "acquire" / "fa2_tap_src" / "verity_tap.h"
-    nvcc = os.path.join(CUDA_HOME or "/usr/local/cuda", "bin", "nvcc")
+    nvcc = os.path.join(CUDA_HOME, "bin", "nvcc")
     arch = "sm_{}{}".format(*torch.cuda.get_device_capability(0))
     incs = [FA2_CSRC / "flash_attn" / "src", FA2_CSRC / "flash_attn", FA2_CSRC / "common", FA2_CSRC / "cutlass" / "include", *include_paths()]
     libs: dict[int, ctypes.CDLL] = {}

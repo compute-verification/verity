@@ -19,7 +19,7 @@ MACHINE = {"PATH": "/usr/bin", "HOME": "/root", "TMPDIR": "/tmp", "LANG": "C.UTF
            "UV_CACHE_DIR": "/root/.cache/uv", "VIRTUAL_ENV": "/w/src/abc/.venv", "CARGO_HOME": "/root/.cargo", "https_proxy": "http://p:3128",
            "VERITY_SLOW": "1", "FLOCK_CHECKOUT": "/root/flock", "AWS_ACCESS_KEY_ID": "dummy", "AWS_SESSION_TOKEN": "dummy",
            "R2_ENDPOINT": "https://r2.invalid", "RUNPOD_API_KEY": "dummy", "GITHUB_TOKEN": "dummy", "SSH_AUTH_SOCK": "/tmp/agent",
-           "RESEARCH_STORE": "/w/store", "RESEARCH_RUN_ID": "r0", "PYTHONPYCACHEPREFIX": "/w/cache", "LD_LIBRARY_PATH": "/usr/local/cuda",
+           "RESEARCH_STORE": "/w/store", "RESEARCH_RUN_ID": "r0", "PYTHONPYCACHEPREFIX": "/w/cache", "LD_LIBRARY_PATH": "/w/cuda",
            "HOSTNAME": "pod", "SOME_TOOL_SETTING": "x"}
 
 
