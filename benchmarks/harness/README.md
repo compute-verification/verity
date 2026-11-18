@@ -164,7 +164,7 @@ been it isn't (`why`), a run of the record whose rows can't be read among them. 
 runs and arts, the targets a record's labels are on, and its attempts started since the spec's file was added, and
 says on stderr when it starts and what it pulled.
 
-**Run.** A steady-state point runs as every point does (Running a point, above), in a GPU slot of the node
+**Run.** A steady-state point runs as every point does (Running a point, above, `jobs.dispatch`), in a GPU slot of the node
 (`--pool gpu`), which gives it its cores, with `--tool verity_bench.tool:STEADY_POINT`; `GPU_LEASE_ON`, where set, is
 the booked card, one index (`steady_node --card`). `--again POINT` runs that point though a passing run stands for it,
 as a labelled row timed before the harness does whatever its closure: `plan SPEC --again POINT` shows it as
