@@ -43,7 +43,7 @@ theorem sampled_fresh {key : Spot.Challenger.ChallengerKey} {w label : String} {
     (hlog : Spot.getD (Spot.getD coins "session") "log" = .arr ls) (hls : ls.toList = lines.map .str)
     (hr : readLog label after records ξ lines = some l) :
     (freshCoins label after l).flatten = Properties.Challenger.bitsOf ξ ∧ ∀ cs ∈ freshCoins label after l, cs ≠ [] := by
-  obtain ⟨cm, roots, hts, hstream⟩ := Verity.Sampled.drawCoins_ok hd
+  obtain ⟨cm, roots, hts, hcm, hlab, hstream⟩ := Verity.Sampled.drawCoins_ok hd
   obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok hts
   obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
   obtain ⟨ls', lines', hlog', hls', hrr⟩ := Verity.Sampled.challengePhaseOf_ok hso
@@ -53,9 +53,10 @@ theorem sampled_fresh {key : Spot.Challenger.ChallengerKey} {w label : String} {
   have hlines : lines' = lines :=
     ((List.map_injective_iff.2 fun _ _ h => Json.str.inj h) hls').symm
   subst hlines
-  have hsize := Verity.Sampled.challengerStream_ok hstream
+  have hsize := Verity.Sampled.challengerStream_ok hstream hlab
   have hfresh := Verity.Sampled.fresh_readLog _ _ _ _ hr
-  rw [Verity.Sampled.countFresh_eq, ← Verity.Sampled.releasedRootsOf_ok hrr] at hfresh
+  rw [Verity.Sampled.countFresh_eq, ← (Verity.Sampled.releasedLogOf_ok hrr hcm).2.1,
+    ← (Verity.Sampled.releasedLogOf_ok hrr hcm).2.2.1] at hfresh
   rw [hfresh]
   exact ⟨Verity.Sampled.chunks_flatten _ _ hsize, Verity.Sampled.chunks_ne_nil_of_size _ _ hsize⟩
 

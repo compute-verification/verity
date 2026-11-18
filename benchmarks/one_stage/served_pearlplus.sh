@@ -13,7 +13,8 @@
 #      tokens (default 1,024) and PEARLPLUS_OUTPUT_TOKENS outputs (default 1) at PEARLPLUS_T tokens a step (default 8,192:
 #      a prefill-heavy load, 8 prompts a step), each engine step one pass retained in passes/, its epoch's salt coin a
 #      live session's on vy-challenger-1 where PEARLC_CHALLENGER_GATE and PEARLC_CHALLENGER_PEER are set (served_verdicts.sh
-#      sets them under POUW=pearlplus; `served_passes.py serve`'s, `bench_arm.live_coins`), else an in-process
+#      sets them under POUW=pearlplus; `served_passes.py serve`'s `scheme_settings`, its epoch numbers spent under
+#      PEARLC_PRIVATE, SERVE_DIR/private unless set), else an in-process
 #      challenger's; with the gate, the lane's Pearl-C period PEARLPLUS_PERIOD (default pearlplus-RUN_ID) is opened right
 #      before that serve (`served_verdicts.py pearlplus-period`: cap 1, its circuit PIECE_DIR/pearlplus-descriptor.json's
 #      SHA-512, its answers in PIECE_DIR/period.json), so the serve's salt session joins it and fills its cap, and the gate
@@ -113,6 +114,8 @@ cd "$(dirname "$0")/../.." || exit 1
 TREE=$PWD TPY=$PWD/.venv/bin/python
 [ -x "$TPY" ] || TPY=${PY:-python3}
 Q=$SD/private/pearlplus SPEC=${PEARLPLUS_SPEC:-benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served.toml}
+# a live session's salt epoch numbers, spent across the serve dir's pieces (served_passes.py serve's PEARLC_PRIVATE)
+export PEARLC_PRIVATE=${PEARLC_PRIVATE:-$SD/private}
 FAST=${PEARLPLUS_FAST-1}
 # every file the piece writes is its owner's alone, the passes' files a step rewrites too: a manifest holds the salt key
 umask 077
