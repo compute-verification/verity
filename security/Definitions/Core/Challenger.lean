@@ -15,7 +15,7 @@ verifier reads coins only from a challenger's log, and uses no randomness of its
   `Reading.elapsed a b`, the difference of two readings of that one device, and `Reading.tick`, a reading counted in a
   registered period;
 * `Challenger.Between reads digest e a b`: an entry `e` after attester's entry `a`, which it reads, and before `b`,
-  which signs its digest;
+  which signs its digest; `Challenger.Bracketed`, the same with both readings, the form every deadline reads;
 * `Challenger.Entry R C`: one entry of a challenger's log, a commitment `r : R` it recorded, a coin `c : C` it
   released, or an attester's entry;
 * `Challenger.Log R C`: its log, oldest entry first;
@@ -100,6 +100,14 @@ digest is the protocol's encoding of it (`digest`); nothing else orders them. -/
 def Between {E : Type} {k : String} (reads : E → Attested k → Prop) (digest : E → Hash.Msg) (e : E)
     (a b : Attested k) : Prop :=
   reads e a ∧ digest e ∈ b.shown
+
+/-- **A bracketed entry**: attester `k`'s entry `a` releases a coin with its reading `ra`, the prover's entry `e` reads
+it, and `k`'s entry `b` signs `e`'s digest with its reading `rb`; so `e` was made within `ra.elapsed rb` of that one
+device's clock. It is the four steps (a reading, the coin released, the commitment recorded, a reading) with the coin's
+release and its reading one entry. A deadline and a salt's age read it and bound `ra.elapsed rb`. -/
+def Bracketed {E : Type} {k : String} (reads : E → Attested k → Prop) (digest : E → Hash.Msg) (e : E)
+    (a b : Attested k) (ra rb : Reading k) : Prop :=
+  Between reads digest e a b ∧ a.reading = some ra ∧ b.reading = some rb
 
 /-- **An entry of a challenger's log**: a commitment it recorded, a coin it released, or an entry `s` that the
 auditor's device registered under key `k` signed. -/

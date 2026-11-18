@@ -21,6 +21,8 @@ two-sided, and each consumer leans on one side:
   real time. Ticks no faster than the period, alone, is this side, the weaker form.
 
 A device at the site, or in a host that registers no drift, times nothing: the premise says nothing of its readings.
+A registered drift of 1 or more makes `NotSlow` say nothing, so a consumer's check refuses it by name. Useful work's
+`honest-clock` and the bandwidth audit's `Paced` are restated over this premise, not kept beside it.
 How late the device acts after it reads its clock is a term of a consumer's statement, not of this premise. It is a
 premise about the auditor's device on a host the prover doesn't control (`trusted-host`), which nothing attests.
 -/
