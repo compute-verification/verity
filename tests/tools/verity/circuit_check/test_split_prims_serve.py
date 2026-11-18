@@ -31,19 +31,16 @@ DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", 
 
 
 def _digest(fn) -> str | None:
-    """The descriptor digest of a circuit-check target: a specialization's Program digest; a primitive's descriptor entry inside
-    a one-Call wrapper (which is not registered)."""
+    """The descriptor digest of a circuit-check target: a specialization's Program digest; a primitive's entry digest, read
+    from its entry alone, as a primitive with no Boolean body is in no Program."""
     from verity.circuits import codec
-    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+    from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
     from verity.circuits.program import Program
 
     if isinstance(fn, SpecializedDefinition):
         return codec.program_digest(codec.encode_program(Program(fn)))
     if isinstance(fn, PrimitiveDefinition):
-        params, ret = fn.signature()
-        wrap = CompositeDefinition("SplitDigestWrap", 1, (), lambda S: (params, ret), lambda B, S, *a: B.call(fn, *a), register=False)
-        desc = codec.encode_program(Program(bind(wrap)))
-        return codec.definition_digest(desc["definitions"][fn.id], desc)
+        return codec.definition_digest(codec._encode_definition(fn))
     return None
 
 
