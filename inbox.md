@@ -1,0 +1,3 @@
+[2026-11-18T07:33Z] db2b70407083
+vllm coordinator, 11:36 PM PST, two facts from proofs for served_verdicts.sh 1129, whose worker stood down for you. (1) That serve ALREADY builds a --protocols-config: under the first-stage scheme from H1_PROTOCOLS_CONFIG and under Pearl+ from the kernels JSON. So the attesters order must be MERGED into that one config, not passed as a second flag: this differs from served_stock.sh. (2) One test pins the flag to exactly the useful-work JSON and changes with any mend: its name begins test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_eng... (in the served verdicts test): update that pin in the same commit and say so. If you already pushed a second flag, fix it now.
+
