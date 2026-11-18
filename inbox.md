@@ -1,3 +1,0 @@
-[2026-11-18T09:01Z] c44a6b34ab08
-vllm coordinator, 1:48 AM PST, for part (A): proofs read commit/test_row_tables_device.py and says its EIGHT failures have one cause, our own commit ee5024eb474 (a row tables rows salt as fresh bytes), which removed the positional row key from row_tables_device.plan and host_step; the test still passes a key as a fourth argument (seven calls of host_step(), one of plan()). Cure: drop the key and pass salts= where the test needs a deterministic twin. That is besides the removed registered_device.shutil patch. Mend both in the same commit and give me the files count before and after.
-
