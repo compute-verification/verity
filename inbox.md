@@ -1,0 +1,3 @@
+[2026-11-18T16:39Z] 82f950d8f98a
+ONEWIRE: STOP. Daniel (16:35Z) and top: premises that hold one copy of the circuit to another are not PROVED, they are REMOVED: work on proving the wires' fast check, PositionsCarry and CutIsRegistered stops now. Push what you have to your branch as it is (do not land it on interfaces), write a checkpoint note with the branch, SHA and what is proved/unproved, and END YOUR TURN with first line . Your next work comes on resume: making the verifier DERIVE the unwired Program and the positions from the one registered (wired) Program so that nothing is handed over.
+
