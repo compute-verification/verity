@@ -13,7 +13,7 @@ import Mathlib.Basic.ENNReal.Real
 Stacking needs a carrier the audit counts: device memory whose contents were chosen after the seed (a credited KV page)
 and hold other blocks' encodings, so that one read serves several receipts. In the ideal encoding model a carrier's
 contents are a circuit's values, which depend on the encodings only through the circuit's inputs and its own encodes
-(`Definitions/Poub/Carrier.lean`). Six guarantees, whose proofs are in
+(`Definitions/Poub/Carrier.lean`). Seven guarantees, whose proofs are in
 `security/Proofs/Poub/Stacking.lean`:
 
 * `CarrierBits`, the carrier lemma: memory holding a circuit's values holds at most its input and encoded bits about
@@ -27,7 +27,9 @@ contents are a circuit's values, which depend on the encodings only through the 
   property, `8·R_in·life` input bits and `1024·(c_ρ·reads·life)/E` encoded bits over a carrier's life of `life`
   windows (the property's `L`; `L` here is the side link's bits, as in every rate-audit statement).
 * `RefreshedRunConservationSketchDeployed`: the same session under refresh, every pass rebuilding at most `X` bits
-  with no carrier term (`ResourceAccounting.Assumptions.SeasonedRebuilds` gives that from refresh's conditions).
+  with no carrier term.
+* `RefreshedRunConservationSeasoned`: the same, its rebuild bound given by
+  `ResourceAccounting.Assumptions.SeasonedRebuilds` from refresh's conditions on the session's own layout.
 * `StackedRunConservationRelay`: the relay form, in the general class (`RemoteRunConservationRelay`), where a
   carrier's inputs may depend on the pass's oracle and so relay receipts: a carrier is a side source of the same bits.
   Its store is one for the session, made by the same rule.
@@ -195,6 +197,15 @@ def StackedRunConservationSketchDeployed : Prop :=
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + (n * P : ℝ≥0∞) * δ
 
+/-- **Every pass device of the session rebuilds at most `X` bits, at every store**: the rebuild bound of a
+session with no carrier term. -/
+def _root_.ResourceAccounting.RateSketch.RebuildsWithin {n P N ρ S L q G : ℕ}
+    (A : RateSketch.SketchDeployedRun n P N 128 ρ 512 S L q 16 G 2773) (X : ℕ) : Prop :=
+  ∀ w η j ι c σ Es R O,
+    let dv := (A.window w η).device j ι c
+    let D := RateSketch.Data.ofParts Es R
+    (dv.prog σ D).rebuilds O D * 256 ≤ X
+
 /-- **PoUB at the deployed parameters with a store per pass, under refresh: every pass rebuilds at most `X` bits.**
 `StackedRunConservationSketchDeployed`'s game and bound, with its carrier hypothesis replaced by a rebuild bound with
 no carrier term: every pass device rebuilds at most `X` bits at every store, the shortfall terms read at `X` where the
@@ -231,10 +242,45 @@ def RefreshedRunConservationSketchDeployed : Prop :=
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
     (∀ w η j ι, Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
-    (∀ w η j ι c σ Es R O,
-      let dv := (A.window w η).device j ι c
-      let D := RateSketch.Data.ofParts Es R
-      (dv.prog σ D).rebuilds O D * 256 ≤ X) →
+    RateSketch.RebuildsWithin A X →
+    pr (fun x : (Ω × (Fin T → Ca)) × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+      (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctOn
+        (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w) (x.2 w).1 (x.2 w).2.1) ∧
+        ((((∑ w, (A.win w x.2).readsOn (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w)
+              (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+            (1 - (0.0015 + RateSketch.gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
+          ∃ w, (((A.win w x.2).readsOn (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w)
+              (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+            (1 - (0.01 + RateSketch.gammaSketch N 128 ρ S L X)) * (P * N * 32768)))
+      ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
+        (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + (n * P : ℝ≥0∞) * δ
+
+/-- **The refreshed session's conservation from refresh's conditions.** `RefreshedRunConservationSketchDeployed` with
+its rebuild bound given by `ResourceAccounting.Assumptions.SeasonedRebuilds` under refresh's three conditions on the
+session's own layout, per session: every block a pass reads is read within `life` windows of the one its append joined
+(`RateSketch.LifetimeCappedAll`), has a payload committed at the registration or `life` or more windows before the pass
+(`RateSketch.Seasoned`), and each append's choices read only the coins of the appends before `seen` of it
+(`RateSketch.ChoosesBefore`; at a re-key, its payload is its origin's, by reference, at the origin the rota names). It
+is for one scheme, which payloads may be credited is the layout's, a parameter, and a registered block counts as born
+before the session against this session's coins only.
+
+Frozen: as `RefreshedRunConservationSketchDeployed`. -/
+def RefreshedRunConservationSeasoned : Prop :=
+  ∀ (n P N ρ S L q G X qtot T M life : ℕ) (ε δ : ℝ≥0∞) {Ω Ca Ch : Type} [Fintype Ω]
+    [Fintype Ca] (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → RateSketch.Sector))
+    (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
+    (slot : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Fin N ↪ Fin T × Fin M)
+    (joined : (Ω × (Fin T → Ca)) × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin T → ℕ)
+    (seen : Fin T → Fin T)
+    (A : RateSketch.SketchDeployedRun n P N 128 ρ 512 S L q 16 G 2773),
+    7 ≤ n → 0 < P → 0 < N →
+    Assumptions.SketchRank 16 128 12 ε →
+    Assumptions.KeyBinding T M δ enc →
+    (∀ w η j ι, Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
+    Assumptions.SeasonedRebuilds (fun _ (_ : Ω × (Fin T → Ca)) => A) (fun c _ => slot c) joined choose seen X life →
+    RateSketch.LifetimeCappedAll (fun c (_ : Ω × (Fin T → Ca)) => slot c) joined life →
+    RateSketch.Seasoned (fun c (_ : Ω × (Fin T → Ca)) => slot c) joined seen life →
+    RateSketch.ChoosesBefore choose seen →
     pr (fun x : (Ω × (Fin T → Ca)) × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctOn
         (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w) (x.2 w).1 (x.2 w).2.1) ∧

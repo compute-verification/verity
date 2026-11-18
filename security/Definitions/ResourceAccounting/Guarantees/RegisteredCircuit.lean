@@ -293,8 +293,7 @@ def RefreshedCircuitRequirement : Prop :=
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
     (∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) (qr * τ)) →
-    Assumptions.SeasonedRebuilds (fun c y => A.session (steer c y)) (RateSketch.steeredStore enc choose layout) layout
-      joined choose seen (Xr * τ) L →
+    Assumptions.SeasonedRebuilds (fun c y => A.session (steer c y)) layout joined choose seen (Xr * τ) L →
     Assumptions.SteeredLayout layout steer →
     RateSketch.LifetimeCappedAll layout joined L →
     RateSketch.Seasoned layout joined seen L →
