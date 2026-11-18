@@ -28,8 +28,6 @@
   "benchmarks/pouw/masked_gemm/run.sh": 1,
   "benchmarks/pouw/pearl_c4/ship.sh": 1,
   "benchmarks/pouw/pearl_c_sm120/card.sh": 1,
-  "benchmarks/pouw/pearl_c_sm120/ship.sh": 1,
-  "benchmarks/pouw/pearl_c_sm90/ship.sh": 1,
   "benchmarks/pouw/pearl_c_vllm/served_profile.sh": 1,
   "benchmarks/pouw/pearl_c_vllm/served_step.sh": 1,
   "benchmarks/pouw/pearl_c_vllm/window.sh": 1,
