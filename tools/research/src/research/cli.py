@@ -233,7 +233,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
                          "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise, or "
                          "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's `spill`: every CPU node); the "
-                         "launch says where it went and when it should start. A machine that can start no run takes none, and one "
+                         "launch says where it went and when it should start. A Lean try or records run (lean_changed.py --try "
+                         "FILE, --records PKG; `verity lean try`) goes only to a machine whose kept Lean tree holds its package "
+                         "built, and is refused with what each machine lacks where none does. A machine that can start no run takes none, and one "
                          "that refuses the launch for that is passed over for the next, the launch saying which and why. A run "
                          "that waits in a pool's line, whatever on, asks again and moves to a pool where a place has stood 2 "
                          "min, while the VM that launched it is up and holds its asker: a VM holds only so many alive at a time "
@@ -452,7 +454,8 @@ def _named_asks(ns: argparse.Namespace, command: list[str]) -> dict | None:
 
     if ns.stay or ns.pool != auto.SPILL_POOL or ns.gpus:
         return None
-    return {"cpus": 1, "mem_gb": ns.mem_gb or 0, "lean": auto.lean_pool(command, ns.env)}
+    needs = auto.lean_package(command, Path(ns.source) if ns.source else None, ns.env)
+    return {"cpus": 1, "mem_gb": ns.mem_gb or 0, "lean": auto.lean_pool(command, ns.env), "needs": needs._asdict() if needs else None}
 
 
 def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[str], clones: list[Path]) -> int:
@@ -1426,10 +1429,11 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     told = None                                                # when it should start; a GPU job's wait is the queue's to say
     if why is None:
         lean = auto.lean_pool(command, ns.env)
+        needs = auto.lean_package(command, Path(ns.source) if ns.source else None, ns.env)
         try:
             if not docs:
-                docs.update(auto.read(Path(ns.source), cpus, **({"lean": True} if lean else {})))
-            target, why = auto.choose(docs, cpus, mem, lean_pool=lean)
+                docs.update(auto.read(Path(ns.source), cpus, **({"lean": True} if lean else {}), **({"needs": needs} if needs else {})))
+            target, why = auto.choose(docs, cpus, mem, lean_pool=lean, needs=needs)
         except auto.Unplaceable as e:
             print(f"research run --on auto: refused: {e}", file=sys.stderr)
             return None
@@ -1437,7 +1441,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         told = wait.told(f"{target[0]}'s {target[1]} pool" if target else auto.AUTO_NODE)
         if wait.late:
             told = f"it isn't expected to start within {auto.START_WITHIN_MIN} min: {told}"
-            cut = auto.smaller(docs, cpus, mem, lean_pool=lean)
+            cut = auto.smaller(docs, cpus, mem, lean_pool=lean, needs=needs)
             cut = f"`--cpus {cut[0]} --mem-gb {cut[1]:g}` starts now on {cut[2][0]}'s {cut[2][1]} pool" if cut else None
             if auto.REFUSE and not ns.accept_wait:
                 print(f"research run --on auto: refused: {told}. --accept-wait queues it there anyway"
@@ -1459,7 +1463,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     ns.budget_gb = budget if budget > mem else None            # and the slot gives the run this much to plan its processes on
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     ns.placed = {"machine": machine, "pool": pool, "said": [f"spilled to {machine}'s {pool} pool, from {ns.source} ({why})", told]}
-    ns.asks = {"cpus": cpus, "mem_gb": mem, "lean": lean}      # what `auto` was asked, for the launch's asker to ask it again
+    ns.asks = {"cpus": cpus, "mem_gb": mem, "lean": lean,      # what `auto` was asked, for the launch's asker to ask it again
+               "needs": needs._asdict() if needs else None}
     for line in ns.placed["said"]:
         print(f"research run --on auto: {line}", file=sys.stderr)
     return harness_opts
