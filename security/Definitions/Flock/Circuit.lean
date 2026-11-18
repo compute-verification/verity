@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Boolean
+public import Definitions.Core.Partition
 public import Mathlib.Data.Fintype.Card
 
 /-!
@@ -40,9 +41,7 @@ namespace FlockSoundness.Audit
 
 /-- A partition of a circuit's computed gates into `n` units; the input gates are the input unit
 (`none`). -/
-structure Partition (C : Verity.Boolean.Circuit) (n : ℕ) where
-  unit : Fin C.N → Option (Fin n)
-  input_iff : ∀ g, unit g = none ↔ (C.op g).isInput = true
+abbrev Partition (C : Verity.Boolean.Circuit) (n : ℕ) : Type := Verity.Partition C.toCircuit n
 
 namespace Partition
 
@@ -80,9 +79,7 @@ noncomputable def io (u : Fin n) : Finset (Fin C.N) :=
 /-! ## Refinement -/
 
 /-- `Pf` refines `Pc`: every fine unit lies inside one coarse unit, its `parent`. -/
-structure Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) where
-  parent : Fin nf → Fin nc
-  sub : ∀ g, Pc.unit g = (Pf.unit g).map parent
+abbrev Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) : Type := Verity.Partition.Refines Pf Pc
 
 end Partition
 
