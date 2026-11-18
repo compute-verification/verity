@@ -50,8 +50,6 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``bi-eager``: ``eager`` with ``VLLM_BATCH_INVARIANT=1``, the committing path's execution with nothing committed;
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), in
   the engine core, written by a thread of its own (`servetax_plugin`);
-- ``release-order``: requests added in the network attester's release order (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder` in the engine
-  core, `servetax_plugin.ReleaseGate`), the client standing in for the network attester, which numbers them in send order;
 - ``tick``: the certified tick (`verity.protocols.resource_accounting.network.prover.admission.TickGate` under vLLM's server, `verity_vllm.pipeline.scheme_plugin`), τ_sat and
   τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the network attester (`corpus.StandIn`);
 - ``tokens``: each window's tokens committed: every prompt id and every sampled id, 4 bytes a token, in ``rows-sha512``
@@ -328,7 +326,6 @@ ARMS = {
     "record": Arm("compiled", "+ the scheduler's step trace (StepTrace)", plugin=("record",)),
     "record-ids": Arm("record", "+ each request's prompt ids and served ids, which a replay of vLLM's client's pass reads",
                       plugin=("record", "ids")),
-    "release-order": Arm("record", "+ admission in the network attester's release order", plugin=("record", "release_order")),
     "tick": Arm("record", "+ admission on the certified tick", plugin=("record",), tick=True),
     "tokens": Arm("tick", "+ each window's tokens committed (rows-sha512)", plugin=("record", "tokens"), tick=True),
     "restore-base": Arm("record", "+ seeded sampling, each sampled token's logprob returned", plugin=("record",),
@@ -1651,7 +1648,7 @@ def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int,
     (`SAMPLED`), each naming its client as its ``user`` (``tag``) and, where ``seeded``, sending that user's seed
     in server lifetime ``lifetime`` (`user_seed`). The client sends no completion of its own before
     the pass (no ready check: `wait_ready` has waited), so every completion it sends is in its result, and request k's
-    X-Request-Id is ``{tag}-{k}``, the form the release-order arm reads its release number from
+    X-Request-Id is ``{tag}-{k}``, the form an edge reads its load from
     (`servetax_plugin.release_key`). It names the served model in every request and takes its tokenizer from the
     checkpoint; for its synthetic datasets it first asks the server's ``/tokenize``, which the engine never sees,
     whether the server counts the first prompt's tokens as it does, and trims every prompt to the server's count
