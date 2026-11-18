@@ -1,0 +1,3 @@
+[2026-11-18T15:34Z] f652862b1984
+From coordinator: additions to your plan task. (1) Kernels launches, not us; top did not lift our no-card rule. (2) Kernels (TOP-442, 7:31 AM PST) needs in the plan: the one commit; the command as ONE line that runs under the vLLM environment on the node, with every environment variable it reads (the smoke learned CARD_SKU and the toolkit the hard way); and a DRY RUN that passes off the card on the node before the lease: say what that dry run is (command, what it proves, minutes). (3) vllm is preparing its half as an arm of the existing smoke script (serve with Pearl+ attached by name on the tied class): find that script and say where our launchers attach.
+
