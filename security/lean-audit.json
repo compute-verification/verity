@@ -384,6 +384,11 @@
    "digest": "02a2bc85d0e6ee4433687875b8cbc3705cbb766ba5eb2bb1ac5e4aee362e68d6",
    "why": "The layer below's guarantee at each execution phase: the leak relation (LeakAt) at the incorrect set of the witness computed before the sample, which a live sampled leak guarantee would give, as PooledLeakAccepted takes it."
   },
+  "ResourceAccounting.RateSketch.RebuildsWithin": {
+   "owner": "@proofs",
+   "digest": "5c4d268c0a51b9bf927fd7d735c99032ba0d98e02579bfd3c7487e69ea3ecba3",
+   "why": "`RefreshedRunConservationSketchDeployed` is stated for pass devices that rebuild at most `X` bits at every store; `RefreshedRunConservationSeasoned` meets it by `SeasonedRebuilds`."
+  },
   "ResourceAccounting.RecordsWithin": {
    "owner": "@network-accounting",
    "digest": "c6f07112fa902cb8b5b622705cbd5a00a296e4dd28a25d84bbfb9dfcb76f0dcb",
@@ -583,10 +588,6 @@
    "owner": "@proofs",
    "digest": "2c7e1138e7bbc4840bff376fd43d2c0fc3d466c38d3ff020a6a41feaddcaf198",
    "why": "The bound δ on what the audit leaves undetected at the budget M, which the bound is stated at."
-  },
-  "ResourceAccounting.RateSketch.RebuildsWithin": {
-   "owner": "@proofs",
-   "why": "`RefreshedRunConservationSketchDeployed` is stated for pass devices that rebuild at most `X` bits at every store; `RefreshedRunConservationSeasoned` meets it by `SeasonedRebuilds`."
   }
  },
  "open": {
@@ -1930,6 +1931,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "ResourceAccounting.Assumptions.SeasonedRebuilds": {
+   "owner": "@proofs",
+   "digest": "bc5416c7fda77b6913f511e5833b11ddd30037f152b9855c66a39ba701a0890e",
+   "issue": "PRF-640",
+   "due": "2026-12-04"
+  },
   "ResourceAccounting.Assumptions.SketchHashBudget": {
    "owner": "@memory-accounting",
    "digest": "e2461062b431ebb2fabc8e3ae755f917a3d5f3015ba331fba6e97a59ee231c75",
@@ -2516,11 +2523,41 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "ResourceAccounting.RateSketch.ChoosesBefore": {
+   "owner": "@proofs",
+   "digest": "cc3a3cc42428299700453486dd9c5baca0f9e8953a9399b953c26472620afbab",
+   "issue": "PRF-640",
+   "due": "2026-12-04"
+  },
+  "ResourceAccounting.RateSketch.JoinsInOrder": {
+   "owner": "@proofs",
+   "digest": "943189c63f33eedf4ebecd829df202606adb42a61da9b05d3c8c0a0fae8012a1",
+   "issue": "PRF-640",
+   "due": "2026-12-04"
+  },
   "ResourceAccounting.RateSketch.LifetimeCapped": {
    "owner": "@compute-accounting",
    "digest": "fcbe646960225bb4d2b6f871f17febffa1a651a6641ba10c34d38651619f6943",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "ResourceAccounting.RateSketch.LifetimeCappedAll": {
+   "owner": "@proofs",
+   "digest": "fbea1097b770731f4191f166cfa1827a291d63f54d352af2d53abf146db99cec",
+   "issue": "PRF-640",
+   "due": "2026-12-04"
+  },
+  "ResourceAccounting.RateSketch.OriginsFixed": {
+   "owner": "@proofs",
+   "digest": "996441ed8bb686b6db2bccb1539923e6a09a11ef84fd053040ae16cd4bd802df",
+   "issue": "PRF-640",
+   "due": "2026-12-04"
+  },
+  "ResourceAccounting.RateSketch.Seasoned": {
+   "owner": "@proofs",
+   "digest": "b91a3dc005d5fba12c25a28d7293b16e0c3b8a0c283a3beea6aceecd705d192b",
+   "issue": "PRF-640",
+   "due": "2026-12-04"
   },
   "ResourceAccounting.RateSketch.SectorsBind": {
    "owner": "@memory-accounting",
@@ -3261,36 +3298,6 @@
    "digest": "3a2698362a1e14711580dd145fafd0556395f7956c8d950e365e49f1246a683e",
    "issue": "PRF-413",
    "due": "2026-11-17"
-  },
-  "ResourceAccounting.Assumptions.SeasonedRebuilds": {
-   "owner": "@proofs",
-   "due": "2026-12-04",
-   "issue": "PRF-640"
-  },
-  "ResourceAccounting.RateSketch.ChoosesBefore": {
-   "owner": "@proofs",
-   "due": "2026-12-04",
-   "issue": "PRF-640"
-  },
-  "ResourceAccounting.RateSketch.LifetimeCappedAll": {
-   "owner": "@proofs",
-   "due": "2026-12-04",
-   "issue": "PRF-640"
-  },
-  "ResourceAccounting.RateSketch.Seasoned": {
-   "owner": "@proofs",
-   "due": "2026-12-04",
-   "issue": "PRF-640"
-  },
-  "ResourceAccounting.RateSketch.JoinsInOrder": {
-   "owner": "@proofs",
-   "due": "2026-12-04",
-   "issue": "PRF-640"
-  },
-  "ResourceAccounting.RateSketch.OriginsFixed": {
-   "owner": "@proofs",
-   "due": "2026-12-04",
-   "issue": "PRF-640"
   }
  },
  "ids": {
@@ -21689,6 +21696,47 @@
    "type_hash": "f1bf61fe8497e7afe2ce347316444aefe82ada7dad3d9d6c38b7ef7bd86ca3b5",
    "unfolded_hash": "894e88803064f870cede83c7414a5d1a9e73042007bc2f3641905905a4f8647d"
   },
+  "ResourceAccounting.SecurityProofs.RefreshedRunConservationSeasoned": {
+   "owner": "@proofs",
+   "signature": [
+    "ResourceAccounting.SecurityProofs.RefreshedRunConservationSeasoned :",
+    "  ResourceAccounting.Guarantees.RefreshedRunConservationSeasoned"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": ["ResourceAccounting.Assumptions.KeyBinding"],
+    "domain": [],
+    "open": [
+     "ResourceAccounting.Assumptions.SeasonedRebuilds",
+     "ResourceAccounting.Assumptions.SketchHashBudget",
+     "ResourceAccounting.Assumptions.SketchRank",
+     "ResourceAccounting.RateSketch.ChoosesBefore",
+     "ResourceAccounting.RateSketch.JoinsInOrder",
+     "ResourceAccounting.RateSketch.LifetimeCappedAll",
+     "ResourceAccounting.RateSketch.OriginsFixed",
+     "ResourceAccounting.RateSketch.Seasoned"
+    ],
+    "reads": []
+   },
+   "type_hash": "5ac332edc9188b24cfc9d3fa49fa595d0703f95e30245535c15b8a2337e9ad2e",
+   "unfolded_hash": "0c83f236109fd5c1547be4e3cdbc6e59662f50f86c2a5df54eae86acd7f12180"
+  },
+  "ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed": {
+   "owner": "@proofs",
+   "signature": [
+    "ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed :",
+    "  ResourceAccounting.Guarantees.RefreshedRunConservationSketchDeployed"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": ["ResourceAccounting.Assumptions.KeyBinding"],
+    "domain": ["ResourceAccounting.RateSketch.RebuildsWithin"],
+    "open": ["ResourceAccounting.Assumptions.SketchHashBudget", "ResourceAccounting.Assumptions.SketchRank"],
+    "reads": []
+   },
+   "type_hash": "6e5f9eaff408a5cdc2d9cae1860f9f73ddd52bfe4ca70a87c21c7d4dde759f63",
+   "unfolded_hash": "e7529e4ff181bd5041b1f8e9bc7c115a634f072d0abc890f4ee6ed57bf65b9f4"
+  },
   "ResourceAccounting.SecurityProofs.RegisteredCircuitRequirement": {
    "owner": "@compute-accounting",
    "signature": [
@@ -26950,12 +26998,6 @@
    },
    "type_hash": "129a15e5ba38cbf426e8bf108ce5b819f0ed273352179a99b553e2155d002754",
    "unfolded_hash": "34781449a0a3c8f0ab53885fda423f5d6673b49c72fd1be9fc56713f08f055c2"
-  },
-  "ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed": {
-   "owner": "@proofs"
-  },
-  "ResourceAccounting.SecurityProofs.RefreshedRunConservationSeasoned": {
-   "owner": "@proofs"
   }
  },
  "shape": {
@@ -34647,9 +34689,10 @@
    }
   },
   "Definitions.Poub.Assumptions.Stacking": {
-   "digest": "9b7c1f71a142b538978882d98475594cfba5d6e2a40bbb23a0e73b6e9c07af64",
+   "digest": "4bd72277cf10729982fdea3392194f83e02ae7a769b98e506bc1d2e1e77ed5f8",
    "definitions": {
     "ResourceAccounting.Assumptions.CircuitCarriers": "547655c47af0731770b2ad502bf387879eb85014f24d250b86f8de07ae954a14",
+    "ResourceAccounting.Assumptions.SeasonedRebuilds": "bc5416c7fda77b6913f511e5833b11ddd30037f152b9855c66a39ba701a0890e",
     "ResourceAccounting.Assumptions.SteeredLayout": "b19a0adc608df63bd5902fae36c63c74c02f29bf6e51fe3a8ae1321e37713da8"
    }
   },
@@ -34831,7 +34874,7 @@
    }
   },
   "Definitions.Poub.Carrier": {
-   "digest": "a83bba7a158078c1efdb45781a30cf36ff9067b7435c92e84616f3f721887b11",
+   "digest": "1f318d5b3f3bab323c12e01bbead9cb15307df695607002948f770f669f779cd",
    "definitions": {
     "ResourceAccounting.Rate.PIChip.linkBitsEven": "01fbf020aebc58d6625ce60eaf1399692c521542091229d45a35c8343b3335cd",
     "ResourceAccounting.Rate.PassProvenance": "bf8301f05e96f45f5f2095e415aba1b1576dc2f27cc30ecd28ab385e60f0cdde",
@@ -34850,7 +34893,11 @@
     "ResourceAccounting.RateSketch.Carrier.carried": "c1ccc3f1a185553958238672c52582e960fa083bfa7c6feb706cb9058b316dd0",
     "ResourceAccounting.RateSketch.Carrier.provenance": "9904802f91e837379cf453bcfeb3c107844afa88edb6216da8c909a96cb4b708",
     "ResourceAccounting.RateSketch.Chip.rebuildsIn": "68dfdef399e5227227c50ff1ac6a009dd58e1ce0d9ccba0d3b7735d983e22ec4",
+    "ResourceAccounting.RateSketch.ChoosesBefore": "cc3a3cc42428299700453486dd9c5baca0f9e8953a9399b953c26472620afbab",
+    "ResourceAccounting.RateSketch.JoinsInOrder": "943189c63f33eedf4ebecd829df202606adb42a61da9b05d3c8c0a0fae8012a1",
     "ResourceAccounting.RateSketch.LifetimeCapped": "fcbe646960225bb4d2b6f871f17febffa1a651a6641ba10c34d38651619f6943",
+    "ResourceAccounting.RateSketch.LifetimeCappedAll": "fbea1097b770731f4191f166cfa1827a291d63f54d352af2d53abf146db99cec",
+    "ResourceAccounting.RateSketch.OriginsFixed": "996441ed8bb686b6db2bccb1539923e6a09a11ef84fd053040ae16cd4bd802df",
     "ResourceAccounting.RateSketch.Provenance": "bd7941a9ed0a1cda6931f4f7bb7a1ba99001e5a66bbda0b6c48c18251e710517",
     "ResourceAccounting.RateSketch.Provenance.OfCircuit": "bd193ea3c50532e5225655ae82363c5f0ee53bffd43fbcce5a7040550c1fbb04",
     "ResourceAccounting.RateSketch.Provenance.below": "278a0f13ba4dd688b34f0272cf395eeea64dcf8d5e92e4d9a8bb78b9985c91b2",
@@ -34865,6 +34912,7 @@
     "ResourceAccounting.RateSketch.Provenance.inputs": "c6763b3f6a751a46e15b2bd9409231817b064d9eac00435dedeabb3f65738a5c",
     "ResourceAccounting.RateSketch.Provenance.rec": "93f5a8ec36a215fb0d75da4101ef050d85dc44e15fcc567780724a7aa3da5e0c",
     "ResourceAccounting.RateSketch.Provenance.run": "f5a54ec91c56b37215adea8460ac518535ad4a56fce46d109e368449e9150c3b",
+    "ResourceAccounting.RateSketch.Seasoned": "b91a3dc005d5fba12c25a28d7293b16e0c3b8a0c283a3beea6aceecd705d192b",
     "ResourceAccounting.RateSketch.SketchDeployedWindow.correctOn": "f9580b7bdeba417f7508e52d663906d13dcceb54af61413bac46e836372574be",
     "ResourceAccounting.RateSketch.SketchDeployedWindow.readsIn": "cc70adde00be96a5a04e920494e849148dee6900c6e140528ce99f280ed1551e",
     "ResourceAccounting.RateSketch.SketchDeployedWindow.readsOn": "005f7ad82d4e95faf354bf5dc27a136a02163846fbdb1e581de7c504911add38",
@@ -35084,13 +35132,16 @@
    }
   },
   "Definitions.Poub.Guarantees.Stacking": {
-   "digest": "c3725b53d330eecbc5b66f85fdb3499ecfa4c79c4c455b3ba8a1de2f19af94ef",
+   "digest": "71fd2099d22e89b8844331950bab50ce6f7992b7b2dbfcf8356ec14ed5b304a3",
    "definitions": {
     "ResourceAccounting.Guarantees.CarrierBits": "c174d69a8eb96bd9dabb52c719feb8d33689b2bc8610b635cd642442d7150988",
+    "ResourceAccounting.Guarantees.RefreshedRunConservationSeasoned": "faae9e2cbf27154b2d83235192e4412ebd9b94e835dbb337d955dc283852b768",
+    "ResourceAccounting.Guarantees.RefreshedRunConservationSketchDeployed": "3945b772fc560c326ec73310826447e180383512ce93d88cff5cbb9c31838481",
     "ResourceAccounting.Guarantees.StackedRequirementRelay": "cce399e3d1a7aa835c850de1e069f2358eea12efdda64294c2eb48039ef2b5c5",
     "ResourceAccounting.Guarantees.StackedRequirementSketchDeployed": "56164969bb600c157590ae7f3085831eaa98749b05352f2e93155b1ce69ad45b",
     "ResourceAccounting.Guarantees.StackedRunConservationRelay": "88024e90fd11a52b51f00df33dce8ac9e6f561aeb56d03c3f09427ba101e2435",
-    "ResourceAccounting.Guarantees.StackedRunConservationSketchDeployed": "5b1467ba7525dbc1eb367b9566842f4b2da76e4adf207c02f21b615039d11f01"
+    "ResourceAccounting.Guarantees.StackedRunConservationSketchDeployed": "5b1467ba7525dbc1eb367b9566842f4b2da76e4adf207c02f21b615039d11f01",
+    "ResourceAccounting.RateSketch.RebuildsWithin": "5c4d268c0a51b9bf927fd7d735c99032ba0d98e02579bfd3c7487e69ea3ecba3"
    }
   },
   "Definitions.Poub.RateAudit": {
