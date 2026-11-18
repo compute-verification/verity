@@ -6,12 +6,13 @@ public import Poub.Window
 # The openings frame: `verity/protocols/accounting/poub/verifier/wire.py`'s `decode_openings`
 
 The bytes a prover sends a window's openings in, decoded strictly: `none` for a body that ends early, runs past its
-openings, or has a bound flag above 1. Every opening carries no tile.
+openings, or has a bound flag above 2. Every opening carries no tile.
 
 ~~~text
 body      u32be n ‖ opening × n
 opening   u32be pass ‖ u64be position ‖ block (4096) ‖ u16be len(leaf) ‖ leaf ‖ leaf salt (192) ‖ payload salt (192)
-          ‖ u8 d ‖ d × 64 (receipt path) ‖ u8 d ‖ d × 64 (payload path) ‖ u8 bound (0 or 1) ‖ bound × 64 (d_j)
+          ‖ u8 d ‖ d × 64 (receipt path) ‖ u8 d ‖ d × 64 (payload path) ‖ u8 bound ‖ bound
+bound     0: nothing; 1: d_j (64); 2: d_j (64) ‖ u64be origin position (a block of a re-key append)
 ~~~
 -/
 
@@ -56,10 +57,11 @@ def Cursor.opening (c : Cursor) : Option (Opening × Cursor) := do
   let (d, c) ← c.int 1
   let (payloadPath, c) ← c.path d
   let (bound, c) ← c.int 1
-  guard (bound ≤ 1)
-  let (digest, c) ← c.bytes (DIGEST_BYTES * bound)
+  guard (bound ≤ 2)
+  let (digest, c) ← c.bytes (DIGEST_BYTES * min bound 1)
+  let (originPosition, c) ← if bound == 2 then (c.int 8).map fun (q, c) => (some q, c) else pure (none, c)
   pure ({ pass := i, position := p, block, leaf, leafSalt, receiptPath, payloadSalt, payloadPath,
-          tile := ByteArray.empty, digest }, c)
+          tile := ByteArray.empty, digest, originPosition }, c)
 
 /-- `decode_openings(body)`. -/
 def decodeOpenings (body : ByteArray) : Option (Array Opening) := Id.run do
