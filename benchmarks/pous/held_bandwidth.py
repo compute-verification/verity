@@ -7,7 +7,7 @@ is encoded. The session needs the card (`held`); its answer needs none, and is m
 **The registration** is the auditor's, never the prover's: the bandwidth party (the auditor gate's ``bw_party
 --pous-session SID``) builds it from the memory attester's own record of PoUS session SID on its host
 (`challenger_party.keep`, `p2_parties.pous_record`): the node, P2's parameters, setup's commitment and salt as the request
-declared them before that session, and the root the session bound. Its plan is the whole store. The prover's `Held`
+declared them before that session, and the root the session bound. Its plan is the whole store. The prover (`bandwidth.Held`)
 refuses a registration that isn't its store's (`hold`), and the session's case names the root (`p2_case.store_root`),
 which `p2_case.same_store` holds to PoUS's run case. The party is given a fresh session id (``--session``), which the
 memory attester claims in its session log before the first coin and under which it signs the case's close of the
@@ -53,7 +53,6 @@ import bandwidth as B
 
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period
-from verity.protocols.resource_accounting.memory.poub.prover.held import Held
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger, p2_case, p2_parties
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
@@ -161,7 +160,7 @@ def held(store: Any, *, node: str, card: str, party: str, party_host: str, sid: 
         record = rc = None
         prover = None
         try:
-            prover = Held(store, node.encode(), log=log)
+            prover = B.Held(store, node.encode(), log=log)
             setup_s = time.perf_counter() - t0
             answer, record, rc = B._party(SimpleNamespace(party=command, party_host=party_host), private, prover,
                                           request_)
@@ -274,5 +273,5 @@ def line(answer: Mapping[str, Any]) -> str:
     return f"BANDWIDTH: {answer['verdict']}: {answer['reason']}"
 
 
-__all__ = ["HELD", "Held", "NO_KEY", "SCOPE", "SESSION", "binding", "decide", "held", "key_of", "key_record", "line",
+__all__ = ["HELD", "NO_KEY", "SCOPE", "SESSION", "binding", "decide", "held", "key_of", "key_record", "line",
            "missing", "public_answer", "request"]

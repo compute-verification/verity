@@ -1,4 +1,4 @@
-"""``bandwidth`` attached by name beside PoUS on a stand-in exchange (`poub/scheme.py`, `prover/held.py`): P2's prover
+"""``bandwidth`` attached by name beside PoUS on a stand-in exchange (`poub/scheme.py`, `prover/p2_stage/bandwidth.py`): P2's prover
 runs on the store PoUS holds, encoded once on the CPU at P2's registered point, 4 blocks a segment."""
 from __future__ import annotations
 

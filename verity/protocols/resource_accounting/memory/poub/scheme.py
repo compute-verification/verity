@@ -92,14 +92,15 @@ def _named(role: str) -> str:
 
 def _bandwidth_attach(exchange: Any, ctx: Any) -> Any:
     """``bandwidth`` on a served run (`Scheme.attach`): P2's prover over the store PoUS holds on ``exchange``
-    (`prover.held.Attached`), PoUS attached before it (``depends``); refused by name where it is not."""
+    (`prover.p2_stage.bandwidth.Attached`), PoUS attached before it (``depends``); refused by name where it is not."""
     from verity.protocols.resource_accounting.memory.pous.prover import served
 
     storage = served.of(exchange)
     if storage is None:
         raise LookupError("bandwidth reads the store pous holds on the same exchange, and no pous is attached on it: "
                           "attach pous before bandwidth (its depends)")
-    return import_module("verity.protocols.resource_accounting.memory.poub.prover.held").Attached(storage, ctx)
+    return import_module("verity.protocols.resource_accounting.memory.poub.prover.p2_stage.bandwidth").Attached(
+        storage, ctx)
 
 
 def _refresh(values: Mapping[str, Any]) -> str | None:
