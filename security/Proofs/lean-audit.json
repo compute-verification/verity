@@ -407,6 +407,7 @@
   "Proofs.Properties.Verity.OnsiteCaller",
   "Proofs.Properties.Verity.Coupling",
   "Proofs.Properties.Flock.Nets",
+  "Proofs.Properties.Flock.EvalBool",
   "Proofs.Core.QSortPerm",
   "Proofs.Properties.Verity.Sampled.MemberForm.Ranges",
   "Proofs.Properties.Verity.Sampled.MemberForm.Tree",

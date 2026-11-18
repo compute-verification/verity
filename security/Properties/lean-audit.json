@@ -86,6 +86,7 @@
   "Properties.Flock.Circuit.GateARow",
   "Properties.Ties",
   "Properties.Flock.Nets",
+  "Properties.Flock.EvalBool",
   "Properties.Assumptions",
   "Properties.Verity.ExecutionPhaseFiles",
   "Properties.Verity.Idle",
