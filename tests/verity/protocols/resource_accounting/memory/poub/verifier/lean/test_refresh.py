@@ -1,7 +1,8 @@
-"""Refresh (`audit.Params.refresh`), held to the wire note's form against the Python alone: `Poub.Session` has no
-refresh yet, so `ra_cases.REFRESH_SCENARIOS` replay through `ra_cases.session` only, and join `SCENARIOS` (held to the
-Lean by `test_session.py`) once it has. With refresh off, every recorded session is as it was before refresh, byte for
-byte."""
+"""Refresh (`audit.Params.refresh`), its slot schedule (`rota.Schedule`), held to the Lean of record's form
+(`Poub/Session.lean` with refresh, DRAW256's) against the Python alone: this branch's `Poub.Session` has no refresh, so
+`ra_cases.REFRESH_SCENARIOS`, the cases `test_refresh_lean.py` sends the Lean, replay through `ra_cases.session` only,
+and join `SCENARIOS` (held to the Lean by `test_session.py`) where the two meet. With refresh off, every recorded
+session is as it was before refresh, byte for byte."""
 
 from __future__ import annotations
 
@@ -71,19 +72,38 @@ def test_the_refresh_scenarios_reach_every_new_failure_and_an_accepted_session()
 
 
 def test_the_honest_refresh_session_opens_rekeys_of_registered_and_fresh_payloads() -> None:
-    """Window 1 opens R1's blocks under the registration's root, window 3 K1's under F's (store indices 9 and 10)."""
+    """Windows 1 and 2 open the registered re-keys' blocks under the registration's root, window 2 K1's under slot 0's
+    fresh append's (store indices 6 and 7)."""
     case, _ = M.recorded("honest-refresh")
     origins = {o.get("origin_position") for e in case["events"] if e["kind"] == "verify" for o in e["openings"]}
-    assert {3, 4, 5, 0, 1, 2, 9, 10} <= origins
+    assert {0, 1, 2, 3, 4, 5, 6, 7} <= origins
 
 
 def test_the_honest_refresh_record_names_refresh_and_each_passs_probation() -> None:
-    """F (2 blocks) joins window 1 and is born there; K1 and K2 inherit its birth: windows 1 and 2 hold F, window 2
-    K1 too, in probation; from window 3 nothing is."""
+    """DRAW256's: slot 0's fresh append (2 blocks) is born in window 0 and held in probation from window 0's second
+    pass through window 1; K1 and K2 inherit its birth, out of probation at windows 2 and 4."""
     case, _ = M.recorded("honest-refresh")
     rec = M.session(copy.deepcopy(case))["record"]
-    assert rec["refresh"] is True
-    assert [w["probation"] for w in rec["windows"]] == [[0], [2], [4], [0], [0]]
+    assert rec["refresh"] is True and rec["appended"] == 18
+    assert [w["probation"] for w in rec["windows"]] == [[0, 2], [2, 2], [0, 0], [0, 0], [0, 0]]
+    assert case["params"]["fresh_slots"] == 1
+
+
+def test_each_rejection_is_the_last_event_and_names_what_drew_it() -> None:
+    """Every refresh scenario's rejection is its last event, so none is reached by a step before the one it tests."""
+    for name in M.REFRESH_SCENARIOS:
+        case, outcome = M.recorded(name)
+        failed = [k for k, x in enumerate(M.session(copy.deepcopy(case))["results"]) if "failure" in x]
+        assert failed == ([] if outcome == "accepted" else [len(case["events"]) - 1]), name
+
+
+def test_an_empty_slot_takes_no_coin_and_shifts_nothing() -> None:
+    """With window 3's registered re-key (slot 6) skipped, window 4's appends keep slots 9 and 10, and the append coins
+    are the appends received, in order."""
+    r = run("refresh-skipped-rekey")
+    slots = [e["slot"] for e in r.events if e["kind"] == "append"]
+    assert slots == [0, 1, 3, 4, 9, 10] and r.s.outcome == "accepted"
+    assert r.s.coins.appends == len(slots) == len(r.append_coins)
 
 
 def test_refresh_off_names_neither_refresh_nor_probation_anywhere() -> None:
@@ -138,26 +158,39 @@ def test_a_coin_leaves_only_after_its_own_append_is_committed() -> None:
     assert [coins.coin(o) for o in r.s.coins.opened(coins.APPEND)] == r.append_coins
     refused = run("refresh-coin-before-commit")
     sent = [e for e in refused.events if e["kind"] == "append"]
-    assert len(sent) == 3 and refused.s.coins.appends == 2 and refused.s.outcome == "append"
+    assert len(sent) == 1 and refused.s.coins.appends == 0 and refused.s.outcome == "append"
 
 
-def _rekey_session(count: int) -> audit.AuditRun:
-    reg = audit.register(M.SOURCE, M.NODE, 600, bytes(64), M.P512, nonce=bytes(32))
-    params = audit.Params(600, 100, 2, window_ns=10, codec=M.P512, refresh=True, lifetime=2)
+def _session(blocks: int) -> audit.AuditRun:
+    reg = audit.register(M.SOURCE, M.NODE, blocks, bytes(64), M.P512, nonce=bytes(32))
+    params = audit.Params(blocks, 100, 2, window_ns=10, codec=M.P512, refresh=True, lifetime=2, fresh_slots=1)
     s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, 2, M.Entropy(b"coins")), not_before_ns=0,
                        clock=M.Clock())
     s.start()
-    origin = ("registered", 0)
-    s.append(audit.rekey_root(reg.digest, s.extent, count, origin), count, origin)
     return s
 
 
-def test_a_rekey_holds_at_most_rekey_max_blocks() -> None:
+@pytest.mark.parametrize(("count", "failure"), [(512, None), (513, "origin")])
+def test_a_fresh_slot_holds_at_most_rekey_max_blocks(count: int, failure: str | None) -> None:
     assert audit.REKEY_MAX == 512
-    assert _rekey_session(512).failed is None
-    assert _rekey_session(513).failed.failure == "append"
+    s = _session(6)
+    s.append(hashlib.sha512(b"fresh").digest(), count, slot=0)
+    assert (s.failed and s.failed.failure) == failure
 
 
-def test_refresh_is_a_bool() -> None:
+def test_a_registered_rekey_is_its_whole_class_run_past_rekey_max() -> None:
+    """N = 1200 at L = 2: window 1's registered slot (1) re-keys class 1, blocks 600 … 1199, in one append."""
+    s = _session(1200)
+    s.clock.now = 10
+    s.boundary()
+    origin = ("registered", 600)
+    assert isinstance(s.append(audit.rekey_root(s.registration.digest, s.extent, 600, origin), 600, origin, 1), tuple)
+
+
+def test_refresh_is_a_bool_and_fresh_slots_are_refreshs() -> None:
     with pytest.raises(ValueError, match="refresh is a bool"):
         audit.Params(6, 100, 2, refresh=1)
+    with pytest.raises(ValueError, match="fresh_slots"):
+        audit.Params(6, 100, 2, fresh_slots=1)
+    assert audit.Params(6, 100, 2).schedule is None
+    assert audit.Params(6, 100, 5, refresh=True, lifetime=2, fresh_slots=1).schedule.total == 13
