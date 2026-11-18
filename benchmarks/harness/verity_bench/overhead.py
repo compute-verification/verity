@@ -24,7 +24,8 @@ an interval within `HALF_WIDTH` of the median ratio (`of_record_why`) and passes
 (`cross_check_why`); the scheme gate is γ ≤ `GAMMA_MAX` at each point. `periods` states it per monitoring period.
 
 **What a γ covers** (`covers`) is its model's entry: one layer's linears, and not what `LEFT_OUT` names. **y's commitment**: a
-scheme's entry says whether its arm's timed call commits y, the call's output (`Scheme.commits_y`); a timed run records it,
+scheme's declaration says whether its arm's timed call commits y, the call's output (`Scheme.commits_y`, its
+``y_committed``); a timed run records it,
 and a figure from a run whose arm committed no y carries `WITHOUT_Y` (`y_note`).
 """
 
@@ -217,7 +218,7 @@ def scheme(name: str) -> Scheme:
 
 def y_note(arm: Mapping | None) -> str | None:
     """The note a run's figures carry, from the `arm` record of its `overhead.json`: `WITHOUT_Y` unless the record says its
-    arm committed y (`commits_y`, the scheme's entry as the run recorded it; a record without the field timed no y tree).
+    arm committed y (`commits_y`, the scheme's declared ``y_committed`` as the run recorded it; a record without the field timed no y tree).
     None for a run with no arm: stock's A/A control commits nothing."""
 
     return None if arm is None or arm.get("commits_y") else WITHOUT_Y
