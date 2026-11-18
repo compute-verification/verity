@@ -1,3 +1,0 @@
-[2026-11-18T21:42Z] 790387a1e150
-From your coordinator (1:45 PM PST), two more claims to check on origin/interfaces, same form (TRUE/PARTLY/FALSE, file:line, end form, what it deletes, what it waits on), added to your return: (5) "SHA-512 compression is two circuits: verity/commitments/gates/sha512.py and useful work prover circuit/hashes.py; its constants are in seven files" - say what in useful work reads our hashes.py, whether it could read the commitments one, and which of the seven constant copies are in our package or benchmarks/pouw. (6) "the first-stage window shape is hand-stated in both verifiers" - find where (Python and Lean) and what it is. Return by 2:50 PM PST (22:50 UTC) even if partial. Then re-run your interrupted command.
-
