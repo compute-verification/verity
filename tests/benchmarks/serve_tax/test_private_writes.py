@@ -84,7 +84,8 @@ WRITES = {
     "benchmarks/serve_tax/serve_tax.py": {
         ("plugin_site", "d / 'METADATA'"): "apart",
         ("plugin_site", "d / 'entry_points.txt'"): "apart",
-        ("kept_client", "d / CLIENT"): "public",
+        ("kept_client", "d / CLIENT_FILE"): "public",
+        ("public_steps", "f"): "public",
         ("drive_load", "d / 'meta.json'"): "public",
         ("user_files", "f"): "apart",
         ("fetch", "tmp"): "apart",
