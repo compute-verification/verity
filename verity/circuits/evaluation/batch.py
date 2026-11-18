@@ -18,7 +18,8 @@ nothing else.
 A Boolean Definition (`verity.circuits.boolean`) is evaluated by its word Definition's kernel (`trace.word_of`), through
 the word view (`boolean.word_type`: each element's bits are one word), when it has none of its own; a kernel registered
 against ``Gemm_v2`` serves ``Gemm_v3``.  What that leaves, and what a kernel declines, is evaluated bit-sliced
-(`bits.evaluate_bits`), never gate by gate.  The word Definition is held to the Boolean one by circuit-check's word view.
+(`bits.evaluate_bits`), never gate by gate, and so is a composite with word leaves that `bits.lowers`
+(`bits.evaluate_lowered`).  The word Definition is held to the Boolean one by circuit-check's word view.
 """
 from __future__ import annotations
 
@@ -33,7 +34,7 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.types import Array, Type, Value
 
-from .bits import _to_bits, _to_words, evaluate_bits
+from .bits import _to_bits, _to_words, evaluate_bits, evaluate_lowered, lowers
 from .reference import ScalarReference, Target, evaluate, key_of, refuse_registered_tables, resolve, signature_of, statics_of
 
 __all__ = [
@@ -213,7 +214,7 @@ def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.nda
     ``kernel="auto"`` uses the ``numpy`` kernel when one is registered (for a Boolean Definition without one, its word
     Definition's, `word_kernel`), ``"reference"`` forces the plain-integer reference, any other name selects that kernel.
     Inputs no kernel computes are computed by the reference, whose exceptions (inputs outside the function's domain)
-    propagate, or, for a Boolean composite, bit-sliced (`bits.evaluate_bits`).  A `RegisteredTable` input is refused
+    propagate, or, for a Boolean composite or one that `bits.lowers`, bit-sliced.  A `RegisteredTable` input is refused
     by name."""
     t = resolve(target)
     refuse_registered_tables(t.id, inputs, "evaluate_batch")
@@ -238,6 +239,9 @@ def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.nda
     rows = np.flatnonzero(todo)
     if rows.size and kernel != "reference" and isinstance(t, SpecializedDefinition) and BL.is_boolean(t):
         out[rows] = evaluate_bits(t, *(a[rows] for a in arrays)).reshape(out[rows].shape)
+        return out
+    if rows.size and kernel != "reference" and isinstance(t, SpecializedDefinition) and lowers(t):
+        out[rows] = evaluate_lowered(t, *(a[rows] for a in arrays)).reshape(out[rows].shape)
         return out
     for i, args in _reference_rows(t, params, arrays, rows):
         _store(out, i, evaluate(t, *args))
