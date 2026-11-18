@@ -35,6 +35,7 @@ from verity.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.commitments.periods import interface as IF  # noqa: E402
 from verity.circuits.ops import gemm as G  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, proofs as PF, docket as R  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 
 
 def fixed(w, seed: int = 0) -> dict[str, bytes]:
@@ -53,7 +54,7 @@ RUN = "ab" * 64
 
 def design(n: int) -> dict:
     """`RULE`'s sampling design over `TEMPLATES` with ``n`` members each: the K its strata need (`draw.strat_k`)."""
-    return D.parse_design(f"stratified:{D.strat_k(1, 1, [n] * len(TEMPLATES), n * len(TEMPLATES))}")
+    return RND.parse_design(f"stratified:{D.strat_k(1, 1, [n] * len(TEMPLATES), n * len(TEMPLATES))}")
 
 
 def window(d: Path, members: int) -> Path:

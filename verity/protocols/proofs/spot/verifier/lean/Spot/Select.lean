@@ -37,7 +37,7 @@ namespace Spot.Select
 
 open Lean (Json)
 open Flock (V)
-/-- `draw.digits`: one or more ASCII digits. -/
+/-- `randomness.digits`: one or more ASCII digits. -/
 private def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
 
 /-- Python's `s.partition(sep)` without the separator: `s` split at its first `sep`, and `(s, "")` when it has none. -/
@@ -46,7 +46,7 @@ private def split1 (s sep : String) : String × String :=
   | a :: rest => (a, sep.intercalate rest)
   | [] => (s, "")
 
-/-- `draw.parse_design`: `subset:K`, `stratified:K` or `work:K` (`K ≥ 1`), or `bernoulli:NUM/DEN` with `0 < DEN` and
+/-- `randomness.parse_design`: `subset:K`, `stratified:K` or `work:K` (`K ≥ 1`), or `bernoulli:NUM/DEN` with `0 < DEN` and
 `NUM ≤ DEN`, split at the first `:` and the first `/`, each number one or more ASCII digits; the sampling design object, a Bernoulli
 sampling design's `p` written without leading zeros. -/
 def parseDesign (text : String) : V Json := do
@@ -61,7 +61,7 @@ def parseDesign (text : String) : V Json := do
       return Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{num.toNat!}/{den.toNat!}")]
   throw s!"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {pyRepr text}"
 
-/-- `draw.parse_rate`: the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T`, a public rate `NUM/DEN` with `0 < NUM ≤ DEN` over
+/-- `randomness.parse_rate`: the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T`, a public rate `NUM/DEN` with `0 < NUM ≤ DEN` over
 `T ≥ 1` tables (one when it names none), split at the first `:`, then at the first `/` and `:`, each number one or more
 ASCII digits, as `(NUM, DEN, T)`; none for any other text. -/
 def parseRate (text : String) : Option (Nat × Nat × Nat) :=
@@ -78,7 +78,7 @@ def parseRate (text : String) : Option (Nat × Nat × Nat) :=
     else none
   | none => none
 
-/-- `draw.parse_strata_rate`: the stratified rate sampling design `stratified-rate:NUM/DEN` or the work rate sampling design `work-rate:NUM/DEN`,
+/-- `randomness.parse_strata_rate`: the stratified rate sampling design `stratified-rate:NUM/DEN` or the work rate sampling design `work-rate:NUM/DEN`,
 a public rate `NUM/DEN` with `0 < NUM ≤ DEN`, split at the first `:` and then the first `/`, each number one or more ASCII
 digits, as `(work, NUM, DEN)`, `work` true for the work rate sampling design; none for any other text. -/
 def parseStrataRate (text : String) : Option (Bool × Nat × Nat) :=
