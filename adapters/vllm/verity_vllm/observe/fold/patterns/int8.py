@@ -4,7 +4,8 @@ registered Definitions (`program.registry.int8_exact`, `ml.circuits.ops.gemm`), 
     verity_int8::row_quant(x[M,K] bf16) -> (xq[M,K] s8, s_a[M] f32)
         -> Compute(Int8RowQuant_v1{K}, rows=M, (PerRow(x),), (PerRow(xq), PerRow(s_a)))
     verity_int8::scaled_mm(xq[M,K] s8, s_a[M] f32, w[N,K] int8, s_w[N,1] f32) -> y[M,N] bf16
-        -> Compute(ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}, rows=M, (PerRow(xq), PerRow(s_a), Shared(w), Shared(s_w)), (PerRow(y),))
+        -> Compute(ScaledMmS8_v3{K,N,DOT=BlackwellS8ImmaDot32_v1}, rows=M, (PerRow(xq), PerRow(s_a), Shared(w as u16[N,K/2]),
+                   Shared(s_w as u16[N,2])), (PerRow(y),))
     vllm.unified_attention_with_output(query, ..., output!, layer) ⊃ one verity_int8::kv_quant_batch(key_cache, value_cache,
             block_table, lens, k_scales) -> (kq, vq, sv, v0), then one verity_int8::window_rows_batch(query, kq, vq, sv, v0, k_scales,
             qsl, lens, scale), copied into output; or, under a credited read, the layer's
@@ -66,6 +67,7 @@ from verity_vllm.observe.fold.resolver import (
     Unsupported,
 )
 from verity_vllm.observe.fold.tree import TreeNode
+from verity_vllm.observe.fold.views import as_words
 
 LIBRARY = "verity_int8"
 
@@ -115,7 +117,7 @@ class Int8RowQuant:
 @dataclass
 class Int8ScaledMm:
     """`verity_int8::scaled_mm`: the int8 linear's product of its quantizer's results; `w` and `s_w` must be checkpoint parameters
-    (weight Roots)."""
+    (weight Roots), read as the u16 words they are registered as."""
 
     name: str = "int8.scaled_mm"
 
@@ -140,12 +142,15 @@ class Int8ScaledMm:
         if K % 32:
             return unsupported(node, "ScaledMmS8Coordinate_v1 takes K a multiple of 32 (its IMMA k step)", K=K)
         if not (y.dtype == "bfloat16" and w.dtype == xq.dtype == "int8" and sw.dtype == s_a.dtype == "float32"):
-            return unsupported(node, "ScaledMmS8_v1 is (int8, f32) x (int8, f32) -> bf16", dtypes=[xq.dtype, s_a.dtype, w.dtype, sw.dtype, y.dtype])
+            return unsupported(node, "ScaledMmS8_v3 is (int8, f32) x (int8, f32) -> bf16", dtypes=[xq.dtype, s_a.dtype, w.dtype, sw.dtype, y.dtype])
+        ww, sww = as_words(w), as_words(sw)
+        if ww is None or sww is None:
+            return unsupported(node, "w / s_w are not contiguous whole u16 words", w=repr(w), s_w=repr(sw))
         wroots, sroots = ctx.roots_of(w), ctx.roots_of(sw)
         if not any(r.role == "weight" for r in wroots) or not any(r.role == "weight" for r in sroots):
             return unsupported(node, "w / s_w are not checkpoint parameters (weight Roots)", w=repr(w), s_w=repr(sw))
         wname, sname = wroots[0].name, sroots[0].name
-        return Compute(int8_exact.scaled_mm(K, N), M, (PerRow(xq), PerRow(s_a), Shared(w), Shared(sw)), (PerRow(y),), tuple(sorted(node.ids())),
+        return Compute(int8_exact.scaled_mm(K, N), M, (PerRow(xq), PerRow(s_a), Shared(ww), Shared(sww)), (PerRow(y),), tuple(sorted(node.ids())),
                        hint=hint_of(node, wname), kernels=("_int_mm", "elementwise_kernel"), attribution=attribution_for(ctx, M, node.phase),
                        pattern=self.name, roots=(None, None, wname, sname))
 

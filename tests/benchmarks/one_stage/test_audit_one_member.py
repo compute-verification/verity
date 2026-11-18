@@ -15,6 +15,7 @@ real audit's files with the session on the window's challenger, where every othe
 for the prover, the verifier or the coins."""
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -29,6 +30,15 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as R, draw as
 import test_audit_two_members as T
 from test_audit_two_members import binaries  # noqa: F401 -- the fixture, under the name the test takes
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # beside a5, on the path `test_audit_two_members` put there
+
+
+def fixed(w, seed: int = 0) -> dict[str, bytes]:
+    """Salts a test hands in for every port a commit takes in full (`rows.full_ports`), so two commits of one period are
+    one commitment."""
+    from verity.commitments.periods import rows
+
+    w = getattr(w, "window", w)
+    return {p: hashlib.shake_256(f"{seed} {p}".encode()).digest(n * rows.SALT_BYTES) for p, n in rows.full_ports(w).items()}
 
 pytestmark = pytest.mark.slow
 
@@ -47,7 +57,7 @@ def _window(d: Path) -> Path:
     sx, sw = ((np.abs(rng.standard_normal(N)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
     win.record(t, ins, [np.asarray(evaluate_batch(t, *ins, kernel="reference"), dtype=np.uint16)])
-    win.write(win.close(salt_key=bytes(32)), d, {"label": "test"}, registrar=R)
+    win.write(win.close(salts_of=fixed(win)), d, {"label": "test"}, registrar=R)
     return d
 
 

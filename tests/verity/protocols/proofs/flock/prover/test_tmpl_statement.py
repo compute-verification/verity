@@ -170,7 +170,7 @@ def test_a_structural_stager_writes_the_templated_statement_of_struct_lowers_tem
     diff = sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k))
     assert set(diff) <= {"unit_sha256", "partition", "unit_log", "k_log", "ranges", "vus_per_block"}
     assert FC.template_of(tm.text) != FC.template_of(flat.text)
-    a, b = flat.stage(rows, tmp_path / "flat", b"k" * 32), tm.stage(rows, tmp_path / "struct", b"k" * 32)
+    a, b = flat.stage(rows, tmp_path / "flat"), tm.stage(rows, tmp_path / "struct")
     assert all(np.array_equal(a["outs"][o], b["outs"][o]) for o in a["outs"])
     assert (tmp_path / "struct" / "circuit.txt").read_text() == tm.text
     with pytest.raises(ValueError, match="a structural unit is written as its template: name its layout"):
@@ -187,7 +187,7 @@ def _structural_is_flat(args: tuple, rows: dict, out: Path) -> CS.UnitStager:
     assert tm.meta["dummy"] == flat.meta["dummy"]
     diff = sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k))
     assert set(diff) <= {"template", "unit_sha256", "partition", "unit_log", "k_log", "ranges", "vus_per_block"}
-    a, b = flat.stage(rows, out / "flat", b"k" * 32), tm.stage(rows, out / "struct", b"k" * 32)
+    a, b = flat.stage(rows, out / "flat"), tm.stage(rows, out / "struct")
     assert all(np.array_equal(a["outs"][o], b["outs"][o]) for o in a["outs"])
     assert S.check(args[0])["mismatched_bits"] == 0
     return tm
@@ -320,7 +320,7 @@ def verifier() -> Path:
 
 
 def _statement(b: Path, st, rows, out: Path, statement: str, flags: list[str], indices=None) -> dict:
-    st.stage(rows, out, b"k" * 32, **({"indices": indices} if indices is not None else {}))
+    st.stage(rows, out, **({"indices": indices} if indices is not None else {}))
     p = subprocess.run([str(b), "statement", "--statement", statement, "--circuit", str(out / "circuit.txt"), "--public",
                         str(out / "pub.bin"), *flags], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr

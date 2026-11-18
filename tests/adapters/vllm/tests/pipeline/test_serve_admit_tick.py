@@ -1436,3 +1436,19 @@ def test_the_flag_takes_tick_with_the_engine_class_step_times():
     with pytest.raises(cli.UsageError, match="window-requests"):
         so.preflight(cli.parse("serve-openai", [*base, "--admit", "tick", "--tick-sat-ms", "1", "--tick-free-ms", "1",
                                                 "--window-requests", "4"], environ={}), which=lambda _: None)
+
+
+def test_serve_openais_tick_setup_takes_the_admission_hook_the_build_installed():
+    """`build.hooked` installs admission on an in-process scheduler with the install's own key; `--admit tick`'s setup
+    (`serve_openai.tick_admission`) then attaches its gate and frontend to that one hook, refusing nothing."""
+    sched = Sched()
+    built = admission.install(sched)
+    loop = SimpleNamespace(submit=lambda adm: None, abort=lambda eid: None, tick=lambda rec: None, gate=None, hook=None)
+    opts = SimpleNamespace(tick_bucket_ms=5.0, tick_sat_ms=1.0, tick_free_ms=1.0, admit_hold_ms=1000.0)
+    try:
+        hook, order = so.tick_admission(loop, sched, opts)
+        assert hook is built is loop.hook and isinstance(order, na.TickAdmit) and isinstance(loop.gate, na.TickGate)
+        assert [type(r).__name__ for _, r in messages.current().requests] == ["StartOnBoundary", "ServeRoute"]
+    finally:
+        built.uninstall()
+        messages.close()

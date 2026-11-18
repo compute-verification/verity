@@ -170,7 +170,7 @@ def stage(tops, out_dir: Path, evaluate: bool = True) -> dict:
     own = {"format": G.READS, "ports": {"top": read(tops.own), "out": read(zero.entry())}}
     RB.check(own, TEMPLATE, N)
     (d / "registered.json").write_text(json.dumps(own))
-    FC.write(text, SimpleNamespace(name=TEMPLATE, subcircuit=sub), 0, N, d / "inst.bin", d / "pub.bin", None, list(range(N)),
+    FC.write(text, SimpleNamespace(name=TEMPLATE, subcircuit=sub), 0, N, d / "inst.bin", d / "pub.bin", list(range(N)),
              share_rows=True, outs={"out": np.asarray(out_rows, np.uint16)}, tables={"top": rows}, refs={"top": list(range(N))},
              salts={"top": top_salts, "out": out_salts}, registered={"top": top_entry, "out": out_entry})
     meta = json.loads(text.split("\n", 2)[1][5:])

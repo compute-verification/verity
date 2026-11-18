@@ -16,6 +16,7 @@
 # Kept in $OUT/a11: a11's records and logs, the public files and the sessions; never a prover's file (inst-*, unit.placed),
 # a circuit (its pin is kept) or a session's archive.
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 export HZ_CONFIGS=a11 HZ_MEM_GB=${A11_MEM_GB:?}
 export HZ_CACHE=${A11_CACHE:-$HOME/.cache/verity-a11}
 mkdir -p "$HZ_CACHE"
@@ -75,7 +76,7 @@ audit)
   rc=${PIPESTATUS[0]}
   mkdir -p "$OUT/a11"
   (cd "$W/a11" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name unit.placed ! -path '*/archive/*' -print0 \
-    | xargs -0 -I{} cp --parents {} "$OUT/a11/")
+    | python3 "$PUBF" filter | xargs -0 -I{} cp --parents {} "$OUT/a11/")
   log "a11: done, rc $rc"
   exit "$rc"
   ;;

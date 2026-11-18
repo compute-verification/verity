@@ -16,7 +16,7 @@ row's words are a function of its member, port and index alone, so both arms com
 writes the members' bodies under ``--scratch`` as it goes. Each arm reports the most its process held (``ru_maxrss``)
 once the window is built and again once the commit returns, the commit's seconds, and a digest of the commitment: every
 root in the registration's order, then the leaf layer. With no ``--arm`` both run, one after the other, and the result
-is valid only where the two digests are equal: both arms take their salts from one key (``commit``'s ``salt_key``),
+is valid only where the two digests are equal: both arms hand the commit the same salts (``commit``'s ``salts_of``),
 where a served commit takes as many bytes from the OS.
 """
 
@@ -50,7 +50,11 @@ RESULT_SCHEMA = "research/result/v0.1"
 ARMS = ("whole", "streamed")
 TEMPLATE = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
 RUN = hashlib.sha512(b"interior_commit_peak").hexdigest()
-KEY = hashlib.sha256(b"interior_commit_peak").digest()
+
+
+def salts(w: SR.Binding) -> dict[str, bytes]:
+    """Both arms' salts, the same bytes for each port it takes in full, so their commitments' digests compare."""
+    return {p: hashlib.shake_256(f"{RUN} {p}".encode()).digest(n * SR.SALT_BYTES) for p, n in SR.full_ports(w).items()}
 
 
 def parse(argv: list[str]) -> argparse.Namespace:
@@ -112,9 +116,9 @@ def arm(name: str, ns: argparse.Namespace, scratch: Path) -> dict[str, Any]:
     w = window(ns.spans, ns.units, ns.words)
     built, t = peak(), time.perf_counter()
     if name == "whole":
-        c = SR.commit(w, list(rows(w, True)), salt_key=KEY, workers=ns.workers)
+        c = SR.commit(w, list(rows(w, True)), salts_of=salts(w), workers=ns.workers)
     else:
-        c = SR.commit(w, rows(w, False), salt_key=KEY, workers=ns.workers, into=scratch / "streamed")
+        c = SR.commit(w, rows(w, False), salts_of=salts(w), workers=ns.workers, into=scratch / "streamed")
     seconds, held = time.perf_counter() - t, peak()
     said = [[p, r.hex()] for p, r in c.roots.items()] + [c.leaf_layer]
     return {"arm": name, "built_rss_bytes": built, "peak_rss_bytes": held, "seconds": seconds, "commit": c.seconds,

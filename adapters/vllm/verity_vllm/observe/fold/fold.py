@@ -156,7 +156,7 @@ from verity_vllm.observe.fold.summary import REFERENCE_INTEGRITY_RULE, summarize
 from verity_vllm.observe.fold.supplied import SuppliedInputs
 from verity_vllm.observe.fold.token_select import token_select_output
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
-from verity_vllm.observe.fold.views import row_view
+from verity_vllm.observe.fold.views import as_words, row_view
 from verity_vllm.observe.fold.witnesses import WitnessInputs
 from verity_vllm.observe.log import split_steps
 from verity_vllm.program import model as analytic
@@ -508,13 +508,16 @@ class _Fold:
                 coll = coll[k]
         except (KeyError, IndexError, TypeError, AttributeError) as e:
             raise FoldError(f"weight field path {path!r} for {r.name!r} is not in {self.weights_type!r}: {e}") from None
-        if coll.type.leaves != r.view.numel:
-            raise FoldError(f"Root {r.name!r}: view has {r.view.numel} elements, field {path!r} has {coll.type.leaves} leaves")
         w = _width_of(coll.type)
-        if w != r.view.bits:
-            raise FoldError(f"Root {r.name!r}: field {path!r} is {w}-bit, the view is {r.view.dtype}")
-        self._mem("write", self.mem.write_root, r.view, coll.refs)
-        self._journal("root", r.view, coll.refs, what=f"{r.role}:{r.name}")
+        view = as_words(r.view) if w == 16 and r.view.bits != 16 else r.view
+        if view is None:
+            raise FoldError(f"Root {r.name!r}: field {path!r} is u16 words, the {r.view.dtype} view {r.view!r} isn't whole words")
+        if coll.type.leaves != view.numel:
+            raise FoldError(f"Root {r.name!r}: view has {view.numel} elements, field {path!r} has {coll.type.leaves} leaves")
+        if w != view.bits:
+            raise FoldError(f"Root {r.name!r}: field {path!r} is {w}-bit, the view is {view.dtype}")
+        self._mem("write", self.mem.write_root, view, coll.refs)
+        self._journal("root", view, coll.refs, what=f"{r.role}:{r.name}")
         self.weight_roots.setdefault(tuple(path), []).append((r.name, r.view.alloc))
 
     def _prompt_root(self, r: Root) -> None:

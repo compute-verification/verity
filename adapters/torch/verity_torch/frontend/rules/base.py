@@ -77,6 +77,12 @@ class Rule:
         derivation recorded (design §1.3: the same qualification class as vLLM's `cos_sin_cache`). Default: none."""
         return []
 
+    def weight_types(self, ep, mode: str) -> dict[str, Any]:
+        """The `weights` record's type of a parameter this rule reads in another form than its tensor's elements, by fqn, for
+        the exported graph `ep`: the same bits in other leaves (an int8 weight's bytes as the u16 words it is registered as).
+        Default: none."""
+        return {}
+
     def registered_tables(self, ep, mode: str) -> tuple[str, ...]:
         """The tables a program brings (`verity_vllm.definitions.registry.tables`) this rule reads by index from a registered
         parameter under `registered_values`, for the exported graph `ep`: each a parameter after the `values`. Default: none."""

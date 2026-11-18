@@ -56,7 +56,7 @@ def layer(op_path: str) -> int | None:
 
 def row_table(engine_step: int, op_path: str, template: str, words: int, rows: Iterable[tuple[str, int, int]]) -> CS.RowTable:
     """One int8 quantize output's row table: the token rows of one linear (``op_path``) at one engine step (the table's
-    segment), as its ``ScaledMmS8_v1`` rows read them (``words`` u16 words: the s8 codes, then the f32 scale), each row keyed
+    segment), as its ``ScaledMmS8_v3`` rows read them (``words`` u16 words: the s8 codes, then the f32 scale), each row keyed
     ``(request, token row, program row)``; its ``window.json`` entry names the step, layer and op_path."""
     return CS.RowTable(int(engine_step), op_path, template, int(words), tuple((str(r), int(t), int(i)) for r, t, i in rows),
                        (("engine_step", int(engine_step)), ("layer", layer(op_path)), ("op_path", op_path), ("columns", COLUMNS)))

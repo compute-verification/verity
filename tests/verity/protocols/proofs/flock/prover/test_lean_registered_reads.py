@@ -132,7 +132,7 @@ def _stage(s, name: str, registered=True, salts=None, entry=None, extra=None, ou
     reg = {**reg, **(extra or {})} if registered else extra
     path = s.dir / f"{name}.bin"
     fresh = lambda: [hm96.SHA512.fresh_salt() for _ in range(8)]  # noqa: E731
-    FC.write(s.text, inputs, 0, 8, None, path, None, list(range(8)), share_rows=True,
+    FC.write(s.text, inputs, 0, 8, None, path, list(range(8)), share_rows=True,
              outs={"out": np.asarray(out_rows if outs is None else outs, np.uint16)},
              tables={"x": s.x, "cs": np.asarray(rows)}, refs={"x": list(range(8)), "cs": refs},
              salts={"x": fresh() if "x" in afresh else x_salts, "cs": salts or reg_salts,

@@ -5,13 +5,16 @@ from __future__ import annotations
 
 import random
 from fractions import Fraction
+from types import SimpleNamespace
 
 import pytest
 
+from verity.commitments import MerkleTree
 from verity.errors import ProtocolError
 from verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_audit import Lottery, Prover, Sampled, Verifier, reference_kernel, tickets
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import ncp
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96_WEIGHTS, Epoch, Workload, activation_binding, commit_rows, tile_refs,
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96_SALT, TILE_SCHEMA, Epoch, Workload, activation_binding,
+                                              commit_rows, fresh_salts, tile_refs, transcript_domain, transcript_root,
                                               weight_binding)
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError, Matmul, Shape
 
@@ -107,29 +110,48 @@ def test_lottery_selects_by_digest():
     assert audit.accepted and audit.profile.delta_s(Fraction(1, 2)) is None
 
 
-def test_weight_and_activation_roots_are_matched_only_with_the_committers_key():
-    """Two weight sets committed under the committer's run key give roots no one matches without the key: not the plain
-    SHA-256 or SHA-512 tree of either candidate set, nor either set under another key; the key's holder reproduces its own.
-    `commit_rows` refuses a plain tree of values (only rows public by structure take ``public``) and an hm96 tree with no
-    key, so no PoUW weight or activation root is recomputable from candidate values."""
+def test_weight_and_activation_roots_are_matched_only_with_the_committers_salts():
+    """Two weight sets committed under the committer's fresh salts give roots no one matches without the salts: not the
+    plain SHA-256 or SHA-512 tree of either candidate set, nor either set under other salts; the salts' holder reproduces
+    its own, and two commits of the same rows under fresh salts differ. `commit_rows` refuses a plain tree of values (only
+    rows public by structure take ``public``), an hm96 tree with no salts, a salt short of a row and a salt of another
+    size, so no PoUW weight or activation root is recomputable from candidate values."""
     rng = random.Random(7)
     sets = [int7(rng, 8, 64) for _ in range(2)]
-    key, others = rng.randbytes(32), [bytes(32), rng.randbytes(32)]
-    w, binding = 3, weight_binding(3)
+    salts, others = fresh_salts(8), [fresh_salts(8), [bytes(HM96_SALT)] * 8]
+    binding = weight_binding(3)
 
-    def root(rows, salt_key):
-        return commit_rows(binding, -2, rows, salt_key=salt_key, nonce=HM96_WEIGHTS + w).commitment.root
+    def root(rows, ys):
+        return commit_rows(binding, -2, rows, salts=ys).commitment.root
 
-    roots = [root(rows, key) for rows in sets]
-    assert roots[0] != roots[1] and [root(rows, key) for rows in sets] == roots
-    guesses = {root(rows, k) for rows in sets for k in others}
+    roots = [root(rows, salts) for rows in sets]
+    assert roots[0] != roots[1] and [root(rows, salts) for rows in sets] == roots
+    assert root(sets[0], fresh_salts(8)) != roots[0]
+    guesses = {root(rows, ys) for rows in sets for ys in others}
     guesses |= {commit_rows(binding, -2, rows, h, public=True).commitment.root for rows in sets for h in ("sha256", "sha512")}
     assert not guesses & set(roots)
-    acts = [commit_rows(activation_binding(BEACON, 5), 5, rows, salt_key=k, nonce=5).commitment.root
-            for rows in sets for k in (key, *others)]
+    acts = [commit_rows(activation_binding(BEACON, 5), 5, rows, salts=ys).commitment.root
+            for rows in sets for ys in (salts, *others)]
     assert len(set(acts)) == len(acts)
     for h in ("sha256", "sha512"):
         with pytest.raises(ProtocolError, match="not hiding"):
             commit_rows(binding, -2, sets[0], h)
-    with pytest.raises(ProtocolError, match="salt key"):
+    with pytest.raises(ProtocolError, match="takes the prover's salts"):
         commit_rows(binding, -2, sets[0])
+    with pytest.raises(ProtocolError, match="takes 8 salts, not 7"):
+        commit_rows(binding, -2, sets[0], salts=salts[:7])
+    with pytest.raises(ProtocolError, match=f"row 2's salt is 64 bytes, not {HM96_SALT}"):
+        commit_rows(binding, -2, sets[0], salts=[*salts[:2], bytes(64), *salts[3:]])
+
+
+def test_the_transcript_root_salts_each_digest_as_commit_rows_salts_a_row():
+    """`transcript_root` is the transcript domain's tree of the tiles' digests, each followed by its salt, and refuses
+    what `commit_rows` refuses."""
+    digests, ys = [bytes([i]) * 64 for i in range(5)], fresh_salts(5)
+    salt, wr = bytes(range(32)), bytes(64)
+    epoch = SimpleNamespace(salt=salt, weights_root=wr)
+    want = MerkleTree(transcript_domain(epoch, 5), {i: d + y for i, (d, y) in enumerate(zip(digests, ys))},
+                      lambda _: TILE_SCHEMA).commitment.root
+    assert transcript_root(salt, wr, digests, salts=ys) == want != transcript_root(salt, wr, digests, salts=fresh_salts(5))
+    with pytest.raises(ProtocolError, match="takes the prover's salts"):
+        transcript_root(salt, wr, digests)
