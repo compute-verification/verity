@@ -97,10 +97,6 @@ theorem switchVec_shat {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m -
     exact GF128.zero_eq.symm
   · rw [ite_eq_left rfl, ite_eq_left rfl, mul_one]
 
-theorem switchVec_size (tr : Trace) (c : Claim) : (switchVec tr c).size = 128 := by
-  unfold switchVec
-  simp
-
 end FlockComplete.Replay.Rs
 
 namespace Claims.ZKMal

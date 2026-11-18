@@ -29,6 +29,7 @@ SPOT, and the one record of every verdict (the block record).
     served_verdicts.py coin-trees --challenger C --summary FILE
     served_verdicts.py coins --challenger C --summary FILE
     served_verdicts.py front-line SESSION
+    served_verdicts.py failed|said RC [LOG|- ...]
     served_verdicts.py public-lines [--private FILE]
     served_verdicts.py publish OUT --private DIR
 
@@ -47,7 +48,8 @@ SAMPLED-PROOFS line from the records audit's log
 its sessions' coin trees came from, and no length of the advice or count of the scope's members), ``coin-trees`` why an
 audit on the gate's coins took its sessions' coin trees from elsewhere (`coin_trees_refusal`, exit 1), ``coins`` the
 V3C-AUDIT line's account of whose coins its audit's were and its coin trees (`coins_said`), and
-``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
+``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`), ``failed`` a tool's
+failure by its exception's class and exit status (`failed`) and ``said`` its last line where it passed, else that (`tool_said`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -846,11 +848,34 @@ def front_line(session: Mapping[str, Any]) -> str:
 EXCEPTION = re.compile(r"^(?:[A-Za-z_]\w*\.)*([A-Za-z_]\w*(?:Error|Exception))(?::|$)")
 
 
+def _logs(logs: Sequence[str]) -> list[str]:
+    return [line for p in logs for line in (sys.stdin.read() if p == "-" else
+                                            Path(p).read_text(errors="replace") if Path(p).is_file() else "").splitlines()]
+
+
+def _class(lines: Sequence[str]) -> str:
+    found = [m[1] for line in lines if (m := EXCEPTION.match(line))]
+    return found[-1] if found else "no exception"
+
+
+def failed(rc: object, logs: Sequence[str]) -> str:
+    """A tool's failure by its last exception's class and its exit status alone (``-`` is stdin): a tool's log holds
+    paths, hosts and its inputs' values, so no line of it is said."""
+    return f"({_class(_logs(logs))}, exit {rc}): its log is in the run's private directory"
+
+
+def tool_said(rc: object, logs: Sequence[str]) -> str:
+    """Our tool's own last line where it passed (its verdict), else its last exception's class alone, for a line that
+    says the exit status itself."""
+    lines = _logs(logs)
+    if str(rc) != "0":
+        return f"{_class(lines)}; its log is in the run's private directory"
+    return next((line for line in reversed(lines) if line.strip()), "")
+
+
 def not_listening(log: Path, rc: int) -> str:
-    """A serve that never listened, by its last exception's class and its exit status alone: its log holds paths and the
-    host's address, so no line of it is said."""
-    found = [m[1] for line in log.read_text(errors="replace").splitlines() if (m := EXCEPTION.match(line))]
-    return f"not listening ({found[-1] if found else 'no exception'}, exit {rc}): its log is in the run's private directory"
+    """A serve that never listened, by `failed`: its log holds paths and the host's address."""
+    return f"not listening {failed(rc, [str(log)])}"
 
 
 def _unset(comp: str, what: str) -> str:
@@ -2754,6 +2779,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     nl = sub.add_parser("not-listening")
     nl.add_argument("log", type=Path)
     nl.add_argument("rc", type=int)
+    for name in ("failed", "said"):
+        fa = sub.add_parser(name)
+        fa.add_argument("rc")
+        fa.add_argument("logs", nargs="*", default=["-"])
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
@@ -2854,6 +2883,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "not-listening":
         print(not_listening(a.log, a.rc))
+        return 0
+    if a.cmd in ("failed", "said"):
+        print((failed if a.cmd == "failed" else tool_said)(a.rc, a.logs))
         return 0
     if a.cmd == "public-lines":
         public_lines(sys.stdin, sys.stdout, a.private)

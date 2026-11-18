@@ -1,5 +1,5 @@
 """charge_rows: `ChargeLink_v1`'s carry rows committed window to window and the verifier's chain check over their
-openings (`network.verifier.charge_check`): code_v1's charges over whole streams, and a restarted carry refused wherever
+openings (`network.prover.charge_check`): code_v1's charges over whole streams, and a restarted carry refused wherever
 the prover puts it."""
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.interface.charge import arith_encode as AE, charge_chain as CC
 from verity.protocols.proofs.spot.prover import produced as PP
-from verity.protocols.resource_accounting.network.verifier import charge_check as CK
+from verity.protocols.resource_accounting.network.prover import charge_check as CK
 from verity.protocols.resource_accounting.network.prover import charge_rows as CR
 
 FIXTURE = Path(__file__).parents[1] / "verifier" / "fixtures" / "arith_encode_vectors.json"
