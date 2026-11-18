@@ -151,8 +151,11 @@ def register_request(node: bytes, blocks: int, payload_root: bytes, c: codec.Cod
 
 
 def params_json(p: audit.Params) -> dict:
-    """A session's parameters as the Lean reads them (`Difftest.sessionOf`), naming `groups_per_coin` only above 1."""
+    """A session's parameters as the Lean reads them (`Difftest.sessionOf`), naming `groups_per_coin` only above 1
+    and `refresh`, with its `fresh_slots`, only when it is on."""
     shared = {} if p.groups_per_coin == 1 else {"groups_per_coin": p.groups_per_coin}
+    if getattr(p, "refresh", False):
+        shared |= {"refresh": True} | ({"fresh_slots": p.fresh_slots} if getattr(p, "fresh_slots", 0) else {})
     return {"deadline_ns": p.deadline_ns, "windows": p.windows, "samples": p.samples, "min_passes": p.min_passes,
             "window_ns": p.window_ns, "lifetime": p.lifetime, "deferred": p.deferred,
             "pace": None if p.pace is None else p.pace.to_json()} | shared
@@ -207,8 +210,11 @@ def drew_json(out) -> dict:
 def summary_json(rec: audit.Record) -> dict:
     """An accepted session's record as the Lean writes it (`Difftest.recordJ`, `ra_cases.summary`): all of it but the
     coin commitment's root, the block size, the registration's fields its digest binds, and of each window's profile
-    more than its samples; `groups_per_coin` only above 1."""
+    more than its samples; `groups_per_coin` only above 1, and `refresh`, with each window's `probation`, only when it
+    is on."""
     shared = {} if rec.groups_per_coin == 1 else {"groups_per_coin": rec.groups_per_coin}
+    on = bool(getattr(rec, "refresh", False))
+    shared |= {"refresh": True} if on else {}
     return shared | {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
             "blocks": rec.blocks, "lifetime": rec.lifetime, "pace": None if rec.pace is None else rec.pace.to_json(),
             "registration": rec.registration.hex(), "released": rec.released,
@@ -216,6 +222,7 @@ def summary_json(rec: audit.Record) -> dict:
                          "drawn": w.profile.drawn["receipt"], "heads": [None if h is None else h.hex() for h in w.heads],
                          "lengths": list(w.lengths), "opened_ns": w.opened_ns, "post_seed": list(w.post_seed),
                          "released_ns": w.released_ns, "stale": list(w.stale), "steps": list(w.steps)}
+                        | ({"probation": list(w.probation)} if on else {})
                         for w in rec.windows]}
 
 
@@ -233,11 +240,13 @@ def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: fl
         tuple(audit.WindowRecord(t, tuple(w["lengths"]), w["released_ns"], w["deadline_ns"], w["opened_ns"],
                                  audit.window_profile(w["lengths"], w["drawn"], delta), tuple(w["post_seed"]),
                                  tuple(w["steps"]), tuple(None if h is None else bytes.fromhex(h) for h in w["heads"]),
-                                 tuple(w["stale"]), tuple(w["arrived_ns"])) for t, w in enumerate(j["windows"])),
+                                 tuple(w["stale"]), tuple(w["arrived_ns"]),
+                                 **({"probation": tuple(w["probation"])} if "probation" in w else {}))
+              for t, w in enumerate(j["windows"])),
         registration.receipt, registration.bind, registration.codec, registration.layout, registration.rows,
         j["appended"], j["released"], j["lifetime"], None if j["appends"] is None else bytes.fromhex(j["appends"]),
         None if pace is None else audit.Pace(pace["k"], pace["window_ns"], pace.get("in_flight", 2)),
-        j.get("groups_per_coin", 1), samples=samples)
+        j.get("groups_per_coin", 1), samples=samples, **({"refresh": True} if j.get("refresh") else {}))
 
 
 def released_coins(c: coins.SessionCoins) -> tuple[list[bytes], list[bytes]]:

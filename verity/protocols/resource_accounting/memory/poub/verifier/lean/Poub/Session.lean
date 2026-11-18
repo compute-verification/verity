@@ -10,15 +10,18 @@ clock's reading where `Session` reads it) and with its own coins (the 2W committ
 its openings coin at W + t, and the append coins in the order sampled). Each event gives what the Python call returns:
 
 * `start`, `boundary`: the coin released (`none` at the close after the last window);
-* `append(root, count)`: the first index and its coin `c_a`; rejected `append` if malformed or past the codec's
-  `max_blocks`, `coin` if its root was sent before or the last window's roots are final;
+* `append(root, count, origin, slot)`: the first index and its coin `c_a`; rejected `append` if malformed or past the
+  codec's `max_blocks`, a re-key or a slot without refresh, or a re-key's root not its declaration (`rekeyRoot`);
+  with refresh, `origin` unless its slot is above the last append's and holds it (`State.slotOk`); `coin` if its root
+  was sent before or the last window's roots are final;
 * `release(runs, withdrawn)`: rejected `release` unless the runs are a canonical plan of the store with none released
   before, and `withdrawn` is empty or a canonical plan of appended blocks inside the runs that no plan received before
   held (memory-map/v1's withdrawn blocks, released before their encode landed);
 * `receive(t, i, root, plan, step)`: rejected `malformed` (a root not 64 bytes), `order` (not the next root, a window
   already final, or past a paced window's k roots), `late` (past `D_t = b_t + A`), `step` (missing, not above the previous pass's, or 2^64 or more), `plan`
   (not a canonical plan of the store so far, whole, as runs or as a change of the previous pass's, one holding a
-  released block, or one that would take its window's receipts to `RECEIPT_LIMIT`, 2^64), `lifetime` (an appended block that joined a window L or more before);
+  released block, or one that would take its window's receipts to `RECEIPT_LIMIT`, 2^64), with refresh `origin` (an
+  append joining a window other than its slot's), `lifetime` (an appended block that joined a window L or more before; with refresh, a registered block at `t ≥ L`), `probation` (with refresh, an appended block whose payload was born less than L windows before);
 * `close(t)`: the window's samples, once its roots are final (the next window's first root, `D_t` passed, or a paced
   window's k roots once its boundary has left); rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin went unused;
 * `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the samples); rejected `malformed` on a window with
@@ -55,6 +58,13 @@ structure Params where
   windowNs : Nat
   lifetime : Nat
   pace : Option Pace := none
+  /-- Refresh: appends fill the slots of a public schedule (`Params.slotAt`), fresh or re-keys of registered blocks or
+  of a fresh slot's append (`Origin`); a plan in window `t` holds a registered block only while `t < lifetime`, and an
+  appended one only once its payload's birth `b` (`State.born`) has `b + lifetime ≤ t` (`probation`). Off, appends are
+  fresh, carry no slot, and every check is as without it. -/
+  refresh : Bool := false
+  /-- With refresh, the fresh slots each window has (`Params.slotAt`); unused without. -/
+  freshSlots : Nat := 0
 
 structure Win where
   challenge : ByteArray
@@ -66,6 +76,8 @@ structure Win where
   heads : Array (Option ByteArray) := #[]
   stale : Array Nat := #[]
   arrived : Array Nat := #[]
+  /-- With refresh, each pass's appended blocks held in probation (`State.probationHeld`); empty without. -/
+  probation : Array Nat := #[]
   boundaryNs : Option Nat := none
   final : Bool := false
   drawn : Option (Array (Nat × Nat)) := none
@@ -105,7 +117,7 @@ structure State where
 inductive Event
   | start (now : Nat)
   | boundary (now : Nat)
-  | append (root : ByteArray) (count : Int)
+  | append (root : ByteArray) (count : Int) (origin : Origin := .fresh) (slot : Option Nat := none)
   | release (runs withdrawn : Array (Int × Int))
   | receive (t i : Int) (root : ByteArray) (runs : Option (Array (Int × Int)))
       (change : Option (Array (Int × Int) × Array (Int × Int))) (step : Option Int) (now : Nat)
@@ -139,12 +151,123 @@ def State.releaseCoin (s : State) (t now : Nat) : State :=
 /-- `_released(first, count)`: whether a released run overlaps `first … first + count − 1`. -/
 def State.isReleased (s : State) (first count : Nat) : Bool := s.gone.any fun (a, b) => a < first + count && first < b
 
-/-- `_stale_below(t)`: the store index below which every appended block joined a window `lifetime` or more before t. -/
+/-- Class `c`'s registered run `[lo, hi)`: the blocks `j` with `j · L / N = c`, `lo = ⌈c·N/L⌉`, `hi = ⌈(c+1)·N/L⌉`. -/
+def Params.classRun (p : Params) (N c : Nat) : Nat × Nat :=
+  ((c * N + p.lifetime - 1) / p.lifetime, ((c + 1) * N + p.lifetime - 1) / p.lifetime)
+
+/-- Whether window `w` of a session with refresh has a registered re-key slot: `w ≥ 1` and class `w mod L` holds a
+block. -/
+def Params.hasRegistered (p : Params) (N w : Nat) : Bool :=
+  1 ≤ w && (p.classRun N (w % p.lifetime)).1 < (p.classRun N (w % p.lifetime)).2
+
+/-- The slots of window `w`: its registered re-key slot, one re-key slot for each fresh slot of the windows `w − L`,
+`w − 2L`, …, and `freshSlots` fresh slots. -/
+def Params.windowSize (p : Params) (N w : Nat) : Nat :=
+  (if p.hasRegistered N w then 1 else 0) + p.freshSlots * (w / p.lifetime) + p.freshSlots
+
+/-- The first slot of window `w`: slots are laid out window by window. -/
+def Params.windowStart (p : Params) (N w : Nat) : Nat := ((List.range w).map (p.windowSize N)).sum
+
+/-- The slot of fresh slot `i` of window `b`. -/
+def Params.freshSlot (p : Params) (N b i : Nat) : Nat := p.windowStart N b + p.windowSize N b - p.freshSlots + i
+
+/-- What a slot of the schedule holds: a fresh append, the re-key of registered run `[lo, lo + count)`, or the re-key
+of the fresh append in slot `k`. -/
+inductive Slot
+  | fresh
+  | registered (lo count : Nat)
+  | rekey (k : Nat)
+deriving BEq, Repr, DecidableEq, Inhabited
+
+/-- The kind of the `m`-th slot of window `w`: the registered re-key slot first, then the re-key slots of earlier fresh
+slots, oldest window first and each window's in order, then the fresh slots. -/
+def Params.slotIn (p : Params) (N w m : Nat) : Slot :=
+  let r := if p.hasRegistered N w then 1 else 0
+  if m < r then
+    let (lo, hi) := p.classRun N (w % p.lifetime)
+    .registered lo (hi - lo)
+  else if m < r + p.freshSlots * (w / p.lifetime) then
+    let q := m - r
+    let n := w / p.lifetime - q / p.freshSlots
+    .rekey (p.freshSlot N (w - n * p.lifetime) (q % p.freshSlots))
+  else .fresh
+
+/-- The schedule of a session with refresh: slot `k`'s window and kind, `none` past its last window's slots. A
+function of `N`, `lifetime`, `windows` and `freshSlots` alone, fixed before every coin. -/
+def Params.slotAt (p : Params) (N k : Nat) : Option (Nat × Slot) := Id.run do
+  let mut start := 0
+  for w in [0:p.windows] do
+    let n := p.windowSize N w
+    if k < start + n then return some (w, p.slotIn N w (k - start))
+    start := start + n
+  return none
+
+/-- The window slot `k` joins (`Params.slotAt`), used or empty. -/
+def State.slotWindow (s : State) (k : Nat) : Option Nat := (s.params.slotAt s.reg.blocks k).map (·.1)
+
+/-- `_stale_below(t)`: the store index below which every appended block joined a window `lifetime` or more before t.
+With refresh, `receive` refuses an append joining a window other than its slot's (`joinsAnother`), so this is the
+schedule's bound over each append's slot window. -/
 def State.staleBelow (s : State) (t : Nat) : Nat :=
   let k := (s.joined.toList.takeWhile fun (x : Nat) => (x : Int) ≤ (t : Int) - s.params.lifetime).length
   match s.appends[k]? with
   | some a => a.first
   | none => s.extent
+
+/-- With refresh, the window in which append `a`'s payloads were first committed: the window of the slot of the fresh
+append holding them (its own, or a re-key's origin `k`); `none` for a re-key of registered blocks or past the appends. -/
+def State.born (s : State) (a : Nat) : Option Nat :=
+  match (s.appends[a]?.map (·.origin) : Option Origin) with
+  | some Origin.fresh => s.appends[a]?.bind fun x => s.slotWindow x.slot
+  | some (Origin.rekey k) => s.slotWindow k
+  | _ => none
+
+/-- Whether `first … first + count − 1` holds a block of an append whose payloads were born less than `lifetime`
+windows before `t`. -/
+def State.probation (s : State) (t first count : Nat) : Bool :=
+  (Array.range s.appends.size).any fun a =>
+    let x := s.appends[a]!
+    x.first < first + count && first < x.first + x.count && (s.born a).any (t < · + s.params.lifetime)
+
+/-- The blocks of `first … first + count − 1` released so far. -/
+def State.releasedIn (s : State) (first count : Nat) : Nat :=
+  s.gone.foldl (fun n (a, b) => n + (min b (first + count) - max a first)) 0
+
+/-- The appended blocks held in probation at window `t`: of appends whose payloads were born less than `lifetime`
+windows before `t`, not released. -/
+def State.probationHeld (s : State) (t : Nat) : Nat :=
+  (Array.range s.appends.size).foldl (fun n a =>
+    let x := s.appends[a]!
+    if (s.born a).any (t < · + s.params.lifetime) then n + (x.count - s.releasedIn x.first x.count) else n) 0
+
+/-- With refresh, whether an append not joined yet would join window `t`, another than its slot's. -/
+def State.joinsAnother (s : State) (t : Nat) : Bool :=
+  s.params.refresh && (List.range' s.joined.size (s.appends.size - s.joined.size)).any fun a =>
+    s.slotWindow s.appends[a]!.slot != some t
+
+/-- With refresh, what `receive` refuses of a plan in window `t` past the lifetime check: `lifetime` if it holds a
+registered block at `t ≥ lifetime`, `probation` if it holds a block of an append in probation (`State.probation`). -/
+def State.refreshRefusal (s : State) (t : Nat) (plan : Plan) : Option Failure :=
+  let N := s.reg.blocks
+  if !s.params.refresh then none
+  else if s.params.lifetime ≤ t && plan.runs.any fun (f, _) => f < N then some .lifetime
+  else if plan.runs.any fun (f, c) => f + c > N && s.probation t (max f N) (f + c - max f N) then some .probation
+  else none
+
+/-- A pass's probation entry pushed onto `ps`, with refresh (`probationHeld`); `ps` as it is without. -/
+def State.probationPush (s : State) (t : Nat) (ps : Array Nat) : Array Nat :=
+  if s.params.refresh then ps.push (s.probationHeld t) else ps
+
+/-- `append`'s check of a slot, with refresh: above the last append's slot, in the schedule, and the append its kind
+names: a fresh append of at most `REKEY_MAX` blocks, the re-key of the whole class run, or the whole re-key of the
+fresh append in slot `k` (an empty slot `k` has none to re-key). -/
+def State.slotOk (s : State) (slot count : Nat) (origin : Origin) : Bool :=
+  s.appends.back?.all (·.slot < slot) &&
+    match s.params.slotAt s.reg.blocks slot, origin with
+    | some (_, .fresh), .fresh => count ≤ REKEY_MAX
+    | some (_, .registered lo n), .registered a => a == lo && count == n
+    | some (_, .rekey k), .rekey k' => k == k' && (s.appends.find? (·.slot == k)).any (·.count == count)
+    | _, _ => false
 
 def State.record (s : State) (t : Nat) : WindowRecord :=
   let w := s.windows[t]!
@@ -169,10 +292,14 @@ def boundary (s : State) (now : Nat) : Result × State := Id.run do
   if t + 1 < s.params.windows then return (.released (some (t + 1)), s.releaseCoin (t + 1) now)
   return (.released none, s)
 
-def append (s : State) (root : ByteArray) (count : Int) : Except String (Result × State) := do
+def append (s : State) (root : ByteArray) (count : Int) (origin : Origin := .fresh) (slot : Option Nat := none) :
+    Except String (Result × State) := do
   if let some r := live s then return (r, s)
-  if root.size ≠ DIGEST_BYTES || count < 1 || s.extent + count.toNat > s.reg.codec.maxBlocks then
+  if root.size ≠ DIGEST_BYTES || count < 1 || s.extent + count.toNat > s.reg.codec.maxBlocks
+      || (!s.params.refresh && (origin != .fresh || slot.isSome))
+      || (origin != .fresh && root != rekeyRoot s.digest s.extent count.toNat origin) then
     return s.fail s.filling .append
+  if s.params.refresh && !(slot.any fun k => s.slotOk k count.toNat origin) then return s.fail s.filling .origin
   if s.appends.any (·.root == root) || (s.windows.size == s.params.windows && (s.windows.back?.map (·.final)).getD false)
   then return s.fail s.filling .coin
   let some coin := s.appendCoins[s.appendSampled]? | throw "the append coins ran out"
@@ -181,7 +308,7 @@ def append (s : State) (root : ByteArray) (count : Int) : Except String (Result 
   return (.appended first coin,
     { s with
       appendSampled := s.appendSampled + 1
-      appends := s.appends.push ⟨first, n, root, coin⟩
+      appends := s.appends.push { first, count := n, root, coin, origin, slot := slot.getD s.appends.size }
       head := some (appendHead s.head first n root)
       extent := first + n })
 
@@ -246,9 +373,11 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
   let some plan := plan? | return s.fail t .plan
   if !s.gone.isEmpty && plan.runs.any fun (f, c) => s.isReleased f c then return s.fail t .plan
   if RECEIPT_LIMIT ≤ s.windows[t]!.receipts + plan.length then return s.fail t .plan
+  if s.joinsAnother t then return s.fail t .origin
   s := { s with joined := s.joined ++ Array.replicate (s.appends.size - s.joined.size) t }
   let below := s.staleBelow t
   if below > N && plan.runs.any fun (f, c) => f < below && f + c > N then return s.fail t .lifetime
+  if let some f := s.refreshRefusal t plan then return s.fail t f
   let post := if extent == N then 0 else plan.runs.foldl (fun n (f, c) => n + (f + c - max f N)) 0
   let head := s.head
   let add := fun (w : Win) =>
@@ -259,7 +388,8 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
       steps := w.steps.push st.toNat
       heads := w.heads.push head
       stale := w.stale.push below
-      arrived := w.arrived.push now }
+      arrived := w.arrived.push now
+      probation := s.probationPush t w.probation }
   s := { s with windows := s.windows.modify t add, plan, step := st,
                 planned := cover (s.planned ++ plan.runs.filterMap fun (f, c) =>
                   if f + c > N then some (max f N, f + c) else none) }
@@ -324,7 +454,7 @@ theorem verify_eq_verifyBy (s : State) (t : Int) (openings : Array Opening) :
 def step (s : State) : Event → Except String (Result × State)
   | .start now => pure (start s now)
   | .boundary now => pure (boundary s now)
-  | .append root count => append s root count
+  | .append root count origin slot => append s root count origin slot
   | .release runs withdrawn => pure (release s runs withdrawn)
   | .receive t i root runs change st now => pure (receive s t i root runs change st now)
   | .close t now => close s t now
@@ -358,6 +488,7 @@ structure WindowSummary where
   deadlineNs : Nat
   openedNs : Nat
   drawn : Nat
+  probation : Array Nat := #[]
 
 structure Summary where
   windows : Array WindowSummary
@@ -367,6 +498,7 @@ structure Summary where
   lifetime : Nat
   pace : Option Pace
   appends : Option ByteArray
+  refresh : Bool := false
 
 def State.summary (s : State) : Option Summary :=
   if s.outcome != some "accepted" then none
@@ -382,7 +514,8 @@ def State.summary (s : State) : Option Summary :=
          releasedNs := w.releasedNs
          deadlineNs := (s.deadline t).getD 0
          openedNs := w.openedNs.getD 0
-         drawn := (w.drawn.map (·.size)).getD 0 } : WindowSummary)
+         drawn := (w.drawn.map (·.size)).getD 0
+         probation := w.probation } : WindowSummary)
     some
       { blocks := s.reg.blocks
         appended := s.extent - s.reg.blocks
@@ -390,6 +523,7 @@ def State.summary (s : State) : Option Summary :=
         lifetime := s.params.lifetime
         pace := s.params.pace
         appends := s.head
+        refresh := s.params.refresh
         windows := (Array.range s.windows.size).map window }
 
 end Poub.Session

@@ -60,6 +60,22 @@ private def int (j : Json) (k : String) : V Int := do J.asInt (← J.get j k "in
 
 private def nat (j : Json) (k : String) : V Nat := J.nat j k "input"
 
+/-- `j[k]`, `none` where it is absent or null. -/
+private def opt (j : Json) (k : String) : V (Option Json) := do
+  if !J.has j k then pure none
+  else match ← J.get j k "input" with
+    | .null => pure none
+    | v => pure (some v)
+
+/-- An append's `origin`: absent or null for a fresh one, `{"registered": a}` or `{"append": k}`. -/
+private def originOf (j : Json) : V Origin := do
+  match ← opt j "origin" with
+  | none => pure .fresh
+  | some o =>
+    if J.has o "registered" then pure (.registered (← J.nat o "registered" "origin"))
+    else if J.has o "append" then pure (.rekey (← J.nat o "append" "origin"))
+    else throw "an origin is {\"registered\": a} or {\"append\": k}"
+
 private def runsOf (j : Json) (ctx : String) : V (Array (Int × Int)) := do
   (← J.asArr j ctx).mapM fun r => do
     let xs ← J.asArr r ctx
@@ -94,7 +110,8 @@ def openingOf (j : Json) : V Opening := do
       payloadSalt := ← hex j "payload_salt"
       payloadPath := ← hexes j "payload_path"
       tile := ← hex j "tile"
-      digest := ← hex j "digest" }
+      digest := ← hex j "digest"
+      originPosition := ← (← opt j "origin_position").mapM (J.asNat · "origin_position") }
 
 /-- An event as JSON gives it. A `verify`'s openings are either decoded (`openings`) or the window's frames as the wire
 carried them (`frames`, lowercase hex, read as the verifier's process reads them: `Wire.openingsOf`). -/
@@ -102,7 +119,8 @@ def eventOf (j : Json) : V Session.Event := do
   match ← J.str j "kind" "event" with
   | "start" => pure (.start (← nat j "now"))
   | "boundary" => pure (.boundary (← nat j "now"))
-  | "append" => pure (.append (← hex j "root") (← int j "count"))
+  | "append" =>
+    pure (.append (← hex j "root") (← int j "count") (← originOf j) (← (← opt j "slot").mapM (J.asNat · "slot")))
   | "release" => pure (.release (← runsOf (← J.get j "runs" "event") "runs") (← runsOf (← J.get j "withdrawn" "event") "withdrawn"))
   | "receive" =>
     let runs ← match ← J.get j "runs" "event" with
@@ -136,17 +154,19 @@ def resultJ : Session.Result → Json
 
 /-- The record `Session.record` makes; its pace names `in_flight` only at one window in flight (`Flight`). -/
 def summaryJ (registration : ByteArray) (x : Session.Summary) (inFlight : Nat := 2) : Json :=
-  Json.mkObj [("registration", hexJ registration), ("blocks", toJson x.blocks), ("appended", toJson x.appended),
+  Json.mkObj ([("registration", hexJ registration), ("blocks", toJson x.blocks), ("appended", toJson x.appended),
     ("released", toJson x.released), ("lifetime", toJson x.lifetime),
     ("pace", match x.pace with
       | some p => Json.mkObj ([("k", toJson p.k), ("window_ns", toJson p.windowNs)] ++
           if inFlight == 1 then [("in_flight", toJson inFlight)] else [])
       | none => .null),
     ("appends", match x.appends with | some h => hexJ h | none => .null),
-    ("windows", .arr (x.windows.map fun w => Json.mkObj [("lengths", toJson w.lengths), ("steps", toJson w.steps),
+    ("windows", .arr (x.windows.map fun w => Json.mkObj ([("lengths", toJson w.lengths), ("steps", toJson w.steps),
       ("post_seed", toJson w.post), ("heads", .arr (w.heads.map fun h => match h with | some h => hexJ h | none => .null)),
       ("stale", toJson w.stale), ("arrived_ns", toJson w.arrivedNs), ("released_ns", toJson w.releasedNs),
-      ("deadline_ns", toJson w.deadlineNs), ("opened_ns", toJson w.openedNs), ("drawn", toJson w.drawn)]))]
+      ("deadline_ns", toJson w.deadlineNs), ("opened_ns", toJson w.openedNs), ("drawn", toJson w.drawn)] ++
+      if x.refresh then [("probation", toJson w.probation)] else [])))] ++
+    if x.refresh then [("refresh", .bool true)] else [])
 
 private def positive (p : Json) (k : String) : V Nat := do
   let n ← J.nat p k "params"
@@ -187,7 +207,14 @@ def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArr
       minPasses := ← positive p "min_passes"
       windowNs := ← positive p "window_ns"
       lifetime := ← positive p "lifetime"
-      pace }
+      pace
+      refresh := ← match ← opt p "refresh" with
+        | none => pure false
+        | some b => J.asBool b "refresh"
+      freshSlots := ← match ← opt p "fresh_slots" with
+        | none => pure 0
+        | some n => J.asNat n "fresh_slots" }
+  if !params.refresh && params.freshSlots != 0 then throw "fresh_slots is a parameter of a session with refresh"
   if (← J.bool p "deferred" "params") && params.lifetime < 2 then
     throw "a session that defers residency has a lifetime of at least 2 windows"
   if pace.isSome && params.windows < 2 then
@@ -468,10 +495,16 @@ def summaryOf (j : Json) : V Session.Summary := do
             heads := ← (← J.arr w "heads" "window").mapM (hexOrNull · "heads"), stale := ← natsOf w "stale",
             arrivedNs := ← natsOf w "arrived_ns", releasedNs := ← J.nat w "released_ns" "window",
             deadlineNs := ← J.nat w "deadline_ns" "window", openedNs := ← J.nat w "opened_ns" "window",
-            drawn := ← J.nat w "drawn" "window" } : Session.WindowSummary)
+            drawn := ← J.nat w "drawn" "window"
+            probation := ← match ← opt w "probation" with
+              | none => pure #[]
+              | some v => (← J.asArr v "probation").mapM (J.asNat · "probation") } : Session.WindowSummary)
   pure { windows, blocks := ← J.nat j "blocks" "record", appended := ← J.nat j "appended" "record",
          released := ← J.nat j "released" "record", lifetime := ← J.nat j "lifetime" "record", pace,
-         appends := ← hexOrNull (← J.get j "appends" "record") "appends" }
+         appends := ← hexOrNull (← J.get j "appends" "record") "appends"
+         refresh := ← match ← opt j "refresh" with
+           | none => pure false
+           | some b => J.asBool b "refresh" }
 
 private def seenOf (j : Json) : V Line.Seen := do
   pure
@@ -560,40 +593,45 @@ def gammaJ (x : Gamma.Gamma) : Json :=
   let w := Gamma.worst x.windows Gamma.Terms.gamma
   let h := Gamma.worst x.windows Gamma.Terms.gammaPooled
   Json.mkObj (termsJ x.terms ++
-    [("linked", .bool false), ("steering_bits", .null),
+    [("linked", .bool false), ("steering_bits", match x.steering with | some a => toJson a | none => .null),
      ("windows", .arr (x.windows.map fun v =>
        Json.mkObj ([("span_ns", toJson v.spanNs), ("window", toJson v.window)] ++ termsJ v.terms))),
      ("error", Json.mkObj [("windows", ratJ x.error), ("horizon", ratJ x.errorPooled)]),
      ("worst", Json.mkObj [("gamma", ratJ w.terms.gamma),
        ("horizon", Json.mkObj [("gamma", ratJ h.terms.gammaPooled), ("window", toJson h.window)]),
-       ("window", toJson w.window)])])
+       ("window", toJson w.window)])] ++
+    match x.probation with | some p => [("probation", ratJ p)] | none => [])
 
-private def gammaOn (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : Nat) (j : Json) : V Json := do
+private def gammaOn (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : Nat) (j : Json)
+    (scheduled : Option Nat) : V Json := do
   pure (refusedOr (gammaJ <$> Gamma.gamma reg digest sm g (← ratIn j "delta" "input") (← nat j "block_bytes")
-    (← nat j "chip_bytes") (← ratIn j "capacity_bytes_per_s" "input") (← ratIn j "squarings_per_s" "input")))
+    (← nat j "chip_bytes") (← ratIn j "capacity_bytes_per_s" "input") (← ratIn j "squarings_per_s" "input") scheduled))
 
 /-- `ledger.gamma`'s terms (`audit.GammaTerms`) of `{"registration", "record", "delta", "block_bytes", "chip_bytes",
-"capacity_bytes_per_s", "squarings_per_s"}` (`record` as `recordJ` writes it, sampled its `groups_per_coin` windows a
-coin, 1 when it doesn't name it), or why there are none (`Gamma.gamma`). -/
+"capacity_bytes_per_s", "squarings_per_s"}` and, if the session's schedule check passed, its cap (`"scheduled"`,
+`audit.Scheduled.cap`) (`record` as `recordJ` writes it, sampled its `groups_per_coin` windows a coin, 1 when it doesn't
+name it), or why there are none (`Gamma.gamma`). -/
 def gammaFn (j : Json) : V Json := do
   let reg ← registrationOf (← J.get j "registration" "input")
   let rj ← J.get j "record" "input"
   let g ← if J.has rj "groups_per_coin" then J.nat rj "groups_per_coin" "record" else pure 1
-  gammaOn reg (← hex rj "registration") (← summaryOf rj) g j
+  gammaOn reg (← hex rj "registration") (← summaryOf rj) g j (← (← opt j "scheduled").mapM (J.asNat · "scheduled"))
 
 /-- `audit.named_bits` of `{"k"}` (`Gamma.namedBits`), or why the bracket of log₂ k! doesn't decide it. -/
 def namedBitsFn (j : Json) : V Json := do
   pure (refusedOr (toJson <$> Gamma.namedBits (← nat j "k")))
 
 /-- `gammaFn` of the record of one of the accepted sessions `r` runs, that session's own: the registration it ran on
-and its record as `outcome` writes it equal to `record`, at its own windows a coin; refused unless one is. -/
+and its record as `outcome` writes it equal to `record`, at its own windows a coin; refused unless one is. No schedule
+check runs here (the session commits no cap on a schedule's bits), so it credits no appended block. -/
 def gammaOfRegistry (r : Registry) (j : Json) : V Json := do
   let rj ← J.get j "record" "input"
+  if J.has j "scheduled" then throw "this verifier runs no schedule check, so it takes none"
   for live in r.live do
     for run in live.sessions do
       if let .running s f g := run then
         if let some x := s.summary then
-          if recordJ s.digest x f g == rj then return (← gammaOn s.reg s.digest x g j)
+          if recordJ s.digest x f g == rj then return (← gammaOn s.reg s.digest x g j none)
   pure (refusedOr (.error "the record is not one this verifier accepted"))
 
 private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do

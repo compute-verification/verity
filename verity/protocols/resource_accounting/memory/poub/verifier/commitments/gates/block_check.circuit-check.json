@@ -92,6 +92,22 @@
    "and": 2136,
    "type": "7ea0304033e4c53e601b6777aa7ca4e108e3011b8f12b2805cda9cc435f8dc6bc7cc16ac8cb6c2c1abfe80be877ea73e27a6a8ba4f83cd92025ee685bc1e2faf"
   },
+  "RekeyOpeningCheck_v1{N=32,C=5,K=2,MASKED=1,BYTES=64,ROWS=2,LEAF=3,DR=1,DO=2}": {
+   "and": 2188145,
+   "type": "a1804d57107ae20f907ea596c5b090d7643e4324d3ca2305f6474e960fbeda7c4bcfa6a94df528799f023c46fcfa06a7bfd8bc5c2df82fe3aaf05985b8d4d8ef"
+  },
+  "RekeyOpeningUnit_v1{N=32,C=5,K=2,MASKED=1,BYTES=64,ROWS=2,LEAF=3,DR=1,DO=2}": {
+   "and": 2188145,
+   "type": "a1804d57107ae20f907ea596c5b090d7643e4324d3ca2305f6474e960fbeda7c4bcfa6a94df528799f023c46fcfa06a7bfd8bc5c2df82fe3aaf05985b8d4d8ef"
+  },
+  "RekeyVerdict_v1{W=16}": {
+   "and": 19,
+   "type": "08651da78f855ba90be473ed5406c09ad86d496ea7bb13686878e03cc82e687b90918d2e90f7ebdf7b43ad03f82c49749e061529c07d34a95113e006774816f6"
+  },
+  "RekeyVerdict_v1{W=64}": {
+   "and": 67,
+   "type": "faab4c20cc11fb716c9ddd84b1cb22f1ad504c3a9987199dd5b2dada9d4f718942a877f2b7e710f81db97e0f3877ca40592902391328aef5cbeab0b192cd1d50"
+  },
   "RowCompress_v1": {
    "and": 81402,
    "type": "f004e89187484a24e2955cc1ca0a3854fe0b9618117948ccd191b942a337955ec1b03bcbb85ba1daddd24fb153687f596e10d081976d0a0b5e0a97082c9d1d2b"

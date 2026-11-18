@@ -121,6 +121,7 @@ from . import pooled as _pooled
 from . import schedule as _schedule
 from .codec import BLOCK_BYTES, P2_LAYOUT, SEED_BYTES, Codec, P2Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
+from .rota import FRESH_SLOTS, REKEY_MAX, Origin, Schedule
 
 PROTOCOL_ID = "verity/remote-bandwidth/v0"
 CODEC_DOMAIN = "verity/remote-bandwidth/codec/v0"
@@ -129,6 +130,7 @@ PAYLOAD_DOMAIN = b"verity/remote-bandwidth/payload/v0\0"
 APPEND_DOMAIN = b"verity/remote-bandwidth/append/v0\0"
 APPENDS_DOMAIN = b"verity/remote-bandwidth/appends/v0\0"
 CHAINED_DOMAIN = b"verity/remote-bandwidth/chained/v0\0"
+REKEY_DOMAIN = b"verity/remote-bandwidth/rekey/v0\0"
 REGISTRATION_DOMAIN = b"verity/remote-bandwidth/registration/v0\0"
 TILE_DOMAIN = b"verity/remote-bandwidth/stub-tile/v0\0"
 PAYLOAD_SCHEMA = receipts.SCHEMA
@@ -150,7 +152,7 @@ of the audit's error of 2^-100.  SPOT's `WINDOW_DELTA` is another constant, and 
 (`p2_parties.DELTA`)."""
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
-            "receipt-path", "codec", "payload-path", "tile", "receipt")
+            "receipt-path", "codec", "payload-path", "tile", "receipt", "probation", "origin-path", "origin")
 RECEIPT_LIMIT = 1 << 64
 """A window's receipts, its passes' lengths summed, stay below this: `AuditRun.receive` rejects with `plan` a pass that
 would take them to it, so each sample's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at
@@ -249,10 +251,25 @@ class Params:
     parameters, so before the session's first coin: the schedule check refuses a schedule over it, and the ledger
     credits it as the layout's steering (`GammaTerms.steering`, the `a` of `SteeredLayout`) at every coin alike.  None
     (the default) commits none, and the session credits no appended block (`AuditRun.scheduled` refuses)."""
+    refresh: bool = False
+    """Refresh (off by default): every credited key is fresh, a registered block's too, so no plan of window L or later
+    holds a registered block, and a plan holds an appended block only once its payload is a period old (`probation`).
+    Appends fill the slots of a public schedule (`schedule`, `rota.Schedule`), fresh or re-keys of the registration's
+    or a fresh slot's payloads (`AuditRun.append`'s `origin` and `slot`).  Off, the session is as it was, byte for
+    byte."""
+    fresh_slots: int = 0
+    """F, with refresh, the fresh slots each window has (`rota.Schedule`; a deployment's default is `FRESH_SLOTS`);
+    0 and unused without."""
 
     def __post_init__(self) -> None:
         if type(self.deferred) is not bool:
             raise ValueError("deferred is a bool")
+        if type(self.refresh) is not bool:
+            raise ValueError("refresh is a bool")
+        if type(self.fresh_slots) is not int or self.fresh_slots < 0 or (self.fresh_slots and not self.refresh):
+            raise ValueError("fresh_slots is a nonnegative integer, and a parameter of a session with refresh")
+        if self.refresh and type(self.codec) is P2Codec:
+            raise ValueError("a P2 store appends nothing, so it has no refresh")
         if self.schedule_cap is not None and (type(self.schedule_cap) is not int or self.schedule_cap < 0):
             raise ValueError("a schedule's cap is a nonnegative integer of bits, or None for none")
         if self.pace is not None and (type(self.pace) is not Pace or self.windows < 2):
@@ -282,6 +299,11 @@ class Params:
         receipts.sketch_rows(self.receipt, self.rows)
         if type(self.groups_per_coin) is not int or self.groups_per_coin < 1:
             raise ValueError("groups_per_coin is a positive integer")
+
+    @property
+    def schedule(self) -> Schedule | None:
+        """With refresh, the session's slots (`rota.Schedule` of N, L, W and F); None without."""
+        return Schedule(self.blocks, self.lifetime, self.windows, self.fresh_slots) if self.refresh else None
 
     @property
     def coins(self) -> int:
@@ -358,6 +380,23 @@ def append_head(head: bytes | None, first: int, count: int, root: bytes) -> byte
         raise ValueError(f"an append's root and the chain's head are {DIGEST_BYTES} bytes")
     return hashlib.sha512(APPENDS_DOMAIN + (head or bytes(DIGEST_BYTES)) + first.to_bytes(8, "big")
                           + count.to_bytes(8, "big") + root).digest()
+
+
+def rekey_root(registration: bytes, first: int, count: int, origin: Origin) -> bytes:
+    """What a re-key append sends as its root, having no payload tree of its own: SHA512(REKEY_DOMAIN ‖ registration
+    digest ‖ u64be first ‖ u64be count ‖ origin), origin `u8 0 ‖ u64be a` for ("registered", a) or `u8 1 ‖ u64be k`
+    for ("append", k) (`Poub.rekeyRoot`)."""
+    tail = (b"\0" if origin[0] == "registered" else b"\1") + origin[1].to_bytes(8, "big")
+    return hashlib.sha512(REKEY_DOMAIN + registration + first.to_bytes(8, "big") + count.to_bytes(8, "big")
+                          + tail).digest()
+
+
+def _origin(origin: object) -> Origin | None:
+    """`origin` if it is one in form, else None."""
+    if (type(origin) is tuple and len(origin) == 2 and origin[0] in ("registered", "append") and type(origin[1]) is int
+            and 0 <= origin[1] < 1 << 64):
+        return origin
+    return None
 
 
 def chained(previous: bytes, head: bytes | None) -> bytes:
@@ -481,7 +520,9 @@ class Opening:
     receipts, salt and path to pass i's root, the payload's salt and path to the payload root (to its append's root,
     for a block appended after the seed), PoUW's evidence for `z_(i,j)` (empty unless the registration binds z), and
     the payload's digest `d_j` that an appended block's bound key is derived from, with its append's coin, which the
-    verifier holds (empty under the seed's key)."""
+    verifier holds (empty under the seed's key).  A block of a re-key append (`Params.refresh`) has no payload tree of
+    its own: its payload salt and path are its origin's leaf's, at store index `origin_position` under the origin's
+    root (None for every other block)."""
 
     pass_index: int
     position: int
@@ -493,6 +534,7 @@ class Opening:
     payload_path: tuple[bytes, ...]
     tile: bytes
     digest: bytes = b""
+    origin_position: int | None = None
 
     @property
     def size(self) -> int:
@@ -500,14 +542,15 @@ class Opening:
         follows from j)."""
         return (4 + 8 + len(self.block) + len(self.leaf) + len(self.leaf_salt) + len(self.payload_salt)
                 + DIGEST_BYTES * (len(self.receipt_path) + len(self.payload_path)) + len(self.tile) + len(self.digest)
-                + 4 * 3)
+                + 4 * 3 + (0 if self.origin_position is None else 8))
 
 
 @dataclass(frozen=True)
 class PositionSample:
     """What the verifier knows of one sample (`AuditRun.drawn`): window t, pass i at step s, position p, block j =
     plan_i[p], the pass's seed, plan and root, and the commitment block j's payload is a leaf of: the registration's
-    payload tree (``coin`` None) or its append's, under the append's coin."""
+    payload tree (``coin`` None) or its append's, under the append's coin.  For a block of a re-key append the
+    commitment is its origin's, at store index `origin` (None for every other block), and the coin the re-key's."""
 
     window: int
     index: int
@@ -520,6 +563,7 @@ class PositionSample:
     domain: CommitmentDomain
     commitment: Commitment
     coin: bytes | None
+    origin: int | None = None
 
     @property
     def leaf(self) -> int:
@@ -557,7 +601,9 @@ class WindowRecord:
     joined a window above `window` − L, or the store's extent at that root if none did.  `stale` is a value: the
     appends' counts it sums follow the workload, so the verifier keeps it in its own record and never publishes it
     (`Record.public` has no bound), and the memory-map unit takes it inside its proof, recomputing it from the
-    committed appends.  All three are empty in a record no session made, such as `timing.stated`'s model."""
+    committed appends.  All three are empty in a record no session made, such as `timing.stated`'s model.
+    `probation`, a refresh session's only (`Params.refresh`, empty otherwise), is each pass's appended blocks, not
+    released, whose payload joined fewer than L windows before: held, and in no plan."""
 
     window: int
     lengths: tuple[int, ...]
@@ -570,8 +616,12 @@ class WindowRecord:
     heads: tuple[bytes | None, ...] = ()
     stale: tuple[int, ...] = ()
     arrived_ns: tuple[int, ...] = ()
+    probation: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
+        if self.probation != () and (
+                len(self.probation) != len(self.lengths) or any(type(a) is not int or a < 0 for a in self.probation)):
+            raise ValueError("a window's probation is each pass's, a count of blocks")
         if self.arrived_ns != () and (
                 len(self.arrived_ns) != len(self.lengths) or any(type(a) is not int for a in self.arrived_ns)):
             raise ValueError("a window's arrivals are each pass's root's, an integer time each")
@@ -613,7 +663,8 @@ class WindowRecord:
         return self.deadline_ns - self.released_ns
 
     def to_json(self) -> dict:
-        return {"deadline_ns": self.deadline_ns, "heads": [None if h is None else h.hex() for h in self.heads],
+        refresh = {"probation": list(self.probation)} if self.probation else {}
+        return refresh | {"deadline_ns": self.deadline_ns, "heads": [None if h is None else h.hex() for h in self.heads],
                 "lengths": list(self.lengths), "opened_ns": self.opened_ns, "post_seed": list(self.post_seed),
                 "profile": self.profile.to_json(), "released_ns": self.released_ns, "span_ns": self.span_ns,
                 "stale": list(self.stale), "steps": list(self.steps), "window": self.window}
@@ -667,6 +718,9 @@ class Record:
     pace: Pace | None = None
     groups_per_coin: int = 1
     samples: int | None = None
+    refresh: bool = False
+    """Whether the session refreshed (`Params.refresh`): its appended blocks are credited on the schedule check alone,
+    with no carrier (`ledger`)."""
 
     def __post_init__(self) -> None:
         if self.pace is not None and self.pace.in_flight == 1 and any(
@@ -712,8 +766,9 @@ class Record:
         `appends`.  No stale bound is here: `WindowRecord.stale[i]` is `blocks` plus the counts of the appends that
         joined window t − `lifetime` or before, counts that follow the workload, so it is a value, which the memory-map
         unit recomputes inside its proof from the committed appends and the verifier never publishes.  It names
-        `groups_per_coin` only when a coin samples over more than one window."""
-        shared = {} if self.groups_per_coin == 1 else {"groups_per_coin": self.groups_per_coin}
+        `groups_per_coin` only when a coin samples over more than one window, and `refresh` only when it is on."""
+        shared = ({} if self.groups_per_coin == 1 else {"groups_per_coin": self.groups_per_coin}) | (
+            {"refresh": True} if self.refresh else {})
         return shared | {"appended": self.appended, "appends": None if self.appends is None else self.appends.hex(),
                 "bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks,
                 "codec": self.codec.name, "codec_params": self.codec.to_json(), "coins": self.coins.hex(),
@@ -744,6 +799,7 @@ class _Window:
     heads: list[bytes | None] = field(default_factory=list)
     stale: list[int] = field(default_factory=list)
     arrived: list[int] = field(default_factory=list)
+    probation: list[int] = field(default_factory=list)
     boundary_ns: int | None = None
     final: bool = False
     draws: tuple[tuple[int, int], ...] | None = None
@@ -766,6 +822,15 @@ def _hits(spans: list[tuple[int, int]], first: int, count: int) -> bool:
     """Whether merged `spans` hold a block of `first … first + count − 1`."""
     r = bisect.bisect_right(spans, (first, math.inf))
     return (r > 0 and spans[r - 1][1] > first) or (r < len(spans) and spans[r][0] < first + count)
+
+
+def _covered(spans: list[tuple[int, int]], first: int, count: int) -> int:
+    """How many blocks of `first … first + count − 1` merged `spans` hold."""
+    out, r = 0, max(0, bisect.bisect_right(spans, (first, math.inf)) - 1)
+    while r < len(spans) and spans[r][0] < first + count:
+        out += max(0, min(spans[r][1], first + count) - max(spans[r][0], first))
+        r += 1
+    return out
 
 
 def _within(spans: list[tuple[int, int]], first: int, count: int) -> bool:
@@ -823,6 +888,10 @@ class AuditRun:
         self._roots: set[bytes] = set()
         self._head: bytes | None = None
         self._joined: list[int] = []
+        self._origins: list[Origin | None] = []
+        self._slots: list[int] = []
+        self._slotted: dict[int, int] = {}
+        self._schedule = params.schedule
         self._gone: list[tuple[int, int]] = []
         self._planned: list[tuple[int, int]] = []
         self._plan = Plan.whole(registration.blocks)
@@ -945,7 +1014,8 @@ class AuditRun:
     def _one_in_flight(self) -> bool:
         return self.params.pace is not None and self.params.pace.in_flight == 1
 
-    def append(self, root: bytes, count: int) -> tuple[int, bytes] | Verdict:
+    def append(self, root: bytes, count: int, origin: Origin | None = None,
+               slot: int | None = None) -> tuple[int, bytes] | Verdict:
         """The root of an append's payload tree (`append_tree`), `count` blocks written after the codec seed: they take
         the store's next fresh indices, from the first returned, and a plan received after this may hold them, until
         the lifetime cap: they join the window of the next root received, and no plan of a window `Params.lifetime` or
@@ -955,19 +1025,41 @@ class AuditRun:
         if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
         sent before (a retry never resamples), the last window's roots are final, so no root can follow it, or the session's
         append coins are all released (or it reserved none: `coins.families`).  Over a P2 store, always `append`: the
-        store is fixed at PoUS's setup."""
+        store is fixed at PoUS's setup.
+
+        Under refresh (`Params.refresh`) every append names its `slot` of the session's schedule (`Params.schedule`),
+        above the last append's, and holds what that slot names: a fresh append of at most `REKEY_MAX` blocks
+        (`origin` None), the re-key of the slot's whole registered class run (`("registered", lo)`), or the whole
+        re-key of the fresh append in slot k (`("append", k)`, an empty slot k having none); else `origin`.  A slot
+        no append names is empty.  A re-key re-encodes its origin's payloads under its own coin and has no payload tree
+        of its own: its root is `rekey_root`, and its payloads are leaves of its origin's root.  An origin or a slot
+        with refresh off, an origin not in form, or a re-key's root not its `rekey_root`, is `append`
+        (`Session.append`).
+
+        The coin leaves only here, after its own append's root has been received and checked, so no coin is ever
+        revealed before its append is committed."""
         self._live()
         if self._p2:
             return self._fail(self.filling, "append")
+        o = None if origin is None else _origin(origin)
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
-                or self.extent + count > self.params.codec.max_blocks):
+                or self.extent + count > self.params.codec.max_blocks
+                or (not self.params.refresh and (origin is not None or slot is not None))
+                or (origin is not None and (o is None or root != rekey_root(self.registration.digest, self.extent,
+                                                                            count, o)))
+                or (slot is not None and (type(slot) is not int or slot < 0))):
             return self._fail(self.filling, "append")
+        if self.params.refresh and (slot is None or not self._slot_ok(slot, count, o)):
+            return self._fail(self.filling, "origin")
         if (root in self._roots or (len(self.windows) == self.params.windows and self.windows[-1].final)
                 or self.coins.appends == (self.coins.commitment.family(coins.APPEND) or 0)):
             return self._fail(self.filling, "coin")
-        first, coin = self.extent, coins.coin(self.coins.append(root))
+        first, coin = self.extent, self._append_coin(root, slot)
         self._appends.append((first, append_domain(self.registration.digest, first, count), Commitment(root, count),
                               coin))
+        self._origins.append(o)
+        self._slots.append(len(self._slots) if slot is None else slot)
+        self._slotted[self._slots[-1]] = len(self._appends) - 1
         self._roots.add(root)
         self._head = append_head(self._head, first, count, root)
         self.extent += count
@@ -999,9 +1091,64 @@ class AuditRun:
 
     def _stale_below(self, t: int) -> int:
         """The store index below which every appended block joined a window `Params.lifetime` or more before `t`:
-        appends join windows in index order, so the stale ones are a prefix of them."""
-        k = bisect.bisect_right(self._joined, t - self.params.lifetime)
+        appends join windows in index order, so the stale ones are a prefix of them; with refresh, the window each
+        append's slot joins (`_slot_window`), which `receive` holds it to (`State.staleBelow`)."""
+        if self.params.refresh:
+            k = sum(1 for _ in itertools.takewhile(
+                lambda s: self._slot_window(s, t) <= t - self.params.lifetime, self._slots))
+        else:
+            k = bisect.bisect_right(self._joined, t - self.params.lifetime)
         return self._appends[k][0] if k < len(self._appends) else self.extent
+
+    def _append_coin(self, root: bytes, slot: int | None) -> bytes:
+        """The coin `c_a` of the append whose root is `root`, in `slot`: the session's next append coin, in the order
+        the appends are received, so an empty slot takes none."""
+        return coins.coin(self.coins.append(root))
+
+    def _slot_window(self, slot: int, default: int | None = None) -> int | None:
+        """The window slot `slot` of the schedule joins, used or empty, `default` past it (`State.slotWindow`)."""
+        w = self._schedule.window_of(slot)
+        return default if w is None else w
+
+    def _slot_ok(self, slot: int, count: int, origin: Origin | None) -> bool:
+        """`State.slotOk`: the slot is above the last append's and in the schedule, and the append is what it names: a
+        fresh append of at most `REKEY_MAX` blocks, the re-key of the whole class run, or the whole re-key of the fresh
+        append in slot k (an empty slot k has none to re-key)."""
+        if self._slots and self._slots[-1] >= slot:
+            return False
+        at = self._schedule.slot_at(slot)
+        kind = None if at is None else at[1]
+        if kind is None:
+            return False
+        if kind[0] == "fresh":
+            return origin is None and count <= REKEY_MAX
+        if kind[0] == "registered":
+            return origin == ("registered", kind[1]) and count == kind[2]
+        n = self._slotted.get(kind[1])
+        return origin == ("append", kind[1]) and n is not None and self._appends[n][2].count == count
+
+    def _born(self, n: int) -> int | None:
+        """With refresh, the window append n's payloads were first committed in: the window of the slot of the fresh
+        append holding them (its own, or a re-key's origin k); None for a re-key of registered blocks (`State.born`)."""
+        o = self._origins[n]
+        if o is None:
+            return self._slot_window(self._slots[n])
+        return None if o[0] == "registered" else self._slot_window(o[1])
+
+    def _seasoning(self, t: int) -> list[int]:
+        """The appends whose payloads joined fewer than L windows before t: no plan of t holds their blocks."""
+        L = self.params.lifetime
+        return [n for n in range(len(self._appends)) if (b := self._born(n)) is not None and b + L > t]
+
+    def _probation(self, t: int, runs: Sequence[tuple[int, int]]) -> tuple[bool, int]:
+        """Whether `runs` hold a block of an append in probation at t, and the blocks in probation not released."""
+        held, unreleased = False, 0
+        spans = _merged([(f, f + c) for f, c in runs])
+        for n in self._seasoning(t):
+            first, count = self._appends[n][0], self._appends[n][2].count
+            held = held or _hits(spans, first, count)
+            unreleased += count - _covered(self._gone, first, count)
+        return held, unreleased
 
     def receive(self, t: int, i: int, root: bytes, runs: Sequence[tuple[int, int]] | None = None, *,
                 change: tuple[Sequence[tuple[int, int]], Sequence[tuple[int, int]]] | None = None,
@@ -1011,7 +1158,10 @@ class AuditRun:
         the blocks (added, removed) from the session's previous pass's plan (`Plan.changed`; before its first pass, the
         registered store).  A plan is over the store's blocks so far, registered and appended, holds none released,
         and keeps its window's receipts below `RECEIPT_LIMIT`; its rejection, `lifetime`, if it holds an appended block
-        that joined a window `Params.lifetime` or more before `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
+        that joined a window `Params.lifetime` or more before `t`.  Under refresh (`Params.refresh`) a root first
+        fixes the window of the appends received before it, `origin` if one's slot is not of that window; then
+        `lifetime` also if the plan holds a registered block at t ≥ L, and `probation` if it holds a block of an
+        append whose payload was born fewer than L windows before t (`_born`).  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
         is to hold every complete block the circuit reads at it, filler beside them allowed (`PlanMatches`), which the
         plan's proof block checks against the prover's memory map (`PROTOCOL.md` §8); its rejection, `step`, if it is
         missing or not above.  A paced session's window holds at
@@ -1053,9 +1203,18 @@ class AuditRun:
             return self._fail(t, "plan")
         if sum(p.length for p in self.windows[t].plans) + plan.length >= RECEIPT_LIMIT:
             return self._fail(t, "plan")
-        self._joined.extend([t] * (len(self._appends) - len(self._joined)))
+        joining = range(len(self._joined), len(self._appends))
+        self._joined.extend([t] * len(joining))
+        if self.params.refresh and any(self._slot_window(self._slots[n]) != t for n in joining):
+            return self._fail(t, "origin")
         if (below := self._stale_below(t)) > N and any(f < below and f + c > N for f, c in plan.runs):
             return self._fail(t, "lifetime")
+        if self.params.refresh:
+            if t >= self.params.lifetime and any(f < N for f, _ in plan.runs):
+                return self._fail(t, "lifetime")
+            held, probation = self._probation(t, plan.runs)
+            if held:
+                return self._fail(t, "probation")
         if self._one_in_flight and self.windows[t].boundary_ns is not None:
             return self._fail(t, "order")
         if extent > N:
@@ -1069,6 +1228,8 @@ class AuditRun:
         self.windows[t].heads.append(self._head)
         self.windows[t].stale.append(below)
         self.windows[t].arrived.append(now)
+        if self.params.refresh:
+            self.windows[t].probation.append(probation)
         self._plan, self._step, self._latest = plan, step, root
         return None
 
@@ -1172,23 +1333,21 @@ class AuditRun:
         j = plan.block(p)
         if type(o.digest) is not bytes or len(o.digest) != (0 if j < N else DIGEST_BYTES):
             return "malformed"
+        domain, commitment, coin, origin = self._committed(j)
+        if (o.origin_position is not None and type(o.origin_position) is not int) or o.origin_position != origin:
+            return "malformed"
         seed = receipts.seed(self.windows[t].challenge, i, self._previous(t, i))
         y = receipts.leaf_receipt(o.leaf, p, plan.length)
         if y is None:
             return "malformed"
         if not receipts.verify_leaf(seed, plan, self.windows[t].roots[i], p, o.leaf, o.leaf_salt, o.receipt_path):
             return "receipt-path"
-        if j < N:
-            payload = codec.decode(o.block, j, key)
-            domain, commitment = self._payload_domain, Commitment(self.registration.payload_root, N)
-        else:
-            _, domain, commitment, coin = self._appends[bisect.bisect_right(self._appends, j, key=lambda a: a[0]) - 1]
-            payload = codec.decode(o.block, j, key, o.digest, coin)
+        payload = codec.decode(o.block, j, key) if j < N else codec.decode(o.block, j, key, o.digest, coin)
         if payload is None:
             return "codec"
-        opening = MerkleOpening(j, receipts.hidden(payload, o.payload_salt), o.payload_path)
+        opening = MerkleOpening(j if origin is None else origin, receipts.hidden(payload, o.payload_salt), o.payload_path)
         if not verify_opening(domain, commitment, opening, PAYLOAD_SCHEMA, LIMITS):
-            return "payload-path"
+            return "payload-path" if origin is None else "origin-path"
         z = None
         if self.tiles is not None:
             z = self.tiles.recompute(seed, j, o.tile)
@@ -1209,17 +1368,30 @@ class AuditRun:
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None:
             raise SessionError(f"window {t} has no draws")
-        N, out = self.params.blocks, []
+        out = []
         for i, p in w.draws:
             plan = w.plans[i]
             j = plan.block(p)
-            if j < N:
-                domain, commitment, coin = self._payload_domain, Commitment(self.registration.payload_root, N), None
-            else:
-                _f, domain, commitment, coin = self._appends[bisect.bisect_right(self._appends, j, key=lambda a: a[0]) - 1]
+            domain, commitment, coin, origin = self._committed(j)
             out.append(PositionSample(t, i, p, j, w.steps[i], receipts.seed(w.challenge, i, self._previous(t, i)), plan,
-                                      w.roots[i], domain, commitment, coin))
+                                      w.roots[i], domain, commitment, coin, origin))
         return tuple(out)
+
+    def _committed(self, j: int) -> tuple[CommitmentDomain, Commitment, bytes | None, int | None]:
+        """Block j's payload's commitment, its append's coin (None registered), and for a block of a re-key its
+        origin's store index, its payload a leaf of the origin's commitment there (None otherwise)."""
+        N = self.params.blocks
+        if j < N:
+            return self._payload_domain, Commitment(self.registration.payload_root, N), None, None
+        n = bisect.bisect_right(self._appends, j, key=lambda a: a[0]) - 1
+        first, domain, commitment, coin = self._appends[n]
+        o = self._origins[n]
+        if o is None:
+            return domain, commitment, coin, None
+        if o[0] == "registered":
+            return self._payload_domain, Commitment(self.registration.payload_root, N), coin, o[1] + j - first
+        k_first, k_domain, k_commitment, _ = self._appends[self._slotted[o[1]]]
+        return k_domain, k_commitment, coin, k_first + j - first
 
     def decide(self, t: int, failures: Sequence[str | None]) -> Verdict:
         """Window t's verdict from check 3's outcome on each of its samples (`drawn`), in the order sampled, in place of
@@ -1286,12 +1458,13 @@ class AuditRun:
             lengths = tuple(plan.length for plan in w.plans)
             profile = window_profile(lengths, len(w.draws), self.params.delta)
             out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post),
-                                    tuple(w.steps), tuple(w.heads), tuple(w.stale), tuple(w.arrived)))
+                                    tuple(w.steps), tuple(w.heads), tuple(w.stale), tuple(w.arrived),
+                                    tuple(w.probation)))
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, self.block_bytes, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
                       self.params.lifetime, self._head, self.params.pace, self.params.groups_per_coin,
-                      self.params.samples)
+                      self.params.samples, refresh=self.params.refresh)
 
 
 REGISTRY_SCHEMA = "verity/remote-bandwidth/registry/v0"
@@ -1614,6 +1787,9 @@ class GammaTerms(_Terms):
     error_horizon: float
     linked: bool = False
     steering: int | None = None
+    probation: float | None = None
+    """A refresh record's only (`Record.refresh`, None otherwise), beside γ and in none of its terms: the most any pass
+    held in probation, uncredited, as a share of what it held, `max probation_i / (probation_i + L_i)` over every pass."""
 
     @property
     def worst(self) -> WindowLedger:
@@ -1625,7 +1801,8 @@ class GammaTerms(_Terms):
 
     def to_json(self) -> dict:
         w, h = self.worst, self.worst_horizon
-        return {**self._json(), "linked": self.linked, "steering_bits": self.steering,
+        refresh = {} if self.probation is None else {"probation": self.probation}
+        return refresh | {**self._json(), "linked": self.linked, "steering_bits": self.steering,
                 "windows": [x.to_json() for x in self.windows],
                 "error": {"windows": self.error, "horizon": self.error_horizon},
                 "worst": {"gamma": w.gamma, "horizon": {"gamma": h.gamma_horizon, "window": h.window},
@@ -1768,7 +1945,10 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     before its coins, so the layout the appended blocks are read at is the verifier's function of the schedule, steered
     through at most the cap's bits on every coin (`GammaTerms.steering`, the cap; `SteeredLayout` at cap + 1).
     Without it, or with another session's, crediting them is refused.  Crediting them charges μ_carrier, each pass the
-    least of the verdict's carrier bytes and its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
+    least of the verdict's carrier bytes and its post-seed bytes.  A refresh record (`Record.refresh`) credits them
+    on its schedule check alone, with no verdict (one passed is refused) and μ_carrier 0: every key it credits is
+    fresh and every payload a period old (`AuditRun.receive`), and its probation share is reported beside γ
+    (`GammaTerms.probation`).  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
     On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold, its
     memory-map unit making the record's appends at the passes' heads, `mapped`), a pass's credit is the bits the
     circuit reads from complete blocks at its step, less a block for each planned block it credits no receipt of
@@ -1778,6 +1958,11 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     The link's units are sampled: the session's credit is 1 − ε of that sum, and a window's is its own less ε of the
     session's, since the unproved share may sit in any one window; the link's δ is added to `error` and
     `error_horizon`."""
+    if record.refresh and credit_post_seed is not None:
+        raise ValueError("a refresh record credits its post-seed receipts on its schedule check alone, with no "
+                         "carrier: pass no stacking verdict")
+    if record.refresh and schedule is not None and (type(schedule) is not Scheduled or not schedule.of(record)):
+        raise ValueError("appended blocks are credited only on this session's schedule check (`AuditRun.scheduled`)")
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
     if credit_post_seed is not None and (type(schedule) is not Scheduled or not schedule.of(record)):
@@ -1820,10 +2005,10 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
                          "capacity is understated")
     wrong_receipts = [math.ceil(wrong(w.profile)) for w in record.windows]
     named = {k: named_bits(k, queries_log2) + slack_log2 for k in {k for w in record.windows for k in w.lengths}}
-    credit = credit_post_seed is not None
+    credit = credit_post_seed is not None or (record.refresh and schedule is not None)
 
     def carried(w: WindowRecord) -> float:
-        if not credit or not any(w.post_seed):
+        if credit_post_seed is None or not any(w.post_seed):
             return 0.0
         c = credit_post_seed.carrier_bytes(w.receipts * b)
         if type(c) not in (int, float) or not 0 <= c < math.inf:
@@ -1854,12 +2039,19 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
                       host=host, link=link, carrier=sum(carriers) / whole, horizon=horizon * b / whole, floor=floor,
                       windows=tuple(windows), error=sum(w.profile.delta for w in record.windows) + beside,
                       error_horizon=record.windows[0].profile.delta + beside, linked=requirement is not None,
-                      steering=schedule.cap if credit else None)
+                      steering=schedule.cap if credit else None, probation=probation_share(record))
 
 
-__all__ = ["AuditRun", "Closed", "DELTA", "LEDGER_SOURCES", "NODE_BYTES", "NoiseTiles", "Opening",
-           "PAYLOAD_SCHEMA", "PROTOCOL_ID", "Pace", "Params", "REGISTRY_SCHEMA", "Rebuild", "Record",
+def probation_share(record: Record) -> float | None:
+    """A refresh record's probation share (`GammaTerms.probation`), None for any other record."""
+    if not record.refresh:
+        return None
+    return max((a / (a + n) for w in record.windows for a, n in zip(w.probation, w.lengths) if a + n), default=0.0)
+
+
+__all__ = ["AuditRun", "Closed", "DELTA", "FRESH_SLOTS", "LEDGER_SOURCES", "NODE_BYTES", "NoiseTiles", "Opening",
+           "Origin", "PAYLOAD_SCHEMA", "PROTOCOL_ID", "Pace", "Params", "REGISTRY_SCHEMA", "REKEY_MAX", "Rebuild", "Record",
            "Registration", "Registry", "RegistryError", "SLACK_LOG2", "STEP_LIMIT", "Scheduled", "SessionError",
            "Tiles", "UNENDED", "Verdict", "WINDOW_NS", "append_domain", "append_head", "append_tree",
            "chained", "floors", "ledger", "lifetime_windows", "linked_bits", "payload_domain", "payload_tree", "pooled",
-           "register"]
+           "probation_share", "register", "rekey_root"]

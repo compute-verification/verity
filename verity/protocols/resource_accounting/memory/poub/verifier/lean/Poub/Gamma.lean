@@ -7,11 +7,14 @@ public import Poub.Line
 
 `audit.ledger`'s terms for an accepted session's record against a capacity R, in exact rationals, as
 `Verifier.ledgers` declares them (`audit.GammaTerms`): each a fraction of R over the session's span, and over each
-window's own span `[b_(t−1), D_t]` (`WindowGamma`). The record credits its registered blocks only, and charges no host, link
-or carrier term: no other form is computed here.
+window's own span `[b_(t−1), D_t]` (`WindowGamma`). The record credits its registered blocks, and a refresh record
+(`Session.Summary.refresh`) on its session's schedule check (`scheduled`, the check's cap, `steering_bits`) its appended
+blocks too, with no stacking verdict and no carrier: every key it credits is fresh and every payload a period old
+(`Session.receive`). It charges no host, link or carrier term: no other form is computed here. A refresh record's
+probation share, `max probation_i / (probation_i + L_i)` over every pass, is reported beside γ, in none of its terms.
 
 * timing, `1 − credited/whole`: each pass's credited bytes are its registered receipts' (its length less its post-seed
-  reads) times the block's bytes, and `whole` is `R·span/10^9`;
+  reads; its whole length when appended blocks are credited) times the block's bytes, and `whole` is `R·span/10^9`;
 * sample, the window's incorrect receipts at δ (`incorrectReceipts`, `Stratified.count_bound` of one uniform sample of its
   `drawn` receipts of its U) times the block's bytes;
 * chip, S_chip a pass; counting, AuditRO's bits a pass, `namedBits k + SLACK_LOG2` (`audit.named_bits`);
@@ -201,6 +204,10 @@ structure Gamma where
   windows : Array WindowGamma
   error : Rat
   errorPooled : Rat
+  /-- The schedule check's cap, when appended blocks are credited on it. -/
+  steering : Option Nat := none
+  /-- A refresh record's probation share; `none` for any other record. -/
+  probation : Option Rat := none
 
 /-- The first window of the largest γ (`by`), the windows nonempty. -/
 def worst (ws : Array WindowGamma) (by_ : Terms → Rat) : WindowGamma :=
@@ -211,11 +218,22 @@ def encodeSquarings (c : Codec.Codec) : Nat := c.field.blockWords * c.rounds * N
 
 def ns : Rat := 1000000000
 
+/-- `audit.probation_share`: the most any pass of a refresh record held in probation as a share of what it held and
+read, 0 with none. -/
+def probationShare (sm : Session.Summary) : Rat :=
+  sm.windows.foldl (fun m w => (w.probation.zip w.lengths).foldl (fun m (a, n) =>
+    if a + n = 0 then m else max m ((a : Rat) / ((a + n : Nat) : Rat))) m) 0
+
 /-- γ's terms of record `sm` of registration `reg` (its digest `digest`), sampled `g` windows a coin, at δ, blocks of
 `blockBytes`, S_chip `chipBytes`, against capacity R (bytes a second) and a squaring ceiling at the codec's width
-(squarings a second); or why there are none, word for word `audit.ledger`'s. -/
+(squarings a second), and with the cap of the session's schedule check if it passed (`scheduled`); or why there are
+none, word for word `ledger.gamma`'s. -/
 def gamma (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : Nat) (δ : Rat)
-    (blockBytes chipBytes : Nat) (capacity squaringsPerS : Rat) : Except String Gamma := do
+    (blockBytes chipBytes : Nat) (capacity squaringsPerS : Rat) (scheduled : Option Nat := none) :
+    Except String Gamma := do
+  if scheduled.isSome && !sm.refresh then
+    throw "only a refresh record credits appended blocks on its schedule check alone"
+  let credit := sm.refresh && scheduled.isSome
   if let some why := Line.unregistered reg digest sm then throw why
   if sm.windows.size = 0 then throw "a session has one or more windows"
   if g = 0 then throw "a sample covers one or more windows"
@@ -252,7 +270,7 @@ def gamma (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : 
     if wholeT < (readsT : Rat) then
       throw s!"window {t} certifies {readsT} bytes read, more than the capacity allows in its span: the capacity is understated"
     let e := incorrectReceipts us[t]! w.drawn δ
-    let cr := ((w.lengths.zip w.post).foldl (fun n (l, p) => n + (l - p)) 0) * b
+    let cr := ((w.lengths.zip w.post).foldl (fun n (l, p) => n + (if credit then l else l - p)) 0) * b
     let c := w.lengths.foldl (fun n k => n + bits k) 0
     let f := min 1 (pooled.floors[t / g]! * (groups[t / g]!.1 : Rat) / (us[t]! : Rat))
     out := out.push
@@ -270,6 +288,8 @@ def gamma (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : 
                  chip := ((passes * chipBytes : Nat) : Rat) / whole, counting := (counted : Rat) / 8 / whole,
                  rebuild, host := 0, link := 0, carrier := 0, pooled := pooled.wrong * (b : Rat) / whole,
                  floor := pooled.floor },
-      windows := out, error := (ws.size : Rat) * δ + beside, errorPooled := δ + beside }
+      windows := out, error := (ws.size : Rat) * δ + beside, errorPooled := δ + beside,
+      steering := if credit then scheduled else none,
+      probation := if sm.refresh then some (probationShare sm) else none }
 
 end Poub.Gamma

@@ -59,6 +59,9 @@
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
 # LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it (default: the
 # windows of WINDOW_MS in 30 s, or a paced session's groups, `audit.lifetime_windows`).
+# REFRESH sets refresh for the sessions (the verifier's --refresh, `audit.Params.refresh`): unset, off, and nothing
+# differs; 1, every session; one word a session, as 0,1 with PLAN=P,P, the same plan twice on one registration, first
+# under today's rule and then under refresh, which refresh_result.py writes side by side as one result.
 #
 # SERVE makes the prover vLLM serving under the audit, on one leased GPU in vLLM's venv (VLLM_PY, default the first
 # there of NODE_WORKSPACE/jobs/venv312/bin/python and NODE_WORKSPACE/venv312/bin/python, NODE_WORKSPACE default
@@ -318,7 +321,7 @@ if [ -n "${PACED:-}" ]; then
   FORM=(--paced "${PACE[@]}" ${PACE_PASS_MS:+--pace-pass-ms "$PACE_PASS_MS"} --jitter-ms "$JITTER_MS")
 fi
 VERIFY=(--port "$PORT" --out "$O" "${FORM[@]}" ${QUANTILE:+--quantile "$QUANTILE"}
-  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"})
+  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"} ${REFRESH:+--refresh "$REFRESH"})
 if [ "${SERVE:-}" = node ] && [ "$ROLE" = both ]; then
   lean_exe
   VERIFY+=(--lean-exe "$LEAN_EXE")
