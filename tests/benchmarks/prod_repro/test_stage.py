@@ -48,12 +48,12 @@ def test_a_capture_holding_what_a_price_reads_is_a_passed_capture_record_naming_
 
 def test_a_capture_missing_a_part_of_what_a_price_reads_fails_naming_each(run: Path):
     out = leased(job(run, None))
-    for f in (out / "prod-record.2" / "server").glob("step_trace.*"):
+    for f in (out / "prod-record.2" / "server").glob("steps.*"):
         f.unlink()
     assert G.main(["capture", str(out), "--model", "glm53", "--minify", "r20261117-110000-0001"]) == 1
     v = result(run)["validation"]
     assert v["status"] == "failed"
-    for gap in ("prod-record.1 kept no top-k counts", "prod-record.2 kept no step trace",
+    for gap in ("prod-record.1 kept no top-k counts", "prod-record.2 kept no public steps",
                 "the job measured no prod-trace over prod with an interval"):
         assert gap in v["detail"]
     assert G.capture_gaps(job(run / "b", COUNTS, [BELOW]), ours=("prod-record-bisect",)) == [
@@ -81,7 +81,7 @@ def test_a_capture_names_its_members_model_and_card_only_from_the_jobs_records(t
         {"card": "h200"}, ["glm53-standin is a stand-in: a capture serves the full model"])
     fields, gaps = G.member_parts(leased(out, card="NVIDIA A100", model="org/Other@1"), "glm53")
     assert fields == {} and "names the model 'org/Other@1', not glm53's" in gaps[0]
-    assert "have 'NVIDIA A100', the card nvidia-smi names here, in `driver`" in gaps[1]
+    assert "have 'NVIDIA A100', the name the device reports, in `driver`" in gaps[1]
     (out / G.GPUS).unlink()
     assert G.member_parts(out, "glm53")[1][1] == "gpus.csv names 0 kinds of card, not the one the job was leased"
 

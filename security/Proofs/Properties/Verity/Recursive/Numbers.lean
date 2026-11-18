@@ -199,7 +199,7 @@ theorem read_tags_of {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .o
   rw [if_pos hz', FlockSoundness.Discharge.ZkExec.zkTags_eq, hT, hc, hn]
 
 /-- Part `s`'s staged statement is read from its part's raw statement with the staged public file. -/
-theorem staged_ins {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {i : RecIns}
+theorem staged_ins {st : Stage} {x : Hash.Msg} {ms : List (Hash.Msg × Claims.Out)} {s : ℕ} {i : RecIns}
     (h : insO (staged st x ms s) = some i) :
     ∃ r p, readX x = some r ∧ r.w.parts[s]? = some p ∧ p.base.zk = true ∧
       FlockDeploy.Raw.ins { p.base with publicFile := st.pub x ms s } = .ok i.base := by
@@ -214,7 +214,7 @@ theorem staged_ins {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claim
   exact ⟨r, p, hr, hp, by simpa [partRaw] using hz, RecRaw.ins_base (toOption_eq_some h')⟩
 
 /-- **The staged statements at any two rounds are read alike**: the same tags, circuit file, tables and sample. -/
-theorem reads_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Msg × Claims.Out)} {s : ℕ} {i i' : RecIns}
+theorem reads_eq {st : Stage} {x : Hash.Msg} {ms ms' : List (Hash.Msg × Claims.Out)} {s : ℕ} {i i' : RecIns}
     (hi : insO (staged st x ms s) = some i) (hi' : insO (staged st x ms' s) = some i') :
     i.base.read.tags = i'.base.read.tags ∧ i.base.read.I.circuitFile = i'.base.read.I.circuitFile ∧
       i.base.read.I.tables = i'.base.read.I.tables ∧ i.base.read.draw = i'.base.read.draw := by
@@ -240,7 +240,7 @@ def nOf (r : XR) (s : ℕ) : Option Json → Option ℕ
   | none => ((RecVStar.statements r.shape).toOption.bind (·[s]?)).map (·.instances)
 
 /-- **A staged statement that sets up has one table**, from `setupHidden` at its circuit, with the unit count `nOf`. -/
-theorem side {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {i : RecIns}
+theorem side {st : Stage} {x : Hash.Msg} {ms : List (Hash.Msg × Claims.Out)} {s : ℕ} {i : RecIns}
     {spec : SessionSpec} {sts : Array Flock.Stmt} (h : setupO (staged st x ms s) = some (i, spec, sts)) :
     ∃ r t, readX x = some r ∧ spec = t.spec ∧ sts = #[t] ∧
       HmOut.parseCommit i.base.read.tags i.base.read.I.circuitFile i.base.read.I.tables = .ok t.c ∧
@@ -303,7 +303,7 @@ theorem rounds_one (zk : Bool) (spec : SessionSpec) (t : Flock.Stmt) :
     FlockDeploy.rounds zk spec #[t] = 2 * FlockDeploy.repRounds zk spec t := by
   simp [FlockDeploy.rounds]
 
-theorem numsOf_one {xO : Claims.Msg} {i : RecIns} {t : Flock.Stmt} (h : setupO xO = some (i, t.spec, #[t])) :
+theorem numsOf_one {xO : Hash.Msg} {i : RecIns} {t : Flock.Stmt} (h : setupO xO = some (i, t.spec, #[t])) :
     numsOf xO = numsT t := by
   have ht : tablesO xO = [(t.spec, t)] := by
     unfold tablesO
@@ -329,7 +329,7 @@ open RecDeploy Verity.Recursive.Numbers
 
 /-- **A staged part's numbers don't read its rounds** (C2): at any two inner rounds where part `s`'s staged statement
 sets up, its numbers agree. -/
-theorem numsOf_staged_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Msg × Claims.Out)} {s : ℕ}
+theorem numsOf_staged_eq {st : Stage} {x : Hash.Msg} {ms ms' : List (Hash.Msg × Claims.Out)} {s : ℕ}
     {o o' : RecIns × Flock.SessionSpec × Array Flock.Stmt}
     (h : setupO (staged st x ms s) = some o) (h' : setupO (staged st x ms' s) = some o') :
     numsOf (staged st x ms s) = numsOf (staged st x ms' s) := by
@@ -359,7 +359,7 @@ theorem numsOf_staged_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Ms
   · exact ew
 
 /-- **Part `s`'s numbers are `nums`'** at any inner rounds where its staged statement sets up. -/
-theorem numsOf_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
+theorem numsOf_staged {st : Stage} {x : Hash.Msg} {ms : List (Hash.Msg × Claims.Out)} {s : ℕ}
     {o : RecIns × Flock.SessionSpec × Array Flock.Stmt} (h : setupO (staged st x ms s) = some o) :
     numsOf (staged st x ms s) = nums st x s := by
   have hex : ∃ ms, (setupO (staged st x ms s)).isSome := ⟨ms, by simp [h]⟩
@@ -369,7 +369,7 @@ theorem numsOf_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Cl
   exact numsOf_staged_eq h ho'
 
 /-- **Part `s`'s V\* statement is the staged one** at any inner rounds where it sets up. -/
-theorem vstarAt_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
+theorem vstarAt_staged {st : Stage} {x : Hash.Msg} {ms : List (Hash.Msg × Claims.Out)} {s : ℕ}
     {o : RecIns × Flock.SessionSpec × Array Flock.Stmt} (h : setupO (staged st x ms s) = some o) :
     vstarAt st x ms s = staged st x ms s := by
   unfold vstarAt

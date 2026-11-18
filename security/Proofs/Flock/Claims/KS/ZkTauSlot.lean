@@ -418,7 +418,7 @@ the link coin and `zkPre + zkLig + 2` (`zkTau_dist`); the simulated strategy fol
 that count short of `DeadTZ` (`schedC_simAtJZ_dead` on `zkStreams`, as `zkPadsAlign`), so it reaches the `τ` node
 there (`slotTauZ_of_batch`), and `advTauSZ_le_forkC` gives the alignment, table `j`'s position in the session being
 `j` (`take_gamesZC_length`). -/
-theorem zkTauAlign (x : Claims.Msg) : ZkTauAlign x := by
+theorem zkTauAlign (x : Hash.Msg) : ZkTauAlign x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r u
   have hjS : j < sts.size := by rw [← zk_tables_length hset]; exact hj
   have ht : zkTbl sts j = j := by unfold zkTbl; exact ite_eq_left hjS
@@ -474,7 +474,7 @@ the link coin and `zkPre + zkLig + 2` (`zkTau_dist`); the simulated strategy fol
 that count short of `DeadTZ` (`schedC_simAtJZ_dead` on `zkStreams`, as `zkPadsAlign`), so it reaches the `τ` node
 there (`slotTauZ_of_batch`), and `advTauSZ_le_forkC` gives the alignment, table `j`'s position in the session being
 `j` (`take_gamesZC_length`). -/
-theorem zkTauAlign (x : Claims.Msg) : ZkTauAlign x :=
+theorem zkTauAlign (x : Hash.Msg) : ZkTauAlign x :=
   Gen.zkTauAlign (S := S₀) (x := x)
 
 namespace Gen
@@ -482,13 +482,13 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The masked simulator's fork bound at `τ` holds at every message.** -/
-theorem zkSimForkLeTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsTauZ i :=
+theorem zkSimForkLeTau (x : Hash.Msg) : ZkSimForkLeOn x fun _ i => IsTauZ i :=
   zkSimForkLeTauZ_of_align (zkTauAlign x)
 
 end Gen
 
 /-- **The masked simulator's fork bound at `τ` holds at every message.** -/
-theorem zkSimForkLeTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsTauZ i :=
+theorem zkSimForkLeTau (x : Hash.Msg) : ZkSimForkLeOn x fun _ i => IsTauZ i :=
   Gen.zkSimForkLeTau (S := S₀) (x := x)
 
 namespace Gen

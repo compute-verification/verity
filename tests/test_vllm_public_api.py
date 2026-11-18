@@ -268,7 +268,7 @@ PUBLIC = {
     "verity_vllm.commit.scheme": "I7: the Commit path's vllm-v1 commitment scheme: its leaves, folds and roots (pos_leaf, "
                                  "POS_LEAF_TAG), which benchmarks/commitments prices",
     "verity_vllm.commit.step_rows": "I7: the Commit's rows-sha512 scheme over a step's stream: its row and key sizes, domains, "
-                                    "levels and roots (ROW_BYTES, KEY_BYTES, tensor_root, keyed_tensor_root, run_program_digest), "
+                                    "levels and roots (ROW_BYTES, KEY_BYTES, fresh_tensor_salts, tensor_root, run_program_digest), "
                                     "which benchmarks/served_commit times and benchmarks/serve_tax and benchmarks/one_stage "
                                     "commit under",
     "verity_vllm.commit.store_dump": "I7: a GPU-tree committer's committed store on disk, and back as a CPU store that opens and "
@@ -305,9 +305,6 @@ PUBLIC = {
                                         "LinearSite), which benchmarks/pouw's Pearl-C arms build",
     "verity_vllm.protocols.linear.vllm_site": "I1: the linear sites of a vLLM model, each called through the exchange (discover, "
                                               "attach), which benchmarks/pouw's Pearl-C arms attach",
-    "verity_vllm.protocols.poub.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
-                                                     "stands in for the process memory-accounting registers as poub-session and "
-                                                     "benchmarks/poub_session serves under",
     "verity_vllm.query.manifest.format": "I7: the required-value manifest's format, the vocabulary every manifest producer and "
                                          "consumer shares (load_program), which benchmarks/prove_path reads",
 }
@@ -328,7 +325,6 @@ KNOWN = frozenset({
     "verity_vllm.compiler.served_statics",
     "verity_vllm.compiler.served_tie",
     # the served circuits (`verity_vllm.definitions`), which code outside the adapter imports
-    "verity_vllm.definitions.encoding",
     "verity_vllm.definitions.numerics._jit",
     "verity_vllm.definitions.numerics.cublas_gemm_rows",
     "verity_vllm.definitions.numerics.deepgemm_twins",
@@ -356,7 +352,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.boolean_fp8_moe",
     "verity_vllm.definitions.registry.boolean_int8",
     "verity_vllm.definitions.registry.boolean_io_shell",
-    "verity_vllm.definitions.registry.boolean_silu",
     "verity_vllm.definitions.registry.boolean_stop_rule",
     "verity_vllm.definitions.registry.cublas_bf16",
     "verity_vllm.definitions.registry.cuda_rmsnorm",
@@ -384,7 +379,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.ref_prims",
     "verity_vllm.definitions.registry.sampling",
     "verity_vllm.definitions.registry.sampling_boolean",
-    "verity_vllm.definitions.registry.sampling_rows",
     "verity_vllm.definitions.registry.sparse_mla",
     "verity_vllm.definitions.registry.sparse_mla_split",
     "verity_vllm.definitions.registry.stop_rule",
@@ -405,7 +399,6 @@ KNOWN = frozenset({
     "verity_vllm.engine.profiles.engine_classes",
     "verity_vllm.engine.served",
     "verity_vllm.engine.vllm_adapter",
-    "verity_vllm.observe.fold.patterns.pouw",
     "verity_vllm.pipeline.advice",
     "verity_vllm.pipeline.advice_windows",
     "verity_vllm.pipeline.build_instances",
@@ -453,8 +446,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.definitions.registry.hopper', '_BoundPrims'),
     ('verity_vllm.definitions.registry.lifted', '_LIFTED_COMPOSITES'),
     ('verity_vllm.definitions.registry.lifted', '_UNLIFTED_OF'),
-    ('verity_vllm.definitions.registry.prims', '_silu_f32_bits'),
-    ('verity_vllm.definitions.registry.sampling', '_f'),
     ('verity_vllm.pipeline.serving_rows', '_bind'),
     ('verity_vllm.pipeline.serving_rows', '_operand'),
     ('verity_vllm.pipeline.serving_rows', '_read_s8'),

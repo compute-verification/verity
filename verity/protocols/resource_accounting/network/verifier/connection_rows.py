@@ -167,8 +167,7 @@ from verity.protocols.resource_accounting.network.verifier.io_tie import parse_c
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, Released, NetworkAttesterParams, read_cell
 from verity.protocols.resource_accounting.network.verifier.network_attester_rows import OWNER, SALT_BYTES, WORD_BITS, bc
-from verity.protocols.proofs.spot.verifier.one_stage import produced
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 DOMAIN_TAG = "verity-network-certifier/connection-rows-domain/v1"
 HEAD_TAG = "verity-network-certifier/connection-rows/v1"
@@ -678,5 +677,5 @@ def port(head: Head, table: str, reads_from: int = 0) -> dict[str, Any]:
         raise ValueError(f"the head's table {table!r} has no row, so no proof block reads it: the execution phase "
                          f"released no request filed in its class")
     entry = {"leaves": e.rows, "words": e.row_bytes * 8 // WORD_BITS, "word_bits": WORD_BITS, "domain": e.domain.hex()}
-    return produced.port(value_name(head.link, table, head.window), entry, e.root.hex(), list(range(e.rows)), SCHEMA) | \
-        ({G.READS_FROM: int(reads_from)} if reads_from else {})
+    return RV.port(value_name(head.link, table, head.window), entry, e.root.hex(), list(range(e.rows)), SCHEMA) | \
+        ({RV.READS_FROM: int(reads_from)} if reads_from else {})

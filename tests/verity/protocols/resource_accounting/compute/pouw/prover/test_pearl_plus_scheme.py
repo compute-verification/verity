@@ -26,12 +26,37 @@ def test_found_by_name() -> None:
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
 
 
+def test_its_window_record_values_are_named_in_the_tables_it_declares() -> None:
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+
+    assert S.declared(PS.PEARL_PLUS, "tables") == PWR.tables() == ("pearl-a", "pearl-y", "pearl-b")
+    assert (PWR.a_value(2, 3), PWR.y_value(2, 3), PWR.b_value(5)) == ("pearl-a/2/3", "pearl-y/2/3", "pearl-b/5")
+
+
+def test_it_hands_the_model_a_committed_bf16_y_and_opens_its_salt_after_the_epoch_root() -> None:
+    assert (S.declared(PS.PEARL_PLUS, "output_format"), S.declared(PS.PEARL_PLUS, "y_committed")) == ("bf16", True)
+    assert S.declared(PS.PEARL_PLUS, "salt_open_root") is PSALT.epoch_open_root
+    assert PSALT.epoch_open_root(bytes(64), 3) != PSALT.epoch_open_root(bytes(64), 4)
+
+
+def test_its_useful_products_are_rowwise_scaled_e4m3_whatever_format_y_leaves_in() -> None:
+    """The forming casts each operand row to E4M3 under its own scale (`pearl_c`'s ``atom``), and the products chain on
+    the E4M3 atom into FP32; y is the unscaled sum, written as BF16."""
+    assert S.declared(PS.PEARL_PLUS, "product_family") == "fp8-e4m3-rowwise"
+    assert S.declared(PS.PEARL_PLUS, "output_format") == "bf16"
+
+
+def test_it_keeps_a_weight_derived_copy_for_the_serves_life() -> None:
+    """Its device run builds each registered weight's B buffers once, held to the committed root, and every call reads
+    them (`run_device`'s ``_weight_side`` and pipelines)."""
+    assert S.declared(PS.PEARL_PLUS, "keeps_weight_copy") is True
+
+
 def test_its_record_row_is_verified_compute_in_the_macs_its_verifier_credits() -> None:
     """The run verdict's ``credited`` (`Credit.lean`'s `creditAtAssumption`) is MACs, the unit its costs are in."""
     assert (S.declared(PS.PEARL_PLUS, "record"), S.declared(PS.PEARL_PLUS, "symbol")) == ("work", "V")
     assert S.declared(PS.PEARL_PLUS, "published") == (PS.PEARL_PLUS.unit, Fraction(1)) == ("MACs", Fraction(1))
-    with pytest.raises(LookupError, match="pearl-plus declares no channel_schemas: no Schema is declared for PearlSalt"):
-        S.declared(PS.PEARL_PLUS, "channel_schemas")
+    assert [s.type for s in S.declared(PS.PEARL_PLUS, "channel_schemas")] == ["PearlSalt"]
 
 
 def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
@@ -42,11 +67,13 @@ def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
 
 def test_bound_reads_its_term_at_the_parameters_given() -> None:
     names = {c.name: 0 for c in PS.PEARL_PLUS.charges}
+    assert S.unbounded(PS.PEARL_PLUS) is None
     with pytest.raises(ValueError, match=r"Pouw.PearlC.δPearlC is evaluated at \['q', 'N'\], and \['N'\] were not given"):
         S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names, {"q": 2**64}, epsilon=Fraction(0))
     got = S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names, {"q": 2**64, "N": 2**20}, epsilon=Fraction(1, 2**40))
     assert got.term == "Pouw.PearlC.δPearlC" and got.delta_scheme == Fraction(2**64 + 2**20, 2**128)
     assert got.epsilon == Fraction(1, 2**40)
+    assert got.premises == ("Verity.Vocab.PouwSound", "Pouw.PearlPlus.Setting.ChargeHolds")
     with pytest.raises(ValueError, match="charges are"):
         S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, {**names, "rebuilt": 0}, {"q": 1, "N": 1}, epsilon=Fraction(0))
     with pytest.raises(ValueError, match="the audit's error ε"):

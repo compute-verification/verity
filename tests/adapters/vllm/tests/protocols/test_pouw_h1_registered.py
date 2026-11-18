@@ -1,4 +1,4 @@
-"""`protocol_options.pouw_h1_registered` against core's `registered.Registered.commit`: over random rows of
+"""`protocol_options.pouw_h1_registered` against core's `registered_value.Registered.commit`: over random rows of
 16-bit words, one row to a few dozen, one word to a z/y record's 3072, under each domain binding, the salts are
 `audit.hm96_salt`'s, and the ``b || c`` strings, levels, entry, paths and statement are core's; a row read opens under
 `registered.verify_read`. A window's rows aren't kept unless asked, and a read of one is refused. A small H1 window served
@@ -13,6 +13,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 PROGRAM, WINDOW = "ab" * 64, "cd" * 64
 KEY = bytes(range(32))
@@ -27,7 +28,7 @@ def _core(program, value, words, key, nonce, keep_rows=False, row_salts=None, sc
     salts = ([hm96_salt(key, nonce, j) for j in range(n)] if row_salts is None
              else [row_salts[j] for j in range(n)] if isinstance(row_salts, NR.PublicSalts)
              else [row_salts[192 * j:192 * (j + 1)] for j in range(n)])
-    return G.Registered.commit(program, value, np.asarray(words).tolist(), salts, schema=schema, **binding)
+    return RV.Registered.commit(program, value, np.asarray(words).tolist(), salts, schema=schema, **binding)
 
 
 def test_salts_are_hm96_salts_across_a_chacha_pass():
@@ -50,7 +51,7 @@ def test_a_value_is_what_core_commits(n, w, binding):
     nonce = (1 << 50) + n
     ref, got = _core(PROGRAM, "h1/v", words, KEY, nonce, **binding), NR.commit(PROGRAM, "h1/v", words, KEY, nonce, True,
                                                                               **binding)
-    assert isinstance(got, G.Registered)
+    assert isinstance(got, RV.Registered)
     assert got.entry() == ref.entry() and got.root == ref.root and got.domain == ref.domain
     assert got.levels == ref.levels and got.bcs == ref.bcs
     assert list(got.salts) == list(ref.salts) and list(got.rows) == list(ref.rows)
@@ -98,7 +99,7 @@ def test_a_row_seg_value_is_what_core_commits(n, w):
     assert all(G.verify_read(got.domain, ref.root, p, got.bcs[p], got.path(p), G.SCHEMA_SEG) for p in range(n))
     assert NR.commit(PROGRAM, "weights/e@64/table", words, KEY, 5).root != got.root
     with pytest.raises(ValueError, match="rows of"):
-        NR.commit(PROGRAM, "v", words, KEY, 5, schema=G.SCHEMA)
+        NR.commit(PROGRAM, "v", words, KEY, 5, schema=RV.SCHEMA)
 
 
 def test_given_salts_are_the_rows_salts_and_one_reused_is_refused():
@@ -107,7 +108,7 @@ def test_given_salts_are_the_rows_salts_and_one_reused_is_refused():
     words: np.ndarray = np.arange(15, dtype=np.uint16).reshape(3, 5)
     ys = b"".join(bytes([j + 1]) * 192 for j in range(3))
     got = NR.commit(PROGRAM, "h1/pub@0", words, KEY, 0, True, ys, window=WINDOW)
-    ref = G.Registered.commit(PROGRAM, "h1/pub@0", words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(3)],
+    ref = RV.Registered.commit(PROGRAM, "h1/pub@0", words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(3)],
                               schema=G.SCHEMA_V2, window=WINDOW)
     assert got.entry() == ref.entry() and got.levels == ref.levels and got.bcs == ref.bcs
     assert list(got.salts) == list(ref.salts) and list(got.rows) == list(ref.rows)

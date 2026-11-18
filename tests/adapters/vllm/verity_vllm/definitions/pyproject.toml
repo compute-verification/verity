@@ -11,7 +11,8 @@ untraced = ["test_cublas_train.py"]
 # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
 # `verity_vllm/__init__.py`, which importing this package opens
 inputs = ["verity", "tools/config/verity_config/verity_settings.py", "tools/config/verity_config",
-          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions"]
+          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
+          "calibration/hardware/cards"]
 # its tests are independent, and in one process the suite is among the longest of a check's
 parallel = true
 

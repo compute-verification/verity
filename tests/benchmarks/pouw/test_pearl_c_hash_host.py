@@ -334,6 +334,34 @@ def test_a_pipeline_without_a_trees_salts_refuses_it(host):
     assert not launched
 
 
+@pytest.mark.parametrize("run", ["pearl_c_sm120/run.py", "pearl_c_sm90/run.py"])
+def test_a_salts_buffer_of_the_wrong_length_or_alignment_is_refused_before_any_launch(host, run):
+    """The leaf kernels read `count` salts of 192 bytes by 16-byte loads from an address, so the launch code refuses, by
+    the buffer's name and before any launch, an address that is not a multiple of 16 (a caller's own ``salts_<tree>`` and
+    one handed to `hm_level0`) and a stated length that is a salt too few, a salt too many or a byte short; the right
+    length at an aligned address launches."""
+    M = load(run)
+    count = 4
+    values, salts = host.put(bytes(64 * count)), host.put(salts_of("aligned", count + 1))
+    p = SimpleNamespace(dev=host, keys={"hm": host.put(audit.hm96_kernel_constants()), "dom_b": host.put(bytes(64))},
+                        b={"tree_b": host.alloc(64 * count), "salts_b": salts + 1})
+    launched, launch = [], host.launch
+    host.launch = lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw)
+    try:
+        with pytest.raises(ValueError, match="salts_b at 0x[0-9a-f]+: .*multiple of 16 bytes"):
+            M.Pipeline.hm_level0(p, "b", values, count, "dom_b")
+        with pytest.raises(ValueError, match="tree 'b''s salts at 0x[0-9a-f]+: .*multiple of 16 bytes"):
+            M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts + 8, salt_bytes=M.HM_SALT * count)
+        for given in (M.HM_SALT * (count - 1), M.HM_SALT * (count + 1), M.HM_SALT * count - 1):
+            with pytest.raises(ValueError, match=f"tree 'b''s salts: {given} bytes for {count} leaves, which take {M.HM_SALT * count}"):
+                M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts, salt_bytes=given)
+        assert not launched
+        M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts, salt_bytes=M.HM_SALT * count)
+        assert launched == ["hm_leaves", "s512_frame_leaves"]
+    finally:
+        host.launch = launch
+
+
 @pytest.mark.parametrize("sha", ["fast", pytest.param("ref", marks=pytest.mark.slow)])
 def test_sm120_h3_phases_are_the_verifiers(host, monkeypatch, sha):
     """pearl_c_sm120/run.py's `Pipeline` under -h3 at 64 x 128 x 1024 (m_real 48: a partial row block), its epoch, unit, commit
@@ -421,44 +449,115 @@ def y_trees(host, monkeypatch):
     return torch, SY, run, SYD.DeviceTrees(run)
 
 
-#: why a `DeviceTrees` call fails as a whole: its salts are fresh bytes nothing hands it yet, and its first tree is held to
-#: `commit_y`, which still derives them from a key
-Y_SALTS = "compute-accounting's goal: Pearl+ hands the leaf kernels their salts (DeviceTrees.salts, and commit_y over them)"
+def y_salt_bytes(torch, label: str, m: int):
+    """`m` rows' test salts as `served_y_device.y_tree` takes them: uint8 on the host, `R.HM_SALT` bytes a row."""
+    return torch.frombuffer(bytearray(salts_of(label, m)), dtype=torch.uint8)
 
 
 @pytest.mark.parametrize("m", [1, 5, 129, 300])
 def test_served_y_device_trees_are_the_trees_over_their_salts(host, monkeypatch, m):
     """served_y's `DeviceTrees` (a retained Pearl+ call's y tree as its device builds it, by run.py's launches) on the host
-    build, given the rows' salts: over a call's real rows of y, BF16 widened to FP32 7 rows at a time, the tree is the
+    build, handed the rows' salts: over a call's real rows of y, BF16 widened to FP32 7 rows at a time, the tree is the
     frame-v3-sha512 tree over y's FP32 rows under those salts, level 0 padded and every level above it, under the call's y
-    domain, at 1, 5, 129 and 300 rows.  Without salts handed in, the call is refused before any launch."""
+    domain, at 1, 5, 129 and 300 rows.  It is `commit_y`'s tree under the same salt bytes, which is also what `y_tree`
+    gives where y is on the CPU (the fallback), and other salt bytes give another root."""
     n, index = 1024, 77
     torch, SY, run, trees = y_trees(host, monkeypatch)
+    from verity_torch.pouw.pearl_c import served_y_device as SYD
     monkeypatch.setattr(SY, "Y_CHUNK_BYTES", 7 * 4 * n)
     y = torch.randn(m, n, generator=torch.Generator().manual_seed(m)).to(torch.bfloat16)
-    p, salts = trees._pipe(n), salts_of(f"y-{m}", m)
-    with pytest.raises(NotImplementedError, match="fresh 192-byte hm96 salts"):
-        trees._tree(p, y, index)
-    monkeypatch.setattr(trees, "salts", lambda rows, call: host.put(salts) if (rows, call) == (m, index) else 0)
-    got = trees._tree(p, y, index).numpy().tobytes()
-    assert got == tree_of(SY.y_domain(run.salt, index, m), SY.f32_rows(y.view(torch.uint8).numpy().tobytes(), n), salts)
+    raw = salts_of(f"y-{m}", m)
+    salts, y_bytes = y_salt_bytes(torch, f"y-{m}", m), y.view(torch.uint8).numpy().tobytes()
+    got = trees._tree(trees._pipe(n), y, index, salts).numpy().tobytes()
+    root, tree = SY.commit_y(y_bytes, n, run.salt, index, [raw[i:i + R.HM_SALT] for i in range(0, len(raw), R.HM_SALT)])
+    assert got == tree == tree_of(SY.y_domain(run.salt, index, m), SY.f32_rows(y_bytes, n), raw) and got[-64:] == root
+    assert SYD.y_tree(run, y, index, salts).numpy().tobytes() == got
+    other = trees._tree(trees._pipe(n), y, index, y_salt_bytes(torch, f"other-{m}", m)).numpy().tobytes()
+    assert other[-64:] != root
 
 
-@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason=Y_SALTS)
+def test_served_y_refuses_a_wrong_count_or_size_of_salts(host, monkeypatch):
+    """`commit_y`, and `y_tree`'s fallback through it, take one salt of `R.HM_SALT` bytes a row of y: a salt too few, one
+    too many and a short salt are each refused, naming the count and the size."""
+    n, m, index = 1024, 5, 3
+    torch, SY, run, _ = y_trees(host, monkeypatch)
+    from verity_torch.pouw.pearl_c import served_y_device as SYD
+    y = torch.randn(m, n, generator=torch.Generator().manual_seed(0)).to(torch.bfloat16)
+    raw = salts_of("y-count", m + 1)
+    each = [raw[i:i + R.HM_SALT] for i in range(0, len(raw), R.HM_SALT)]
+    refusal = f"y's {m} rows take {m} salts of {R.HM_SALT} bytes"
+    for salts in (each[:m - 1], each, [*each[:m - 1], each[m - 1][:-1]]):
+        with pytest.raises(ValueError, match=refusal):
+            SY.commit_y(y.view(torch.uint8).numpy().tobytes(), n, run.salt, index, salts)
+    for size in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1):
+        with pytest.raises(ValueError, match=refusal):
+            SYD.y_tree(run, y, index, torch.frombuffer(bytearray(raw[:size]), dtype=torch.uint8))
+
+
+def test_device_trees_refuse_a_wrong_count_or_size_of_salts_before_any_launch(host, monkeypatch):
+    """The device path (`DeviceTrees`, whose kernels read `R.HM_SALT` bytes a leaf from the salts' address with no length)
+    refuses a salt too few, one too many, a short salt, and salts not contiguous uint8 on y's device, each before any
+    launch: its width's pipeline is built first, and every launch after it fails."""
+    n, m, index = 1024, 5, 3
+    torch, _, _, trees = y_trees(host, monkeypatch)
+    y = torch.randn(m, n, generator=torch.Generator().manual_seed(0)).to(torch.bfloat16)
+    raw = salts_of("y-device-count", m + 1)
+    trees.pipe(n, index)
+
+    def launched(*a, **kw):
+        raise AssertionError("a launch")
+    monkeypatch.setattr(host, "launch", launched, raising=False)
+    wrong = [torch.frombuffer(bytearray(raw[:size]), dtype=torch.uint8)
+             for size in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1)]
+    whole = torch.frombuffer(bytearray(raw[:R.HM_SALT * m]), dtype=torch.uint8)
+    wrong += [whole.view(torch.int8), torch.frombuffer(bytearray(raw[:2 * R.HM_SALT * m]), dtype=torch.uint8)[::2]]
+    for salts in wrong:
+        with pytest.raises(ValueError, match=f"y's {m} rows take {m} salts of {R.HM_SALT} bytes, contiguous uint8"):
+            trees(y, index, salts)
+
+
+def test_served_y_tree_launches_state_the_salts_length_to_hm_level0(host, monkeypatch):
+    """`tree_launches` hands `hm_level0` its salts with their length: a buffer a salt short, a salt long or a byte short of
+    `m` rows' is refused by name before the leaf launch, and the right length launches it."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+    m = 4
+    salts = host.put(salts_of("tree-launches", m + 1))
+    p = SimpleNamespace(dev=host, keys={"hm": host.put(audit.hm96_kernel_constants()), "dom_b": host.put(bytes(64))}, b={},
+                        tree_setup=lambda *a: [], row_digests=lambda *a: None, levels=lambda *a: None)
+    launched: list[str] = []
+    launch = host.launch
+    monkeypatch.setattr(host, "launch", lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw), raising=False)
+
+    def go(given: int) -> None:
+        SY.tree_launches(R, p, host.alloc(64 * m), host.alloc(64 * m), 0, m, m, 0, lambda r, c: 0, salts, given)
+    for given in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1):
+        with pytest.raises(ValueError, match=f"tree 'b''s salts: {given} bytes for {m} leaves, which take {R.HM_SALT * m}"):
+            go(given)
+    assert not launched
+    go(R.HM_SALT * m)
+    assert launched == ["hm_leaves", "s512_frame_leaves"]
+
+
 def test_served_y_device_trees_refuse_a_width_whose_first_tree_isnt_commit_ys(host, monkeypatch):
-    """A width's first device tree is held to `commit_y` over a fixed 129-row y, so a tree with a node off is refused, naming
-    the node, and the width's pipeline isn't kept: the next call checks again."""
+    """A width's first device tree is held to `commit_y` over a fixed 129-row y under the same fresh salts, so a tree with a
+    node off is refused, naming the node, and the width's pipeline isn't kept: the next call checks again.  A tree left as
+    built passes the check, and the call's tree is `commit_y`'s under the salts it was handed."""
     n = 1024
     torch, SY, run, trees = y_trees(host, monkeypatch)
     real = trees._tree
 
-    def off(p, y, index):
-        t = real(p, y, index)
+    def off(p, y, index, salts):
+        t = real(p, y, index, salts)
         t[64 * 3] ^= 1
         return t
 
     trees._tree = off
+    y, salts = torch.zeros(4, n, dtype=torch.bfloat16), y_salt_bytes(torch, "y-check", 4)
     for _ in range(2):
         with pytest.raises(ValueError, match=f"width {n} differs from served_y.commit_y over 129 rows, first at node 3 of 511"):
-            trees(torch.zeros(4, n, dtype=torch.bfloat16), 5)
+            trees(y, 5, salts)
         assert not trees.pipes
+    trees._tree = real
+    raw = salts_of("y-check", 4)
+    want = SY.commit_y(y.view(torch.uint8).numpy().tobytes(), n, run.salt, 5, [raw[i:i + R.HM_SALT] for i in range(0, len(raw), R.HM_SALT)])[1]
+    assert trees(y, 5, salts).numpy().tobytes() == want and list(trees.pipes) == [n]

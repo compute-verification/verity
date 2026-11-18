@@ -2,7 +2,6 @@
 only for an accepting ``VERDICT`` line of the goal's seven checks, from a research run, on a commit of main."""
 from __future__ import annotations
 
-import ast
 import json
 import os
 import subprocess
@@ -32,7 +31,7 @@ def repo(tmp_path: Path) -> tuple[Path, str, str]:
 
 
 def line(verdict: str = "accept", run: str = "r-prover", **components: str) -> str:
-    c = {k: "accept" for k in M.CHECKS} | components
+    c = {k: "accept" for k in M.checks()} | components
     return "VERDICT " + json.dumps({"block": 0, "coins": "development", "components": c, "product": "verity/onsite/v0",
                                     "reason": "", "registration": "ab" * 32, "run": run, "simulated": [],
                                     "verdict": verdict}, sort_keys=True)
@@ -51,15 +50,6 @@ def demo(root: Path, sha: str, *log: str) -> list[str]:
         (d / "stdout.log").write_text("".join(f"{x}\n" for x in ("PARTY {}", *lines)))
         out.append(rid)
     return out
-
-
-def test_the_checks_are_the_served_tables_seven():
-    """`CHECKS` repeats `served_table.ONSITE_COMPONENTS`, which this reader can't import (it is stdlib only)."""
-    table = Path(M.__file__).resolve().parents[2] / "tools" / "verity" / "cli" / "verity_cli" / "served_table.py"
-    tree = ast.parse(table.read_text())
-    (seven,) = [ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
-                and any(getattr(t, "id", None) == "ONSITE_COMPONENTS" for t in n.targets)]
-    assert M.CHECKS == seven
 
 
 def test_an_accepting_verdict_of_the_seven_checks_from_research_runs_on_main_is_its_minutes(tmp_path, repo,

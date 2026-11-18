@@ -49,7 +49,7 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     NodeMemory,
     PoubReceipt,
 )
-from verity.protocols.resource_accounting.memory.poub.scheme import POUB, PROVER
+from verity.protocols.resource_accounting.memory.poub.scheme import POUB
 from verity.hooks import RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, StepBegan, StepEnded
 
 __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
@@ -408,5 +408,3 @@ class Binder:
                 "hooks": {k: {"calls": c.calls[k], "seconds": c.seconds[k], "us_per_call": 1e6 * c.seconds[k] / c.calls[k]}
                           for k in sorted(c.calls)}}
 
-
-PROVER["binder"] = Binder

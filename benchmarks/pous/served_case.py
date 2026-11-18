@@ -23,9 +23,9 @@ directory composite.py takes as ``--piece``.
 
 Before anything is written, the case is held to what the run published. For PoUS, the private opening opens the public
 answer's commitment, under the window's binding, to the digest of the case's commitment. For the wipe, the answer's
-commitment is that digest. For both, the component's verifier (`period.answer`, `wipe_period.answer`, the Python its
-Lean port is held to) answers the case, decoded from its own bytes, as the kept answer does. A piece that fails any of
-these is refused (`Refused`) and nothing is written.
+commitment is that digest. For both, the component's verifier (its scheme's ``check``, `period.answer` and
+`wipe_period.answer`, the Python its Lean port is held to) answers the case, decoded from its own bytes, as the kept
+answer does. A piece that fails any of these is refused (`Refused`) and nothing is written.
 
 The case and its answer stay on the prover's side, in that 0700 directory, and so does composite.py's ``--out``, where it
 writes every piece's evidence again (``evidence.json``). The auditor's side reads what it read before: each piece's
@@ -45,8 +45,9 @@ import json
 import os
 import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
@@ -54,6 +55,8 @@ from verity.protocols.resource_accounting.memory.pous.attester import memory_att
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party, wipe_period
+from verity.protocols.compose import schemes as registry
+from verity.protocols.resource_accounting import scheme as S
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -104,6 +107,16 @@ def digest(case: Mapping[str, Any]) -> str:
     return hashlib.sha512(bytes.fromhex(case["commitment"])).hexdigest()
 
 
+def _check(verifier: ModuleType) -> Callable[..., dict[str, Any]]:
+    """The verifier of record (`Scheme.check`) of the scheme declared in ``verifier``'s own protocol package whose
+    protocol is ``verifier``'s ``PROTOCOL``; only that package's declarations are loaded."""
+    package = verifier.__name__.rsplit(".verifier.", 1)[0] + "."
+    for name, module in registry.DECLARATIONS.items():
+        if module.startswith(package) and (scheme := registry.get(name)).protocol == verifier.PROTOCOL:
+            return S.declared(scheme, "check")
+    raise Refused(f"no scheme declared in {package[:-1]} has the protocol {verifier.PROTOCOL}")
+
+
 def pous_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
                 protocol: str = period.PROTOCOL) -> dict[str, Any]:
     """`PousCheck.RunProtocol`'s answer on ``case`` by its Python (`period.answer`), from the case's bytes alone."""
@@ -116,7 +129,8 @@ def pous_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = m
         inputs = period.setup_inputs(ev["setup"])
     except (KeyError, TypeError, ValueError) as e:
         raise Refused(f"the PoUS case doesn't decode: {type(e).__name__}: {e}") from None
-    return period.answer(point, schemes, trusted, published, digests, session, sid, protocol, setup_inputs=inputs)
+    return _check(period)(point, schemes, trusted, published, digests, session, sid, protocol,
+                                   setup_inputs=inputs)
 
 
 def wipe_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
@@ -136,18 +150,25 @@ def wipe_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = m
     _need(egress is None or type(egress) is int, "the wipe's evidence gives its egress as null or an integer of MiB")
     _need(wipe_period.case(server, session, trusted, c, signed, egress) == dict(case),
           "the wipe's case is not the one its decoded commitment, session, egress and params make")
-    return wipe_period.answer(server, session, trusted, c, signed, schemes, protocol, egress_mib=egress)
+    return _check(wipe_period)(server, session, trusted, c, signed, schemes, protocol, egress_mib=egress)
 
 
 def judged(case: Mapping[str, Any], answer: dict[str, Any], exe: str | os.PathLike | None) -> dict[str, Any]:
     """``answer``, or with ``exe`` (the component's Lean, `pous-run-protocol` or `wipe-protocol`) the Lean's answer on
     ``case`` (`period.serve`), refused unless it agrees with ``answer`` but for the reason."""
-    if exe is None:
-        return answer
+    return answer if exe is None else agreed(lean_answer(case, exe), answer, exe)
+
+
+def lean_answer(case: Mapping[str, Any], exe: str | os.PathLike) -> dict[str, Any]:
+    """``exe``'s answer on ``case`` (`period.serve`); `Refused` when it gives none."""
     try:
-        lean = period.serve(exe, [case])[0]
+        return period.serve(exe, [case])[0]
     except (OSError, IndexError, ValueError, subprocess.CalledProcessError) as e:
         raise Refused(f"{exe} doesn't answer the case: {type(e).__name__}: {e}"[:1000]) from None
+
+
+def agreed(lean: dict[str, Any], answer: Mapping[str, Any], exe: str | os.PathLike) -> dict[str, Any]:
+    """``lean``, ``exe``'s answer, refused unless it is the Python's ``answer`` but for the reason."""
     _need({k: v for k, v in lean.items() if k != "reason"} == {k: v for k, v in answer.items() if k != "reason"},
           f"{exe} answers the case {lean.get('verdict')} ({lean.get('reason')}), its Python {answer['verdict']} "
           f"({answer['reason']})")

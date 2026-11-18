@@ -93,7 +93,7 @@ run in turn; `wit j x` is statement `j`'s witness at the honest context `x`. -/
 structure LoopSessions (Ctx Pub WS : Type) where
   pubOf : Ctx → Pub
   m : ℕ
-  stmt : ℕ → Pub → Claims.Msg
+  stmt : ℕ → Pub → Hash.Msg
   wit : ℕ → Ctx → WS
 
 /-- **One worker's context**: the auditor's tape, the ZK server's commitments, the worker's randomness and the salts. -/
@@ -129,8 +129,8 @@ def nilSim : Claims.Simulator where
 noncomputable def simCoinsEquiv {WA WB : Type} (T₀ : Claims.ZKMal.SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB]
     [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (Q : (n : ℕ) → Claims.ZKMal.Seq WA WB (T₀.at c NB ΩB n))
     (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
-    (progB : (n : ℕ) → (x : Claims.Msg) → (Q n).U x → CB n → Claims.SP (List (Claims.Msg × Claims.Out)))
-    (go : ℕ → Claims.Msg → List (Claims.Msg × Claims.Out) → Bool) (x : Claims.Msg) :
+    (progB : (n : ℕ) → (x : Hash.Msg) → (Q n).U x → CB n → Claims.SP (List (Hash.Msg × Claims.Out)))
+    (go : ℕ → Hash.Msg → List (Hash.Msg × Claims.Out) → Bool) (x : Hash.Msg) :
     (n : ℕ) → SimCoins CB n ≃ (Claims.ZKMal.iterSimG T₀ c NB ΩB Q nilSim (fun j _ => CB j) progB go n).C x
   | 0 => Equiv.refl Unit
   | n + 1 => Equiv.prodCongr (simCoinsEquiv T₀ c NB ΩB Q CB progB go x n) (Equiv.refl (CB n))
@@ -149,9 +149,9 @@ places to go on. -/
 theorem iterSimG_seq_prog {W WS W' WS' : Type} (T₀ : Claims.ZKMal.SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB]
     [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (L : Claims.ZKMal.Layout W WS (T₀.N × T₀.Ω))
     (L' : Claims.ZKMal.Layout W' WS' (T₀.N × T₀.Ω)) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
-    (progB : (n : ℕ) → Claims.Msg → List (Claims.Msg × Claims.Msg) → CB n →
-      Claims.SP (List (Claims.Msg × Claims.Out)))
-    (go go' : ℕ → Claims.Msg → List (Claims.Msg × Claims.Out) → Bool) (hgo : go = go') (x : Claims.Msg) :
+    (progB : (n : ℕ) → Hash.Msg → List (Hash.Msg × Hash.Msg) → CB n →
+      Claims.SP (List (Hash.Msg × Claims.Out)))
+    (go go' : ℕ → Hash.Msg → List (Hash.Msg × Claims.Out) → Bool) (hgo : go = go') (x : Hash.Msg) :
     ∀ (n : ℕ) (s : SimCoins CB n),
       (Claims.ZKMal.iterSimG T₀ c NB ΩB (Claims.ZKMal.Layout.seq T₀ c NB ΩB L) nilSim (fun j _ => CB j) progB go
           n).prog x (simCoinsEquiv T₀ c NB ΩB (Claims.ZKMal.Layout.seq T₀ c NB ΩB L) CB progB go x n s) =
@@ -172,25 +172,25 @@ def nilP : Ctx → Claims.Prover (Unit × Unit) := fun _ => ⟨fun _ _ _ => .ret
 
 /-- **The statements as a layout**: no first part, then statement `j` at the public context `pc`, for `kS (stmt j pc)`
 rounds, with the witness `wit j` of the honest context. -/
-def lay (kS : Claims.Msg → ℕ) (pc : Pub) : Claims.ZKMal.Layout Ctx WS (Unit × Unit) where
+def lay (kS : Hash.Msg → ℕ) (pc : Pub) : Claims.ZKMal.Layout Ctx WS (Unit × Unit) where
   k₀ _ := 0
   n _ j := kS (V.stmt j pc)
   xs _ j _ := V.stmt j pc
   ws j x _ _ _ := V.wit j x
 
 /-- The rounds of the `m` statements in turn. -/
-def rounds (kS : Claims.Msg → ℕ) (pc : Pub) : ℕ := (V.lay kS pc).start [] V.m
+def rounds (kS : Hash.Msg → ℕ) (pc : Pub) : ℕ := (V.lay kS pc).start [] V.m
 
 /-- **The statements' prover**: `PS` at each statement in turn, at the honest context's witness, each on its own
 tape. -/
 noncomputable def prover {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (kS : Claims.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (pc : Pub) (x : Ctx) :
+    (kS : Hash.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (pc : Pub) (x : Ctx) :
     Claims.Prover (Claims.Sampling.unitTape.at 0 NB ΩB V.m) :=
   ((V.lay kS pc).prover nilP PS V.m x).comap (Claims.ZKMal.Layout.flatten Claims.Sampling.unitTape 0 NB ΩB V.m)
 
 /-- **The statements' simulator** at the public context `pc`: statement `j`'s simulator `Sim` on the coins `CB j`, in
 turn, going on where the transcript before it does. -/
-noncomputable def sim (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (kS : Claims.Msg → ℕ)
+noncomputable def sim (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (kS : Hash.Msg → ℕ)
     (Sim : Claims.Simulator) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (pc : Pub) :
     Claims.Simulator :=
   Claims.ZKMal.iterSimG Claims.Sampling.unitTape 0 NB ΩB
@@ -200,7 +200,7 @@ noncomputable def sim (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [
 
 /-- The statements' simulator samples `SimCoins CB m` at every public context. -/
 noncomputable def coinsE (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (kS : Claims.Msg → ℕ) (Sim : Claims.Simulator) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
+    (kS : Hash.Msg → ℕ) (Sim : Claims.Simulator) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
     (pc : Pub) : SimCoins CB V.m ≃ (V.sim NB ΩB kS Sim CB pc).C [] :=
   simCoinsEquiv Claims.Sampling.unitTape 0 NB ΩB
     (Claims.ZKMal.Layout.seq Claims.Sampling.unitTape 0 NB ΩB (V.lay kS pc)) CB
@@ -210,21 +210,21 @@ noncomputable def coinsE (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB
 /-- **The auditor's view of the statements** at the honest context `x`: the statements' prover against `V*` at its
 tape `θ`, for the statements' rounds. -/
 noncomputable def viewAt {NB ΩB Θ : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (Vs : Claims.VStar Θ)
-    (x : Ctx) (θ : Θ) (q : Claims.Sampling.unitTape.at 0 NB ΩB V.m) : List (Claims.Msg × Claims.Out) :=
+    (H : Hash.Msg → Hash.Msg) (kS : Hash.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (Vs : Claims.VStar Θ)
+    (x : Ctx) (θ : Θ) (q : Claims.Sampling.unitTape.at 0 NB ΩB V.m) : List (Hash.Msg × Claims.Out) :=
   (Claims.runStar H (V.prover kS PS (V.pubOf x) x) (Vs.head fun _ => V.rounds kS (V.pubOf x)) [] q θ).msgs
 
 /-- **The simulated view**: the statements' simulator at the public context `pc`, against `V*` at its tape `θ`. -/
 noncomputable def simAt {Θ : Type} (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ) (Sim : Claims.Simulator) (CB : ℕ → Type)
+    (H : Hash.Msg → Hash.Msg) (kS : Hash.Msg → ℕ) (Sim : Claims.Simulator) (CB : ℕ → Type)
     [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (Vs : Claims.VStar Θ) (pc : Pub) (θ : Θ) (s : SimCoins CB V.m) :
-    List (Claims.Msg × Claims.Out) :=
+    List (Hash.Msg × Claims.Out) :=
   (V.sim NB ΩB kS Sim CB pc).out H (Vs.head fun _ => V.rounds kS pc) θ [] (V.coinsE NB ΩB kS Sim CB pc s)
 
 /-- **The statements' error**: the supremum over contexts of the statements' errors at their public context and the
 composed prover's fork term at `m` times the statements' factor `g`, against `V*` at the tape `θ x`. -/
 noncomputable def err {NB ΩB Θ : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (εS : Claims.Msg → ℝ)
+    (H : Hash.Msg → Hash.Msg) (kS : Hash.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (εS : Hash.Msg → ℝ)
     (g : ℝ) (Vs : Claims.VStar Θ) (θ : Ctx → Θ) : ℝ≥0∞ :=
   ⨆ x, ENNReal.ofReal (∑ j ∈ Finset.range V.m, εS (V.stmt j (V.pubOf x)) +
     V.m * g * (Claims.Fork H (V.prover kS PS (V.pubOf x) x) (Vs.head fun _ => V.rounds kS (V.pubOf x)) (θ x)
@@ -240,8 +240,8 @@ def Sized (Sim : Claims.Simulator) (CB : ℕ → Type) : Prop :=
 the `m` statements in turn are `ZKmalAt` at the sum of their errors and `m·g` (`zkmalAt_layout`, with no first
 part). -/
 theorem zkmalAt_prover {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (R : Claims.Rel WS)
-    (Sim : Claims.Simulator) (εS : Claims.Msg → ℝ) (g : ℝ) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
+    (H : Hash.Msg → Hash.Msg) (kS : Hash.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (R : Claims.Rel WS)
+    (Sim : Claims.Simulator) (εS : Hash.Msg → ℝ) (g : ℝ) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
     [∀ j, Nonempty (CB j)] (hZK : Claims.ZKmalR H kS PS R Sim εS fun _ => g) (hε : ∀ x, 0 ≤ εS x) (hg : 0 ≤ g)
     (pc : Pub) (hS : ∀ j < V.m, Nonempty (CB j ≃ Sim.C (V.stmt j pc))) :
     Claims.ZKMal.ZKmalAt H (V.rounds kS pc) (V.prover kS PS pc)
@@ -267,12 +267,12 @@ theorem zkmalAt_prover {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] 
 at the honest context `x` is at most as likely as at the simulator at `x`'s public context, plus the statements'
 error. -/
 theorem view_le {NB ΩB Θ : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (R : Claims.Rel WS)
-    (Sim : Claims.Simulator) (εS : Claims.Msg → ℝ) (g : ℝ) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
+    (H : Hash.Msg → Hash.Msg) (kS : Hash.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (R : Claims.Rel WS)
+    (Sim : Claims.Simulator) (εS : Hash.Msg → ℝ) (g : ℝ) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
     [∀ j, Nonempty (CB j)] (hZK : Claims.ZKmalR H kS PS R Sim εS fun _ => g) (hε : ∀ x, 0 ≤ εS x) (hg : 0 ≤ g)
     (Vs : Claims.VStar Θ) (θ : Ctx → Θ) (x : Ctx) (pc : Pub) (hpc : V.pubOf x = pc)
     (hS : ∀ j < V.m, Nonempty (CB j ≃ Sim.C (V.stmt j pc))) (hR : ∀ j < V.m, R (V.stmt j (V.pubOf x)) (V.wit j x))
-    (E : List (Claims.Msg × Claims.Out) → Prop) :
+    (E : List (Hash.Msg × Claims.Out) → Prop) :
     Verity.Game.prCoin (fun q => E (V.viewAt H kS PS Vs x (θ x) q)) ≤
       Verity.Game.prCoin (fun s => E (V.simAt NB ΩB H kS Sim CB Vs pc (θ x) s)) + V.err H kS PS εS g Vs θ := by
   subst hpc
@@ -314,25 +314,25 @@ def Honest {Ctx Pub WS Ω : Type} (V : LoopSessions Ctx Pub WS) (R : Claims.Rel 
 
 /-- **V*'s statements at one worker**: the public context is the auditor's tape and the ZK server's commitments, read
 from the worker's context, with `m` statements `stmt j` at it and their witnesses `wit j`. -/
-def atWorker {Ωa Ωp WS : Type} {nh : ℕ} (m : ℕ) (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg)
+def atWorker {Ωa Ωp WS : Type} {nh : ℕ} (m : ℕ) (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Hash.Msg)
     (wit : ℕ → WCtx Ωa Ωp nh → WS) : LoopSessions (WCtx Ωa Ωp nh) (Ωa × (Fin nh → ByteArray)) WS :=
   ⟨fun x => (x.1, x.2.1), m, stmt, wit⟩
 
 /-- **V*'s public statements**: the count `m` and the statements `stmt` at the public context, with no witness. They
 are all of V*'s statements the simulator reads (`simAt_pubStmts`). -/
-def pubStmts {Pub : Type} (m : ℕ) (stmt : ℕ → Pub → Claims.Msg) : LoopSessions Pub Pub Unit :=
+def pubStmts {Pub : Type} (m : ℕ) (stmt : ℕ → Pub → Hash.Msg) : LoopSessions Pub Pub Unit :=
   ⟨id, m, stmt, fun _ _ => ()⟩
 
 /-- **The simulator reads no witness**: V*'s statements' simulated view is their public statements' (`pubStmts`). -/
 theorem simAt_pubStmts {Ctx Pub WS Θ : Type} (V : LoopSessions Ctx Pub WS) (NB ΩB : Type) [Fintype NB] [Nonempty NB]
-    [Fintype ΩB] [Nonempty ΩB] (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ) (Sim : Claims.Simulator)
+    [Fintype ΩB] [Nonempty ΩB] (H : Hash.Msg → Hash.Msg) (kS : Hash.Msg → ℕ) (Sim : Claims.Simulator)
     (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (Vs : Claims.VStar Θ) (pc : Pub) (θ : Θ)
     (s : SimCoins CB V.m) :
     V.simAt NB ΩB H kS Sim CB Vs pc θ s = (pubStmts V.m V.stmt).simAt NB ΩB H kS Sim CB Vs pc θ s := by
   have hgo : (fun j x => Claims.ZKMal.goesOn ((V.lay kS pc).start x j)) =
       fun j x => Claims.ZKMal.goesOn (((pubStmts V.m V.stmt).lay kS pc).start x j) := by
     rw [start_eq_of (V.lay kS pc) ((pubStmts V.m V.stmt).lay kS pc) rfl rfl]
-  exact congrArg (fun p : Claims.SP (List (Claims.Msg × Claims.Out)) =>
+  exact congrArg (fun p : Claims.SP (List (Hash.Msg × Claims.Out)) =>
       (p.eval H fun as => ((Vs.next [] as θ).eval H).1).1)
     (iterSimG_seq_prog Claims.Sampling.unitTape 0 NB ΩB (V.lay kS pc) ((pubStmts V.m V.stmt).lay kS pc) CB
       (fun j _ _ => Claims.ZKMal.progOf Sim (CB j) (V.stmt j pc)) _ _ hgo [] V.m s)
@@ -340,9 +340,9 @@ theorem simAt_pubStmts {Ctx Pub WS Θ : Type} (V : LoopSessions Ctx Pub WS) (NB 
 /-- `simAt_pubStmts` under `prCoin`: every event of V*'s statements' simulated view is as likely at their public
 statements'. -/
 theorem prCoin_simAt_pubStmts {Ctx Pub WS Θ : Type} (V : LoopSessions Ctx Pub WS) (NB ΩB : Type) [Fintype NB]
-    [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ)
+    [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (H : Hash.Msg → Hash.Msg) (kS : Hash.Msg → ℕ)
     (Sim : Claims.Simulator) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (Vs : Claims.VStar Θ)
-    (pc : Pub) (θ : Θ) (E : List (Claims.Msg × Claims.Out) → Prop) :
+    (pc : Pub) (θ : Θ) (E : List (Hash.Msg × Claims.Out) → Prop) :
     Verity.Game.prCoin (fun s => E (V.simAt NB ΩB H kS Sim CB Vs pc θ s)) =
       Verity.Game.prCoin (fun s => E ((pubStmts V.m V.stmt).simAt NB ΩB H kS Sim CB Vs pc θ s)) :=
   congrArg Verity.Game.prCoin (funext fun s => congrArg E (simAt_pubStmts V NB ΩB H kS Sim CB Vs pc θ s))
@@ -361,8 +361,8 @@ theorem outerSessionsZK_of {Ow Prog Wit Rv Ωa Ωp Pub WS NB ΩB Θ : Type} [Fin
     [Nonempty ΩB] {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
     (honest : Ow → Prog → Wit → Prop) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
     (V : LoopSessions (HCtx Prog Wit Ωa Ωp nr nh) Pub WS) (pubS : Ow → Rv → Ωa → (Fin nh → ByteArray) → Pub)
-    (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (R : Claims.Rel WS)
-    (Sim : Claims.Simulator) (εS : Claims.Msg → ℝ) (g : ℝ) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
+    (H : Hash.Msg → Hash.Msg) (kS : Hash.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (R : Claims.Rel WS)
+    (Sim : Claims.Simulator) (εS : Hash.Msg → ℝ) (g : ℝ) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
     [∀ j, Nonempty (CB j)] (hZK : Claims.ZKmalR H kS PS R Sim εS fun _ => g) (hε : ∀ x, 0 ≤ εS x) (hg : 0 ≤ g)
     (Vs : Claims.VStar Θ) (θ : Rv → Ωa → (Fin nh → ByteArray) → Θ)
     (hpub : V.Public rows pub honest (committed msgs) pubS)
@@ -390,7 +390,7 @@ theorem outerSessionsZK_of {Ow Prog Wit Rv Ωa Ωp Pub WS NB ΩB Θ : Type} [Fin
 session with the loop's stops. -/
 noncomputable abbrev loopRef
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) :
     Claims.ZKMal.RefSession :=
   Claims.ZKServer.Loop.finS.withStops
@@ -400,26 +400,26 @@ noncomputable abbrev loopRef
     (Claims.ZKServer.LeanRelease.ofLoopLink L₀ src (Claims.ZKServer.Loop.realOf src)).stop
 
 /-- The rounds of one of the loop's sessions: the masked verifier's and the `Finish`. -/
-noncomputable abbrev loopK (x : Claims.Msg) : ℕ := (FlockDeploy.deployZk _root_.Flock.Readable.relation).V.k x + 1
+noncomputable abbrev loopK (x : Hash.Msg) : ℕ := (FlockDeploy.deployZk _root_.Flock.Readable.relation).V.k x + 1
 
 /-- The loop's session's simulator (`Flock.zk_deployZk_sw_stops`'s) at `t` rewinds. -/
 noncomputable abbrev loopSim
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (t : ℕ) : Claims.Simulator :=
   ((loopRef L₀ src).refP.withSim fun x _ c => (loopRef L₀ src).coinModel x c).simulatorE t (t * 3 ^ t)
 
 /-- The loop's session's error (`Flock.zk_deployZk_sw_stops`'s) at the pinned key's hiding gap and `t` rewinds. -/
 noncomputable abbrev loopEps
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
-      _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (t : ℕ) (x : Claims.Msg) : ℝ :=
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+      _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (t : ℕ) (x : Hash.Msg) : ℝ :=
   8 * (loopRef L₀ src).nLeaves x * CROnly.hidingGap ZkView.My ZkView.saltHash +
     8 * t * (loopRef L₀ src).nLeaves x * CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t
 
 theorem loopEps_nonneg (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
-      _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (t : ℕ) (x : Claims.Msg) :
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+      _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (t : ℕ) (x : Hash.Msg) :
     0 ≤ loopEps L₀ src t x := by
   have h0 := CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash
   exact add_nonneg (add_nonneg (mul_nonneg (by positivity) h0) (mul_nonneg (by positivity) h0)) (by positivity)
@@ -436,7 +436,7 @@ theorem loop_zkmalR (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < 
     (hsc : Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs)
     (hT : Claims.ZKServer.Loop.finS.TapeOK)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) :
     Claims.ZKmalR Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) (loopSim L₀ src t)
@@ -471,7 +471,7 @@ theorem outerSessionsZK_loop {Ow Prog Wit Rv Ωa Ωp Pub Θ : Type} {nr nh : ℕ
     (hsc : Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs)
     (hT : Claims.ZKServer.Loop.finS.TapeOK)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv) (honest : Ow → Prog → Wit → Prop)
     (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
@@ -510,9 +510,9 @@ theorem outerViewZK_loop {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Lo
     (hsc : Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs)
     (hT : Claims.ZKServer.Loop.finS.TapeOK)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (msgs : Ωa → Ωp → Fin nh → ByteArray) (m : ℕ) (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg)
+    (msgs : Ωa → Ωp → Fin nh → ByteArray) (m : ℕ) (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Hash.Msg)
     (wit : ℕ → WCtx Ωa Ωp nh → Claims.Flock.Wit) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
     (Vs : Claims.VStar Θ) (θ : Ωa → (Fin nh → ByteArray) → Θ)
     (hH : (LoopSessions.atWorker m stmt wit).Honest

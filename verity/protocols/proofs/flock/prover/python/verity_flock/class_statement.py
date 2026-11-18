@@ -1,7 +1,7 @@
 """A size class of any partition (`verity.circuits.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
 ``flock-circuit`` per class.
 
-    python -m verity_flock.class_statement --model tiny --partition q-word --out DIR [--binary PATH] [--n 16] [--selftest]
+    python -m verity_flock.class_statement --definition ID --resolver MODULE:FUNC --partition q-word --out DIR [--binary PATH] [--n 16] [--selftest]
 
 M0's statement proves a template's identical units with every instance's input rows hashed in the circuit
 (``hm96-sha512/row/v1`` under frame-v3-sha512 trees). A class becomes such a template here:
@@ -212,7 +212,7 @@ class Wiring:
     prover may commit instead (the negatives): a linked row that is not its writer's output row, or one under a salt of its
     own.
 
-    ``tree`` (`registered.Registered` of the template's output field, leaf v the template's v-th unit in root order): each
+    ``tree`` (`registered_value.Registered` of the template's output field, leaf v the template's v-th unit in root order): each
     instance's ``out`` row is its leaf's row under its leaf's salt, and each link row the writer's leaf, opened by path in
     the header's ``registered`` (a tree port of the verifier's `--registered`), so a writer may lie in another statement.
     Since a verifier given registered reads reads every port by path, each other input port is registered too, a value of
@@ -471,7 +471,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     from verity.circuits.codec import definition_digest, descriptor_id
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.program import Program
-    from verity_vllm.definitions.encoding import encode_specialization
+    from verity.circuits.codec import encode_specialization
 
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
     index = g.get("definitions_index") or {}
@@ -1833,7 +1833,6 @@ def _selftest_cases(binary: str, d: Path, n: int, port: int, cases: Sequence[str
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     src = ap.add_mutually_exclusive_group(required=True)
-    src.add_argument("--model", choices=["tiny"])
     src.add_argument("--definition")
     src.add_argument("--program-module", help="MODULE:FUNC (FUNC() returns a Program); MODULE may be a .py path")
     src.add_argument("--program-graph", help="a served row's program graph: its distinct Call Definitions (distinct_calls)")

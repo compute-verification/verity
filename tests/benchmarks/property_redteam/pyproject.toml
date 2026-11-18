@@ -38,4 +38,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
           "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py",
           "verity/protocols/proofs/spot/__init__.py",
-          "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "benchmarks/property_redteam"]
+          "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "benchmarks/property_redteam",
+          "calibration/hardware/cards",
+          "verity/device.py"]

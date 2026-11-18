@@ -112,8 +112,8 @@ theorem lsilent_quiet {v : V α} {y : PS α} (hq : quietS.R v y) : LSilent (lift
   obtain ⟨-, rfl⟩ := Prod.mk.inj e4
   exact (Prod.mk.inj e2).2.symm
 
-theorem challengeP_one (resp : ℕ → Claims.Msg) (split : Bool) {st st' : LigState} {t t' : Transcript}
-    {l l' : Array Claims.Msg} {a : F256}
+theorem challengeP_one (resp : ℕ → Hash.Msg) (split : Bool) {st st' : LigState} {t t' : Transcript}
+    {l l' : Array Hash.Msg} {a : F256}
     (h : (((challengeP (asksS resp) split).run st).run t).go l = (.ok ((a, st'), t'), l')) :
     l'.size = l.size + 1 := by
   unfold challengeP at h
@@ -130,8 +130,8 @@ theorem challengeP_one (resp : ℕ → Claims.Msg) (split : Bool) {st st' : LigS
     obtain ⟨-, rfl⟩ := lpure_go_ok h
     exact hl₁
 
-theorem oodIntroP_two (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hdim : dim ≠ 0)
-    {st st' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg} {u : Unit}
+theorem oodIntroP_two (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hdim : dim ≠ 0)
+    {st st' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg} {u : Unit}
     (h : (((oodIntroP (asksS resp) nonce g dim).run st).run t).go l = (.ok ((u, st'), t'), l')) :
     l'.size = l.size + 2 := by
   unfold oodIntroP at h
@@ -144,8 +144,8 @@ theorem oodIntroP_two (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt6
   rw [lsilent_modify _ _ _ _ _ _ _ _ h]
   omega
 
-theorem queryP_two (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit)
-    (hq : lv.q ≠ 0) {st st' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg} {a : LevelProof × Array F128}
+theorem queryP_two (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit)
+    (hq : lv.q ≠ 0) {st st' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg} {a : LevelProof × Array F128}
     (h : (((queryP (asksS resp) nonce ms lv cm).run st).run t).go l = (.ok ((a, st'), t'), l')) :
     l'.size = l.size + 2 := by
   unfold queryP at h
@@ -160,11 +160,11 @@ theorem queryP_two (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) 
 
 /-- **A masked Ligerito prover that returns sent `k_0 + 7 + 11 R` bodies** over its `R + 1` levels, and level 0's pair
 coins, the replies to sends `|l| + 2 + k_0` and `|l| + 3 + k_0`, are independent. -/
-theorem ligeritoPZk_exact (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoPZk_exact (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n ≠ 0)
     (hk0 : 1 ≤ sch.k0) (hL : 2 ≤ sch.levels.size)
-    (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {t t' : Transcript} {l l' : Array Claims.Msg}
+    (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {t t' : Transcript} {l l' : Array Hash.Msg}
     {r : LigeritoProof × Zk.Level0Msgs × Zk.L0Rec}
     (hrun : ((ligeritoPZk (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 tb b lay hv rep tPad extra lanePad salt
       nonce).run t).go l = (.ok (r, t'), l')) :
@@ -187,7 +187,7 @@ theorem ligeritoPZk_exact (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArr
   obtain ⟨_, _, _, h1⟩ := lsilent_bind lsilent_get h1
   obtain ⟨_, _, _, h1⟩ := lsilent_bind (lsilent_sendMsg _) h1
   obtain ⟨s, stC, tC, lC, hLoop, h1⟩ := lp_bind_ok h1
-  have hI := lforIn_inv _ (fun j (_ : Array F256 × (F256 × F256) × Zk.Level0Msgs) (l' : Array Claims.Msg) =>
+  have hI := lforIn_inv _ (fun j (_ : Array F256 × (F256 × F256) × Zk.Level0Msgs) (l' : Array Hash.Msg) =>
       l'.size = l.size + 2 + j + (if j = sch.k0 then 2 else 0) ∧
       (j = sch.k0 → Zk.rhoIndependent (coinKOf (resp (l.size + 2 + sch.k0)),
         coinKOf (resp (l.size + 3 + sch.k0))) = true)) sch.k0
@@ -241,14 +241,14 @@ theorem ligeritoPZk_exact (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArr
   obtain ⟨_, _, _, h1⟩ := lsilent_bind (lsilent_modify _) h1
   obtain ⟨s2, stH, tH, lH, hLoop2, h1⟩ := lp_bind_ok h1
   obtain ⟨-, rfl⟩ := lpure_go_ok h1
-  have hI2 := lforIn_inv _ (fun i _ (l'' : Array Claims.Msg) =>
+  have hI2 := lforIn_inv _ (fun i _ (l'' : Array Hash.Msg) =>
       l''.size + (if i = sch.levels.size - 1 then 4 else 0) = lG.size + 11 * i) (sch.levels.size - 1)
     ?step2 (by rw [ite_eq_right (by omega)]) hLoop2
   case step2 =>
     rintro i hi ⟨sd, pc, cps, rps, fn⟩ st t l₀ r st' t' l₂ hl₀ hb
     rw [ite_eq_right (by omega)] at hl₀
     obtain ⟨f, st₁, t₁, l₁, hIn, hb⟩ := lp_bind_ok hb
-    have hl₁ := lforIn_inv _ (fun j _ (l'' : Array Claims.Msg) => l''.size = l₀.size + j) 4 ?inner rfl hIn
+    have hl₁ := lforIn_inv _ (fun j _ (l'' : Array Hash.Msg) => l''.size = l₀.size + j) 4 ?inner rfl hIn
     case inner =>
       rintro j hj f st t l₃ r st' t' l₄ hl₃ hb
       split at hb
@@ -295,9 +295,9 @@ theorem ligeritoPZk_exact (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArr
 /-! ## The inner proof -/
 
 /-- **A masked inner proof that returns sent `4` bodies**, and `β`, the reply to send `|l| + 2`, is not `0`. -/
-theorem innerP_exact (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
+theorem innerP_exact (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) {t t' : Transcript}
-    {l l' : Array Claims.Msg} {r : Zk.InnerProof}
+    {l l' : Array Hash.Msg} {r : Zk.InnerProof}
     (hrun : ((innerP (asksS resp) (Hashes.ofSha512 h) lay p ic finalC cons).run t).go l = (.ok (r, t'), l')) :
     l'.size = l.size + 4 ∧ (coinOf (resp (l.size + 2)) 0).isZero = false := by
   unfold innerP at hrun
@@ -327,7 +327,7 @@ theorem innerP_exact (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (
 
 /-- **The rank check, where it returns, passed** on the transcript it ran at. -/
 theorem rankCheckP_ok {m kLog : ℕ} {prior : Array (List F128)} {words : List ℕ} {t t' : Transcript}
-    {l l' : Array Claims.Msg} {u : Unit}
+    {l l' : Array Hash.Msg} {u : Unit}
     (h : ((rankCheckP m kLog prior words : TMW PS Unit).run t).go l = (.ok (u, t'), l')) :
     MaskRank.maskRankOk (prior ++ MaskRank.roundPoints m kLog t.rounds) words = true := by
   unfold rankCheckP at h
@@ -339,7 +339,7 @@ theorem rankCheckP_ok {m kLog : ℕ} {prior : Array (List F128)} {words : List �
     cases h1
 
 /-- A lifted check of the verifier's monad that returns sends nothing. -/
-theorem liftV_bind_ok {v : V α} {f : α → TMW PS β} {t : Transcript} {l l'' : Array Claims.Msg}
+theorem liftV_bind_ok {v : V α} {f : α → TMW PS β} {t : Transcript} {l l'' : Array Hash.Msg}
     {r : β × Transcript}
     (h : (((StateT.lift (monadLift v : PS α) : TMW PS α) >>= f).run t).go l = (.ok r, l'')) :
     ∃ a, v = .ok a ∧ ((f a).run t).go l = (.ok r, l'') := by
@@ -360,12 +360,12 @@ def piopZk (st : Setup) (extras : Array Claim) : ℕ := 3 + (st.m - 6) + (3 + (s
 /-- **A masked rep that returns sent its rounds**, `piopZk` and then Ligerito's `k_0 + 7 + 11 R` and the inner proof's
 `4`; level 0's pair coins, Ligerito's sends `k_0 + 2` and `k_0 + 3`, are independent; the inner proof's `β`, its send
 `2`, is not `0`; and the rank check passed on the transcript after the lincheck. -/
-theorem repPZk_exact (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_exact (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (hn : sch.n ≠ 0)
     (hk0 : 1 ≤ sch.k0) (hL : 2 ≤ sch.levels.size)
-    (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {t t' : Transcript} {l l' : Array Claims.Msg}
+    (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {t t' : Transcript} {l l' : Array Hash.Msg}
     {P : Zk.ZkProof}
     (h : ((repPZk (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
       nonce prior words).run t).go l = (.ok (P, t'), l')) :

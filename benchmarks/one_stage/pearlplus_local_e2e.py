@@ -11,7 +11,7 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
 
 1. ``served_verdicts.py pearlplus-period open``: the lane's Pearl-C period, cap 1.
 2. A salt-only session reserved in that period and opened on salt epoch 0's root over the passes' fixed operands' root
-   (`pouw_h1_window.reserve_salt` and ``open_session``, as `bench_arm.live_coins`' install does), its salt coin salting
+   (`pouw_h1_window.reserve_salt` and ``open_session``, as Pearl+'s attach does (`pouw.scheme.Attached.reserve`)), its salt coin salting
    a toy pass (the pouw suite's `proved_pass`, k = 128 and 16 x 16 tiles, in place of a GPU serve), then closed.
 3. ``served_verdicts.py pearlplus-period close``, once that session has ended.
 4. ``served_passes.py verify --tie W --test-instance`` under PEARLC_CHALLENGER_GATE/PEER/LANE: the verifier's sample a sample
