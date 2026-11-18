@@ -115,8 +115,8 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
         O.scheme(scheme)
     art = points or current_points(store, card, model)
     if art is None:
-        raise ValueError(f"no points of record for the {card} and {model}: run `verity bench overhead points --card {card} "
-                         f"--model {model} --on NODE`, then `verity bench overhead points --store RUN`")
+        raise ValueError(f"no points of record for the {card} and {model}: run `verity bench overhead points --model {model} "
+                         f"--on NODE` on a node with the {card}, then `verity bench overhead points --store RUN`")
     held = {k: store.get_manifest(art).meta.get(k) for k in ("card", "model")}
     if held != {"card": card, "model": model}:
         raise ValueError(f"{art} holds the points of the {held['card']} and {held['model']}, not the {card} and {model}")
