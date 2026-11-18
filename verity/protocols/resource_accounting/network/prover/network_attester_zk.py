@@ -483,7 +483,7 @@ def prove(a) -> int:
     if a.dry:
         log("dry: done")
         return 0
-    av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
+    av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, tmpl_unit_bin=a.tmpl_unit_bin)
     ok = summary["unsigned_registration"].startswith("refused")
     for j, (name, m) in enumerate(staged.items()):
         res = audit_member(M, av, sg, m, at, out / name, a.port + j)

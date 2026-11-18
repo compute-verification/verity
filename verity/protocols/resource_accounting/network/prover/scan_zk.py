@@ -2170,7 +2170,7 @@ def prove(a) -> int:
         "unit": g.defn.id, "lower_s": g.lower_s, "k_log": g.st.meta["k_log"], "vus_per_block": g.st.meta["vus_per_block"],
         "pin": g.st.pin, "base": g.base, "n": g.n} for k, pg in pgs.items() for tp, g in pg.stagers.items()}
     log(f"stagers: {summary['stagers']}")
-    av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
+    av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, tmpl_unit_bin=a.tmpl_unit_bin)
     by_window: dict[int, list[SimpleNamespace]] = {}
     for r in h.rounds.values():
         by_window.setdefault(r.number, []).append(r)
