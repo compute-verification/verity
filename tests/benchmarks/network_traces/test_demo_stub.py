@@ -129,6 +129,7 @@ def test_what_isnt_a_network_attesters_id_request_is_refused_and_the_models_list
         assert "a network attester's id request" in refused(respond(other))
     models = respond(b"GET /v1/models HTTP/1.1\r\nhost: s\r\n\r\n")
     assert models.startswith(b"HTTP/1.1 200 OK\r\n")
+    assert [m["id"] for m in json.loads(models.partition(b"\r\n\r\n")[2])["data"]] == [NAME]
 
 
 @pytest.mark.parametrize("field, name", [(b"x-verity-release: 3x", "x-verity-release"),
@@ -141,7 +142,6 @@ def test_an_id_request_with_a_malformed_release_is_refused_by_its_headers_name(f
     with pytest.raises(ValueError, match=f"^{name}: "):
         S.network_attester_request(marked)
     assert refused(respond(marked)).startswith(name + ": ")
-    assert [m["id"] for m in json.loads(models.partition(b"\r\n\r\n")[2])["data"]] == [NAME]
 
 
 def test_its_prompts_are_the_class_and_the_gate_takes_them_as_its_scan_rehearsals_prompts():
