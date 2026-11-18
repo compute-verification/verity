@@ -73,7 +73,7 @@
 # (the default) or servedrop:K. SERVE=row runs row ROW's Commit under the audit, `verity-vllm row run ROW CHECKPOINT
 # REPO REV` with the checkpoint `verity-vllm epoch resolve ROW` names and REMOTE_VERIFIER at the verifier: its Commit
 # puts the store binder on its engine and proves the store in lockstep with its first instrumented run, a pass an
-# engine step (`verity_vllm.protocols.poub.remote.CommitSession`: one GPU, synchronous scheduling declared
+# engine step (`verity.protocols.resource_accounting.memory.poub.prover.commit_session.CommitSession`: one GPU, synchronous scheduling declared
 # in the row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). ROW is a row
 # id whose file `verity_vllm.config.row_file` finds (ROW_FILE: that file instead): a stored row whose target declares
 # the synchronous scheduling a session needs, such as
@@ -153,20 +153,18 @@
 #
 # SERVE=node serves the whole node: a vLLM engine a leased GPU (`engine.py`), and the prover (`node.py`) registers
 # their weights arenas as the store, where they are served, the engines decoding each weight as they use it
-# (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
-# node's host DRAM (its MemTotal) in the memory line. Its cores default to this process's: the first quarter the
+# (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). Its cores default to this process's: the first quarter the
 # engines' (ENGINE_CPUS), under ROLE=both the last quarter the verifier's, the rest the prover's, all declared to a lease
 # program that takes --cores. PACED (K:T_MS:DRAWS:WINDOWS a session of PLAN, `verifier.py --paced`) and PACE_PASS_MS
 # make the sessions paced; ROLE=both SERVE=node, the node's session on this machine with its verifier and a local
 # challenger beside it, defaults them to 1:1000:2773:7 (seven stretches of a second, a live coin a pass) and 0 (the
 # pass its calibration measured), builds the Lean verifier before the lease, as a served line does, and ends by the
-# verdict line. VERIFIER_ARGS='--hbm-bytes N' states the share of the node the store is on (default: the figures').
-# The verifier reads the audited node's figures from FIGURES, by default out/figures.json, which `sheets.py NODE_KIND`
+# verdict line. The verifier reads the audited node's figures, its HBM and host DRAM among them, from FIGURES, by default out/figures.json, which `sheets.py NODE_KIND`
 # writes, NODE_KIND a node file's name (ROLE=both on a GPU: the node file of this machine's card). The north-star run,
 # the verifier on a second node's CPUs:
 #
 #   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 QUANTILE=max \
-#     JITTER_MS=50 NODE_KIND=rtx-pro-6000-server-x8 VERIFIER_ARGS='--host-bytes 1843153879040' \
+#     JITTER_MS=50 NODE_KIND=rtx-pro-6000-server-x8 \
 #     bash benchmarks/poub_session/run.sh                         # 16 CPUs
 #   ROLE=prover PORT=7799 SERVE=node PLAN=honest,skip:0.0625 ENGINE_CPUS=0-23 PROVER_CPUS=24-47 \
 #     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings 33273' \
