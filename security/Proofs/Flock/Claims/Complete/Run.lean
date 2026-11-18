@@ -60,13 +60,13 @@ namespace FlockComplete
 open Flock FlockDeploy
 
 /-- **The program's run** against `H`, send `i` answered by `resp i`, from send `i`: its sends and its result. -/
-def PI.sim {α : Type} (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) : PI α → ℕ → List Claims.Msg × α
+def PI.sim {α : Type} (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) : PI α → ℕ → List Hash.Msg × α
   | .ret a, _ => ([], a)
   | .query q k, i => PI.sim H resp (k (H q)) i
   | .ask m k, i => (m :: (PI.sim H resp (k (resp i)) (i + 1)).1, (PI.sim H resp (k (resp i)) (i + 1)).2)
 
 /-- **Fed the first `j` answers, the program sends its `j`-th message**: its sends, then its result. -/
-theorem feed_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (p : PI Claims.Msg) :
+theorem feed_sim (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) (p : PI Hash.Msg) :
     ∀ (i j : ℕ), j ≤ (p.sim H resp i).1.length →
       ((feed p ((List.range j).map fun k => resp (i + k))).eval H).1 =
         ((p.sim H resp i).1 ++ [(p.sim H resp i).2]).getD j [] := by
@@ -97,9 +97,9 @@ theorem feed_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (p 
 
 /-- **An accepted run**: the prover's `j`-th message is `seq j` once it has seen `resp 0, …, resp (j − 1)`; the verifier
 answers each of the first `N` messages with `resp j` and accepts the next; with `N + 1` rounds, the run accepts. -/
-theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
-    (vnext : List Claims.Msg → Claims.OC Claims.Out) (seq resp : ℕ → Claims.Msg) (N : ℕ)
-    (hP : ∀ j ≤ N, ∀ hist : List (Claims.Msg × Claims.Msg), hist.map Prod.snd = (List.range j).map resp →
+theorem stepWith_acc {Ω : Type} (H : Hash.Msg → Hash.Msg) (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
+    (vnext : List Hash.Msg → Claims.OC Claims.Out) (seq resp : ℕ → Hash.Msg) (N : ℕ)
+    (hP : ∀ j ≤ N, ∀ hist : List (Hash.Msg × Hash.Msg), hist.map Prod.snd = (List.range j).map resp →
       ((P.next x hist ω).eval H).1 = seq j)
     (hV : ∀ j < N, ((vnext ((List.range (j + 1)).map seq)).eval H).1 = .msg (resp j))
     (hA : ((vnext ((List.range (N + 1)).map seq)).eval H).1 = .acc) (n : ℕ) (hn : N + 1 ≤ n) (t : Claims.Transcript) :
@@ -128,16 +128,16 @@ theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Pro
     exact ih (j + 1) (by omega) n (by omega) _ _ hh'
 
 /-- A last message of tag `0` is answered by its coin. -/
-theorem act_coin {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Flock.Stmt} {t : Claims.Msg} {c : Coin} (hs : setupOf false x = some (s, spec, sts))
+theorem act_coin {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Flock.Stmt} {t : Hash.Msg} {c : Coin} (hs : setupOf false x = some (s, spec, sts))
     (ha : as.getLast? = some (0 :: t)) (hc : cs.getLast? = some c) : act false x as cs = .coin c := by
   unfold act
   rw [hs, ha, hc]
   rfl
 
 /-- The last message is decided: after the link message, on the link, its coin, the round messages with theirs. -/
-theorem act_final {x : Claims.Msg} {a₁ : Claims.Msg} {rest : List Claims.Msg} {c₁ : Coin} {crest : List Coin}
-    {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {f : Claims.Msg} {F : Final}
+theorem act_final {x : Hash.Msg} {a₁ : Hash.Msg} {rest : List Hash.Msg} {c₁ : Coin} {crest : List Coin}
+    {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {f : Hash.Msg} {F : Final}
     {link : List ByteArray × List ByteArray} (hs : setupOf false x = some (s, spec, sts))
     (hl : (a₁ :: rest).getLast? = some f) (hf : finalOf f = some F) (hlink : linkOf a₁ = some link) :
     act false x (a₁ :: rest) (c₁ :: crest) =
@@ -166,17 +166,17 @@ theorem act_final {x : Claims.Msg} {a₁ : Claims.Msg} {rest : List Claims.Msg} 
 
 /-- **The honest run** at the coins `r`: the honest program's sends, each answered by its coin's bytes, and its last
 message. -/
-def honestRun (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : Tape) {k : ℕ}
-    (r : Fin k → Coin) : List Claims.Msg × Claims.Msg :=
+def honestRun (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (w : Claims.Flock.Wit) (ω : Tape) {k : ℕ}
+    (r : Fin k → Coin) : List Hash.Msg × Hash.Msg :=
   (prog x w ω).sim H (fun j => (Claims.coinSeq r j).bytes) 0
 
 /-- The round messages and their coins, as the verifier's decision reads them (`act`): every message after the first
 but the last, its tag dropped, with its coin. -/
-def midsOf : List Claims.Msg → List Coin → List (Claims.Msg × Coin)
+def midsOf : List Hash.Msg → List Coin → List (Hash.Msg × Coin)
   | _ :: rest, _ :: crest => (rest.dropLast.map List.tail).zip crest.dropLast
   | _, _ => []
 
-theorem map_getD_range (L : List Claims.Msg) :
+theorem map_getD_range (L : List Hash.Msg) :
     (List.range L.length).map (fun j => L.getD j []) = L := by
   apply List.ext_getElem (by simp)
   intro i h1 h2
@@ -187,7 +187,7 @@ theorem map_getD_range (L : List Claims.Msg) :
 verifier's setup), the honest run's sends are of tag `0`,
 fit the verifier's rounds, and start with a link message, its last message decodes, and the shipped verdict and the
 checks pass on it. -/
-theorem run_acc_of (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : Claims.Msg) (ω : Tape)
+theorem run_acc_of (H : Hash.Msg → Hash.Msg) (w : Claims.Flock.Wit) (x : Hash.Msg) (ω : Tape)
     (r : Fin ((V false).k x) → Coin) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     {link : List ByteArray × List ByteArray} {F : Final} (hs : setupOf false x = some (s, spec, sts))
     (hsu : setupWith (Claims.hOf H) s.read = .ok (spec, sts))
@@ -203,8 +203,8 @@ theorem run_acc_of (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : C
     (Claims.run H (honestP w) (V false) x ω r).out = .acc := by
   set ms := (honestRun H x w ω r).1 with hms
   set f := (honestRun H x w ω r).2 with hf
-  let seq : ℕ → Claims.Msg := fun j => (ms ++ [f]).getD j []
-  let resp : ℕ → Claims.Msg := fun j => (Claims.coinSeq r j).bytes
+  let seq : ℕ → Hash.Msg := fun j => (ms ++ [f]).getD j []
+  let resp : ℕ → Hash.Msg := fun j => (Claims.coinSeq r j).bytes
   have hseq : ∀ j (hj : j < ms.length), seq j = ms[j] := by
     intro j hj
     simp only [seq, List.getD_eq_getElem?_getD, List.getElem?_append_left hj, List.getElem?_eq_getElem hj,

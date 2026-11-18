@@ -63,7 +63,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **`P`'s accepting runs carry the statement's sample up to key order**: on every accepting run of `V false` at `x`
 and `ω`, the last message's record has a sample `JsonEquiv` to the statement's, what `checks` compares. -/
-def RecordSampleEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Prop :=
+def RecordSampleEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) : Prop :=
   ∀ r : Fin ((V false).k x) → Coin, (Claims.run sha512 P (V false) x ω r).out = .acc →
     ∀ s spec sts link c₁ mids f,
       act false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
@@ -73,7 +73,7 @@ def RecordSampleEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : 
 
 /-- **Every prover's accepting runs carry the statement's sample up to key order**: an accepting decision passes
 `checks`, whose sample check is `sampleEq` (`checks_sample`). -/
-theorem recordSampleEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : RecordSampleEquiv P x ω := by
+theorem recordSampleEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) : RecordSampleEquiv P x ω := by
   intro r h s spec sts link c₁ mids f hact
   have hacc := run_acc_next sha512 P (V false) x ω r h
   replace hacc : ((next false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
@@ -92,8 +92,8 @@ theorem sampleEq_ne : ∃ a b : Json, sampleEq (some a) (some b) = true ∧ a �
 /-- **A prover of the live session at one table simulates `P` on the coins `Φ`**: wherever `V false` accepts at
 `Φ (u, r')`, the coins of `V false` at the tape `u` and the live coins `r'`, the live outcome of `P'` at the tape
 `(ω, u)` and `r'` is the run's (`viewOf`). -/
-def PlainSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ)
-    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} (P' : Claims.Prover (Ω × τ))
+def PlainSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Hash.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : Hash.Msg → Wire nMax 1 mPts) {τ : Type} (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
   ∀ u r', (Claims.run sha512 P (V false) x ω (Φ (u, r'))).out = .acc →
     ∀ s spec sts link c₁ mids f,
@@ -104,21 +104,21 @@ def PlainSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (m
 
 /-- **A prover of the live session at one table simulates `P`**: the coins `Φ (u, r')` have the sampling design of uniform coins,
 and `P'` simulates `P` on them (`PlainSimRun`). -/
-def PlainSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ)
-    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} [Fintype τ] [Nonempty τ]
+def PlainSim {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Hash.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : Hash.Msg → Wire nMax 1 mPts) {τ : Type} [Fintype τ] [Nonempty τ]
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
   (∀ E : (Fin ((V false).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E) ∧
     PlainSimRun P x ω mPts N dg w P' Φ
 
 /-- **The deployed coins at the tape `u` and the live coins `r'`**: coin `j` takes its first `n j` field elements from
 the live coin `r' j` and the rest from `u j` (`mergeAt`). -/
-def plainCoins {x : Claims.Msg} {N : ℕ} (hk : N + 2 = (V false).k x) (n : Fin ((V false).k x) → ℕ)
+def plainCoins {x : Hash.Msg} {N : ℕ} (hk : N + 2 = (V false).k x) (n : Fin ((V false).k x) → ℕ)
     (p : (Fin ((V false).k x) → Coin) × (Fin (N + 2) → LCoin 65536)) : Fin ((V false).k x) → Coin :=
   @mergeAt _ _ _ 𝔽 hk n p.1 p.2
 
 /-- **`P'` simulates `P` on `plainCoins`** where it simulates the runs: the merged coins are uniform (`Pr_mergeAt`). -/
-theorem plainSim_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ} {N : Claims.Msg → ℕ}
-    {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts}
+theorem plainSim_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {mPts : ℕ} {N : Hash.Msg → ℕ}
+    {dg : ByteArray → ByteArray} {w : Hash.Msg → Wire 65536 1 mPts}
     {P' : Claims.Prover (Ω × (Fin ((V false).k x) → Coin))} (hk : N x + 2 = (V false).k x)
     (n : Fin ((V false).k x) → ℕ) (h : PlainSimRun P x ω mPts N dg w P' (plainCoins hk n)) :
     PlainSim P x ω mPts N dg w P' (plainCoins hk n) :=

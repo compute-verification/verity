@@ -8,7 +8,7 @@ pass both readers that look inside it:
 * credit's ROOTS1 (`credit._arow`) wants the Commit record to register `row-table/<s>/k<K>` and `input-ids/<s>`, each
   with the domain, root and leaves of the window's own `<prefix>a/<K>@<s>` and `<prefix>ids@<s>`;
 * one-stage's R1-R7 (`registration.check`) wants exactly the 14 v2 keys and the audited Program, and each registered
-  value's domain under that Program and that value's own name (`registered.domain`).
+  value's domain under that Program and that value's own name (`registered_value.domain`).
 
 The toy window: one call of one linear, `q`, at K = 2048 with m = 4, and one round, its tables registered under the H1
 window Program's domain and the window's open root. The Program digests and roots are stand-ins; the checks are the
@@ -42,7 +42,7 @@ from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as C
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as W
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 I2 = hashlib.sha512(b"V3c's I2 window circuit's population Program").hexdigest()
@@ -73,7 +73,7 @@ v3c_registered = [entry(I2, "weights/q@1", 64), entry(I2, "scan/state", 16)]
 print("2. credit ROOTS1 (_arow) on V3c's record:", C._arow(rounds, entries, v3c_registered, layout, PREFIX))
 
 for program in (I2, H1):
-    r7 = G.domain(program, C.commit_rows(0, K), 1, rows, window=OPEN).domain_id.hex()
+    r7 = RV.domain(program, C.commit_rows(0, K), 1, rows, window=OPEN).domain_id.hex()
     print(f"3. R7's domain for row-table/0/k{K} under {'I2' if program == I2 else 'H1'}'s Program == ROOTS1's:",
           r7 == h1_a["domain"])
 

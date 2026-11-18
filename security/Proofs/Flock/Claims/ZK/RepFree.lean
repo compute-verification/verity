@@ -65,11 +65,11 @@ variable {α β γ δ : Type}
 /-! ## Forward runs -/
 
 /-- **Where `x` returns, `y` returns** with a log of the same size and a result related by `R`. -/
-def Fw (R : α → β → Prop) (x : Except String (α × Transcript) × Array Claims.Msg)
-    (y : Except String (β × Transcript) × Array Claims.Msg) : Prop :=
+def Fw (R : α → β → Prop) (x : Except String (α × Transcript) × Array Hash.Msg)
+    (y : Except String (β × Transcript) × Array Hash.Msg) : Prop :=
   ∀ a t L, x = (.ok (a, t), L) → ∃ b t' L', y = (.ok (b, t'), L') ∧ L'.size = L.size ∧ R a b
 
-theorem run_ok {x : TMW PS α} {f : α → TMW PS β} {t t₂ : Transcript} {l L₂ : Array Claims.Msg} {b : β}
+theorem run_ok {x : TMW PS α} {f : α → TMW PS β} {t t₂ : Transcript} {l L₂ : Array Hash.Msg} {b : β}
     (h : ((x >>= f).run t).go l = (.ok (b, t₂), L₂)) :
     ∃ a t₁ L, (x.run t).go l = (.ok (a, t₁), L) ∧ ((f a).run t₁).go L = (.ok (b, t₂), L₂) := by
   rcases e : (x.run t).go l with ⟨r, L⟩
@@ -79,7 +79,7 @@ theorem run_ok {x : TMW PS α} {f : α → TMW PS β} {t t₂ : Transcript} {l L
   · exact ⟨a, t₁, L, rfl, by rw [bind_go e] at h; exact h⟩
 
 theorem fw_bind {R : α → β → Prop} {S : γ → δ → Prop} {x : TMW PS α} {y : TMW PS β} {f : α → TMW PS γ}
-    {g : β → TMW PS δ} {t t' : Transcript} {l l' : Array Claims.Msg}
+    {g : β → TMW PS δ} {t t' : Transcript} {l l' : Array Hash.Msg}
     (hxy : Fw R ((x.run t).go l) ((y.run t').go l'))
     (hfg : ∀ a b t₁ t₁' L L', L'.size = L.size → R a b → Fw S (((f a).run t₁).go L) (((g b).run t₁').go L')) :
     Fw S (((x >>= f).run t).go l) (((y >>= g).run t').go l') := by
@@ -89,7 +89,7 @@ theorem fw_bind {R : α → β → Prop} {S : γ → δ → Prop} {x : TMW PS α
   rw [bind_go e₁]
   exact hfg a b t₁ t₁' L L' hL hR c t₂ L₂ h₂
 
-theorem fw_pure {R : α → β → Prop} {a : α} {b : β} {t t' : Transcript} {l l' : Array Claims.Msg}
+theorem fw_pure {R : α → β → Prop} {a : α} {b : β} {t t' : Transcript} {l l' : Array Hash.Msg}
     (hl : l'.size = l.size) (h : R a b) :
     Fw R (((pure a : TMW PS α).run t).go l) (((pure b : TMW PS β).run t').go l') := by
   intro c t₂ L₂ hc
@@ -100,7 +100,7 @@ theorem fw_pure {R : α → β → Prop} {a : α} {b : β} {t t' : Transcript} {
 
 /-- **Two transcript actions that send nothing**, the second one that never throws. -/
 theorem fw_liftTM_bind {S : γ → δ → Prop} {x x' : TM Unit} {f : Unit → TMW PS γ} {g : Unit → TMW PS δ}
-    {t t' : Transcript} {l l' : Array Claims.Msg} (hx' : ∃ t₁', x' t' = .ok ((), t₁'))
+    {t t' : Transcript} {l l' : Array Hash.Msg} (hx' : ∃ t₁', x' t' = .ok ((), t₁'))
     (h : ∀ t₁ t₁', Fw S (((f ()).run t₁).go l) (((g ()).run t₁').go l')) :
     Fw S (((liftTM x >>= f).run t).go l) (((liftTM x' >>= g).run t').go l') := by
   intro c t₂ L₂ hc
@@ -115,7 +115,7 @@ theorem fw_liftTM_bind {S : γ → δ → Prop} {x x' : TM Unit} {f : Unit → T
 /-- **A step whose return reads only the log's size**: from a log of the same size it returns the same, with a log of
 the same size. -/
 def Coined (m : TMW PS α) : Prop :=
-  ∀ (t t' : Transcript) (l l' : Array Claims.Msg) (a : α) (t₁ : Transcript) (L : Array Claims.Msg),
+  ∀ (t t' : Transcript) (l l' : Array Hash.Msg) (a : α) (t₁ : Transcript) (L : Array Hash.Msg),
     (m.run t).go l = (.ok (a, t₁), L) → l'.size = l.size →
     ∃ t₁' L', (m.run t').go l' = (.ok (a, t₁'), L') ∧ L'.size = L.size
 
@@ -134,7 +134,7 @@ theorem coined_bind {x : TMW PS α} {f : α → TMW PS β} (hx : Coined x) (hf :
   obtain ⟨t₂', L₂', e₂, hL₂⟩ := hf a t₁ t₁' L L' b t₂ L₂ h₂ hL
   exact ⟨t₂', L₂', by rw [bind_go e₁]; exact e₂, hL₂⟩
 
-theorem squeezeP_zero_go (coin : ℕ → ℕ → F128) (n : ℕ) (kind : UInt8) (t : Transcript) (l : Array Claims.Msg) :
+theorem squeezeP_zero_go (coin : ℕ → ℕ → F128) (n : ℕ) (kind : UInt8) (t : Transcript) (l : Array Hash.Msg) :
     ((squeezeP (asksCut coin n) kind 0).run t).go l = (.ok (#[], { t with pending := framed t kind 0 }), l) := by
   simp only [squeezeP, StateT.run, ↓reduceIte]
   rfl
@@ -172,7 +172,7 @@ abbrev SR (s s' : LigState) : Prop := s.msgs.size = s'.msgs.size
 /-- **Forward Ligerito runs**: from states with as many messages, transcripts and logs of one size, where `x` returns,
 `y` returns, with as many messages, a log of the same size and a result related by `R`. -/
 def FwL (R : α → β → Prop) (x : LP PS α) (y : LP PS β) : Prop :=
-  ∀ (s s' : LigState) (t t' : Transcript) (l l' : Array Claims.Msg), SR s s' → l'.size = l.size →
+  ∀ (s s' : LigState) (t t' : Transcript) (l l' : Array Hash.Msg), SR s s' → l'.size = l.size →
     Fw (fun a b => R a.1 b.1 ∧ SR a.2 b.2) (((x.run s).run t).go l) (((y.run s').run t').go l')
 
 theorem liftT_run (m : TMW PS α) (s : LigState) : (liftT m : LP PS α).run s = m >>= fun a => pure (a, s) := by
@@ -267,7 +267,7 @@ theorem fwL_powP (nonce : ℕ → ℕ → UInt64) (kind : ℕ) : FwL (fun _ _ =>
 
 /-- A level's commitment sends nothing and returns. -/
 theorem lift_commit_go (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (g : Array F128)
-    (salt : ℕ → ByteArray) (t : Transcript) (l : Array Claims.Msg) :
+    (salt : ℕ → ByteArray) (t : Transcript) (l : Array Hash.Msg) :
     ∃ cm, ((StateT.lift (commitP (Hashes.ofSha512 h) ms lv g salt) : TMW PS Commit).run t).go l = (.ok (cm, t), l) := by
   obtain ⟨cm, hcm⟩ := JsonRT.commitP_ok h ms lv g salt
   refine ⟨cm, ?_⟩
@@ -403,7 +403,7 @@ theorem fwL_challengeP (coin : ℕ → ℕ → F128) (n : ℕ) {split : Bool} :
 /-- **A run of Ligerito's program, then a transcript step**, forward. -/
 theorem fw_runL_bind {R : α → β → Prop} {S : γ → δ → Prop} {x : LP PS α} {y : LP PS β}
     {f : α × LigState → TMW PS γ} {g : β × LigState → TMW PS δ} {s s' : LigState} {t t' : Transcript}
-    {l l' : Array Claims.Msg} (hxy : FwL R x y) (hS : SR s s') (hl : l'.size = l.size)
+    {l l' : Array Hash.Msg} (hxy : FwL R x y) (hS : SR s s') (hl : l'.size = l.size)
     (hfg : ∀ a b s₁ s₁' t₁ t₁' L L', L'.size = L.size → R a b → SR s₁ s₁' →
       Fw S (((f (a, s₁)).run t₁).go L) (((g (b, s₁')).run t₁').go L')) :
     Fw S (((x.run s >>= f).run t).go l) (((y.run s' >>= g).run t').go l') :=
@@ -421,7 +421,7 @@ commitments, schemes and hashes on either side. -/
 theorem ligeritoPZk_cut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (h h' : ByteArray → ByteArray) (ms ms' : MerkleScheme)
     (sch : Schedule) (T T' : F128) (cm0 cm0' : Commit) (t b b' : Array F128) (lay lay' : Zk.PadLayout)
     (hp : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (src : RepSrc)
-    (tr tr' : Transcript) (l l' : Array Claims.Msg) (hl : l'.size = l.size) :
+    (tr tr' : Transcript) (l l' : Array Hash.Msg) (hl : l'.size = l.size) :
     Fw (fun a c => a.1.messages.size = c.1.messages.size ∧ a.2.2.challenges.size = c.2.2.challenges.size ∧
         a.2.2.ood.size = c.2.2.ood.size)
       (((ligeritoPZk (asksCut coin n) (Hashes.ofSha512 h) ms sch T cm0 t b lay hp rep tPad extra lanePad salt

@@ -382,31 +382,36 @@ class DefStore:
         return out
 
 
-_PRIMS: dict | None = None
+def load_catalog(package: str) -> None:
+    """Import every module of catalog package ``package`` but its quarantine, so its Definitions are registered."""
+    import importlib
+    import pkgutil
+
+    pkg = importlib.import_module(package)
+    for m in pkgutil.iter_modules(pkg.__path__):
+        if m.name.startswith("quarantine"):
+            continue
+        try:
+            importlib.import_module(f"{package}.{m.name}")
+        except Exception:  # noqa: BLE001  (a registry module that needs a GPU stack or data)
+            continue
+
+
+def _registered(pid: str):
+    """The registered PrimitiveDefinition ``pid``, None when no loaded module registers one (`load_catalog`)."""
+    import verity.circuits.ops.prims  # noqa: F401
+    from verity.circuits.defs import REGISTRY, PrimitiveDefinition
+
+    p = REGISTRY.defs.get(pid)
+    return p if isinstance(p, PrimitiveDefinition) else None
 
 
 def prims() -> dict:
-    """Every registered PrimitiveDefinition by id (verity.circuits.ops and the vLLM registry modules)."""
-    global _PRIMS
-    if _PRIMS is None:
-        import importlib
-        import pkgutil
+    """Every registered PrimitiveDefinition by id: ``verity.circuits.ops``' and those of the catalogs loaded (`load_catalog`)."""
+    import verity.circuits.ops.prims  # noqa: F401
+    from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 
-        from verity.circuits.defs import PrimitiveDefinition
-
-        mods = ["verity.circuits.ops.prims"]
-        import verity_vllm.definitions.registry as R
-        mods += [f"{R.__name__}.{m.name}" for m in pkgutil.iter_modules(R.__path__) if not m.name.startswith(("quarantine",))]
-        _PRIMS = {}
-        for m in mods:
-            try:
-                mod = importlib.import_module(m)
-            except Exception:  # noqa: BLE001  (a registry module that needs a GPU stack or data)
-                continue
-            for v in vars(mod).values():
-                if isinstance(v, PrimitiveDefinition):
-                    _PRIMS.setdefault(v.id, v)
-    return _PRIMS
+    return {k: v for k, v in REGISTRY.defs.items() if isinstance(v, PrimitiveDefinition)}
 
 
 def _width_prim(pid: str):
@@ -497,7 +502,7 @@ class Walker:
             return {"ref": self.tc_unit(pid)}
         if (m := re.fullmatch(r"GatherBf16x(\d+)_v1", pid)) and GATHERS == "mux":
             return self.gather(int(m.group(1)))
-        p = prims().get(pid) or _width_prim(pid)
+        p = _registered(pid) or _width_prim(pid)
         if p is None:
             return {"not_yet_lowered": pid, "reason": "primitive not in the registries this export reads"}
         widths = [w for _, t in p.params for w in t.leaf_widths()]
@@ -699,7 +704,7 @@ class Walker:
     def _fold(self, pid: str, consts: list):
         """A gate of constant (or lane-counter) operands: its value, COUNTER when a counter reads into it, or None when it
         cannot be folded here (not one word, or no evaluator)."""
-        p = prims().get(pid) or _width_prim(pid)
+        p = _registered(pid) or _width_prim(pid)
         if p is None or len(p.ret.leaf_widths()) != 1:
             return None
         if any(c is COUNTER for c in consts):
@@ -1460,7 +1465,6 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
 
     if g["template"].startswith(("Const32", "Const64")):
         return {}
-    prims()  # every registry module imported: `specialization` reads the registry as registered
     q = g.get("q_word_v1") or {}
     try:
         if g["definition"] in OPENED and GATHERS == "opening":
@@ -1556,10 +1560,14 @@ def main(argv=None) -> int:
     global GATHERS
     ap = argparse.ArgumentParser(prog="verity_flock.boolean_export")
     ap.add_argument("--program-graph", action="append", required=True)
+    ap.add_argument("--catalog", action="append", required=True, help="a catalog package whose modules register the program "
+                    "graphs' Definitions (each module imported first)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--gathers", choices=("mux", "opening"), default=GATHERS,
                     help="a gather from committed weights as a multiplexer (default) or as a commitment opening")
     a = ap.parse_args(argv)
+    for package in a.catalog:
+        load_catalog(package)
     GATHERS = a.gathers
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

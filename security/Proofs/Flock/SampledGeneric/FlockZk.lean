@@ -137,7 +137,7 @@ set_option synthInstance.maxHeartbeats 1000000
 abbrev Parser : Type := _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation
 
 /-- The hash the server's runs call: SHA-512 on messages. -/
-abbrev sha : Claims.Msg → Claims.Msg := Claims.ZKMal.CoinOpen.shaH
+abbrev sha : Hash.Msg → Hash.Msg := Claims.ZKMal.CoinOpen.shaH
 
 /-- The ZK server's session at the tables `T`: the coin layer's, at the coin counts the session loop requests. -/
 abbrev Sess (T : Claims.ZKMal.CoinLayer.TableData) : Claims.ZKMal.RefSession :=
@@ -151,11 +151,11 @@ abbrev Release (T : Claims.ZKMal.CoinLayer.TableData) : Type := Claims.ZKServer.
 
 /-- The transport's frame state at each statement and coins (`zk_server_lean_loop`'s `pc`). -/
 abbrev PC (T : Claims.ZKMal.CoinLayer.TableData) : Type :=
-  Claims.Msg → List (Sess T).Coin → _root_.Flock.ZkServer.Frame.Masker
+  Hash.Msg → List (Sess T).Coin → _root_.Flock.ZkServer.Frame.Masker
 
 /-- The transport's checked frame state (`zk_server_lean_loop`'s `fc`). -/
 abbrev FC (T : Claims.ZKMal.CoinLayer.TableData) : Type :=
-  Claims.Msg → List (Sess T).Coin → Except String _root_.Flock.ZkServer.Frame.Masker
+  Hash.Msg → List (Sess T).Coin → Except String _root_.Flock.ZkServer.Frame.Masker
 
 /-- The session with the release's stops, which the server's simulator and its error read. -/
 abbrev Stops (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (pc : PC T) (fc : FC T) :
@@ -163,7 +163,7 @@ abbrev Stops (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (pc : PC T) 
   (Sess T).withStops (Claims.ZKServer.LeanRelease.rfOf (Sess T) L pc fc Claims.ZKServer.Loop.readCoins) L.stop
 
 /-- The server's rounds at `x`: the masked verifier's and the `Hello`. -/
-noncomputable abbrev rounds (rel : Parser) : Claims.Msg → ℕ := fun x => (FlockDeploy.deployZk rel).V.k x + 1
+noncomputable abbrev rounds (rel : Parser) : Hash.Msg → ℕ := fun x => (FlockDeploy.deployZk rel).V.k x + 1
 
 /-- **A verifier of the server's rounds**: a malicious verifier `V*` and its tape `θ`, whose round count at every
 statement is the deployed masked verifier's plus the `Hello` (`zk_server_lean_loop`'s `hk`, at every statement). -/
@@ -183,34 +183,34 @@ noncomputable abbrev sim (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (
 /-- The honest view: the deferred server's transcript with the worker `wk` (`ZkServer.proverD`) against `v`'s `V*`,
 scheduled, at the server's tape and check coins `ω`. -/
 noncomputable def realView (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (wk : L.toSrv.Worker)
-    {Θ : Type} (x : Claims.Msg) (w : Claims.Flock.Wit) (v : Verifier rel Θ) (ω : Tape T × L.toSrv.Chk) :
-    List ((Claims.Msg × Claims.Out) × ℕ) :=
+    {Θ : Type} (x : Hash.Msg) (w : Claims.Flock.Wit) (v : Verifier rel Θ) (ω : Tape T × L.toSrv.Chk) :
+    List ((Hash.Msg × Claims.Out) × ℕ) :=
   L.toSrv.timed x (Claims.runStar sha (L.toSrv.proverD L.fillOf (rounds rel) wk w) v.Vs x ω v.θ).msgs
 
 /-- The simulator's view: `sim`'s transcript against `v`'s `V*` at its coins `c`, scheduled the same way. -/
 noncomputable def simView (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (pc : PC T)
-    (fc : FC T) (t : ℕ) {Θ : Type} (x : Claims.Msg) (v : Verifier rel Θ) (c : (sim rel T L pc fc t).C x) :
-    List ((Claims.Msg × Claims.Out) × ℕ) :=
+    (fc : FC T) (t : ℕ) {Θ : Type} (x : Hash.Msg) (v : Verifier rel Θ) (c : (sim rel T L pc fc t).C x) :
+    List ((Hash.Msg × Claims.Out) × ℕ) :=
   L.toSrv.timed x ((sim rel T L pc fc t).out sha v.Vs v.θ x c)
 
 /-- **The ZK server as a `Zk`**, at the worker `wk`: the honest view over the server's tape and check coins
 (`realView`), the simulator's over its coins (`simView`). -/
 noncomputable def server (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (wk : L.toSrv.Worker)
     (pc : PC T) (fc : FC T) (t : ℕ) (Θ : Type) :
-    Zk Claims.Msg Claims.Flock.Wit (Verifier rel Θ) (List ((Claims.Msg × Claims.Out) × ℕ)) where
+    Zk Hash.Msg Claims.Flock.Wit (Verifier rel Θ) (List ((Hash.Msg × Claims.Out) × ℕ)) where
   real x w v := ⟨.coin (Tape T × L.toSrv.Chk) fun ω => .ret (realView rel T L wk x w v ω), fun _ => PUnit.unit⟩
   sim x v := ⟨.coin ((sim rel T L pc fc t).C x) fun c => .ret (simView rel T L pc fc t x v c), fun _ => PUnit.unit⟩
 
 theorem server_real_pr (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (wk : L.toSrv.Worker)
-    (pc : PC T) (fc : FC T) (t : ℕ) (Θ : Type) (x : Claims.Msg) (w : Claims.Flock.Wit) (v : Verifier rel Θ)
-    (E : List ((Claims.Msg × Claims.Out) × ℕ) → Prop) :
+    (pc : PC T) (fc : FC T) (t : ℕ) (Θ : Type) (x : Hash.Msg) (w : Claims.Flock.Wit) (v : Verifier rel Θ)
+    (E : List ((Hash.Msg × Claims.Out) × ℕ) → Prop) :
     ((server rel T L wk pc fc t Θ).real x w v).pr E =
       ENNReal.ofReal (Claims.Pr fun ω => E (realView rel T L wk x w v ω)) :=
   pr_uniform _ E
 
 theorem server_sim_pr (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (wk : L.toSrv.Worker)
-    (pc : PC T) (fc : FC T) (t : ℕ) (Θ : Type) (x : Claims.Msg) (v : Verifier rel Θ)
-    (E : List ((Claims.Msg × Claims.Out) × ℕ) → Prop) :
+    (pc : PC T) (fc : FC T) (t : ℕ) (Θ : Type) (x : Hash.Msg) (v : Verifier rel Θ)
+    (E : List ((Hash.Msg × Claims.Out) × ℕ) → Prop) :
     ((server rel T L wk pc fc t Θ).sim x v).pr E =
       ENNReal.ofReal (Claims.Pr fun c => E (simView rel T L pc fc t x v c)) :=
   pr_uniform _ E
@@ -219,7 +219,7 @@ theorem server_sim_pr (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L :
 session's leaves at `x` and `Fork` the real game's collision finder, two runs of the switched prover at `w` against `v`'s
 `V*` on one nonce: `zk_server_lean_loop`'s bound less `2·Pr_sim`. -/
 noncomputable def err (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T)
-    (pc : PC T) (fc : FC T) (t : ℕ) (δ₁ : ℝ≥0∞) {Θ : Type} (x : Claims.Msg) (w : Claims.Flock.Wit)
+    (pc : PC T) (fc : FC T) (t : ℕ) (δ₁ : ℝ≥0∞) {Θ : Type} (x : Hash.Msg) (w : Claims.Flock.Wit)
     (v : Verifier rel Θ) : ℝ≥0∞ :=
   2 * ENNReal.ofReal ((8 * (Stops T L pc fc).nLeaves x * δ₁.toReal +
       8 * t * (Stops T L pc fc).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
@@ -230,7 +230,7 @@ states (`ProgReads`), and the link, final, live and fill rounds' releases being 
 `FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`). `LiveRoundEq` holds at every history and gives `LiveRoundEqOwn`, the
 worker's own (`LiveRoundEq.own`). -/
 abbrev Live (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T) (wk : L.toSrv.Worker)
-    (pc : PC T) (fc : FC T) (x : Claims.Msg) (w : Claims.Flock.Wit) : Prop :=
+    (pc : PC T) (fc : FC T) (x : Hash.Msg) (w : Claims.Flock.Wit) : Prop :=
   Claims.ZKServer.LeanRelease.ProgReads (Sess T) L pc fc x ∧
     Claims.ZKServer.LeanRelease.LinkRoundEq (Sess T) vs L x w ∧
     Claims.ZKServer.LeanRelease.FinalRoundEq (Sess T) vs L sha wk x w ∧
@@ -240,7 +240,7 @@ abbrev Live (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : R
 /-- **The relation the server is zero knowledge at**: the statement's (`Claims.Flock.R` at the masked deployment's
 parser) with the live path's premises at the statement (`Live`). -/
 abbrev LiveRel (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T)
-    (wk : L.toSrv.Worker) (pc : PC T) (fc : FC T) (x : Claims.Msg) (w : Claims.Flock.Wit) : Prop :=
+    (wk : L.toSrv.Worker) (pc : PC T) (fc : FC T) (x : Hash.Msg) (w : Claims.Flock.Wit) : Prop :=
   Claims.Flock.R (FlockDeploy.deployZk rel).parse x w ∧ Live T vs L wk pc fc x w
 
 /-- **`zk_server_lean_loop` in `Exp`'s terms**: at a statement in the relation with its live path's premises
@@ -254,7 +254,7 @@ theorem server_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs :
     (hδ₁ : δ₁ ≠ ⊤) (hS : (Sess T).Tables) (hV : (Sess T).Complete (Claims.Flock.R (FlockDeploy.deployZk rel).parse))
     (hD : (Sess T).DummyReg) (hc : (Sess T).Causal) (hsc : (Sess T).SwCausal vs) (hT : (Sess T).TapeOK)
     (L₀ L : Release T) (hL : L = Claims.ZKServer.LeanRelease.loop Claims.ZKServer.Loop.loopNr T L₀)
-    (wk : L.toSrv.Worker) (pc : PC T) (fc : FC T) (Θ : Type) (x : Claims.Msg) (w : Claims.Flock.Wit)
+    (wk : L.toSrv.Worker) (pc : PC T) (fc : FC T) (Θ : Type) (x : Hash.Msg) (w : Claims.Flock.Wit)
     (hR : LiveRel rel T vs L wk pc fc x w) (v : Verifier rel Θ) :
     Below ((server rel T L wk pc fc t Θ).real x w v) ((server rel T L wk pc fc t Θ).sim x v) 2
       (err rel T vs L pc fc t δ₁ x w v) := by
@@ -298,7 +298,7 @@ theorem audit_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : 
     (L₀ L : Release T) (hL : L = Claims.ZKServer.LeanRelease.loop Claims.ZKServer.Loop.loopNr T L₀)
     (wk : L.toSrv.Worker) (pc : PC T) (fc : FC T) (Θ : Type)
     {n : ℕ} {Tr Rnd Com : Type} [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com) {εh : ℝ≥0∞}
-    (hH : H.Hiding εh) (stmtOf : Com × Finset (Fin n) → Claims.Msg)
+    (hH : H.Hiding εh) (stmtOf : Com × Finset (Fin n) → Hash.Msg)
     (samp : Verifier rel Θ → Com → Finset (Fin n)) (wit : Tr → Rnd → Finset (Fin n) → Claims.Flock.Wit) (Xt : Tr)
     (hR : ∀ r S, Claims.Flock.R (FlockDeploy.deployZk rel).parse (stmtOf (H.commit Xt r, S)) (wit Xt r S))
     (hPr : ∀ r S, Claims.ZKServer.LeanRelease.ProgReads (Sess T) L pc fc (stmtOf (H.commit Xt r, S)))

@@ -80,7 +80,7 @@ theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : ResourceAccounting.Device �
 
 /-- **The population is `PopMatches`' count**: where the descriptor parses as `p` and `p`'s layout under the query is
 `l`, `PopMatches desc q n` makes `Partition.units p q` the count `n`. -/
-theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_.Spot.Program}
+theorem units_of_popMatches {desc : Hash.Msg} {q : Json} {n : ℕ} {p : _root_.Spot.Program}
     {l : _root_.Spot.Slots.SlotOrder} (h : Flock.Bridge.PopMatches desc q n)
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p)
     (hl : _root_.Spot.Slots.layout p q = .ok l) : _root_.Spot.Partition.units p q = .ok n := by

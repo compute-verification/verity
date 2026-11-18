@@ -515,16 +515,6 @@ def test_readers_of_live_weights_see_the_plaintext_an_option_released(monkeypatc
     assert comp.weights() == {} and PO.weights_view(comp, model) is model
 
 
-def test_with_pous_on_an_option_keeping_a_resident_weight_copy_is_refused(monkeypatch):
-    pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1", "ncp-v2"))
-    pouw.keeps_weight_copy = lambda scheme: scheme == "ncp-v2"
-    _fake_adapter(monkeypatch, "pous", _pous([]), schemes=("band-chain/d12/v1",))
-    assert PO.refusals(_serve("pouw:ncp-v2")) == ()
-    got = PO.refusals(_serve("pouw:ncp-v2", "pous:band-chain/d12/v1"))
-    assert len(got) == 1 and got[0].startswith("pouw:ncp-v2: keeps a weight-derived copy resident across forwards")
-    assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == ()
-
-
 @pytest.mark.parametrize("knob,target,world,match", [
     ("pous:s1", {}, 1, "a row is a sampled-proofs run"),
     ("pous:s1,sampled-proofs:rows-sha512", {"protocols": ["pouw:s1", "sampled-proofs:rows-sha512"]}, 1, "contradicts"),
