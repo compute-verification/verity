@@ -1,9 +1,9 @@
 """The network attester's admission on the served node: its release order (`ReleaseOrder`) and the certified tick
 (`TickGate`, `RuleGate`), the readers of its release headers and its watermark (`release_of`, `Watermark`), and the
 frontends that feed them: serve-openai's (`TickAdmit`) and an OpenAI-style server's middleware (`ReleaseFeed`). The
-adapter hands in what is its own: the engine loop's submit and abort, how it refuses an admission, its server's
-routes and body check, the configuration it read, and the exchange of `verity.hooks` events and requests the gate
-attaches to. Nothing here imports the adapter or vLLM.
+adapter hands in what is its own: the engine loop's submit and abort, its server's routes and body check, the
+configuration it read, and the exchange of `verity.hooks` events and requests the gate and serve-openai's frontend
+attach to. Nothing here imports the adapter or vLLM.
 
 `ReleaseOrder` is a reorder buffer in front of the engine loop's ``submit``: it forwards request n of the release order
 once the frontend holds every earlier-released request, each forwarded, refused or dropped, and holds it until then. There
@@ -360,10 +360,8 @@ class TickGate:
 
     def attach(self, exchange: Any, name: str | None = None) -> None:
         """File this gate on ``exchange`` (the adapter's exchange of `verity.hooks` events and requests) under scheme
-        ``name``, by default the network attester's declared name, and subscribe it to the ``steps`` hook."""
-        if name is None:
-            from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER
-            name = NETWORK_ATTESTER.name
+        ``name`` (the network attester's declaration's by default), and subscribe it to the ``steps`` hook."""
+        name = name or scheme_name()
         exchange.request(name, H.StartOnBoundary(self))
         exchange.subscribe(name, "steps", self.on)
 
@@ -566,14 +564,19 @@ def open_watermark(headers: Mapping[str, str], runs: set[str], emit: Callable[[d
     return Watermark(run, emit)
 
 
+def scheme_name() -> str:
+    """The name the network attester's scheme registers under."""
+    from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER
+    return NETWORK_ATTESTER.name
+
+
 class TickAdmit:
     """serve-openai's frontend under ``--admit tick``: `key` reads a request's release headers (`ValueError` on a malformed
     or repeated N, the server's 400), `submit` hands the engine loop's gate the release (through ``take``, the loop's
     queue) just before the request itself (``forward``), `passed` says a numbered request won't be submitted, and the
-    server's watermark route feeds `watermark` streams, one a run and none of a client's (`open_watermark`). A release
+    watermark's route (`attach`, `serve_watermark`) feeds `watermark` streams, one a run and none of a client's (`open_watermark`). A release
     a watermark line names lost is the gate's to drop and this frontend's to answer, since the engine never finishes a
-    request its scheduler never saw: a request of it that is in the engine is answered with that error (``refuse``, the
-    adapter's answer to an admission) and aborted, and
+    request its scheduler never saw: a request of it that is in the engine is answered with that error and aborted, and
     one that comes later is refused (`key`). A watermark that breaks forgets its run's lost releases: the gate is open
     then, and adds every request at once. The frontend sees no other opening of the gate (a watermark that stalls past
     the hold, the engine loop's drain), so after one a line still has it abort or refuse the requests of the releases it
@@ -581,14 +584,46 @@ class TickAdmit:
     orders nothing. All of it runs on the HTTP server's event loop."""
 
     def __init__(self, forward: Callable[[Any], None], abort: Callable[[str], None],
-                 take: Callable[[dict[str, Any]], None], *, refuse: Callable[[Any, str], None]) -> None:
-        self.forward, self.abort, self.take, self.refuse = forward, abort, take, refuse
+                 take: Callable[[dict[str, Any]], None]) -> None:
+        self.forward, self.abort, self.take = forward, abort, take
         self.seen: dict[str, set[int]] = {}
         self.buckets: dict[tuple[str, int], int | None] = {}
         self.submitted: dict[tuple[str, int], Any] = {}     # (run, N) -> its admission, until its answer ends
         self.lost: dict[str, set[int]] = {}                 # run -> the N its watermark named lost
         self.streams: set[str] = set()                      # the runs whose watermark stream has come
         self.counts = {"numbered": 0, "unordered": 0, "passed": 0, "lost": 0, "watermarks": 0}
+        self.refuse: Callable[[str, str], None] | None = None
+
+    def attach(self, exchange: Any, name: str | None = None) -> None:
+        """Serve the watermark's route on ``exchange`` (the adapter's exchange of `verity.hooks` events and requests)
+        under scheme ``name`` (the network attester's declaration's by default), and refuse there the requests of the
+        releases it names lost."""
+        name = name or scheme_name()
+        exchange.request(name, H.ServeRoute(WATERMARK_PATH, self.serve_watermark))
+        self.refuse = lambda input, why: exchange.request(name, H.RefuseInput(input, why))
+
+    def serve_watermark(self, first_line: str, headers: Mapping[str, str], body: Iterable[bytes]) -> tuple[int, str]:
+        """The watermark's route (`hooks.Route`): its chunked body's lines go to the gate as they come, and its end is
+        answered 200 (400 for a malformed stream). A POST that isn't a run's one stream (`watermark`) is answered 400
+        with its body unread."""
+        if not first_line.startswith("POST "):
+            return 405, f"{WATERMARK_PATH} takes POST"
+        try:
+            w = self.watermark(headers)
+        except ValueError as e:
+            return 400, str(e)
+        if "chunked" not in headers.get("transfer-encoding", "").lower():
+            w.close("the watermark's body is chunked")
+        try:
+            for data in body:
+                if w.closed:
+                    break
+                w.feed(data)
+            if not w.closed:
+                w.close()
+        except H.Broken as e:
+            w.close(f"the watermark broke off: {e}")
+        return (200, "") if w.error is None else (400, w.error)
 
     def key(self, headers: Mapping[str, str]) -> tuple[str, int] | None:
         rel = release_of(headers)
@@ -647,8 +682,9 @@ class TickAdmit:
         for n in lost:
             adm = self.submitted.get((run, n))
             if adm is not None:
-                self.refuse(adm, LOST.format(n=n, run=run))
-                self.abort(adm.engine_id)
+                if self.refuse is None:
+                    raise RuntimeError("a TickAdmit refuses through the exchange it is attached to (attach)")
+                self.refuse(adm.engine_id, LOST.format(n=n, run=run))
 
     def summary(self) -> dict[str, Any]:
         return {**self.counts, "runs": len(self.seen)}

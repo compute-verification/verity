@@ -125,30 +125,46 @@ from __future__ import annotations
 
 import asyncio
 import json
+import queue
 import shutil
 import signal
 import sys
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity import hooks as H
 from verity_vllm import messages as M, settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
-from verity.protocols.resource_accounting.network.prover import serve_head as HD
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL,
                                    serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
                                    serve_seal as SS)
-from verity.protocols.resource_accounting.network.prover.admission import WATERMARK_PATH, ReleaseOrder, Tick, TickAdmit, TickGate
+from verity.protocols.resource_accounting.network.prover.admission import ReleaseOrder, Tick, TickAdmit, TickGate
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
                                                records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
+
+NO_REQUEST_LINE = ("the request's first line isn't `METHOD target HTTP/1.0` or `HTTP/1.1`, one space between and nothing "
+                   "after")
+_TOKEN = frozenset("!#$%&'*+-.^_`|~0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+def request_line(line: str) -> tuple[str, str] | None:
+    """(method, target) of an HTTP/1.x request's first line: a token, a target of printable non-space characters, and
+    ``HTTP/1.0`` or ``HTTP/1.1``, one space between and nothing after; None for any other line."""
+    parts = line.split(" ")
+    if not (len(parts) == 3 and parts[2] in ("HTTP/1.0", "HTTP/1.1") and parts[0] and set(parts[0]) <= _TOKEN
+            and parts[1] and all(c.isprintable() and not c.isspace() for c in parts[1])):
+        return None
+    return parts[0], parts[1]
+
 
 PRECISIONS = ("verity_int8", "int8_exact", "pin", "bfloat16")
 #: precision -> (the int8 parts it registers, the int8 scope its layers must then run; None: not checked). Every precision
@@ -276,8 +292,13 @@ class Server:
 
     def __init__(self, *, proto: PlainProtocol, served_name: str, max_model_len: int, tokenizer: Any, defaults: Mapping[str, Any],
                  submit: Callable[[Admission], None], abort: Callable[[str], None], model_root: str = "",
-                 clock: Callable[[], float] = time.time, order: ReleaseOrder | TickAdmit | None = None) -> None:
+                 clock: Callable[[], float] = time.time, order: ReleaseOrder | TickAdmit | None = None,
+                 exchange: M.Exchange | None = None,
+                 arrive: Callable[[str, str, Mapping[str, str]], None] | None = None) -> None:
         self.proto, self.served_name, self.max_model_len = proto, served_name, int(max_model_len)
+        self.ex, self.arrive = exchange or M.current(), arrive
+        self.ex.refuse = self.refuse
+        self.live: dict[str, Admission] = {}                   # engine id -> its admission, while its answer goes on
         self.tokenizer, self.defaults, self.order = tokenizer, dict(defaults), order
         self.submit, self.abort = (submit, abort) if order is None else (order.submit, order.abort)
         self.model_root, self.clock = model_root or served_name, clock
@@ -290,16 +311,19 @@ class Server:
             head = await reader.readuntil(b"\r\n\r\n")
             t_head = self.clock()
             line, *fields = head[:-4].split(b"\r\n")
-            first = HD.request_line(line)
+            first_line = line.decode("latin-1")
+            first = request_line(first_line)
             if first is None:
-                return await self._json(writer, 400, error_body(HD.NO_REQUEST_LINE, 400, "BadRequestError"))
+                return await self._json(writer, 400, error_body(NO_REQUEST_LINE, 400, "BadRequestError"))
             method, path = first
-            headers = HD.header_fields(fields)
-            if method == "POST" and path.split("?", 1)[0] == WATERMARK_PATH and isinstance(self.order, TickAdmit):
-                return await self.watermark(reader, writer, headers)
+            headers = {k.strip().lower().decode("latin-1"): v.strip().decode("latin-1")
+                       for k, _, v in (f.partition(b":") for f in fields if f)}
+            served = self.ex.route(path.split("?", 1)[0])
+            if served is not None:
+                return await self.serve_route(served[1], first_line, headers, reader, writer)
             body = await reader.readexactly(int(headers.get("content-length") or 0))
             await self.route(method, path.split("?", 1)[0], body, writer, headers, head + body,
-                             {"head": t_head, "received": self.clock()})
+                             {"head": t_head, "received": self.clock()}, first_line)
         except (asyncio.IncompleteReadError, ConnectionError, ValueError):
             pass
         finally:
@@ -309,28 +333,29 @@ class Server:
             except (ConnectionError, OSError):
                 pass
 
-    async def watermark(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, headers: Mapping[str, str]) -> None:
-        """The network attester's watermark (``--admit tick``): its chunked body's lines go to the gate as they come, and
-        its end is answered 200 (400 for a malformed stream). A POST that isn't a run's one stream (a client's, a run's
-        second: `TickAdmit.watermark`) is answered 400 with its body unread."""
+    async def serve_route(self, serve: H.Route, first_line: str, headers: Mapping[str, str], reader: asyncio.StreamReader,
+                          writer: asyncio.StreamWriter) -> None:
+        """A request on a route a scheme serves (`hooks.ServeRoute`): its body, chunked or of its stated length, streams to
+        ``serve`` on a thread of its own, the event loop waiting while it takes each piece, so nothing ``serve`` calls
+        overlaps the server's own work; its status and text are the answer. A body that breaks off reaches ``serve`` as
+        `hooks.Broken`."""
+        route = _Route(serve, first_line, headers)
         try:
-            w = self.order.watermark(headers)
-        except ValueError as e:
-            return await self._json(writer, 400, error_body(str(e), 400, "BadRequestError"))
-        try:
-            if "chunked" not in headers.get("transfer-encoding", "").lower():
-                w.close("the watermark's body is chunked")
-            while not w.closed:
-                size = int((await reader.readuntil(b"\r\n")).split(b";", 1)[0], 16)
-                if size == 0:
-                    await reader.readuntil(b"\r\n")
-                    w.close()
-                    break
-                w.feed((await reader.readexactly(size + 2))[:-2])
+            if "chunked" in headers.get("transfer-encoding", "").lower():
+                while True:
+                    size = int((await reader.readuntil(b"\r\n")).split(b";", 1)[0], 16)
+                    if size == 0:
+                        await reader.readuntil(b"\r\n")
+                        break
+                    if not route.feed((await reader.readexactly(size + 2))[:-2]):
+                        break
+            elif int(headers.get("content-length") or 0):
+                route.feed(await reader.readexactly(int(headers["content-length"])))
         except (asyncio.IncompleteReadError, ConnectionError, ValueError) as e:
-            w.close(f"the watermark broke off: {type(e).__name__}")
-        await self._json(writer, 200 if w.error is None else 400,
-                         b"" if w.error is None else error_body(w.error, 400, "BadRequestError"))
+            route.feed(H.Broken(type(e).__name__))
+        status, text = route.end()
+        kind = {400: "BadRequestError", 404: "NotFoundError", 405: "MethodNotAllowed"}.get(status, "InternalServerError")
+        await self._json(writer, status, text.encode() if status < 400 else error_body(text, status, kind))
 
     @staticmethod
     def _head(status: int, ctype: str, length: int | None) -> bytes:
@@ -343,7 +368,8 @@ class Server:
         await writer.drain()
 
     async def route(self, method: str, path: str, body: bytes, writer: asyncio.StreamWriter,
-                    headers: Mapping[str, str] | None = None, request: bytes = b"", times: Mapping[str, float] | None = None) -> None:
+                    headers: Mapping[str, str] | None = None, request: bytes = b"", times: Mapping[str, float] | None = None,
+                    first_line: str = "") -> None:
         release = None
         try:
             if path == "/health":
@@ -356,7 +382,8 @@ class Server:
                 return await self._json(writer, 200, json.dumps(self.tokenize(self._body(body))).encode())
             if path == "/v1/completions":
                 release = self._release(headers)
-                return await self.completions(self._body(body), writer, release, self.proto.of(request), times)
+                return await self.completions(self._body(body), writer, release, self.proto.of(request), times,
+                                              first_line, headers or {})
             raise RequestError(f"no route {method} {path}", 404, "NotFoundError")
         except RequestError as e:
             await self._json(writer, e.status, error_body(str(e), e.status, e.kind, e.param))
@@ -437,12 +464,16 @@ class Server:
         print(f"SERVE-OPENAI stream error ({proto.name}) {adm.http_id}: {error}", file=sys.stderr, flush=True)
 
     async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None,
-                          proto: Any = None, times: Mapping[str, float] | None = None) -> None:
+                          proto: Any = None, times: Mapping[str, float] | None = None, first_line: str = "",
+                          headers: Mapping[str, str] | None = None) -> None:
         proto = proto or self.proto
         loop = asyncio.get_running_loop()
         deltas: asyncio.Queue = asyncio.Queue()
         req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release, proto, times)
         created, model = int(self.clock()), self.served_name
+        if self.arrive is not None:
+            self.arrive(adm.engine_id, first_line, dict(headers or {}))
+        self.live[adm.engine_id] = adm
         self.submit(adm)
         self.served += 1
         n_prompt, n_out, finished = len(adm.prompt_ids), 0, False
@@ -493,8 +524,67 @@ class Server:
             writer.write(frame(SSE_DONE) + (b"0\r\n\r\n" if http else b""))
             await writer.drain()
         finally:
+            self.live.pop(adm.engine_id, None)
             if not finished:
                 self.abort(adm.engine_id)
+
+    def refuse(self, input: str, why: str) -> None:
+        """A scheme refused input ``input`` (`hooks.RefuseInput`): its answer, if it is still going on, ends with ``why``
+        and the engine aborts it."""
+        adm = self.live.get(input)
+        if adm is not None:
+            adm.deliver(Delta([], "", error=why))
+            self.abort(input)
+
+
+class _Route:
+    """One request's body handed to a route's ``serve`` on its own thread, a piece at a time (`Server.serve_route`)."""
+
+    END = object()
+
+    def __init__(self, serve: H.Route, first_line: str, headers: Mapping[str, str]) -> None:
+        self.inbox: queue.SimpleQueue = queue.SimpleQueue()
+        self.outbox: queue.SimpleQueue = queue.SimpleQueue()
+        self.answer: tuple[int, str] | None = None
+        threading.Thread(target=self._run, args=(serve, first_line, headers), name="route", daemon=True).start()
+
+    def _body(self) -> Iterator[bytes]:
+        while (item := self.inbox.get()) is not self.END:
+            if isinstance(item, BaseException):
+                raise item
+            yield item
+            self.outbox.put(None)
+
+    def _run(self, serve: H.Route, first_line: str, headers: Mapping[str, str]) -> None:
+        try:
+            answer = serve(first_line, headers, self._body())
+        except Exception as e:  # noqa: BLE001  (a route's fault answers 500)
+            answer = (500, f"{type(e).__name__}: {e}")
+        self.outbox.put(answer)
+
+    def _wait(self) -> bool:
+        if self.answer is None:
+            got = self.outbox.get()
+            if got is None:
+                return True
+            self.answer = got
+        return False
+
+    def feed(self, item: bytes | BaseException) -> bool:
+        """Hand ``serve`` the body's next piece (or why it broke off) and wait while it takes it; False once it has
+        answered."""
+        if self.answer is not None:
+            return False
+        self.inbox.put(item)
+        return self._wait()
+
+    def end(self) -> tuple[int, str]:
+        if self.answer is None:
+            self.inbox.put(self.END)
+            while self._wait():
+                pass
+        assert self.answer is not None
+        return self.answer
 
 
 class HttpThread(threading.Thread):
@@ -695,15 +785,16 @@ def main(opts: Options) -> int:
     if opts.admit == "release-order":
         order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
     elif opts.admit == "tick":
-        from verity_vllm import messages
         from verity_vllm.engine import admission
         from verity_vllm.engine.engine_driver import external_id
         loop.gate = TickGate(Tick.of_ms(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms), hold_s=opts.admit_hold_ms / 1000)
-        loop.gate.attach(messages.current())
+        loop.gate.attach(M.current())
         ticked = loop.hook = admission.install(scheduler(engine), key=external_id)
-        order = TickAdmit(loop.submit, loop.abort, loop.tick, refuse=lambda adm, why: adm.deliver(Delta([], "", error=why)))
+        order = TickAdmit(loop.submit, loop.abort, loop.tick)
+        order.attach(M.current())
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
-                    defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order)
+                    defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order,
+                    arrive=ticked.arrive if ticked is not None else None)
     http = HttpThread(server, opts.host, opts.port)
     http.start()
     http.ready.wait()
