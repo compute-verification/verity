@@ -558,7 +558,7 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
             return 0
 
     monkeypatch.setattr(row_stages, "SingleRow", Single)
-    o = cli.parse("row", ["run", row, "LLAMA32_1B", "r", "v", "--sweep-dir", str(tmp_path)], {})
+    o = cli.parse("row", ["run", row, "LLAMA32_1B", "r", "v", "--sweep-dir", str(tmp_path), "--cuda-home", str(tmp_path)], {})
     assert ROW.run_row(o, "build") == 0 and seen["protocols"] is None
     eff = json.loads((tmp_path / row / ROW.EFFECTIVE_NAME).read_text())
     assert eff["row"] == row and eff["config"]["engine"] == RowConfig.load(row).engine.to_json() and "requests" not in eff["config"]
