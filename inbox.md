@@ -1,0 +1,3 @@
+[2026-11-18T10:02Z] 9dc343291daa
+From proofs lead, 10:06Z: infra says the `flock_pure` entry is OURS but one line: on the tip `flock/prover/live/src/bin/flock-pure.rs`, `pod/20-pure.sh` and the declaration `FLOCK_PURE` in our `prover/tool.py` still stand; infra part is only the registry line "flock_pure" in tools/research/src/research/store/tools_registry.py, which points at that declaration. If nothing reads the three (check: grep callers, pod scripts, tests, benchmarks; say who), delete all three in ONE commit and tell me the SHA; do NOT edit infra registry file: I hand them the SHA. If deleting the declaration breaks the registry import before infra edits, say so and hold the commit on a branch instead.
+
