@@ -326,6 +326,14 @@ def write_key(p: Path, key: str, value: Any | None) -> None:
     _replace(p, with_key(p.read_text(), key, value))
 
 
+def _same_tables(text: str, entry: dict) -> bool:
+    try:
+        tables = {k: v for k, v in tomllib.loads(text).items() if isinstance(v, dict)}
+    except tomllib.TOMLDecodeError:
+        return False
+    return tables == {k: v for k, v in entry.items() if isinstance(v, dict)}
+
+
 def write_entry(d: Path, name: str, entry: dict) -> Path:
     """Write machine `name`'s whole record. A table equal to the one the file holds keeps its text (comments and layout):
     only the keys above the tables are rendered again."""
@@ -334,13 +342,8 @@ def write_entry(d: Path, name: str, entry: dict) -> Path:
     text = render_entry(name, entry)
     if p.is_file():
         old = p.read_text()
-        try:
-            same = {k: v for k, v in tomllib.loads(old).items() if isinstance(v, dict)} == \
-                   {k: v for k, v in entry.items() if isinstance(v, dict)}
-        except tomllib.TOMLDecodeError:
-            same = False
         lines = old.splitlines()
-        if same and (start := _tables_start(lines)) < len(lines):
+        if _same_tables(old, entry) and (start := _tables_start(lines)) < len(lines):
             text = render_entry(name, {k: v for k, v in entry.items() if not isinstance(v, dict)}) + "\n" + \
                 "\n".join(lines[start:]).lstrip("\n") + "\n"
     _replace(p, text)
