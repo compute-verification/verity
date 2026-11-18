@@ -415,6 +415,11 @@ def layout_problem(scheme: Any, epoch: Any, families: Any) -> str | None:
         return "a live coin scheme is a nonempty name of lowercase letters, digits, '-' and '/'"
     if type(epoch) is not int or epoch < 0:
         return "an epoch is a nonnegative integer"
+    return families_problem(families)
+
+
+def families_problem(families: Any) -> str | None:
+    """Why `families` are not a live coin layout's `(label, count)` families; None when they are."""
     if type(families) is not tuple or not families or not all(
             type(f) is tuple and len(f) == 2 and _name(f[0]) and type(f[1]) is int and f[1] >= 1 for f in families):
         return "a live coin layout is a nonempty sequence of (label, count), a name and a positive integer"
@@ -423,6 +428,18 @@ def layout_problem(scheme: Any, epoch: Any, families: Any) -> str | None:
     if sum(n for _, n in families) > MAX_COINS:
         return f"a live coin layout holds at most {MAX_COINS} coins"
     return None
+
+
+def layout(*parts: Sequence[tuple[str, int]]) -> tuple[tuple[str, int], ...]:
+    """One window's families, each part's `(label, count)` in turn: every scheme's coins in the window come from one
+    challenger session and one log, so the order between two schemes' entries is read from that log alone, never by
+    comparing a stamp of another device's clock with it.  The labels are the parts' own data, never read here; a label
+    twice raises `CoinError`."""
+    families = tuple(tuple(f) for part in parts for f in part)
+    why = families_problem(families)
+    if why is not None:
+        raise CoinError(why)
+    return families
 
 
 def live_domain(scheme: str, epoch: int, families: Sequence[tuple[str, int]]) -> CommitmentDomain:
@@ -2119,6 +2136,21 @@ class LiveRecord:
         self._release(request[1], opening)
         return opening
 
+    def record_slot(self, slot: int, root: bytes) -> LiveOpening:
+        """`record` of the family's coin `slot` rather than its next: each slot opened at most once and in any order, an
+        unused slot's coin never opened."""
+        raise NotImplementedError("a coin opened by slot: waits on `released_log_of` and `Challenger.releasedLogOf` "
+                                  "taking a family's coins in any order, each slot once (both refuse an index other "
+                                  "than the family's next), and on `order_reason` and the session reads reading a "
+                                  "coin's slot from its entry's index rather than its place in the family")
+
+    def commit(self, root: bytes) -> None:
+        """Log `root` as the family's next commitment, with no coin after it: the one log's third entry."""
+        raise NotImplementedError("a root logged with no coin after it: waits on the challenger writing a `commit` "
+                                  "event to its release log and `released_log_of` and `Challenger.releasedLogOf` "
+                                  "reading it as an entry `committed`, which `before` orders and `cut` counts among "
+                                  "the payloads' roots")
+
     def _root(self, root: bytes) -> tuple[str, int, bytes]:
         if len(self.roots) == _count(self.challenger, self.label):
             raise CoinError(f"every {self.label} coin of the epoch is open")
@@ -2243,7 +2275,7 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_many", "record_message", "record_reason", "released_log_of", "root_of",
-           "Entry", "RELEASED_BEFORE_RECEIVED", "before", "by_family", "cut",
+           "Entry", "RELEASED_BEFORE_RECEIVED", "before", "by_family", "cut", "families_problem", "layout",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
            "verify_periods", "withheld_on", "write_record",
            "CLOSING_ROUND", "EXTRA_OPENING", "LINK_ROOT_LEN", "LINK_TABLES", "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS",
