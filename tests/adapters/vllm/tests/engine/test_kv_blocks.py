@@ -278,18 +278,26 @@ def test_a_block_held_resident_is_freed_at_the_first_step_it_no_longer_is(monkey
 
 
 def test_a_runner_emits_its_registered_values_after_load_and_its_ranges_after_the_real_kv_cache(monkeypatch, subscribe):
-    """After vLLM's own `load_model`, the loaded model's parameters, each by name; after vLLM's own
-    `initialize_kv_cache`, unless profiling (its flag by position or by name), the pool's ranges with each layer's
-    cache a store."""
+    """After vLLM's own `load_model`, the loaded model's parameters, each by name, a linear layer's weight marked
+    linear; after vLLM's own `initialize_kv_cache`, unless profiling (its flag by position or by name), the pool's
+    ranges with each layer's cache a store."""
+    class LinearBase:
+        pass
+
+    class RowLinear(LinearBase):
+        pass
+
     caches = [SimpleNamespace(numel=lambda: 2 * PAGES * SLOTS * 64, element_size=lambda: 2)] * 2
     w = SimpleNamespace(numel=lambda: 4, data_ptr=lambda: 1, data="w")
-    model = SimpleNamespace(named_parameters=lambda: [("w", w)])
+    pw = SimpleNamespace(numel=lambda: 4, data_ptr=lambda: 2, data="pw")
+    model = SimpleNamespace(named_parameters=lambda: [("w", w), ("proj.weight", pw)],
+                            named_modules=lambda: [("", model), ("proj", RowLinear())])
     v = kv_classes(fake_vllm.install(monkeypatch), held=lambda: {
         "model": model, "kv_caches": caches, "cache_config": SimpleNamespace(block_size=SLOTS),
         "kernel_block_sizes": [SLOTS]})
     heard = subscribe()
     r, config = v.runners[0](), SimpleNamespace(num_blocks=PAGES)
-    assert r.load_model("x") == "loaded" and heard == [RegisteredValues((("w", "w"),))]
+    assert r.load_model("x") == "loaded" and heard == [RegisteredValues((("w", "w"), ("proj.weight", "pw")), linear=frozenset({"proj.weight"}))]
     assert r.initialize_kv_cache(config, True) == r.initialize_kv_cache(config, is_profiling=True) == "kv"
     assert len(heard) == 1 and r.initialize_kv_cache(config) == "kv"
     assert heard[1:] == [RangesDeclared(PAGES, SLOTS, 2 * 64 * 2, 1, tuple(caches))]

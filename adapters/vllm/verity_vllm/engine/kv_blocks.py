@@ -46,6 +46,7 @@ RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 #: What a `RUNNERS` runner calls its kernel block sizes, one per KV cache group, set in `initialize_kv_cache`: Model Runner
 #: V2's name (`vllm.v1.worker.gpu.model_runner`), then the first runner's (`vllm.v1.worker.gpu_model_runner`).
 KERNEL_BLOCK_SIZES = ("kernel_block_sizes", "_kernel_block_sizes")
+LINEAR = ("LinearBase", "Linear")
 
 
 def attach() -> Callable[[], None]:
@@ -54,7 +55,8 @@ def attach() -> Callable[[], None]:
 
 
 def registered_values(runner: Any, step: int = 0) -> H.RegisteredValues:
-    """Every parameter of the runner's model once (tied ones once), by its name, as the model holds it."""
+    """Every parameter of the runner's model once (tied ones once), by its name, as the model holds it; the ``weight``
+    of a linear layer (vLLM's ``LinearBase`` or torch's ``Linear``) marked linear."""
     model, seen, out = runner.model, set(), []
     while not hasattr(model, "named_parameters") and hasattr(model, "runnable"):
         model = model.runnable
@@ -63,7 +65,9 @@ def registered_values(runner: Any, step: int = 0) -> H.RegisteredValues:
             continue
         seen.add(p.data_ptr())
         out.append((name, p.data))
-    return H.RegisteredValues(tuple(out), step)
+    linear = {f"{m}.weight" if m else "weight" for m, mod in model.named_modules()
+              if any(c.__name__ in LINEAR for c in type(mod).__mro__)}
+    return H.RegisteredValues(tuple(out), step, frozenset(n for n, _ in out if n in linear))
 
 
 def ranges_declared(runner: Any, kv_cache_config: Any, step: int = 0) -> H.RangesDeclared:
