@@ -1,12 +1,12 @@
-"""Scratch (not for main): the periods pair (writer ``Gemm_v2{K=16,N=16}``, reader ``Gemm_v2{K=16,N=8}`` whose ``x`` is the
-writer's ``o0``) staged as a5 stages it under the order-keeping cut (the wired builder over the record with no wires), each
-member through `verity-verify-proof statement` with ``--program`` the cut and ``--wired`` the record's wired Program: the
-reader's ``x`` a tree port with ``param`` and no link row, its position derived (`Registered.wiredReads`). Prints each case's
-verdict; asserts nothing."""
+"""The periods pair (writer ``Gemm_v2{K=16,N=16}``, reader ``Gemm_v2{K=16,N=8}`` whose ``x`` is the writer's ``o0``) staged
+under the order-keeping cut, each member through `verity-verify-proof statement` with ``--program`` the cut and
+``--wired`` the record's wired Program: the reader's ``x`` is a tree port with ``param`` and no link row, so the verifier
+derives its position (`Registered.wiredReads`) and refuses a statement that names another."""
 from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -21,12 +21,17 @@ from verity.circuits.population import wired_population_program
 from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-from test_audit_two_members import LEAN, RUN, fixed
+from test_audit_two_members import RUN, fixed
+
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "benchmarks" / "one_stage"))
+import served_cases as SC  # noqa: E402
+
+pytestmark = pytest.mark.slow
 
 WRITER = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
 READER = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
 WID, RID = descriptor_id(WRITER), descriptor_id(READER)
-DESIGN = "stratified:1"
 WIRE = IF.Wire(RID, "x", WID, "o0", at=0, radix=(1,), base=0, step=(1,))
 
 
@@ -38,113 +43,148 @@ def _wired(c: IF.Circuit):
     return wired_population_program(list(c.templates), {**c.description(), "external": list(c.external)})[0]
 
 
-def _lean(*args: str) -> tuple[int, str]:
-    p = subprocess.run([str(LEAN / "verity-verify-proof"), "statement", *args], capture_output=True, text=True)
-    return p.returncode, (p.stdout + p.stderr).strip()
+class Staged:
+    def __init__(self, exe: Path, tmp: Path, members: list, honest: dict):
+        self.exe, self.tmp, self.members, self.honest = exe, tmp, members, honest
 
+    def statement(self, k: int, reads: str | None, public: str | None = None, wired: str | None = "wired.json"):
+        sd, pub, _ = self.members[k]
+        args = ["--circuit", str(sd / "circuit.txt"), "--public", public or str(pub),
+                "--partition", str(self.tmp / "partition.json"), "--program", str(self.tmp / "program.json")]
+        if wired:
+            args += ["--wired", str(self.tmp / wired)]
+        if reads:
+            args += ["--registered", reads]
+        p = subprocess.run([str(self.exe), "statement", *args], capture_output=True, text=True)
+        return p.returncode, (p.stdout + p.stderr).strip()
 
-def test_derived_positions_on_the_unwired_window(tmp_path, monkeypatch):
-    from verity_flock.class_statement import member_stager
-    from verity.commitments.periods import flock_inputs as FI, rows as CS
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
-
-    rng = np.random.default_rng(0)
-    x, w, w8 = _bf16(rng.standard_normal((1, 16))), _bf16(rng.standard_normal((1, 16, 16)) / 4), \
-        _bf16(rng.standard_normal((1, 8, 16)) / 4)
-    y = np.asarray(evaluate_batch(WRITER, x, w, kernel="reference"), dtype=np.uint16).reshape(1, 16)
-    y8 = np.asarray(evaluate_batch(READER, y, w8, kernel="reference"), dtype=np.uint16).reshape(1, 8)
-    circuit = IF.Circuit("wired-two", ((WRITER, 1), (READER, 1)), wires=(WIRE,))
-    other = IF.Circuit("wired-other", ((WRITER, 2), (READER, 1)), wires=(WIRE,))
-    same_shape = IF.Circuit("wired-same-shape", ((WRITER, 1), (READER, 2)), wires=(WIRE,))
-    wired, wired_other, wired_same = _wired(circuit), _wired(other), _wired(same_shape)
-    monkeypatch.setattr(IF.Circuit, "program", lambda self: wired_population_program(
-        list(self.templates), {**self.description(), "external": list(self.external), "wires": []}))
-    cut = circuit.program()[0]
-    print("DIGESTS wired", program_digest(wired)[:16], "cut", program_digest(cut)[:16], "other", program_digest(wired_other)[:16],
-          "same-shape", program_digest(wired_same)[:16])
-    (tmp_path / "wired.json").write_bytes(canonical_json(encode_program(wired)))
-    (tmp_path / "wired-other.json").write_bytes(canonical_json(encode_program(wired_other)))
-    (tmp_path / "wired-same.json").write_bytes(canonical_json(encode_program(wired_same)))
-
-    d = tmp_path / "window"
-    win = IF.Window(circuit, RUN, RND.parse_design(DESIGN), 4)
-    win.record(WRITER, [x, w], [y])
-    win.record(READER, [None, w8], [y8])
-    win.write(win.close(salts_of=fixed(win)), d, {"label": "rows-unwired"}, registrar=R)
-    bw = win.window
-    assert program_digest(bw.program) == program_digest(cut)
-    bind_ = {"partition": bw.partition_digest, "program": bw.partition["program"]}
-    rec = json.loads((d / "registration.json").read_text())
-    roots = {r["port"]: r for r in rec["roots"]}
-    want = CS.expected_ports(bw)
-    reads = CS.own_reads({}, bw, roots, registered=REG)
-    (tmp_path / "partition.json").write_text(json.dumps(bw.partition, sort_keys=True))
-    (tmp_path / "program.json").write_bytes(canonical_json(encode_program(bw.program)))
-    staged = {}
-    for k, (m, defn) in enumerate(zip(bw.members, (WRITER, READER))):
-        sd = tmp_path / f"m{k}"
-        sd.mkdir()
-        st = member_stager(defn, m, bind_)
-        (sd / "circuit.txt").write_text(st.text)
-        got = FI.flock_input_files(d, k, st.text, sd, write=("pub",))
-        header = json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])
-        print(f"M{k}-META-LINKS", "links" in st.text.split("\n", 2)[1], "HEADER-REGISTERED",
-              json.dumps({p: {f: v for f, v in e.items() if f != "paths"} for p, e in (header.get("registered") or {}).items()}))
-        own = None
-        if m.key in reads:
-            fv = header["frame_v3"]["roots"]
-            own = REG.bind_ports(reads[m.key], fv, {p: {"root": roots[bw.tree(m, p)]["root"],
-                                                        "domain": want[bw.tree(m, p)]["domain"]} for p in fv})
-        print(f"M{k}-REGISTERED", json.dumps({p: {f: v for f, v in e.items() if f not in ("root", "domain")}
-                                              for p, e in ((own or {}).get("ports") or {}).items()}, sort_keys=True))
-        staged[k] = (sd, Path(got["pub"]), own)
-
-    base = ["--partition", str(tmp_path / "partition.json"), "--program", str(tmp_path / "program.json")]
-    sd0, pub0, own0 = staged[0]
-    m0_reads = []
-    if own0:
-        (sd0 / "reg.json").write_text(json.dumps(own0))
-        m0_reads = ["--registered", str(sd0 / "reg.json")]
-    rc, out = _lean("--circuit", str(sd0 / "circuit.txt"), "--public", str(pub0), *base, *m0_reads)
-    print("M0", rc, out.splitlines()[-1] if out else "")
-
-    sd, pub, own = staged[1]
-    if own is None:
-        pytest.fail("the reader has no registered file")
-    honest = json.loads(json.dumps(own))
-    e = honest["ports"]["x"]
-    for f in ("reads", "reads_from", "tree", "param"):
-        e.pop(f, None)
-    e |= {"tree": {"template": WID, "field": "o0"}, "param": "x", "reads": []}
-    print("READER-X", json.dumps({f: v for f, v in e.items() if f not in ("root", "domain")}, sort_keys=True))
-
-    def reg(name: str, **edit) -> str:
-        doc = json.loads(json.dumps(honest))
+    def reads(self, name: str, **edit) -> str:
+        doc = json.loads(json.dumps(self.honest))
         for f, v in edit.items():
             if f in ("template", "field"):
                 doc["ports"]["x"]["tree"][f] = v
             else:
                 doc["ports"]["x"][f] = v
-        (sd / f"{name}.json").write_text(json.dumps(doc))
-        return str(sd / f"{name}.json")
+        path = self.members[1][0] / f"{name}.json"
+        path.write_text(json.dumps(doc))
+        return str(path)
 
-    def pub_moved() -> str:
+    def moved_public(self) -> str:
+        sd, pub, _ = self.members[1]
         head, body = pub.read_bytes().split(b"\n", 1)
         h = json.loads(head)
         h["registered"]["x"]["positions"] = [p + 1 for p in h["registered"]["x"]["positions"]]
         (sd / "moved.pub").write_bytes(json.dumps(h).encode() + b"\n" + body)
         return str(sd / "moved.pub")
 
-    def run(name: str, reads: str, wired_file: str = "wired.json", public: str = str(pub), wired_flag: bool = True):
-        rc, out = _lean("--circuit", str(sd / "circuit.txt"), "--public", public, *base,
-                        *(["--wired", str(tmp_path / wired_file)] if wired_flag else []), "--registered", reads)
-        print(f"CASE {name}: rc={rc}: {out.splitlines()[-1] if out else ''}")
 
-    run("honest", reg("honest"))
-    run("tree port without --wired", reg("honest"), wired_flag=False)
-    run("another leaf (stated position moved)", reg("honest"), public=pub_moved())
-    run("another leaf (param w)", reg("param_w", param="w"))
-    run("another field (o1)", reg("field_o1", field="o1"))
-    run("another writer template (the reader's)", reg("writer", template=RID))
-    run("a different wired Program (record wired-other)", reg("honest"), wired_file="wired-other.json")
-    run("a different wired Program (record wired-same-shape)", reg("honest"), wired_file="wired-same.json")
+@pytest.fixture(scope="module")
+def staged(tmp_path_factory) -> Staged:
+    from verity_flock.class_statement import member_stager
+    from verity.commitments.periods import flock_inputs as FI, rows as CS
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+
+    exe = SC.build(ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier", "verity-verify-proof")
+    tmp = tmp_path_factory.mktemp("unwired")
+    rng = np.random.default_rng(0)
+    x, w, w8 = _bf16(rng.standard_normal((1, 16))), _bf16(rng.standard_normal((1, 16, 16)) / 4), \
+        _bf16(rng.standard_normal((1, 8, 16)) / 4)
+    y = np.asarray(evaluate_batch(WRITER, x, w, kernel="reference"), dtype=np.uint16).reshape(1, 16)
+    y8 = np.asarray(evaluate_batch(READER, y, w8, kernel="reference"), dtype=np.uint16).reshape(1, 8)
+    circuit = IF.Circuit("wired-two", ((WRITER, 1), (READER, 1)), wires=(WIRE,))
+    same_shape = IF.Circuit("wired-same-shape", ((WRITER, 1), (READER, 2)), wires=(WIRE,))
+    (tmp / "wired.json").write_bytes(canonical_json(encode_program(_wired(circuit))))
+    (tmp / "wired-same-shape.json").write_bytes(canonical_json(encode_program(_wired(same_shape))))
+
+    d = tmp / "window"
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(IF.Circuit, "program", lambda self: wired_population_program(
+            list(self.templates), {**self.description(), "external": list(self.external), "wires": []}))
+        cut = circuit.program()[0]
+        win = IF.Window(circuit, RUN, RND.parse_design("stratified:1"), 4)
+        win.record(WRITER, [x, w], [y])
+        win.record(READER, [None, w8], [y8])
+        win.write(win.close(salts_of=fixed(win)), d, {"label": "unwired"}, registrar=R)
+    bw = win.window
+    assert program_digest(bw.program) == program_digest(cut)
+    bind_ = {"partition": bw.partition_digest, "program": bw.partition["program"]}
+    roots = {r["port"]: r for r in json.loads((d / "registration.json").read_text())["roots"]}
+    want = CS.expected_ports(bw)
+    reads = CS.own_reads({}, bw, roots, registered=REG)
+    (tmp / "partition.json").write_text(json.dumps(bw.partition, sort_keys=True))
+    (tmp / "program.json").write_bytes(canonical_json(encode_program(bw.program)))
+    members = []
+    for k, (m, defn) in enumerate(zip(bw.members, (WRITER, READER))):
+        sd = tmp / f"m{k}"
+        sd.mkdir()
+        st = member_stager(defn, m, bind_)
+        assert "links" not in st.text.split("\n", 2)[1]
+        (sd / "circuit.txt").write_text(st.text)
+        pub = Path(FI.flock_input_files(d, k, st.text, sd, write=("pub",))["pub"])
+        own = None
+        if m.key in reads:
+            fv = json.loads(pub.read_bytes().split(b"\n", 1)[0])["frame_v3"]["roots"]
+            own = REG.bind_ports(reads[m.key], fv, {p: {"root": roots[bw.tree(m, p)]["root"],
+                                                        "domain": want[bw.tree(m, p)]["domain"]} for p in fv})
+        members.append((sd, pub, own))
+    honest = members[1][2]
+    assert honest is not None, "the reader has no registered file"
+    e = honest["ports"]["x"]
+    for f in ("reads", "reads_from", "tree", "param"):
+        e.pop(f, None)
+    e |= {"tree": {"template": WID, "field": "o0"}, "param": "x", "reads": []}
+    return Staged(exe, tmp, members, honest)
+
+
+def _refused(rc: int, out: str, *words: str) -> None:
+    assert rc != 0, out
+    for w in words:
+        assert w in out, out
+
+
+def test_the_writer_member_is_accepted(staged):
+    sd, _, own = staged.members[0]
+    reads = None
+    if own:
+        (sd / "reg.json").write_text(json.dumps(own))
+        reads = str(sd / "reg.json")
+    rc, out = staged.statement(0, reads)
+    assert rc == 0, out
+
+
+def test_the_reader_is_accepted_with_its_position_derived_from_param(staged):
+    rc, out = staged.statement(1, staged.reads("honest"))
+    assert rc == 0, out
+
+
+def test_the_tree_port_without_wired_is_refused_by_the_link_rule(staged):
+    rc, out = staged.statement(1, staged.reads("honest"), wired=None)
+    _refused(rc, out, "a link row reads its writer's whole output row", "HmLinks.checkUnit")
+
+
+def test_a_stated_position_moved_is_refused(staged):
+    rc, out = staged.statement(1, staged.reads("honest"), public=staged.moved_public())
+    _refused(rc, out, "does not open", "registered root at position 1")
+
+
+def test_param_naming_another_parameter_is_refused(staged):
+    rc, out = staged.statement(1, staged.reads("param_w", param="w"))
+    _refused(rc, out, "is no unit's output in the wired Program")
+
+
+def test_another_field_is_refused(staged):
+    rc, out = staged.statement(1, staged.reads("field_o1", field="o1"))
+    _refused(rc, out, "reads field o1", "not that field's first")
+
+
+def test_another_writer_template_is_refused(staged):
+    rc, out = staged.statement(1, staged.reads("writer", template=RID))
+    _refused(rc, out, f"reads {RID}'s tree", f"unit 1's writer, unit 0, is {WID}'s")
+
+
+@pytest.mark.xfail(strict=True, reason="nothing binds --wired to the registration: closed by the docket's rule that the "
+                   "wired Program's digest is the one the record's program names, and by Spot.Cut.check that the cut of "
+                   "--wired and its record is --program")
+def test_a_wired_program_of_another_record_of_the_same_shape_is_refused(staged):
+    rc, out = staged.statement(1, staged.reads("honest"), wired="wired-same-shape.json")
+    assert rc != 0, out
