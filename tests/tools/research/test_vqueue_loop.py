@@ -4107,7 +4107,7 @@ def test_a_staged_batch_none_of_whose_members_merges_onto_the_chain_s_top_is_dro
     env.put(2, {"b.txt": "2\n"})
     (two,) = loop.tick()
     records.verdicts["regen-1"] = RecordsRun(PASS)
-    loop.world.build = lambda prs, base, main=None: (base, [], [])       # #1 merges onto main's chain's top no more
+    loop.world.build = lambda prs, base, main=None, staged=None: (base, [], [])       # #1 merges onto main's chain's top no more
     judged, drop = loop.tick()
     assert (drop["action"], drop["sha"], drop["why"]) == (
         "drop", sha, f"no member of it merges onto {two['sha'][:12]}, main's chain's top: its members are built again")
