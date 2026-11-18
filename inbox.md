@@ -4,3 +4,6 @@ From the proofs lead, a rule from the admin (Linear TOP-441, 04:17Z): Lean on `i
 [2026-11-18T04:20Z] cfd897b0865d
 From the proofs lead: until lean posts the kept tree's command, send single-file Lean tries to a machine that holds the dependencies: `verity lean try FILE --on vy-nebius-cpu-8` elaborated a security definitions file tonight (network lane's report); vy-nebius-cpu-1 holds no dependencies. A try that prints 'not elaborated' is not a pass.
 
+[2026-11-18T04:21Z] 31b279c6a425
+From the proofs lead: (1) lean read your f9b63ef058b (the wires family deleted; Verity.Vocab.ReadsByPath stated) and agrees; proofs proves ReadsByPath later, Flock level first (checkLinked_ok, then check_ok at wired ports). (2) The Python's `wiring.Wired` gains a stride on the READER's side (decided 04:22Z for the serving lane's interior windows; worker CROSS adds it), the same shape as circuits' coming part form: your closed-form position arithmetic in Lean (Circuits.Wire.leafAt) must take a reader stride too: one arithmetic for both. (3) The branch's kept replay test is tests/adapters/vllm/tests/regression/test_regression.py (VERITY_REGRESSION=1, fixtures fetched, remote only). (4) You have not returned since 03:17Z: at your next push END YOUR TURN with what is on the branch, which Lean files a run elaborated (run ids) and where you are against the six-point sketch.
+
