@@ -58,9 +58,10 @@ from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.scheme import POUS as POUS_SCHEME
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
+from verity.commitments.randomness import parse_rate, parse_strata_rate
 from verity.channel import Refused
 from verity.runtime import runner
 from verity.runtime.sources import MONOTONIC, RealClock
@@ -191,7 +192,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
               channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("SignedRun",), after=("End",))),
-              needs=frozenset({"store"}), params=_pous, default_params={"challenges": 320}),
+              needs=frozenset({"store"}), params=_pous, default_params=dict(POUS_SCHEME.settings)),
     Component("bandwidth", SP.IDS["bandwidth"], parties=(*_P2_PARTIES, _VERIFIER),
               channels=(*_P2_CHANNELS, Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
               needs=frozenset({"receipts"})),
@@ -258,7 +259,7 @@ def configuration(commit: str, demo: str = "onsite_full",
     cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
     if "pous" in protocols:
-        cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
+        cfg["params"] = {SP.IDS["pous"]: dict(MANIFESTS["pous"].default_params)}
     for p in cfg["party"]:
         remote = demo == "remote" and p["principal"] == "auditor"
         p["machine"] = AUDITOR_REMOTE if remote else PLACEMENT[p["name"]]
