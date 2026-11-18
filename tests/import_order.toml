@@ -401,6 +401,14 @@ loads = [
 
 [[place]]
 paths = [
+    "verity/protocols/proofs/spot/prover/produced.py",
+]
+loads = [
+    "verity/commitments",
+]
+
+[[place]]
+paths = [
     "verity/protocols/proofs/spot/prover/workload.py",
 ]
 loads = [
@@ -525,6 +533,7 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
+    "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
@@ -819,6 +828,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/periods",
     "verity/commitments/randomness",
+    "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/verifier",
     "verity/runtime",
