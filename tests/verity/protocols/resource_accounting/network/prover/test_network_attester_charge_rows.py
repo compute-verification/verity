@@ -1,5 +1,5 @@
 """charge_rows: `ChargeLink_v1`'s carry rows committed window to window and the verifier's chain check over their
-openings (`network.verifier.charge_check`): code_v1's charges over whole streams, and a restarted carry refused wherever
+openings (`network.prover.charge_check`): code_v1's charges over whole streams, and a restarted carry refused wherever
 the prover puts it."""
 from __future__ import annotations
 

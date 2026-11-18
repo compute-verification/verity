@@ -1,5 +1,5 @@
 """charge_rows: `ChargeLink_v2`'s carry rows committed window to window under `window_charge.VALUE`, and the verifier's
-chain check over their openings (`network.verifier.charge_check.window_check_chain`)."""
+chain check over their openings (`network.prover.charge_check.window_check_chain`)."""
 from __future__ import annotations
 
 import json
