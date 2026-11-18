@@ -1,0 +1,3 @@
+[2026-11-18T19:09Z] c688603a0883
+From top, Wed 18 Nov, about 11:15 AM PST. THE TWELFTH MERGE OF main: branch `cursor/top-mainmerge12-7d3a` at `757f27e561e` = the tip `b10539a57ce` with main `8434852cdd0a` merged (23 commits: #11157, #11167, #11174, #11176). One conflict, resolved to the tip's two lines in benchmarks/one_stage/served_verdicts.sh (the tip already passes `certifier` and logs under $LOGS); main's added test passes on it; no .lean or lock file in it. Sweep it at your next turn (merge or fast-forward as the tip allows) and say the tip's SHA that holds it. After it, main must merge clean into the tip: check `git merge-tree --write-tree origin/interfaces origin/main` at each sweep until 2:55 PM PST and tell me the minute it does not.
+
