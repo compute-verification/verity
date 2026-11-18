@@ -3,6 +3,7 @@ module
 public import Flock.Sigma
 public import Flock.TemplateQuery
 public import Spot.Wires
+public import Spot.Edges
 
 /-!
 # What an execution phase's circuit record's text declares
@@ -13,9 +14,9 @@ module reads those declarations, as functions of the decoded Program and the par
 instance, no trusted input, no pin. A check of such a record is built on them, and a statement about such a check
 names them, so that the check and the statement read one definition.
 
-* **The text's wiring** (`wiresOf`, `wiring`): what `Spot.Wires.Wiring.ofJson` is given of the text alone, its `cuts`
-  (none where it states none) and its `wires`, with no template and no order. A record's templates are not the
-  text's to state: they are the Program's (`templatesOf`).
+* **The record's wiring** (`wiring`): the Program's templates (`templatesOf`), the text's `cuts` (`cutsOf`, none
+  where it states none) and the wires the Program's root states (`Spot.Edges.edgesOf`), with no order: the text
+  states no wire, and SPOT's check places the templates.
 * **The templates** (`templatesOf`): the text names the Program by its SHA-512, and its `templates`, `[id, units]`
   each, are the templates of the root's nodes that are no input, each once, in the order of its first node, its
   units its nodes' members summed (`rangesAt`, `unitsOf`); a root node of a composite keyed as an input id is
@@ -36,8 +37,7 @@ names them, so that the check and the statement read one definition.
 declared row is θ, and the pin, are the check's to decide, from the trusted input and the instance: nothing here
 reads them.
 
-`slot` and `declared` read no order. The declarations read the text's cuts and wires and never the order its wires
-are held to, so what a row is declared to hold is the same under any order.
+`slot` and `declared` read no order: the declarations read the record's wiring's cuts and wires alone.
 -/
 
 @[expose] public section
@@ -62,15 +62,11 @@ def stringOf? : Json → Option String
 /-- Field `k` of `j` as a string. -/
 def stringAt (j : Json) (k : String) : Option String := stringOf? (valueAt j k)
 
-/-- **The text's wiring, as SPOT's reader is given it**: of the record `doc`, its `cuts`, none where it states none,
-and its `wires`, with no template. -/
-def wiresOf (doc : Json) : Json :=
-  Json.mkObj [("templates", Json.mkObj []), ("cuts", (doc.getObjVal? "cuts").toOption.getD (Json.mkObj [])),
-    ("wires", valueAt doc "wires")]
-
-/-- **The text's wiring**: the cuts and the wires `Spot.Wires.Wiring.ofJson` reads of the record `doc`
-(`wiresOf`), with no template and no order. -/
-def wiring (doc : Json) : Except String Spot.Wires.Wiring := Spot.Wires.Wiring.ofJson (wiresOf doc)
+/-- **The text's cuts**: the record `doc`'s `cuts`, `{tid: {port: k}}`, as `Spot.Wires.Wiring.ofJson` reads them;
+none where it states none. -/
+def cutsOf (doc : Json) : Except String (List (String × List (String × Nat))) :=
+  (Spot.Wires.Wiring.ofJson (Json.mkObj [("templates", Json.mkObj []),
+    ("cuts", (doc.getObjVal? "cuts").toOption.getD (Json.mkObj [])), ("wires", Json.arr #[])])).map (·.cuts)
 
 /-! ## Templates -/
 
@@ -585,11 +581,25 @@ def slot (P : Prog) (doc : Json) (tid : String) (u : Nat) : Option Nat :=
     | .error _ => none
   | .error _ => none
 
+/-- A template as SPOT's wiring reads it. -/
+def Tmpl.wired (t : Tmpl) : Spot.Wires.Template :=
+  { units := t.units, rows := t.rows.map fun (p, w, o) => (p, ⟨w, o⟩), outs := t.outs }
+
+/-- **The record's wiring**: the Program's templates (`templatesOf`), the text's cuts (`cutsOf`) and the wires the
+Program's root states under the templates' ranges (`Spot.Edges.edgesOf`, whose refusal it is), with no order. -/
+def wiring (P : Prog) (doc : Json) : Except String Spot.Wires.Wiring := do
+  let ts ← templatesOf P doc
+  let rs ← match Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (ts.map (·.tid)).toArray with
+    | .ok rs => pure rs
+    | .error _ => throw "templates"
+  let W : Spot.Wires.Wiring := { templates := ts.map fun t => (t.tid, t.wired), cuts := ← cutsOf doc, wires := [] }
+  return { W with wires := ← Spot.Edges.edgesOf P rs W }
+
 /-- **What the record's text declares a row to hold**: of the row `r`, by the Program's templates (`templatesOf`),
-the text's wiring (`wiring`) and its declarations (`inputsOf`); none where one of them refuses, or the row is
+the record's wiring (`wiring`) and its declarations (`inputsOf`); none where one of them refuses, or the row is
 declared to hold no registered data. -/
 def declared (P : Prog) (doc : Json) (r : Row) : Option Declared :=
-  match templatesOf P doc, wiring doc with
+  match templatesOf P doc, wiring P doc with
   | .ok ts, .ok W => match inputsOf ts W doc with
     | .ok x => x.declared r
     | .error _ => none

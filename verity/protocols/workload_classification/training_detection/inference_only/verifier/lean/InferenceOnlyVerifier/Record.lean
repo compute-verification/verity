@@ -11,29 +11,28 @@ public import Flock.TemplateQuery
 
 `Theta` decides the rate rule on a Program that holds every weight it reads and every wire between its
 units. An execution phase's Program holds neither: its root is calls and batches of templates, each unit reading
-committed rows, and which unit reads which registered parameter and which unit feeds which are declarations of the
-phase's circuit record (its wires, registered reads, table reads, openings and ingress), which SPOT checks unit by
-unit. This module does for such a record what `Theta.evaluate` does for a Program: it reads the record
+committed rows: which unit feeds which is the root's own references (`Spot.Edges.edgesOf`), and which unit reads
+which registered parameter is declared by the phase's circuit record (its registered reads, table reads, openings
+and ingress), which SPOT checks unit by unit. This module does for such a record what `Theta.evaluate` does for a Program: it reads the record
 (`read`), takes one summary of it (`summarize`), decides the rate rule on the summary (`rate`), and counts as θ only
 what the registration log registers at the start of the deployment (`isTheta`). It has a difftest (`RecordDifftest`),
 and the rows protocol (`RowsProtocol`) reads it.
 
 What the record's text declares is the module `RecordText`'s, functions of the Program and the text alone: the
-text's wiring, the templates, each unit's block and what each row is declared to hold. This module builds on them
-what the instance and the trusted input decide: the order, the leaves each wire lands on, which declared parameter
+record's wiring, the templates, each unit's block and what each row is declared to hold. This module builds on them
+what the instance and the trusted input decide: the leaves each wire lands on, which declared parameter
 is θ, which opening is held, and each reader's pin.
 
 ## The instance and the trusted input
 
-An instance is `{"program", "record", "gamma", "alpha", "pins"}`, and optionally `"order"`:
+An instance is `{"program", "record", "gamma", "alpha", "pins"}`:
 
 * `program`: the Program, a v1 descriptor, as text;
 * `record`: the circuit record, as the text the run's registration record commits;
 * `gamma`, `alpha`: `Γ`, and `α = [num, den]`, as `InferenceOnlyCheck.parse` reads them;
 * `pins`: SHA-512s in lower-case hex, each the closure digest (`DefinitionDigest.closureDigest`) of a
   Definition the policy takes as the reader of a table opening. The pins are the policy's parameter, the verifier's
-  own: nothing of the Program or the record sets them;
-* `order`: the order of the record's unit ranges, read where the record states none (`Spot.Wires.Wiring.order`).
+  own: nothing of the Program or the record sets them.
 
 The trusted input is `Theta`'s, `{"log", "params", "run"}`: the deployment's registration log, the first
 record first, and the digest of the run's own record. `params` is not read.
@@ -56,10 +55,8 @@ record first, and the digest of the run's own record. `params` is not read.
    parameters, one row a parameter, and its outputs the fields of its return type (`RecordText.templatesOf`).
 7. `own-rows`: the root hands some unit a row that is not input gates of its own (`ownRows`, "Rows of its own"
    below).
-8. `wires`: SPOT's reader refuses the record's wires, cuts or order (`Spot.Wires.Wiring.ofJson`), or SPOT's check
-   refuses them (`Spot.Wires.check`). The wiring is the one SPOT reads: the text's `cuts` and `wires`
-   (`RecordText.wiring`), with the templates' rows and outputs from the Program and the record's `order`, else the
-   instance's (`piece`, `wiringOf`).
+8. `wires`: the record's wiring is refused (`RecordText.wiring`: the text's cuts as SPOT's reader reads them, and
+   the wires the Program's root states, `Spot.Edges.edgesOf`), or SPOT's check refuses it (`Spot.Wires.check`).
 9. `leaf-widths`: some wire's row holds bits its writer's output lacks; or a leaf of some wire's writer does not lie
    inside one leaf of the row that reads it, and that row is not closed (`unwhole`, "Wires whole" below).
 10. `inputs`: a registered read, table, table read, opening, ingress or row format declaration is malformed for the
@@ -232,13 +229,12 @@ Definition's parameters and return type alone. `exported` gives the first two fo
 Each is built on what the record's text declares, so that a statement names the text's readers and not this
 module. On a record `read` accepts, `c` what it reads, with the Program `c.f.P` and the parsed text `c.f.doc`:
 
-* the wiring `c.W` has the cuts and the wires of the text's wiring (`RecordText.wiring`), field for field
-  (`wiringOf`);
+* the wiring `c.W` is the record's wiring (`RecordText.wiring`);
 * `Case.slot c` is `RecordText.slot` of the Program and the text: one `slotIn` of one `gridsOf` of one
   `templatesOf`;
 * where `Case.heldAt c r` is a reason, `RecordText.declared` of the Program, the text and `r` is that reason
   without its pin (`RecordText.Held.declared`): `heldAt` reads what fills the row through `Inputs.declares`, on the
-  declarations `inputsOf` gives of the templates and the text's wiring, which are `declared`'s.
+  declarations `inputsOf` gives of the templates and the record's wiring, which are `declared`'s.
 
 ## Cost
 
@@ -267,8 +263,7 @@ open Spot.RecordText
 def isDigest (s : String) : Bool :=
   s.length == 128 && s.all fun c => c.isDigit || (decide ('a' ≤ c) && decide (c ≤ 'f'))
 
-/-- An instance's fields: the Program's text, the record's text, `Γ`, `α = num/den`, the pins, and the order given
-beside the record. -/
+/-- An instance's fields: the Program's text, the record's text, `Γ`, `α = num/den` and the pins. -/
 structure Instance where
   program : String
   record : String
@@ -276,7 +271,6 @@ structure Instance where
   num : Nat
   den : Nat
   pins : Array String
-  order : Option Json
 
 /-- The instance's fields, refused (`instance`) where one is missing or of the wrong JSON kind, and (`params`) where
 `Γ`, `α` or a pin is not as stated. -/
@@ -294,7 +288,7 @@ def parse (j : Json) : Except String Instance := do
   let pins ← pinsJ.mapM fun
     | .str s => if isDigest s then pure s else throw "params"
     | _ => throw "params"
-  return { program, record, gamma, num, den, pins, order := (j.getObjVal? "order").toOption }
+  return { program, record, gamma, num, den, pins }
 
 /-! ## Templates -/
 
@@ -344,14 +338,18 @@ def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
       if Widths.homo ty == some 1 && !on.contains i then some name else none }
 
 /-- **Every unit's rows are its own input gates** (the module docstring's "Rows of its own"), read from the root's
-body: every argument of a root node that is no input node is runs of leaves of the root's input nodes (affine parts
-and no other; an input node a primitive or a batch of one, a leaf a gate), a batch maps every argument over its
+body: every part of an argument of a root node that is no input node, but a part reading another such node's outputs
+(an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is runs of leaves of the root's input nodes (affine
+parts and no other; an input node a primitive or a batch of one, a leaf a gate), a batch maps every argument over its
 members (each has the `dims` resolution reads a member's leaves by), and no two runs, of one argument or of two,
 share a leaf. It costs the root's argument parts, sorted. -/
 def ownRows (P : Prog) : Bool :=
   let nodes := (P.defs[P.root]!).body.nodes
   let units := nodes.toList.filter fun n => !Desc.isInputNode P n
-  let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList
+  let edge := fun (q : Part) => match q with
+    | .affine false i _ _ | .strided false i _ _ _ _ _ => (nodes[i]?.map fun n => !Desc.isInputNode P n).getD false
+    | _ => false
+  let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
   let runs := parts.filterMap fun
     | .affine false i base count =>
       if (nodes[i]?.map fun n => Desc.isInputNode P n && (n.form == .prim || n.form == .batch)).getD false then
@@ -365,10 +363,11 @@ def ownRows (P : Prog) : Bool :=
 
 /-- What an `own-rows` refusal says, with its fix. -/
 def OWN_ROWS : String :=
-  "the root hands a unit a row that is not input gates of its own. Every argument of a root node that is no input " ++
-  "node is affine runs of leaves of the root's input nodes, a batch maps every argument over its members, and no " ++
-  "leaf is handed to two rows. Fix the Program, not the record: build its root as templates over input nodes of " ++
-  "their own, each input leaf handed once."
+  "the root hands a unit a row that is not input gates of its own. Every part of an argument of a root node that " ++
+  "is no input node reads another such node's outputs or is affine runs of leaves of the root's input nodes, a " ++
+  "batch maps every argument over its members, and no leaf is handed to two rows. Fix the Program, not the " ++
+  "record: build its root as templates over input nodes of their own or other templates' outputs, each input " ++
+  "leaf handed once."
 
 /-- A port's leaf width as a refusal names it. -/
 def widthName : Option Nat → String
@@ -445,27 +444,6 @@ def front (j tr : Json) : Except String Front := do
   if !ownRows P then throw "own-rows"
   let passed := passedOn P
   return { i, P, T, doc, ts, leaves := ts.map (leavesOf P passed) }
-
-/-- The record's wires as SPOT's `wires` piece states them, the JSON `Spot.Wires.Wiring.ofJson` reads: the text's
-`cuts` and `wires` (`RecordText.wiresOf`), with the templates' units, rows and outputs from the Program, and the
-record's `order`, else the instance's. -/
-def piece (f : Front) : Json :=
-  let templates := Json.mkObj (f.ts.map fun t => (t.tid, Json.mkObj [
-    ("units", toJson t.units),
-    ("rows", Json.mkObj (t.rows.map fun (p, words, outer) => (p, Json.arr #[toJson words, toJson outer]))),
-    ("outs", Json.mkObj (t.outs.map fun (o, words) => (o, toJson words)))]))
-  let order := match (f.doc.getObjVal? "order").toOption, f.i.order with
-    | some o, _ => [("order", o)]
-    | none, some o => [("order", o)]
-    | none, none => []
-  (wiresOf f.doc).mergeObj (Json.mkObj (("templates", templates) :: order))
-
-/-- The record's wiring: the text's cuts and wires (`text`, `RecordText.wiring`'s), with the Program's templates and
-the order as SPOT's reader reads them from `piece`. Its cuts and its wires are `text`'s, field for field. -/
-def wiringOf (f : Front) (text : Spot.Wires.Wiring) : Except String Spot.Wires.Wiring :=
-  match Spot.Wires.Wiring.ofJson (piece f) with
-  | .ok W => .ok { text with templates := W.templates, order := W.order }
-  | .error _ => .error "wires"
 
 /-! ## Blocks -/
 
@@ -764,13 +742,12 @@ def Case.heldAt (c : Case) (r : Row) : Option Held :=
 pins its Definition. `rolesOf` gives the pinned templates among the readers the declarations name, every opening's
 reader among them, so an opening's reader is pinned exactly where it is one of those. -/
 def finish (f : Front) (pin : String → Option String) : Except String Case := do
-  let text ← recode "wires" (wiring f.doc)
-  let W ← wiringOf f text
+  let W ← recode "wires" (wiring f.P f.doc)
   let wired ← match Spot.Wires.check W with
     | .ok s => pure s
     | .error _ => throw "wires"
   if (unwhole f.ts f.leaves wired.wires).isSome then throw "leaf-widths"
-  let x ← inputsOf f.ts text f.doc
+  let x ← inputsOf f.ts W f.doc
   if !formatsHeld f.T f.doc x.params then throw "formats"
   let (S, grids) ← gridsOf f.ts f.doc
   let pins ← rolesOf f.P f.ts pin x
@@ -879,7 +856,7 @@ def messageOf (j tr : Json) (code : String) : Option String :=
   if code == "own-rows" then some OWN_ROWS
   else if code == "leaf-widths" then
     match front j tr with
-    | .ok f => match wiring f.doc >>= wiringOf f with
+    | .ok f => match wiring f.P f.doc with
       | .ok W => match Spot.Wires.check W with
         | .ok wired => unwhole f.ts f.leaves wired.wires
         | .error _ => none
