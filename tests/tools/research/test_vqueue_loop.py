@@ -1910,7 +1910,7 @@ class Slim:
             return {"ids": [f"main-{len(self.below)}"], "tip": sha, "base": base, "gate": "check"}
         self.started.append((driver, sha, base))
         if self.launching and self.shards:
-            return {"ids": [], "at": 0.0, "tip": sha, "base": base, "shards": [
+            return {"ids": [], "at": 0.0, "tip": sha, "base": base, "gate": "check", "shards": [
                 {"ids": [], "launch": {"dir": f"train-{len(self.started)}-{k}", "pid": 1}} for k in range(1, self.shards + 1)]}
         if self.launching:
             return {"ids": [], "launch": {"dir": f"train-{len(self.started)}", "pid": 1}, "tip": sha, "base": base,
