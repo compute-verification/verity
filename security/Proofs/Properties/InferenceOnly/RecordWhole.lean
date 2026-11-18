@@ -106,7 +106,6 @@ theorem accum_mem (m : Nat) : ∀ (ps : List (Nat × Int)) (x : Nat) {os : List 
       · cases h
       · rename_i hr0
         simp only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq, not_or] at hr0
-        dsimp only at h
         split at h
         · cases h
         · obtain rfl := Option.some.inj h
@@ -122,7 +121,7 @@ theorem unwhole_none {P : Prog} {ts : List Tmpl} {ls : List Leaves} {s : Spot.Wi
     ∃ os, offsetSteps (((ts.find? (·.tid == w.writer)).map fun t => (fieldsOf (P.defs[t.defn]!).ret).length).getD 0)
         (Circuits.Wire.opairs w) = some os ∧ ∀ d ∈ os,
     ∃ t j, ts.find? (·.tid == w.writer) = some t ∧ j < (fieldsOf (P.defs[t.defn]!).ret).length ∧
-      Spot.Edges.fieldWord (P.defs[t.defn]!).ret j = ((w.offset : ℤ) + d).toNat ∧
+      Spot.Edges.fieldWord (P.defs[t.defn]!).ret j = ((w.offset : Int) + d).toNat ∧
       0 < Spot.Edges.wordsOf (fieldsOf (P.defs[t.defn]!).ret)[j]! ∧
       (∀ b, ((ls.find? (·.tid == w.writer)).bind fun l => l.bits.lookup ("o" ++ toString j)) = some b →
         b = 16 * n) ∧

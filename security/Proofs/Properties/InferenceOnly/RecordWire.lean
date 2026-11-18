@@ -37,8 +37,8 @@ theorem shape_spec {c : Spot.Wires.Wiring} {w : Spot.Wires.Wire} {rt wt : Spot.W
     c.templates.lookup w.reader = some rt ∧ c.templates.lookup w.writer = some wt ∧
       ∃ p ow, rt.rows.lookup w.port = some p ∧ wt.outs.lookup w.out = some ow ∧ 1 ≤ w.cuts ∧
         w.cut0 + w.cuts ≤ c.cutsOf w.reader w.port ∧ (w.cuts = 1 ∨ w.radix.getLast? = some w.cuts) ∧
-        w.units % w.cuts = 0 ∧ 0 ≤ (w.offset : ℤ) + Circuits.Wire.lowOf w.opairs ∧
-        (w.offset : ℤ) + Circuits.Wire.highOf w.opairs + ((p.words / c.cutsOf w.reader w.port : ℕ) : ℤ) ≤ ow := by
+        w.units % w.cuts = 0 ∧ 0 ≤ (w.offset : Int) + Circuits.Wire.lowOf w.opairs ∧
+        (w.offset : Int) + Circuits.Wire.highOf w.opairs + ((p.words / c.cutsOf w.reader w.port : Nat) : Int) ≤ ow := by
   unfold Spot.Wires.shape at h
   split at h
   · rename_i rt' wt' hr hw
