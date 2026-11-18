@@ -5,4 +5,6 @@
 testpaths = ["."]
 
 [tool.verity.tests]
-inputs = ["adapters/torch", "benchmarks/served_commit"]
+inputs = ["adapters/torch", "benchmarks/served_commit", "benchmarks/harness/verity_bench", "tools/config/verity_config", "calibration/hardware/cards",
+          "verity/__init__.py", "verity/device.py", "verity/channel.py", "verity/errors.py"]
+

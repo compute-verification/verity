@@ -68,7 +68,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/resource_accounting/network",
           "tools/difftest", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/circuits/kernels", "verity/commitments/randomness", "verity/protocols/proofs/flock/prover/python", "verity/commitments/periods",
-          "hardware/cards",
+          "calibration/hardware/cards",
           "tools/config/verity_config",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/commit/__init__.py", "verity/commitments/periods/hiding.py",
@@ -154,7 +154,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "security/Definitions/Pouw", "security/Proofs/Pouw", "security/Proofs/Properties/Pouw", "security/lean-audit.json",
           "security/Proofs/ResourceAccounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts", "benchmarks/pouw/filler", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler",
-          "benchmarks/machine_model", "benchmarks/pouw/README.md",
+          "calibration/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "verity/protocols/experimental/dither/prover/j10r_ws.py",
           # test_mma_gate runs torch_gpu's build gate, which reads the build through verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py's mma_gate
@@ -179,15 +179,15 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "benchmarks/harness/verity_bench/__init__.py", "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_work.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear/__init__.py",
-          "verity/circuits/ops/boolean/versions.py", "benchmarks/pouw"]
+          "verity/circuits/ops/boolean/versions.py", "benchmarks/pouw", "calibration/pouw"]
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
 # check runs it as three parts by test id (`lean-suites:verity-pouw-benchmarks:K/3`, `suites.py`'s `id_part_of`), each
 # collecting every file and running the tests whose node id hashes to K, so that ci.toml's plans spread it over three shards
 parts = 3
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
-artifacts = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/.lake/build/bin/pouw-check",
-             "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/.lake/build/bin/pouw-check-difftest",
+artifacts = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/.lake/build/bin/pouw-verifier",
+             "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/.lake/build/bin/pouw-verifier-difftest",
              "verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-difftest"]
 
 [tool.pytest.ini_options]
@@ -195,3 +195,7 @@ testpaths = ["."]
 # test_proved_ticks_placed imports `datacenter` (not an installed package) by path.
 pythonpath = ["../../../benchmarks/datacenter"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+

@@ -1062,7 +1062,7 @@ class Landing:
                 f" (log {launch['dir']}/log)"
         rec.update(ids=ids, at=self.now())
         shutil.rmtree(launch["dir"], ignore_errors=True)
-        self.q.log(f"research queue drive: {what}: {' '.join(ids)}")
+        self.q.log(f"research queue: {what}: {' '.join(ids)}")
         return None
 
     def _gating(self, commit: str) -> list[str]:
@@ -1113,7 +1113,7 @@ class Landing:
         if commit not in cache:
             got = policy.at(self.repo, commit)
             if isinstance(got, str):
-                self.q.log(f"research queue drive: {got}: no failure is allowed at {commit[:12]}")
+                self.q.log(f"research queue: {got}: no failure is allowed at {commit[:12]}")
                 got = policy.Policy()
             cache[commit] = got
         return cache[commit]
@@ -1259,13 +1259,13 @@ class Landing:
             return
         to = tuple(dict.fromkeys((f"@{handle}" if handle else CI, *(f"@{h}" for h in also if h))))
         if self.q.shadow or self.dry_run:
-            self.q.log(f"research queue drive: would tell {' '.join(to)}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
+            self.q.log(f"research queue: would tell {' '.join(to)}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
             return
         if self.post(f"{' '.join(to)} queue: {text}", to):
             state["told"].extend(k for k in keys if k not in state["told"])
-            self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
+            self.q.log(f"research queue: told {' '.join(to)}: {text}")
         else:
-            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
+            self.q.log(f"research queue: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
 
     def _stacked(self, state: dict, members: list[Member], tip: str) -> None:
         """After a landing at ``tip``, tell the owner of each open PR based on `main` or on a landed member's branch whose head
@@ -1282,7 +1282,7 @@ class Landing:
             rest = {n: p for n, p in opened.items() if n not in landed}
             refs = pull_refs(q, rest.values())
         except QueueError as e:
-            q.log(f"research queue drive: PRs stacked on {', '.join(f'#{n}' for n in sorted(landed))} not found: {e}")
+            q.log(f"research queue: PRs stacked on {', '.join(f'#{n}' for n in sorted(landed))} not found: {e}")
             return
         bases: dict[int, list[int]] = {}
         for x in members:
@@ -1297,7 +1297,7 @@ class Landing:
                 if q.ready(n, rest[n].head):
                     continue
             except QueueError as e:
-                q.log(f"research queue drive: #{n}'s ready mark can't be read, so it isn't told its base landed now: {e}")
+                q.log(f"research queue: #{n}'s ready mark can't be read, so it isn't told its base landed now: {e}")
                 continue
             names = ", ".join(f"#{b}" for b in below)
             self.tell(state, [f"stacked:{n}<{b}" for b in below],
@@ -1308,13 +1308,13 @@ class Landing:
     def beside_args(self, tip: str, base: str) -> tuple[dict, list[str], str]:
         """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_after_landing`'s
         keywords, the steps it skips by name, its flags as a message gives them).  It sends the upstream build (`--agreement`)
-        when the merges above ``base`` change what lean-agreement checks (as check.py finds against that base), and skips
-        lean-agreement else; lean-audit fails on a record difference (`--no-regenerate`), since the records it checks are the
-        candidate's own (`vqueue_records`); ratchet-gate judges the merges above `--base`: ``base``, or ``tip``'s first parent
-        when they are one.  Every pass a step may reuse, it reuses."""
+        when the merges above ``base`` change what lean-agreement checks (as ``base``'s own declaration names it, not the
+        loop's checkout's, which can be days behind), and skips lean-agreement else; lean-audit fails on a record difference
+        (`--no-regenerate`), since the records it checks are the candidate's own (`vqueue_records`); ratchet-gate judges the
+        merges above `--base`: ``base``, or ``tip``'s first parent when they are one.  Every pass a step may reuse, it reuses."""
         from .merge import required_steps
 
-        extra = {"agreement": "lean-agreement" in required_steps(self.repo, base, tip, "check"), "no_regenerate": True}
+        extra = {"agreement": "lean-agreement" in required_steps(self.repo, base, tip, "check", at=base), "no_regenerate": True}
         skip = [] if extra["agreement"] else ["lean-agreement"]
         below = (base if base != tip else
                  _git(self.repo, "rev-parse", "--verify", "-q", f"{tip}^1", check=False).stdout.strip()) or None

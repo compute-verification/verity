@@ -12,6 +12,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # (verity_vllm), ks_form.py's mirror (verity.core's one-stage proofs), and the break-even planner's reader, whose
 # required fields prove_rows.py's rows are held to.
 # `adapters/torch/verity_torch`: the PyTorch adapter, which verity_vllm's serving rows the tests import load.
-inputs = ["verity", "hardware/cards", "adapters/vllm/verity_vllm", "tools/verity/circuit_check/src/circuit_check",
+inputs = ["verity", "calibration/hardware/cards", "adapters/vllm/verity_vllm", "tools/verity/circuit_check/src/circuit_check",
           "adapters/torch/verity_torch",
-          "benchmarks/spot_figures/breakeven/reprice.py", "benchmarks/served_units"]
+          "benchmarks/spot_figures/breakeven/reprice.py", "benchmarks/served_units",
+          "benchmarks/harness/verity_bench", "tools/config/verity_config"]

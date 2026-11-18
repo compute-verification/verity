@@ -213,11 +213,12 @@ def test_the_tick_rule_reads_whole_buckets_in_microseconds():
 class Gated:
     """A gate over `Sched` with a hand-turned clock."""
 
-    def __init__(self, hold_s: float = 5.0) -> None:
+    def __init__(self, hold_s: float = 5.0, rule: dict[str, Any] | None = None) -> None:
         self.now = 0.0
         self.sched = Sched()
         self.log: list[dict] = []
-        self.gate = sa.TickGate(TICK, hold_s=hold_s, clock=lambda: self.now, log=self.log.append)
+        kw = {"hold_s": hold_s, "clock": lambda: self.now, "log": self.log.append}
+        self.gate = tp.RuleGate(TICK, **rule, **kw) if rule else sa.TickGate(TICK, **kw)
         self.hooks = sa.install(self.sched, self.gate, key=lambda rid: rid)
         self.watermark = sa.Watermark(RUN, self.gate.take)
 
@@ -265,7 +266,64 @@ def test_the_engine_waits_for_the_watermark_and_admits_at_the_bucket_close():
     assert not g.step() and g.gate.T == 320_000                      # T is past bucket 2's close: its line is wanted
     g.lines(3)
     assert g.step() and g.sched.added == ["r0", "r1", "r2"] and g.sched.steps[-1] == ["r1", "r2"]
-    assert g.log[0] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [0, 1], "t": 0.0}
+    assert g.log[0] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [0, 1], "held_steps": [0], "t": 0.0}
+    assert [r["held_steps"] for r in g.log] == [[0], [0], [2]]       # r2 came, then r1 stepped twice before its bucket
+
+
+def test_a_rule_gate_adds_its_tokens_to_t_and_catches_up_to_the_newest_line_while_nothing_waits():
+    g = Gated(rule={"token_ns": 1_000_000, "catch_up": "marks"})
+    g.release(0, bucket=0)
+    g.arrive("r0", out=10)
+    g.lines(1)
+    assert g.step() and g.gate.T == TICK.close(0) + TICK.free_us + 1_000
+    g.release(1, bucket=3)
+    g.arrive("r1")
+    g.lines(1, 1, 2)
+    assert g.step() and g.sched.added == ["r0", "r1"] and g.sched.steps[-1] == ["r0", "r1"]
+    up = [r for r in g.log if r.get("event") == "catch_up"]
+    assert [(r["T"], r["to"], r["bits"]) for r in up] == [(141_000, TICK.close(3), 2.0)]
+    h = Gated()
+    h.release(0, bucket=0)
+    h.arrive("r0", out=10)
+    h.lines(1)
+    h.step()
+    h.release(1, bucket=3)
+    h.arrive("r1")
+    h.lines(1, 1, 2)
+    assert h.step() and h.sched.added == ["r0"]                     # the registered rule holds r1 till T closes bucket 3
+    o = Gated(rule={"catch_up": "open"})
+    o.release(0, bucket=5)
+    o.arrive("r0")
+    assert o.step() and o.sched.added == ["r0"] and o.gate.opened == "the rule orders nothing"
+
+
+def test_a_rule_gates_token_term_counts_non_draft_tokens_on_a_clock_of_nanoseconds():
+    drafted = SimpleNamespace(total_num_scheduled_tokens=14, scheduled_spec_decode_tokens={"a": [3] * 5, "b": [-1] * 5})
+    assert tp.non_draft_tokens(drafted) == (4, 10)
+    assert tp.non_draft_tokens(SimpleNamespace(total_num_scheduled_tokens=7, scheduled_spec_decode_tokens={})) == (7, 0)
+    g = Gated(rule={"token_ns": 600})
+    g.release(0, bucket=0)
+    g.arrive("r0", out=10)
+    g.lines(1)
+    assert g.step() and g.gate.T == TICK.close(0) + TICK.free_us
+    assert g.step() and g.gate.T == TICK.close(0) + 2 * TICK.free_us + 1
+    assert g.gate.summary()["rule"] == {"token_ns": 600, "catch_up": "quiet", "tokens": {"non_draft": 2, "draft": 0}}
+
+
+def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_another_it_does_not_know(tmp_path):
+    env = config(tmp_path)
+    assert {k: tp.tick_config(env)[k] for k in ("token_ns", "catch_up")} == {"token_ns": 0, "catch_up": "quiet"}
+    for bad in ({"token_ns": -1}, {"token_ns": 1.5}, {"catch_up": "wall"}):
+        with pytest.raises(ValueError, match="token_ns a non-negative integer"):
+            tp.tick_config({tp.TICK_ENV: json.dumps(json.loads(env[tp.TICK_ENV]) | bad)})
+
+
+def test_the_tick_config_refuses_the_open_gate_unless_a_benchmark_arm_names_it(tmp_path):
+    cfg = json.loads(config(tmp_path)[tp.TICK_ENV]) | {"catch_up": "open"}
+    for unnamed in (cfg, cfg | {"arm": ""}):
+        with pytest.raises(ValueError, match="catch_up 'open' opens the gate"):
+            tp.tick_config({tp.TICK_ENV: json.dumps(unnamed)})
+    assert tp.tick_config({tp.TICK_ENV: json.dumps(cfg | {"arm": "prod-tick"})})["catch_up"] == "open"
 
 
 def test_a_missing_release_no_line_names_lost_holds_the_later_ones_until_its_skip_and_comes_late():
@@ -300,7 +358,8 @@ def test_a_lost_release_at_the_head_is_not_waited_for_and_never_added_should_it_
         g.arrive(f"r{n}")
     g.mark(3, lost=[0])
     assert g.gate.lost == {0} and g.step() and g.sched.added == ["r1", "r2"]         # at once: the clock never moved
-    assert g.log[-1] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [1, 3], "t": 0.0}
+    assert g.log[-1] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [1, 3], "held_steps": [0, 0],
+                         "t": 0.0}
     assert counts(g) == {"admitted": 2, "lost": 1, "dropped": 0, "aborted": 0, "held_now": 0}
     g.release(0, bucket=0)                           # its bytes arrive after all, once the gate is past it
     g.arrive("r0")
@@ -472,7 +531,7 @@ def test_install_refuses_what_the_tick_does_not_order_and_comes_off():
     assert not hasattr(g.sched, "_verity_tick") and "add_request" not in vars(g.sched)
 
 
-def test_watermark_lines_as_the_certifier_sends_them():
+def test_watermark_lines_as_the_network_attester_sends_them():
     assert sa.watermark_line(line(0, 0)) == (0, 0, ()) and sa.watermark_line(line(3, 7), (2, 5)) == (3, 7, ())
     assert sa.watermark_line(line(3, 7, [5]), (2, 5)) == (3, 7, (5,))                 # one lost release, the bucket's first
     assert sa.watermark_line(line(3, 9, [5, 6, 8]), (2, 5)) == (3, 9, (5, 6, 8))      # several, its last among them
@@ -903,7 +962,7 @@ def test_under_vllms_server_a_lost_releases_request_is_given_its_disconnect_and_
     middleware adds nothing. A client's own close stays the server's to end, and the middleware adds nothing to it."""
     for k, v in config(tmp_path).items():
         monkeypatch.setenv(k, v)
-    late = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else
+    late: list[dict] = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else
             [{"type": "http.response.body", "body": b"data: late\n\n", "more_body": True}])
     app = Held(head, late)
     feed, sent = tp.TickFeed(app), []
@@ -1152,7 +1211,7 @@ def tick_endpoint() -> Iterator[SimpleNamespace]:
 def test_serve_openai_admits_at_the_tick_over_http():
     with tick_endpoint() as e:
         wm = socket.create_connection(e.address)
-        wm.sendall(b"POST /verity/watermark HTTP/1.1\r\nhost: network-certifier\r\nx-verity-release-run: ab\r\n"
+        wm.sendall(b"POST /verity/watermark HTTP/1.1\r\nhost: network-attester\r\nx-verity-release-run: ab\r\n"
                    b"content-type: text/plain\r\ntransfer-encoding: chunked\r\n\r\n4\r\n0 0\n\r\n")
         c = socket.create_connection(e.address)
         c.sendall(request(dict(CERTIFIER_BODY, max_tokens=2, min_tokens=2), 0, 1))
@@ -1254,8 +1313,8 @@ REQUEST_LINES = [(b"POST /v1/completions HTTP/1.1", True), (b"GET /health HTTP/1
 
 def test_serve_openai_takes_for_a_requests_line_what_the_network_attester_does():
     """`hd.request_line` over first lines well formed and not: it gives a line's method and target where the network
-    attester puts its release on a request that begins with the line, and None where the certifier passes the bytes on
-    as the client wrote them."""
+    attester puts its release on a request that begins with the line, and None where the network attester passes the
+    bytes on as the client wrote them."""
     for line, is_one in REQUEST_LINES:
         sent = line + b"\r\nhost: s\r\nx-verity-release: 9\r\n\r\n"
         stamped = REL.with_release(sent, 3, bytes.fromhex(RUN), 1)
@@ -1309,9 +1368,9 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
     """A request with a client's own release headers, one byte before each one's name or between the name and its
     colon, on which the network attester then puts its release (`release.with_release`), dropping those of the
     client's it takes for release headers. One over HTTP, the byte ``\\xa0`` (its body not JSON, so it is answered at
-    once): the frontend has read the certifier's release of it, not the client's. Then each of the 256 bytes in each
-    place: whichever fields the certifier kept, the server's headers (`hd.header_fields`) give the certifier's
-    release, as the certifier's own reader does."""
+    once): the frontend has read the network attester's release of it, not the client's. Then each of the 256 bytes in
+    each place: whichever fields the network attester kept, the server's headers (`hd.header_fields`) give its
+    release, as its own reader does."""
     run = bytes.fromhex(RUN)
 
     def stamped(pre: bytes, post: bytes, n: int, rest: bytes = b"\r\n") -> bytes:

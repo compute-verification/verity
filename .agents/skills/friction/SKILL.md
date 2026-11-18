@@ -108,7 +108,7 @@ What an agent may change:
 - Each owner removes the smells it finds in its own files without asking: code serving a retired question, two
   sources of truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired
   process, structure that doesn't earn itself, dead references. What crosses owners goes to that owner.
-- Close your own lane's PRs whenever you want; nobody asks first.
+- Close your own lane's PRs whenever you want, a superseded one at once; Daniel's standing word, so no tool need ask.
 - Hard switches: once a replacement lands, no second path stays alive beside it, and every bridge kept for the
   transition names its end state. The admin audits for splits and tells Daniel when an abstraction fails or turns into
   red tape.
@@ -160,7 +160,7 @@ Protocols and claims:
 - A demo shows that the code works, so it runs fast: it samples one or two proof blocks, or whatever keeps it quick.
   What the theorems give at an operating point (a sampling design, δ, a datacenter's size) is a separate result computed
   from the bounds; no demo is sized up to show one.
-- Network accounting is two things for each execution block. First, its consistency with the network certificates: its
+- Network accounting is two things for each execution block. First, its consistency with the network attestations: its
   committed inputs and outputs are what they say crossed the wire, pass or fail, with no sampling requirement. Second,
   from SPOT, its transfers' covert capacity, in three terms reported apart: side channels, the timing channel (which the
   network attester mostly fixes) and what SPOT fails to check; at full sampling only the first two remain.

@@ -1,10 +1,19 @@
 # security/Proofs: the proofs
 
-The package `security_proofs` (`security/Proofs/lakefile.toml`): every proof, `<Area>.SecurityProofs.G :
-<Area>.Guarantees.G` for each proved guarantee, the lemmas behind them, and under `Properties/` the proofs of
-`security/Properties/`. The kernel checks it and nobody reads it for meaning: the locks of `security/` and
-`security/Properties/` name its theorems (`proved_in`), and its own lock lists no guarantee.
+This tree holds every proof: `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each proved guarantee, the lemmas
+behind them, and under `Properties/` the proofs of `security/Properties/`. The kernel checks it and nobody reads it for
+meaning: the locks of `security/` and `security/Properties/` name its theorems (`proved_in`), and its own lock lists no
+guarantee. The tree is the package `security_proofs` (`security/Proofs/lakefile.toml`).
 [`security/README.md`](../README.md) has the argument and what code outside `security/` may do.
+
+## Try it
+
+~~~sh
+git grep -n -E "theorem \w+ : Pous\.Guarantees\.\w+" -- security/Proofs/Pous.lean
+~~~
+
+This lists the theorems in PoUS's root module whose type is one of its guarantee statements, each with its line. It
+needs only the checkout.
 
 ## Who may import it
 
@@ -27,7 +36,7 @@ The package `security_proofs` (`security/Proofs/lakefile.toml`): every proof, `<
     (`Proofs.Flock.Soundness.PlanDraw`).
   - `tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py` builds `Proofs.Flock.Verifier`, which its scratch
     files import; `test_security_inputs.py` beside it checks that the suite's inputs hold that module's imports.
-  - `tests/benchmarks/two_stage/guard_node.py` builds `Proofs.Flock.SpotFlock.Code` and
+  - `tests/benchmarks/one_stage/guard_node.py` builds `Proofs.Flock.SpotFlock.Code` and
     `Proofs.Flock.SamplingGeneric.TwoAt` and runs `TwoGuard.lean` beside it, which imports them.
   - `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_lean_package.py` reads the lock's `runs` entry of `Proofs.Pouw.Bulk`.
 

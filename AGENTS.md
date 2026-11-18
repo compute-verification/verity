@@ -1,9 +1,9 @@
 # Verity
 
-Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and the Glossary, whose
-terms code, docs and output use. This file states what holds on `main` now; each package's README and docstrings say what
-it contains. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
+Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives compute,
+memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and `GLOSSARY.md` the Glossary,
+whose terms code, docs and output use. This file states what holds on `main` now; what a package contains is read from
+its code. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
 
 ## Map and commands
 
@@ -32,8 +32,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     `spot_flock/`, `remote/` and `onsite/` are Lean only; the policy's Python is its
     manifest alone (`inference_only/verifier/parties.py`: the verifier, no channel). `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
-    keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
-    own): `pouw/prover/clear/`, `pouw/verifier/receipts/`, `poub/attester/live_verifier/` and `poub/verifier/remote_session/`.
+    keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/poub_session/` a place of its
+    own): `pouw/prover/clear/`, `pouw/verifier/receipts/`, `poub/attester/live_verifier/` and `poub/verifier/poub_session/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -50,17 +50,18 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     over channels. `verity_config`, its own distribution, is `tools/config/`.
   - `tools/difftest/`: the differential tests that hold the Python to each Lean (`verity_difftest`).
     `verity/protocols/compose/verifier/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
-- `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
+- `calibration/`: the cards, the probes and the measurements that choose parameters. `calibration/hardware/` is the
+  data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
   base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
   commits its values while serving. It sits on `adapters/torch/` (`verity_torch`), the translator from PyTorch to
   circuits, which also traces a training step.
-- `demos/`: one file per demo, the configuration `verity run` reads (`demos/README.md`, one table of them); a demo holds no
+- `applications/`: one file per demo, the configuration `verity run` reads (`applications/README.md`, one table of them); a demo holds no
   code.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
-  end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
+  end to end, GPU probes, and `calibration/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command (`cli/`), `circuit_check/`, `graph/` (the check as a graph of tasks) and `lean/`
   (the Lean check); `tools/check/`: the one check.
 - `artifacts.json`: every replicated fixture by `art:` id (no root `fixtures/`: each file sits beside
@@ -128,7 +129,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   16-bit limit). A plain path, Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and
   `verity verify proof` refuses a plain session past what the plain theorem covers (one table today).
-- **One proof system** for PoUW, PoUS and network certification: the workers behind the ZK server, the challenger and the
+- **One proof system** for PoUW, PoUS and network attestation: the workers behind the ZK server, the challenger and the
   verifier. A protocol states what is committed, which proof blocks need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
@@ -138,7 +139,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   the Lean verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not
   exfiltration. The demonstration adds the network attester as a separate layer: it stamps each request's release order
   and bucket at ingress, which the certified tick admits by, so the scheduler's choice of batch is no longer advice.
-  SPOT[Flock] reads that stamp as a certified input and never imports the certifier, which has its own code, guarantee
+  SPOT[Flock] reads that stamp as a certified input and never imports network attestation, which has its own code, guarantee
   and proof; the two compose only above both.
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows, or keyed
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
@@ -187,7 +188,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
   and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
-  capacity, and nothing else: no power certifier, power ceiling, energy floor or meter enters a protocol, premise or
+  capacity, and nothing else: no power attester, power ceiling, energy floor or meter enters a protocol, premise or
   plan.
 - **Lean is the definition and the verifier.** The provers' Python (the listing's untrusted places) mirrors it for
   the prover's speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until
@@ -202,7 +203,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   checks, and defines every other layer's circuit from it.
 - **Integrations are frontends, and Verity is agnostic to them.** Verity's vocabulary is circuits, values,
   commitments, coins, proofs and verdicts; models, checkpoints, requests, batches and schedulers stay out of `verity/`, and
-  those still in it (network certification's advice format) move out to the adapter. An integration hands Verity only: a
+  those still in it (network attestation's advice format) move out to the adapter. An integration hands Verity only: a
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.commitments` scheme and registered
@@ -212,7 +213,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   period (Glossary), not the execution phase, the run or the demo. Every result, in a report, a
   table, a PR or a message, is presented for monitoring periods of one week, one month and one year, and over
   all compute, in AND gates: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks
-  one. The datacenter's size (from `benchmarks/census/`) and the execution phase's length are stated parameters, and a
+  one. The datacenter's size (from `calibration/census/`) and the execution phase's length are stated parameters, and a
   figure scaled from one machine says which parts are proved and which are scaled. Give each bound as its pooled total over
   the period and as a share of the compute it covers, beside the per-execution-phase figure, never instead of it: a
   per-execution-phase δ that looks weak is not the result.
@@ -240,14 +241,22 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 
 ## Checking and merging
 
+**ci's one goal is the landing metrics, and ci has full autonomy over the landing system** (Daniel's ruling: only he
+changes or removes this paragraph). The metrics are the time from a ready mark to `main`, as a median and as the slowest
+tenth, and the share of marked PRs on `main` within two hours; ci keeps them well specified, each counted in one place.
+To make them go down ci does whatever it takes: it changes or removes any process, limit, gate, hold or other constraint
+of the landing system (the mark and its preflight, the readers, the queue, the check and what it gates), experiments and
+takes risks, without asking anyone, whatever the rest of this file, a skill or a lead's order says. It tells an owner
+after removing something of theirs; nobody restores it or asks ci to justify it first.
+
 There is no GitHub Actions CI. `check` (`verity check`, `tools/check/check.py`) is the one check: every suite,
 `circuit-check --all`, Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
 `lean-agreement` (against upstream's Rust verifier) when Flock or its Lean verifier changes. The runners report facts: each
 suite, test, target and step's real verdict. What gates and what may stay red is the landing policy,
 `tools/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
 which the verified queue takes a failure as not red until it expires. `circuit-check` is off the merge gate until
-`circuit-check --all` fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it
-out; a candidate's check still runs it, and its red there holds nothing.
+`circuit-check --all` fits inside the rest of the check: a recorded check and the move of `main` leave it out; a
+candidate's check still runs it, and its red there holds nothing.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
@@ -263,8 +272,8 @@ fails on its base too. Under `--gate verdict` a plain candidate lands on its mem
 `main`'s whole check follows each landing, and a red check reverts the one culprit or, with no culprit, sends plain
 candidates back to the whole check until `main` is green; a candidate is plain when each member has a land verdict of its
 own, is no move and touches nothing drive.toml's `verdict_excludes` names, nor any entry of its `lowrisk_excludes` that
-`verdict_plain` doesn't list (with either of the first two empty, none is plain), so every other candidate (Lean, a lock, a move, a verifier or device, the soundness path, the landing code
-itself) keeps the whole check before landing. A failure the candidate's base shares blames none of its PRs;
+`verdict_plain` doesn't list (with either of the first two empty, none is plain), so every other candidate (Lean, a lock, a move, a verifier or device, the soundness path, the Lean check) keeps
+the whole check before landing. A failure the candidate's base shares blames none of its PRs;
 any other's suspects are the PRs whose change touches what it names (its files, the files declaring a Lean declaration it
 names), every PR when none does: a lone suspect is ejected, several are bisected, and in the same tick the candidate and
 those above it are rebuilt without them. A candidate holding a Lean, lock or spec change runs lean-audit alone first (its records run) and is checked on the
@@ -295,7 +304,7 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
   executable verifier and the ZK server (`verity/protocols/proofs/flock/verifier/`, with the release side in
-  `verity/protocols/proofs/recursion/verifier/zk_server/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  `verity/protocols/proofs/recursion/verifier/zk_server/`), the PoUS grader, the network attester's program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_ZK_SERVER=1` every byte that leaves is
   computed by `Flock.ZkServer`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `security/`, three trees: definitions
@@ -387,6 +396,22 @@ and its parameters). What a run measured, what happened and who decided live out
 - **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`artifacts.json`'s
   `art:` ids and digests, a lock's records, the handle registry, a table's runs of record), never in a comment, a
   docstring or a doc.
+
+## Comments and docstrings
+
+The default is none. A reader has this file, `ARCHITECTURE.md` and the Glossary, and can read code. Write one only for:
+
+- **A file:** at most one sentence saying what it is, where its path doesn't.
+- **A function, class or declaration:** what a caller must know that its name and signature don't say (a unit, an
+  invariant, when it refuses), in one to three lines. No `Args:` or `Returns:` that restates the signature.
+- **A line:** why it is the way it is, where a careful reader would otherwise "fix" it, in one or two lines at that
+  line.
+
+Each is in the present tense, about the code as it is, in the Glossary's words. None restates the code or another file,
+or says what the code used to be, what changed, or anything "Where writing goes" keeps out of the tree. Text a program
+reads keeps its form: a tool's directive (`# noqa`, `# type:`, a licence line), a docstring printed as `--help`, text a
+test pins, and the docstring of a Lean declaration a lock lists (the lean-proofs skill). When unsure whether something
+is surprising, leave it out.
 
 ## Skills
 

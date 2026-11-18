@@ -19,7 +19,7 @@ from verity.circuits.silicon import fp32 as silicon
 from verity_machine_model.eps import design
 from verity_machine_model.model import device
 
-DC = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "dc"
+DC = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "dc"
 
 
 def _f32(w: int) -> float:

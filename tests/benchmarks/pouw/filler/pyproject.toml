@@ -15,8 +15,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # their folds, key rules and lane starts from the receipts reference. capacity_of.py reads its σ through machine_model's
 # capacity over its data's Π. The ledger reads its variables through PoUW's benchmarks' registry (benchmarks/pouw/settings.py).
 inputs = ["benchmarks/pouw/harness", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler", "benchmarks/pouw/settings.py", "tools/config/verity_config",
-          "verity/protocols/resource_accounting/compute/pouw/verifier/receipts", "benchmarks/machine_model/verity_machine_model",
-          "benchmarks/machine_model/data", "tools/research/src/research/__init__.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/receipts", "calibration/machine_model/verity_machine_model",
+          "calibration/machine_model/data", "tools/research/src/research/__init__.py",
           "tools/research/src/research/store", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", 
           "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/serving.py",

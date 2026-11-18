@@ -2486,6 +2486,31 @@ def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_t
     assert [p for p, _ in api.posts if p.endswith("/archive")] == [f"/v1/agents/{W1_}/archive"]
 
 
+def test_a_lanes_reader_is_never_rung_silent_nor_archived_and_the_workers_beside_it_still_are(tmp_path):
+    """ci's readers (`review-73`), whose work is verdict labels and lines in ci's shared request list, were rung silent, and
+    one was archived mid-shift. A worker whose name matches its handle's `staffs` in the registry is never judged, however
+    long; a worker of the same lane, and one named like a reader in a lane that staffs none, are rung and archived as before."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits reader ({W1_})", age_s=2 * 3600)
+    note(notes, "circuits", "b.md", f"circuits worker W3 ({W2_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    note(notes, "vllm", "c.md", f"vllm worker ({W3_})", age_s=2 * 3600)
+    since = W.iso(T0 - 3 * 3600)
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", since, name="review-73"),
+                                                            W2_: worker("ACTIVE", since), W3_: worker("ACTIVE", since, name="review-9")},
+                                 notes=notes, git_remote=REMOTE, sh=FakeSh({"cursor/w3-branch-c7a9": "a" * 40}))
+    reg = tmp_path / "registry.json"
+    d = json.loads(reg.read_text())
+    d["handles"][0]["staffs"] = ["review-*"]
+    reg.write_text(json.dumps(d))
+    assert W.reader("review-73", "circuits", reg) and W.reader("circuits reader review-73: tier 2", "circuits", reg)
+    assert not W.reader("review-73", "vllm", reg) and not W.reader("review-73", None, reg) and not W.reader("ZKS10", "circuits", reg)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 24 * 60)
+    judged = [(r["kind"], r["agent"]) for r in records(tmp_path) if r["kind"] in ("silent", "no_step", "archived")]
+    assert sorted(judged) == sorted([("silent", W2_)] * 2 + [("archived", W2_)] + [("silent", W3_)] * 2 + [("archived", W3_)])
+    assert sorted(p for p, _ in api.posts if p.endswith("/archive")) == sorted(f"/v1/agents/{a}/archive" for a in (W2_, W3_))
+
+
 def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(tmp_path):
     """A coordinator working only in Slack makes no note or push for hours, and no_step must not tell top to archive it. Its agent's `updatedAt` moving is activity to no_step,
     not to silent; once that stops too, no_step counts from it."""
@@ -3295,9 +3320,9 @@ def test_a_relaunched_worker_with_no_recorded_branch_is_told_the_branches_its_ne
     assert new["branch"] == "cursor/ca-salt-wire-ea24"
 
 
-def test_a_relaunched_worker_runs_opus_at_high_effort_and_its_children_never_run_fable(tmp_path):
-    """Only leads run Fable 5.2: a worker's replacement is launched on Opus 5.5 at high effort, and told to name
-    `claude-opus-5-5-high` (or `claude-sonnet-5-5-high`) for any child and to hold no timer or subscription."""
+def test_a_relaunched_worker_runs_opus_at_medium_effort_and_its_children_never_run_fable(tmp_path):
+    """Only leads run Fable 5.2: a worker's replacement is launched on Opus 5.5 at medium effort, and told to name
+    `claude-opus-5-5-medium` (or `claude-sonnet-5-5-high`) for any child and to hold no timer or subscription."""
     (tmp_path / "workers.d").mkdir()
     (tmp_path / "workers.d" / "w1.json").write_text(json.dumps({"agent_id": W1_, "lane": "zk-port", "launched_by": NEW}))
     launch_api = FakeLaunchApi()
@@ -3310,10 +3335,10 @@ def test_a_relaunched_worker_runs_opus_at_high_effort_and_its_children_never_run
         clock.t += 60
         w.sweep(lambda r: None)
     ((_, body),) = launch_api.posts
-    assert body["model"] == {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
+    assert body["model"] == {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "medium"}]}
     assert "claude-fable" not in json.dumps(body), "a worker never runs Fable"
     text = body["prompt"]["text"]
-    assert ("A child you start names `claude-opus-5-5-high` (or `claude-sonnet-5-5-high` for a fully specified task), "
+    assert ("A child you start names `claude-opus-5-5-medium` (or `claude-sonnet-5-5-high` for a fully specified task), "
             "never Fable, `inherit` or none.") in text
     assert "You hold no timer or subscription of your own." in text
 

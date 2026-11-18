@@ -156,9 +156,11 @@ from typing import IO, Any, Callable
 
 from . import clone
 from .telemetry.events import utc_now_ms
-from .telemetry.job import write_json_atomic
+from .telemetry.job import address_names, hide_addresses, write_json_atomic
 
 REQUEST_SCHEMA = "research/request/v0.1"
+#: the request's {address: machine name} for the registered addresses it holds, which the machine's records name instead
+HIDDEN_ADDRESSES = "hidden_addresses"
 PRESERVED_SCHEMA = "research/preserved/v0.1"
 READY_SCHEMA = "research/source-ready/v0.1"
 READY_FILE = "READY.json"                     # the only marker that makes <root>/src/<identity>/ executable
@@ -368,6 +370,11 @@ def ssh_host_target(machine: dict[str, Any]) -> dict[str, Any]:
         raise Refused(f"{who}: user {user!r} is not a user name")
     return {"host": host, "port": port, "user": user, "pod_name": machine.get("name"), "cost_per_hr": machine.get("rate_usd_per_hour"),
             "rate_observed_utc": utc_now_ms(), "gpu": machine.get("gpu")}
+
+
+def registered_addresses(machines: dict[str, dict[str, Any]]) -> dict[str, str]:
+    """{name: address} of each machine whose entry gives its address (an ssh machine's `host`)."""
+    return {n: m["host"] for n, m in machines.items() if isinstance(m, dict) and isinstance(m.get("host"), str) and m["host"]}
 
 
 def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
@@ -1898,8 +1905,10 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         try:
             if mem_rec:
                 M.set_pid(mem_rec["reservation"], proc.pid)
-            write_json_atomic(run_dir / "launch.json", {"run_id": run_id, "claimed_utc": utc_now_ms(), "runner_pid": proc.pid, "argv": argv,
-                                                        "cwd": req.get("cwd"), "request": str(request_path), "hostname": os.uname().nodename})
+            hidden = {**address_names(req.get("env") or {}, None, req["command"]), **(req.get(HIDDEN_ADDRESSES) or {})}
+            write_json_atomic(run_dir / "launch.json", hide_addresses({"run_id": run_id, "claimed_utc": utc_now_ms(), "runner_pid": proc.pid,
+                                                                       "argv": argv, "cwd": req.get("cwd"), "request": str(request_path),
+                                                                       "hostname": os.uname().nodename}, hidden))
             first = await_first_record(proc, ack_fd)
         except Exception as e:  # noqa: BLE001  (the runner is started: an error here leaves its launch unconfirmed, never refused)
             return {**started, "first_record": None, "unconfirmed": f"{type(e).__name__}: {e}"}
@@ -2381,6 +2390,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                               "source_archive_sha256": ready.get("archive_sha256"), "source_files": ready.get("files"),
                               "source_verified": ready.get("verified"), "source_transport": ready.get("transport"),
                               "launched_from": os.uname().nodename}}
+        held = json.dumps(request)
+        names = address_names(env, {**registered_addresses(load_machines()), machine_name: tgt["host"]}, command)
+        request[HIDDEN_ADDRESSES] = {a: n for a, n in names.items() if a in held}
         req_path = stage_request(ssh, m["root"], run_id, request, sends, private=custody_files or None)
         rec.update(phase="launching", request=req_path, remote_run_dir=f"{m['root']}/runs/{run_id}", tool=tool_dir, source_sha=tree_sha,
                    source_archive_sha256=ready.get("archive_sha256"), rate_usd_per_hour=tgt["cost_per_hr"])

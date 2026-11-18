@@ -12,7 +12,7 @@ descriptor format, its canonical bytes and its digests are specified in [`PROTOC
 
 ## Terms
 
-The terms are the [Glossary](../../ARCHITECTURE.md#glossary)'s; [`GLOSSARY.md`](../../GLOSSARY.md) holds the rest.
+The terms are the [Glossary](../../GLOSSARY.md)'s.
 
 - A **circuit** is gates and the wires between them. A **gate** outputs one bit: the AND or XOR of two or more bits, a NOT,
   an input gate, or the constant 0 or 1 as one of an operation's own bits. A wire carries its source gate's value and none

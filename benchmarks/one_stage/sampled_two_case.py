@@ -93,10 +93,10 @@ def from_run(out: Path) -> dict[str, Any]:
     interior audit's per-member case), written under ``out/form``: {files, blobs} or {error}."""
     try:
         run = json.loads((out / "run-input.json").read_text())
-        members = json.loads((out / "audit" / "case-v2-members.json").read_text())
+        members = json.loads((out / "audit" / "case-v2.json").read_text())
         files = write(assemble(run, members), out / "form")
     except (OSError, ValueError, KeyError, TypeError) as e:
-        why = (out / "audit" / "case-v2-members-error.txt")
+        why = (out / "audit" / "case-v2-error.txt")
         return {"error": f"{type(e).__name__}: {e}", **({"members": why.read_text().strip()} if why.is_file() else {})}
     return {"files": [str(f) for f in files[:3]], "blobs": len(files) - 3}
 

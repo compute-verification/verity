@@ -39,7 +39,8 @@ packages = [
 research = { workspace = true }
 verity = { workspace = true }
 verity-config = { workspace = true }
-# vLLM's mypy settings; tests/lint/test_mypy.py runs mypy under them and holds its errors to allowlists/mypy.json
+# vLLM's mypy settings; tests/adapters/vllm/tests/lint/test_mypy.py runs mypy under them and holds its errors to
+# allowlists/mypy.json
 [tool.mypy]
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true

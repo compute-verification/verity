@@ -45,7 +45,9 @@ def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod(
     assert S.changes_of("prod-record") == ["the step record", "the served ids", "the canonical top-k"]
     # an arm is costed over the nearest stock arm above it: at the recipe's settings, stock at those settings
     assert [S.stock_of(a) for a in ("prod-again", "prod-record", "prod", "published")] == ["prod", "prod", "published", "compiled"]
-    assert {S.stock_of(a) for a in S.ARMS if a not in ("prod", "prod-again", "prod-record", "prod-seeded", "prod-trace")} == {"compiled"}
+    prods = ("prod", "prod-again", "prod-record", "prod-seeded", "prod-trace", "prod-tick", "prod-all-on",
+             "prod-record-bisect")
+    assert {S.stock_of(a) for a in S.ARMS if a not in prods} == {"compiled"}
     assert S.stock_of("no such arm") == "compiled" and all(n in S.ARMS and not S.changes_of(n) for n in S.STOCK)
     # the recipe is one model's; its arms serve at the job's context limit, the same for the three
     for arm in ("prod", "prod-again", "prod-record"):
@@ -75,12 +77,19 @@ def test_what_prod_record_differs_from_prod_by_is_read_apart_by_two_arms(tmp_pat
     assert env["prod-trace"][S.PLUGIN_ENV] == env["prod-record"][S.PLUGIN_ENV]
     assert [env[n].get("VERITY_DSA_TOPK") for n in names] == [None, None, None, "canonical"]
     assert replace(S.ARMS["prod-trace"], what="", env=S.TOPK_ENV, general=S.TOPK) == replace(S.ARMS["prod-record"], what="")
+    # prod-record-bisect is prod-record with its top-k's other pass, which writes the same rows: against it, what the
+    # refinement saves
+    bisect = S.server_env(S.ARMS["prod-record-bisect"], tmp_path, tmp_path / "site", None, 600.0, 600.0,
+                          private=tmp_path / "private")
+    assert {k: v for k, v in bisect.items() if env["prod-record"].get(k) != v} == {"VERITY_DSA_TOPK": "canonical-bisect"}
+    assert S.changes_of("prod-record-bisect") == S.changes_of("prod-record")
+    assert replace(S.ARMS["prod-record-bisect"], what="", env=S.TOPK_ENV) == replace(S.ARMS["prod-record"], what="")
     # a cost over prod takes prod-again alone for prod's second lifetime: prod-seeded's server is prod's, but what it is
     # sent is not, so its seconds are no reading of the noise between two of prod's starts
     assert S.same_engine("prod-again", "prod") and not S.same_engine("prod-seeded", "prod")
     assert not any(S.same_engine(a, b) for a in names for b in names if a < b)
     # no other arm is sent seeds without keeping the record
-    assert [n for n, a in S.ARMS.items() if a.seeds] == ["prod-seeded"]
+    assert [n for n, a in S.ARMS.items() if a.seeds] == ["prod-seeded", "prod-tick"]
 
 
 def test_an_arms_meta_holds_the_value_settings_in_force_in_the_environment_its_server_is_started_with(
@@ -411,7 +420,7 @@ def test_the_cost_on_a_sessions_load_is_over_stock_at_the_same_settings_with_its
     assert (stock["steps"], stock["draft_accepted_share"], stock["tokens_per_draft"]) == (2000, 50.0, 3.5)
     text = S.session_text(r)
     assert text.splitlines()[0] == ("serving cost on load agentic: prod-record over prod: 0.50% of stock's serving "
-                                    "compute over 1 server lifetime an arm, 4 users; target 1%: cannot tell")
+                                    "time over 1 server lifetime an arm, 4 users; target 1%: cannot tell")
     assert ("  the cost is the mean of the lifetimes' costs, a lifetime's being prod-record's seconds for the passes "
             "both arms counted in it over prod's, less one, a pass's seconds from its users' first send to the last "
             "one's last answer; one lifetime an arm gives no interval and so no verdict\n"
@@ -667,7 +676,7 @@ def test_a_cost_over_server_lifetimes_pairs_the_same_pass_of_the_same_lifetime_a
     assert S.session_cost(in_lifetimes(), "prod-record", "prod", target=0.45)["verdict"] == "misses"
     text = S.session_text(r)
     assert text.splitlines()[0] == ("serving cost on load agentic: prod-record over prod: 0.50% [0.50%, 0.50%] of stock's "
-                                    "serving compute over 2 server lifetimes an arm, 4 users; target 1%: meets")
+                                    "serving time over 2 server lifetimes an arm, 4 users; target 1%: meets")
     assert ("last answer; its interval is Student's t over the lifetimes, and the verdict is its upper end against the target\n"
             "  passes taken as independent: 0.50% [0.50%, 0.50%], 6 reps, the median over them with its interval; in no "
             "verdict\n"
@@ -768,10 +777,10 @@ def test_cost_prints_a_sessions_loads_cost_over_the_arms_own_stock(tmp_path: Pat
         files[-1].write_text(json.dumps(a))
     assert S.main(["cost", *map(str, files), "--arm", "prod-record", "--out", str(tmp_path / "out")]) == 0
     text = capsys.readouterr().out
-    assert text.startswith("serving cost on load agentic: prod-record over prod: 0.50% of stock's serving compute over 1 ")
+    assert text.startswith("serving cost on load agentic: prod-record over prod: 0.50% of stock's serving time over 1 ")
     assert (tmp_path / "out" / "serving_cost.txt").read_text() == text
     r = json.loads((tmp_path / "out" / "serving_cost.json").read_text())
-    assert list(r)[:4] == ["value", "unit", "commit", "run"] and r["reference"] == "prod"
+    assert list(r)[:4] == ["value", "unit", "commit", "run"] and r["reference"] == "prod" and r["unit"] == S.SESSION_UNIT
     ok, first, what, measurements = S.result_of(r)
     assert ok and first == text.splitlines()[0] and what["loads"] == ["agentic"] and what["arm"] == "prod-record"
     assert [(m["name"], m["value"], m["ci95"], m["target"], m["verdict"], m["users"], m["lifetimes"]) for m in measurements] == [

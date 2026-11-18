@@ -1,6 +1,6 @@
 """IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the network attester's own ingress:
 the proof block a bucket row that binds each request's prompt_len and arrival ordinal to the network attester's
-certified ingress cells, its reference in the clear and the Boolean Definitions it is built from. Nothing here is in a
+attested ingress cells, its reference in the clear and the Boolean Definitions it is built from. Nothing here is in a
 Spec or proved.
 
 **The cells are the network attester's** (`network_attester.NetworkAttester._ingress`, its rows as `network_attester_rows` registers them, a row a
@@ -15,7 +15,7 @@ LENGTH), whose every field is at a place fixed by the prompt's length and B alon
 content-length plus `BODY_AT`. Each cell is parsed without its request's prompt length (`parse_frame`): the head and the
 fixed fields at their places, 11-byte prompt fields (`[` or `,`, then a u32 in 10 characters), the gap spaces only where
 the next piece would straddle a cell, and `]}` then zero fill at the request's last byte. So each request's prompt_len
-is its count of prompt fields, read from the certified bytes. A name (`model`, `user`) is printable ASCII but `"` and
+is its count of prompt fields, read from the attested bytes. A name (`model`, `user`) is printable ASCII but `"` and
 `\\` in quotes, so a request whose name needs a JSON escape is refused.
 
 **The lanes** (`Lane`, public in the named gap): each lane's connection, its ordinal q (0 for a lane no connection
@@ -645,7 +645,7 @@ IoTieRequest = CompositeDefinition(
     doc="1 iff each of the bucket row's L lanes, its R cells scanned from the lane's carry-in (left, fields) on its "
         "ordinal q, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, is pads and canonical id-request cells on q, "
         "none after a pad or the request's END, leaving its carry-out (left_out, fields_out) with no count past 2^32 "
-        "(`IoTieRequestEnd`): the ingress tie of one bucket row of the network certifier's registered root (the row the proof "
+        "(`IoTieRequestEnd`): the ingress tie of one bucket row of the network attester's registered root (the row the proof "
         "system's registered read, bit 8k + i bit i of byte k), every cell opened; an execution phase's tie is its T rows'")
 IoTieRequest.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins (`tie_service.gate`)
 #: the circuit digests circuit-check pins (`head_check.pinned_digest`)

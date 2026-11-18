@@ -212,6 +212,15 @@ class Moves(World):
         moving = self.moving(s, acts)
         return [r for r in super().pool(s, acts, aside) if not (r.move and scripts) and (not moving or self.crosses(r))]
 
+    def takeable(self, s: Snapshot, acts: list, upto: Build | None = None) -> list[Ready]:
+        """`World.takeable` without the moves once a build of the tick before ``upto`` changes the move scripts, and only the
+        PRs that cross a move once one holds one."""
+        ready = {r.number: r for r in s.ready}
+        before = acts[:acts.index(upto)] if upto is not None else acts
+        on = [ready[m] for b in before if isinstance(b, Build) and b.replaces is None and not b.records for m in b.members]
+        scripts, moving = any(r.scripts for r in on), any(r.move for r in on)
+        return [r for r in super().takeable(s, acts, upto) if not (r.move and scripts) and (not moving or self.crosses(r))]
+
     def admits(self, s: Snapshot, acts: list, where: str) -> None:
         """`World.admits` of the PRs `pool` leaves, so while a move holds the builds (the tick advances to one, or the chain,
         the batch its `Commit` puts there among it, holds one in flight) a PR that crosses it is built as any is while it
@@ -264,6 +273,8 @@ class Moves(World):
             self.left_out |= set(refused)
             self.seen["a move refused on its tip"] += 1
             if not (a := replace(a, members=tuple(m for m in a.members if m not in refused))).members:
+                base = self.rebuilds.get(a.base, a.base) if a.after is None else self.put.get(a.after)
+                self.rebuilds.update((k, base) for k in (a.replaces, a.name) if k is not None)
                 return
         if isinstance(a, Advance):
             c = self.cands[a.sha]

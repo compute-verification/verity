@@ -92,8 +92,6 @@ That table holds these scans' shapes alone.  A shape another capture scans (GLM-
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
-
 import argparse
 import ctypes
 import ctypes.util
