@@ -188,7 +188,8 @@ def test_network_rows_and_the_python_check_decide_each_run_alike(tmp_path):
     Every disagreement is reported with both verdicts. By design: a run under a
     `max_tokens_cap` the Python check accepts and `network-rows` refuses by name; a run whose egress cell isn't
     id-form the Python audit refuses and `network-rows` accepts; and a bytes-form run the Python check accepts and
-    `network-rows` refuses."""
+    `network-rows` refuses. The relay check, running it, names no `lean-disagrees` on any of them, and its `lean` is
+    accepted on exactly those `network-rows` accepts and not covered on the capped and bytes-form runs."""
     exe = str(D.build(LEAN, "network-rows"))
     honest = served(tmp_path / "honest")
     resigned = republished(honest, tmp_path / "resigned")
@@ -237,3 +238,11 @@ def test_network_rows_and_the_python_check_decide_each_run_alike(tmp_path):
     assert python(bytes_run) == []
     got = lean(exe, bytes_run, tmp_path / "case-bytes")
     assert (got["verdict"], got["reason"]) == ("reject", "requests window 0: the certified head isn't the record's"), got
+
+    accepted = {"honest", "resigned", "one window fewer", "not id"}
+    for name, run in [*((n, r) for n, (r, _) in runs.items()), ("not id", not_id_run), ("capped", capped),
+                      ("bytes", bytes_run)]:
+        result = RC.check(run, rows_exe=Path(exe))
+        assert not [p for p in result["problems"] if p.startswith("lean-disagrees")], (name, result["problems"])
+        assert (result["lean"] == "accepted") == (name in accepted), (name, result["lean"])
+        assert result["lean"].startswith("not-covered: ") == (name in ("capped", "bytes")), (name, result["lean"])
