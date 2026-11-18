@@ -1,0 +1,31 @@
+# The top-p keep word's builder and word gates, out of the vLLM adapter into the core ops, so the proof system's
+# `topp_word.py` imports no adapter: what `tools/move/layout.py --map tools/move/topp_word_core_map.toml` moves and
+# rewrites. Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", verity_torch = "adapters/torch/verity_torch", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "calibration/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", verity_torch = "adapters/torch/verity_torch", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "calibration/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+
+[paths]
+"adapters/vllm/verity_vllm/definitions/registry/topp_word_gates.py" = "verity/circuits/ops/topp_word_gates.py"
+"adapters/vllm/verity_vllm/definitions/registry/topp_word_gates.circuit-check.json" = "verity/circuits/ops/topp_word_gates.circuit-check.json"
+"adapters/vllm/verity_vllm/definitions/registry/topp_keep_builder.py" = "verity/circuits/ops/topp_keep_builder.py"
+
+[retired]
+paths = ["adapters/vllm/verity_vllm/definitions/registry/topp_word_gates.py", "adapters/vllm/verity_vllm/definitions/registry/topp_keep_builder.py"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, `move_check.py` and its test, and `tests/tree.toml`, the layout of record.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/check/tests/test_move_check.py", "tools/check/move_check.py",
+           "tools/research/src/research/store/moves.json", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
+"verity_vllm.definitions.registry.topp_keep_builder" = "verity.circuits.ops.topp_keep_builder"
+"verity_vllm.definitions.registry.topp_word_gates" = "verity.circuits.ops.topp_word_gates"
