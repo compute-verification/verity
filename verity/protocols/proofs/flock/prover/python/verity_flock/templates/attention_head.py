@@ -98,8 +98,3 @@ def class_manifest(subcircuit, lo: int, hi: int) -> bytes:
     m = {"format": CLASS_FORMAT, "template": subcircuit.id, "T": [lo, hi], "key_port": "k", "words_per_key": D, "unit_rows": rows.pop(),
          "nets": nets}
     return (json.dumps(m, sort_keys=True, separators=(",", ":")) + "\n").encode()
-
-
-def key_counts(input_set, lo: int = 0, hi: int | None = None) -> list[int]:
-    D = int(input_set.subcircuit.params["D"])
-    return [len(k) // D for k in input_set.port("k", lo, hi)]
