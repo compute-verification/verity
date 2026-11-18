@@ -151,8 +151,8 @@ SUBPROTOCOLS = {
                          "inference-only": "verity/inference-only/v0", "pous": POUS_P2_RUN,
                          "pearl-plus": "verity/pouw/pearl-plus/v1", COMPONENT: COMPOSED,
                          "wipe": WIPE_PROTOCOL},
-    "verity/remote/v1": {"inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
-                         COMPONENT: COMPOSED},
+    DM.REMOTE_V1_PROTOCOL: {"inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
+                            COMPONENT: COMPOSED},
 }
 #: a configuration's subprotocol names and the protocol id each has outside a composite
 IDS = {"bandwidth": POUB_PROTOCOL, "network-attester": CERTIFIER_PROTOCOL,

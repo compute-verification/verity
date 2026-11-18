@@ -133,6 +133,7 @@ RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "b
 #: what a scheme needs of the proof layer that the layer doesn't provide every scheme the same way yet
 REQUIREMENTS = ("one-labelling", "log-order", "log-times", "coins-at-rate", "one-design")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
+_ENTRY = re.compile(r"[A-Za-z_][\w.]*:[A-Za-z_]\w*")
 
 
 @dataclass(frozen=True)
@@ -256,13 +257,17 @@ class Term:
 class Launch:
     """What the served runner launches for one developer-side party of a scheme (its piece), as data: the bindings of
     the party it reaches that it takes, ``binds`` each required and ``optional`` each taken where bound; ``development``,
-    the one of them whose absence makes it a development run that starts the party it reaches on its own machine; and
-    ``reaches``, that party, said only where no declared channel joins it to one auditor party."""
+    the one of them whose absence makes it a development run that starts the party it reaches on its own machine;
+    ``reaches``, that party, said only where no declared channel joins it to one auditor party; and ``starts``, the
+    bindings the party it reaches writes for it when `verity run` starts that party, in order, with ``starts_optional``
+    those of them the start may leave out. A start writes only some of ``binds`` and ``optional``."""
 
     binds: tuple[str, ...] = ()
     optional: tuple[str, ...] = ()
     development: str = ""
     reaches: str = ""
+    starts: tuple[str, ...] = ()
+    starts_optional: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -318,7 +323,9 @@ class Scheme:
     cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
     against the committed root once at build; ``copy_beside_storage_ruled`` (`BESIDE_STORAGE`), the sentence that rules
     that copy beside storage, empty or a `Lacks` where none has. ``pieces``, by developer-side party, what the served runner launches for
-    it (`Launch`), a `Lacks` where it launches nothing.
+    it (`Launch`), a `Lacks` where it launches nothing. ``answers``, the entry (``module:attribute``) of the functions
+    that answer its kept session in a process with no exchange (`Answers`, read through `answering`). ``tie``, the
+    parameters an application that ties its workload to this scheme states over its settings' defaults.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -336,6 +343,7 @@ class Scheme:
     charges: tuple[Charge, ...]
     settings: Mapping[str, Any] = field(default_factory=dict)
     check_settings: Callable[[Mapping[str, Any]], str | None] = _no_settings_check
+    tie: Mapping[str, Any] = field(default_factory=dict)
     option: str = ""
     hooks: tuple[str, ...] = ()
     requires: Mapping[str, str] = field(default_factory=dict)
@@ -370,6 +378,7 @@ class Scheme:
     keeps_weight_copy: bool | Lacks = UNDECLARED
     copy_beside_storage_ruled: str | Lacks = UNDECLARED
     pieces: Mapping[str, Launch] | Lacks = UNDECLARED
+    answers: str | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -419,8 +428,17 @@ class Scheme:
                                      "binds or optional")
                 if p.reaches and principal.get(p.reaches) != "auditor":
                     raise ValueError(f"{self.name}: {party} reaches a declared auditor party, not {p.reaches!r}")
+                if extra := sorted(set(p.starts) - {*p.binds, *p.optional}):
+                    raise ValueError(f"{self.name}: what {party}'s start writes is among its binds or optional, "
+                                     f"not {extra}")
+                if extra := sorted(set(p.starts_optional) - set(p.starts)):
+                    raise ValueError(f"{self.name}: what {party}'s start may leave out is among what it writes, "
+                                     f"not {extra}")
             object.__setattr__(self, "pieces", MappingProxyType(dict(self.pieces)))
+        if not isinstance(self.answers, Lacks) and not _ENTRY.fullmatch(self.answers):
+            raise ValueError(f"{self.name}: answers is an entry, module:attribute, not {self.answers!r}")
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
+        object.__setattr__(self, "tie", MappingProxyType(dict(self.tie)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
 
     @property
@@ -555,6 +573,29 @@ def declared(scheme: Scheme, name: str) -> Any:
     return value
 
 
+@dataclass(frozen=True)
+class Answers:
+    """What answers a scheme's kept session with no exchange and no store: ``held``, the file the session keeps;
+    ``binding``, ``decide``, ``missing`` and ``line``; ``request`` and its defaults ``session``; and ``key_of``."""
+
+    held: str
+    binding: Callable[..., bytes]
+    decide: Callable[..., Mapping[str, Any]]
+    missing: Callable[..., Mapping[str, Any]]
+    line: Callable[[Mapping[str, Any]], str]
+    request: Callable[..., Mapping[str, Any]]
+    session: Mapping[str, Any]
+    key_of: Callable[..., str | None]
+
+
+def answering(scheme: Scheme) -> Answers:
+    """``scheme``'s `Answers`, its entry's mapping loaded; refused by name (`declared`) where it lacks one."""
+    from importlib import import_module
+
+    module, _, name = declared(scheme, "answers").partition(":")
+    return Answers(**getattr(import_module(module), name))
+
+
 def layout(scheme: Scheme, port: str, shape: Mapping[str, int]) -> Layout:
     """``port``'s `Layout` at ``shape``, as ``scheme`` declares it; KeyError naming the scheme's ports, or ValueError when
     the port declares no layout."""
@@ -588,26 +629,6 @@ def register_process(name: str, start: Callable[..., Any]) -> Callable[..., Any]
         raise KeyError(f"a process named {name!r} is registered already")
     PROCESSES[name] = start
     return start
-
-
-@dataclass(frozen=True)
-class Circuits:
-    """What a scheme's executed computation is traced as: ``schemes``, the schemes with a circuit, and ``traced_as(scheme,
-    m, k, n)``, one executed call's circuit (None without one)."""
-
-    schemes: Mapping[str, Any]
-    traced_as: Callable[[str, int, int, int], Any]
-
-
-#: the circuits of each scheme's executed computation, by the name a configuration lists it under
-CIRCUITS: dict[str, Circuits] = {}
-
-
-def register_circuits(name: str, circuits: Circuits) -> Circuits:
-    if name in CIRCUITS:
-        raise KeyError(f"circuits named {name!r} are registered already")
-    CIRCUITS[name] = circuits
-    return circuits
 
 
 def order_refusals(listed: Sequence[Scheme]) -> list[str]:
@@ -661,8 +682,8 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["BESIDE_STORAGE", "BESIDE_STORAGE_NOT_SHOWN", "CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
-           "Charge", "Circuits", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
+__all__ = ["BESIDE_STORAGE", "BESIDE_STORAGE_NOT_SHOWN", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
+           "Answers", "Charge", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
            "bound",
-           "credited", "declared", "layout", "order_refusals", "register", "register_circuits", "register_process", "settings",
+           "answering", "credited", "declared", "layout", "order_refusals", "register", "register_process", "settings",
            "unbounded"]

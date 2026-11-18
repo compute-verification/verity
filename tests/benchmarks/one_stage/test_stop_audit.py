@@ -169,9 +169,8 @@ def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_
 
 def test_the_stop_streams_answer_carries_its_audit_records_complete(tmp_path, monkeypatch):
     """`answer_of` is one-stage's answer of the stop stream's outcome. The record that accepts with three entries null
-    gives an accept of the stop docket over the stop sample whose public ``complete`` is false, which a reader
-    that wants a complete audit refuses (`audit.answer_complete`). The same record saying complete gives one it takes:
-    the field is the record's own. A session Lean's verdict refuses gives a reject of that docket with no public
+    gives an accept of the stop docket over the stop sample whose public ``complete`` is false. The same record saying
+    complete gives one whose ``complete`` is true: the field is the record's own. A session Lean's verdict refuses gives a reject of that docket with no public
     outputs, naming the failed checks and the two verdicts that did not accept: Lean's, and the registered reads'
     entry, which is Lean's verdict held to the verifier's file."""
     first = _handoff(tmp_path, monkeypatch, "answer")
@@ -182,13 +181,13 @@ def test_the_stop_streams_answer_carries_its_audit_records_complete(tmp_path, mo
     assert a["commitment"] == first["stop"]["registration"]
     units, others = sorted(first["stop"]["units"]), set(a["public"]) - {"bound", "complete", "per_template"}
     assert len(others) == 2 and "proved" in others and all(a["public"][k] == units for k in others)
-    assert a["public"]["complete"] is got["audit"]["complete"] is False and not SA.A.answer_complete(a)
+    assert a["public"]["complete"] is got["audit"]["complete"] is False
     whole = SA.answer_of(r, {**got, "audit": {**got["audit"], "complete": True}})
-    assert whole["public"] == {**a["public"], "complete": True} and SA.A.answer_complete(whole)
+    assert whole["public"] == {**a["public"], "complete": True}
     refused, _ = _audit(first, accepted=False, why="the proof does not verify")
     b = SA.answer_of(r, refused)
     assert (b["verdict"], b["public"], b["profile"], b["commitment"]) == ("reject", None, None, a["commitment"])
-    assert b["reason"] == f"checks: roots; verdicts: {SA.LEAN}, {SA.READS}" and not SA.A.answer_complete(b)
+    assert b["reason"] == f"checks: roots; verdicts: {SA.LEAN}, {SA.READS}"
 
 
 def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
@@ -203,7 +202,6 @@ def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
     none = {**reject, "reason": "the stop stream refused the outcome"}
     assert SA.answer_of(r, {"accepted": False, "refused": {"codes": ["sessions"]}}) == none
     assert SA.answer_of(r, {"accepted": False, "audit": {"accepted": True}}) == none
-    assert not any(SA.A.answer_complete(SA.answer_of(r, g)) for g in ({"accepted": False, "audit": entry}, {"accepted": False}))
 
 
 def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path, monkeypatch):

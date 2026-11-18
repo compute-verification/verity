@@ -100,24 +100,18 @@ def test_without_bindings_no_key_blocks_and_pearl_pluss_coins_are_the_workloads_
     assert {k: variables.get(k) for k in LOCAL} == LOCAL and "H1_KEY_SHA512" not in variables
 
 
-#: onsite's subprotocols with Pearl+ in H1's place
-ONSITE_PEARLPLUS = tuple("pearl-plus" if c == "pouw" else c for c in T.listed("onsite_full"))
 ONSITE_UNBOUND = [k for k in T.unbound(R.load(ONSITE, REG), {}) if k.split(".")[1] != "pouw"]
 
 
-def onsite_pearlplus(tmp: Path, monkeypatch) -> Path:
-    with monkeypatch.context() as m:
-        m.setattr(T, "listed", lambda demo: ONSITE_PEARLPLUS)
-        cfg = T.configuration(K.parse(ONSITE.read_text())["program"]["commit"])
+def onsite_pearlplus(tmp: Path) -> Path:
     f = tmp / "onsite.toml"
-    f.write_text(K.render(cfg))
+    f.write_text(K.render(T.configuration(K.parse(ONSITE.read_text())["program"]["commit"])))
     return f
 
 
-def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute_key_blocks(tmp_path, capsys,
-                                                                                           monkeypatch):
-    monkeypatch.setitem(K.COMPOSITES, T.ONSITE, ONSITE_PEARLPLUS)
-    f = onsite_pearlplus(tmp_path, monkeypatch)
+def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute_key_blocks(tmp_path, capsys):
+    assert "pearl-plus" in T.listed("onsite_full") and "pouw" not in T.listed("onsite_full")
+    f = onsite_pearlplus(tmp_path)
     rc, got, err = dry(capsys, config=f)
     written = {f"{p}.{c}.{k}" for p, s in T.STARTS.items() for c, ks in s.writes.items() for k in ks}
     assert rc == 0 and got["dry"][0]["unbound"] == sorted(set(ONSITE_UNBOUND) - written), err
@@ -133,11 +127,13 @@ def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute
 
 
 def test_a_part_of_pearl_pluss_live_challenger_is_refused_by_name(tmp_path, capsys):
-    for part, lacking in (({"gate": "gate-command"}, "challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512"),
-                          ({"peer": "peer-1", "key-sha512": KEY}, "challenger.pearl-plus.gate")):
-        rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": part}}))
-        assert rc == 2 and "refused unbound: Pearl+'s live challenger takes gate, peer, key-sha512 together" in err, err
-        assert f"without {lacking}: bind them" in err, err
+    rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": {"gate": "gate-command"}}}))
+    assert rc == 2 and "refused unbound: Pearl+'s live challenger takes gate, peer, key-sha512 together" in err, err
+    assert "without challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512: bind them" in err, err
+    rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": {"peer": "peer-1",
+                                                                                              "key-sha512": KEY}}}))
+    assert rc == 2 and "refused unbound: challenger.pearl-plus.gate is unbound" in err, err
+    assert "bind challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512 beside it" in err, err
 
 
 def test_the_runners_variables_under_remote_are_pearl_pluss():

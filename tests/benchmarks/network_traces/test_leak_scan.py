@@ -20,7 +20,7 @@ zk_drivers.install()
 RD = proof_drivers.drivers().redigest
 
 REPS = ("s-circuit.rep0.bin", "s-circuit.rep1.bin")
-# The routed tie's switch row as served_tie_zk.blobs_of writes it: four values, u16 little-endian.
+# The routed tie's switch row: its route's values, each a u16 little-endian.
 SW = b"".join(x.to_bytes(2, "little") for x in (0, 1, 2, 3, 2, 1, 0, 3))
 POS = b"\x5d" + bytes(15)
 BLOBS = {"salt @0": bytes(range(16)), "pos @0": POS, "sw_route 0 @0": SW}

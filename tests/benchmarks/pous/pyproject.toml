@@ -45,6 +45,9 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           # block_record.py (test_pous_served_piece.py, test_pous_served_case.py load it) derives the record's subprotocols
           # from the onsite application, so it loads each scheme the application lists by its declaration
           "applications/onsite_full.toml", "verity/protocols/proofs/spot/scheme.py", "verity/protocols/proofs/spot/verifier/parties.py",
+          # Pearl+ is declared on the onsite application since main's stack, so block_record.py loads its declaration too
+          "verity/protocols/resource_accounting/compute/pouw/scheme.py", "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py", "verity/protocols/resource_accounting/compute/pouw/prover/workload.py",
+          "verity/protocols/resource_accounting/compute/pouw/prover/schemes/__init__.py", "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py", "verity/protocols/resource_accounting/compute/pouw/verifier/kernel_schemes.py",
           "verity/protocols/resource_accounting/network",
           # network's verifier loads the release formats' file
           "verity/release.py",

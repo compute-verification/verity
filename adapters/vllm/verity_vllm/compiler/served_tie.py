@@ -1,6 +1,8 @@
-"""The served rows' tie to the compute: a window's committed served rows (`served_rows`) held to the positions its steps'
-Commit holds, so a prover can't register cheaper rows at serve time than the batch it ran. The six-pass run's rows
-(user-1 never admitted) leave step 6's 29 prefill tokens of the honest batch uncovered, and the tie refuses them.
+"""The served rows' tie to the compute, a Definition: it states that a window's committed served rows (`served_rows`)
+are the positions its steps' Commit holds, which is built to keep a prover from registering cheaper rows at serve time
+than the batch it ran; no proof of it runs, so today the rows registered at serve time are the prover's word. The
+six-pass run's rows (user-1 never admitted) leave step 6's 29 prefill tokens of the honest batch uncovered, and `check`
+refuses them.
 
     ServedRowsTie_v2{R, P, G, IW, L, T, IB, PB} (pub, srv, pos_<g>_<k> …, sw_<g> …) -> verdict[16]
         G steps of a P-step window, block j of its P / G
@@ -19,11 +21,11 @@ from the same chunks through the same layout (`positions` and `ids`, the shared 
 - ``pub``, public: the proof block's block j of the window (JW = bitlen(P / G − 1) bits, none when G = P), then each of
   its G steps' token count N (TW bits a step), the binding map's element count of the positions;
 - ``srv``, the window's served rows, row w of the served-rows registration (`served_rows`: P steps of R slots of (valid,
-  request, kind, start, n), `compile_slice.rows_bits`' packing), whole in every proof block so that its b‖c is the
-  registration's leaf, checked natively;
-- ``pos_<g>_<k>``, the proof block's step g's k-th positions chunk, a 4096-byte leaf of the step's tree, its b‖c checked
-  natively against that leaf (`chunk_ok`) at its public index, and the tree's root through the step root to the run
-  root;
+  request, kind, start, n), `compile_slice.rows_bits`' packing), whole in every proof block so that a proof of the tie
+  would check natively that its b‖c is the registration's leaf;
+- ``pos_<g>_<k>``, the proof block's step g's k-th positions chunk, a 4096-byte leaf of the step's tree, its b‖c for a
+  proof of the tie to check natively against that leaf (`chunk_ok`) at its public index, and the tree's root through the
+  step root to the run root;
 - ``sw_<g>``, witness: the prover's switches of step g's routing (`route`).
 
 **The statement** (`check`). Per step, the slots in batch order cover the step's tokens in turn: slot k's run is [lo_k,
@@ -43,11 +45,12 @@ token t − 1's position plus one, compared on X = max(LW, TW) + 1 bits with the
 t − lo < 2^LW + 2^TW), so with the honest switches (`route`) the verdict is `check`'s, and with any switches it accepts
 only what `check` accepts (`reference` is the circuit in integers).
 
-**Selection: every proof block, always proved** (`Selection` All, as a transfer-gate proof block is). The tie is a
-binding, not a check on work: a step left untied makes that step's served rows the prover's word, and one such step can
-lower a window's charge (the six passes are one). The charge it protects feeds the network verdict, an AND over every
-window with no ε, so a tie sampled at ε would leave each untied step's charge free with probability 1 − ε. A window is
-its P / G proof blocks, block j = 0 … P / G − 1 each once, under one template.
+**Selection: every proof block** (`Selection` All, as a transfer-gate proof block is), under a proof of the tie; no
+proof of it runs, so today the rows registered at serve time are the prover's word. The tie is a binding, not a check on
+work: a step left untied makes that step's served rows the prover's word, and one such step can lower a window's charge
+(the six passes are one). The charge it protects feeds the network verdict, an AND over every window with no ε, so a tie
+sampled at ε would leave each untied step's charge free with probability 1 − ε. A window is its P / G proof blocks,
+block j = 0 … P / G − 1 each once, under one template.
 
 **Cost** (`size`, `step_size`): a step is the routing, about (M / 2)(2D − 1)·(TW + LW) ANDs less the switches a zero record
 folds away, and about 3·TW + 2·X + 8·PB ANDs a token for the scan; a proof block is G steps and, when G < P, P·TB ANDs
