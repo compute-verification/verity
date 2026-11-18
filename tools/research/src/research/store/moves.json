@@ -5392,6 +5392,33 @@
         "benchmarks/harness/specs/qwen3-8b-bf16-rtx-served-arm-eager.toml": "benchmarks/harness/specs/qwen3-8b-bf16-served-arm-eager.toml",
         "benchmarks/harness/specs/qwen3-8b-bf16-rtx-served-arm.toml": "benchmarks/harness/specs/qwen3-8b-bf16-served-arm.toml"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/run.sh": "benchmarks/pouw/masked_gemm/run.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/run.sh": "benchmarks/pouw/floored_gemm/run.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/tb_run.sh": "benchmarks/pouw/floored_gemm/tb_run.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/aprun.sh": "benchmarks/pouw/edited_gemm/aprun.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/cpvrun.sh": "benchmarks/pouw/edited_gemm/cpvrun.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/crun.sh": "benchmarks/pouw/edited_gemm/crun.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/profile.sh": "benchmarks/pouw/edited_gemm/profile.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/run.sh": "benchmarks/pouw/edited_gemm/run.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/serve.sh": "benchmarks/pouw/served_zk/serve.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/job.sh": "benchmarks/pouw/served_zk/job.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/run.sh": "benchmarks/pouw/served_zk/run.sh"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/README.md": "benchmarks/pouw/served_zk/README.md"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/prover/pod/gemm_hill.py": "benchmarks/proof_throughput/gemm_hill.py",
+        "verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py": "benchmarks/proof_throughput/gemm_slowdown.py",
+        "tests/verity/protocols/proofs/flock/prover/test_gemm_hill.py": "tests/benchmarks/proof_throughput/test_gemm_hill.py"
+      }
     }
   ]
 }

@@ -145,12 +145,12 @@ BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments
 BENCHMARKS_IMPORTERS = {
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
-        "verity/protocols/proofs/flock/prover/pod/gemm_hill.py", "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
+        "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py", "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py", "verity/protocols/proofs/flock/prover/python/verity_flock/ir_bench.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
         "tests/verity/protocols/proofs/flock/prover/test_backend_bench.py", "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
-        "tests/verity/protocols/proofs/flock/prover/test_gemm_hill.py", "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
+        "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
     **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tests/tools/research/test_store_prov.py"),
@@ -1114,7 +1114,6 @@ SPOT_VERIFIER_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/registration_log.py",
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
     "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
-    "adapters/vllm/verity_vllm/pipeline/window_sampling_design.py",
     "adapters/vllm/verity_vllm/program/predict/weights_tie.py",
     "adapters/vllm/verity_vllm/program/predict/window_rows.py",
     "adapters/vllm/verity_vllm/program/predict/window_weights.py",

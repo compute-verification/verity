@@ -14,7 +14,8 @@
 # runs no arms.
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
+export PATH=$CUDA_HOME/bin:$PATH
 D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/dfill.XXXXXX); trap 'rm -rf "$B"' EXIT
 export DF_ALONE=${DF_ALONE:-"4:1 4:2 4:4 8:1 8:2 8:4"}

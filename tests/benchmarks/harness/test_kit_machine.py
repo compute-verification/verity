@@ -54,7 +54,7 @@ def test_a_missing_or_unknown_property_is_refused_by_name(tmp_path):
 
 
 @pytest.mark.parametrize("old, new, field", [
-    ('cards = { value = 1,', 'cards = { value = 0,', "cards"),
+    ('cards = { value = 1,', 'cards = { value = -1,', "cards"),
     ('cards = { value = 1,', 'cards = { value = true,', "cards"),
     ('cpus = { value = 16,', 'cpus = { value = "16",', "cpus"),
     ('value = "allowed"', 'value = "yes"', "profiler"),
@@ -81,6 +81,39 @@ def test_an_entry_that_is_not_a_value_and_its_read_is_refused(tmp_path, old, new
     d = _record(tmp_path, old, new)
     with pytest.raises(SystemExit, match=re.escape("gives python as ") + r".*not \{ value, read \}"):
         kit.machine_properties("m", directory=d)
+
+
+NO_CARD = (('card = { value = "h100-sxm-80gb",', 'card = { value = "none",'), ('cards = { value = 1,', 'cards = { value = 0,'),
+           ('numa = { value = [{ card = 0, node = 0, cpus = "0-15" }],', 'numa = { value = [],'))
+
+
+def _no_card(tmp_path: Path, keep: str | None = None) -> Path:
+    """one-card's record as a machine with no card writes it, but for the replacement starting `keep`."""
+    text = (MACHINES / "one-card.toml").read_text()
+    for old, new in NO_CARD:
+        assert old in text
+        text = text if keep and old.startswith(keep) else text.replace(old, new)
+    (tmp_path / "m.toml").write_text(text)
+    return tmp_path
+
+
+def test_a_machine_with_no_card_gives_cards_0_and_its_toolkit(tmp_path, monkeypatch):
+    (tmp_path / "inputs").mkdir()
+    _no_card(tmp_path / "inputs")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("RESEARCH_MACHINE", "m")
+    monkeypatch.delenv("CUDA_HOME", raising=False)
+    assert kit.machine_properties()["cards"]["value"] == 0
+    assert kit.toolkit("13.0") == "/usr/local/cuda-13.0"
+
+
+@pytest.mark.parametrize("keep, why", [
+    ("card =", r"gives cards 0 and yet names the card 'h100-sxm-80gb'"),
+    ("numa =", r"gives cards 0 and yet places cards \[0\] in numa"),
+])
+def test_a_machine_with_cards_0_that_names_a_card_is_refused_by_name(tmp_path, keep, why):
+    with pytest.raises(SystemExit, match=rf"^machine 'm': .*m\.toml {why}"):
+        kit.machine_properties("m", directory=_no_card(tmp_path, keep))
 
 
 def _run(tmp_path: Path, monkeypatch, machine: str | None) -> Path:

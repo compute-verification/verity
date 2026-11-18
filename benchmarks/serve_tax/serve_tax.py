@@ -287,8 +287,6 @@ class Arm:
     attester: bool = False
     #: what of a served deployment the arm leaves off, in words (`parts_of`)
     off: tuple[str, ...] = ()
-    #: the tick rule's catch-up forms that only a measurement may take (`tick_rule`) and that this arm measures
-    catch_ups: tuple[str, ...] = ()
     #: the application's component the arm serves and the settings it serves it at, as ``--feature`` names them
     #: (`feature_of`): what a profile's job finds the arm by
     feature: Feature | None = None
@@ -375,8 +373,7 @@ ARMS = {
     "prod-tick": Arm("prod", "+ admission on the certified tick, its releases and watermark from a stand-in release "
                      "front on the node: prod-all-on's tick with nothing recorded and no edge, its client sending each user's seed as "
                      "prod-all-on's does", plugin=("idle_reset",), published=True, tick=True, seeds=True, off=("the network attester's egress pacing", "useful-work kernels",
-                                                     "commitment of values", "the record", "the edge snapshot"),
-                     catch_ups=("open",)),
+                                                     "commitment of values", "the record", "the edge snapshot")),
     "prod-all-on": Arm("prod-record", "+ admission on the certified tick, its releases and watermark from a stand-in "
                        "release front on the node (`release_front`: admission real, no answer paced), and the edge "
                        "snapshot every --edges-every-s seconds as a server would take it, every rank's KV cache hashed "
@@ -388,8 +385,9 @@ ARMS = {
                               plugin=("record", "ids"), env={**TOPK_ENV, "VERITY_DSA_TOPK": "canonical-bisect"},
                               general=TOPK, published=True),
 }
-#: Pearl+ on every linear block inside vLLM's own server, eager, as its scheme requests
-PEARL_PLUS = Feature("pearl-plus", (("tie-uniform", False),))
+#: Pearl+ on every linear block inside vLLM's own server, eager, as its scheme requests; at its declared settings'
+#: defaults, which `feature` fills through the component's own check
+PEARL_PLUS = Feature("pearl-plus")
 ARMS["pearl-plus"] = Arm("compiled", "+ Pearl+ on every linear block, turned on by name inside vLLM's own server, eager",
                          ("--enforce-eager",), schemes=("pearl-plus",), feature=PEARL_PLUS)
 ARMS["prod-pearl-plus"] = replace(ARMS["pearl-plus"], parent="prod", published=True)
@@ -881,8 +879,8 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
 
 
 #: what the job states for each scheme an arm turns on by name, beyond its declared settings' defaults: Pearl+'s kernel
-#: directory and the auditor device's challenger with the session its gate reserved
-SCHEME_NEEDS = {"pearl-plus": ("kernel", "challenger", "session")}
+#: directory and the auditor device's challenger (the session that goes with it is Pearl+'s own check's)
+SCHEME_NEEDS = {"pearl-plus": ("kernel", "challenger")}
 
 
 def scheme_config(arm: Arm, given: dict | None) -> dict:
@@ -1980,17 +1978,12 @@ def private_dir(a: argparse.Namespace) -> Path:
     return private
 
 
-def tick_rule(name: str, text: str) -> dict:
-    """``--tick-rule``'s JSON for arm ``name``, with ``arm`` set where its catch-up is one only a measurement takes
-    (``open``: the gate open from the start, which orders nothing). Refused where the arm doesn't name it
-    (`Arm.catch_ups`)."""
+def tick_rule(text: str) -> dict:
+    """``--tick-rule``'s JSON, the rule's token term ``{"token_ns": N}`` and nothing else."""
     rule = json.loads(text)
-    if rule.get("catch_up") != "open":
-        return rule
-    if "open" not in ARMS[name].catch_ups:
-        raise SystemExit(f"arm {name}: catch_up 'open' opens the tick's gate, which then orders nothing, and only an arm "
-                         "that names it in Arm.catch_ups measures it")
-    return rule | {"arm": name}
+    if not isinstance(rule, dict) or set(rule) - {"token_ns"}:
+        raise SystemExit(f"--tick-rule: the rule's token term, {{\"token_ns\": N}}, and nothing else, not {text}")
+    return rule
 
 
 def corpus_only(arm: Arm) -> str | None:
@@ -2052,7 +2045,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         print(f"[serve-tax] plan: {len(plan)} requests in {time.monotonic() - t:.1f} s", flush=True)
     tick = tick_args(a.tick_from, a.tick_ms) if arm.tick else None
     if tick and a.tick_rule:
-        tick["rule"] = tick_rule(a.arm, a.tick_rule)
+        tick["rule"] = tick_rule(a.tick_rule)
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
@@ -2217,10 +2210,8 @@ def tick_counts(recs: list[dict]) -> dict:
     by = {}
     for k in sorted(held):
         by[str(k)] = by.get(str(k), 0) + 1
-    bits = sum(r["bits"] for r in recs if r.get("event") == "catch_up")
     return {"admitted": len(held), "deferred": sum(k > 0 for k in held), "held_steps": by,
-            "admitting_steps": sum("admitted" in r for r in recs), "events": events,
-            **({"catch_up_bits": round(bits, 1)} if bits else {})}
+            "admitting_steps": sum("admitted" in r for r in recs), "events": events}
 
 
 def topk_calls(d: Path | None) -> dict[str, int]:
@@ -5005,8 +4996,8 @@ def main(argv: list[str] | None = None) -> int:
                         "gate command, and each scheme's settings under its name (pearl-plus: kernel DIR, challenger "
                         "HOST:PORT, session, the gate's reserve answer), or a list of one such object a server lifetime, "
                         "picked by --lifetime (`lifetime_settings`); ignored by the other arms")
-    r.add_argument("--tick-rule", metavar="JSON", help="the tick arms: a rule other than the registered one, "
-                   "the network attester's token_ns and catch_up")
+    r.add_argument("--tick-rule", metavar="JSON", help="the tick arms: the rule's token term, "
+                   "{\"token_ns\": N}")
     r.add_argument("--side", choices=(SERVER, CLIENT),
                    help="an arm behind the network certifier: the side this command serves, the engine and the id "
                         "front on the node, or the network attester, its shim and vLLM's client on the network attester's host "

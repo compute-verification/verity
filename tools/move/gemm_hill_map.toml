@@ -1,0 +1,29 @@
+# Flock's GEMM hillclimb and slowdown probes are measurement: they leave Flock's pod directory for
+# `benchmarks/proof_throughput/`, their test for its suite. `tools/move/layout.py --map tools/move/gemm_hill_map.toml`
+# moves and rewrites. The pod scripts that run them (71-gemm-slowdown.sh, 74-gemm-hill.sh, 76-read-gadget.sh) stay.
+
+[roots]
+old = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", datacenter = "benchmarks/datacenter/datacenter", research = "tools/research/src/research", slowdown = "benchmarks/slowdown/slowdown", verity = "verity", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_machine_model = "calibration/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", datacenter = "benchmarks/datacenter/datacenter", research = "tools/research/src/research", slowdown = "benchmarks/slowdown/slowdown", verity = "verity", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_machine_model = "calibration/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm" }
+
+[paths]
+"verity/protocols/proofs/flock/prover/pod/gemm_hill.py" = "benchmarks/proof_throughput/gemm_hill.py"
+"verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py" = "benchmarks/proof_throughput/gemm_slowdown.py"
+"tests/verity/protocols/proofs/flock/prover/test_gemm_hill.py" = "tests/benchmarks/proof_throughput/test_gemm_hill.py"
+
+[modules]
+"tests.verity.protocols.proofs.flock.prover.test_gemm_hill" = "tests.benchmarks.proof_throughput.test_gemm_hill"
+"verity.protocols.proofs.flock.prover.pod.gemm_hill" = "benchmarks.proof_throughput.gemm_hill"
+"verity.protocols.proofs.flock.prover.pod.gemm_slowdown" = "benchmarks.proof_throughput.gemm_slowdown"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was, files whose bytes a digest pins, every Lean input and lock.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch",
+           "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/research/src/research/store/moves.json", "**/*.lean",
+           "**/lean-audit.json"]
