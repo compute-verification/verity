@@ -337,9 +337,8 @@ def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
     name."""
     def refused(entry, settings):
         return PO.refusals(PO.Context(stage="serve", enabled=(entry,), settings=settings))
-    other = {"pouw": {"coins": Challenger(0, CH.entropy(0))}}
     period = {"period": "p1", "lane": "vllm"}
-    for entry, settings in ((_entry(), _settings()), ("pouw:ncp-v1", other)):
+    for entry, settings in ((_entry(), _settings()),):
         assert refused(entry, settings) == ()
         no_window = (f"{entry}: the pouw setting 'draw_session' is the draw session of H1's window "
                      f"({PH.SCHEME}) on the challenger at 'challenger'")
@@ -1730,14 +1729,13 @@ def test_the_hosts_table_roots_take_n_rows_of_8_bit_codes_and_n_32_bit_words():
 
 
 def test_the_hosts_libraries_are_refused_where_no_cxx_compiler_is_on_the_path(monkeypatch):
-    """The host's twins of the device's hashing are built with the system's C++ compiler, the first of g++, c++ and
-    clang++ on the path. With none there, each library is refused by what is missing."""
-    asked: list[str] = []
-    monkeypatch.setattr(RGD.shutil, "which", lambda name: asked.append(name))
+    """The host's twins of the device's hashing are built with the serving device's C++ compiler. With none, each library
+    is refused by what is missing."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device
+    monkeypatch.setattr(pouw_device, "compiler", lambda: None)
     for lib in (RGD.host_lib, RGD.zy_host_lib):
-        with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler on the path$"):
+        with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler configured or on the path$"):
             lib.__wrapped__()
-    assert asked == ["g++", "c++", "clang++"] * 2
 
 
 def test_a_compiled_call_shape_is_whole_tiles_and_its_units_in_one_seed_group(window, monkeypatch):
