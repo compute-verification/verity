@@ -1,10 +1,12 @@
 """The control pod's reruns of the declared numbers (infra/control/metrics_rerun.py): a number older than its `every` is launched
-as a `research run` on a machine, at most `--max` a pass; never one whose last launch is in flight or ran less than its `every`
-ago, whatever the door says; a command that failed twice running is held until its declaration changes, and launches that
-never ran are held after two in a row until its `every`; the stop file stops every launch, read again before each; a dry run
-launches nothing; a command asking for GPUs or naming a machine runs only on a machine the plan lists for it now; never `auto`
-or a small-disk machine; a row's options outside the allowed set are refused; a pass takes a lock. The clone, the door, the
-runs' records, the launch and the clock are stand-ins: no test reads the clock or the network."""
+as a `research run` on a machine, at most `--max` a pass; never one whose last launch is in flight or passed less than its
+`every` ago, whatever the door says; a failed launch rings its owners and is tried again within the hour, and is held after
+three that ended alike until its declaration changes; a placeholder's owner is rung once; the stop file stops every launch,
+read again before each; a dry run launches nothing; a CPU command (no `--on`, `auto`, a CPU node, a pool's `NODE`) runs in
+the loop's pool up to a CPU machine's size, and one asking for GPUs or naming another machine only on a machine the plan
+lists for it now; never `auto` or a small-disk machine; a row's options outside the allowed set are refused; the record
+says each number's reason; a pass takes a lock. The clone, the door, the runs' records, the launch, the rings and the clock
+are stand-ins: no test reads the clock or the network."""
 import calendar
 import fcntl
 import importlib.util
@@ -14,7 +16,6 @@ from pathlib import Path
 
 import pytest
 from research import runs
-from research.cli import AUTO_MAX_MIN, AUTO_MEM_GB
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTROL = ROOT / "infra" / "control"
@@ -58,10 +59,11 @@ class Pod:
     is registered once its launch printed its run line, or when `states` holds it), and each launch's output; it records what
     it was asked."""
 
-    def __init__(self, ages=None, states=None, out=None, listed=None, on_refresh=None):
+    def __init__(self, ages=None, states=None, out=None, listed=None, on_refresh=None, ring_fails=0):
         self.ages, self.states, self.lines, self.launched = ages or {}, states or {}, [], []
         self.listed, self.on_refresh, self.named, self.registered = listed, on_refresh, 0, set()
         self.out = out or (lambda n: f"research: run {run_id(n)} launched\n")
+        self.rang, self.ring_fails = [], ring_fails
 
     def log(self, msg):
         self.lines.append(msg)
@@ -85,7 +87,13 @@ class Pod:
         s = self.states.get(run, RUNNING)
         if isinstance(s, Exception):
             raise s
-        return {"state": s[0], "rc": s[1], "started": s[2]}
+        return {"state": s[0], "rc": s[1], "started": s[2], **(s[3] if len(s) > 3 else {})}
+
+    def ring(self, run, rc, owner, text):
+        if self.ring_fails:
+            self.ring_fails -= 1
+            raise RuntimeError("ring-run exited 1: slack is down")
+        self.rang.append((run, rc, owner, text))
 
     def launch(self, argv):
         i = argv.index("--id")
@@ -205,20 +213,24 @@ def past_default(tmp_path, option):
 
 
 def past_default_line(options):
-    return (f"skip training/asks: training/asks has no reading; but its command asks for more than the default job "
+    return (f"skip training/asks: training/asks has no reading; but its command asks for more than a CPU check machine has "
             f"({options}): such a number is rerun by its owner")
 
 
-MEM, MAX_S = AUTO_MEM_GB, AUTO_MAX_MIN * 60          # the default job's GiB and seconds
+MEM, MAX_S, CPUS = R.CEILING["--mem-gb"], R.CEILING["--timeout"], R.CEILING["--cpus"]
+
+
+def test_the_ceiling_is_a_cpu_check_machines():
+    assert (CPUS, MEM) == (192, 750), "a CPU check machine's logical CPUs and GiB"
 
 
 @pytest.mark.parametrize("option, said", [
     (f"--mem-gb {MEM:g}", None), (f"--mem-gb {MEM + 1:g}", f"--mem-gb {MEM + 1:g} over {MEM:g}"),
     (f"--timeout {MAX_S:g}", None), (f"--timeout {MAX_S + 1:g}", f"--timeout {MAX_S + 1:g} over {MAX_S:g}"),
-    ("--pool network", "--pool network")])
-def test_a_number_is_launched_only_when_its_command_asks_no_more_than_the_default_job(tmp_path, option, said):
-    """At or under the default job's memory and time, a row is launched like one that names neither; one unit over, or with a
-    pool of its own, it is left to its owner, and the pass names the option, its value and the default it exceeds."""
+    (f"--cpus {CPUS:g}", None), (f"--cpus {CPUS + 1:g}", f"--cpus {CPUS + 1:g} over {CPUS:g}")])
+def test_a_number_is_launched_only_when_its_command_asks_no_more_than_a_cpu_check_machine_has(tmp_path, option, said):
+    """At or under the machine's CPUs, memory and the loop's longest run, a row is launched like one that names none; one unit
+    over, it is left to its owner, and the pass names the option, its value and the ceiling it exceeds."""
     cfg, pod = past_default(tmp_path, option)
     state, _ = run(cfg, pod)
     assert sorted(i for e in state["launches"] for i in e["metrics"]) == (
@@ -227,7 +239,7 @@ def test_a_number_is_launched_only_when_its_command_asks_no_more_than_the_defaul
 
 
 @pytest.mark.parametrize("option, said", [(f"--mem-gb={MEM:g}", None), (f"--timeout={MAX_S + 1:g}", f"--timeout {MAX_S + 1:g} over {MAX_S:g}")])
-def test_a_dry_run_judges_the_default_job_the_same(tmp_path, option, said):
+def test_a_dry_run_judges_the_ceiling_the_same(tmp_path, option, said):
     cfg, pod = past_default(tmp_path, option)
     state, _ = run(cfg, pod, dry_run=True)
     assert pod.launched == [] and state["launches"] == []
@@ -238,18 +250,19 @@ def test_a_dry_run_judges_the_default_job_the_same(tmp_path, option, said):
 
 @pytest.mark.parametrize("dry_run", [False, True])
 @pytest.mark.parametrize("option, said", [
-    (f"--timeout {AUTO_MAX_MIN}m", None),
-    (f"--timeout {AUTO_MAX_MIN + 1}m", f"--timeout {AUTO_MAX_MIN + 1}m over {MAX_S:g}"),
-    (f"--timeout {AUTO_MAX_MIN // 60 + 1}h", f"--timeout {AUTO_MAX_MIN // 60 + 1}h over {MAX_S:g}"),
+    ("--timeout 240m", None),
+    ("--timeout 241m", f"--timeout 241m over {MAX_S:g}"),
+    ("--timeout 5h", f"--timeout 5h over {MAX_S:g}"),
     ("--timeout abc", "--timeout abc could not be read"),
     ("--mem-gb x", "--mem-gb x could not be read"),
+    ("--cpus x", "--cpus x could not be read"),
     ("--timeout nan", "--timeout nan could not be read"),
     ("--mem-gb nan", "--mem-gb nan could not be read"),
     ("--timeout inf", f"--timeout inf over {MAX_S:g}"),
     ("--mem-gb inf", f"--mem-gb inf over {MEM:g}")])
 def test_a_value_is_read_as_research_run_reads_it_and_one_it_cant_read_is_its_owners(tmp_path, option, said, dry_run):
     """`--timeout` in research run's own units (`60m`, `2h`) is judged by its seconds; a value research run can't read is past
-    the default job and said, and the pass goes on to the next row."""
+    the ceiling and said, and the pass goes on to the next row."""
     cfg, pod = past_default(tmp_path, option)
     state, _ = run(cfg, pod, dry_run=dry_run)
     if dry_run:
@@ -261,20 +274,44 @@ def test_a_value_is_read_as_research_run_reads_it_and_one_it_cant_read_is_its_ow
     assert pod.lines.count(past_default_line(said)) == (1 if said else 0)
 
 
+def test_a_host_measurement_asking_for_cpus_and_memory_runs_in_the_loops_pool_without_its_cpus(tmp_path):
+    """The shape of the host rate rows: `--cpus 48 --mem-gb 64`. `research run --pool` refuses `--cpus` (the slot's cores are
+    the run's), so the launch leaves it out and keeps `--mem-gb`, which the slot admits by."""
+    rate = row("memory-accounting/host-write-rate", "research run --on auto --cpus 48 --mem-gb 64 --project verity --cwd source "
+                                                    "-- bash calibration/bandwidth/run_write_host.sh")
+    cfg = setup(tmp_path, {"calibration/bandwidth": [rate]})
+    pod = Pod()
+    run(cfg, pod)
+    assert pod.launched == [["research", "run", "--on", "vy-nebius-cpu-12", "--pool", "research", "--source", ".", "--mem-gb",
+                             "64", "--project", "verity", "--cwd", "source", "--", "bash",
+                             "calibration/bandwidth/run_write_host.sh"]]
+
+
 @pytest.mark.parametrize("dry_run", [False, True])
-def test_a_planned_command_past_the_default_job_is_not_launched_though_the_plan_lists_its_machine(tmp_path, dry_run):
-    """The shape of the network scans' rows: a machine of the plan's choosing, a pool of its own and more than the default
-    job's memory and time. The default job is judged first, so the plan's machine doesn't launch it."""
+def test_a_pools_run_on_an_owners_machine_runs_in_the_loops_pool(tmp_path, dry_run):
+    """The shape of the network scans' rows: `--on NODE`, a pool of research's, 128 GiB and three hours. A pool's run is a
+    slot's, on a CPU node, so the loop runs it on its own machine in its own pool, without the plan."""
     scan = row("network-accounting/scan",
-               "research run --on NODE --pool network --mem-gb 128 --timeout 10800 -- bash benchmarks/scan/run.sh")
+               "research run --on NODE --project verity --source . --cwd clone --pool network --as network-accounting "
+               "--mem-gb 128 --timeout 10800 -- bash benchmarks/scan/run.sh")
     cfg = setup(tmp_path, {"benchmarks/scan": [scan]})
-    cfg.plan.write_text(free("vy-nebius-cpu-9", ["network-accounting/scan"]))
     pod = Pod(ages={"network-accounting/scan": None})
     state, _ = run(cfg, pod, dry_run=dry_run)
-    assert pod.launched == [] and state["launches"] == []
-    assert ("skip network-accounting/scan: network-accounting/scan has no reading; but its command asks for more than the "
-            f"default job (--pool network, --mem-gb 128 over {MEM:g}, --timeout 10800 over {MAX_S:g}): such a number is "
-            "rerun by its owner") in pod.lines
+    argv = ["research", "run", "--on", "vy-nebius-cpu-12", "--pool", "research", "--project", "verity", "--source", ".",
+            "--cwd", "clone", "--as", "network-accounting", "--mem-gb", "128", "--timeout", "10800", "--", "bash",
+            "benchmarks/scan/run.sh"]
+    if dry_run:
+        assert pod.launched == [] and any(ln.endswith(" ".join(argv)) for ln in pod.lines)
+    else:
+        assert pod.launched == [argv]
+
+
+def test_a_pool_research_does_not_have_is_refused(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/b": [row("benchmarks/b", "research run --on auto --pool mine -- bash benchmarks/b/run.sh")]})
+    pod = Pod()
+    run(cfg, pod)
+    assert pod.launched == []
+    assert "gives --pool 'mine', which isn't network or proofs or research or soundness" in pod.lines[-1]
 
 
 def test_at_most_max_launches_a_pass_and_the_rest_are_said(tmp_path):
@@ -302,23 +339,80 @@ def test_never_a_number_whose_last_launch_is_in_flight_or_ran_less_than_its_ever
     assert len(pod.launched) == 2
 
 
-def test_a_command_that_failed_twice_running_is_held_until_its_declaration_changes(tmp_path):
+def test_a_failed_run_rings_its_owner_and_is_tried_again_within_the_hour_not_after_its_every(tmp_path):
+    """A weekly number whose run fails is launched again an hour after, not a week: the owner (the id's handle) is rung once
+    with the run id and the failure's reason line, and the launch between is said."""
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU)]})
+    pod = Pod()
+    state, _ = run(cfg, pod)
+    pod.states[run_id(1)] = ("failed", 1, True, {"class": "WORKLOAD_EXIT", "why": "census has no passing run"})
+    run(cfg, pod, state, now=NOW + 900)
+    assert pod.rang == [(run_id(1), "1", "compute-accounting",
+                         "metrics-rerun: compute-accounting/share failed (WORKLOAD_EXIT: census has no passing run); it is "
+                         "launched again after 60 min, or its every if shorter")]
+    assert state["launches"][0]["rung"] == "2026-11-14T12:15:00Z"
+    run(cfg, pod, state, now=NOW + 1800)
+    assert len(pod.launched) == 1 and pod.lines[-1].endswith(
+        f"its last launch, run {run_id(1)}, failed at 2026-11-14T12:15:00Z, and it is launched again 60 min after")
+    assert state["numbers"]["compute-accounting/share"]["reason"] == "retry"
+    run(cfg, pod, state, now=NOW + 900 + 3600)
+    assert len(pod.launched) == 2 and len(pod.rang) == 1
+
+
+def test_three_failures_that_ended_alike_hold_the_command_until_its_declaration_changes(tmp_path):
+    """The first failure of a cause rings, the second ended as it did and doesn't, the third rings again and holds the number
+    for HOLD_S or until its rows change."""
     cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU, every="1h")]})
     pod = Pod()
     state, _ = run(cfg, pod)
-    pod.states[run_id(1)] = ("failed", 1, True)
-    run(cfg, pod, state, now=NOW + 7200)                      # seen ended now: less than its every ago
-    run(cfg, pod, state, now=NOW + 2 * 7200)
-    pod.states[run_id(2)] = ("failed", 1, True)
-    run(cfg, pod, state, now=NOW + 3 * 7200)
-    run(cfg, pod, state, now=NOW + 4 * 7200)
-    assert len(pod.launched) == 2
-    assert pod.lines[-1] == ("skip compute-accounting/share: compute-accounting/share has no reading; but held: its command "
-                             f"failed twice running ({run_id(1)}, {run_id(2)}) under this declaration, and is launched "
-                             "again once its rows in benchmarks/compute/metrics.toml change")
+    for n in range(1, 4):
+        pod.states[run_id(n)] = ("failed", 1, True)
+        run(cfg, pod, state, now=NOW + n * 7200 - 3600)      # sees it end
+        run(cfg, pod, state, now=NOW + n * 7200)             # an hour on: launched again
+    assert len(pod.launched) == 3, "the third failure holds it"
+    assert [r[0] for r in pod.rang] == [run_id(1), run_id(3)]
+    assert pod.rang[1][3].endswith("held: it ended this way 3 times running, so it is launched again once its rows in "
+                                   "benchmarks/compute/metrics.toml change, or 7.0 d after")
+    assert pod.lines[-1] == ("skip compute-accounting/share: compute-accounting/share has no reading; but held: its last 3 "
+                             "launches ended alike, failed (failed, rc 1) "
+                             f"({run_id(1)}, {run_id(2)}, {run_id(3)}), so it is launched again once its rows in "
+                             "benchmarks/compute/metrics.toml change, or 7.0 d after 2026-11-14T17:00:00Z")
+    assert state["numbers"]["compute-accounting/share"]["reason"] == "failing"
     (cfg.tree / "benchmarks/compute/metrics.toml").write_text(toml([row("compute-accounting/share", CPU, every="2h")]))
-    run(cfg, pod, state, now=NOW + 5 * 7200)
-    assert len(pod.launched) == 3
+    run(cfg, pod, state, now=NOW + 8 * 7200)
+    assert len(pod.launched) == 4
+
+
+def test_failures_that_ended_differently_never_hold_the_command(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU, every="1h")]})
+    pod = Pod()
+    state, _ = run(cfg, pod)
+    for n, rc in enumerate((1, 2, 1, 2), start=1):
+        pod.states[run_id(n)] = ("failed", rc, True)
+        run(cfg, pod, state, now=NOW + n * 7200 - 3600)
+        run(cfg, pod, state, now=NOW + n * 7200)
+    assert len(pod.launched) == 5 and len(pod.rang) == 4, "each failure is the first of its cause"
+
+
+def test_a_ring_that_fails_is_tried_again_and_then_given_up(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU)]})
+    pod = Pod(ring_fails=R.RING_TRIES)
+    state, _ = run(cfg, pod)
+    pod.states[run_id(1)] = ("failed", 1, True)
+    for n in range(1, R.RING_TRIES + 2):
+        run(cfg, pod, state, now=NOW + n * 60)
+    assert pod.rang == [] and state["launches"][0]["rung"] == "not rung: RuntimeError: ring-run exited 1: slack is down"
+    assert sum("ring of compute-accounting/share failed" in ln for ln in pod.lines) == R.RING_TRIES
+
+
+def test_a_failure_recorded_before_rings_is_never_rung(tmp_path):
+    """A record from before this loop rang holds failures with no `rung`: none of them is rung when the loop starts."""
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU)]})
+    old = {"metrics": ["compute-accounting/share"], "command": CPU, "state": "failed", "rc": 1, "run": run_id(9),
+           "at": "2026-11-13T00:00:00Z", "ended": "2026-11-13T01:00:00Z"}
+    pod = Pod()
+    run(cfg, pod, {"launches": [old]})
+    assert pod.rang == [] and len(pod.launched) == 1
 
 
 def test_a_row_with_an_option_outside_the_allowed_set_is_refused_naming_it(tmp_path):
@@ -326,7 +420,8 @@ def test_a_row_with_an_option_outside_the_allowed_set_is_refused_naming_it(tmp_p
            "--source /data/steward/research-notes": "gives --source '/data/steward/research-notes', which isn't .",
            "--runs-dir /data/research": "takes --runs-dir", "--id r20261114-000000-0000": "takes --id",
            "--project other": "gives --project 'other', which isn't verity", "--pool=../x": "gives --pool '../x'",
-           "--store-read=1": "gives the flag --store-read a value", "--pool a --pool b": "gives --pool twice"}
+           "--store-read=1": "gives the flag --store-read a value",
+           "--pool research --pool proofs": "gives --pool twice", "--gpu-host": "takes --gpu-host"}
     files = {f"benchmarks/b{n}": [row(f"benchmarks/n{n}", f"research run --on auto {opt} -- bash benchmarks/b{n}/run.sh")]
              for n, opt in enumerate(bad)}
     cfg = setup(tmp_path, files)
@@ -338,20 +433,19 @@ def test_a_row_with_an_option_outside_the_allowed_set_is_refused_naming_it(tmp_p
         assert why in line, line
 
 
-def test_launches_that_never_ran_are_held_after_two_in_a_row_and_tried_again_after_its_every(tmp_path):
+def test_launches_that_never_ran_are_held_after_three_in_a_row(tmp_path):
     cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU, every="1d")]})
     pod = Pod()
     state, _ = run(cfg, pod)
-    pod.states[run_id(1)] = ("failed", 75, False)             # its pool refused it at once: it never took a slot
-    run(cfg, pod, state, now=NOW + 900)
-    pod.states[run_id(2)] = ("failed", 75, False)
-    for n in range(2, 50):                                    # a pass every 15 min for half a day
+    for n in range(1, 4):
+        pod.states[run_id(n)] = ("failed", 75, False)         # its pool refused it at once: it never took a slot
+    for n in range(1, 50):                                    # a pass every 15 min for half a day
         run(cfg, pod, state, now=NOW + n * 900)
-    assert len(pod.launched) == 2 and [e["state"] for e in state["launches"]] == ["unrun", "unrun"]
-    assert pod.lines[-1].endswith(f"held: its last 2 launches never ran ({run_id(1)} unrun, {run_id(2)} unrun), so it is "
-                                  "tried again once compute-accounting/share's every 1d has passed since 2026-11-14T12:30:00Z")
-    run(cfg, pod, state, now=NOW + 1800 + DAY)
-    assert len(pod.launched) == 3
+    assert len(pod.launched) == 3 and [e["state"] for e in state["launches"]] == ["unrun"] * 3
+    assert "held: its last 3 launches ended alike, unrun (failed, rc 75)" in pod.lines[-1]
+    assert [r[1] for r in pod.rang] == ["75", "75"]
+    run(cfg, pod, state, now=NOW + 11 * 900 + R.HOLD_S)
+    assert len(pod.launched) == 4
 
 
 def test_the_trim_keeps_each_declared_numbers_newest_launches(tmp_path):
@@ -419,8 +513,8 @@ def test_a_gpu_command_runs_only_on_a_machine_the_plan_lists_for_it_now(tmp_path
 
 
 def test_a_plan_row_applies_only_to_the_numbers_it_names(tmp_path):
-    scan = row("network-accounting/scan", "research run --on NODE --pool network --mem-gb 128 -- bash benchmarks/scan/run.sh")
-    cfg = setup(tmp_path, {"benchmarks/scan": [scan], "benchmarks/serve_tax": [row("vllm/serving-cost-glm53", GPU)]})
+    lease = row("kernels/lease", "research run --on NODE --mem-gb 128 -- bash benchmarks/lease/run.sh")
+    cfg = setup(tmp_path, {"benchmarks/lease": [lease], "benchmarks/serve_tax": [row("vllm/serving-cost-glm53", GPU)]})
     cfg.plan.write_text(free("vy-h200-1"))
     pod = Pod()
     run(cfg, pod)
@@ -445,26 +539,46 @@ def test_a_row_naming_a_machine_goes_there_only_by_the_plans_row_for_that_machin
                              "bash", "benchmarks/x/run.sh"]]
 
 
-def test_a_local_run_is_never_launched(tmp_path):
+def test_a_command_with_no_on_runs_on_the_loops_machine_like_one_on_auto(tmp_path):
+    """A `research run` without `--on` would run where it is launched, the pod; the loop runs it as a CPU command instead.
+    One that asks for GPUs still waits for the plan."""
     cfg = setup(tmp_path, {"benchmarks/landing": [row("ci/landing", "research run --project verity --cwd source -- bash "
-                                                                    "benchmarks/landing/run.sh", every="12h")]})
+                                                                    "benchmarks/landing/run.sh", every="12h")],
+                           "benchmarks/gpu": [row("vllm/gpu", "research run --gpus 1 -- bash benchmarks/gpu/run.sh")]})
     pod = Pod()
-    run(cfg, pod)
-    assert pod.launched == [] and pod.lines[-1].endswith(
-        "but its command is a local run (a `research run` without --on), which runs where it is launched, and the loop runs "
-        "no workload on the pod")
+    state, _ = run(cfg, pod)
+    assert pod.launched == [["research", "run", "--on", "vy-nebius-cpu-12", "--pool", "research", "--source", ".", "--project",
+                             "verity", "--cwd", "source", "--", "bash", "benchmarks/landing/run.sh"]]
+    assert state["numbers"]["vllm/gpu"]["reason"] == "plan"
+
+
+def test_a_command_naming_a_cpu_node_runs_there_without_the_plan(tmp_path):
+    """The dashboard's count names vy-nebius-cpu-9: a CPU node runs it in the loop's pool. A GPU machine, a small-disk node or
+    `--on NODE` alone (a GPU lease's usual shape) still waits for the plan, or never runs."""
+    cfg = setup(tmp_path, {"infra/dashboard": [row("console/top-goals-running", "research run --on vy-nebius-cpu-9 --project "
+                                                   "verity --source . --cwd source -- uv run python infra/dashboard/run.py",
+                                                   every="1d")],
+                           "benchmarks/serve_tax": [row("vllm/serving-cost-glm53", GPU)],
+                           "benchmarks/x": [row("benchmarks/x", "research run --on vy-nebius-cpu-5 -- bash benchmarks/x/run.sh")]})
+    pod = Pod()
+    state, _ = run(cfg, pod)
+    assert pod.launched == [["research", "run", "--on", "vy-nebius-cpu-9", "--pool", "research", "--project", "verity",
+                             "--source", ".", "--cwd", "source", "--", "uv", "run", "python", "infra/dashboard/run.py"]]
+    assert {i: n["reason"] for i, n in state["numbers"].items()} == {
+        "console/top-goals-running": "launched", "vllm/serving-cost-glm53": "plan", "benchmarks/x": "small-disk"}
 
 
 def test_a_launch_that_names_no_run_is_a_fault_of_the_launch_and_never_holds_the_command(tmp_path):
     cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU, every="1h")]})
     pod = Pod(out=lambda n: "Traceback: ImportError\n" if n <= 2 else f"research: run {run_id(n)} launched\n")
     state, _ = run(cfg, pod)
-    run(cfg, pod, state, now=NOW + 900)
+    run(cfg, pod, state, now=NOW + 3600)
     assert [e["state"] for e in state["launches"]] == ["unlaunched", "unlaunched"]
-    assert "a fault of the launch and not of the command" in pod.lines[-1]
-    run(cfg, pod, state, now=NOW + 1800)
-    assert len(pod.launched) == 2 and "never ran" in pod.lines[-1] and "failed twice" not in pod.lines[-1]
-    run(cfg, pod, state, now=NOW + 900 + 3601)
+    assert any("a fault of the launch and not of the command" in ln for ln in pod.lines)
+    run(cfg, pod, state, now=NOW + 5400)
+    assert len(pod.launched) == 2 and "unlaunched at 2026-11-14T13:00:00Z, and it is launched again" in pod.lines[-1]
+    assert [r[1] for r in pod.rang] == ["unlaunched"], "the second ended as the first, whose ring said so"
+    run(cfg, pod, state, now=NOW + 7200)
     assert len(pod.launched) == 3 and state["launches"][-1]["state"] == "submitted"
 
 
@@ -489,8 +603,8 @@ def test_a_launch_that_stopped_before_its_run_reached_its_machine_never_ran(tmp_
     pod = Pod(out=lambda n: "", states={run_id(1): (R.UNSENT, None, False)})
     state, _ = run(cfg, pod)
     assert state["launches"][0]["state"] == "unlaunched"
-    assert pod.lines[-1] == (f"launch of compute-accounting/share named no run (exit 0) and run {run_id(1)} never reached its "
-                             "machine: it printed nothing, a fault of the launch and not of the command")
+    assert (f"launch of compute-accounting/share named no run (exit 0) and run {run_id(1)} never reached its "
+            "machine: it printed nothing, a fault of the launch and not of the command") in pod.lines
 
 
 def test_the_loop_names_each_run_and_records_its_id_before_launching(tmp_path):
@@ -623,3 +737,94 @@ def test_the_checked_in_loop_parses_and_launches_nowhere_it_must_not():
     cfg, ns = R.parse(lp.argv[3:])
     assert not ns.dry_run and not ns.once and cfg.max >= 1 and ns.every == 900, "the row declares its interval"
     assert cfg.stop.parent == cfg.state.parent == Path("/data/watchers")
+
+
+PRICED = "research run --on auto --store-read --source . --cwd source -- uv run python benchmarks/serving_cost/run.py --capture CAPTURE"
+
+
+def test_a_placeholder_rings_its_owner_once_for_each_declaration_and_the_record_says_so(tmp_path):
+    """A CPU command that holds a value only its owner fills in is never launched: its owner is rung once, the record says
+    why, and a change to its rows that still holds one rings again."""
+    cfg = setup(tmp_path, {"benchmarks/serving_cost": [row("benchmarks/serving-cost-priced", PRICED)]})
+    pod = Pod()
+    state, _ = run(cfg, pod, dry_run=True)
+    assert pod.rang == [] and any(ln.startswith("would ring @benchmarks: ") for ln in pod.lines)
+    for n in range(3):
+        state, _ = run(cfg, pod, state if n else None, now=NOW + n * 900)
+    assert pod.launched == [] and pod.rang == [(
+        "placeholder:benchmarks/serving-cost-priced", "placeholder", "benchmarks",
+        "metrics-rerun: benchmarks/serving-cost-priced: its command takes CAPTURE, which only its owner fills in, so the loop "
+        "launches it only once its command in benchmarks/serving_cost/metrics.toml holds none")]
+    assert state["numbers"]["benchmarks/serving-cost-priced"]["reason"] == "placeholder"
+    (cfg.tree / "benchmarks/serving_cost/metrics.toml").write_text(toml([row("benchmarks/serving-cost-priced", PRICED, "1d")]))
+    state, _ = run(cfg, pod, state, now=NOW + DAY)
+    assert len(pod.rang) == 2 and len(state["rings"]) == 1, "the old declaration's ring is dropped"
+
+
+def test_a_placeholder_in_a_command_the_plan_places_rings_nobody(tmp_path):
+    """A card a GPU lease takes (CARD) waits for the plan as well: filling it in alone wouldn't launch the number."""
+    lease = row("kernels/lease", "research run --on NODE -- bash benchmarks/lease/run.sh --on CARD")
+    cfg = setup(tmp_path, {"benchmarks/lease": [lease]})
+    pod = Pod()
+    state, _ = run(cfg, pod)
+    assert pod.rang == [] and state["numbers"]["kernels/lease"]["reason"] == "placeholder"
+
+
+def test_the_record_says_each_declared_numbers_reason(tmp_path):
+    loop = row("infra/loop-number", "sh infra/control/store_index.sh", every="5m")
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/a", CPU)],
+                           "benchmarks/tree": [row("top/fresh", "research run --on auto -- bash benchmarks/tree/x.sh", "1d"),
+                                               row("top/gone", "research run --on auto -- bash benchmarks/tree/y.sh", "1d")],
+                           "benchmarks/landing": [row("ci/landing", "research run -- bash benchmarks/landing/run.sh")],
+                           "infra/control": [loop]}, max=1)
+    pod = Pod(ages={"top/fresh": DAY_MS // 2}, listed=["compute-accounting/a", "top/fresh", "ci/landing", "infra/loop-number"])
+    state, _ = run(cfg, pod)
+    assert {i: n["reason"] for i, n in state["numbers"].items()} == {
+        "ci/landing": "max", "compute-accounting/a": "launched", "infra/loop-number": "loop", "top/fresh": "fresh",
+        "top/gone": "unlisted"}
+    assert set(r for n in state["numbers"].values() for r in [n["reason"]]) <= set(R.REASONS)
+    assert state["judged"] == {"at": "2026-11-14T12:00:00Z", "commit": "c0ffee" + "0" * 34}
+    assert any("by reason: " in ln and "launched 1" in ln and "max 1" in ln for ln in pod.lines)
+
+
+def test_a_number_the_stop_file_stops_before_its_launch_says_so(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU)]})
+    pod = Pod(on_refresh=lambda: cfg.stop.write_text(""))
+    state, _ = run(cfg, pod)
+    assert pod.launched == [] and state["numbers"]["compute-accounting/share"]["reason"] == "stopped"
+
+
+def test_the_census_classifies_each_number_from_the_files_alone(tmp_path):
+    """`classify` reads only the declarations: no door, record, plan, clock or network."""
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/a", CPU)],
+                           "benchmarks/landing": [row("ci/landing", "research run -- bash benchmarks/landing/run.sh")],
+                           "benchmarks/serving_cost": [row("benchmarks/priced", PRICED)],
+                           "benchmarks/serve_tax": [row("vllm/serving-cost-glm53", GPU)],
+                           "benchmarks/r": [{**row("benchmarks/r", RECURSION, "30d"), "goal": "top/parked"}],
+                           "benchmarks/big": [row("benchmarks/big", "research run --on auto --mem-gb 900 -- bash benchmarks/big/x.sh")],
+                           "benchmarks/bad": [row("benchmarks/bad", "research run --on auto --gpu-host -- bash benchmarks/bad/x.sh")],
+                           "infra/dashboard": [row("console/n", "research run --on vy-nebius-cpu-9 -- uv run python infra/dashboard/run.py")],
+                           "infra/control": [row("infra/loop", "sh infra/control/store_index.sh", "5m")]})
+    lines = []
+    counts = R.census(cfg.tree, lines.append)
+    assert counts == {"runnable": 3, "placeholder": 1, "plan": 1, "parked": 1, "ceiling": 1, "refused": 1, "loop": 1}
+    assert "runnable     console/n: launched once it is due (classify) (on vy-nebius-cpu-9)" in lines
+    assert lines[-1] == "9 numbers: runnable 3, loop 1, parked 1, refused 1, ceiling 1, placeholder 1, plan 1"
+
+
+def test_the_census_runs_from_the_command_line(tmp_path, capsys):
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/a", CPU)]})
+    assert R.main(["classify", "--tree", str(cfg.tree)]) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == "1 numbers: runnable 1"
+
+
+def test_a_launch_holds_none_of_the_pods_keys():
+    held = ["JOBS_TOKEN", "SLACK_BOT_TOKEN", "LINEAR_CLIENT_SECRET"]
+    kept = ["RESEARCH_STORE", "RESEARCH_LANE", "PATH", "XSLACK_BOT_TOKEN"]
+    assert [k for k in held + kept if R.LEFT_OUT.match(k)] == held
+
+
+def test_the_loop_rings_with_the_relays_slack_key():
+    _, loops = W.load(CONTROL / "watchers.toml")
+    (lp,) = [lp for lp in loops if lp.name == "metrics-rerun"]
+    assert "/root/.config/verity/relay.env" in lp.env_files

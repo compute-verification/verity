@@ -105,7 +105,7 @@ its clone's local `credential.helper` being `gh_app_token.sh git`; if `watch.log
 | `/data/chats` | `/workspace/chats` | the chats archive |
 | `/data/research`, `/data/research-control` | `/workspace/research`, `/workspace/research-control` | `research run` state and control worktrees |
 | `/data/infra` | `/workspace/infra` | infra's pod scripts and their logs; `msg-repo` and `msg-notes`, `msg.sh`'s checkout and notes clone |
-| `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `loop-metrics.json` with its `.lock` once `loop-metrics` runs, `monitors/`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` (its store index is `/root/watchers-preflight-store`, on the pod's own disk), `nightly-check.json` (schema `verity/nightly-check/v1`: the night in progress and the last outcome) with `nightly-check.launch.log` (the last launch's output) and `nightly-check/tmp` (the launch's temp dirs; its clone, worktrees and store index are on the pod's own disk, `/root/fast/nightly-check` and `/root/watchers-nightly-store`), `top-asks.json`, `top-sweep.json` with `linear-audit.jsonl` and `goals/` (the Goals page each hour, which `research velocity` reads; a sweep running this tree's `top_watch.py` puts each copy in the store, preserved, and deletes it after 14 days only once the store reported it preserved), `challenger/` with `publish.sh` and its `state`, `metrics-rerun.json` (schema `verity/metrics-rerun/v1`: each launch's numbers, run id, machine and time) with its pass's lock `metrics-rerun.json.lock`, a record that wasn't JSON moved aside to `metrics-rerun.json.corrupt`, the stop file `metrics-rerun.stop` and the week's GPU plan `gpu-plan.toml`), `repo` (a clone without a working tree, for `research deploy drift`'s `RESEARCH_DEPLOY_REPO`; drift fetches it each run), `bin/gh` (GitHub's CLI release, checksum-checked; every loop's `PATH` has the tree's `infra/control/bin/gh` before it, which runs it with the read-only App token of that call), `extra.d/`, `ssh_config` (the loops' ssh config, which `research deploy` makes from the register of machines), `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`, which waits for it, and `monitors-relay`'s `asks`, which reads it when it is there), `goals.key` (a site key with `events:read`, one line, for `top-sweep`'s read of the Goals page), `metrics-rerun.env` (`JOBS_TOKEN`, a site key with `events:read`, for `metrics-rerun`'s read of the metrics) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
+| `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `loop-metrics.json` with its `.lock` once `loop-metrics` runs, `monitors/`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` (its store index is `/root/watchers-preflight-store`, on the pod's own disk), `nightly-check.json` (schema `verity/nightly-check/v1`: the night in progress and the last outcome) with `nightly-check.launch.log` (the last launch's output) and `nightly-check/tmp` (the launch's temp dirs; its clone, worktrees and store index are on the pod's own disk, `/root/fast/nightly-check` and `/root/watchers-nightly-store`), `top-asks.json`, `top-sweep.json` with `linear-audit.jsonl` and `goals/` (the Goals page each hour, which `research velocity` reads; a sweep running this tree's `top_watch.py` puts each copy in the store, preserved, and deletes it after 14 days only once the store reported it preserved), `challenger/` with `publish.sh` and its `state`, `metrics-rerun.json` (schema `verity/metrics-rerun/v1`: each launch's numbers, run id, machine and time, and each declared number's reason at the last pass) with its pass's lock `metrics-rerun.json.lock`, a record that wasn't JSON moved aside to `metrics-rerun.json.corrupt`, the stop file `metrics-rerun.stop` and the week's GPU plan `gpu-plan.toml`), `repo` (a clone without a working tree, for `research deploy drift`'s `RESEARCH_DEPLOY_REPO`; drift fetches it each run), `bin/gh` (GitHub's CLI release, checksum-checked; every loop's `PATH` has the tree's `infra/control/bin/gh` before it, which runs it with the read-only App token of that call), `extra.d/`, `ssh_config` (the loops' ssh config, which `research deploy` makes from the register of machines), `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`, which waits for it, and `monitors-relay`'s `asks`, which reads it when it is there), `goals.key` (a site key with `events:read`, one line, for `top-sweep`'s read of the Goals page), `metrics-rerun.env` (`JOBS_TOKEN`, a site key with `events:read`, for `metrics-rerun`'s read of the metrics) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
 | `/data/backup`, `/data/tmp` | | backups and transfer bundles |
 
 Secrets stay on the volume and never in git: this README names the files, never their contents. To see which variables an env
@@ -227,29 +227,34 @@ The declared numbers' reruns (`metrics-rerun`) need no seed either: the first pa
 `main`'s tip out clean and reads every `metrics.toml` there. A number is due when the door holds no reading of it or its newest
 is older than its `every`; a number the door doesn't list is said and isn't due; one file's rows that share a command are one
 launch. The loop holds no workload: each launch is a `research run` of the row's command with its `--on` replaced, from the
-clone with `--source .` and the clone's own `research`, without the site key in its environment. A row's `research run` may
-carry only the options `ALLOWED` in `metrics_rerun.py` lists, each with a value of its form; any other (`--send`, `--source
-DIR`, `--runs-dir`, `--id`) is refused and said, so no row ships a file of the pod. A command that doesn't split as a shell
-line is refused and said, and the pass goes on; a `research run` without `--on` is a local run, which would run on the pod,
-and is skipped and said. The loop runs a row only when its command asks no more than the default job (`DEFAULT_JOB`,
-`research run`'s own `AUTO_MEM_GB` and `AUTO_MAX_MIN` from `research.cli`): no `--pool`, and `--mem-gb` and `--timeout` each
-at or under the default's, read as `research run` reads them (one it can't read is over); a row may carry no `--cpus`.
-Any other row runs when its owner runs it, and is skipped and said, before and whatever the plan below lists for it. A CPU command (`--on auto`) goes to the loop's `--on` in the loop's
-`--pool`; a command asking for GPUs or naming its machine (`--on NODE`, `--on vy-...`) goes only to a machine
-`/data/watchers/gpu-plan.toml` lists for one of its numbers now (the machine it names, when it names one) and that no
-launch of the loop's is in flight on (waiting for its slot or running), and without one it is skipped and said. The plan is
-the lead's, one `[[free]]` table a machine, with `machine`, `from` and `until` (TOML date-times, UTC) and `metrics`, the ids
-it is free for: a row naming none is free for none, and said. Never `auto`, never vy-nebius-cpu-2, -4, -5 or -6. A pass
-launches at most `--max`; never a number whose last launch of the loop's is in flight (a run whose state can't be read
-stays so) or ran and ended less than its `every` ago, whatever the door says; never a command that takes a run id only its
-owner picks (FIRE_RUN); never a loop's own number (a row whose command's script is under `infra/control/`); never a parked
-number (a row whose `goal` is `top/parked`, rerun only by hand), and said; never a command
-that failed twice running under its rows as they are, until a change to them. The loop names each run (`--id`) and records
-it before launching, so a launch that prints no run line, or that its timeout kills, is judged by that run's own record: a
-run that registered and reached its machine is in flight and never launched again while it is. A launch that never ran
-(its run never registered or never reached its machine, or ended without taking its slot, as when a pool refuses it at
-once) is a fault of the launch, not of the command: after two in a row the number waits its `every` from the last, and is
-then tried once more. Each pass holds
+clone with `--source .` and the clone's own `research`, without the site, Slack or Linear keys in its environment. A row's
+`research run` may carry only the options `ALLOWED` in `metrics_rerun.py` lists, each with a value of its form; any other
+(`--send`, `--source DIR`, `--runs-dir`, `--id`, `--gpu-host`, `--custody-ttl`) is refused and said, so no row ships a file
+of the pod, and a `--pool` must be one of research's pools (`slot_only.POOLS`). A command that doesn't split as a shell line
+is refused and said, and the pass goes on. The loop runs a row only when its command asks no more than a CPU check machine
+has (`CEILING`: `--cpus`, `--mem-gb` and `--timeout`, read as `research run` reads them; one it can't read is over); any
+other row runs when its owner runs it, and is skipped and said, whatever the plan below lists for it. A CPU command (no
+`--on`, `--on auto`, or `--on NODE` with a pool) goes to the loop's `--on` in the loop's `--pool`, and one naming a CPU node
+(`vy-nebius-cpu-N`, `research.auto.CPU_NODE`) to that node in the loop's `--pool`; neither passes on the row's `--cpus` or
+`--pool` (the slot's cores are the run's, and its memory rule admits the run). A command asking for GPUs, naming another
+machine, or naming `NODE` without a pool goes only to a machine `/data/watchers/gpu-plan.toml` lists for one of its numbers
+now (the machine it names, when it names one) and that no launch of the loop's is in flight on (waiting for its slot or
+running), and without one it is skipped and said. The plan is the lead's, one `[[free]]` table a machine, with `machine`,
+`from` and `until` (TOML date-times, UTC) and `metrics`, the ids it is free for: a row naming none is free for none, and
+said. Never `auto`, never vy-nebius-cpu-2, -4, -5 or -6. A pass launches at most `--max`; never a number whose last launch
+of the loop's is in flight (a run whose state can't be read stays so) or passed less than its `every` ago, whatever the door
+says; never a loop's own number (a row whose command's script is under `infra/control/`); never a parked number (a row
+whose `goal` is `top/parked`, rerun only by hand), and said; never a command that takes a value only its owner fills in
+(FIRE_RUN, CONFIG), whose owner is rung once for each declaration of it when it would otherwise run on a CPU node. The loop
+names each run (`--id`) and records it before launching, so a launch that prints no run line, or that its timeout kills, is
+judged by that run's own record: a run that registered and reached its machine is in flight and never launched again while
+it is. A launch that fails (its run ended non-zero, never registered, never reached its machine, or ended without taking
+its slot) rings its numbers' owners, the handle before each id's slash, with its run id and reason line (`research msg
+ring-run`, with `relay.env`'s Slack key), and is launched again an hour later, or after its `every` if that is shorter;
+after three failures in a row that ended alike under its rows as they are, it is rung once more and held seven days or
+until its rows change. The record's `numbers` holds each declared number's reason at the last pass (one of `REASONS`), and
+`python3 infra/control/metrics_rerun.py classify --tree DIR` prints what the loop could ever do with each number of a
+checkout, with the count of each reason. Each pass holds
 `metrics-rerun.json.lock`, so a dry run and the live loop never share the clone; one that finds it held does nothing and
 says so. A record that isn't JSON is moved aside and said, and every number then waits its `every`, so nothing in flight is
 launched twice; a record that is lost may launch a run still in flight once more. A launch runs `main`'s `research` from
