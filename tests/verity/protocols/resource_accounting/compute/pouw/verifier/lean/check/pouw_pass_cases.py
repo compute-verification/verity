@@ -91,7 +91,7 @@ def gate_end(s: RC.Session) -> dict:
     and complete when it released every one (`challenger_host`'s)."""
     c = s.ch.commitment
     try:
-        released = {label: len(roots) for label, roots in Ch.released_roots_of(c, s.lines).items()}
+        released = {label: len(roots) for label, roots in Ch.by_family(c, Ch.released_log_of(c, s.lines)).items()}
     except Ch.CoinError:
         return {"released": None, "complete": False}
     return {"released": released, "complete": all(released[label] == n for label, n in c.families)}

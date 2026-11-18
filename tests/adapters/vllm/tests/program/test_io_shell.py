@@ -1,7 +1,7 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
 Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network attester's scan
-state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
+state read (`ScanSlots_v3`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
 bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`; `SelectCollect_v2` v1 at a
 round). Ingress schema v1 likewise: its encoder's JSON in whole blocks, `IngressSampled_v1` as `sampled_reference` in and out of
 the schema, and the statics it refuses."""
@@ -164,8 +164,12 @@ def _lane(tok: int, slot: list[int], occ: int, head: list[int]) -> list[int]:
     return [tok, *slot, occ, *head]
 
 
+def _scan(fn, state) -> list[int]:
+    return _run(fn, list(state))
+
+
 def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_packed():
-    """`ScanSlots_v2` on a 40-word row with two lanes: random rows give `scan_reference`'s lanes, and a row packed field by
+    """`ScanSlots_v3` on a 40-word row with two lanes: random rows give `scan_reference`'s lanes, and a row packed field by
     field (occupancy, lp, max_tokens, and ids at `position`'s index, K0 = 2 in the first cell and K = 3 in each later one)
     gives each lane its first position's `TokenFeed_v1{FIRST}` on its row (ids cut to IDB bits), its occupancy word and its
     head, at the prompt lengths where the decrement's borrow runs furthest (0, 1, 2^31 and 2^32 − 1). A field past the
@@ -173,21 +177,19 @@ def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_p
     NS, NP, IDB, K0, K = 40, 4, 17, 2, 3
     OCC, LP, MAX, IDS = (3, 300), (40, 340), (80, 380), (120, 420)
     st = {"NS": NS, "NP": NP, "IDB": IDB, "K0": K0, "K": K, "OCC": OCC, "LP": LP, "MAX": MAX, "IDS": IDS}
-    fn = bind(BX.ScanSlotsV2, **st)
-    assert BX.ScanSlotsV2.traced(SimpleNamespace(**st)).counts["and"] == 30 * 2
+    fn = bind(BX.ScanSlotsV3, **st)
+    assert BX.scan_bits(SimpleNamespace(**st))[0].counts["and"] == 30 * 2
     state = np.random.default_rng(1).integers(0, 1 << 16, size=(3, NS), dtype=np.uint64)
-    got = np.asarray(evaluate_words(fn, state.astype(np.uint32)), dtype=np.uint64)
     for i in range(3):
         ref = X.scan_reference([int(w) for w in state[i]], NP, IDB, K0, K, OCC, LP, MAX, IDS)
-        assert [int(v) for v in got[i].reshape(-1)] == [v for lane in ref for v in _lane(*lane)]
+        assert _scan(fn, state[i]) == [v for lane in ref for v in _lane(*lane)]
     for lp0, lp1 in ((3, 0), (1, 1 << 31), (X.M32, 2)):
         lanes = [(1, lp0, 64, [5, (1 << IDB) - 1, 0, 77]), (0, lp1, 9, [0, 0, 0, 0])]
         x = 0
         for (occ, lp, m, ids), o, lp_at, mx, at in zip(lanes, OCC, LP, MAX, IDS):
             x |= occ << o | lp << lp_at | m << mx
             x |= sum(v << at + IDB * X.position(K0, K, p) for p, v in enumerate(ids))
-        words = [[x >> 16 * k & 0xFFFF for k in range(NS)]]
-        out = [int(v) for v in np.asarray(evaluate_words(fn, np.array(words, dtype=np.uint32)), dtype=np.uint64).reshape(-1)]
+        out = _scan(fn, [x >> 16 * k & 0xFFFF for k in range(NS)])
         assert out == [v for occ, lp, m, ids in lanes
                        for tok, slot in [X.feed_reference([lp, *ids], None, NP)]
                        for v in _lane(tok, slot, occ, [lp, m])]
@@ -195,7 +197,7 @@ def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_p
     assert [X.position(K0, K, p) for p in range(NP)] == [0, 1, 3, 4]
     for bad in ({"IDS": (120, 16 * NS - IDB)}, {"IDB": 33}, {"OCC": (3,)}):
         with pytest.raises(ValueError, match="refuses this binding"):
-            bind(BX.ScanSlotsV2, **{**st, **bad})
+            bind(BX.ScanSlotsV3, **{**st, **bad})
 
 
 @pytest.mark.parametrize("KO", [1, 2, 5])

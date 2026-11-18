@@ -287,7 +287,7 @@ def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, hea
     or main doesn't hold, trusts nothing (`remote.trusted_session`, `pinned_session`, `core_check.salt_of_record`,
     `core_check.rounds`)."""
     try:
-        trusted, _received = remote.trusted_session(directory, heads, window, key, verify)
+        trusted, _log = remote.trusted_session(directory, heads, window, key, verify)
         lines = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
         files = remote.session_files(directory)
         draw_files = None if draw_directory is None else remote.session_files(draw_directory)
@@ -374,8 +374,8 @@ def evidence(ledger: Ledger, root: str, fetch: Fetch, verify: Any = lms_verify
     if tree is None:
         raise CoinError(f"session {audited.session} has no tree on the auditor's side (the gate's fetch)")
     files = remote.session_files(Path(tree) / "out")
-    trusted, received = session_named(audited, ledger.key, files, verify)
-    return files, trusted, received
+    trusted, log = session_named(audited, ledger.key, files, verify)
+    return files, trusted, Ch.by_family(trusted, log)
 
 
 def held(given: Any, ledger: Ledger, commit: str | None = None) -> tuple[str | None, Mapping[str, Any] | None]:
