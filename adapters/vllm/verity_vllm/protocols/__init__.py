@@ -232,8 +232,8 @@ def refusals(ctx: Context) -> tuple[str, ...]:
         except _refused() as r:
             out.extend(r.reasons)
             continue
-        if name == "pouw" and releasing:
-            out.append(f"{entry}: the first-stage hash scheme commits its weights from each layer's weight, which "
+        if releasing and getattr(mod, "READS_LAYER_WEIGHT", False):
+            out.append(f"{entry}: commits its weights from each layer's weight at install (READS_LAYER_WEIGHT), which "
                        f"{', '.join(releasing)} releases on this build (ReleaseValue): they don't run in one process")
             continue
         known = tuple(mod.schemes())
