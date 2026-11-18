@@ -43,14 +43,25 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "facet_break"))
 from loads import class_of  # noqa: E402  the model's own SASS opcode -> census class
 from sass_semantics import classify  # noqa: E402
+from verity_machine_model.model import device, devices  # noqa: E402
 
 MM = Path(__file__).resolve().parents[2] / "machine_model" / "data"
-#: the device census file an architecture family reads its priced kinds from
-DEVICE_CENSUS = {"sm_120": MM / "census" / "DS-120.csv", "sm_100": MM / "devices" / "sm_100" / "census.csv",
-                 "sm_90": MM / "devices" / "sm_90" / "census.csv"}
-#: the rows file whose `DS_tensor` row gives each operand type's data-sheet tensor peak
-DEVICE_ROWS = {"sm_120": MM / "rows.csv", "sm_100": MM / "devices" / "sm_100" / "rows.csv",
-               "sm_90": MM / "devices" / "sm_90" / "rows.csv"}
+
+
+def device_census(family: str) -> Path | None:
+    """The device census file an architecture family reads its priced kinds from: its device directory's measured
+    `census.csv`, else (`data/`'s own device) its data sheet's `census/DS-NN.csv`; None for a family no device prices."""
+    if family not in devices():
+        return None
+    d = device(family)
+    return p if (p := d / "census.csv").is_file() else d / "census" / f"DS-{family[3:]}.csv"
+
+
+def device_rows(family: str) -> Path | None:
+    """The rows file whose `DS_tensor` row gives each operand type's data-sheet tensor peak; None as `device_census`."""
+    return device(family) / "rows.csv" if family in devices() else None
+
+
 #: NVIDIA's Instruction Set Reference table an architecture family maps to
 ISA_TABLE = {"sm_90": "hopper", "sm_100": "blackwell", "sm_103": "blackwell", "sm_120": "blackwell"}
 #: an MMA SASS base -> the census-kind token its peak would appear under (QMMA covers FP8/FP6/FP4 mma.sync on sm_120)
@@ -89,7 +100,7 @@ ESCAPE = {
 
 def priced_tensor_tokens(family: str) -> set[str]:
     """The MMA-kind tokens that have a row in the device's census (so A3 has a peak for them)."""
-    f = DEVICE_CENSUS.get(family)
+    f = device_census(family)
     if not f or not f.exists():
         return set()
     kinds = {r["kind"] for r in csv.DictReader(f.read_text().splitlines())}
@@ -109,7 +120,7 @@ def ds_tensor_types(family: str) -> set[str]:
     """The operand types the device's `DS_tensor` row gives a data-sheet peak for: the types its "dense MACs a SM-clock"
     clause lists, up to the first `;` (so sm_90's "no b1 figure" after it doesn't count b1). e5m2 runs at e4m3's FP8 rate,
     so a listed e4m3 covers it."""
-    f = DEVICE_ROWS.get(family)
+    f = device_rows(family)
     if not f or not f.exists():
         return set()
     for r in csv.DictReader(f.read_text().splitlines()):
@@ -281,7 +292,7 @@ def record(out: Path) -> int:
         return 1
     w.validation("passed", "dump.sh", f"{len(corpus)} binaries counted")
     census = json.loads((out / "census.json").read_text())
-    by = {f: unpriced_counts(f, census) for f in sorted(DEVICE_CENSUS) if f in census}
+    by = {f: unpriced_counts(f, census) for f in sorted(devices()) if f in census}
     unit = "opcodes"
     if not by:
         w.measurement(METRIC, None, unit, mark="measured", why="no binary holds SASS of a family with a device census",

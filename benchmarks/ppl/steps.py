@@ -14,7 +14,6 @@ A new intervention is one more function here (or in any module `run.py --plugin`
 `@attention_step`; `spec.py` says what it receives."""
 from __future__ import annotations
 
-import hashlib
 import math
 import zlib
 from collections.abc import Callable, Sequence
@@ -1357,42 +1356,28 @@ def emulate_attention(mm: MM, nxt: Next, *, route: str) -> Product:
 
 # ================================================================ the served Pearl-C linear
 
-PEARL_C_SCHEME = "pearl-c-h100-v1-h3"
-PEARL_C_KERNEL = "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90"
-PEARL_C_TILES = 1 << 16
 
-
-def pearl_c_run(weight: torch.Tensor, tag: str) -> object:
+def pearl_c_run(weight: torch.Tensor) -> object:
     cubin = settings.get("PEARLC_CUBIN")
     if not cubin:
         raise SystemExit("pearl_c: PEARLC_CUBIN names no cubin: build it with benchmarks/harness/setup/pearl_c_sm90.sh "
                          "(benchmarks/ppl/h200.sh sources it)")
-    import numpy as np
-    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
-    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
-    from verity_torch.pouw import PearlCDeviceRun, pearl_c_weight_roots
-    from verity_torch.pouw.pearl_c.run_device import fresh_weight_salts
+    from verity_bench.schemes import attached
 
-    kernel = PPD.Kernel.load(settings.get("PEARLC_KERNEL") or str(Path(__file__).resolve().parents[2] / PEARL_C_KERNEL), cubin)
-    digest = hashlib.sha512(tag.encode()).digest()
-    weights = {0: weight}
-    salts = fresh_weight_salts(weights)
-    roots = pearl_c_weight_roots(kernel, weights, PEARL_C_SCHEME, weight_salts=salts)
-    ch = Challenger(0, np.random.default_rng(int.from_bytes(digest[32:40], "little")).bytes)
-    return PearlCDeviceRun(pouw_schemes.get(PEARL_C_SCHEME), f"pouw:{PEARL_C_SCHEME}", kernel, weights, roots, ch.commitment,
-                           ch.open("salt", weights_root(roots)), capacity=PEARL_C_TILES, weight_salts=salts)
+    kernel = settings.get("PEARLC_KERNEL") or str(Path(__file__).resolve().parents[2]
+                                                  / "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90")
+    return attached("pearl-plus", {0: weight}, {"kernel": kernel, "cubin": cubin, "coins": "in-process"}).run
 
 
 @linear_step("pearl_c", phase="quantize", seeded=True, source="pearl_c_sm90, verity_torch.pouw")
 def pearl_c(mm: MM, nxt: Next) -> Product:
     """The linear as the compute benchmark's served engine computes it: Pearl-C (`pearl-c-h100-v1-h3`) on the sm_90a
     kernel through `verity_torch.pouw.PearlCDeviceRun.gemm`, x and W in BF16, y in BF16. One run per (seed, layer,
-    linear), its salt an in-process challenger's coin; each call its own pass. On every call, y finite (`pearl_c`)."""
+    linear), as the scheme's `attach` opens it (`verity_bench.schemes.attached`), its salt an in-process challenger's
+    coin; each call its own pass. On every call, y finite (`pearl_c`)."""
     def make():
         w = mm.weight().to(torch.bfloat16).contiguous()
-        return pearl_c_run(w, f"ppl/{mm.seed}/{mm.layer}/{mm.name}"), w
+        return pearl_c_run(w), w
 
     run, w = mm.cached("pearl_c", make)
     y = run.gemm(0, mm.x.to(torch.bfloat16).contiguous(), w, None)
