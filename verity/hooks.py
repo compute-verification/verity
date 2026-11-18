@@ -7,7 +7,7 @@ the channel a scheme subscribes to it through (`verity.protocols.resource_accoun
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Protocol
 
@@ -53,12 +53,14 @@ class InputArrived:
 
 @dataclass(frozen=True)
 class StepBegan:
-    """``steps``: workload step ``step`` begins, computing for ``inputs`` over ``slots`` slots."""
+    """``steps``: workload step ``step`` begins, computing for ``inputs`` over ``slots`` slots, with ``queued`` started
+    inputs left waiting for a slot."""
 
     hook: ClassVar[str] = "steps"
     step: int
     inputs: tuple[str, ...] = ()
     slots: int = 0
+    queued: int = 0
 
 
 @dataclass(frozen=True)
@@ -180,6 +182,14 @@ class RefuseProperty:
     why: str
 
 
+def unmet[T](requests: Iterable[tuple[T, Any]], properties: Mapping[str, Any]) -> list[tuple[T, Any]]:
+    """The `RequireProperty` and `RefuseProperty` of ``requests`` (each with who filed it) that ``properties`` doesn't
+    meet: a required property it lacks is unmet."""
+    return [(who, r) for who, r in requests
+            if (isinstance(r, RequireProperty) and properties.get(r.property) != r.value)
+            or (isinstance(r, RefuseProperty) and r.property in properties and properties[r.property] == r.value)]
+
+
 class Kernel(Protocol):
     """A scheme's computation of a due block: its output, computed itself or through ``original``, the workload's own,
     given inputs in place of the block's or None for the block's."""
@@ -194,13 +204,29 @@ class ComputeBlockWith:
     kernel: Kernel
 
 
+@dataclass(frozen=True)
+class StepDue:
+    """Workload step ``step`` is next: ``active`` inputs started and not complete, ``queued`` of them waiting for a slot,
+    and ``completing`` complete since the last step, which the step frees."""
+
+    step: int
+    active: int
+    queued: int
+    completing: int
+
+
 class Gate(Protocol):
     """A scheme's hold on starting inputs: ``add`` starts an input when the scheme calls ``start``, and ``pending`` says
-    whether it holds any not yet started."""
+    whether it holds any not yet started. ``ready`` is asked before each step, may start inputs, and holds the step while
+    False; ``open`` starts what it holds, and every later input at once."""
 
     def add(self, input: str, start: Callable[[], None]) -> None: ...
 
     def pending(self) -> bool: ...
+
+    def ready(self, due: StepDue) -> bool: ...
+
+    def open(self, why: str) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -227,20 +253,26 @@ class HoldResident:
 
 
 @dataclass(frozen=True)
+class ReuseOldestFreed:
+    """A scheme's request that a freed range be handed out again only after every range freed before it, so a freed
+    range keeps its values as long as the workload has other ranges to hand out."""
+
+
+@dataclass(frozen=True)
 class StartBeside:
-    """A scheme's request to start its process ``process`` beside the workload, by the command line it registered
-    (``command``), handed the readers it names (``readers``)."""
+    """A scheme's request to start the process it registered as ``process``
+    (`verity.protocols.resource_accounting.scheme.register_process`) beside the workload, called with the workload's
+    readers it names by what they do (``server-request``, ``stream-token-ids``), in that order."""
 
     process: str
-    command: tuple[str, ...]
     readers: tuple[str, ...] = ()
 
 
 type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
-                | StartBeside)
+                | StartBeside | ReuseOldestFreed)
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
            "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
-           "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "StartBeside", "StartOnBoundary",
-           "StepBegan", "StepEnded", "ValueProduced"]
+           "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "ReuseOldestFreed",
+           "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced", "unmet"]

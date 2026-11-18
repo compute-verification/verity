@@ -3,7 +3,8 @@
 In one process, through its one `Exchange` (`current`): the adapter's hooks emit the events of `verity.hooks` to the
 subscribers of their hooks, and a scheme, attached by its name before the engine is built, files its requests, each
 answered yes or refused by the scheme's name before serving starts.  A subscriber only reads, so it may attach at any
-time; a request changes what is served, so none is filed after the first answer.  The exchange names no scheme; the adapter's hooks translate vLLM's engine,
+time; a request changes what is served: one on what the workload declares (a property, a process beside it) is filed
+before the build's answer, and any other before serving begins, at the first step.  The exchange names no scheme; the adapter's hooks translate vLLM's engine,
 requests, tokens and KV blocks into the circuit's words.
 
 On disk, by their protocols' declarations (each protocol's `prover/workload.py`): a body is checked against its declared
@@ -21,6 +22,7 @@ from typing import Any
 from verity import hooks as H
 from verity.channel import Message, MessageTypes, Refused
 from verity.protocols.proofs.spot.prover import workload as spot
+from verity.protocols.resource_accounting import scheme as schemes
 from verity.protocols.resource_accounting.compute.pouw.prover import workload as pouw
 from verity.protocols.resource_accounting.memory.pous.prover import workload as pous
 from verity.protocols.resource_accounting.network.prover import workload as certifier
@@ -39,9 +41,18 @@ class Exchange:
         self.requests: list[tuple[str, H.Request]] = []
         self.declared: H.Declared | None = None
         self.fixed = False
-        self.step = 0
-        #: set by a launcher that starts each `beside` process before serving
-        self.launches = False
+        self._step: int | None = None
+        #: the workload's readers a launcher offers a process beside it, by what they do; none: no launcher
+        self.readers: Mapping[str, Callable[..., Any]] = {}
+
+    @property
+    def step(self) -> int:
+        """The workload's step: 0 before serving begins."""
+        return 0 if self._step is None else self._step
+
+    @step.setter
+    def step(self, value: int) -> None:
+        self._step = value
 
     def subscribe(self, name: str, hook: str, fn: Subscriber) -> Callable[[], None]:
         """``name`` receives every event of ``hook`` from now on, in the order the adapter emits them; returns its
@@ -54,9 +65,11 @@ class Exchange:
 
     def request(self, name: str, request: H.Request) -> None:
         """File scheme ``name``'s request; kernels and gates filed later run outside earlier ones."""
-        if self.declared is not None:
-            raise Refused(name, f"files {type(request).__name__} after the requests were answered; attach before the "
-                                "engine is built")
+        kind = type(request).__name__
+        if self.declared is not None and isinstance(request, (H.RequireProperty, H.RefuseProperty, H.StartBeside)):
+            raise Refused(name, f"files {kind} after the build was answered; file it before the engine is built")
+        if self._step is not None:
+            raise Refused(name, f"files {kind} after serving began (step {self._step}); file it before the first step")
         self.requests.append((name, request))
 
     def _filed[R](self, kind: type[R]) -> list[tuple[str, R]]:
@@ -66,14 +79,15 @@ class Exchange:
         """Answer every request before an engine is built: `Refused` under the first refused scheme's name, with all
         its reasons; else True when a scheme's required property fixes the build.  Emits ``declared``."""
         why: dict[str, list[str]] = {}
+        for name, r in H.unmet(self.requests, declared.properties):
+            verb = "requires" if isinstance(r, H.RequireProperty) else "refuses"
+            why.setdefault(name, []).append(f"{verb} {r.property} = {r.value!r}: {r.why}")
         for name, r in self.requests:
-            if isinstance(r, H.RequireProperty) and declared.properties.get(r.property) != r.value:
-                why.setdefault(name, []).append(f"requires {r.property} = {r.value!r}: {r.why}")
-            elif isinstance(r, H.RefuseProperty) and declared.properties.get(r.property) == r.value:
-                why.setdefault(name, []).append(f"refuses {r.property} = {r.value!r}: {r.why}")
-            elif isinstance(r, H.StartBeside) and not self.launches:
-                why.setdefault(name, []).append(f"starts {r.process} beside the workload, and no launcher in this "
-                                                "process starts one")
+            if isinstance(r, H.StartBeside) and (r.process not in schemes.PROCESSES or set(r.readers) - set(self.readers)):
+                missing = sorted(set(r.readers) - set(self.readers))
+                why.setdefault(name, []).append(
+                    f"starts {r.process} beside the workload, which no scheme registered" if r.process not in schemes.PROCESSES
+                    else f"starts {r.process} beside the workload with readers {missing} no launcher here offers")
         if why:
             name, reasons = next(iter(why.items()))
             raise Refused(name, "; ".join(reasons))
@@ -120,6 +134,15 @@ class Exchange:
         """Whether a gate holds an input not yet started."""
         return any(r.gate.pending() for _, r in self._filed(H.StartOnBoundary))
 
+    def ready(self, due: H.StepDue) -> bool:
+        """Whether step ``due.step`` may run: every gate is asked, and may start inputs."""
+        return all([r.gate.ready(due) for _, r in self._filed(H.StartOnBoundary)])
+
+    def open(self, why: str) -> None:
+        """Every gate starts what it holds, and every later input at once."""
+        for _, r in self._filed(H.StartOnBoundary):
+            r.gate.open(why)
+
     def held(self, input: str, step: int) -> bool:
         """Whether an output of ``input`` may not leave at ``step`` (`HoldRelease`)."""
         return any(r.input == input and step < r.until for _, r in self._filed(H.HoldRelease))
@@ -128,10 +151,18 @@ class Exchange:
         """Whether range ``range_`` must stay allocated at ``step`` (`HoldResident`)."""
         return any(r.range == range_ and step < r.until for _, r in self._filed(H.HoldResident))
 
-    def beside(self) -> list[tuple[str, H.StartBeside]]:
-        """The processes schemes asked to start beside the workload, by scheme, for the launcher to start before
-        serving."""
-        return self._filed(H.StartBeside)
+    def oldest_freed_first(self) -> bool:
+        """Whether a freed range is handed out again only after every range freed before it (`ReuseOldestFreed`)."""
+        return bool(self._filed(H.ReuseOldestFreed))
+
+    def beside(self) -> list[tuple[str, Callable[[], Any]]]:
+        """The processes schemes asked to start beside the workload, each by its name and bound to the readers it
+        named, for the launcher to call before serving."""
+        out = []
+        for _, r in self._filed(H.StartBeside):
+            start, readers = schemes.PROCESSES[r.process], [self.readers[k] for k in r.readers]
+            out.append((r.process, (lambda f, a: lambda: f(*a))(start, readers)))
+        return out
 
 
 _CURRENT: Exchange | None = None

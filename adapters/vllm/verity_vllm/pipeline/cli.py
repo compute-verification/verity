@@ -113,8 +113,6 @@ MACHINE: dict[str, str] = {
     "RunEnv.py": "/workspace/venv312/bin/python",
     "RunEnv.sweep_dir": "/workspace/cp/sweep",
     "RunEnv.hf_home": "/workspace/hf",
-    "RunEnv.cuda_home": "/usr/local/cuda",
-    "RunEnv.cuda_bin": "/usr/local/cuda/bin",
     "RunEnv.native_collect_default": "/workspace/cp/nc_build",
     "RunEnv.hidden_so_fa2": "/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so",
     "RunEnv.hidden_so_fa3": "/workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so",

@@ -29,12 +29,13 @@ namespace Verity
 open ResourceAccounting Core
 
 /-- **The record names the wiring `W`**: the record's `window.circuit` is the SHA-512 of a text, the circuit
-record's, that parses to a document whose cuts and wires SPOT's reader reads as `W` (`Spot.RecordText.wiring`). -/
+record's, that parses to a document whose wiring over a Program `P` is `W` (`Spot.RecordText.wiring`: the text's
+cuts and the edges of `P`'s root, of a text that names `P` by its SHA-512). -/
 def RecordWiring (record : Lean.Json) (W : Spot.Wires.Wiring) : Prop :=
-  ∃ (text : String) (doc : Lean.Json),
+  ∃ (text : String) (doc : Lean.Json) (P : Flock.Program.Prog),
     InferenceOnlyVerifier.Theta.strAt (InferenceOnlyVerifier.Theta.getD record "window") "circuit" =
         some (Flock.hexOf (Flock.Sha512.hash text.toUTF8)) ∧
-      Flock.JsonParse.parse text = .ok doc ∧ Spot.RecordText.wiring doc = .ok W
+      Flock.JsonParse.parse text = .ok doc ∧ Spot.RecordText.wiring P doc = .ok W
 
 /-- **The record names `R` as the root of `name`**: one of its `roots` has the port `name` and the root `R`, in hex. -/
 def RecordRoot (record : Lean.Json) (name : String) (R : Hash.Digest) : Prop :=

@@ -10,29 +10,30 @@ import pytest
 SPEC = importlib.util.spec_from_file_location("compile_cost_run", Path(__file__).parents[3] / "benchmarks/compile_cost/run.py")
 run = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(run)
+H200_ARGS = ["--card", "h200-sxm-141gb"]
 
 
-def test_the_bare_command_compiles_long_w0() -> None:
-    assert run.parse([]).window == "long-w0"
+def test_the_card_alone_compiles_long_w0() -> None:
+    assert run.parse(H200_ARGS).window == "long-w0"
 
 
 def test_requests_stay_in_place_of_a_window() -> None:
-    a = run.parse(["--requests", "0:300:3"])
+    a = run.parse([*H200_ARGS, "--requests", "0:300:3"])
     assert (a.window, a.requests) == (None, "0:300:3")
     with pytest.raises(SystemExit):
-        run.parse(["--window", "one-300", "--requests", "0:300:3"])
+        run.parse([*H200_ARGS, "--window", "one-300", "--requests", "0:300:3"])
 
 
-def test_the_bare_command_stays_glm_5_3() -> None:
-    assert run.parse([]).model == "glm-5.3"
+def test_the_card_alone_stays_glm_5_3() -> None:
+    assert run.parse(H200_ARGS).model == "glm-5.3"
 
 
 def test_llama_3_2_1b_compiles_its_class_circuit_in_place_of_a_window() -> None:
-    a = run.parse(["--model", "llama-3.2-1b"])
+    a = run.parse([*H200_ARGS, "--model", "llama-3.2-1b"])
     assert (a.model, a.window, a.requests) == ("llama-3.2-1b", None, None)
     for extra in (["--window", "long-w0"], ["--requests", "0:300:3"], ["--layers", "2"], ["--guard"]):
         with pytest.raises(SystemExit):
-            run.parse(["--model", "llama-3.2-1b", *extra])
+            run.parse([*H200_ARGS, "--model", "llama-3.2-1b", *extra])
 
 
 H200, H100, UNKNOWN = "NVIDIA H200", "NVIDIA H100 80GB HBM3", "NVIDIA A100-SXM4-80GB"
@@ -42,9 +43,12 @@ H200_TARGET = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": 
                "moe_backend": "triton"}
 
 
-def test_the_bare_command_compiles_for_the_h200_exactly_as_it_was_written_in() -> None:
-    assert run.parse([]).card == run.CARD == "h200-sxm-141gb"
-    assert json.dumps(run.target(run.CARD)) == json.dumps(H200_TARGET)
+def test_the_card_has_no_default_and_the_h200_compiles_exactly_as_it_was_written_in(capsys) -> None:
+    with pytest.raises(SystemExit):
+        run.parse([])
+    assert "--card" in capsys.readouterr().err
+    assert run.parse(H200_ARGS).card == run.PINS_CARD == "h200-sxm-141gb"
+    assert json.dumps(run.target(run.PINS_CARD)) == json.dumps(H200_TARGET)
 
 
 def test_another_card_is_read_from_its_card_file() -> None:
@@ -81,7 +85,7 @@ def writer(monkeypatch: pytest.MonkeyPatch, card: str) -> Writer:
                                           ("none", "glm-5.3-long-w0-eager-cpu")])
 def test_a_member_names_the_card_records_short(monkeypatch, tmp_path, card, member) -> None:
     w = writer(monkeypatch, card)
-    run.record(tmp_path, "glm-5.3", "long-w0", "eager", {"wall_min": 1.0, "peak_gib": 2.0})
+    run.record(tmp_path, "glm-5.3", "long-w0", "eager", {"wall_min": 1.0, "peak_gib": 2.0}, card=run.PINS_CARD)
     assert w.members == [member, member]
 
 
@@ -99,5 +103,5 @@ def test_a_point_names_the_card_it_was_compiled_for(monkeypatch, tmp_path, model
 def test_a_card_no_record_names_writes_no_point_and_is_named(monkeypatch, tmp_path) -> None:
     w = writer(monkeypatch, UNKNOWN)
     with pytest.raises(SystemExit, match=re.escape(repr(UNKNOWN))):
-        run.record(tmp_path, "glm-5.3", "long-w0", "eager", {"wall_min": 1.0, "peak_gib": 2.0})
+        run.record(tmp_path, "glm-5.3", "long-w0", "eager", {"wall_min": 1.0, "peak_gib": 2.0}, card=run.PINS_CARD)
     assert w.members == []

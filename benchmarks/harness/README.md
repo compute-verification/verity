@@ -16,18 +16,16 @@ uv run verity-bench plan llama31-8b-fp8-1gpu-commit-served --local-only
 ~~~
 
 This expands a spec from [`specs/`](specs/README.md) and prints, as JSON, each point with its identity and the run that
-passed it, if this machine's store has one. It needs no GPU. `verity-bench run SPEC` queues a run for each point
-without one, for any free GPU.
+passed it, if this machine's store has one. It needs no GPU. `verity-bench run SPEC`, the command of a recorded
+`research run` on a GPU machine, runs a point without one there (Running a point, below).
 
 ## Commands
 
 ~~~text
 verity-bench plan SPEC       # expand a spec; each point's identity and its passing run, if any
-verity-bench run SPEC        # one recorded run per point without a passing run, queued for any free GPU
-                             # (--direct NODE: on NODE itself, through its GPU slots, instead; --again POINT: that
-                             # point too, though a passing run stands for it; plan takes --again to show it first;
-                             # --card INDEX --cores CPUS: a booked card and its slot's cores, with --direct;
-                             # --here: the one point in this research run, on this machine's given cards and CPUs)
+verity-bench run SPEC        # in a research run: the spec's point without a passing run, on this machine
+                             # (--point POINT: one of several; --again POINT: that point though a passing run
+                             # stands for it; plan takes --again to show it first)
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
@@ -45,6 +43,41 @@ verity-bench prove-layers --flock R --zk R --sampling R --recursion R  # the pro
                                                 # for each layer read from its run's out/ or run id (`verity bench prove layers`, the same README)
 ~~~
 
+## Running a point
+
+A point is one recorded `research run` whose command is `verity-bench run SPEC`, the one launch every machine takes:
+
+~~~sh
+research run --on NODE --pool gpu --as LANE --project verity --source . --cwd source --timeout 130m --require-result \
+  --tool verity_bench.tool:VLLM_BENCH_POINT --env GPU_LEASE_ON=N -- uv run verity-bench run SPEC --point POINT
+~~~
+
+`run` plans the spec as `plan` does and runs one point (`jobs.dispatch`): `--point`'s, else the spec's only point, else
+the one `--again` names. A point a passing run stands for runs only when `--again` names it; it exits 0 saying which run
+passed it. The lookup reads the catalog where one is reachable, and where none is (a tree with no git that knows its
+commit, a store with no remote) it says so by name and the point runs. The commit is `RESEARCH_SOURCE_SHA`, which
+`research run` sets (`--tree-sha` for a tree with no `.git`), so the point's identity is the one the launch recorded:
+the tool (`verity_bench.tool:VLLM_BENCH_POINT`, a steady-state spec's `STEADY_POINT`) plans the launch's point in the
+launching checkout and records its identity, which `plan` and `check` look a point's runs up by.
+
+On a machine whose GPUs `gpu-lease` hands out (`/etc/vy/gpu-lease-host`) a vLLM point waits for its cards in a lease of
+its own (`jobs._lease`), for the spec's `max_minutes`, preemptible, of the cards `GPU_LEASE_ON` lists and on the CPUs
+`GPU_LEASE_CORES` lists where they are set; a job that holds its lease already (`research run --gpus N`, the queue's
+kind `vllm-bench-1gpu`) takes no second one, and on a machine that isn't ours (a Slurm job of VCF's cluster,
+`benchmarks/README.md`) it runs on the cards and CPUs the job was given. `--pool gpu` waits for one of the node's GPU
+slots, which gives the run its CPUs, for `--pool-wait` (4 h by default), and `--timeout` counts from taking it. A point
+whose row names its statement in the store also needs `--store-read`.
+
+What the launch before this one did that `research run` doesn't yet:
+
+| What it did | Now |
+| --- | --- |
+| `--end UTC`: a booked period's end; the slot wait stopped in time and a point whose `max_minutes` didn't fit wasn't started | none: `--timeout` and `--pool-wait` are lengths, not an end (`jobs.booked`, infra's launcher) |
+| `--cores CPUS`: the slot taker ran under `taskset -c CPUS`, so it took the booked slot or waited for it | none: `--pool` takes the first free slot (`jobs.booked`); the lease's CPUs are `GPU_LEASE_CORES` (gpu-lease's `--cores`) |
+| `--card INDEX`: the lease asked for the booked card alone | `--env GPU_LEASE_ON=INDEX`, read by the point's lease (gpu-lease reads no such variable, and `research run --gpus N` takes any card) |
+| a GPU slot of the node, waited for up to 4 h | `--pool gpu --pool-wait S`, which also runs the point under `nice -n 19` |
+| the run bounded by the spec's `max_minutes` | `--timeout`, counted from taking the slot; the lease's `--max-min` is the spec's |
+
 ## What a point and a result hold
 
 `tests/benchmarks/harness/test_bench.py::test_the_readme_states_the_contract_the_code_keeps` holds each name below to the
@@ -58,7 +91,7 @@ code, and fails when the code has one this list lacks.
 | Modes | `resident`, every arm's engine on the GPU at once and the arms interleaved rep by rep; else `blocks`, an engine for each arm in turn |
 | Metrics of a timed rep | `time_per_output_token_s`, `time_to_first_token_s`, `tokens_per_s`, `peak_gpu_memory_bytes`; and where every rep has them, `decode_time_per_token_s`, `inter_token_latency_p50_s`, `inter_token_latency_p99_s` |
 | A result | `verity-bench/vllm-overhead/v1`: its identity, its baseline, its sweep, its gates, how it ran, and its points |
-| A queued point | one preemptible job of the kind `vllm-bench-1gpu` |
+| A point | one recorded `research run` of `verity-bench run SPEC`; queued, of the kind `vllm-bench-1gpu` |
 
 One failed gate times nothing. Every metric is reported as a mean and as a ratio to the baseline paired by rep.
 
@@ -74,10 +107,10 @@ benchmarks' `ran with` line). Nothing it writes is a verdict of record.
 ## The serving profiles
 
 `benchmarks/production.toml` holds the three serving profiles (`coding-agent`, `chat`, `fixed-size`): each one's
-dataset, requests, load, bounds and version, each model's stock launch, and where the profiles differ from the published
-command. `verity_bench.profiles` reads it strictly into frozen objects and builds a profile's two command lines, stock
-`vllm serve` (`serve_argv`) and `vllm bench serve` (`bench_argv`). A profile's version rises with any change to what it
-reads, which a test pins.
+dataset, requests, load on each card a model is served on, bounds and version, each model's stock launch and cards
+(the card files' `short`), and where the profiles differ from the published command. `verity_bench.profiles` reads it
+strictly into frozen objects and builds no command line: a profile's server and client are serve_tax's own
+(`run.sh --profile`). A profile's version rises with any change to what it reads, which a test pins.
 
 ## A steady-state spec
 
@@ -131,24 +164,12 @@ been it isn't (`why`), a run of the record whose rows can't be read among them. 
 runs and arts, the targets a record's labels are on, and its attempts started since the spec's file was added, and
 says on stderr when it starts and what it pulled.
 
-**Run.** `verity-bench run SPEC --direct NODE` launches each point without a passing run as one recorded run on NODE
-through one of its GPU slots, which gives the run its cores, by the harness's one dispatch and its one slot run
-(`jobs.dispatch`, `jobs.slot_run`); a steady-state spec has no queued form. `--again POINT` (repeatable, each point by
-its id, never all of them) launches that point too though a passing run stands for it, as a labelled row timed before
-the harness does whatever its closure: `plan SPEC --again POINT` shows it as `again: passed by RUN` before anything is
-launched, and the new run labels and supersedes nothing, so the passing run stays the record until a run is labelled
-on purpose. `--cores CPUS` (a booked slot's, `34-43`) runs the slot taker under `taskset -c CPUS`, so it takes that
-slot or waits for it, and `--card INDEX` (a booked card's, with `--cores`) asks the lease for that card alone, which
-the node side refuses before the statement unless it is on the NUMA node of the run's CPUs. The run waits for its slot,
-`jobs.DIRECT_WAIT_S` at most or until the spec's `max_minutes` and `jobs.SLOT_GRACE_S` (for `slot.py`'s 20 s poll)
-before `--end UTC` (a booked period's end), and then has `max_minutes`; its timeout is the two, so it ends before the
-end whichever `slot.py` the node runs, and `run` refuses a point whose `max_minutes` don't fit before `--end` at
-launch. On a node whose launcher
-takes a run only through `slot.py` (`/etc/vy/runs-via-slot`), the launcher refuses a `--cores` launch.
-`verity-bench run SPEC --here`, inside a `research run` on a machine that is not ours (a Slurm job of VCF's cluster,
-`benchmarks/README.md`), runs a vLLM spec's one point to run in that run (`jobs.here_command`): the cards and CPUs the
-process was given, no lease, slot or node name, and no catalog lookup, so the commit is `RESEARCH_SOURCE_SHA`
-(`research run --tree-sha`) where the tree has no `.git`; the point's card check is the same. A steady-state point's job is
+**Run.** A steady-state point runs as every point does (Running a point, above, `jobs.dispatch`), in a GPU slot of the node
+(`--pool gpu`), which gives it its cores, with `--tool verity_bench.tool:STEADY_POINT`; `GPU_LEASE_ON`, where set, is
+the booked card, one index (`steady_node --card`). `--again POINT` runs that point though a passing run stands for it,
+as a labelled row timed before the harness does whatever its closure: `plan SPEC --again POINT` shows it as
+`again: passed by RUN` first, and the new run labels and supersedes nothing, so the passing run stays the record until
+a run is labelled on purpose. A steady-state point's job is
 `benchmarks/harness/steady_point.sh`, which sources the spec's `setup` in the source tree and runs
 `python -m verity_bench.steady_node` under the Python the setup names. The setup builds the prover and exports
 `VERITY_BENCH_STEADY_BIN` (the prover) and `VERITY_BENCH_STEADY_PY` (a Python the stager, the timing script and the
@@ -161,7 +182,7 @@ the node's disk. A point whose row names its statement in the store is launched 
 1. before any card is asked for, refuses a tree that gives the point another identity than the one it was launched with,
    an environment that isn't the spec's, a node that can't run `gpu-lease` (the kit's lease calls it by its bare name:
    the refusal names the tree's script to put on the node's path), a node whose nvcc's version isn't the spec's
-   `cuda_toolkit`, a run whose CPUs aren't exactly the spec's `cores`, a booked card (`--card`) not on their NUMA node,
+   `cuda_toolkit`, a run whose CPUs aren't exactly the spec's `cores`, a booked card (`GPU_LEASE_ON`) not on their NUMA node,
    and a statement (staged there, copied from `staged` on the node, or fetched from `staged` in the store) whose
    circuit isn't the row's `pin` or whose units aren't its `n`. A statement from the store is fetched into the scratch, on the node's disk: a scratch
    in its memory (`/dev/shm`, the default of `VERITY_BENCH_STEADY_SCRATCH`, which the setup then exports) is refused,

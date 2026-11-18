@@ -46,9 +46,9 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
     assert w["of"] == {"commitment": step_rows.NAME, "run_root": c["run_root"], "bundle_manifest_sha256": man, "rows": DRW.ROWS}
     assert w["link"] == DRW.link(step_rows.NAME) and w["committer"]["from"] == "replay bundle" and w["row"] == "rope-d64-cpu"
 
-    # the verifier's own copies: its population program, the run root of record, the public body it holds
+    # the verifier's own copies: its listed Program, the run root of record, the public body it holds
     defn = bind(REGISTRY["RoPEHead_v1"], D=D)
-    program, query = P.population_program(defn, heads), P.template_instance_query(defn)
+    program, query = IF.listed_program([(defn, heads)], ())
     ports = {f"{ROPE}/{p}": {"leaves": heads, "domain": R.window_domain(P.program_digest(program), P.digest(P.partition(program, query)),
                                                                           f"{ROPE}/{p}", CS.ROW_SCHEMA, heads, c["run_root"])}
              for p in ("x", "cs", "out")}

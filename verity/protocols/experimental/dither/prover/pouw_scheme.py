@@ -9,9 +9,11 @@ Definition holds the committed words to (`dither.block_inputs`, `check_block`, `
 (A + d_A)(B + d_B)ᵀ as a signed 32-bit integer. No credit assumes a bound over operands the prover chose, so every
 well-formed tile is admissible.
 
-The parameters are an (L, L′) pair of `PARAMETERS`, the pairs the protocol settles for the RTX PRO 6000 ("The segment
-and the noise period"): L = 1,024 with L′ = 128 when registration pins B, and L = 768 with L′ = 256 for weights the
-prover chooses. No pair is settled for the H200.
+The parameters are an (L, L′) pair of `PARAMETERS`, keyed by the card's short name (its card file's ``short``, under
+``calibration/hardware/cards``) and whether registration pins B: the pairs the protocol settles for the RTX PRO 6000
+("The segment and the noise period"), L = 1,024 with L′ = 128 when registration pins B, and L = 768 with L′ = 256 for
+weights the prover chooses. No pair is settled for the H200. PoUW's kernel schemes reach it as the resource scheme
+``dither`` on a card (`verity.protocols.resource_accounting.compute.pouw.prover.schemes.of`).
 
 Three methods ask for what Dither has no code for, and raise `NotImplementedError` naming it:
 
@@ -35,9 +37,9 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 from . import dither as D
 
 NAME = "dither"
-#: name -> (L, L′) on the RTX PRO 6000: registration pins B, or the prover chooses the weights
-PARAMETERS: dict[str, tuple[int, int]] = {"rtx-pro-6000-pinned": (1024, 128), "rtx-pro-6000-chosen": (768, 256)}
-DEFAULT = "rtx-pro-6000-pinned"
+#: (card's short name, whether registration pins B) -> (L, L′)
+PARAMETERS: dict[tuple[str, bool], tuple[int, int]] = {("rtx-pro-6000", True): (1024, 128),
+                                                       ("rtx-pro-6000", False): (768, 256)}
 
 Cells = list[list[tuple[list[int], int]]]
 
@@ -45,11 +47,12 @@ Cells = list[list[tuple[list[int], int]]]
 class Dither:
     """Dither v3.2 at one (L, L′) pair of `PARAMETERS`."""
 
-    def __init__(self, parameters: str = DEFAULT) -> None:
-        if parameters not in PARAMETERS:
-            raise ValueError(f"{NAME}: no parameters {parameters!r}; they are {', '.join(PARAMETERS)}")
-        self.name, self.parameters = NAME, parameters
-        self.L, self.lp = PARAMETERS[parameters]
+    def __init__(self, card: str, pinned: bool) -> None:
+        if (card, pinned) not in PARAMETERS:
+            raise ValueError(f"{NAME}: no parameters on {card!r} with B {'pinned' if pinned else 'chosen'}; they are "
+                             + ", ".join(f"{c} with B {'pinned' if p else 'chosen'}" for c, p in PARAMETERS))
+        self.name, self.card, self.pinned = NAME, card, pinned
+        self.L, self.lp = PARAMETERS[card, pinned]
         self.certificate = Certificate(
             conjecture="SAKMatmul",
             gap0=None,
@@ -113,4 +116,4 @@ class Dither:
         return [[o - (1 << 32) if o >> 31 else o for _, o in row] for row in checked]
 
 
-__all__ = ["DEFAULT", "NAME", "PARAMETERS", "Dither"]
+__all__ = ["NAME", "PARAMETERS", "Dither"]

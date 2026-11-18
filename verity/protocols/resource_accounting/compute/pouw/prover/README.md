@@ -7,26 +7,30 @@ it, so nothing here is trusted.
 
 ## Try it
 
-The named schemes are registered here, and a caller asks for one by name:
+The kernel schemes are named once, in `../verifier/kernel_schemes.py`, and built here; a caller asks for one by name,
+or for the one a resource scheme runs on a card:
 
 ~~~sh
 uv sync --all-packages --extra torch-cpu
 uv run python -c "
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes
-print(', '.join(schemes.SCHEMES))
+from verity.protocols.resource_accounting.compute.pouw.verifier import kernel_schemes
+print(', '.join(kernel_schemes.BY_NAME))
 print(schemes.get('pearl-c-sm120-v1-h3').name)
+print(schemes.of('pearl-plus', 'h100', True).name)
 "
 ~~~
 
-It prints every registered scheme's name, then `pearl-c-sm120-v1-h3`, the scheme it built. It needs no GPU.
-`pearl-c-nvfp4-v0` is listed but raises when asked for until `verity.protocols.experimental.pearl_c4` is imported, which
-registers it.
+It prints every kernel scheme's name, then `pearl-c-sm120-v1-h3`, the scheme it built, then `pearl-c-h100-v1-h3`, the
+one Pearl+ runs on the H100. It needs no GPU. `pearl-c-nvfp4-v0` and `dither` are named but raise when asked for until
+`verity.protocols.experimental.pearl_c4` or `verity.protocols.experimental.dither` is imported, which registers its
+builder.
 
 ## What is here
 
 | Part | What it is |
 | --- | --- |
-| `schemes/` | The named schemes: NCP, Pearl's FP8 scheme and Pearl-C, each a `PoUWScheme`, and Pearl-C's device record. |
+| `schemes/` | The kernel schemes' builders: NCP, Pearl's FP8 scheme and Pearl-C, each a `PoUWScheme`, and Pearl-C's device record. |
 | `circuit/` | Each scheme's Definitions, an execution phase's Program and sampling design, and what a call's rows are committed under. |
 | `serving/` | What runs beside a served model, one directory a scheme. An adapter reaches it only through the names `serving` exports. |
 | `lowering/` | H1's lowering: the statements Flock proves for a sampled H1 tile, and the commitments they are opened against. |
