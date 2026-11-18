@@ -3368,6 +3368,58 @@ def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_tak
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
+QUIET = {DRIVE_FLAGS: '[quiet_main]\nuntil = "2026-11-20T23:00:00Z"\nfrozen = ["verity/", "adapters/"]\n'
+                      'allowed = ["tools/", "tests/tools/"]\n'}
+#: 2026-11-20T22:59:59Z and 23:00:00Z, the last second the quiet-main rule above holds and its expiry
+QUIET_LAST, QUIET_OVER = 1795215599.0, 1795215600.0
+
+
+def test_until_it_expires_the_preflight_refuses_a_change_to_a_frozen_directory_onto_main_but_a_repair_or_tools(world, capsys):
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world, QUIET)
+    pre = lambda: _preflight(world, now=lambda: QUIET_LAST)   # noqa: E731
+    world.gh.put(2, h2 := world.change({"verity/a.py": "2\n", "tests/adapters/test_b.py": "2\n", "tools/c.py": "2\n"}),
+                 ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=pre()) == 1
+    [said] = [ln for ln in capsys.readouterr().err.splitlines() if ln.startswith("  - ")]
+    assert said == (
+        "  - its own change touches tests/adapters/test_b.py, verity/a.py, under verity/, adapters/ (or tests/ under them), "
+        "which `main` takes only as a repair of a red until 2026-11-20T23:00:00Z (drive.toml's `quiet_main`; outside them it "
+        "takes tools/, tests/tools/): open it on `one-circuit` instead (`research queue open --base one-circuit`), or, if it "
+        "cures a red on `main`, add a line `Repair: <suite>::<test id>` naming that test to the PR's body"), said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False
+    world.gh.put(3, h3 := world.change({"verity/a.py": "3\n"}), body="Lane `lane-3`.\nRepair: verity-core::test_x.py::test_y\n",
+                 ready=False)
+    world.gh.put(4, h4 := world.change({"tools/c.py": "4\n"}), ready=False)
+    world.gh.put(5, h5 := world.change({"tests/tools/test_c.py": "5\n"}), ready=False)
+    for n, h in ((3, h3), (4, h4), (5, h5)):
+        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=pre()) == 0, capsys.readouterr().err
+        assert StoreLabels(world.store, log=world.logs.append).ready(n, h) is True
+
+
+def test_from_its_expiry_the_quiet_main_rule_refuses_nothing(world, capsys):
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world, QUIET)
+    world.gh.put(2, h2 := world.change({"verity/a.py": "2\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, now=lambda: QUIET_OVER)) == 0, \
+        capsys.readouterr().err
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True
+
+
+@pytest.mark.parametrize("table, why", [
+    ('until = "Fri"\nfrozen = ["verity/"]', "`until` a UTC time"),
+    ('until = "2026-11-20T23:00:00Z"\nfrozen = []', "`frozen` a non-empty list"),
+    ('until = "2026-11-20T23:00:00Z"\nfrozen = ["verity"]', "`frozen` a non-empty list"),
+    ('until = "2026-11-20T23:00:00Z"\nfrozen = ["verity/"]\nonto = "x"', "a table of `until`, `frozen`")])
+def test_a_malformed_quiet_main_is_refused_naming_what_it_takes(table, why):
+    from research.queue import DriveFlags, QueueError
+
+    with pytest.raises(QueueError, match=re.escape(why)):
+        DriveFlags.parse(f"[quiet_main]\n{table}\n")
+
+
 #: the added-lines warn gate and what it reads at `main`, committed into the origin as they are in this checkout
 ADDED = "tools/check/added_lines.py"
 ADDED_FILES = {DRIVE_FLAGS: f'warn_gates = ["{ADDED}"]\n', **{f: (Path(__file__).resolve().parents[3] / f).read_text() for f in (

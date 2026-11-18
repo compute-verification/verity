@@ -49,7 +49,9 @@ are built again without them in the same tick.
                                                    branch `Preflight._fetch` fetches outside the pins (naming the paths), contains an
                                                    open PR that isn't admitted (naming it), fails a landing gate of drive.toml at `main` (with
                                                    the gate's fix; a warn gate's failure is printed as a warning and refuses
-                                                   nothing), or, merged onto it in a temporary worktree, fails `pins.py
+                                                   nothing), onto `main` touches what drive.toml's `quiet_main`
+                                                   freezes until it expires with no `Repair:` line, or, merged
+                                                   onto it in a temporary worktree, fails `pins.py
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
                                                    test_repository.py, tests/tools/research/test_pythonpath.py, a lint its
                                                    change reaches (tests/test_no_wall_clock.py, tests/adapters/vllm/tests/lint),
@@ -794,6 +796,63 @@ def signed_mode(value: object) -> str | None:
     return "shadow" if value == "shadow" else None
 
 
+#: the line of a PR's body that says it repairs a red on `main` (`QuietMain`): the suite and the test it cures
+REPAIR_RE = re.compile(r"^Repair:[ \t]*\S+::\S+", re.MULTILINE)
+#: a directory from the repository's root, ending in `/` (`QuietMain`'s prefixes)
+QUIET_DIR_RE = re.compile(r"(?:[\w.-]+/)+")
+
+
+@dataclass(frozen=True)
+class QuietMain:
+    """drive.toml's `quiet_main`: until ``until`` (a UTC time), `main` takes a PR whose own change touches a file under
+    ``frozen``, or `tests/` under one, only as a repair of a red (a `Repair:` line, `REPAIR_RE`); a file under ``allowed`` is
+    never frozen, and the rest goes to ``instead``.  From ``until`` on it refuses nothing."""
+    until: str
+    frozen: tuple[str, ...]
+    allowed: tuple[str, ...] = ()
+    instead: str = "one-circuit"
+
+    def touched(self, files: Iterable[str], now: float) -> list[str]:
+        """The files of ``files`` the rule freezes at ``now`` (epoch seconds): none from `until` on."""
+        if now >= calendar.timegm(time.strptime(self.until, "%Y-%m-%dT%H:%M:%SZ")):
+            return []
+
+        def frozen(f: str) -> bool:
+            g = f.removeprefix("tests/")
+            return not f.startswith(self.allowed) and g.startswith(self.frozen)
+        return sorted(f for f in files if frozen(f))
+
+    def refusal(self, files: list[str]) -> str:
+        shown = ", ".join(files[:10]) + (f" and {len(files) - 10} more" if len(files) > 10 else "")
+        return (f"its own change touches {shown}, under {', '.join(self.frozen)} (or tests/ under them), which `main` takes only "
+                f"as a repair of a red until {self.until} (drive.toml's `quiet_main`; outside them it takes "
+                f"{', '.join(self.allowed) or 'everything'}): open it on `{self.instead}` instead "
+                f"(`research queue open --base {self.instead}`), or, if it cures a red on `main`, add a line "
+                "`Repair: <suite>::<test id>` naming that test to the PR's body")
+
+    @classmethod
+    def parse(cls, v: object, source: str) -> "QuietMain":
+        def bad(want: str) -> QueueError:
+            return QueueError(f"{source}: quiet_main = {v!r}: {want}")
+
+        if not isinstance(v, dict) or not {"until", "frozen"} <= set(v) or set(v) - {"until", "frozen", "allowed", "instead"}:
+            raise bad("a table of `until`, `frozen` and, optionally, `allowed` and `instead`")
+        if not (isinstance(v["until"], str) and MARK_TIME_RE.fullmatch(v["until"])):
+            raise bad("`until` a UTC time as YYYY-MM-DDTHH:MM:SSZ")
+        dirs = {}
+        for k in ("frozen", "allowed"):
+            d = v.get(k, [])
+            if not (isinstance(d, list) and all(isinstance(x, str) and QUIET_DIR_RE.fullmatch(x) for x in d)) \
+                    or (k == "frozen" and not d):
+                raise bad(f"`{k}` a {'non-empty ' if k == 'frozen' else ''}list of directories from the repository's root, "
+                          "each ending in `/`, as [\"verity/\", \"adapters/\"]")
+            dirs[k] = tuple(d)
+        instead = v.get("instead", cls.instead)
+        if not (isinstance(instead, str) and re.fullmatch(r"[\w./-]+", instead)):
+            raise bad("`instead` a branch's name")
+        return cls(v["until"], dirs["frozen"], dirs["allowed"], instead)
+
+
 @dataclass(frozen=True)
 class DriveFlags:
     """The queue's flags: the defaults, then `DRIVE_FLAGS` at `main`, which the verified queue's loop reads each tick
@@ -855,6 +914,8 @@ class DriveFlags:
     signed_verdicts: str = "off"
     #: the restacks across a move `Queue.sync` runs at once in the background, each `restack.py` on one head (`Queue._restack`)
     restack_jobs: int = 3
+    #: until its `until`, what `main` takes only as a repair of a red (`QuietMain`, `Preflight._quiet`); none, everything
+    quiet_main: QuietMain | None = None
 
     @property
     def plain_excludes(self) -> tuple[str, ...]:
@@ -918,6 +979,8 @@ class DriveFlags:
             if type(doc["restack_jobs"]) is not int or doc["restack_jobs"] < 1:
                 raise bad("restack_jobs", "a whole number, 1 or more")
             got["restack_jobs"] = doc["restack_jobs"]
+        if "quiet_main" in doc:
+            got["quiet_main"] = QuietMain.parse(doc["quiet_main"], source)
         for k in ("lowrisk_excludes", "verdict_excludes", "verdict_plain"):
             if k in doc:
                 v = doc[k]
@@ -1073,6 +1136,19 @@ def gates_at(repo: Path, ref: str, key: str = "landing_gates") -> tuple[str, ...
     if gates is None:
         return ()
     return getattr(DriveFlags.parse(f"{key} = {json.dumps(gates)}\n", source), key)
+
+
+def quiet_at(repo: Path, ref: str) -> QuietMain | None:
+    """drive.toml's `quiet_main` at ``ref``; None when it has none.  Only that key is read, as `gates_at` reads its own."""
+    r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
+    if r.returncode:
+        return None
+    source = f"{DRIVE_FLAGS} at {ref}"
+    try:
+        quiet = tomllib.loads(r.stdout).get("quiet_main")
+    except tomllib.TOMLDecodeError as e:
+        raise QueueError(f"{source}: not TOML: {e}") from None
+    return None if quiet is None else QuietMain.parse(quiet, source)
 
 
 def land_into_key(repo: Path, ref: str) -> str | None:
@@ -5631,7 +5707,9 @@ class Preflight:
     imports; or (f) merged onto `next` as the sync merges it (`lock_drops`), drops from a lock it changes a `shape.inline` premise or
     a `shape.frozen` key `next`'s statements still need (`dropped_entries`), naming each and the fix (`LOCK_DROP_FIX`); or (g)
     carries, through a merge of `next` (`carried_heads`), a PR's head that isn't on the landing branch and that the PR closed,
-    rebuilt without, or isn't admitted at (`stale_carried`), naming each and the fix.  A train most often breaks on one of (a) to
+    rebuilt without, or isn't admitted at (`stale_carried`), naming each and the fix; or (h) onto `main`, touches what
+    drive.toml's `quiet_main` at `main` freezes until it expires, with no `Repair:` line (`_quiet`), naming the files and both
+    fixes.  A train most often breaks on one of (a) to
     (c), and a Lean break is most often one of (e) or (f).
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its merge there, as drive's next sync would
@@ -5659,9 +5737,9 @@ class Preflight:
                  root: Path | None = None, log: Callable[[str], None] = print,
                  lean: Callable[[Path, list[str], float], LeanBuilt | str] | None = None,
                  lean_s: float = PREFLIGHT_LEAN_S, lean_modules: int = PREFLIGHT_LEAN_MODULES,
-                 collide_s: float = PREFLIGHT_COLLIDE_S, collide_jobs: int | None = None):
+                 collide_s: float = PREFLIGHT_COLLIDE_S, collide_jobs: int | None = None, now: Callable[[], float] = time.time):
         self.repo, self.remote, self.store, self.sync, self.python = Path(repo), remote, store, sync, python
-        self.budget_s, self.clock, self.log = budget_s, clock, log
+        self.budget_s, self.clock, self.log, self.now = budget_s, clock, log, now
         self.lean, self.lean_s, self.lean_modules = lean, lean_s, lean_modules
         self.collide_s, self.collide_jobs = collide_s, max(1, collide_jobs or os.cpu_count() or 1)
         self.root = Path(root or tempfile.gettempdir())
@@ -5679,7 +5757,7 @@ class Preflight:
         if why := self._old_next(pr, prs):
             return why
         notes: list[str] = []
-        found = self._contained(pr, prs) + self._gates(pr, notes)
+        found = self._quiet(pr, notes) + self._contained(pr, prs) + self._gates(pr, notes)
         tree, files, r = None, [], None
         if not pr.move:
             tree, files, r = merged_tree(self.repo, base, pr.head)
@@ -5836,6 +5914,22 @@ class Preflight:
                 f"behind it: mark #{n} ready first, so it lands first, or drop #{n}'s commits from this branch (if this PR carries "
                 f"#{n}'s change, #{n}'s owner withdraws its mark: `research data label pr:{n}@{entries[n].pr.head[:12]} ready false "
                 f"--by OWNER`)" for n in held] + list(stale.values())
+
+    def _quiet(self, pr: PR, notes: list[str]) -> list[str]:
+        """(h): until drive.toml's `quiet_main` at `main` expires, a PR onto `main` whose own change (`own_files`) touches what
+        it freezes, unless its body has a `Repair:` line (`QuietMain`)."""
+        if pr.base != "main":
+            return []
+        main = _out(self.repo, "rev-parse", "refs/queue/preflight/main")
+        try:
+            quiet = quiet_at(self.repo, main)
+        except QueueError as e:
+            notes.append(f"no quiet-main rule read ({e})")
+            return []
+        if quiet is None or REPAIR_RE.search(pr.body):
+            return []
+        touched = quiet.touched(own_files(self.repo, main, pr.head), self.now())
+        return [quiet.refusal(touched)] if touched else []
 
     def _gates(self, pr: PR, notes: list[str]) -> list[str]:
         """(d): what drive.toml's `landing_gates` at `main` refuse (`gate_refusal`).  A gate that can't judge is a note: the
