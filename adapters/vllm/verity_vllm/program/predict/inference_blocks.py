@@ -36,7 +36,7 @@ import hashlib
 from collections.abc import Sequence
 from typing import Any
 
-from verity.circuits import partition_object as PO
+from verity.circuits import codec
 from verity.circuits import partition_v2 as PV2
 from verity.commitments import advice as AC
 from verity.commitments.periods import interface as IF
@@ -74,8 +74,8 @@ def _blocks(circuit: IF.Circuit) -> IF.Blocks:
 
 
 def program_digest(circuit: IF.Circuit) -> str:
-    """The SHA-512 of ``circuit``'s Program (`partition_object.program_sha512`), the ``program`` its record names."""
-    return PO.program_sha512(circuit.program()[0])
+    """The SHA-512 of ``circuit``'s Program (`codec.program_digest`), the ``program`` its record names."""
+    return codec.program_digest(circuit.program()[0])
 
 
 def rows(circuit: IF.Circuit, program: str | None = None) -> list[bytes]:
