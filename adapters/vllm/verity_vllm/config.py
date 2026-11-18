@@ -15,7 +15,7 @@
 * **How a stage runs.**  :class:`BuildConfig`, :class:`MatchConfig` and :class:`CommitConfig`: defaults in code,
   overrides from flags or the environment of ``verity-vllm row``.
 * **Where it runs.**  :class:`RunEnv`: interpreters, caches and roots.  ``pipeline/cli.py`` fills it from flags and the
-  environment (the machine-path defaults live there); it is recorded as telemetry and never hashed.
+  environment, with no machine path as a default; it is recorded as telemetry and never hashed.
 * **Subcommand options.**  Every ``verity-vllm`` subcommand takes one frozen dataclass whose fields are declared with
   :func:`option`; ``pipeline/cli.py`` is the only parser.  A subcommand refuses a command line by raising
   :class:`UsageError`, and what needs the team's run store refuses the same way on a tree without it (:func:`run_store`).
@@ -788,8 +788,8 @@ class CommitConfig:
 
 @dataclass(frozen=True, kw_only=True)
 class RunEnv:
-    """Where a row runs: interpreters, caches and roots.  Filled by ``pipeline/cli.py`` from flags, the environment and
-    the pod layout's machine-path defaults (``cli.MACHINE``); recorded as telemetry, never hashed.
+    """Where a row runs: interpreters, caches and roots.  Filled by ``pipeline/cli.py`` from flags and the environment; a path
+    with no default and neither set is refused by name.  Recorded as telemetry, never hashed.
 
     ``environ`` is the environment the CLI was started with; child processes get it plus the pins the driver sets.
     """
@@ -803,15 +803,15 @@ class RunEnv:
                                   help="put on the stages' PATH after the interpreter's directory (default: <cuda-home>/bin)")
     native_collect_build: str | None = option("--native-collect-build", env="NATIVE_COLLECT_BUILD", default=None,
                                               help="collector build dir (default: the release's, else --native-collect-default)")
-    native_collect_default: str = option("--native-collect-default")
+    native_collect_default: str = option("--native-collect-default", env="NATIVE_COLLECT_DEFAULT")
     hidden_so: str | None = option("--hidden-so", env="HIDDEN_SO", default=None,
                                    help="M1 tap .so (default: the one of the row's attention implementation)")
-    hidden_so_fa2: str = option("--hidden-so-fa2")
-    hidden_so_fa3: str = option("--hidden-so-fa3")
-    hidden_so_fa2_guarded: str = option("--hidden-so-fa2-guarded", help="the guarded-max FA2 tap build (ops/pod_fa2_tap.sh, FA2_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
-    hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
-    norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
-    router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
+    hidden_so_fa2: str = option("--hidden-so-fa2", env="HIDDEN_SO_FA2")
+    hidden_so_fa3: str = option("--hidden-so-fa3", env="HIDDEN_SO_FA3")
+    hidden_so_fa2_guarded: str = option("--hidden-so-fa2-guarded", env="HIDDEN_SO_FA2_GUARDED", help="the guarded-max FA2 tap build (ops/pod_fa2_tap.sh, FA2_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
+    hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", env="HIDDEN_SO_FA3_GUARDED", help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
+    norm_tap_so: str = option("--norm-tap-so", env="NORM_TAP_SO", help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
+    router_tap_so: str = option("--router-tap-so", env="ROUTER_TAP_SO", help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
                                   help="stage telemetry file (default: <row dir>/timeline.jsonl)")
     verity_tree: str | None = option("--verity-tree", env="VERITY_TREE", default=None,
@@ -819,5 +819,5 @@ class RunEnv:
     research_run_dir: str | None = option("--research-run-dir", env="RESEARCH_RUN_DIR", default=None)
     research_run_id: str | None = option("--research-run-id", env="RESEARCH_RUN_ID", default=None)
     guard_preserve_file: str = option("--guard-preserve-file", env="GUARD_PRESERVE_FILE")
-    pod_guard: str = option("--pod-guard", help="the pod guard shell library (the tree's copy when absent)")
+    pod_guard: str | None = option("--pod-guard", default=None, help="the pod guard shell library (the tree's copy when absent)")
     environ: Mapping[str, str] = environ_snapshot()
