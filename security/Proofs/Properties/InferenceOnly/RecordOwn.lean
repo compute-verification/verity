@@ -113,10 +113,12 @@ def OwnRuns (P : Prog) : Prop :=
         fun (a, b) => a.1 != b.1 || a.2.1 + a.2.2 ≤ b.2.1) = true
 
 /-- **Part `q` reads another unit's outputs**: an affine or strided part over a node of the root that is no input
-node, as `Record.ownRows` tells an edge. -/
+node, or an explicit part naming one, as `Record.ownRows` tells an edge. -/
 def edgeOf (P : Prog) : Part → Bool
   | .affine false i _ _ | .strided false i _ _ _ _ _ =>
     ((P.defs[P.root]!).body.nodes[i]?.map fun n => !Desc.isInputNode P n).getD false
+  | .explicit it =>
+    it.any fun r => !r.p && ((P.defs[P.root]!).body.nodes[r.i]?.map fun n => !Desc.isInputNode P n).getD false
   | _ => false
 
 /-- **The root has no edge**: no part of an argument of a root node that is no input node reads another such node. -/

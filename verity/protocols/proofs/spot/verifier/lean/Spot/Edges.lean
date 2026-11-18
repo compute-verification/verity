@@ -196,6 +196,7 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
       continue
     let (run, lanes) := partLanes q
     let (w, l0, radix, steps) ← laneWire run lanes (x0 + lo * L - s0) L len cnt
+    if radix.length != steps.length || radix.any (· == 0) then throw "edge-rows"
     if w ≥ k then throw "not-topological"
     if isInputNode P w then continue
     let wnode := nodes[w]!
