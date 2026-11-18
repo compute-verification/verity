@@ -24,8 +24,10 @@ import hashlib
 import importlib.util
 import json
 import os
+import resource
 import shutil
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -164,7 +166,16 @@ def _link(src: Path, dst: Path) -> None:
         shutil.copyfile(src, dst)
 
 
-def cached(cache: Path, key: str, out: Path | None, bind: dict, compose: Callable[[Path], dict]) -> dict:
+def entry_of(cache: Path, key: str, bind: dict, keep: bool = True) -> Path:
+    """The entry `cached` keeps ``key``'s compose for ``bind`` under: ``key``'s own, which holds the circuit, or, without
+    ``keep`` and where that one holds none for ``bind``, ``key``'s record for ``bind`` alone (a record's pin is its binding's)."""
+    whole = cache / key
+    if keep or ((whole / "made.json").exists() and json.loads((whole / "made.json").read_text())["bind"] == bind):
+        return whole
+    return cache / f"{key}.{hashlib.sha512(json.dumps(bind, sort_keys=True).encode()).hexdigest()[:32]}"
+
+
+def cached(cache: Path, key: str, out: Path | None, bind: dict, compose: Callable[[Path], dict], keep: bool = True) -> dict:
     """Compose's line for ``out`` through ``cache``'s entry ``key`` (`--cache`: a machine's composed circuits, so that the ranks
     it audits compose each template once, and a window's composes can be made before its timed audit, `a5.warm`). Under an
     exclusive lock on the entry, the first caller composes into it (``compose(path)`` writes the circuit at ``path`` bound to
@@ -174,10 +185,13 @@ def cached(cache: Path, key: str, out: Path | None, bind: dict, compose: Callabl
     GLM-5.3 GEMM's template takes half an hour and a 4,32,4 window's Int8RowQuant_v3 four hours. The line carries the circuit's
     ``meta`` (`head`), so that no caller reads a circuit, past 100 GB, to stage public files under it; a kept circuit is held
     to its pin when it is copied, and by the caller when a sampled proof block's prover reads it (a5's `held`). ``out`` None
-    only makes the entry. A compose that fails keeps nothing."""
+    only makes the entry. A compose that fails keeps nothing. Without ``keep``, where ``key`` holds no circuit for ``bind``, the
+    compose is hashed as it is rendered (`circuit.digests_only`) and its record alone is kept (`recorded`)."""
     _needles(bind)
     cache.mkdir(parents=True, exist_ok=True)
-    entry = cache / key
+    entry = entry_of(cache, key, bind, keep)
+    if entry.name != key:
+        return recorded(entry, out, compose)
     with (cache / f"{key}.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if not (entry / "made.json").exists():
@@ -186,7 +200,7 @@ def cached(cache: Path, key: str, out: Path | None, bind: dict, compose: Callabl
             tmp.mkdir()
             try:
                 made = compose(tmp / "circuit.txt")
-                made = {**made, "meta": head(tmp / "circuit.txt")}
+                made = {**made, "meta": head(tmp / "circuit.txt"), "bytes": (tmp / "circuit.txt").stat().st_size}
                 at = binding_at(tmp / "circuit.txt", bind, made["pin"])
                 (tmp / "made.json").write_text(json.dumps({**made, "bind": bind, "at": at}, sort_keys=True))
             except BaseException:
@@ -207,6 +221,38 @@ def cached(cache: Path, key: str, out: Path | None, bind: dict, compose: Callabl
         return {k: v for k, v in kept.items() if k not in ("bind", "at")}
     print(f"compose cache: {how} {entry}, restamped", file=sys.stderr)
     return {**restamp(entry / "circuit.txt", kept, out, bind), "meta": head(out)}
+
+
+def recorded(entry: Path, out: Path | None, compose: Callable[[Path], dict]) -> dict:
+    """`cached`'s entry ``entry`` keeping no circuit: compose's line with the circuit's META, ``bytes`` (the file's size), and
+    its compose's ``seconds`` and ``peak_gib`` (the process's peak resident GiB so far), each hashed as the text is
+    rendered; ``out`` gets any MUFU tables and no circuit, and the line says so (``"text": False``)."""
+    with (entry.parent / f"{entry.name}.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not (entry / "made.json").exists():
+            tmp = entry.parent / f"{entry.name}.tmp{os.getpid()}"
+            shutil.rmtree(tmp, ignore_errors=True)
+            tmp.mkdir()
+            try:
+                t0 = time.time()
+                with FC.digests_only() as got:
+                    made = compose(tmp / "circuit.txt")
+                if not got:
+                    raise RuntimeError(f"{entry.name}: its composer wrote its circuit other than through `circuit.compose_to`, "
+                                       "so no text was hashed: keep its text (--keep-circuits)")
+                if got[-1]["sha512"] != made["pin"]:
+                    raise RuntimeError(f"{entry.name}: the compose's line names pin {made['pin']}, not the one its text hashes to")
+                made = {**made, "meta": FC.meta_of(got[-1]["head"]), "bytes": got[-1]["bytes"], "text": False,
+                        "seconds": round(time.time() - t0, 1),
+                        "peak_gib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1)}
+                (tmp / "made.json").write_text(json.dumps(made, sort_keys=True))
+            except BaseException:
+                shutil.rmtree(tmp, ignore_errors=True)
+                raise
+            os.replace(tmp, entry)
+    for f in sorted((entry / "tables").glob("*")) if out is not None and (entry / "tables").is_dir() else ():
+        _link(f, out.parent / "tables" / f.name)
+    return json.loads((entry / "made.json").read_text())
 
 
 def template_inputs(tid: str, tp: object, stmt: dict) -> list:
