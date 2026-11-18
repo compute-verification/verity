@@ -243,9 +243,9 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     (out / "serve" / "h1" / "window-program.json.gz").write_bytes(gzip.compress(json.dumps({"rows": 512}).encode()))
     assert S.main(["publish", str(out), "--private", str(private)]) == 0
     assert not _window_data(out, 7), _window_data(out, 7)
-    kept = {"predicted.json", "pieces/wipe/served.json"}
+    kept, whole = {"pieces/wipe/served.json"}, {"sampled-proofs/w7/summary.json", "predicted.json", "pieces/pouw/check/check.log"}
     for rel, body in files.items():
-        assert (out / rel).exists() == (rel != "sampled-proofs/w7/summary.json"), rel
+        assert (out / rel).exists() == (rel not in whole), rel
         if rel in kept:
             assert (out / rel).read_text() == body and not (private / rel).exists(), rel
         else:
@@ -324,8 +324,8 @@ def test_publish_holds_the_loads_tokens_and_span_by_path_and_leaves_the_policy_a
     IO._write(out / "record" / "inference-only.json", verdict)
     (out / "pieces" / "pearlplus").mkdir(parents=True)
     (out / "pieces" / "pearlplus" / "load.json").write_text(json.dumps({"tokens": 1024, "span_s": 9.5, "served_tokens": 64}))
-    kept = {p: p.read_bytes() for p in out.rglob("*.json") if p.name != "overhead.json"}
-    assert S.publish(out, private) == ["serve/overhead.json"]
+    kept = {p: p.read_bytes() for p in out.rglob("*.json") if p.name not in ("overhead.json", "load.json")}
+    assert S.publish(out, private) == ["pieces/pearlplus/load.json", "serve/overhead.json"]
     (ld,) = json.loads((out / "serve" / "overhead.json").read_text())["loads"]
     assert ld == {"time_per_output_token_s": 0.15625, "tokens_per_s": 6.4, "client_tokens_per_s": 6.1}
     assert json.loads((private / "serve" / "overhead.json").read_text()) == AGGREGATE
@@ -2138,13 +2138,14 @@ def test_a_published_serve_dir_carries_none_of_the_give_ups_counts(tmp_path, liv
     full = {p.relative_to(out).as_posix(): p.read_text() for p in out.rglob("*") if p.is_file()}
     assert S.publish(out, private) == sorted(full)
     for rel, text in full.items():
-        shown = (out / rel).read_text()
+        shown = (out / rel).read_text() if (out / rel).exists() else ""
         assert (private / rel).read_text() == text and not [v for v in own if v in shown], rel
         assert "a_rows" not in shown and "bad_tiles" not in shown and "credit kept" not in shown, rel
     pub = json.loads((out / "pieces" / "pouw" / "development.json").read_text())
     assert "give_up" not in pub and pub["credit"] == work and pub == {k: v for k, v in json.loads(
         full["pieces/pouw/development.json"]).items() if k != "give_up"}
-    log = (out / "pieces" / "pouw" / "piece.log").read_text().splitlines()
+    assert not (out / "pieces" / "pouw" / "piece.log").exists()
+    log = [S.public_line(x) for x in full["pieces/pouw/piece.log"].splitlines()]
     assert log[0].endswith("volunteer FAIL: " + S.GAVE_UP) and log[1].endswith("pass-00002: FAIL: " + S.GAVE_UP)
     assert log[2].endswith("round 2: tiles left over a cap after its give-up")
     shown = json.loads(log[3].removeprefix("POUW-DEV "))
@@ -2556,8 +2557,8 @@ def test_publish_holds_window_steps_under_a_load_and_publishes_the_callers_servi
     assert S.public_line(line) == line and S.public_doc(json.dumps(serving)) == json.dumps(serving)
     said = json.loads(S.public_line(f"POUW-DEV {json.dumps(doc)}").removeprefix("POUW-DEV "))
     assert said == {"run": {**serving, "load": {}}}
-    (tmp_path / "out").mkdir()
-    (tmp_path / "out" / "onsite.json").write_text(json.dumps(serving))
+    (tmp_path / "out" / "record").mkdir(parents=True)
+    (tmp_path / "out" / "record" / "onsite.json").write_text(json.dumps(serving))
     assert S.publish(tmp_path / "out", tmp_path / "private") == []
 
 
@@ -5838,10 +5839,10 @@ def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its
 
 
 @pytest.mark.parametrize("blob, said", [
-    ("sampled-proofs-served/window/m0/inst-0.bin", ": it would carry the served run's witness (WITNESS "
-     "sampled-proofs-served/window/m0/inst-0.bin: a prover's instance file (its rows))"),
-    ("sampled-proofs-served/window/m0/prover/rows.bin", ": it would carry the served run's witness (WITNESS "
-     "sampled-proofs-served/window/m0/prover/rows.bin: a prover's input file (its rows and salts))"),
+    ("sampled-proofs-served/window/m0/inst-0.bin", ": it would carry a file the list doesn't name ("
+     "sampled-proofs-served/window/m0/inst-0.bin: not on the hand-off's list (public_files.PUBLIC))"),
+    ("sampled-proofs-served/window/m0/prover/rows.bin", ": it would carry a file the list doesn't name ("
+     "sampled-proofs-served/window/m0/prover/rows.bin: not on the hand-off's list (public_files.PUBLIC))"),
     ("/elsewhere/pub-0.bin", f" (no exception, exit 1): {PRIVATE}"),
 ])
 def test_a_hand_off_that_would_carry_a_witness_or_a_blob_outside_the_serve_dir_is_refused(tmp_path, blob, said):
@@ -5866,6 +5867,40 @@ def test_witness_names_each_path_a_served_run_holds_as_its_witness_and_why(tmp_p
     monkeypatch.setattr(sys, "stdin", io.StringIO("h1/log.jsonl\nrequests.jsonl\n"))
     assert S.main(["witness"]) == 1
     assert capsys.readouterr().out == "WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds\n"
+
+
+def test_the_hand_off_carries_only_what_the_list_names_and_never_a_witness(capsys, monkeypatch):
+    """`public_files.py handoff` passes every file a hand-off carries (`HANDED_READS`, the blobs, its own files) and
+    refuses each witness kind (`HELD_BACK`, H1's prover state) and any other file of the serve dir, exiting 1 iff it
+    named one."""
+    import public_files as PF
+
+    assert PF.unlisted([*HANDED_READS, *BLOBS, *HANDED_OWN, "private/compose/inputs.sha256"]) == []
+    refused = [*HELD_BACK, "private/h1/w0/state.json", "serve.json", "windows.jsonl", "seals.jsonl", "stray.log"]
+    assert PF.unlisted(refused) == refused
+    monkeypatch.setattr(sys, "stdin", io.StringIO("h1/log.jsonl\nrequests.jsonl\n"))
+    assert PF.main(["handoff"]) == 1
+    assert capsys.readouterr().out == "requests.jsonl: not on the hand-off's list (public_files.PUBLIC)\n"
+
+
+def test_publish_holds_every_file_the_list_does_not_name_and_the_serves_records_leave_through_the_mirror(tmp_path):
+    """`publish` keeps under OUT only what `public_files.PUBLIC` lists under ``OUT/``: a tool's log, a piece's log, a
+    sampled-proofs job's log and any file of no entry are held whole in the private directory; the serve's three records
+    are listed only as the mirror writes them."""
+    import public_files as PF
+
+    out, priv = tmp_path / "out", tmp_path / "private"
+    kept = {"verdicts.txt": "ACCEPT\n", "machine.txt": "0" * 40 + "\n", "pieces/pous/answer.json": "{}\n",
+            "v3c-audit/period.json": "{}\n", "serve/serve.json": "{}\n", "sampled-proofs/summary.json": "{}\n"}
+    held = {"build.log": "x\n", "pieces/pous/piece.log": "x\n", "sampled-proofs/honest/audit.log": "x\n",
+            "sampled-proofs/honest/audit.err": "x\n", "predict_row.json": "{}\n", "stray/thing.txt": "x\n"}
+    for rel, text in {**kept, **held}.items():
+        (out / rel).parent.mkdir(parents=True, exist_ok=True)
+        (out / rel).write_text(text)
+    assert sorted(S.publish(out, priv)) == sorted(held)
+    assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()) == sorted(kept)
+    assert all((priv / rel).read_text() == text for rel, text in held.items())
+    assert {PF.listed(f"OUT/serve/{n}") for n in ("serve.json", "windows.jsonl", "seals.jsonl")} == {PF.MIRROR}
 
 
 @pytest.mark.parametrize("extra, line", [
@@ -6627,8 +6662,8 @@ def test_copy_to_a_write_only_rsync_sends_the_list_under_the_serve_dirs_name_mak
      "window's witness, and its node is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"),
     ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6"}, 3, "COPY refused: its node is the served "
      "node, which the prover controls: copy the hand-off to COMPOSE_NODE"),
-    ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names the served run's "
-     "witness (WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds)"),
+    ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names a file the "
+     "list doesn't (requests.jsonl: not on the hand-off's list (public_files.PUBLIC))"),
     ("deferred", "compose", "vy-auditor-2", {}, 3, "COPY refused: the serve dir D holds no compose list "
      "(private/compose/inputs.txt and compose.env)"),
     ("handed", "values", "vy-auditor-2", {}, 3, "COPY refused: served_verdicts.sh copy deferred|compose HOST[:DIR], not values"),

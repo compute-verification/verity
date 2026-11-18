@@ -46,8 +46,8 @@ open _root_.Flock FlockSoundness.Refine in
 set_option maxHeartbeats 4000000 in
 /-- **A statement `Stmt.setupH` returns passed `checkInRange`.** -/
 theorem setupH_inRange {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt}
-    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
+    {sample partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt}
+    (h : Stmt.setupH tags cf pf coins tables sample partition program = .ok st) :
     checkInRange st.c.kLog st.regions.size st.mPts = .ok () := by
   unfold Stmt.setupH at h
   dsimp only at h
@@ -60,8 +60,8 @@ theorem setupH_inRange {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables
 
 /-- `m = k_log + nbl` at a statement `Stmt.setupH` returns, typed or not. -/
 theorem setupH_m {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt}
-    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : st.m = st.c.kLog + st.nbl := by
+    {sample partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt}
+    (h : Stmt.setupH tags cf pf coins tables sample partition program = .ok st) : st.m = st.c.kLog + st.nbl := by
   cases ht : tags.typed
   · exact (FlockSoundness.setupH_spec ht h).2.2.2.2.1
   · exact (FlockSoundness.setupH_spec_typed ht h).2.2.2.2.1
@@ -70,11 +70,11 @@ open _root_.Flock FlockSoundness.Refine in
 set_option maxHeartbeats 4000000 in
 /-- **A session with public outputs takes no public inputs of its own** (`Stmt.setupTables` refuses them). -/
 theorem setupTables_own_none {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
-    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program own : Option ByteArray}
+    {tables : List (String × ByteArray)} {sample partition : Option Lean.Json} {program own : Option ByteArray}
     {work : Option (ℕ × Array (String × ℕ × ℕ))} {stratified : Option ℕ}
     {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hh : tags.hiddenOutputs = false)
-    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure own =
+    (h : Stmt.setupTables tags cf pf coins count tables sample partition program work stratified closure own =
       .ok (spec, sts)) : own = none := by
   by_contra hn
   obtain ⟨p, rfl⟩ := Option.ne_none_iff_exists'.1 hn
@@ -100,7 +100,7 @@ theorem setupTables_own_none {tags : Tags} {cf pf : ByteArray} {coins : Coins} {
   simp [hh, throw_bind', pure_bind] at h
 
 /-- **The facts the length bound reads, from the setup alone**, at one table under tags with public outputs. -/
-theorem setup_facts_public {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem setup_facts_public {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1) (hh : s.read.tags.hiddenOutputs = false) :
     ∃ (st : Flock.Stmt) (t : String) (ct : CoinTree.Spec) (own : Json) (hz : String), sts = #[st] ∧
       spec.tables = #[t] ∧ spec.coinTree = some ct ∧ Flock.JsonParse.parse spec.hello = .ok own ∧
@@ -144,7 +144,7 @@ theorem setup_facts_public {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts 
     hrange'.2.2, Nat.le_refl 2⟩
 
 /-- **The facts the length bound reads, from the setup alone**, at one table. -/
-theorem setup_facts {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem setup_facts {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1) :
     ∃ (st : Flock.Stmt) (t : String) (ct : CoinTree.Spec) (own : Json) (hz : String), sts = #[st] ∧
       spec.tables = #[t] ∧ spec.coinTree = some ct ∧ Flock.JsonParse.parse spec.hello = .ok own ∧
@@ -154,11 +154,11 @@ theorem setup_facts {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array
   · exact setup_facts_public hs h1 hh
   · exact setup_facts_hidden hs h1 hh
 
-variable {H : Claims.Msg → Claims.Msg}
+variable {H : Hash.Msg → Hash.Msg}
 
 /-- **The honest masked record weighs at most `2^8` its spec's text and `2^40`**, at one table of a masked session whose
 setup is `x`'s, whatever the witness, tape and coins. -/
-theorem recordZk_size_le (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem recordZk_size_le (h64 : Claims.Out64 H) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1)
     {w : Claims.Flock.Wit} {ω : TapeZk} {k : ℕ} {r : Fin k → Coin} {record : String} {proofs : Array ByteArray}
     (hrun : ((sessionPZk asks Hashes.pi spec (tabsOf sts) (MaskRank.masksOf sts) (tracesOf sts w) ω).run.sim H
@@ -181,7 +181,7 @@ theorem recordZk_size_le (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec
 
 /-- **The honest masked record fits its length word** at one table of a masked session whose setup is `x`'s, where its
 spec's text is under `2^55`. -/
-theorem recordFitsZkAt_of_text (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem recordFitsZkAt_of_text (h64 : Claims.Out64 H) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1)
     (ht : specText spec < 2 ^ 55) : RecordFitsZkAt H x spec sts := by
   obtain ⟨st, t, ct, own, hz, rfl, htb, hct, hown, hc, h25, h35, hms, hkm, hreg, hpm, hmp, hpt⟩ := setup_facts hs h1

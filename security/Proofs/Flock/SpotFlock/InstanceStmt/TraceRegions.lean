@@ -196,12 +196,12 @@ theorem zIX_bcCol {w : ℕ → Bool} (hw : ∀ y < 2 ^ 22, w y = zIX y) {p : ℕ
 end facts
 
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-  {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+  {sample partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
 /-- **The trace satisfies the table at its regions**, where it satisfies its rows and pin and the statement is one
 `Stmt.setupHidden` accepts: at each region "digest p" the trace holds the public bytes. -/
 theorem satisfies_regions_x
-    (hd : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) (ht : tags.typed = false)
+    (hd : Stmt.setupHidden tags cf pf coins tables sample partition program = .ok st) (ht : tags.typed = false)
     (hrf : Hidden.Any.RowsFitS st.c) (hpin0 : HmRow.pinnedCount st.c.metaJ = 0)
     (hn : Properties.Flock.Nets.FixedNetsBuild) (L : FlockSoundness.Layout st) (R : RowRanges st.c) (F : Facts st)
     (RF : RegionFacts st.c st.pub) :
@@ -228,7 +228,7 @@ theorem satisfies_regions_x
           (Discharge.Hm.bytesOf (chunkBit T (zOf zIX T.m) o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c 0 p)))
         (Discharge.Hm.bytesOf (chunkBit T (zOf zIX T.m) o) 192 (saltCol st.c 0 p)) :=
       HiddenExec.AcceptedH.row_bc (T := T)
-        ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, Hidden.setupHidden_specCC hd,
+        ⟨tags, cf, pf, coins, tables, sample, partition, program, st, ht, Hidden.setupHidden_specCC hd,
           Hidden.unpin_layout ht hd, HiddenExec.unitRowsFlat_unpin ht hd hrf.1.toP, [], hTdef.symm⟩
         (show 0 < st.c.upv by rw [RF.upv]; omega) hrf.toP hzT o (g := 0) (p := p)
         (show 0 < st.c.g by rw [RF.g]; omega) (show p < st.c.ports.size by rw [RF.nports]; exact hp)
