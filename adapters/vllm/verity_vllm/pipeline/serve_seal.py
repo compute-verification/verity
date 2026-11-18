@@ -377,7 +377,7 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
     args = {k: None for k in RB.ARGS} | {"label": label, "retain": v.retain}
     ctx = {"pair": 0, "arm": "instrumented", "committer": v.name, "run_root": rc.run_root.hex(), "code": code, "args": args,
            "requests": reqs, "sampling": dict(sampling), "tokens": {k: list(t) for k, t in tokens.items()}, "stop_of_record": None,
-           "ids_full": None, "retention": v.retain, "required_manifest_sha256": None, "declaration": None,
+           "ids_full": None, "retention": v.retain, "declaration": None,
            "required_classes": [], "min_openings": 0, "vc_result": None, "engine_of_record": dict(engine_of_record or {}), "slim": None,
            "served_window": {"schema": SERVED_WINDOW, "window": rec.get("window"), "run_id": rec.get("run_id"), "commit_scheme": scheme,
                              "programs": "none sealed: the registered compiler's Programs for the window's advice",
