@@ -249,6 +249,14 @@ def test_a_listed_scheme_that_is_not_declared_is_refused_by_name(monkeypatch, tm
         so.listed(_listing(monkeypatch, tmp_path, "a,nope", []), tmp_path)
 
 
+def test_a_declared_schemes_option_is_refused_naming_its_name(tmp_path):
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path),
+                                      "--protocols", "pouw:pearl-c-h100-v1-h3"])
+    with pytest.raises(cli.UsageError, match="pouw:pearl-c-h100-v1-h3 is pearl-plus's option: list it as --protocols "
+                                             "pearl-plus, its settings under 'pearl-plus'"):
+        so.listed(opts, tmp_path)
+
+
 def test_the_served_commit_is_rows_sha512_alone(tmp_path):
     """rows-sha512 is the one served scheme: a committing run is refused before the model loads until it names its bench
     row's manifest, and by the committer before it builds anything; vllm-v1 (SHA-256) is no longer a choice."""
