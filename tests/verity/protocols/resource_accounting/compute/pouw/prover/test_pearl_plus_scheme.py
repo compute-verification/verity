@@ -9,6 +9,8 @@ import pytest
 from verity import hooks as H
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.compute.pouw import scheme as PS
+from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as T
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_tile import PearlCTileRead
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile import PearlPlusTile
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import PearlC
@@ -66,7 +68,8 @@ def _due(fmt: str = "bf16") -> H.BlockDue:
 
 def _attached(monkeypatch) -> tuple[_Exchange, _Run]:
     ex, run = _Exchange(), _Run()
-    monkeypatch.setattr(PS.Attached, "open", lambda self, weights: run)
+    monkeypatch.setattr(PS.Attached, "inputs", lambda self, event: ({3: "w"}, {}))
+    monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: run)
     PS.PEARL_PLUS.attach(ex, {})
     ex.emit(H.RegisteredValues((("model.layers.0.qkv.weight", "w"),), linear=frozenset({"model.layers.0.qkv.weight"})))
     return ex, run
@@ -94,8 +97,62 @@ def test_attach_ends_a_pass_at_each_step_and_refuses_a_step_over_one(monkeypatch
 def test_opening_the_run_names_what_is_missing() -> None:
     ex = _Exchange()
     PS.PEARL_PLUS.attach(ex, {})
-    with pytest.raises(NotImplementedError, match="block key in RegisteredValues"):
+    with pytest.raises(NotImplementedError, match="vllm builds .* block key in RegisteredValues .* settings in attach's ctx"):
         ex.emit(H.RegisteredValues((("w", "w"),), linear=frozenset({"w"})))
+
+
+class _Kernel:
+    @staticmethod
+    def load(path, cubin=None):
+        return ("kernel", path, cubin)
+
+
+class _Coins:
+    commitment = "commitment"
+
+    def __init__(self) -> None:
+        self.opened: list = []
+
+    def open(self, label, root):
+        self.opened.append((label, root))
+        return "opening"
+
+
+class _DeviceRun(_Run):
+    def __init__(self, scheme, entry, kernel, weights, roots, coins, opening, **kw) -> None:
+        super().__init__()
+        self.made = (scheme.name, entry, kernel, weights, roots, coins, opening, kw)
+        self.commits: dict = {}
+
+
+class _Device:
+    PearlCDeviceRun = _DeviceRun
+
+    @staticmethod
+    def weight_roots(kernel, weights, scheme):
+        return {w: bytes([w]) * 64 for w in weights}
+
+    @staticmethod
+    def step_tokens(run, calls):
+        return 128
+
+
+def test_open_runs_the_handed_in_device_run_on_the_salt_coin(monkeypatch) -> None:
+    monkeypatch.setattr(SV, "PearlCKernel", _Kernel, raising=False)
+    monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
+    coins = _Coins()
+    run = PS.Attached({}).open({0: "w0", 1: "w1"}, {"kernel": "k.so", "coins": coins})
+    roots = {0: bytes([0]) * 64, 1: bytes([1]) * 64}
+    assert coins.opened == [("salt", SV.weights_root(roots))]
+    assert run.made == ("pearl-c-h100-v1-h3", PS.OPTION, ("kernel", "k.so", None), {0: "w0", 1: "w1"}, roots,
+                        "commitment", "opening", {"pass_index": None})
+    assert run.details["max_step_tokens"] == 128
+
+
+def test_open_refuses_without_the_hand_in(monkeypatch) -> None:
+    monkeypatch.setattr(T, "_pearl_c", None)
+    with pytest.raises(NotImplementedError, match="use_pearl_c"):
+        PS.Attached({}).open({0: "w0"}, {"kernel": "k.so", "coins": _Coins()})
 
 
 def test_tie_uniform_is_its_one_setting() -> None:
