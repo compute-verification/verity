@@ -5,6 +5,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -285,7 +286,7 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
     from verity_vllm.llm import resolve_options
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
-    spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
+    spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served@rtx-pro-6000")
     pearl = "pouw:pearl-c-sm120-v1-h3"
     assert spec.arm_settings[pearl] == resolve_spec("llama31-8b-1gpu-pouw-protocol-served").arm_settings[pearl]
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -312,22 +313,33 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
     assert "whole_eager" not in type(whole)(whole.protocol).run_options
 
 
+def test_the_1b_whole_step_spec_is_the_1b_pouw_spec_on_the_h100_with_the_whole_step_arm_beside():
+    whole, protocol = (tomllib.loads((SPEC_ROOT / f"{name}.toml").read_text())
+                       for name in ("llama32-1b-1gpu-pearl-c-whole-served", "llama32-1b-1gpu-pouw-protocol-served"))
+    assert (whole.pop("cards"), protocol.pop("cards")) == (["h100"], ["h200", "h100"])
+    assert whole.pop("arms") == [*protocol.pop("arms"), "pouw-pearl-c-whole"]
+    assert whole.pop("arm_modules") == ["benchmarks.pouw.pearl_c_vllm.bench_arm:PEARL_C_WHOLE"]
+    whole["id"] = whole["preset"]["id"] = protocol["id"]
+    assert whole == protocol
+
+
 def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the_h100_record(monkeypatch):
-    """`llama31-8b-1gpu-pearl-c-whole-served-h200` is the whole-served spec's preset on one H200, the whole-step arm beside
-    compiled stock, its setup building pearl_c_sm90's cubin; the arm takes the useful-work scheme by its registered name
+    """`llama31-8b-1gpu-pearl-c-whole-served` on one H200 is its preset there, the whole-step arm beside compiled stock
+    alone (`[card_settings.h200]`), its setup building pearl_c_sm90's cubin; the arm takes the useful-work scheme by its registered name
     and, on a card of the H200's target, the kernel scheme Pearl+ runs there (`pearl-c-h100-v1-h3`) from the tree's
     pearl_c_sm90 directory or PEARLC_KERNEL and its build.sh cubin, and builds the same engine."""
     from verity_bench.schemes import arch
 
     root = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(root))
-    spec, rtx = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served-h200"), resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
+    spec, rtx = (resolve_spec(f"llama31-8b-1gpu-pearl-c-whole-served@{card}") for card in ("h200", "rtx-pro-6000"))
     assert (spec.preset.gpu_id, spec.preset.engine_settings, spec.preset.model) == ("h200", rtx.preset.engine_settings,
                                                                                      rtx.preset.model)
     assert (root / spec.setup).is_file() and "pearl_c_sm90/build.sh" in (root / spec.setup).read_text()
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.execution, a.experimental) for a in arms] == [("stock-fp8@compiled", "compiled", False),
                                                                    ("pouw-pearl-c-whole", None, True)]
+    assert dict(spec.arm_settings) == {"stock-fp8@compiled": rtx.arm_settings["stock-fp8@compiled"]}
     from benchmarks.pouw.pearl_c_vllm import bench_arm
     assert bench_arm.PEARL_C_WHOLE.protocol == bench_arm.PEARL_C.protocol == "pearl-plus"
     assert arch(spec.preset.gpu_id) == arch("h100")

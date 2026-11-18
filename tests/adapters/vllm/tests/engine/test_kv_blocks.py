@@ -1,6 +1,6 @@
 """The KV block hook (`engine.kv_blocks`) on vLLM's KV cache manager, block pool and scheduler under the stand-in for
 vLLM, the admission hook (`engine.admission`) emitting the steps: the events on the exchange in the order vLLM acts,
-each at its step and an allocation for its request, ReuseOldestFreed's reuse order, HoldResident's held blocks, a
+each at its step and an allocation for its request, ReuseOldestFreed's reuse order, a
 prefix-cache hit as a reused allocation, a step's writes, one set of patches for every attachment, and no step of its
 own."""
 from __future__ import annotations
@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.hooks import (HoldResident, RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, ReleaseValue,
+from verity.hooks import (RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, ReleaseValue,
                           ReuseOldestFreed, StepBegan, StepComputed, StepEnded)
 
 from tests import fake_vllm
@@ -261,24 +261,6 @@ def test_a_prefix_cache_hit_is_a_reused_allocation_and_a_block_in_use_is_none(mo
     pool.free_blocks(got[2:])
     assert pool.touch([got[2], got[0]]) == "touched"
     assert heard[1:] == [RangeFreed((3,), step=0), RangeAllocated((3,), reused=True, step=0)]
-
-
-def test_a_block_held_resident_is_freed_at_the_first_step_it_no_longer_is(monkeypatch, subscribe):
-    """vLLM's free of a block a scheme holds resident (`HoldResident`) is withheld, and the block freed, with its
-    RangeFreed, when the scheduler begins the step the hold ends at."""
-    v = kv_classes(fake_vllm.install(monkeypatch))
-    heard = subscribe(HoldResident(2, 2))
-    pool, sched = v.pool(), admitted(v)
-    sched.output = SimpleNamespace(num_scheduled_tokens={}, total_num_scheduled_tokens=1)
-    got = pool.get_new_blocks(2)
-    sched.schedule()
-    pool.free_blocks(got)
-    assert heard[-1] == RangeFreed((1,), step=0) and [x.block_id for x in pool.free_block_queue.q] == [1, 3, 4, 5]
-    sched.schedule()
-    assert heard[-1] == StepBegan(1, (), 1) and got[1].ref_cnt == 1
-    sched.schedule()
-    assert heard[-2:] == [RangeFreed((2,), step=2), StepBegan(2, (), 1)] and got[1].ref_cnt == 0
-    assert [x.block_id for x in pool.free_block_queue.q] == [2, 1, 3, 4, 5]
 
 
 def test_a_runner_emits_its_registered_values_after_load_and_its_ranges_after_the_real_kv_cache(monkeypatch, subscribe):

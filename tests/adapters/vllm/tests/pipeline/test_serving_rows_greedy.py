@@ -22,7 +22,6 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.commitments.periods import interface as IF
-from verity.commitments.periods import wiring as WI
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import ir_lower as IL
 from verity_flock.class_statement import UnitStager
@@ -30,6 +29,7 @@ from verity_flock.gf2 import Circuit
 
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import greedy_stages as G
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import stage_rows as ST
@@ -141,7 +141,7 @@ def test_each_combine_parameter_is_wired_to_the_chunk_that_wrote_it():
     s = Served(n=2)
     ms = members(s)
     assert sum(m.n for m in ms) == 2 * 20
-    WI.validate(ms)
+    CH.validate(ms)
     at = places(ms, TMPLS, rows=2)
     unit = {key: u for u, key in at.items()}
     plan = {u.key: u for u in G.plan(V)}
@@ -150,7 +150,7 @@ def test_each_combine_parameter_is_wired_to_the_chunk_that_wrote_it():
         for i in range(m.n):
             p, key = at[m.base + i]
             want = {(f"in{names.index(x)}", f"o{j}", unit[(p, w)]) for x, w, j in plan[key].wires}
-            assert {(q, o, ws[i]) for q, o, ws in m.wired} == want, (m.key, key)
+            assert {(q, o, ws[i]) for q, o, ws in CH.writer_units(ms, m)} == want, (m.key, key)
 
 
 def test_the_units_read_the_twin_s_words_whose_token_is_the_served_row():
@@ -159,8 +159,7 @@ def test_the_units_read_the_twin_s_words_whose_token_is_the_served_row():
     s = Served(n=2)
     ms = members(s)
     got = read(s, ms)
-    words = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    WI.salts(ms, words, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
+    CH.check_held(ms, [g for g, _e in got])
     at, plan = places(ms, TMPLS, rows=2), {u.key: u for u in G.plan(V)}
     for m, (g, entries) in zip(ms, got):
         stager(m.template).reference_check(g["rows"], g["outs"])
@@ -226,7 +225,7 @@ def test_a_row_at_the_served_statics_reads_and_wires_its_20_units():
     s.tok[0] = 150000
     tmpls = [t for t, _n in SRW.unit_templates(spec)[1:]]
     ms = members(s, tmpls, dict.fromkeys(tmpls, 16))
-    WI.validate(ms)
+    CH.validate(ms)
     assert sum(m.n for m in ms) == 20
     got = read(s, ms, tmpls)
     for m, (g, _e) in zip(ms, got):

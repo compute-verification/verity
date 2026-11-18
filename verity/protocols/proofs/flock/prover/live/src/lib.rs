@@ -40,11 +40,12 @@ pub mod proved_scope;
 pub mod pure_block;
 pub mod record_text;
 pub mod run_record;
+#[cfg(any(test, feature = "seed-injection"))]
+mod seed_injection;
 #[cfg(feature = "glue")]
 pub mod tables;
 pub mod tree_from;
 pub mod typed;
-pub mod vllm_block;
 pub mod zk_hooks;
 #[cfg(feature = "sha512")]
 pub mod zk_veil;

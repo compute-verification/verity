@@ -69,6 +69,10 @@ def _rate(x: object, what: str) -> float:
 
 
 TIER_KEYS = ("devices", "spec_bytes_per_s", "read_bytes_per_s", "chip_bytes")
+NODE_KEYS = ("chip_bytes", "disk_burst_bytes", "disk_bytes_per_s", "gpu_write_bytes_per_s", "host_write_bytes_per_s",
+             "link_burst_bytes", "link_bytes_per_s", "read_bytes_per_s", "rebuild_burst_bytes", "spec_bytes_per_s",
+             "squarings_per_s", "tiers")
+"""`Node.to_json`'s keys."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,7 +107,7 @@ class Node:
     maximal rebuild batch, one maximal disk read and one link burst.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
     and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
-    the node states no DPU's (`timing.HOST_WRITE_BYTES_PER_S`).  `stated` takes them from the node's `timing.Figures`,
+    the node states no DPU's.  `stated` takes them from the node's `timing.Figures`,
     whose read rate a reported one can only raise.  `tiers` are the memory tiers R and S_chip are summed over (`Tier`),
     for what states the node or splits its R by tier; the ledger's terms read the sums."""
 
@@ -181,7 +185,7 @@ class Node:
     def of_json(cls, j: object) -> Node:
         """The node's capacities handed in as a parameter, in `to_json`'s form, which the ledger publishes them in:
         exactly its keys, and each tier's, each value as `__post_init__` holds it."""
-        keys = sorted(cls.stated(timing.RTX_PRO_6000_NODE).to_json())
+        keys = sorted(NODE_KEYS)
         if type(j) is not dict or sorted(j) != keys:
             raise ValueError(f"a node's capacities are an object of exactly {', '.join(keys)}")
         if type(j["squarings_per_s"]) is not dict:

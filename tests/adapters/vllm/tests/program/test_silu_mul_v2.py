@@ -78,7 +78,7 @@ def test_the_served_vocabulary_binds_v2():
     got = {name: vocab.kind("silu_mul", I=8).id for name, vocab in PROFILES.items()}
     v1, v2 = bind(b1.SiluMul, I=8).id, bind(SiluMul, I=8).id
     assert got == {"b1-eager": v1, "b1-eager-v2": v1, "b1-eager-v3": v2, "dense2-eager-v1": v2, None: v1}
-    assert PROFILES[TargetProfile().numerics_profile].kind("silu_mul", I=8).id == v2 == "SiluMul_v2{I=8}"
+    assert PROFILES[TargetProfile.default().numerics_profile].kind("silu_mul", I=8).id == v2 == "SiluMul_v2{I=8}"
 
 
 def test_the_served_kind_has_its_boolean_version():

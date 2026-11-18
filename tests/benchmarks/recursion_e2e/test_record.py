@@ -24,7 +24,7 @@ def _stamp(monkeypatch):
 
 def test_run_launches_run_py_s_run_with_the_job_wrapped(capsys) -> None:
     """`record.py run` is `run.py run`, its job's command `JOB` before job.sh's arguments, so the run's command records."""
-    assert REC.main(["run", "--dry-run"]) == 0
+    assert REC.main(["run", "--dry-run", "--direct", "--on", "cpu-node-2"]) == 0
     cmd = capsys.readouterr().out.split()
     tail = cmd[cmd.index("--") + 1:]
     assert tail[3:6] == list(REC.JOB) and "K=4096" in tail and "STEPS=" + ",".join(

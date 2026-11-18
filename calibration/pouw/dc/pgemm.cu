@@ -24,7 +24,6 @@
 //                                            host reference; X, W, C, R and meta.json to DIR for dgemm_ref.py
 //   pgemm rate REPS KSTEPS                   every (NB, LW, MODE, MI) at lm 1, 2, 4, 8 on one CTA a SM, REPS
 //                                            interleaved launches; one JSON line a configuration (clock64 a CTA)
-// Build: nvcc -O3 -std=c++17 -gencode arch=compute_100a,code=sm_100a pgemm.cu -o pgemm
 #include <cuda_runtime.h>
 
 #include <algorithm>

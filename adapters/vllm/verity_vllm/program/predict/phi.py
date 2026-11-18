@@ -1,8 +1,9 @@
 """φ — the base context known before execution, from which the predictor builds a Program without tracing.
 
     Phi.model     the pinned checkpoint: repo, revision and its `config.json` (the HF config the model class is built from)
-    Phi.target    the declared `TargetProfile` (capability, SM count, batch invariance, numerics profile, FA version knob), and the
-                  `device_name` its GPU reports where the row's class names one (`engine.profiles.devices`: vLLM's tuned configs)
+    Phi.target    the declared `TargetProfile` (its card, or the capability and SM count a device reported; batch invariance,
+                  numerics profile, FA version knob): a target that names its card names the GPU vLLM's tuned configs are keyed
+                  by (`TargetProfile.device_name`)
     Phi.tp        {"world", "rank"}
     Phi.sampling  the row's declared sampling policy (`pipeline.build.sampling_policy` shape: greedy | stochastic)
     Phi.engine    the engine args (block_size, max_num_seqs, max_num_batched_tokens, chunked prefill, prefix caching,
@@ -79,8 +80,7 @@ class Phi:
         (`TargetProfile.execution_label`: a `bi-*` row runs the batch-invariant kernels, an `eager` row vLLM's defaults)."""
         from verity_vllm.program.frontend.target_profile import TargetProfile
         names = {f.name for f in fields(TargetProfile)}
-        tp = TargetProfile.default().with_overrides(**{k: (tuple(v) if k == "compute_capability" else v) for k, v in self.target.items()
-                                                       if k in names})
+        tp = TargetProfile(**{k: (tuple(v) if k == "compute_capability" else v) for k, v in self.target.items() if k in names})
         tp = tp if tp.numerics_profile == self.profile else tp.with_overrides(numerics_profile=self.profile)
         if "batch_invariant" in self.target:
             return tp

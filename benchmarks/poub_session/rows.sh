@@ -30,8 +30,8 @@
 #             are rows.py's own (--whole-store)
 #   session   PLAN's sessions at SESSION_ROWS rows over SESSION_GIB GiB on the first card, the verifier's process
 #             (on VERIFIER_CORES) beside the prover (on PROVER_CORES) on this machine, which audits nothing: a check
-#             of the kernels against the verifier; out/session/. It registers as SESSION_NODE (default: this
-#             machine's name, the card's index and its model)
+#             of the kernels against the verifier; out/session/. It registers as SESSION_NODE (default:
+#             `machine.py session-node` of the card: local/<its node file>/<its index>)
 #
 #   research run --on NODE --project verity --source TREE --cwd clone -- \
 #     env CARDS=0 CORES=0-7 ARCH=120a NOT_AFTER=2026-11-20T18:00Z bash benchmarks/poub_session/rows.sh
@@ -50,15 +50,22 @@ first() { local p; for p in "$@"; do [ -x "$p" ] && { echo "$p"; return; }; done
 pinned() { local cores=$1; shift; if [ -n "$cores" ]; then taskset -c "$cores" "$@"; else "$@"; fi; }
 
 session() {  # under the lease: PLAN's sessions, the verifier's process beside the prover
-  local port=$((7700 + RANDOM % 200)) sessions v p w
-  sessions=$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))
+  local port=$((7700 + RANDOM % 200)) node=${SESSION_NODE:-} kind sessions v p w
+  [ -n "$node" ] || node=$(python3 benchmarks/kernels/machine.py session-node "$(nvidia-smi --query-gpu=name \
+    --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null)" "${CARDS%%,*}" 2>&1) \
+    || { say "SESSION: no node for it to register: $node"; return 3; }
+  kind=${node#*/} kind=${kind%/*}
   mkdir -p "$O/session"
+  "$PY" benchmarks/poub_session/sheets.py "${NODE_KIND:-$kind}" > "$O/session/figures.json" \
+    || { say "SESSION: no figures for its verifier (NODE_KIND names a node file)"; return 3; }
+  sessions=$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))
   pinned "${VERIFIER_CORES:-}" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py \
     --port "$port" --out "$O/session" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES" \
-    --jitter-ms "$JITTER_MS" --sessions "$sessions" --lean-exe "$LEAN_EXE" > "$O/session/verifier.log" 2>&1 & v=$!
+    --jitter-ms "$JITTER_MS" --sessions "$sessions" --lean-exe "$LEAN_EXE" --figures "$O/session/figures.json" \
+    > "$O/session/verifier.log" 2>&1 & v=$!
   pinned "${PROVER_CORES:-}" "$PY" $PR/poub_session/prover.py --connect "127.0.0.1:$port" --out "$O/session" \
     --plan "$PLAN" --rows "$SESSION_ROWS" --lib "$B/session.so" --kv "$B/kv.so" --gib "$SESSION_GIB" --gpus 1 \
-    --calibration-passes "$CAL" --sketch-ctas "$SKETCH_CTAS" --node "$SESSION_NODE" > "$O/session/prover.log" 2>&1
+    --calibration-passes "$CAL" --sketch-ctas "$SKETCH_CTAS" --node "$node" > "$O/session/prover.log" 2>&1
   p=$?
   [ $p = 0 ] || kill $v 2> /dev/null
   wait $v; w=$?
@@ -71,11 +78,6 @@ STEPS=${STEPS-rows session} ROWS=${ROWS:-64 16} GIB=${GIB:-16}
 LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 export CAL=${CAL:-400} SKETCH_CTAS=${SKETCH_CTAS:-128} PLAN=${PLAN:-honest,skip:0.0625}
 export SESSION_ROWS=${SESSION_ROWS:-64} SESSION_GIB=${SESSION_GIB:-16}
-# The node a session registers: this machine, its first card and the card's model (prover.py's default names another
-# machine), in the 64 bytes the verifier takes.
-SESSION_NODE=${SESSION_NODE:-$(echo "$(hostname)/${CARDS%%,*}/$(nvidia-smi --query-gpu=name --format=csv,noheader \
-  -i "${CARDS%%,*}" 2> /dev/null | tr 'A-Z ' 'a-z-')" | cut -c1-64)}
-export SESSION_NODE
 export WINDOWS=${WINDOWS:-7} WINDOW_MS=${WINDOW_MS:-1000} SAMPLES=${SAMPLES:-2773} JITTER_MS=${JITTER_MS:-10}
 N=$(($(tr -cd , <<< "$CARDS" | wc -c) + 1))
 if [ -n "${TOOLKIT:-}" ]; then

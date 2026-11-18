@@ -220,7 +220,7 @@ def test_a_chain_row_also_holds_each_key_block_as_its_scores_and_values_units():
     assert all(m.wired_trees == (CH.kind(SRW.template(m.template)) not in ("scores", "values")) for m in ms)
     got = read(s, ms, tmpls)
     ws = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    WI.salts(ms, ws, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
+    CH.check_held(ms, [g for g, _e in got])
     for m, (g, _e) in zip(ms, got):
         stager(m.template).reference_check(g["rows"], g["outs"])
     (e,) = [m for m in ms if m.template == tmpls[4]]
@@ -244,7 +244,7 @@ def test_each_later_block_and_end_is_wired_to_the_block_before_it():
             assert m.wired == (("in3", "o0", prev), ("in4", "o1", prev), ("in5", "o2", prev))
         else:
             assert m.wired == (("in0", "o1", prev), ("in1", "o2", prev))
-    WI.validate(ms)
+    CH.validate(ms)
 
 
 def test_the_units_read_the_twin_s_states_whose_end_is_the_served_row():
@@ -253,8 +253,7 @@ def test_the_units_read_the_twin_s_states_whose_end_is_the_served_row():
     s = Served(n=2)
     ms = members(s)
     got = read(s, ms)
-    words = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    WI.salts(ms, words, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
+    CH.check_held(ms, [g for g, _e in got])
     unit, S = units(ms, TMPLS, rows=2), TOY
     at = {u: key for key, u in unit.items()}
     vs = M.visits(S["T"], S["BN"])
@@ -322,7 +321,7 @@ def test_a_row_at_the_served_statics_reads_and_wires_its_32_units():
     assert ms[2].wired == tuple((f"in{g}", o, tuple(unit[(0, h, 2)] for h in range(8))) for g, o in ((0, "o1"), (1, "o2")))
     got = read(s, ms, tmpls)
     words = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    WI.salts(ms, words, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
+    CH.check_held(ms, [g for g, _e in got])
     assert words[ms[2].port("o0")].reshape(-1).tolist() == s.y.tolist()
 
 

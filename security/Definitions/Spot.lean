@@ -16,6 +16,7 @@ public import Definitions.Spot.Sampling.Partitioning
 public import Definitions.Spot.Sampling.Layer
 public import Definitions.Spot.Sampling.Scheme
 public import Definitions.Spot.Limits
+public import Definitions.Spot.LimitsLevels
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Analysis.Complex.Order
@@ -37,6 +38,7 @@ detection, with the named assumptions `DetectionPressure` and `TrustedModel`, th
 the honest egress. `SamplePressure`: the deployed sample, `k` of the `n` units uniformly without replacement, and the samples
 that miss an incorrect set. `ChiPool`: the halt `Δ` windows after the first caught window's commitment, and what leaves
 through it (`Strategy.cumLag`, `Strategy.cumUpToLag`). `Limits`: the exfiltration, infiltration and inference-only limits
-as statements over the circuit's description, each given the sampling layer's soundness. -/
+as statements over the circuit's description, each given the sampling layer's soundness; `LimitsLevels`: their count
+premise at a levels design, the count over the last level's blocks. -/
 
 @[expose] public section

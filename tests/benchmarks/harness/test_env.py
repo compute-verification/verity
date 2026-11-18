@@ -92,7 +92,7 @@ def test_the_python_is_the_launchs_and_the_toolkit_the_machines_with_no_path_of_
     assert "/workspace" not in script and "/usr/local" not in script
     ran = subprocess.run([BASH, "-c", ". benchmarks/harness/env.sh"], cwd=ROOT, env={"PATH": _tools(tmp_path)},
                          capture_output=True, text=True)
-    assert ran.returncode == 2 and "no Python at VERITY_BENCH_VENV (unset)" in ran.stderr
+    assert ran.returncode == 2 and "no Python at VERITY_BENCH_VENV, else VIRTUAL_ENV (both unset)" in ran.stderr
     venv = tmp_path / "py"
     (venv / "bin").mkdir(parents=True)
     (venv / "bin" / "python").symlink_to(sys.executable)
@@ -107,6 +107,29 @@ def test_the_python_is_the_launchs_and_the_toolkit_the_machines_with_no_path_of_
     assert ran.returncode == 0, ran.stderr
     assert ran.stdout.strip() == "/usr/local/cuda-13.0"
 
+
+
+def test_without_verity_bench_venv_the_python_is_the_environment_the_launch_runs_in(tmp_path):
+    """A launch inside an environment (`uv run`, an activated one) needs no VERITY_BENCH_VENV: env.sh takes $VIRTUAL_ENV,
+    VERITY_BENCH_VENV wins where both are set, and one that holds no Python is refused by its path."""
+
+    def venv(name: str) -> Path:
+        (tmp_path / name / "bin").mkdir(parents=True)
+        (tmp_path / name / "bin" / "python").symlink_to(sys.executable)
+        return tmp_path / name
+
+    def sourced(**env: str) -> subprocess.CompletedProcess:
+        return subprocess.run([BASH, "-c", '. benchmarks/harness/env.sh && printf "%s\\n" "$VENV"'], cwd=ROOT,
+                              env={"PATH": _tools(tmp_path), "HOME": str(tmp_path), "CUDA_HOME": str(tmp_path), **env},
+                              capture_output=True, text=True)
+
+    uv, given = venv("uv-env"), venv("given")
+    ran = sourced(VIRTUAL_ENV=str(uv))
+    assert ran.returncode == 0 and ran.stdout.strip() == str(uv), ran.stderr
+    ran = sourced(VIRTUAL_ENV=str(uv), VERITY_BENCH_VENV=str(given))
+    assert ran.returncode == 0 and ran.stdout.strip() == str(given), ran.stderr
+    ran = sourced(VIRTUAL_ENV=str(tmp_path / "empty"))
+    assert ran.returncode == 2 and f"({tmp_path}/empty)" in ran.stderr
 
 @pytest.mark.parametrize("script", ["benchmarks/harness/overhead_node.sh",
                                     *sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / "benchmarks/harness/setup").glob("*.sh"))])

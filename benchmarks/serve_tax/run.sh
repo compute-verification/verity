@@ -10,7 +10,7 @@
 #     # only replay an earlier window, at the model's GPUs as tensor-parallel width, taking REPLAY_CAPTURE's requests'
 #     # logits rows and ids at the sampler into OUT/replay-<mode>/capture (replay.py --capture)
 #   ARMS="restore-base restore-pause restore" RATES=medium=R REPS=1 SPAN_S=720 EDGES_S=180,360,540 [SAVE_KV=1]
-#     [RESTORE=1:2 [RESTORE_ARM="restore ..."] [RESTORE_WARM=N]] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR]
+#     [RESTORE=1:2 [RESTORE_ARM="restore ..."] [RESTORE_WARM=N]] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR] [SCHEME_SETTINGS=JSON]
 #     bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
 #   ARMS="compiled record tokens-only boundary" RATES=... EDGES_EVERY_S=30 [KV_COPY=all|first|none] [PLAN_FILE=PLAN.jsonl]
 #     [MAX_MODEL_LEN=N] [FLASHINFER=1] [LDCONFIG=1] [BUDGET_MIN=M] bash benchmarks/serve_tax/run.sh   # the served configuration's tax
@@ -46,7 +46,9 @@
 # refuses what the profile has on, the result is `cannot run` in the refusal's words and the job exits 1, as for an
 # arm whose run refuses it; where a change on our side alone lets the same prompts through, ARM is served with it
 # (OURS, its label in the result) as the second line, stock unchanged. The passes are planned within the model's
-# cap_minutes (BUDGET_MIN and STOP_AT, the earlier of the given and the cap).
+# cap_minutes (BUDGET_MIN and STOP_AT, the earlier of the given and the cap). An arm that turns a scheme on inside
+# vLLM's server (pearl-plus) takes SCHEME_SETTINGS, serve_tax.py run's --scheme-settings, a list of one object a server
+# lifetime under a profile (each lifetime opens its own reserved session); the plan checks it before any GPU is held.
 # PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own, and
 # NAME=Kx K prompts for each request its rung holds in flight (serve_tax.parse_pass_prompts): for a ladder past the
 # rungs the load's own prompts can hold, and the same for every arm of a cost. SAMPLED=1 has every request sampled at
@@ -80,7 +82,8 @@
 # starts the arm's engine and the id front before it on loopback port FRONT and holds them until the network attester's run
 # has ended or STOP_AT (serve_tax.certified_server); OUT/tick-certifier/server.json is its record, and it has no table
 # and no cost here. The other command runs where the network attester does, a host that reaches FRONT and is never this node:
-# serve_tax.py run --arm tick-certifier --side client, with the same LOADS and CELLS. Its directory is the arm's, and
+# serve_tax.py run --arm tick-certifier --side client --private DIR, with the same LOADS and CELLS (DIR, outside every
+# run's, keeps the network attester's run and the shim's records). Its directory is the arm's, and
 # `serve_tax.py cost` over it and this job's compiled gives its cost. SIDE is its arms' alone: stock named before it
 # is served whole, under the same lease.
 # PRIVATE is where the arms keep what never leaves the node, each in PRIVATE/<arm>: a boundary commitment's classes, whose
@@ -270,7 +273,7 @@ if [ -n "${PROFILE:-}" ] && [ "${1:-}" != leased ]; then
   # stock arm and the model's minutes (CAP_MIN), within which the arms' passes are planned. No arm where the feature
   # cannot run and no change on our side lets the profile through: its result is written now, and no GPU is held
   plan=$("$PY" "$here/serve_tax.py" profile plan --profile "$PROFILE" --model-id "$MODEL_ID" ${FEATURE:+--feature "${FEATURE[@]}"} \
-    ${FIND_LOAD:+--find-load}) || exit 2
+    ${FIND_LOAD:+--find-load} ${SCHEME_SETTINGS:+--scheme-settings "$SCHEME_SETTINGS"}) || exit 2
   eval "$plan"
   { [ -n "${BUDGET_MIN:-}" ] && [ "$BUDGET_MIN" -le "$CAP_MIN" ]; } || BUDGET_MIN=$CAP_MIN
   export ARMS LOADS REPS LIFETIMES OURS STOCK CAP_MIN BUDGET_MIN
@@ -330,6 +333,7 @@ if [ "${1:-}" = leased ]; then
   if [ -n "${TICK_MS:-}" ]; then tick=(--tick-ms "$TICK_MS"); else tick=(--tick-from "${TICK_FROM:-$OUT/record}"); fi
   [ -n "${TICK_RULE:-}" ] && tick+=(--tick-rule "$TICK_RULE")
   count=(); [ -n "${REQUESTS:-}" ] && count=(--requests "$REQUESTS")
+  [ -n "${SCHEME_SETTINGS:-}" ] && count+=(--scheme-settings "$SCHEME_SETTINGS")
   [ -n "${NUM_GPU_BLOCKS:-}" ] && count+=(--num-gpu-blocks "$NUM_GPU_BLOCKS")
   [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")
   [ -n "${EDGES_EVERY_S:-}" ] && count+=(--edges-every-s "$EDGES_EVERY_S" ${SAVE_KV:+--save-kv "$SAVE_KV"} --kv-copy "${KV_COPY:-all}")

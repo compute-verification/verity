@@ -430,7 +430,7 @@ def launch_class(phi: Phi) -> None:
     eng = dict(phi.engine or {})
     facts = [f"{k} {v!r}, not {CLASS_G[k]!r}" for k, v in (("model_type", str(phi.hf_config.get("model_type", "")).lower()),
                                                         ("world", int((phi.tp or {}).get("world", 1))),
-                                                        ("device_name", (phi.target or {}).get("device_name"))) if v != CLASS_G[k]]
+                                                        ("device_name", phi.target_profile().device_name)) if v != CLASS_G[k]]
     if phi.execution not in CLASS_G_EXECUTIONS:
         facts.append(f"execution {phi.execution!r}, not one of {', '.join(map(repr, CLASS_G_EXECUTIONS))}")
     elif (phi.target or {}).get("compilation") != CLASS_G_EXECUTIONS[phi.execution]:

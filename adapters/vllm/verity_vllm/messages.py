@@ -27,7 +27,7 @@ from verity.protocols.proofs.spot.prover import workload as spot
 from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
 
-__all__ = ["Exchange", "append", "body", "build", "close", "current", "line", "lines", "providing", "read", "write"]
+__all__ = ["Exchange", "append", "body", "build", "close", "current", "declaring", "line", "lines", "providing", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
 
@@ -50,7 +50,7 @@ class Exchange:
         self.refuse: Callable[[str, str], None] | None = None
         #: the schemes `attach` attached, by name, each with its settings: `Declared.schemes` and `Declared.settings`
         self.attached: dict[str, Mapping[str, Any]] = {}
-        #: what each attached scheme's ``attach`` returned, by its name: its `H.Reports` or `H.Commits` for the run's record
+        #: what each attached scheme's ``attach`` returned, by its name, read by `scheme_plugin.write_reports`
         self.reports: dict[str, Any] = {}
         #: this build's key, unique in the process: a scheme's ``ctx["build"]``
         self.key = f"build-{next(_KEYS)}"
@@ -115,7 +115,7 @@ class Exchange:
             return
         if isinstance(request, H.ServeRoute) and (other := self.route(request.path)) is not None:
             raise Refused(name, f"serves route {request.path}, which {other[0]} serves")
-        if self.declared is not None and isinstance(request, (H.RequireProperty, H.RefuseProperty, H.StartBeside)):
+        if self.declared is not None and isinstance(request, (H.RequireProperty, H.StartBeside)):
             raise Refused(name, f"files {kind} after the build was answered; file it before the engine is built")
         if self._step is not None:
             raise Refused(name, f"files {kind} after serving began (step {self._step}); file it before the first step")
@@ -129,8 +129,7 @@ class Exchange:
         its reasons; else True when a scheme's required property fixes the build.  Emits ``declared``."""
         why: dict[str, list[str]] = {}
         for name, r in H.unmet(self.requests, declared.properties):
-            verb = "requires" if isinstance(r, H.RequireProperty) else "refuses"
-            why.setdefault(name, []).append(f"{verb} {r.property} = {r.value!r}: {r.why}")
+            why.setdefault(name, []).append(f"requires {r.property} = {r.value!r}: {r.why}")
         for name, r in self.requests:
             if isinstance(r, H.StartBeside) and (r.process not in schemes.PROCESSES or set(r.readers) - set(self.readers)):
                 missing = sorted(set(r.readers) - set(self.readers))
@@ -200,10 +199,6 @@ class Exchange:
         """Each scheme that refused input ``input`` (`RefuseInput`), with its reason."""
         return [(n, r.why) for n, r in self._filed(H.RefuseInput) if r.input == input]
 
-    def resident(self, range_: int, step: int) -> bool:
-        """Whether range ``range_`` must stay allocated at ``step`` (`HoldResident`)."""
-        return any(r.range == range_ and step < r.until for _, r in self._filed(H.HoldResident))
-
     def oldest_freed_first(self) -> bool:
         """Whether a freed range is handed out again only after every range freed before it (`ReuseOldestFreed`)."""
         return bool(self._filed(H.ReuseOldestFreed))
@@ -218,12 +213,21 @@ class Exchange:
         return out
 
 
+def _one(what: str, has: Callable[[schemes.Scheme], bool]) -> schemes.Scheme:
+    found = [s for s in declarations.load().values() if has(s)]
+    if len(found) != 1:
+        raise LookupError(f"one declared scheme {what}, not {len(found)}: {[s.name for s in found]}")
+    return found[0]
+
+
 def providing(role: str) -> schemes.Scheme:
     """The one declared scheme that provides ``role`` (`Scheme.provides`); `LookupError` naming those that do otherwise."""
-    found = [s for s in declarations.load().values() if role in s.provides]
-    if len(found) != 1:
-        raise LookupError(f"one declared scheme provides {role!r}, not {len(found)}: {[s.name for s in found]}")
-    return found[0]
+    return _one(f"provides {role!r}", lambda s: role in s.provides)
+
+
+def declaring(port: str) -> schemes.Scheme:
+    """The one declared scheme with a port named ``port`` (`Scheme.ports`); `LookupError` naming those that have otherwise."""
+    return _one(f"declares port {port!r}", lambda s: any(p.name == port for p in s.ports))
 
 
 _CURRENT: Exchange | None = None
