@@ -36,18 +36,48 @@ def _tile_window(bits: bool) -> str:
         "types": [word, row, ["Array", 2, word]]}, sort_keys=True, separators=(",", ":"))
 
 
+def _recut_reads() -> list[str]:
+    """A root over an input node of two 16-bit leaves whose `ret` reads it at another width (PROTOCOL.md §4.4): as four
+    8-bit leaves (read recut, q = 2), as 3-bit leaves (recut-width), as six 8-bit leaves, past its N·q = 4
+    (recut-overrun), from its second 8-bit leaf (recut-boundary), and the 8-bit read of a node that is no input node, a
+    call of an identity over it (E_REINTERPRET). `Flock.Test.Recut` holds the Lean decoder's verdicts on the same bytes."""
+    word, pair = ["Value", 16], ["Array", 2, ["Value", 16]]
+    ident = {"form": "composite", "id": "Id_v1", "bindings": {}, "body": {
+        "params": [["x", pair]], "ret_type": pair, "ret": {"affine": ["p", 0, 0, 2]}, "nodes": []}}
+
+    def desc(ret_type, ret, call=False):
+        nodes = [{"args": [], "axes": [], "fn": 0, "form": "batch", "n": 2, "out": 1}]
+        if call:
+            nodes.append({"args": [{"refs": {"affine": ["n", 0, 0, 2]}, "type": 1}], "fn": 1, "form": "call", "out": 1})
+        defs = {"Input16_v1": {"form": "primitive", "id": "Input16_v1", "params": [], "ret": word},
+                "Root[P_v1]_v1": {"form": "composite", "id": "Root[P_v1]_v1", "bindings": {},
+                                  "body": {"params": [], "ret_type": ret_type, "ret": ret, "nodes": nodes}},
+                **({"Id_v1": ident} if call else {})}
+        return json.dumps({"callees": ["Input16_v1", *(["Id_v1"] if call else [])], "definitions": defs,
+                           "program_fn": "P_v1", "root": "Root[P_v1]_v1", "schema": "verity-ir/descriptor/v1",
+                           "types": [word, pair, ret_type]}, sort_keys=True, separators=(",", ":"))
+
+    return [desc(["Array", 4, ["Value", 8]], {"affine": ["n", 0, 0, 4]}),
+            desc(["Array", 2, ["Value", 3]], {"affine": ["n", 0, 0, 2]}),
+            desc(["Array", 6, ["Value", 8]], {"affine": ["n", 0, 0, 6]}),
+            desc(["Array", 2, ["Value", 8]], {"affine": ["n", 0, 1, 2]}),
+            desc(["Array", 2, ["Value", 8]], {"affine": ["n", 1, 0, 2]}, call=True)]
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_width_refusals_agree_with_the_codec(tmp_path):
     """The inference-only difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
     their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
-    template's bits and its bits as them (`_tile_window`): the Lean decoder, which Flock's verifier, `InferenceOnlyCheck` and
+    template's bits and its bits as them (`_tile_window`), and reads of an input node at another width (`_recut_reads`):
+    the Lean decoder, which Flock's verifier, `InferenceOnlyCheck` and
     PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
     (`verity/protocols/proofs/flock/prover/agreement/README.md`'s D22; `qword_program_agree.py --widths`)."""
     spec = importlib.util.spec_from_file_location("desc_difftest_vectors", INFERENCE_ONLY_SCRIPTS / "desc_difftest_vectors.py")
     V = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(V)
     with open(tmp_path / "widths.jsonl", "w") as f:
-        for inst in [*V.mistyped(), {"program": _tile_window(False)}, {"program": _tile_window(True)}]:
+        for inst in [*V.mistyped(), {"program": _tile_window(False)}, {"program": _tile_window(True)},
+                     *({"program": d} for d in _recut_reads())]:
             desc = json.loads(inst["program"])
             try:
                 V.reference.codec.decode_program(desc, V.reference.declared(desc))
