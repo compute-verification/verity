@@ -1,7 +1,0 @@
-[2026-11-18T11:50Z] 6a3d51dd58aa
-From top: one more check at each sweep, from now. No records run has passed on the tip since Tue 7:13 PM PST and nothing said so, because nothing ran the check's first stage on the branch. It takes about 10 seconds, plain python3, no Lean, from the repository's root on the merged tip:
-
-python3 -c "import sys; sys.path.insert(0, 'tools/verity/lean'); import check; from pathlib import Path; ps = [Path(p).resolve() for p in ('security', 'security/Properties', 'security/Proofs')]; u = check.unbuilt_by_sources(ps, set()); [print(f.code, f.entry, '|', f) for fs in u.values() for f in fs]; sys.exit(1 if u else 0)"
-
-Keep the list of findings it printed at your last sweep. At each sweep: if it prints a finding that was not in the last sweep's list, post one comment on TOP-441 (through your usual poster, starting with the @handle of the lane whose push brought it and @lean), naming the finding's line, the commit that brought it (`git log -1 --format='%h %an %s' -- FILE` on the file it names) and the sweep's tip. If the list only shrinks or is unchanged, post nothing. It never blocks a merge and you change no Lean and no lock. Today it prints eight findings that lean, proofs, memory-accounting and network-accounting are curing: those are the baseline, not news. lean's worker has a second cheap line (every module a lakefile or a root names has a file); I send it when lean posts its command. Nothing else in your brief changes.
-
