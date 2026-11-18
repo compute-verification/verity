@@ -83,7 +83,7 @@ def model_shapes(model: str, ms: Sequence[int]) -> list[str]:
 
 def _card_why(card: O.Gpu, result: dict) -> str | None:
     got = ((result.get("identity") or {}).get("card") or {}).get("name")
-    if got is None or card.name not in got:
+    if got is None or not kit.is_card(got, card.gpu):
         return f"the run's card is {got!r}, not the {card.name} the door was asked to measure"
     return None
 

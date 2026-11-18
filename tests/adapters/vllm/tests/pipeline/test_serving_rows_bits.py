@@ -45,7 +45,7 @@ VERIFY = PF.PACKAGE / ".lake" / "build" / "bin" / PF.EXE
 
 def _templates(t) -> dict[str, SpecializedDefinition]:
     """The long row ``t``'s templates but its read, by id, in body order."""
-    return {descriptor_id(d): d for _k, d in LR.units(t) if spec_base(descriptor_id(d)) != "EmbeddingRead_v1"}
+    return {descriptor_id(d): d for _k, d in LR.units(t) if spec_base(descriptor_id(d)) != "EmbeddingRead_v2"}
 
 
 def _cut(N: int, TOPK: int, BLOCK: int):

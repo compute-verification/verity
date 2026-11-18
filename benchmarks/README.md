@@ -341,7 +341,8 @@ no slot of ours (its memory limit is Slurm's `--mem`), its node is shared with o
 nothing preserves it while it runs (`research run-preserve` and `research status` from a VM don't reach it). The nodes
 have network, Python 3.12 and no root. The DGX's driver is CUDA 13.0's, which `main`'s torch needs;
 `h100-nvl-1-1-cc`'s is CUDA 12.8's, too old for it, and `h100-nvl-1-0-cc` refuses any GPU request. No node has `nvcc` or `ncu` on
-its PATH, and the H100 has no card file in `calibration/hardware/cards/`, so a card-bound benchmark refuses there. Use only idle
+its PATH. A harness spec's point runs there as the job's command, `verity-bench run SPEC --here`
+(`benchmarks/harness/README.md`), with no lease or slot of ours. Use only idle
 capacity: one job at a time, at most 30 minutes, one GPU and 16 CPUs; `vcf-job-run.sh` cancels a job still pending
 after 20 minutes. A job that pends on `Resources` while the DGX's GPUs are idle may find them held by a reservation
 of the account (`scontrol show reservation`), which `--reservation=NAME` runs it in.

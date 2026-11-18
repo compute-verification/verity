@@ -205,7 +205,7 @@ def make_toy() -> SimpleNamespace:
     reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=H200), default_seed=7)
     low = WC.lower(reg, CLASS, None, GRAIN, tables=PEARL)
     fields = _weights(low.fn)
-    state = WRS.standin_state(WC.population_digest(low.circuit), CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)], KEY, 0, window=RUN)
+    state = WRS.standin_state(WC.population_digest(low.circuit), CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)], window=RUN)
     values = {**WW.weight_values(reg, fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi], cut=low.cut)
              for row, _ in WRS.scan_slots(low, state.rows)]
@@ -296,7 +296,7 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0}}
-    win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.W))
+    win.write(committed, out, prov, registrar=REG, previous=REG.digest(toy.W))
     mine, doc = IF.of_records(out, SAMPLING_DESIGN, WT.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine, doc=doc,

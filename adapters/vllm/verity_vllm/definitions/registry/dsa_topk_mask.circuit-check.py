@@ -60,6 +60,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     and the tags' scan), with picks (N 33, K 8) and in the rows' read (N 7, K 3); the rows' read of 6 rows padded to 9, and of 9
     padded to 16, a long row's shape (T >= K, N = 2K)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_topk_mask
 
     return [

@@ -7,7 +7,12 @@ from __future__ import annotations
 import numpy as np
 
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.ref_prims import f32_erf_rn_bits, f32_exp_rn_bits, f32_log_rn_bits, f32_tanh_rn_bits
+from verity_vllm.definitions.registry.ref_prims import (
+    f32_erf_rn_bits,
+    f32_exp_rn_bits,
+    f32_log_rn_bits,
+    f32_tanh_rn_bits,
+)
 
 
 def _np_u32(x: np.ndarray) -> np.ndarray:

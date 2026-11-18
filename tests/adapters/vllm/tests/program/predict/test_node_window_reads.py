@@ -8,20 +8,20 @@ from __future__ import annotations
 import dataclasses
 
 import pytest
+from verity.commitments.periods import interface as IF
+
+from tests.program.predict.test_node_window import LP, glm_request
+from tests.program.predict.test_node_window_ranks import FAMILIES as LOWERED
+from tests.program.predict.test_node_window_select import FAMILIES as SELECT
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_embed as NE
 from verity_vllm.program.predict import node_window_join as NJ
 from verity_vllm.program.predict import node_window_reads as NR
 from verity_vllm.program.predict.build import Unexpressible
 
-from tests.program.predict.test_node_window import LP, glm_request
-from tests.program.predict.test_node_window_ranks import FAMILIES as LOWERED
-from tests.program.predict.test_node_window_select import FAMILIES as SELECT
-from verity.commitments.periods import interface as IF
-
 FAMILIES = {**SELECT, **NE.FAMILIES}
 BLOCKS, OUTPUTS = 6144 // NE.WIDTH, 2
-READ, COMBINE = "EmbeddingRead_v1{V=154880,H=192}", "GreedyCombine_v2{V=154880,N=7744}"
+READ, COMBINE = "EmbeddingRead_v2{V=154880,H=192}", "GreedyCombine_v2{V=154880,N=7744}"
 
 
 def _window(rank: int, stand_ins: bool = True):

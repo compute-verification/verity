@@ -18,7 +18,6 @@ NOT_LISTED = 3
 
 def main(argv: list[str]) -> int:
     from verity_bench import kit
-    from verity_bench.overhead import CARD_FILES
 
     match argv:
         case ["toolkit", version]:
@@ -28,9 +27,9 @@ def main(argv: list[str]) -> int:
                 print(f"machine.py: {e}", file=sys.stderr)
                 return NOT_LISTED
         case ["arch", name]:
-            print(kit.card_arch(name, directory=CARD_FILES))
+            print(kit.card_arch(name))
         case ["arch"]:
-            print(kit.machine_arch(directory=CARD_FILES))
+            print(kit.machine_arch())
         case _:
             raise SystemExit(__doc__)
     return 0

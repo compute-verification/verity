@@ -773,7 +773,7 @@ CALLS = {"first": "AttnBlockFirst", "block": "AttnBlock", "end": "AttnHeadEnd"}
 STATE = {"m_prev": (2.0, 0.0), "l_prev": (4.0, 16.0), "o_prev": (4.0, 0.0), "l": (4.0, 16.0), "o": (4.0, 0.0)}
 #: the window circuit's units that no serving row commits (`serving_rows.template` refuses their one-bit leaves): their
 #: Definition is the window's own (`interface.resolve`), and they read no pinned table
-WINDOW_ONLY = ("EmbeddingRead_v1",)
+WINDOW_ONLY = ("EmbeddingRead_v2",)
 
 
 def _gen(rng: np.random.Generator, n: int, size: int, scale: float = 1.0, mean: float = 0.0) -> np.ndarray:
@@ -835,7 +835,7 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
         attention-v19:M:T:CALL  a Call of the RTX PRO 6000's decode head over T keys as the window circuit cuts it
                              (`attention_call`): first (AttnBlockFirst_v1), block (AttnBlock_v5) or end (AttnHeadEnd_v1)
         attention-v20:M:T:CALL  the same on the H200 (sm_90, FA3): AttnBlockFirst_v1, AttnBlock_v4 or AttnHeadEnd_v1
-        embedding-read:M[:V] EmbeddingRead_v1{V,H}, the window's embedding unit, each stand-in row opening at its token
+        embedding-read:M[:V] EmbeddingRead_v2{V,H}, the window's embedding unit, each stand-in row opening at its token
     """
     from verity.circuits.defs import bind
     from verity_vllm import TargetProfile

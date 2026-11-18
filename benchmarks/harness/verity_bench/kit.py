@@ -3,14 +3,15 @@
 - `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
-- `card_short(name, directory=...)`: the card's name in a measurement's member, from the one card record whose `driver`
-  holds the stamp's `card` exactly.
+- `card_short(name)`: the card's name in a measurement's member, from the one card record under `cards_directory()` whose
+  `driver` holds the stamp's `card` exactly; `is_card(card, short)` says whether a stamp's card is the one a workload
+  names, and `wrong_card(workload, short, card)` why not.
 - `machine_properties(name, directory=...)`: a machine record's `[properties]` (what a job may do there: its toolkit, profiler,
   clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field;
   with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
 - `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set, else the run's machine's
-  `[properties]`'; `card_arch(name, directory=...)`: the `arch` of the card `card_short` finds, and
-  `machine_arch(directory=...)` the run's machine's card's.
+  `[properties]`'; `card_arch(name)`: the `arch` of the card `card_short` finds, and
+  `machine_arch()` the run's machine's card's.
   `benchmarks/kernels/machine.py` prints both for a shell script.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
@@ -207,11 +208,34 @@ def host_stamp() -> dict:
     return stamp
 
 
-def _card(name: str, directory: Path) -> dict:
+def cards_directory() -> Path:
+    return Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+
+
+def _gpu_cards(directory: Path) -> list[dict]:
     from verity.device import load_card, skus
 
-    cards = [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
-    found = [c for c in cards if name and name in {d["value"] for d in c.get("driver", ())}]
+    return [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
+
+
+def _holding(name: str, directory: Path) -> list[dict]:
+    return [c for c in _gpu_cards(directory) if name and name in {d["value"] for d in c.get("driver", ())}]
+
+
+def card_short(name: str, *, directory: Path | None = None) -> str:
+    """The ``short`` of the card record in ``directory`` (`cards_directory` by default) whose ``driver`` has ``name``, the
+    name nvidia-smi gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record
+    holds it and has a ``short``, the card's name in a measurement's member."""
+
+    return _card_named(name, directory or cards_directory())["short"]
+
+
+def card_sku(name: str, *, directory: Path | None = None) -> str:
+    return _card_named(name, directory or cards_directory())["sku"]
+
+
+def _card_named(name: str, directory: Path) -> dict:
+    found = _holding(name, directory)
     if len(found) != 1 or not found[0].get("short"):
         raise SystemExit(
             f"{len(found)} card records under {directory} have {name!r}, the card nvidia-smi names here, in `driver`: add "
@@ -220,19 +244,12 @@ def _card(name: str, directory: Path) -> dict:
     return found[0]
 
 
-def card_short(name: str, *, directory: Path) -> str:
-    """The ``short`` of the card record in ``directory`` (``verity.device.load_card``) whose ``driver`` has ``name``, the
-    name nvidia-smi gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record
-    holds it and has a ``short``, the card's name in a measurement's member."""
-    return _card(name, directory)["short"]
-
-
-def card_arch(name: str, *, directory: Path) -> str:
+def card_arch(name: str, *, directory: Path | None = None) -> str:
     """The ``arch`` of the card record `card_short` finds for ``name``: the target (``sm_90a``) machine code is built for."""
-    return _card(name, directory)["arch"]
+    return _card_named(name, directory or cards_directory())["arch"]
 
 
-def machine_arch(*, directory: Path) -> str:
+def machine_arch(*, directory: Path | None = None) -> str:
     """The ``arch`` of the run's machine's card: `machine_properties()`'s ``card``, a card record's name in ``directory``,
     with no card needed; refused by name where it is unread."""
     from verity.device import load_card
@@ -240,7 +257,7 @@ def machine_arch(*, directory: Path) -> str:
     card = machine_properties()["card"]["value"]
     if card == "unread":
         raise SystemExit(f"machine {settings.RESEARCH_MACHINE!r}: its [properties] have card unread: read it there")
-    return load_card(card, directory=directory)["arch"]
+    return load_card(card, directory=directory or cards_directory())["arch"]
 
 
 def _text(v: Any) -> bool:
@@ -335,6 +352,33 @@ def toolkit(version: str) -> str:
         raise NotListed(f"machine {name!r}: its [properties] list no CUDA toolkit {version} under toolkit (they list "
                         f"{', '.join(t['version'] for t in listed) or 'none'}): set CUDA_HOME")
     return at[0]
+
+
+def gpu_target(sku: str, *, directory: Path | None = None) -> dict[str, Any]:
+    from verity.device import load_card, number
+
+    directory = directory or cards_directory()
+    card = load_card(sku, directory=directory)
+    names = [d["value"] for d in card.get("driver", ())]
+    arch = re.fullmatch(r"sm_(\d+)(\d)a?", str(card.get("arch", "")))
+    if card["kind"] != "gpu" or len(names) != 1 or not arch:
+        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: it needs kind \"gpu\", one `driver` name "
+                         f"and an `arch` sm_<major><minor>[a], and has kind {card['kind']!r}, driver {names}, arch {card.get('arch')!r}")
+    return {"device_name": names[0], "compute_capability": [int(arch[1]), int(arch[2])], "num_sms": int(number(card["sm"]["count"]))}
+
+
+def is_card(card: str, short: str, *, directory: Path | None = None) -> bool:
+    directory = directory or cards_directory()
+    return all(len(found := _holding(name, directory)) == 1 and found[0].get("short") == short for name in card.split(", "))
+
+
+def wrong_card(workload: str, short: str, card: str, *, directory: Path | None = None) -> str | None:
+    directory = directory or cards_directory()
+    if is_card(card, short, directory=directory):
+        return None
+    want = " or ".join(d["value"] for c in _gpu_cards(directory) if c.get("short") == short for d in c.get("driver", ()))
+    return (f"the card is a {card}, not the {short} of spec {workload!r} ({want}): run it on a node whose card is a "
+            f"{want}, or use the spec for this card")
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------

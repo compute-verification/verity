@@ -167,30 +167,22 @@ def test_a_version_the_machine_does_not_list_is_named(tmp_path, monkeypatch, val
 
 @pytest.mark.parametrize(("name", "arch"), [("NVIDIA H200", "sm_90a"), ("NVIDIA H100 80GB HBM3", "sm_90a")])
 def test_the_arch_is_the_card_records_whose_driver_holds_the_reported_name(name, arch):
-    from verity_bench.overhead import CARD_FILES
-
-    assert kit.card_arch(name, directory=CARD_FILES) == arch
+    assert kit.card_arch(name) == arch
 
 
 def test_a_card_no_record_holds_is_refused_by_name():
-    from verity_bench.overhead import CARD_FILES
-
     with pytest.raises(SystemExit, match=r"^0 card records under .* have 'NVIDIA A100-SXM4-80GB'"):
-        kit.card_arch("NVIDIA A100-SXM4-80GB", directory=CARD_FILES)
+        kit.card_arch("NVIDIA A100-SXM4-80GB")
 
 
 def test_the_machines_arch_is_its_cards_records(tmp_path, monkeypatch):
-    from verity_bench.overhead import CARD_FILES
-
     _run(tmp_path, monkeypatch, "one-card")
-    assert kit.machine_arch(directory=CARD_FILES) == "sm_90a"
+    assert kit.machine_arch() == "sm_90a"
 
 
 def test_a_machine_whose_card_is_unread_is_refused_by_name(tmp_path, monkeypatch):
-    from verity_bench.overhead import CARD_FILES
-
     _run(tmp_path, monkeypatch, "slurm-node")
     table = (MACHINES / "slurm-node.toml").read_text().split("[properties]", 1)[1]
     (tmp_path / "inputs" / "slurm-node.toml").write_text(f'machine = "slurm-node"\n\n[properties]{table}')
     with pytest.raises(SystemExit, match=r"^machine 'slurm-node': its \[properties\] have card unread"):
-        kit.machine_arch(directory=CARD_FILES)
+        kit.machine_arch()

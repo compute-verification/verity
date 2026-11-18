@@ -24,6 +24,14 @@ def test_every_setting_has_a_type_a_role_and_a_doc() -> None:
         assert name.startswith(settings.REGISTRY.prefixes) or not name.startswith("VERITY_"), name
 
 
+def test_the_variables_and_the_result_form_the_harness_shares_with_research_are_researchs() -> None:
+    from research import result
+    from verity_bench import kit
+
+    assert {result.ENV_RUN_ID, result.ENV_RUN_DIR, result.ENV_SOURCE_SHA} <= settings.SETTINGS.keys()
+    assert kit.RESULT_SCHEMA == result.RESULT_SCHEMA
+
+
 def test_a_read_parses_the_environment_at_the_read(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     assert settings.RESEARCH_RUN_ID == "local" and not settings.is_set("RESEARCH_RUN_ID")
@@ -108,7 +116,6 @@ def test_direct_environment_uses_only_shrink() -> None:
 
 def test_a_point_writes_its_settings_record_beside_its_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from verity_bench import cli
-    from verity_bench.vllm.presets import GPUS
 
     root = Path(__file__).resolve().parents[3]
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
@@ -121,7 +128,7 @@ def test_a_point_writes_its_settings_record_beside_its_result(tmp_path: Path, mo
     monkeypatch.setattr(cli, "run_benchmark", lambda *a, **k: {"gates": [], "points": []})
     monkeypatch.setattr(cli, "write", lambda doc, path: path.write_text(json.dumps(doc)))
     monkeypatch.setattr(cli, "render", lambda doc: "")
-    card = GPUS["rtx-pro-6000"].nvidia_smi_name
+    card = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
     monkeypatch.setattr(cli.kit, "host_stamp", lambda: {"commit": "abc", "card": card})
     assert cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id, "--identity", item.identity]) == 0
     record = json.loads((tmp_path / "out" / "settings.json").read_text())
