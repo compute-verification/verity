@@ -158,10 +158,19 @@ def _other_record(j: dict) -> None:
     j["record"] = {**j["record"], "cuts": {GID: {"x": 2}}}
 
 
+def _cut_of_cut(c: I.Circuit) -> dict:
+    """The cut as the wired Program, under the record with no wires: it cuts to itself."""
+    wired, _ = c.program()
+    rec = {**record(c), "wires": []}
+    cut, _ = cut_of(wired, record(c), list(c.templates))
+    return _case(cut, rec, list(c.templates))
+
+
 ROUNDED, CHAIN = _circuit(rounded()), _circuit(chain())
 HONEST = [("rounded", ROUNDED), ("chain", CHAIN), ("held, no values", _circuit(held(()))),
           ("held, w a value", _circuit(held(("w",)))),
-          ("by hand, uncut", _case(*by_hand(2, [6, 0]))), ("by hand, two rows", _case(*by_hand(4, [2], cut=2)))]
+          ("by hand, uncut", _case(*by_hand(2, [6, 0]))), ("by hand, two rows", _case(*by_hand(4, [2], cut=2))),
+          ("a cut cuts to itself", _cut_of_cut(chain()))]
 FORGED = [
     ("templates swapped", _forged(ROUNDED, _swap), "cut-order"),
     ("an extra root node", _forged(ROUNDED, _extra), "cut-extra"),
