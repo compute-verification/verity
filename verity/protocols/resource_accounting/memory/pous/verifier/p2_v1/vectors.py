@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -361,9 +362,9 @@ def main() -> None:
             if old.get(name) and old[name] != value:
                 text = text.replace(old[name], value)
         path.write_text(text)
-    print(f"randomness {maps['randomness']}; {negative['case_count']} negative cases")
+    sys.stdout.write(f"randomness {maps['randomness']}; {negative['case_count']} negative cases\n")
     for name, value in new.items():
-        print(f"{name} {value}")
+        sys.stdout.write(f"{name} {value}\n")
 
 
 if __name__ == "__main__":

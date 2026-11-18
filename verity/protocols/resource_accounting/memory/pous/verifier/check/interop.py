@@ -134,13 +134,13 @@ def report(results: list[dict], expected: int, out: Path | None = None) -> int:
     """Print each mismatch and the count, write `out`; the exit code."""
     mismatches = [r for r in results if r["python"] != r["lean"]]
     for r in mismatches:
-        print(f"MISMATCH {r['kind']} {r['id']}\n  python {r['python']}\n  lean   {r['lean']}")
+        sys.stdout.write(f"MISMATCH {r['kind']} {r['id']}\n  python {r['python']}\n  lean   {r['lean']}\n")
     if out:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("".join(canonical(r | {"match": r["python"] == r["lean"]}) + "\n" for r in results))
-    print(f"{len(results)} transcripts, {len(mismatches)} mismatches")
+    sys.stdout.write(f"{len(results)} transcripts, {len(mismatches)} mismatches\n")
     if len(results) != expected:
-        print(f"expected {expected} transcripts, every vector of the vectors files")
+        sys.stdout.write(f"expected {expected} transcripts, every vector of the vectors files\n")
         return 1
     return 1 if mismatches else 0
 
