@@ -52,6 +52,8 @@ for pkg in pkgs:
     os.makedirs(os.path.join(out, "audit-" + os.path.basename(pkg)), exist_ok=True)
     with open(os.path.join(out, "audit-" + os.path.basename(pkg), "report.json"), "w") as f:
         json.dump(reps[-1], f)
+    if "--unread-facts" in sys.argv:
+        open(os.path.join(out, "audit-" + os.path.basename(pkg), "unread-facts.jsonl.gz"), "wb").close()
     if "--update" in sys.argv:
         with open(os.path.join(pkg, "lean-audit.json"), "w") as f:
             f.write('{"guarantees": {"A.t": {}}}')
@@ -750,20 +752,85 @@ def test_unread_facts_goes_to_every_check_py_of_the_run_and_runs_the_packages_it
     assert LC.audit_records("p", deps, tree, unread=True, log=said.append) == 0
     calls = _calls(tmp_path)
     assert calls and all("--unread-facts" in c["argv"] for c in calls)
-    assert any("no audit of security, security/Proofs left `Unread.lean`'s facts" in s for s in said)
+    assert not any(s.startswith("lean-records: unread:") for s in said), "no audit of security or security/Proofs"
 
 
-def test_unread_line_names_the_facts_both_audits_left_and_otherwise_which_left_none(tmp_path):
+@pytest.fixture
+def counted(monkeypatch) -> list[dict]:
+    """`p` and `a` as the packages whose audits leave the unread facts, and lean-audit's ratchet replaced by one that
+    records the facts it is given and fails while the list it returns holds a failure (`counted[0]["failures"]`)."""
+    monkeypatch.setattr(LC.AUDIT, "UNREAD_FACTS", ("p", "a"))
+    got = [{"failures": []}]
+
+    def ratchet(pkgs, failed, facts, files, out, log=print):
+        got.append({"pkgs": pkgs, "facts": dict(facts)})
+        for f in got[0]["failures"]:
+            log(f"lean-audit: FAIL: {f}")
+        return {"failures": list(got[0]["failures"])}
+    monkeypatch.setattr(LC.LA, "unread_ratchet", ratchet)
+    return got
+
+
+def _audited(calls: list[dict]) -> list[str]:
+    return sorted(Path(p).name for c in calls for p in c["argv"][c["argv"].index("--out") + 2:])
+
+
+def test_a_records_run_counts_unread_modules_by_default_and_fails_above_a_cap(repo, tmp_path, counted):
+    """The records run that misses an area's cap is the one a candidate's lean-audit then fails on: by default it asks
+    each check.py for the facts, runs the ratchet on them and fails with its failure, which names the fix."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    (repo / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
+    (deps / LC.LA.deps_key(repo / "a") / "dep").mkdir(parents=True)
+    assert LC.audit_records("p", deps, tree) == 0
+    assert all("--unread-facts" in c["argv"] for c in _calls(tmp_path))
+    assert counted[1]["pkgs"] == ["p", "a"] and {p: f.parent.name for p, f in counted[1]["facts"].items()} == \
+        {"p": "audit-p", "a": "audit-a"}
+    counted[0]["failures"] = ["unread: Proofs/Core has 8 wholly unread modules (61 declarations), above its cap of 7"]
+    said = []
+    assert LC.audit_records("p", deps, tree, log=said.append) == 1
+    assert "lean-audit: FAIL: unread: Proofs/Core has 8 wholly unread modules" in "\n".join(said)
+    assert json.loads(said[-1].removeprefix(LC.OUTCOME_LINE))["outcome"] == LC.FAILED
+    _calls(tmp_path)
+    assert LC.audit_records("p", deps, tree, count=False) == 0, "--no-unread-count"
+    assert not any("--unread-facts" in c["argv"] for c in _calls(tmp_path)) and len(counted) == 3
+
+
+def test_a_run_that_audits_one_package_of_the_unread_facts_audits_the_other_it_would_reuse(reuse, tmp_path, counted):
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
+    (deps / LC.LA.deps_key(reuse / "a") / "dep").mkdir(parents=True)
+    assert LC.audit_records("p", deps, tree) == 0 and _audited(_calls(tmp_path)) == ["a", "p"]
+    (reuse / "a" / "Aa.lean").write_text("def a := 2\n")
+    assert LC.audit_records("p", deps, tree, count=False) == 0 and _audited(_calls(tmp_path)) == ["a"]
+    (reuse / "a" / "Aa.lean").write_text("def a := 3\n")
+    said = []
+    assert LC.audit_records("p", deps, tree, log=said.append) == 0 and _audited(_calls(tmp_path)) == ["a", "p"]
+    assert any(s.startswith("lean-records: p: audited all the same: the unread count reads its facts") for s in said)
+    assert set(counted[-1]["facts"]) == {"p", "a"}
+
+
+def test_unread_count_counts_only_where_both_audits_left_facts(tmp_path, counted):
     out = tmp_path / "out"
-    for tag, pkg in (("audit-security", "/slot/security"), ("audit-Proofs", "/slot/security/Proofs")):
+    for tag, pkg in (("audit-p", "/slot/p"), ("audit-a", "/slot/a")):
         (out / tag).mkdir(parents=True)
         (out / tag / "report.json").write_text(json.dumps({"package": pkg}))
-    (out / "audit-security" / "unread-facts.jsonl.gz").write_bytes(b"")
+    (out / "audit-p" / "unread-facts.jsonl.gz").write_bytes(b"")
     said = []
-    LC.unread_line(out, said.append)
-    assert said == ["lean-records: no audit of security/Proofs left `Unread.lean`'s facts, so `unread.py` would build"]
-    (out / "audit-Proofs" / "unread-facts.jsonl.gz").write_bytes(b"")
+    assert LC.unread_count(out, [], said.append) is False and len(counted) == 1
+    assert said == ["lean-records: unread: not counted: no audit of a in this run left `Unread.lean`'s facts; "
+                    "`lean_changed.py --records security --unread-facts` counts, and a change that adds a Lean module "
+                    "runs it before its ready mark"]
+    (out / "audit-a" / "unread-facts.jsonl.gz").write_bytes(b"")
     said.clear()
-    LC.unread_line(out, said.append)
-    assert said[0].endswith(f"unread.py --out {out / 'unread'} --facts {out / 'audit-Proofs' / 'unread-facts.jsonl.gz'} "
-                            f"--facts {out / 'audit-security' / 'unread-facts.jsonl.gz'}")
+    assert LC.unread_count(out, [], said.append) is False
+    assert said[0].endswith(f"unread.py --out {out / 'unread'} --facts {out / 'audit-p' / 'unread-facts.jsonl.gz'} "
+                            f"--facts {out / 'audit-a' / 'unread-facts.jsonl.gz'}")
+    counted[0]["failures"] = ["unread: over"]
+    assert LC.unread_count(out, [], said.append) is True
+
+
+def test_no_unread_count_goes_with_records_and_not_with_unread_facts(capsys):
+    for argv in (["--no-unread-count"], ["--records", "p", "--unread-facts", "--no-unread-count"]):
+        with pytest.raises(SystemExit):
+            LC.main(argv)
+    assert "give one" in capsys.readouterr().err
