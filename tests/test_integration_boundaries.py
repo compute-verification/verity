@@ -42,7 +42,6 @@ KNOWN = {
     ("verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py", "verity_vllm.definitions.registry.topp_keep_builder"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py", "verity_vllm.definitions.registry.topp_word_gates"),
     ("tests/verity/protocols/proofs/flock/prover/test_boolean_export.py", "verity_vllm.definitions.registry"),
-    ("tests/verity/protocols/proofs/flock/prover/test_boolean_export.py", "verity_vllm.definitions.registry.prims"),
     ("tests/verity/protocols/proofs/flock/prover/test_circuit.py", "verity_vllm.definitions.numerics"),
     ("tests/verity/protocols/proofs/flock/prover/test_circuit.py", "verity_vllm.definitions.registry"),
     ("tests/verity/protocols/proofs/flock/prover/test_class_statement.py", "verity_vllm.definitions.registry"),
