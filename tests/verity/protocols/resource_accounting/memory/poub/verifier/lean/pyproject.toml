@@ -21,7 +21,7 @@ untraced = [
     "test_schedule.py",
     "test_session.py",
     "test_refresh_lean.py",
-    "test_refresh_attacks_lean.py",
+    "test_refresh_attacks.py",
     "test_span.py",
     "test_units.py",
 ]
