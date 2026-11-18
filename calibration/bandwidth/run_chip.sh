@@ -38,7 +38,7 @@ if [ "${1:-}" = leased ]; then
   exit $rc
 fi
 
-CUDA=${CUDA:-/usr/local/cuda}
+CUDA=${CUDA:-$(python3 ../../benchmarks/kernels/machine.py toolkit 13.0)} || { echo "REFUSED: no CUDA 13.0 (machine.py, above)"; exit 3; }
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 FLAGS=(-O3 -std=c++17 -arch=sm_120 -Xptxas -v)
 { "$CUDA/bin/nvcc" --version; echo "flags: ${FLAGS[*]}"; } > "$O/build.txt"
