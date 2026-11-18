@@ -10,7 +10,7 @@ sessions.
     python benchmarks/one_stage/zk_cost.py fit    --out DIR [--run RUN_ID]
     python benchmarks/one_stage/zk_cost.py overhead --out DIR [--card rtx-pro-6000-server]
 
-* **Statements.** For each K and c, a one-template program of c units (`mixed_population_program`), its
+* **Statements.** For each K and c, a one-template program of c units (`wired_population_program`), its
   `Q_template_instances` partition, and one statement staged by A6's `stage_template` bound to it (stand-in values; a
   Boolean circuit's cost doesn't depend on them). Its stage seconds exclude building the circuit, which a template pays
   once.
@@ -76,7 +76,8 @@ CARD_FILES = REPO / "calibration/hardware/cards"
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
+from verity.circuits.population import wired_population_program  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS  # noqa: E402
@@ -296,8 +297,7 @@ def stage(a) -> int:
         for c in (int(x) for x in a.sizes.split(",")):
             sd = out / f"k{K}-c{c}"
             sd.mkdir(parents=True, exist_ok=True)
-            program = P.mixed_population_program([(d, c)])
-            query = P.template_instances_query([d])
+            program, query = wired_population_program([(d, c)], {"templates": [[descriptor_id(d), c]]})
             part = P.partition(program, query)
             (sd / "partition.json").write_text(json.dumps(part, sort_keys=True))
             (sd / "program.json").write_bytes(canonical_json(encode_program(program)))

@@ -388,8 +388,9 @@ ARMS = {
                               plugin=("record", "ids"), env={**TOPK_ENV, "VERITY_DSA_TOPK": "canonical-bisect"},
                               general=TOPK, published=True),
 }
-#: Pearl+ on every linear block inside vLLM's own server, eager, as its scheme requests
-PEARL_PLUS = Feature("pearl-plus", (("tie-uniform", False),))
+#: Pearl+ on every linear block inside vLLM's own server, eager, as its scheme requests; at its declared settings'
+#: defaults, which `feature` fills through the component's own check
+PEARL_PLUS = Feature("pearl-plus")
 ARMS["pearl-plus"] = Arm("compiled", "+ Pearl+ on every linear block, turned on by name inside vLLM's own server, eager",
                          ("--enforce-eager",), schemes=("pearl-plus",), feature=PEARL_PLUS)
 ARMS["prod-pearl-plus"] = replace(ARMS["pearl-plus"], parent="prod", published=True)
@@ -881,8 +882,8 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
 
 
 #: what the job states for each scheme an arm turns on by name, beyond its declared settings' defaults: Pearl+'s kernel
-#: directory and the auditor device's challenger with the session its gate reserved
-SCHEME_NEEDS = {"pearl-plus": ("kernel", "challenger", "session")}
+#: directory and the auditor device's challenger (the session that goes with it is Pearl+'s own check's)
+SCHEME_NEEDS = {"pearl-plus": ("kernel", "challenger")}
 
 
 def scheme_config(arm: Arm, given: dict | None) -> dict:

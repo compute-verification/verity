@@ -72,8 +72,9 @@ from verity.protocols.resource_accounting.memory.poub.verifier import audit, cod
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
-from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
+from verity.circuits.population import wired_population_program  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC, class_statement as CS  # noqa: E402
@@ -156,8 +157,7 @@ def stager(S, n: int, out: Path) -> SimpleNamespace:
     """The statement's program and partition (one template, n proof blocks) and its one stager (the circuit lowered once)."""
     defn = bind(BC.BlockOpeningCheck, **vars(S))
     rows = BC.opening_rows(S)
-    program = P.mixed_population_program([(defn, n)])
-    query = P.template_instances_query([defn])
+    program, query = wired_population_program([(defn, n)], {"templates": [[descriptor_id(defn), n]]})
     part = P.partition(program, query)
     n_all, ranges = P.units(program, query), P.ranges(program, query)
     out.mkdir(parents=True, exist_ok=True)

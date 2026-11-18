@@ -55,7 +55,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench served_errors` | error terms of the quoted guarantees that had no value, evaluated at the served sizes, each with its formula and premises |
 | `verity bench served_units` | a served model's proof blocks proved one type at a time from synthetic values and verified by the Lean verifier, forgeries included: `fp8-coord:K=6144` at one input unless given other units |
 | `verity bench tc_probe` | a tensor-core instruction bit for bit against its silicon models (`--instruction`, no default), built for the run's card, which must be of its architecture |
-| `verity bench tc_probe_fp4` | the FP4 path on Blackwell: `nvf4` with its SASS check unless given other arguments, on an sm_120a GPU |
+| `verity bench tc_probe_fp4` | the FP4 path on Blackwell: `nvf4` with its SASS check unless given other arguments, built for the card the run opened |
 | `verity bench tensor_duty` | the tensor-duty sweep on one H200: dense tensor MACs a second by duty cycle, against the card's tensor clock |
 | `verity bench training_slowdown` | every job of an attack config and of its honest config, each found by its label and run where it is missing; `ENTRY --library --root DIR`, one library entry's step traced on a CPU and its slowdown, the bound on one traced step with no entry trained |
 | `verity bench unit_block` | a word primitive's Boolean version built as one Flock proof block, against Flock's proved range |

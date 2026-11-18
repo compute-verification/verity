@@ -2124,7 +2124,7 @@ def prove(a) -> int:
     setup = SETUPS[a.setup]
     h = host(out / "warden", a.network_attester_run, a.draw, setup, a.group, v3c=a.v3c)
     whole, T = h.whole, h.T
-    ch, cls, N = whole.chain, setup.cls, 2 * T + 1
+    cls, N = setup.cls, 2 * T + 1
     if a.draw is not None and not 3 <= a.draw <= N:
         raise SystemExit(f"--draw {a.draw}: a round's sample is 3 .. {N} of its {N} units (one a template at least)")
     ks = {"honest": a.draw, "chain": a.draw, "tampered": None if a.draw is None else stratum_k(a.draw, T, N)}
@@ -2137,20 +2137,12 @@ def prove(a) -> int:
                      "bits": {f"{tp}/{r}": b for tp, (ins, outs) in ports_of(cls).items() for r, b in ins + outs},
                      "members": {name: [{"name": m.name, "base": m.base, "n": m.n} for m in r.members]
                                  for name, r in h.rounds.items()},
-                     "admitted": whole.admitted,
-                     "anchors": {q: cls.anchor(s, s % cls.EVERY) for q, s in whole.admitted.items()},
-                     "responses": {q: len(x) for q, x in sorted(whole.outputs.items())}, "run_s": whole.run_s,
+                     "connections": len(whole.admitted), "run_s": whole.run_s,
                      "swap": None if whole.swap is None else [whole.swap, whole.swap + 1],
-                     "unread": whole.unread and {"bucket": whole.unread.bucket, "slot": whole.unread.slot,
-                                                 "q": whole.unread.q},
                      "tampered": whole.tampered and {"bucket": whole.tampered.bucket,
                                                      "window": whole.windows[whole.tampered.window],
                                                      "key": whole.tampered.key_of},
-                     "void": whole.void and {"buckets": whole.void, "failed": whole.failed, "why": whole.failed_why,
-                                             "refused": targets(last, round_name("honest", last.number))},
-                     "cells": {side: {"data": sum(r[s * cls.B] == DATA for r in rows for s in range(sh.R)),
-                                      "end": sum(r[s * cls.B] == W.END for r in rows for s in range(sh.R))}
-                               for side, rows in (("ingress", ch.ingress), ("egress", ch.egress))},
+                     "void": whole.void and {"refused": targets(last, round_name("honest", last.number))},
                      "roots": {r.number: {k: t.root.hex() for k, t in r.at.trees.items()}
                                for r in h.rounds.values() if r.kind == "honest"},
                      "start": {name: {x: r.members[0].ports["sin"][x] for x in ("value", "root", "domain")}
@@ -2159,12 +2151,11 @@ def prove(a) -> int:
                                            "trees": sorted(k for k, t in last.trees.items() if isinstance(t, Held))},
                      "host": {name: [{"member": m.name, "refused": m.refused, "outputs": m.outputs}
                                      for m in r.members] for name, r in h.rounds.items()}}
-    void = (f" but its FAIL buckets {whole.void} (void: execution phase {last.number}'s honest round refused at "
-            f"{summary['void']['refused']})" if whole.void else "")
+    void = (f" but void (execution phase {last.number}'s honest round refused at {summary['void']['refused']})"
+            if whole.void else "")
     log(f"run: {whole.source}; {setup.name}'s class, execution phases {whole.windows} of {T} buckets, each a "
-        f"registration, admitted {whole.admitted}, responses {summary['responses']}, anchors {summary['anchors']}, "
-        f"cells {summary['cells']}; every egress bucket computes the network attester's row from its ingress bucket's "
-        f"view{void}; host reads as expected ({whole.run_s} s); sample {summary['draw']}")
+        f"registration, {len(whole.admitted)} connections; every egress bucket computes the network attester's row "
+        f"from its ingress bucket's view{void}; host reads as expected ({whole.run_s} s); sample {summary['draw']}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.dry:
         log("dry: done")
