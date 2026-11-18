@@ -48,6 +48,7 @@ import numpy as np
 import pearlc_census as K
 import run_result
 
+from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D
@@ -57,7 +58,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 #: what the tests read
 __all__ = ["K", "cell"]
 
-SCHEME = "pearl-c-h100-v1-h3"
+SCHEME = schemes.get("pearl-plus").option.partition(":")[2]
 K_ = 256
 N_CREDIT = 6144
 FRAG = (16, 8)

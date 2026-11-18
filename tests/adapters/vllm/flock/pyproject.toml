@@ -1,0 +1,93 @@
+# Flock's tests that run on the vLLM adapter's Definitions: a suite of their own, beside the adapter's and Flock's.
+[tool.pytest.ini_options]
+testpaths = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "test_circuit.py",
+    "test_class_statement.py",
+    "test_flock_rows.py",
+    "test_ir_lowering.py",
+    "test_ir_sampling.py",
+    "test_lean_typed_statement.py",
+    "test_stage_typed.py",
+    "test_typed_statement.py",
+]
+inputs = [
+    "verity", "adapters/vllm/verity_vllm", "benchmarks/numerical/python/verity_numerical", "tools/config/verity_config",
+    "tools/verity/circuit_check", "calibration/census",
+    # the Flock suite's helpers these tests import (conftest.py puts its directory on the path) and what they read
+    "tests/verity/protocols/proofs/flock/prover/synthetic_sets.py",
+    "tests/verity/protocols/proofs/flock/prover/fixtures/synthetic_sets",
+    "tests/verity/protocols/proofs/flock/prover/test_circuit_types.py",
+    "tests/verity/protocols/proofs/flock/prover/circuit_type_vectors.json",
+    "tests/verity/protocols/proofs/flock/prover/test_class_statement_unit_stager.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py",
+    "tests/verity/protocols/proofs/flock/prover/stratified_agree.py",
+    "tests/verity/protocols/proofs/flock/prover/test_pouw_rows.py",
+    "tests/verity/protocols/proofs/flock/prover/test_read_slots.py",
+    "tests/verity/protocols/proofs/flock/prover/test_struct_lower.py",
+    "tests/verity/protocols/proofs/flock/prover/tmpl_toy.py",
+    "tests/verity/protocols/proofs/flock/prover/derive_vectors.json",
+    "tests/verity/protocols/proofs/flock/prover/data/captured-101",
+]
+parallel = true
+# Build outputs the Lean tests run or skip on.
+artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
+             "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-rows"]
+
+# What these test files read that their source doesn't name: the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = [
+    "test_circuit.py",
+    "test_ir_lowering.py",
+    "test_ir_sampling.py",
+    "test_stage_typed.py",
+    "test_typed_statement.py",
+]
+paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_class_statement.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "adapters/vllm/verity_vllm",
+    "tools/verity/circuit_check/src/circuit_check",
+    "verity",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["test_tmpl_statement.py", "test_unit_range.py"]
+paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier", "tests/verity/protocols/experimental/pearl_c4"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_derive.py"]
+paths = ["adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_flock_rows.py"]
+paths = ["verity/circuits/ops", "adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_lean_typed_statement.py"]
+paths = ["tools/research/src/research"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_ir_lowering_bench.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "tools/research/src/research",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/templates",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["test_partition_units.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "verity/protocols/resource_accounting/network",
+    "verity/protocols/resource_accounting/memory/pous",
+    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/resource_accounting/compute/pouw/prover", "verity/protocols/resource_accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
+]
