@@ -12,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from bench_standins import on_stand_in_machine
 from verity_config import Admission
 
 from verity_bench import jobs, served_table, steady_spec
@@ -295,6 +296,7 @@ def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(t
     path.write_text(path.read_text().replace('cards = ["rtx-pro-6000"]', 'cards = ["h200"]'))
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    on_stand_in_machine(monkeypatch, tmp_path)
     item = jobs.make_plan(path, lookup=lambda identity, commit: None).points[0]
     monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"card": card})
     monkeypatch.setattr("verity_bench.cli.run_benchmark", lambda *args, **kwargs: sys.exit("timed"))
@@ -306,6 +308,21 @@ def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(t
         assert stop.value.code == 2 and (
             f"the card is a {card}, not the h200 of spec 'llama31-8b-fp8-1gpu' (NVIDIA H200): run it on a node whose "
             "card is a NVIDIA H200, or name this card where the spec lists it (`SPEC@CARD`)") in capsys.readouterr().err
+
+
+def test_a_point_on_a_machine_whose_record_has_not_read_its_processors_is_refused_before_any_arm(tmp_path, monkeypatch):
+    path = _spec_with(tmp_path, "")
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    on_stand_in_machine(monkeypatch, tmp_path)
+    record = tmp_path / "inputs" / "one-card.toml"
+    record.write_text(record.read_text().replace('cpus = { value = 16, read = "nproc" }',
+                                                 'cpus = { value = "unread", read = "not run" }'))
+    item = jobs.make_plan(path, lookup=lambda identity, commit: None).points[0]
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"card": "NVIDIA RTX PRO 6000 Blackwell Server Edition"})
+    monkeypatch.setattr("verity_bench.cli.resolve_arms", lambda *args: sys.exit("an arm was resolved"))
+    with pytest.raises(SystemExit, match=r"^machine 'one-card': its record gives cpus \"unread\".* cpus = \{ value = N"):
+        main(["_vllm-point", "--spec", str(path), "--point", item.point.id, "--identity", item.identity])
 
 
 def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
