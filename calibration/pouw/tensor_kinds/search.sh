@@ -16,7 +16,8 @@ NVCC=${NVCC:-$(python3 "$SRC/../../../benchmarks/kernels/machine.py" toolkit 13.
 CUOBJDUMP=$(dirname "$NVCC")/cuobjdump
 PROBE="$SRC/../opcode_probe/probe.py"
 ARCH=$(python3 "$PROBE" arch) || exit 2
-[ "$ARCH" = sm_120a ] || { echo "search.sh: the card's target is $ARCH, and search.cu has forms for sm_120a only: nothing built" >&2; exit 2; }
+WANT=$(python3 "$PROBE" arch --sku rtx-pro-6000-server) || exit 2
+[ "$ARCH" = "$WANT" ] || { echo "search.sh: the card's target is $ARCH, and search.cu has forms for $WANT only: nothing built" >&2; exit 2; }
 GENCODE=$(python3 "$PROBE" gencode) || exit 2
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
