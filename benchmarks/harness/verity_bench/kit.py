@@ -389,7 +389,7 @@ def _texts(v: Any, *keys: str) -> bool:
 
 #: a machine record's `[properties]`, each field with the check its value passes unless it is ``"unread"``
 MACHINE_PROPERTIES: dict[str, Any] = {
-    "kind": _text, "card": _text, "cards": _count, "cpus": _count, "threads_per_core": _count,
+    "kind": _text, "card": _text, "cards": lambda v: type(v) is int and v >= 0, "cpus": _count, "threads_per_core": _count,
     "numa": lambda v: isinstance(v, list) and all(
         isinstance(e, dict) and set(e) == {"card", "node", "cpus"} and type(e["card"]) is int and type(e["node"]) is int
         and _text(e["cpus"]) for e in v),
@@ -406,7 +406,8 @@ def machine_properties(name: str | None = None, *, directory: Path | None = None
     field of `MACHINE_PROPERTIES` ``{ value, read }``, `read` the command that read `value`, and `value` ``"unread"`` or one
     its check takes: a `toolkit` is ``{ directory, version, loader }`` (`others`: more ``{ directory, version }``) or
     ``"none"``, `numa` a list of ``{ card, node, cpus }``, `launcher` ``{ start, sets }``, `profiler` ``"allowed"``,
-    ``"needs-root"`` or ``"refused"``, `job_cap_minutes` minutes or ``"none"``. Refused by name otherwise.
+    ``"needs-root"`` or ``"refused"``, `job_cap_minutes` minutes or ``"none"``; `cards` 0 for a machine with no card, which
+    then names none (`card` ``"none"`` or ``"unread"``, `numa` empty). Refused by name otherwise.
     Unnamed, the machine is ``$RESEARCH_MACHINE`` and the directory ``$RESEARCH_RUN_DIR/inputs``, where `research run --on`
     puts the copy; a run with no ``RESEARCH_MACHINE`` (a local one) is refused."""
     run_copy = directory is None
@@ -438,6 +439,12 @@ def machine_properties(name: str | None = None, *, directory: Path | None = None
             raise refuse(f"gives {field_} as {entry!r}, not {{ value, read }} with read the command that read it")
         if entry["value"] != "unread" and not check(entry["value"]):
             raise refuse(f"gives {field_} the value {entry['value']!r}, which its check refuses (machine_properties' docstring)")
+    if table["cards"]["value"] == 0:
+        if (card := table["card"]["value"]) not in ("none", "unread"):
+            raise refuse(f"gives cards 0 and yet names the card {card!r}: a machine with no card gives card \"none\"")
+        if isinstance(numa := table["numa"]["value"], list) and numa:
+            raise refuse(f"gives cards 0 and yet places cards {[e['card'] for e in numa]} in numa: a machine with no card "
+                         "gives numa []")
     return table
 
 

@@ -79,14 +79,6 @@ def now() -> str:
     return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 24), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def panel_rows(result: dict, every: bool = False) -> list[tuple[str, str, dict]]:
     """(arm, shape label, panel block) of every arm row the run reported a panel block for; with `every`, of every arm row,
     one without a panel block verified into a ``verified`` block of its own (`verity bench overhead`'s rows)."""
@@ -133,7 +125,8 @@ def judge(path: Path, recs: list[dict], per: str) -> dict:
     """One transcript's verdict from its commands' records."""
     if not path.is_file():
         return {"accepted": False, "why": f"no transcript at {path}"}
-    sha = sha256_file(path)
+    with open(path, "rb") as f:
+        sha = hashlib.file_digest(f, "sha256").hexdigest()
     lines = [ln for r in recs for ln in r["lines"]]
     named = [ln for ln in lines if sha in SHA256.findall(ln)]
     accepts = [ln for ln in named if ACCEPT.match(ln)]
@@ -153,7 +146,8 @@ def judge_control(path: Path, recs: list[dict]) -> dict:
     naming it; exit codes don't count (a verifier may exit nonzero for rejecting it)."""
     if not path.is_file():
         return {"rejected": False, "accepted": False, "why": f"no control transcript at {path}"}
-    sha = sha256_file(path)
+    with open(path, "rb") as f:
+        sha = hashlib.file_digest(f, "sha256").hexdigest()
     named = [ln for r in recs for ln in r["lines"] if sha in SHA256.findall(ln)]
     if any(ACCEPT.match(ln) for ln in named):
         return {"rejected": False, "accepted": True, "sha256": sha, "why": "the verifier accepted the negative control"}
