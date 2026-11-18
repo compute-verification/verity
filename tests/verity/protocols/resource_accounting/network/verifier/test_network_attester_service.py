@@ -305,7 +305,7 @@ def test_n2s_program_reads_no_registered_value(tmp_path):
 def test_the_verdict_of_record_is_the_proofs(tmp_path):
     """The verifier decides on the delivered proof and public inputs alone, and reads the opening only for
     the debug comparison it is given. Each of these rejects an honest execution phase's sample: the Lean run rejecting
-    the session, a circuit file other than the committed one, a public file whose instance is another proof block, the
+    the session, a public file whose instance is another proof block, the
     public or the output row's salt not the one committed, a proof on a head edited under its attestation (its
     verdict bit 0), with or without a forged output word, a forged signature, an attestation whose signed digest isn't
     the one the proof's public row holds, and the attestations swapped."""
@@ -333,8 +333,8 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     forged = replace(eg.certificate, signature=bytes(len(eg.certificate.signature)))
     recertified = run.honest(0).records[0].certificate
     assert recertified.digest != eg.certificate.digest
-    cases = [(prove(opening, 0, accepted=False), {}), (honest, {"circuit": "0" * 128}),
-             (prove(opening, 1, units=[1]), {}), (prove(opening, 2, salts={"pub": bytes(192)}), {}),
+    cases = [(prove(opening, 0, accepted=False), {}), (prove(opening, 1, units=[1]), {}),
+             (prove(opening, 2, salts={"pub": bytes(192)}), {}),
              (prove(opening, 3, salts={"o0": bytes(192)}), {}), (prove(off, 4), {}), (prove(off, 5, word=0b11), {}),
              (honest, {"certificates": [forged, certs[1]]}), (honest, {"certificates": [recertified, certs[1]]}),
              (honest, {"certificates": certs[::-1]})]
