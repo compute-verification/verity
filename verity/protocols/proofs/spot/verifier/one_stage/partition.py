@@ -53,7 +53,6 @@ from verity.circuits.refs import Affine, Concat, Grid, Strided
 from verity.circuits.types import Value
 
 _PRE_CANONICAL = {"program", "query"}
-Q_WORD = ("Q_word", 1)
 #: `Q_word` v1's `X`, and the most `Q_call` v1's `X` may be: the width rule of the queries applied here.
 QUERY_X = 16
 
@@ -163,7 +162,7 @@ def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition
         part = PO.evaluate(program, q)
         _check_units(program, part)
         return part
-    if kind == Q_WORD and x == QUERY_X:
+    if kind == PO.Q_WORD and x == QUERY_X:
         part = PO.evaluate(program, q)
         _check_word(part)
         return part
