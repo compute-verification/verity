@@ -1133,13 +1133,16 @@ def _env_workspace(root: Path, members: dict[str, str]) -> None:
 
 def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_prefix(tmp_path):
     """Inside a `research run`, the tests get neither the run's RESEARCH_* nor the machine's PYTHONPYCACHEPREFIX, which check's
-    steps never get either: an inner run that inherits the prefix writes no bytecode where test_remote_cwd looks for it. A
-    VERITY_ switch still reaches them."""
+    steps never get either: an inner run that inherits the prefix writes no bytecode where test_remote_cwd looks for it. Nor the
+    kit's VERITY_BENCH_TRIAL, which `research run` sets on a check of a tree that isn't main's. Another VERITY_ switch still
+    reaches them."""
     root = tmp_path / "tree"
     _env_workspace(root, {"pkg": "import os\n\ndef test_env():\n    assert os.environ.get('VERITY_SWITCH') == '1'\n"
-                                 "    assert not [k for k in os.environ if k.startswith('RESEARCH_') or k == 'PYTHONPYCACHEPREFIX']\n"})
+                                 "    assert not [k for k in os.environ if k.startswith('RESEARCH_') or k in "
+                                 "('PYTHONPYCACHEPREFIX', 'VERITY_BENCH_TRIAL')]\n"})
     p = _run_suite(root, tmp_path, "--fresh", extra={"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(tmp_path / "run"),
-                                                     "PYTHONPYCACHEPREFIX": str(tmp_path / "pycache"), "VERITY_SWITCH": "1"})
+                                                     "PYTHONPYCACHEPREFIX": str(tmp_path / "pycache"), "VERITY_SWITCH": "1",
+                                                     "VERITY_BENCH_TRIAL": "1"})
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
@@ -2629,15 +2632,17 @@ def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
 
 def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_tree_build_in_turn(tmp_path, monkeypatch):
     """On a node every run of a commit shares its source tree, so two runs could build the verifier's `.lake` there at once.
-    `lake` runs under
-    `.lake/verity-build.lock`, so a second build of the tree waits for the first."""
+    `lake` runs under the tree's one Lake build lock, the file every test-time build takes (`verity_difftest.BUILD_LOCK`,
+    under the tree's root however deep the package), so a second build of the tree, or a test's, waits for the first."""
     mod = _suites(monkeypatch, tmp_path)
     lean = tmp_path / "verity" / "core" / "service" / "flock"
     lean.mkdir(parents=True)
+    (tmp_path / "verity" / "circuits" / "difftest").mkdir(parents=True)
     (lean / "lakefile.toml").write_text('name = "f"\n')
+    lock = tmp_path / "verity" / "circuits" / "difftest" / ".lake" / "harness-build.lock"
     bin_ = tmp_path / "bin"
     bin_.mkdir()
-    (bin_ / "lake").write_text('#!/bin/sh\nflock -n .lake/verity-build.lock true && echo unlocked || echo locked\n')
+    (bin_ / "lake").write_text(f'#!/bin/sh\nflock -n "{lock}" true && echo unlocked || echo locked\n')
     (bin_ / "lake").chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("HOME", str(tmp_path))                       # ELAN puts $HOME/.elan/bin first
