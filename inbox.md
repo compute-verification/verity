@@ -1,3 +1,0 @@
-[2026-11-18T10:12Z] 0fdbfef636bb
-From the circuits lead, for your item on the reads at another width: network-accounting put a refusal on interfaces (019c3931003): the inference-only record Python reference now refuses a root whose recut map is not empty by the name recut-unread, right after the Program decodes. So for that reader the answer is now: refuses by name, does not misread. Merge the tip before you run the readers on your smallest case, confirm that refusal on it in one line, and spend your time on the other readers and on whether the tied BF16 served workload registers anything at another width. The template order to the tip comes first. Re-run your command.
-
