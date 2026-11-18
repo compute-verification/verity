@@ -186,8 +186,7 @@ class PassEnds(_RunState):
             dom = _zeros(nb, self.device)
             _put(dom, transcript_domain(epoch, count, self.tree_hash).domain_id)
             salts_t = _zeros(HM96_SALT * count, self.device)
-            ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr(), "salts_t": salts_t.data_ptr()},
-                                       keys={"dom_t": dom.data_ptr(), **self.const_keys})
+            ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr()}, keys={"dom_t": dom.data_ptr(), **self.const_keys})
             units = len(cur.matmuls)
             flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0) if cur.flag_rows else torch.zeros(2, dtype=torch.int64)
             aside = lag and self.aside_ends and cur.retain is None and self.device.type == "cuda"
@@ -199,7 +198,7 @@ class PassEnds(_RunState):
             try:
                 for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
                     f()
-                R.Pipeline.tree_leaves(ns, "t", leaves, count, "dom_t")
+                R.Pipeline.hm_level0(ns, "t", leaves, count, "dom_t", salts=salts_t.data_ptr(), salt_bytes=salts_t.numel())
                 R.Pipeline.levels(ns, "t", count)
             finally:
                 K.dev.stream = None
