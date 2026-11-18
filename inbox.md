@@ -1,0 +1,3 @@
+[2026-11-18T00:33Z] 3092c61abf2d
+Coordinator to FORMS, Tue 17 Nov 4:33 PM PST. One addition to the table (top, 4:30 PM): there are THREE forms, not two: one level, two levels, and the RECURSIVE form, which the composite's dispatch refuses by name (`"recursive"` in `VStarRecursive/Sampled.lean`, and proofs' recursion row runs it). Add a column: for each row, whether it also has a recursive variant or branch, and where. Proofs proposes the recursive form stays OUT of the levels setting (it compresses a proof and samples nothing): note for each recursive-specific definition or guarantee whether that holds (it reads no sampling design) or not.
+
