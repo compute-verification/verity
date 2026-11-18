@@ -50,7 +50,8 @@ class Pending(Exception):
 
 
 class Session:
-    """One session, the verifier's `AuditRun` and the reference prover in step, every receipt sampled, a pass a step.
+    """One session, the verifier's `AuditRun` and the reference prover in step, every receipt sampled, a pass a step
+    from step 1, so that a block appended before the first pass is written at a step, 0.
     Appends and passes name blocks by the append's name (`REG` the registered store), a run `(first, count)`, or
     `(name, m)` for block m of an append."""
 
@@ -66,7 +67,7 @@ class Session:
                           clock=self.clock)
         self.prover = audit_prover.Prover(self.store, None, entropy=Entropy(b"receipt salts"))
         self.challenges = [self.s.start()]
-        self.t, self.i, self.step, self.previous = 0, 0, -1, reg.digest
+        self.t, self.i, self.step, self.previous = 0, 0, 0, reg.digest
         self.head: bytes | None = None
         self.named: dict[str, tuple[int, int, int]] = {REG: (-1, 0, N)}
         self.origins: list[tuple[str, int] | None] = []
@@ -174,13 +175,13 @@ class Session:
     def schedule(self) -> schedule.Schedule:
         """The schedule whose plan at each pass's step is the plan the pass read: every chunk resident exactly while
         planned, a registered one from the start, so `schedule.check` takes it when the plans allow one."""
-        steps = list(range(len(self.passes)))
+        steps = list(range(1, len(self.passes) + 1))
         planned: dict[int, list[int]] = {}
         for s, ps in zip(steps, self.passes):
             for j in ps.plan:
                 planned.setdefault(j, []).append(s)
         for j, ss in planned.items():
-            if ss != list(range(ss[0], ss[-1] + 1)) or (j < N and ss[0] != 0):
+            if ss != list(range(ss[0], ss[-1] + 1)) or (j < N and ss[0] != steps[0]):
                 raise ValueError(f"block {j} is planned at steps {ss}: no schedule frees it and brings it back")
         registered, last = [], steps[-1]
         for j in range(N):
@@ -269,7 +270,7 @@ def control(s: Session, t: int, kept: Sequence[int] = (), keep: Sequence[str] = 
             gone += [(j, 1) for j in range(w[0], w[0] + w[1]) if j not in kept]
     if gone:
         s.release(*gone)
-    s.controlled = reads
+    s.controlled = list(reads)
     for kind, a in r.due(t, {0: 0}):
         if kind == "registered":
             s.rekey(f"R{r.registered_class(a)}@{t}", (REG, a), count=dict(r.registered_due(t))[a])
@@ -304,8 +305,9 @@ def registered_carrier(s: Session) -> None:
     """A fresh append B in window 0 carrying registered block 0's stored form under the seed's key, re-keyed each
     window from 1 (B{t}), aged L by window 2, read from window 2 with registered block 0 kept past its key's
     lifetime."""
-    s.read(*control(s, 0))
+    reads = control(s, 0)
     s.fresh("B", s.stored((0, 1)))
+    s.read(*reads)
     for t in range(1, s.p.windows):
         s.next_window()
         reads = control(s, t, kept=(0,))
@@ -323,8 +325,9 @@ def forged_age(s: Session) -> None:
     stored forms: under F's age it is plannable in window 2, where R1 is read."""
     s.read(*control(s, 0))
     s.next_window()
-    s.read(*control(s, 1))
+    reads = control(s, 1)
     s.rekey("X", "F", payloads=s.stored((R1, 0)) + s.stored((R1, 1)))
+    s.read(*reads)
     s.next_window()
     s.read(*control(s, 2), "X")
     for t in range(3, s.p.windows):
@@ -365,9 +368,10 @@ def early_plan(s: Session) -> None:
     in window 2 beside R1: the next window boundary after its commit, a window short of its full period."""
     s.read(*control(s, 0))
     s.next_window()
-    s.read(*control(s, 1))
+    reads = control(s, 1)
     s.fresh("B", s.stored((R1, 0)))
     s.rekey("B1", "B")
+    s.read(*reads)
     s.next_window()
     s.read(*control(s, 2), "B1")
     for t in range(3, s.p.windows):
@@ -380,11 +384,13 @@ def late_rekey(s: Session) -> None:
     (B2) and read in window 3 when its payload has aged L, beside R1's first block kept past R1's key's lifetime."""
     s.read(*control(s, 0))
     s.next_window()
-    s.read(*control(s, 1))
+    reads = control(s, 1)
     s.fresh("B", s.stored((R1, 0)))
+    s.read(*reads)
     s.next_window()
-    s.read(*control(s, 2))
+    reads = control(s, 2)
     s.rekey("B2", "B")
+    s.read(*reads)
     s.next_window()
     reads = control(s, 3, keep=(R1,))
     s.release(*[(R1, m) for m in range(1, s.runs(R1)[1])])
