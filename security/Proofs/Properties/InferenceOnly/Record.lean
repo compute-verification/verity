@@ -288,7 +288,7 @@ private theorem below_iff (rs : Array TRange) (tid : String) (u : ℕ) : ∀ n, 
   | 0, _ => by
     have h0 : ((rs.extract 0 0).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 = 0 := by
       rw [Array.extract_zero]
-      simp
+      rfl
     rw [h0]
     simp
   | n + 1, hn => by
