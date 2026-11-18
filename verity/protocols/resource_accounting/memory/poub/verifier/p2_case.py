@@ -14,7 +14,7 @@ A case (`case_of`) is ``{"params", "commitment", "evidence"}``, the commitment a
 * ``commitment``: the auditor's registration file, its fields and its plan (`p2_parties.registration_json`), whose digest
   (`digest`) is SHA-512 of `DIGEST_DOMAIN` and those bytes, so it binds the plan with the registration;
 * ``evidence``: ``{"close": {"chain", "lines", "public_key", "signature"}, "log": [...]}``. The log is every request the
-  verifier's Lean process answered of the session after it opened, in order (`p2_parties.Twin` records them), each
+  verifier's Lean process answered of the session after it opened, in order (`p2_parties.LeanSession` records them), each
   line's bytes as the prover sent them in hex: ``{"op": "p2_event", "event", "coin"}`` (the challenger's whole coin,
   `COIN_BYTES`, of which the process read the first `coins.COIN_BYTES`), ``{"op": "p2_root", "t", "i", "now",
   "line"}``, ``{"op": "p2_openings", "t", "line"}`` and ``{"op": "p2_fail"}``. The close (`close_of`) is the memory
@@ -26,8 +26,8 @@ A case (`case_of`) is ``{"params", "commitment", "evidence"}``, the commitment a
 The evidence holds `C*`'s opened blocks and the verifier's coins and clock: it is witness, and `write` puts a case only
 in a private directory (0700, its files 0600). The case's answer (`answer`) is the core form of the session's own
 answer (`P2Session.answer`), which the Lean's replay of the case is held to; `judged` is the Lean's, given its
-executable. A session the Python's books vetoed, one refused before its first coin, or one with no memory attester to
-sign its close (`p2_parties.Closer`), has no case.
+executable. A session refused before its first coin, or one with no memory attester to sign its close
+(`p2_parties.Closer`), has no case.
 """
 
 from __future__ import annotations
@@ -144,10 +144,9 @@ def storing(case: Mapping[str, Any], pous_case: Mapping[str, Any]) -> dict[str, 
 
 
 def answer(case: Mapping[str, Any], session: Mapping[str, Any]) -> dict[str, Any]:
-    """The case's answer in the core interface's form from the session's own answer `session` (`p2_parties.answer`'s,
-    `P2Session.answer`), as `Poub.P2Protocol` answers a case of `p2_parties.SESSION`'s session: accepted,
-    `{"eps", "q_bytes", "span_ns"}` and the rest of the answer as its profile; rejected with the failure, its window and
-    its sample; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
+    """The case's answer in the core interface's form from the session's own answer `session` (`P2Session.answer`), as
+    `Poub.P2Protocol` answers a case of `p2_parties.SESSION`'s session: accepted, `{"eps", "q_bytes", "span_ns"}` and
+    the rest of the answer as its profile; rejected with the failure, its window and its sample; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
     which the replay refuses, is answered here as its session was."""
     out: dict[str, Any] = {"commitment": digest(case).hex(), "profile": None, "protocol": PROTOCOL, "public": None,
                            "reason": None}

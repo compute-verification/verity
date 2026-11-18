@@ -25,7 +25,7 @@ it), read from the bytes it holds and the prover sends, and decided here:
   (`Verifier`'s `p2_hold`), so the prover chooses none of them;
 * each root's line (`receive`) and each window's openings line (`verify`), every opening checked on PoUS's vk root
   (`checkOpenings`, `P2.checkOpeningWith`);
-* the answer (`answer`, `p2_parties.answer`'s): the credited reads under the pooled bound at δ = 2^-40
+* the answer (`answer`, the tests' `p2_books.answer`'s): the credited reads under the pooled bound at δ = 2^-40
   (`Pooled.pooled`).
 
 The bookkeeping (seeds, plans, steps, deadlines, order, samples) is `Session`'s over the store's units: the registration
@@ -354,7 +354,7 @@ def credit (sm : Session.Summary) : Credit :=
   { receipts := us, wrong, bound, draws := ws.map (·.2), qBytes := (us - wrong) * P2.UNIT_BYTES,
     spanNs := ((sm.windows.back?.map (·.deadlineNs)).getD 0) - ((sm.windows[0]?.map (·.releasedNs)).getD 0) }
 
-/-- `p2_parties.answer` less its `reason`: `accept` with the credited reads (`credit`), `reject` with the failure, its
+/-- The tests' `p2_books.answer` less its `reason`: `accept` with the credited reads (`credit`), `reject` with the failure, its
 window and the sample it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass reads. -/
 def answer (held : Held) (s : Session.State) : Json :=
   let windows := s.windows.map fun w => Json.mkObj [("passes", toJson w.roots.size),

@@ -8,8 +8,7 @@ replayed, each refusal by name: a key the params don't trust, a line count or a 
 head, the commitment's digest and the clock floor, then its log), a
 signature that doesn't verify, a close replayed under another session, a coin that isn't the challenger's whole coin,
 and a PoUS session record or a wipe record the same key signed for the same session put as the close. Edits of a root,
-a coin or the plan are rejected, and the plan is bound by the commitment's digest. A session the books veto has no
-case. A session over the `C*` of PoUS's own setup, its case held to PoUS's store (`p2_case.storing`), is accepted, and
+a coin or the plan are rejected, and the plan is bound by the commitment's digest. A session over the `C*` of PoUS's own setup, its case held to PoUS's store (`p2_case.storing`), is accepted, and
 a case whose params name another store than its registration's is refused by name (`P2Protocol.NOT_POUS_STORE`)."""
 
 from __future__ import annotations
@@ -319,14 +318,6 @@ def test_the_commitment_binds_the_plan(exe, lean, store) -> None:
     assert p2_case.digest(swapped) != p2_case.digest(case)
     got = replayed(lean, swapped)
     assert got["verdict"] == "reject" and got["reason"] == UNCHAINED, got
-
-
-def test_a_session_the_books_veto_has_no_case(exe, store) -> None:
-    def accepting(lean):
-        return Lying(lean, "p2_openings", lambda req, _got: {"accepted": req["t"]})
-
-    answer, case = session(exe, store, lean_of=accepting, skip=1)
-    assert answer["failure"] == p2_parties.DISAGREEMENT and case is None
 
 
 def test_the_written_piece_is_private(exe, store, tmp_path) -> None:

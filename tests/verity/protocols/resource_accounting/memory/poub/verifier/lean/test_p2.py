@@ -3,7 +3,7 @@ sampled inputs that include what both sides must refuse: a registration's digest
 `codec.P2Codec`'s refusals), a unit's sketch from its blocks' partials (`p2.Sketcher`: π a block, σ their sum, and y
 from σ against y of the unit's bytes) and an opening's check (`p2.check`) on stores of sampled blocks under PoUS's leaf
 and vk tree, honest or with one field changed; a whole session of record (`Poub.P2Session`, which `p2_parties.py`
-runs) against `p2_parties.Books` on the bytes the verifier reads, the registration file, the request and each root and
+runs) against `p2_books.Books` on the bytes the verifier reads, the registration file, the request and each root and
 openings line, under the auditor's session parameters, recorded from a prover over a sampled store, honest or with one
 deviation; and the committed C* (`tests/fixtures/p2-c-star.bin`, PoUS's setup's prover bytes): its registration's
 digest, an honest opening of each of its units, an honest session over it, one of `SESSION`'s (the Lean's pinned
@@ -17,6 +17,7 @@ import json
 import shutil
 from pathlib import Path
 
+import p2_books as B
 import pytest
 import ra_cases as M
 import verity_difftest as D
@@ -327,7 +328,7 @@ def p2_event_of(v) -> tuple:
     raise D.Reject(f"no P2 event kind {kind}")
 
 
-def p2_apply(b: p2_parties.Books, e: tuple) -> dict:
+def p2_apply(b: B.Books, e: tuple) -> dict:
     kind, *a = e
     return {"start": b.start, "boundary": b.boundary, "close": b.close, "root": b.root, "openings": b.openings,
             "fail": b.fail}[kind](*a)
@@ -337,7 +338,7 @@ def p2_session(v) -> dict:
     """`p2SessionFn`: the registration file's bytes and the prover's request line read as `p2_parties` reads them
     (`registration_of`, `plan_of`, `message`, `params_of`) under the auditor's session parameters (`auditor_of`), a
     request out of form refused as such and one off the auditor's with `params_of`'s reason, and the events through
-    `p2_parties.Books` on a challenger replaying the case's 2W coins: the held store, every event's result and the
+    `B.Books` on a challenger replaying the case's 2W coins: the held store, every event's result and the
     answer, less its reason."""
     with M.decoding():
         data = M.hex_(v, "registration")
@@ -365,11 +366,11 @@ def p2_session(v) -> dict:
         M.nat(v, "chunk")
         not_before = M.nat(v, "not_before_ns")
         events = [p2_event_of(e) for e in M._list(v, "events")]
-    b = p2_parties.Books(params, reg, M.replayed(reg, 0, params.windows, committed, []), plan, not_before)
+    b = B.Books(params, reg, M.replayed(reg, 0, params.windows, committed, []), plan, not_before)
     results = [p2_apply(b, e) for e in events]
-    answer = json.loads(json.dumps(p2_parties.answer(b.s, plan=plan)))
+    answer = json.loads(json.dumps(B.answer(b.s, plan=plan)))
     del answer["reason"]
-    return {"held": p2_parties.held_json(reg, plan), "results": results, "answer": answer}
+    return {"held": B.held_json(reg, plan), "results": results, "answer": answer}
 
 
 P2_STEP_NS = 400
@@ -432,7 +433,7 @@ def p2_events(store: p2_prover.Store, plan: Plan, params, committed: list[bytes]
     3 a unit's reads skipped (its receipt from zeros), 4 window t's openings line near its form (`p2_bad_openings`), 5
     window t's last pass missing, 6 the pass's root line near its form (`p2_bad_root`) and 7 the pass's root after
     window t's deadline. The events end once the session has its outcome."""
-    b = p2_parties.Books(params, store.registration, M.replayed(store.registration, 0, params.windows, committed, []),
+    b = B.Books(params, store.registration, M.replayed(store.registration, 0, params.windows, committed, []),
                        plan, not_before)
     prover = p2_prover.Prover(store, entropy=Entropy(b"p2 session"))
     events: list[dict] = []

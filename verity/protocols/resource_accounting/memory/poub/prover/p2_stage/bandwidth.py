@@ -750,7 +750,7 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     deployed = period.deployment({}) if deployment is None else deployment
     trusted_sha512 = key_of(deployed, trusted_sha512)
     doc = json.loads((private / SESSION).read_text())
-    answer, record, steps = doc["answer"], doc["verifier_record"], doc["steps"] or []
+    answer, steps = doc["answer"], doc["steps"] or []
     r_bytes_per_s = doc["r_bytes_per_s"]
     kept = json.loads((private / HELD).read_text()) if (private / HELD).is_file() else None
     request = {k: v for k, v in doc["request"].items() if k != "node"}   # the node's name: in the private record only
@@ -760,10 +760,7 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
                                "setup_s": doc["setup_s"], "session_wall_s": doc["session_wall_s"],
                                "verifier_rc": doc["verifier_rc"], "passes": len(steps),
                                "pass_s": [s["pass_s"] for s in steps]}
-    if record is not None and record != answer:
-        out = _no("reject", f"the verifier's own record of its answer ({record.get('verdict')}) is not the session's "
-                            f"({answer.get('verdict')}); {scope}")
-    elif trusted_sha512 is None:
+    if trusted_sha512 is None:
         out = _no("undecided", f"{NO_KEY}; {scope}")
     elif kept is None:
         verdict = "undecided" if answer.get("verdict") in ("prover-error", "refused", None) else "reject"
