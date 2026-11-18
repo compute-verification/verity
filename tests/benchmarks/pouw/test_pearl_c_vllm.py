@@ -405,6 +405,41 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
 
 
+def test_a_retained_pass_refuses_a_weight_tree_whose_root_moved_after_the_build(device_run, tmp_path):
+    """A retained pass writes each weight's tree from the device beside the build's root: a tree_b whose root bytes were
+    written after the build is refused by the weight's name before any of the pass's last files is written, and an
+    untouched one is retained."""
+    make, _, weights, roots, _ = device_run
+    for touched in (True, False):
+        run = make()
+        d = tmp_path / str(touched)
+        run.begin(retain=str(d))
+        run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+        if touched:
+            run.weights[1].b["tree_b"][-64:] ^= 0x5A
+            with pytest.raises(ValueError, match=r"weight 1's tree on the device roots at [0-9a-f]{16}, not its build's "
+                                                  f"{roots[1].hex()[:16]}: its tree_b was written after the build"):
+                run.end()
+            assert not (d / "weights").exists() and not (d / "leaves").exists()
+        else:
+            man = json.loads(Path(run.end()["manifest"]).read_text())
+            assert (d / man["weights"]["1"]["tree"]["path"]).read_bytes()[-64:] == roots[1]
+
+
+@pytest.mark.parametrize("dtype", ["float16", "float32"])
+def test_the_weight_build_refuses_a_weight_that_is_not_bfloat16(device_run, dtype):
+    """Pearl+ commits a weight's FP32 words and retains its rows as BF16, so a weight in another format (whose words BF16
+    does not hold) is refused by name and dtype, by `weight_roots` and by a run's own build, before either allocates."""
+    make, kernel, weights, roots, _ = device_run
+    bad = {0: weights[0].to(getattr(torch, dtype)), 1: weights[1]}
+    refusal = f"weight 0 is torch.{dtype}: Pearl\\+ commits a weight's FP32 words and retains its rows as BF16"
+    with pytest.raises(ValueError, match=refusal):
+        PPDR.weight_roots(kernel, bad, SCHEME, weight_salts=salts_b(bad))
+    with pytest.raises(ValueError, match=refusal):
+        PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, bad, roots, *salt_coin(roots),
+                             capacity=1 << 12, weight_salts=salts_b(bad))
+
+
 def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(device_run, tmp_path, monkeypatch):
     """A caller that commits y with its own launches (the overhead arm) hands `_retained` its tree (``y_tree``): the pass
     retains those bytes, its y root their last node, and makes no tree of its own; so a tree its launches wrote nothing
