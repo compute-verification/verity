@@ -9,7 +9,7 @@ gives its outcome (`prove`, `outcome_of`).
 
 * **The Spec** (`spec_of`): the class's boundary values (`Layout.schemas`: ``b.ingress`` and ``b.egress``, or under a
   serve's stop rule their parts ``b.request``, ``b.prompt`` and ``b.egress``, then its history tables; phase ``serve``),
-  the interior values (phase ``interior``: the check template's ports as the replay side commits them,
+  the interior values (phase ``interior``: the trees of the interior window the replay side commits,
   `interior_values`) and the replay block's
   parameters the interior docket registers as values (`Rule.span_values`: those the verifier supplies, a table
   read's root and domain or an index, and those the replay gives, a picking unit's scores or a read's opening, each
@@ -202,10 +202,10 @@ COUNTS = "spot-two-stage-counts/v1"
 PROOF_DEADLINE_S = 86400.0
 
 
-def interior_values(member: CS.Member) -> tuple[tuple[str, str], ...]:
-    """The interior values of a replay side that commits the check template's units as one window member
-    (`ml.windows.rows`): each port's name and schema, in the member's order."""
-    return tuple((member.port(p), member.schema(p)) for p in CS.port_leaves(member))
+def interior_values(window: CS.Binding) -> tuple[tuple[str, str], ...]:
+    """The interior values of a replay side that commits the check template's units as one interior window: each of
+    the window's trees (`Binding.trees`) and its schema, in the window's order."""
+    return tuple((t, s) for t, (s, _n) in window.trees.items())
 
 
 @dataclass(frozen=True)
@@ -712,15 +712,14 @@ def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlink
 
 def rule_of(layout: BR.Layout, replay: str, k: int | Mapping[str, int],
             proof_deadline: float = PROOF_DEADLINE_S) -> Rule:
-    """The class's rule from its `design`: the interior values the replay side commits (its templates' ports as an
-    interior window lays them out) and the replay block's parameters its interior registers as values
+    """The class's rule from its `design`: the interior values the replay side commits (its interior window's trees)
+    and the replay block's parameters its interior registers as values
     (`interior_rows.span_values`, sized by the class: its rows a sampled span), which are none where the class's record
     commits every parameter its templates read. A class round 2 derives no wires from has its templates' ports alone
     (`design`'s ``unlinked``): its first stage samples as any class's does."""
     d = design(layout, unlinked=True)
     w = d.window("00", [0])
-    return Rule(replay, k, tuple(v for m in w.members for v in interior_values(m)), proof_deadline,
-                IR.span_values(d.links))
+    return Rule(replay, k, interior_values(w), proof_deadline, IR.span_values(d.links))
 
 
 def second_need(stream: S.Stream, q: int) -> int:

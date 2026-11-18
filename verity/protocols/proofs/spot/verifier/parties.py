@@ -121,6 +121,7 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from verity.commitments import domains as DM
 from verity.config import COMPOSITES
 from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import Finish, Identity, Received, LogEntry, Send
@@ -128,7 +129,7 @@ from verity.channel import Body, Hex, Int, Message, Schema, Str
 
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-ID = R.PROTOCOL
+ID = DM.ONE_STAGE_PROTOCOL
 #: SPOT as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the
 #: verdicts the verifier's own run of the proof check) under the ``form`` ``one-stage``; `ID`'s own audit, whose
 #: verdicts are the evidence's, and the recursive audit are refused

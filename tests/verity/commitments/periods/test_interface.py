@@ -35,7 +35,7 @@ from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import cast as BC, gemm as BG
 from verity.circuits.types import Array, Tuple, Value
-from verity.commitments import history as HT, row_table as RT
+from verity.commitments import domains as DM, history as HT, row_table as RT
 from verity.commitments.gates import embedding as E
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.indexed import RangeIndexedDomain
@@ -1739,14 +1739,14 @@ def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_t
         got.update(k)
         return {"leaf_layer": "l"}
 
-    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f1", "FORMAT_V2": "f2", "record": staticmethod(record),
+    reg = type("R", (), {"KINDS": ("served",), "record": staticmethod(record),
                          "digest": staticmethod(lambda rec: "d")})
     win, w = registered(held=("w",))
     doc = win.write(win.close(salts_of=fixed(win)), tmp_path / "v2", {"by": "test"}, registrar=reg, previous="ab" * 64)
-    assert (got["registered"], got["previous"], doc["registration"]) == ([w.entry()], "ab" * 64, "f2")
+    assert (got["registered"], got["previous"], doc["registration"]) == ([w.entry()], "ab" * 64, DM.REGISTRATION)
     plain, _ = registered()
     doc = plain.write(plain.close(salts_of=fixed(plain)), tmp_path / "v1", {"by": "test"}, registrar=reg)
-    assert (got["registered"], got["previous"], doc["registration"]) == ([], None, "f1")
+    assert (got["registered"], got["previous"], doc["registration"]) == ([], None, DM.REGISTRATION_V1)
     unheld, _ = registered(params={"v": 8}, held=("v",))
     c = unheld.close(salts_of=fixed(unheld))
     with pytest.raises(ValueError, match=r"values \['v'\] have no committed value"):

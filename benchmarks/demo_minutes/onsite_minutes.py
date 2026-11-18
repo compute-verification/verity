@@ -11,19 +11,19 @@ the period's ``VERDICT`` line. The minutes run from PROVER_RUN's ``started_utc``
 the runs, the served commit (the prover node's run's), what is refused and what is written are `run_minutes.py`'s,
 whose code this one runs with its own verdict (`verdict`). It also refuses an AUDITOR_RUN whose
 log holds no ``VERDICT`` line, a line whose ``run`` is ``local`` (a `verity run` outside any research run, whose record
-holds no time), and one whose ``components`` give a verdict on fewer than the goal's seven checks (`CHECKS`).
+holds no time), and one whose ``components`` give a verdict on fewer than the goal's checks (`checks`).
 """
 from __future__ import annotations
 
 import importlib.util
 import json
 import sys
+import tomllib
 from pathlib import Path
 
 METRIC = "vllm/onsite-demo-minutes"
-#: the goal's seven checks, by the names a ``VERDICT`` line's ``components`` give them (served_table's ONSITE_COMPONENTS)
-CHECKS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
 HERE = Path(__file__).resolve().parent
+ONSITE = HERE.parents[1] / "applications" / "onsite_full.toml"
 
 
 def _reader():
@@ -39,6 +39,12 @@ def _reader():
 R = _reader()
 
 
+def checks() -> tuple[str, ...]:
+    """The goal's checks: the subprotocols the onsite application lists (its ``protocols``), the names a ``VERDICT``
+    line's ``components`` give them."""
+    return tuple(tomllib.loads(ONSITE.read_text())["protocols"])
+
+
 def verdict(d: Path) -> str:
     """The period's verdict in run ``d``'s ``VERDICT`` lines (`verity run`'s), accept only where every line accepts;
     `Refused` where there is none, or one is outside a research run or short of the goal's checks."""
@@ -47,12 +53,13 @@ def verdict(d: Path) -> str:
              if x.startswith("VERDICT {")]
     if not lines:
         raise R.Refused(f"{d.name}: no verdict line in its stdout.log")
+    want = checks()
     for x in lines:
         if x.get("run") == "local":
             raise R.Refused(f"{d.name}: its verdict line's run is local, a `verity run` outside any research run")
         given = {k for k, v in (x.get("components") or {}).items() if v != "absent"}
-        if gone := [c for c in CHECKS if c not in given]:
-            raise R.Refused(f"{d.name}: its verdict covers {len(CHECKS) - len(gone)} of the goal's {len(CHECKS)} "
+        if gone := [c for c in want if c not in given]:
+            raise R.Refused(f"{d.name}: its verdict covers {len(want) - len(gone)} of the goal's {len(want)} "
                             f"checks, not {', '.join(gone)}")
     return next((x["verdict"] for x in lines if x.get("verdict") != "accept"), "accept")
 

@@ -260,6 +260,15 @@ class Scheme:
     the exact factor from ``unit`` (``("bytes", 1/8)`` for an amount in bits published in bytes, ``(unit, 1)`` where
     it is the same); and ``record_owner``, the lane the record names as answering for its row. ``composed_protocol``
     is the protocol id it carries inside a composite where that differs from ``protocol``, None where it is the same.
+    ``tables``, the names of the value tables its run registers in the window record, a value of table ``t`` named
+    ``t/...``; ``output_format``, the number format the output y leaves its blocks in for the served model
+    (``bf16``), not the format of the arithmetic that made it; ``product_family``, the number family of its useful
+    products, the operands' format and scaling (``fp8-e4m3-rowwise``: E4M3 operands, one scale per row of each, an
+    FP32 accumulator), named as the harness names a stock kernel's family; ``y_committed``, whether each of its calls
+    commits that y; ``salt_open_root``, the root its salt coin is opened after, a function of the weights' root
+    and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card, of the card's short name and
+    ``pinned=`` (whether registration pins the weights), `LookupError` naming the cards and pinnings it runs on
+    otherwise.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     is a `Lacks` saying so: it is in the one table with its parties and record, and `bound` and `credited` refuse it by
@@ -298,6 +307,12 @@ class Scheme:
     published: tuple[str, Fraction] | Lacks = UNDECLARED
     record_owner: str | Lacks = UNDECLARED
     composed_protocol: str | None = None
+    tables: tuple[str, ...] | Lacks = UNDECLARED
+    output_format: str | Lacks = UNDECLARED
+    product_family: str | Lacks = UNDECLARED
+    y_committed: bool | Lacks = UNDECLARED
+    salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
+    kernels: Callable[..., str] | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):

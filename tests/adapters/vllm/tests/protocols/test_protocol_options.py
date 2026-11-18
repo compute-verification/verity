@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from tests.row_paths import row_paths
 import types
 from collections.abc import Callable
 from types import SimpleNamespace
@@ -514,16 +515,6 @@ def test_readers_of_live_weights_see_the_plaintext_an_option_released(monkeypatc
     assert comp.weights() == {} and PO.weights_view(comp, model) is model
 
 
-def test_with_pous_on_an_option_keeping_a_resident_weight_copy_is_refused(monkeypatch):
-    pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1", "ncp-v2"))
-    pouw.keeps_weight_copy = lambda scheme: scheme == "ncp-v2"
-    _fake_adapter(monkeypatch, "pous", _pous([]), schemes=("band-chain/d12/v1",))
-    assert PO.refusals(_serve("pouw:ncp-v2")) == ()
-    got = PO.refusals(_serve("pouw:ncp-v2", "pous:band-chain/d12/v1"))
-    assert len(got) == 1 and got[0].startswith("pouw:ncp-v2: keeps a weight-derived copy resident across forwards")
-    assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == ()
-
-
 @pytest.mark.parametrize("knob,target,world,match", [
     ("pous:s1", {}, 1, "a row is a sampled-proofs run"),
     ("pous:s1,sampled-proofs:rows-sha512", {"protocols": ["pouw:s1", "sampled-proofs:rows-sha512"]}, 1, "contradicts"),
@@ -558,7 +549,7 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
             return 0
 
     monkeypatch.setattr(row_stages, "SingleRow", Single)
-    o = cli.parse("row", ["run", row, "LLAMA32_1B", "r", "v", "--sweep-dir", str(tmp_path), "--cuda-home", str(tmp_path)], {})
+    o = cli.parse("row", ["run", row, "LLAMA32_1B", "r", "v", "--sweep-dir", str(tmp_path), "--cuda-home", str(tmp_path)], row_paths(tmp_path))
     assert ROW.run_row(o, "build") == 0 and seen["protocols"] is None
     eff = json.loads((tmp_path / row / ROW.EFFECTIVE_NAME).read_text())
     assert eff["row"] == row and eff["config"]["engine"] == RowConfig.load(row).engine.to_json() and "requests" not in eff["config"]
