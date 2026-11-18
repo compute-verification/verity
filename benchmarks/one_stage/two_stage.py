@@ -807,7 +807,7 @@ class Replayed:
 
 
 def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, window_root: str | None = None,
-             rids: Mapping[str, str] | None = None, salt_key: bytes | None = None, unlinked: bool = False,
+             rids: Mapping[str, str] | None = None, unlinked: bool = False,
              kept: Path | None = None, clock: Callable[[], float] | None = None,
              tables: Mapping[str, Sequence[str]] | None = None, registered: Mapping[str, Any] | None = None,
              pins: Mapping[str, Mapping[str, Any]] | None = None, tied: Tied | None = None) -> Replayed:
@@ -822,8 +822,8 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     stream's coins committed to the docket's digest. ``c``: the class's commitment, reopened from its files
     (`boundary_rows.reopen`), whose spans say which requests were sampled and what the serve emitted for them, and
     whose salts open the return's rows.
-    ``window_root``: the open root of the challenger session the second stage's coins come from. ``salt_key``: tests
-    only. ``unlinked``: a class round 2 derives no wires from is committed with no link and no wire (`design`).
+    ``window_root``: the open root of the challenger session the second stage's coins come from. ``unlinked``: a class
+    round 2 derives no wires from is committed with no link and no wire (`design`).
     ``kept``: the directory the serve kept the rows and salts of the select's inputs in (`boundary_logits.load`'s),
     for a class whose record commits them: the rows are held to the record's root before anything is committed.
     ``clock``: read before the capture and after the window's files are written, for `Replayed.commit_s`: the
@@ -843,7 +843,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     t0 = None if clock is None else clock()
     per, launches = spans_of(c, capture, sample, rids)
     it = IR.interior(per, d.cells, again.docket.digest, sample, row=again.pub["window"], links=d.links,
-                     wires=d.wires, rows=d.rows, served=again.record, window_root=window_root, salt_key=salt_key,
+                     wires=d.wires, rows=d.rows, served=again.record, window_root=window_root,
                      returns=[(x, c.port(x.value)) for x in d.returns if x.held],
                      inputs=[(x, kept_port(c, x.value, kept)) for x in d.inputs], registered=registered, pins=pins)
     record = IR.write(it, directory)
