@@ -1092,7 +1092,7 @@ theorem rota_final {s : State} (h : Rota s) (u : Nat) :
 theorem rotaOn_push {P N as js ws} (h : RotaOn P N as js ws) (w : Win) (hd : w.drawn = none)
     (hs : ws.size + 1 ≤ max 1 P.windows) (hb : ∀ u, u < ws.size → ws[u]!.boundaryNs.isSome) :
     RotaOn P N as js (ws.push w) := by
-  have g : ∀ u, (ws.push w)[u]!.drawn = ws[u]!.drawn := by
+  have g : ∀ u : Nat, ((ws.push w)[u]! : Win).drawn = (ws[u]! : Win).drawn := by
     intro u
     by_cases hl : u < ws.size
     · rw [getElem!_pos (ws.push w) u (by simp only [Array.size_push]; omega), getElem!_pos ws u hl,
@@ -1311,7 +1311,7 @@ theorem rota_boundary {s : State} {now : Nat} {r : Result} {s' : State} (h : Rot
       have hc' : t + 1 < s.params.windows := hc
       cases he
       exact rotaOn_push (rotaOn_wk h (wk_modify _ _ _ fun _ => ⟨rfl, id, fun _ => rfl⟩)) _ rfl
-        (by simp only [Array.size_modify]; omega) (by simpa only [Array.size_modify] using hb')
+        (by simp only [Array.size_modify]; omega) (fun u hu => hb' u (by rw [Array.size_modify] at hu; exact hu))
     · cases he; exact rotaOn_wk h (wk_modify _ _ _ fun _ => ⟨rfl, id, fun _ => rfl⟩)
   · cases he; exact h
 
@@ -1431,10 +1431,10 @@ theorem originsOnRota : OriginsOnRota := by
   · rename_i f _
     have := Option.some.inj hout
     cases hf : f.failure <;> simp [hf, Failure.name] at this
-  split at hout
-  swap
-  · cases hout
-  rename_i hc
+  have hc : (s.windows.size == s.params.windows && s.windows.all fun x => x.verdict == some Verdict.accept) = true := by
+    split at hout
+    · assumption
+    · cases hout
   simp only [Bool.and_eq_true, beq_iff_eq, Array.all_eq_true] at hc
   obtain ⟨hsz, hall⟩ := hc
   have hon := hR.onRota hr a ha
