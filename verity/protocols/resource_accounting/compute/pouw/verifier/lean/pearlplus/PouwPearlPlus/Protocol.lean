@@ -19,8 +19,8 @@ the epoch's coins (`EpochCoins.ofJson`: a live session's on the auditor device's
 number of samples, and the verifier's record of the coin it drew on this run's commitment (`CoinRecord`, as `verify_run`
 writes it: its schema and its sample), which pins the source (`after-coin`): a bare source, which `check` also takes, is no
 input here, so the coin is always the one sampled on the run. The verdict is of record (`ofRecord`, `--of-record` as
-`served_pearlplus.sh` runs it): only a challenger sample on live coins is taken (`ofRecordReason`), so in-process coins, the
-node's sample and a v1 record are refused as `of-record`.
+`served_pearlplus.sh` runs it): only a challenger sample on live coins is taken (`ofRecordReason`), so in-process coins and
+the node's sample are refused as `of-record`, and a record of another schema than `COIN_SCHEMA` as `coin-schema`.
 
 **Commitment**, canonical JSON with exactly these keys:
 

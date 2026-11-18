@@ -8,12 +8,14 @@ public import PouwPearlPlus.Records
 * **A pass** (`Pass`) is what the verifier holds once a retained pass's manifest is read and held to what it published
   (`Load`): its epoch's salt and fixed operands' roots, its records, and the roots it published (activations, transcript, records,
   each call's y).
-* **The run's commitment** (`runCommitment`) binds the retained passes and their records, before the coin:
-  `tagged("verity/pouw/pearl-plus/run/v1", per pass: transcript root, records root, salt, each call's y root or empty)`.
-* **The coin record** (`CoinRecord`, `verity-pouw/pearl-plus-coin/v2`; v1, which names no sample, read for development) is
-  the verifier's record of its coin against that commitment, and of where the coin came from (its `draw`, `Coins`). A
-  verdict over passes whose commitment is another, or with another source, is refused (`after-coin`): neither a retention
-  nor a give-up can follow the coin, and a retry never resamples.
+* **The run's commitment** (`runCommitment`) binds the retained passes, their records and their activation trees, before
+  the coin: `tagged("verity/pouw/pearl-plus/run/v2", per pass: transcript root, records root, salt, each call's y root or
+  empty, each call's A root)`.
+* **The coin record** (`CoinRecord`, `verity-pouw/pearl-plus-coin/v3`) is the verifier's record of its coin against that
+  commitment, and of where the coin came from (its `draw`, `Coins`). A record of another schema was drawn on a commitment
+  that binds no A root, and is refused (`OLD_COIN`). A verdict over passes whose commitment is another, or with another
+  source, is refused (`after-coin`): neither a retention, a give-up nor an A tree can follow the coin, and a retry never
+  resamples.
 * **The sample** keys `t` work-weighted samples over every pass's tickets together on the coin
   (`derive(source, "verity/pouw/pearl-plus-run-draw/v1", {run})`, `clear_work.draw`). A tile's ticket is its credited
   cells' share of `wref` at |K| (`clear_work.ticket_cell`, the scheme's own `wref` on the H100), scaled to integers by the
@@ -29,10 +31,9 @@ namespace PouwVerifier.PearlPlus
 open PouwCommit
 
 def PROTOCOL : String := "verity/pouw/pearl-plus/v1"
-def RUN_TAG : String := "verity/pouw/pearl-plus/run/v1"
+def RUN_TAG : String := "verity/pouw/pearl-plus/run/v2"
 def RUN_DRAW_DOMAIN : String := "verity/pouw/pearl-plus-run-draw/v1"
-def COIN_SCHEMA : String := "verity-pouw/pearl-plus-coin/v2"
-def COIN_SCHEMA_V1 : String := "verity-pouw/pearl-plus-coin/v1"
+def COIN_SCHEMA : String := "verity-pouw/pearl-plus-coin/v3"
 /-- The named assumption a run of the H100's scheme is credited at (`verify_run.ASSUMPTION_H100`). -/
 def ASSUMPTION : String := "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1"
 
@@ -94,10 +95,11 @@ def exclusionTiles (p : Pass) : List Nat := Id.run do
 end Pass
 
 /-- `run_commitment`: each retained pass's transcript root, records root and salt, then its calls' y roots (empty where a
-call commits none), in order. -/
+call commits none), then its calls' A roots, in order. -/
 def runCommitment (passes : List Pass) : ByteArray :=
   tagged RUN_TAG (passes.flatMap fun p =>
-    [.bytes p.transcriptRoot, .bytes p.recordsRoot, .bytes p.salt] ++ p.yRoots.map fun y => .bytes (y.getD ByteArray.empty))
+    [.bytes p.transcriptRoot, .bytes p.recordsRoot, .bytes p.salt] ++ p.yRoots.map (fun y => .bytes (y.getD ByteArray.empty)) ++
+      p.rootsA.map fun a => .bytes a)
 
 /-- The verifier's record of its coin: the run commitment it was sampled on, the source (a challenger sampling coin's 64 bytes,
 or the node's 32), the record's schema and its `draw` as the record carries it (`Coins.drawReason` reads it). -/
@@ -110,6 +112,10 @@ structure CoinRecord where
 def AFTER_COIN : String × String :=
   ("after-coin", "the retained passes or their records are not those the verifier's coin was drawn on: a retention change " ++
     "or a give-up after the coin is refused, and a retry never redraws")
+
+def OLD_COIN : String × String :=
+  ("coin-schema", s!"the verifier's coin record is not {COIN_SCHEMA}: it was drawn on a run commitment that binds no " ++
+    "activation root, and a retry never redraws; serve and retain the run again and draw its coin with this verifier")
 
 /-- A tile's ticket weight as a fraction `num/den` in lowest terms: |credited rows|·|credited columns| cells at the cell's
 share of `wref(1, |K|, n)`, over n. -/

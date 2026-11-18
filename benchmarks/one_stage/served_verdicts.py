@@ -368,7 +368,7 @@ def pearlplus_epoch_tied(challenger: str) -> str:
 LIVE_SOURCE = "challenger"
 #: the evidence store's kind for the verifier's coin record as `coin` publishes it: the record's own schema
 #: (`verify_run.COIN_SCHEMA`)
-COIN_KIND = "verity-pouw/pearl-plus-coin/v2"
+COIN_KIND = "verity-pouw/pearl-plus-coin/v3"
 #: `coin`'s copy of the coin record and the store's answer to its put, in the piece's directory
 COIN_RECORD, COIN_PUT = "coin.json", "coin-put.json"
 #: a `research run` id, whose Attempt keeps its ``out/`` (`coin`'s custody fallback)

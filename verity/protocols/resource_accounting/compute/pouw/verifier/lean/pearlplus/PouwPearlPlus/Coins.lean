@@ -19,7 +19,7 @@ public import PouwWindow.Rounds
   opened after the run's commitment C (`challenger.live_reason`), its coin is the record's source S, and its commitment is
   of a sample session's layout (`window.draw_epoch_reason`).
 * **Of record** (`--of-record`), the verdict takes only a challenger sample on live epoch coins: `ofRecordReason` refuses
-  the node's sample, a v1 record (which names no sample), no record, a source given on the command line, and an in-process
+  the node's sample, a record of another schema, no record, a source given on the command line, and an in-process
   challenger's epoch coins. Without it they are read as development runs.
 
 Every JSON comparison here is by a match (`PouwCommit.fieldIs`), never `Lean.Json`'s `==`.

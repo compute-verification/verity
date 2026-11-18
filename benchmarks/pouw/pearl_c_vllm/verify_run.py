@@ -56,9 +56,11 @@ the profile (``exact_work``) on the node.
 
 The prover may drop passes from its retention before the coin (`served_passes.py retain`: a pass its CPU replay didn't
 finish, or one left over a cap): the verdict is over the retained passes alone, each at its round, and the dropped ones
-credit nothing (their MACs stay in what the run declared).  The run's commitment binds the retained passes and their
-records, and the verifier records its coin against it (``record``, ``coin.json``): a verdict over other passes or other
-records after the coin is refused (``after-coin``), so neither a retention nor a give-up can follow the coin.
+credit nothing (their MACs stay in what the run declared).  The run's commitment binds the retained passes, their
+records and their calls' A roots, and the verifier records its coin against it (``record``, ``coin.json``): a verdict over
+other passes, other records or other A roots after the coin is refused (``after-coin``), so neither a retention, a give-up
+nor an A tree can follow the coin.  A coin record of another schema than `COIN_SCHEMA` was drawn on a commitment that
+binds no A root, and is refused (``coin-schema``).
 
 An accepted run's verdict also says where its linears' MACs went uncredited, call by call (`uncredited_calls`, the verify
 document's ``uncredited``): excluded, voluntary and side-channel cells, and the deduction's terms (ε, the samples over
@@ -79,7 +81,7 @@ nothing the verdict accepts.
 **The coin record** (``record``, `COIN_SCHEMA`) is what every reader of the sample reads, the Lean `PouwCheck.PearlPlus`
 among them; it is written before any replay, and once asked for a sample is never asked again (`ASKED`):
 
-    {"schema": "verity-pouw/pearl-plus-coin/v2",
+    {"schema": "verity-pouw/pearl-plus-coin/v3",
      "commitment": C,                      128 lowercase hex
      "source": S,                          lowercase hex: the sampling coin's 64 bytes, or the node's 32
      "passes": [...],                      each retained pass's manifest as `read` names it, in order
@@ -163,7 +165,7 @@ settings = of(__file__)
 DRAWS = 3
 #: a served run's verdict over all its passes (`verify_passes`)
 PROTOCOL = "verity/pouw/pearl-plus/v1"
-RUN_TAG = "verity/pouw/pearl-plus/run/v1"
+RUN_TAG = "verity/pouw/pearl-plus/run/v2"
 RUN_DRAW_DOMAIN = "verity/pouw/pearl-plus-run-draw/v1"
 #: the named assumption an accepted run's credit is at, TT_OUT(1/400) per audit tile, rev1, at the scheme's device record
 #: (`security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean`): the scheme credits (1 − ρ)·`creditDevRev1`
@@ -496,10 +498,11 @@ def y_roots(p: Pass) -> list[str | None]:
 
 
 def run_commitment(passes: list[Pass]) -> bytes:
-    """What the run committed before its sample: each pass's transcript root, records root, salt and its calls' y roots (empty
-    where none), in order."""
+    """What the run committed before its sample: each pass's transcript root, records root, salt, its calls' y roots (empty
+    where none) and its calls' A roots, in order."""
     return tagged(RUN_TAG, *(x for p in passes for x in (p.transcript.commitment.root, bytes.fromhex(p.man["records_root"]),
-                                                         p.epoch.salt, *(bytes.fromhex(r or "") for r in y_roots(p)))))
+                                                         p.epoch.salt, *(bytes.fromhex(r or "") for r in y_roots(p)),
+                                                         *p.transcript.activation_roots)))
 
 
 TIE_A, TIE_Y, TIE_B = "pearl-a/{s}/{c}", "pearl-y/{s}/{c}", "pearl-b/{w}"
@@ -514,7 +517,7 @@ WEIGHTS_UNTIED = "weights untied (W v1)"
 #: why `tie` refuses a version-1 W that registers a fixed operand's B rows
 V1_WEIGHTS = "W states no version (version 1), whose values are the calls' alone, and registers"
 #: the coin record's schema (module docstring, "The coin record")
-COIN_SCHEMA = "verity-pouw/pearl-plus-coin/v2"
+COIN_SCHEMA = "verity-pouw/pearl-plus-coin/v3"
 #: the coin record's ``draw.from``: a sample session's coin on the auditor device's challenger, or this node's coins
 DRAW_CHALLENGER, DRAW_NODE = "challenger", "node"
 #: the claim instance the node's sample source rests on (`pouw.verifier.coins`)
@@ -525,6 +528,9 @@ ASKED = ".asked"
 #: why `verify_passes` refuses passes other than those its recorded coin was flipped on
 AFTER_COIN = ("after-coin", "the retained passes or their records are not those the verifier's coin was drawn on: a "
               "retention change or a give-up after the coin is refused, and a retry never redraws")
+#: why `verify_passes` refuses a coin record of another schema than `COIN_SCHEMA`
+OLD_COIN = ("coin-schema", f"the verifier's coin record is not {COIN_SCHEMA}: it was drawn on a run commitment that binds no "
+            "activation root, and a retry never redraws; serve and retain the run again and draw its coin with this verifier")
 #: why `verify_passes` refuses a run whose sample was asked for and never recorded
 ASKED_ONCE = ("asked-once", "the verifier's draw was asked for and never recorded (a draw that failed or was cut short), "
               "and a retry never redraws")
@@ -914,6 +920,9 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     asked = None if record is None else record.with_name(record.name + ASKED)
     if record is not None and record.exists():
         held = json.loads(record.read_text())
+        if held.get("schema") != COIN_SCHEMA:
+            out["refused"] = list(OLD_COIN)
+            return reject(f"{OLD_COIN[0]}: {OLD_COIN[1]}")
         if held["commitment"] != root.hex() or (source is not None and source.hex() != held["source"]):
             out["refused"] = list(AFTER_COIN)
             return reject(f"{AFTER_COIN[0]}: {AFTER_COIN[1]} (its coin was drawn on run {held['commitment'][:16]}, "

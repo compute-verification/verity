@@ -14,7 +14,7 @@ exact credit it replaces beside it (``exact_work``).
 The passes are a test instance's, read as one (``test_instance``, ``--test-instance``), so the work credits nothing;
 read as a served run's they are refused (their tile is not 64 x 64), as passes of two salts are. A layer past `K_MAX` is
 refused at load on both sides. Passes salted by a live session's coins load under that session's commitment, and a coin
-record's challenger sample (the v2 record's ``draw``) holds only as coin ``pouw/draw`` 0 of a sample session opened after the
+record's challenger sample (the v3 record's ``draw``) holds only as coin ``pouw/draw`` 0 of a sample session opened after the
 run's commitment, its coin the record's source; ``--of-record`` takes no other sample. `test_a_recorded_h200_run` does the
 same on an H200 run's retained passes at the sample count and source of the verdicts the Python recorded on them, where
 `POUW_PEARLPLUS_RECORDED` names a directory holding them (`passes/` and `verdicts/{run,control}.json`).
@@ -399,10 +399,25 @@ def test_a_give_up_after_the_coin(exe, tmp_path):
     assert lean(exe, [path], 3, None, lr, test_instance=True) == late
 
 
+def test_an_activation_root_changed_after_the_coin_is_refused(exe, tmp_path):
+    """The run's commitment binds each call's A root: a manifest whose ``root_a`` changes after the verifier recorded its
+    coin is another run, refused (`after-coin`) before any tile is opened, and a coin record of the schema whose
+    commitment bound no A root is refused (`coin-schema`), in Lean as in Python."""
+    path = T.proved_pass(tmp_path, H100, key=bytes(32))[0]
+    rec, old = tmp_path / "coin.json", tmp_path / "old.json"
+    assert same(exe, [path], record=rec)["verdict"] == "accept"
+    old.write_text(json.dumps({**json.loads(rec.read_text()), "schema": "verity-pouw/pearl-plus-coin/v2"}))
+    stale = same(exe, [path], source=None, record=old)
+    assert (stale["verdict"], stale["refused"], stale["verdicts"]) == ("reject", list(VR.OLD_COIN), [])
+    edit(path, lambda m: m["matmuls"][0].update(root_a="ab" * 64))
+    late = same(exe, [path], source=None, record=rec)
+    assert (late["verdict"], late["refused"][0], late["verdicts"], late["source"]) == ("reject", "after-coin", [], None)
+
+
 def test_a_live_epoch_and_a_challenger_draw(exe, tmp_path):
     """Passes salted by a live session (``coins.json`` of `window.LIVE_SCHEME`, each salt coin opened after its salt
     epoch's root) and a coin record whose sample is a sample session's coin on the run's commitment: the Lean's verdict is the
-    Python's, of record or not, and reads a v2 record the Lean wrote itself on the node's sample."""
+    Python's, of record or not, and reads a v3 record the Lean wrote itself on the node's sample."""
     a, b = (T.proved_pass(tmp_path / n, H100, ix, live=0)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))
     (b.parent / "coins.json").write_text((a.parent / "coins.json").read_text())
     rec = tmp_path / "coin.json"
@@ -421,19 +436,15 @@ def test_a_live_epoch_and_a_challenger_draw(exe, tmp_path):
 
 
 def test_a_verdict_of_record_takes_only_a_challenger_draw_on_live_coins(exe, tmp_path):
-    """``--of-record`` refuses (`of-record`) the node's sample, a v1 coin record (which names no sample), no record, a source
-    given on the command line and an in-process challenger's epoch coins; without it each is the Python's verdict."""
+    """``--of-record`` refuses (`of-record`) the node's sample, no record, a source given on the command line and an
+    in-process challenger's epoch coins; without it each is the Python's verdict."""
     live = T.proved_pass(tmp_path / "live", H100, live=0)[0]
     plain = T.proved_pass(tmp_path / "plain", H100)[0]
     node = tmp_path / "node.json"
     assert same(exe, [live], record=node)["verdict"] == "accept"
-    v1 = tmp_path / "v1.json"
-    v1.write_text(json.dumps({**{k: v for k, v in json.loads(node.read_text()).items() if k != "draw"},
-                              "schema": "verity-pouw/pearl-plus-coin/v1"}))
     drawn = tmp_path / "drawn.json"
     assert same(exe, [plain], 3, None, drawn, draw=challenger_sample())["verdict"] == "accept"
     for paths, source, record, why in (([live], None, node, "drawn on the serving node"),
-                                       ([live], None, v1, "not verity-pouw/pearl-plus-coin/v2"),
                                        ([live], SOURCE, None, "the source is given on the command line"),
                                        ([live], SOURCE, node, "the source is given on the command line"),
                                        ([plain], None, drawn, "an in-process challenger's")):

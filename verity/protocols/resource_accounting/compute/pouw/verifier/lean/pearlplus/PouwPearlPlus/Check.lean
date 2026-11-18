@@ -21,8 +21,8 @@ public import PouwPearlPlus.Credit
   asks only for the tiles its sample names.
 * **The verdict**: every pass loads (`load`), all of one salt and, unless the input is a test instance's
   (`testInstance`), each at the served instance, `k_min` `K_MIN` and `TILE × TILE` tiles; the passes are W's and, given
-  the window's class, its fixed load (`tieAt`: `tieOf` and `heldToLoad`, refused as Python's `ValueError`), the run's
-  commitment is the coin record's where there is one (`after-coin`), the record's challenger sample is coin ``pouw/draw`` 0
+  the   window's class, its fixed load (`tieAt`: `tieOf` and `heldToLoad`, refused as Python's `ValueError`), a coin record is
+  of `COIN_SCHEMA` (`coin-schema`), the run's commitment is the coin record's where there is one (`after-coin`), the record's challenger sample is coin ``pouw/draw`` 0
   opened after it (`drawReason`, refused as `draw`), a verdict of record takes only a challenger sample on live coins
   (`ofRecordReason`, refused as `of-record`), the sample over every pass's tickets names the sampled tiles, each pass adds one
   tile per excluded row, and the run accepts iff every one of them passes `checkTile`, or is over its inert-work bound
@@ -130,6 +130,9 @@ structure RunAnswer where
 /-- `verify_passes` after the tie: the record, the source, the sample's holds and the tiles to open. -/
 def afterTie (i : Input) (passes : List Pass) (tie : Option Tied) : Except Refusal Plan := do
   let root := runCommitment passes
+  if let some h := i.held then
+    if h.schema != COIN_SCHEMA then
+      throw { refused := some OLD_COIN, reason := s!"{OLD_COIN.1}: {OLD_COIN.2}" }
   let source ← match i.held with
     | some h =>
       if h.commitment != root || (i.source.isSome && i.source != some h.source) then

@@ -969,7 +969,7 @@ def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
     (piece / "blobs" / hashlib.sha512(blob).hexdigest()).write_bytes(blob)
     parts = {"schema": "verity-pouw/pearl-plus-case-parts/v1", "delta": "1/100",
              "params": {"coins": {"epoch": 0, "root": "c0" * 64, "scheme": "s"}, "draws": 3,
-                        "record": {"commitment": "d0" * 64, "source": "e0" * 32, "schema": "verity-pouw/pearl-plus-coin/v2",
+                        "record": {"commitment": "d0" * 64, "source": "e0" * 32, "schema": "verity-pouw/pearl-plus-coin/v3",
                                    "draw": {"from": "challenger"}}},
              "manifests": [{"hm96_salt_key": "5a" * 32, "run": "r"}],
              "window": {"dropped": [0], "rounds": [1],

@@ -1832,7 +1832,8 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
     over = _replay_every_tile(p)
     assert over and all("replayed debit" in r for r in over.values()), over
     d, source = _serve_dir(tmp_path, [path]), b"verifier" * 4
-    (d / SP.COIN).write_text(json.dumps({"commitment": VR.run_commitment([p]).hex(), "source": source.hex()}))
+    (d / SP.COIN).write_text(json.dumps({"schema": VR.COIN_SCHEMA, "commitment": VR.run_commitment([p]).hex(),
+                                         "source": source.hex()}))
     takes = {}
     for verdict, fn in (("run", VR.verify_passes), ("pass", VR.verify)):
         takes[verdict] = "over_cap" in inspect.signature(fn).parameters
@@ -2218,7 +2219,7 @@ def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
 
 
 def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_draw_again(tmp_path):
-    """``verify_passes``' ``draw(C, asking)``: its source is the sample's coin on the run's commitment C, recorded (v2) with
+    """``verify_passes``' ``draw(C, asking)``: its source is the sample's coin on the run's commitment C, recorded (v3) with
     the sample before any replay and reused by a later verdict without sampling; a sample that fails before it asks rejects
     and may be asked again, while one that fails after ``asking`` marked the record is refused (``asked-once``) and
     never redrawn."""
