@@ -86,8 +86,11 @@ only where the row is input gates of that unit and of no other row: a row the ro
 is computed, whatever the record declares of it, and input gates handed to two rows are one value the record may
 declare twice, differently. `ownRows` reads it from the root's body, where each unit's rows are its node's arguments:
 every argument of a root node that is no input node is runs of leaves of the root's input nodes, a batch maps every
-argument over its members, and no two runs share a leaf. A leaf of an input node is one gate, and a batch that maps
-an argument hands each member its own stretch of it, so every unit's every row is then input gates no other row has.
+argument over its members, and no two runs share a leaf. A strided part whose outer stride is at least its inner run
+reads one row a member, the rows that far apart, and is that many runs (`gatherRuns`); one whose outer stride lies
+between 0 and the run reads rows that overlap and is refused. A leaf of an input node is one gate, and a batch that
+maps an argument hands each member its own stretch of it, so every unit's every row is then input gates no other row
+has.
 A root of any other form is refused: the form reads no row it cannot show to be the unit's own.
 
 ## Shared runs
@@ -358,7 +361,7 @@ def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
       if Widths.homo ty == some 1 && !on.contains i then some name else none }
 
 /-- The runs of input leaves the root's argument parts read, `(input node, first leaf, leaves)` each, none empty:
-`own`, each read by one part, and `shared`, each read by one strided part that reads it more than once over or
+`own`, each read by one part or a row of a strided part whose rows lie apart, and `shared`, each read by one strided part that reads it more than once over or
 by more than one part ("Shared runs"), in the order of their nodes and first leaves, a run read by several parts
 once for each after the first. -/
 structure Runs where
@@ -383,6 +386,26 @@ def partRun (P : Prog) : Part → Option ((Nat × Nat × Nat) × Bool)
     else none
   | _ => none
 
+/-- The rows a strided part over an input node reads where no two overlap: from a leaf at or after 0, inner stride
+1, a count a multiple of its inner run, and an outer stride at least the run (or one row), `count / inner` runs of
+the run's leaves, row `j` from leaf `base + j · outer stride`, each its member's own. None for any other part, so a
+strided part whose rows overlap, an outer stride between 0 and its run, is neither rows of its own nor a shared run. -/
+def gatherRuns (P : Prog) : Part → Option (List (Nat × Nat × Nat))
+  | .strided false i base inner os is count =>
+    if inputAt P i && is == 1 && 0 ≤ base && 0 < inner && count % inner == 0 &&
+        (count == inner || (inner : Int) ≤ os) then
+      some ((List.range (count / inner)).map fun j => (i, (base + (j : Int) * os).toNat, inner))
+    else none
+  | _ => none
+
+/-- Whether the runs `rs`, each marked where it is a strided part's row (`gatherRuns`), share no leaf, but for two
+unmarked ones that are one run. It costs the runs, sorted. -/
+def apart (rs : List ((Nat × Nat × Nat) × Bool)) : Bool :=
+  let sorted := (rs.filter fun r => r.1.2.2 > 0).mergeSort fun a b =>
+    a.1.1 < b.1.1 || (a.1.1 == b.1.1 && a.1.2.1 ≤ b.1.2.1)
+  (sorted.zip sorted.tail).all fun (a, b) =>
+    a.1.1 != b.1.1 || a.1.2.1 + a.1.2.2 ≤ b.1.2.1 || (a.1 == b.1 && !a.2 && !b.2)
+
 /-- `rowRuns` over the parts `parts`: each a run (`partRun`), and two runs, of one argument or of two, the same run or
 sharing no leaf. It costs the parts, sorted. -/
 def runsOf (P : Prog) (parts : List Part) : Option Runs :=
@@ -402,9 +425,10 @@ def runsOf (P : Prog) (parts : List Part) : Option Runs :=
 /-- **The root's rows as runs of input leaves** (the module docstring's "Rows of its own" and "Shared runs"), read
 from the root's body: every part of an argument of a root node that is no input node, but a part reading another
 such node's outputs (a grid, in every lane; an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is a run
-of leaves of one of the root's input nodes (`partRun`); a batch maps every argument over its members (each has the
-`dims` resolution reads a member's leaves by); and two runs are the same run or share no leaf (`runsOf`). None where
-the root is of another form. -/
+of leaves of one of the root's input nodes (`partRun`) or rows of one that lie apart (`gatherRuns`), each row its
+member's own; a batch maps every argument over its members (each has the `dims` resolution reads a member's leaves
+by); and two runs are the same run or share no leaf (`runsOf`), and a strided part's row shares no leaf with any other
+run (`apart`). None where the root is of another form. -/
 def rowRuns (P : Prog) : Option Runs :=
   let nodes := (P.defs[P.root]!).body.nodes
   let units := nodes.toList.filter fun n => !Desc.isInputNode P n
@@ -414,7 +438,13 @@ def rowRuns (P : Prog) : Option Runs :=
     | .grid _ lanes => lanes.all fun l => !l.p && (nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
     | _ => false
   if units.all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) then
-    runsOf P (units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·))
+    let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
+    let rest := parts.filter fun q => (partRun P q).isSome || (gatherRuns P q).isNone
+    let rows := (parts.filterMap fun q => if (partRun P q).isSome then none else gatherRuns P q).flatten
+    (runsOf P rest).bind fun R =>
+      if apart (rows.map (·, true) ++ (rest.filterMap (partRun P)).map (·.1, false)) then
+        some { R with own := R.own ++ rows }
+      else none
   else none
 
 /-- **Every unit's rows are input gates, each its own or a shared run's**: `rowRuns` reads the root. -/
@@ -427,7 +457,8 @@ def sharedRuns (P : Prog) : List (Nat × Nat × Nat) := ((rowRuns P).map (·.sha
 def OWN_ROWS : String :=
   "the root hands a unit a row that is not input gates of its own. Every part of an argument of a root node that " ++
   "is no input node reads another such node's outputs or is affine runs of leaves of the root's input nodes, a " ++
-  "batch maps every argument over its members, and no leaf is handed to two rows. Fix the Program, not the " ++
+  "batch maps every argument over its members, and no leaf is handed to two rows; a strided part's rows overlap " ++
+  "where its outer stride is between 0 and its inner run. Fix the Program, not the " ++
   "record: build its root as templates over input nodes of their own or other templates' outputs, each input " ++
   "leaf handed once."
 
