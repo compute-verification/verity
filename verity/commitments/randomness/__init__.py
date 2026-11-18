@@ -117,6 +117,12 @@ class Key:
             out += block
         return bytes(out[:n])
 
+    def block(self, index: Index, c: int) -> bytes:
+        """Block `c` of the stream at `index`: its bytes [64c, 64c + 64), without the blocks before it."""
+        if isinstance(c, bool) or not isinstance(c, int) or not 0 <= c < 1 << 64:
+            raise ValueError("a block's counter is an int in [0, 2^64)")
+        return hashlib.sha512(_STREAM + self.value + _frames(index) + c.to_bytes(8, "big")).digest()
+
     def shard(self, index: Index) -> Key:
         """An independent sub-key for one shard of a population."""
         return Key(hashlib.sha512(_SHARD + self.value + _frames(index)).digest()[:32])
