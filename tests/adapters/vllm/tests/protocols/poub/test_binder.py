@@ -287,8 +287,11 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
     b.on_event(StepBegan(1, slots=1))
     b.on_event(StepEnded(1))
     assert m.last == 1 and memory_map_lines(m) == [] and b.step == 2
+    b.on_event(StepBegan(2))
+    b.on_event(StepEnded(2))
+    assert m.last == 2 and b.step == 3, "a scheduler call that schedules no token is a step the map numbers"
     with pytest.raises(RuntimeError, match="no KV pool"):
-        s.kv_append([Append(1, 0, 1)], 2)
+        s.kv_append([Append(1, 0, 1)], 3)
 
 
 def memory_map_lines(m) -> list:
@@ -593,7 +596,8 @@ def test_installed_the_pools_pages_are_the_stores_and_a_freed_page_is_not_touche
 def test_installed_a_steps_pass_opens_after_vllm_schedules_and_ends_after_vllm_reads_the_output(monkeypatch, binder):
     """Under the admission hook, the steps' one emitter: `Scheduler.schedule` runs vLLM's own first, with its arguments,
     and then opens the step's pass; the pass ends after vLLM's own `Scheduler.update_from_output`, and a ``schedule``
-    that schedules no token opens none."""
+    that schedules no token is a step too, with its pass and its number, as each engine step of a session in lockstep
+    is (`node_store.serving.StoreBackend.advance`)."""
     s = NodeMemory()
     v = vllms_classes(monkeypatch, s)
     b = binder(s, install=True, block_bytes=1024)
@@ -607,4 +611,4 @@ def test_installed_a_steps_pass_opens_after_vllm_schedules_and_ends_after_vllm_r
     assert v.calls[-1] == ("update_from_output", True, "out", True) and not s.in_pass
     sched.output = SimpleNamespace(num_scheduled_tokens={}, total_num_scheduled_tokens=0)
     sched.update_from_output(sched.schedule(), "out")
-    assert not s.in_pass and b.step == 1 and s.counters.calls["end_pass"] == 1
+    assert not s.in_pass and b.step == 2 and s.counters.calls["end_pass"] == 2

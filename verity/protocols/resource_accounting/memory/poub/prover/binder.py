@@ -12,8 +12,9 @@ RangeFreed                          kv_free of the pages (with kv=False, none); 
                                     allows
 RangeAllocated reused               refused: a prefix-cache hit would bring a page back with its KV (run without it)
 RangeWritten                        the step's writes, kept for its StepBegan (with kv=False, none)
-StepBegan                           a verifier's message since the last pass ends the window, the next challenge begins
-                                    one; then kv_append of the step's writes, which closes the last step's memory-map
+StepBegan                           every one, a step that scheduled no token too (``slots == 0``: the map numbers it
+                                    and a session in lockstep has its pass); a verifier's message since the last pass
+                                    ends the window, the next challenge begins one; then kv_append of the step's writes, which closes the last step's memory-map
                                     line (with its re-keys for the window just begun), and begin_pass over the
                                     allocated pages, tagged with the step (a pass still open from an earlier step is
                                     ended first)
@@ -325,8 +326,7 @@ class Binder:
     def on_event(self, e: Any) -> None:
         """One of the exchange's ``memory`` or ``steps`` events."""
         if isinstance(e, StepBegan):
-            if e.slots > 0:
-                self.on_step(e)
+            self.on_step(e)
         elif isinstance(e, StepEnded):
             self.end()
         elif isinstance(e, RangeWritten):
