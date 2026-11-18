@@ -38,6 +38,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from verity.circuits.defs import SpecializedDefinition, bind
+
 from verity_vllm.definitions.registry import greedy_stages as G
 from verity_vllm.definitions.registry import greedy_stop as GS
 
