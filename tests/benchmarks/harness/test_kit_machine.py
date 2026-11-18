@@ -114,7 +114,7 @@ OTHERS = '[{ directory = "/usr/local/cuda-12.9", version = "12.9" }]'
 
 
 def _toolkits(run: Path, value: str | None = None) -> None:
-    """The run's copy listing CUDA 13.0 as the toolkit's own with 12.9 and 13.3 beside it, as vy-h100-1's does, or `value`."""
+    """The run's copy listing CUDA 13.0 as the toolkit's own with 12.9 and 13.3 beside it, or `value`."""
     copy = run / "inputs" / "one-card.toml"
     text = copy.read_text()
     assert OTHERS in text
@@ -136,6 +136,16 @@ def test_cuda_home_where_given_wins_with_no_machine(monkeypatch):
     monkeypatch.delenv("RESEARCH_MACHINE", raising=False)
     monkeypatch.setenv("CUDA_HOME", "/opt/cuda-13.3")
     assert kit.toolkit("13.3") == "/opt/cuda-13.3"
+
+
+@pytest.mark.parametrize(("says", "found"), [("13.3.0", "home"), ("13.3", "home"), ("13.0.1", "machine"), ("13.30.0", "machine")])
+def test_cuda_home_at_another_version_gives_way_to_the_machines(tmp_path, monkeypatch, says, found):
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / "version.json").write_text(f'{{"cuda": {{"name": "CUDA SDK", "version": "{says}"}}}}')
+    _toolkits(_run(tmp_path, monkeypatch, "one-card"))
+    monkeypatch.setenv("CUDA_HOME", str(home))
+    assert kit.toolkit("13.3") == (str(home) if found == "home" else "/usr/local/cuda-13.3")
 
 
 @pytest.mark.parametrize(("machine", "says"), [
