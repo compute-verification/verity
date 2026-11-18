@@ -231,6 +231,7 @@ from verity.commitments.frame_v3 import BitRowLeaf, FrameV3, Port
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+from verity.ports import free_port
 from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf,
                                            sha512_row_seg_digest)
 from verity.commitments.crypto import lms
@@ -1842,7 +1843,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             log(f"{name}/{m['name']}: no unit sampled, no session")
             continue
         sdir = out / f"session-{m['name']}"
-        record, live, proc = M.a8.session(a, m, sdir, local, port + j if port else proof_drivers.free_port(), env=WZ.zk_server(M, m))
+        record, live, proc = M.a8.session(a, m, sdir, local, port + j if port else free_port(), env=WZ.zk_server(M, m))
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
         verdicts[f"m0-verifier/{m['name']}"] = {
