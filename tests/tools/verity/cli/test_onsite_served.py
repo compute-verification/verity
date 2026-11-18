@@ -36,6 +36,8 @@ ROOT = Path(R.ROOT)
 CONFIG = ROOT / "applications" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
+#: onsite's components by their rows in the record
+NAMES = {T.ROWS[c]: c for c in T.PROTOCOLS}
 KEY = "0" * 128
 PIN = {p["protocol"]: p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"]}
 WIPE_PIN = PIN["wipe"]
@@ -705,11 +707,11 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
     assert line["verdict"] == verdict and line["block"] == SEAL and line["product"] == T.ONSITE
     assert line["components"] == undecided({**{c: "accept" for c in T.PROTOCOLS}, "bandwidth": "absent",
                                             "inference-only": "absent",
-                                            **{T.RECORD_NAMES[k]: v for k, v in rows.items()}})
+                                            **{NAMES[k]: v for k, v in rows.items()}})
     assert line["coins"] == "simulated" and line["reason"] == reason
     assert line["coins_on"] == {**{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")},
                                 **{c: T.GATE_HOST for c in ("sampled-proofs", "pouw")}}
-    assert line["answer_from"] == {T.RECORD_NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
+    assert line["answer_from"] == {NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
                                    for k in ("integrity", "work", "space", "communication", "wipe", *rows)}
 
 

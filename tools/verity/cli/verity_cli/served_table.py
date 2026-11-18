@@ -81,11 +81,6 @@ BINDINGS = "bindings.json"
 WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_ATTESTER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_ATTESTER = P2.CLOSER_PARTY, NC.NETWORK_ATTESTER
-#: served_verdicts.py's record reads each piece's answer by its runner name
-RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
-                "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
-#: each component's row in the record: Pearl+'s is the one it declares
-ROWS = {v: k for k, v in RECORD_NAMES.items()} | {"pearl-plus": declared(schemes.get("pearl-plus"), "record")}
 #: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
 AS_WRITTEN = "as the served node wrote it"
 
@@ -175,26 +170,32 @@ def _declared(name: str, **launch: Any) -> Component:
                      requires=declared(s, "depends"), **launch)
 
 
-#: the components no scheme declares yet, which only shrinks (`tests/tools/verity/cli/test_undeclared_rows.py`)
-UNDECLARED: dict[str, Component] = {c.name: c for c in (
-    Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-              needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="rate:1/3481648"),
-    Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
-                                               Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
-              channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
-                        Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
-              needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
-    Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
-    Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
-              needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
-              colocated=((CHALLENGER, NETWORK_ATTESTER),)),
+#: the components no scheme declares yet, each with its row in the record, which only shrinks
+#: (`tests/tools/verity/cli/test_undeclared_rows.py`)
+UNDECLARED: dict[str, tuple[Component, str]] = {c.name: (c, row) for c, row in (
+    (Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
+               needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="rate:1/3481648"),
+     "integrity"),
+    (Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
+                                                Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
+               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
+                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
+               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)), "work"),
+    (Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
+     "inference-only"),
+    (Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
+               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
+               colocated=((CHALLENGER, NETWORK_ATTESTER),)), "communication"),
 )}
-MANIFESTS: dict[str, Component] = {**UNDECLARED, **{c.name: c for c in (
+MANIFESTS: dict[str, Component] = {**{n: c for n, (c, _) in UNDECLARED.items()}, **{c.name: c for c in (
     _declared("pearl-plus", params=_pearlplus_params),
     _declared("pous", params=_pous, default_params=dict(schemes.get("pous").settings)),
     _declared("bandwidth"),
     _declared("wipe"),
 )}}
+#: each component's row in the record, the one its scheme declares (`record`)
+ROWS: dict[str, str] = {n: row for n, (_, row) in UNDECLARED.items()} | {
+    n: declared(schemes.get(n), "record") for n in MANIFESTS if n not in UNDECLARED}
 SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receipts", "ingress-relay"}),
                   (Role(WORKERS, "developer", needs=("serve",)),), _served,
                   {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800",

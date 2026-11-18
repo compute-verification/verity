@@ -363,13 +363,13 @@ def test_remotes_verifier_gives_its_verdict_line_on_its_own_machine(tmp_path, ca
     assert len(lines) == 1, out
     assert (rc, lines[0]["product"], lines[0]["verdict"], lines[0]["block"]) == (0, T.REMOTE, "accept", 3)
     assert lines[0]["coins"] == "simulated"
-    assert lines[0]["coins_on"] == {T.RECORD_NAMES["integrity"]: T.PROVER_NODE, "pearl-plus": T.PROVER_NODE}
+    assert lines[0]["coins_on"] == {SP.COMPONENT: T.PROVER_NODE, "pearl-plus": T.PROVER_NODE}
 
 
 def test_the_verifiers_line_names_the_challengers_machine_for_a_bound_gate(tmp_path):
     cfg = R.load(CONFIG, REG)
     written(tmp_path / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
-    spot = T.RECORD_NAMES["integrity"]
+    spot = SP.COMPONENT
     at = {p["name"]: p["machine"] for p in cfg["party"]}
     for tables, want in ((BINDINGS, {spot: at[T.WORKERS], "pearl-plus": at[T.CHALLENGER]}),
                          ({"challenger": {**BINDINGS["challenger"], spot: {"gate": "user@gate-1"}}},

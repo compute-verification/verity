@@ -31,8 +31,8 @@ def test_the_undeclared_rows_only_shrink() -> None:
 @pytest.mark.parametrize("name", sorted(set(T.MANIFESTS) - set(OWNERS)))
 def test_a_declared_component_is_its_declaration(name: str) -> None:
     s, c = schemes.get(name), T.MANIFESTS[name]
-    assert (c.parties, c.channels, c.colocated, c.needs, c.requires) == (s.parties, s.channels, s.colocated, s.needs,
-                                                                         s.depends)
+    assert (c.parties, c.channels, c.colocated, c.needs, c.requires, T.ROWS[name]) == (
+        s.parties, s.channels, s.colocated, s.needs, s.depends, s.record)
 
 
 def test_the_bandwidth_audit_without_storage_is_refused_by_name() -> None:
