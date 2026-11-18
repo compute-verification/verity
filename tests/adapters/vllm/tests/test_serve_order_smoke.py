@@ -471,10 +471,11 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
     from verity_vllm.pipeline import serve_openai as so
     from verity_vllm.pipeline import serve_protocol as proto
 
-    fake = fake_vllm.install(monkeypatch)
-    for key, cls in VLLM.items():
+    fake, classes = fake_vllm.install(monkeypatch), {key.rpartition(":")[2]: key for key in VLLM}
+    vllm = dict(VLLM)
+    broken("vllm", vllm)
+    for key, cls in vllm.items():
         fake.set(key, cls)
-    broken("vllm", fake)
     monkeypatch.chdir(out)
     M.close()
     doc = {n: SETTINGS.get(n, {}) for n in names}
@@ -507,10 +508,12 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
                              tuple(ex.attached), dict(ex.attached)))
 
         def make() -> Any:
-            runner = GPUModelRunner()
+            cls = {name: vllm[key] for name, key in classes.items()}
+            runner = cls["GPUModelRunner"]()
             runner.load_model()
             runner.initialize_kv_cache(SimpleNamespace(num_blocks=fixed[0] if fixed else PAGES))
-            return SimpleNamespace(vllm=SimpleNamespace(llm_engine=LLMEngine(runner, Scheduler(KVCacheManager(BlockPool())))))
+            return SimpleNamespace(vllm=SimpleNamespace(llm_engine=LLMEngine(
+                runner, cls["Scheduler"](cls["KVCacheManager"](cls["BlockPool"]())))))
 
         llm, _hook, off = engine_build.hooked(make)
         engine = llm.vllm.llm_engine
@@ -613,6 +616,17 @@ class Misfiled(H.RangeWritten):
     hook = "steps"
 
 
+class Halving(Scheduler):
+    """vLLM's scheduler taking at most half the load's requests from its waiting queue at a step."""
+
+    def schedule(self) -> Any:
+        held, self.waiting = self.waiting[REQUESTS // 2:], self.waiting[:REQUESTS // 2]
+        try:
+            return super().schedule()
+        finally:
+            self.waiting = held + self.waiting
+
+
 def breaking(stage: str, act: Callable[[Any], None]) -> Callable[[str, Any], None]:
     return lambda s, it: act(it) if s == stage else None
 
@@ -658,6 +672,11 @@ NEGATIVE = {
                                                                       "after steps outside any phase"),
     "a step outside any phase after one closed": ("warmed", ["pearl-plus"], second_phase_unopened, RuntimeError,
                                                    "phase 1 closes, and the open phase is None"),
+    "a scheduler that takes half the waiting requests a step under release order": ("vllm", ["pearl-plus"], lambda mp: (
+        lambda vllm: vllm.update({"vllm.v1.core.sched.scheduler:Scheduler": Halving})), AssertionError,
+        f"window 0's first step holds {REQUESTS // 2} of"),
+    "--out inside the run's directory": ("options", ["pearl-plus"], lambda mp: lambda env: env.update(RESEARCH_RUN_DIR="/"),
+                                         Exception, r"is \$RESEARCH_RUN_DIR \(/\) or inside it"),
     "a scheduler that is not FCFS under release order": ("built", ["pearl-plus"], lambda mp: lambda engine: setattr(
         engine.sched.scheduler_config, "policy", "priority"), RuntimeError, "needs the FCFS scheduler"),
     "a scheme's subscription to the steps hook dropped": ("attached", ["pearl-plus"], lambda mp: lambda ex: ex.subscribers[
