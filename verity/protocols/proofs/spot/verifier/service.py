@@ -186,7 +186,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     docket as R,
     verifier as V,
 )
-from verity.commitments import randomness as RND
+from verity.commitments import randomness as RND, rate as RT
 from .one_stage.verdict import Verdict, _Collect
 from verity.protocols.proofs.spot.verifier.challenger.challenger import ChallengerKey
 from verity.protocols.proofs.spot.verifier.challenger.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
@@ -780,14 +780,14 @@ def selection_sampling_design(rule: Selection, n: int, sizes: Sequence[int] = ()
 def selection_table(rule: Selection, program: Program, query: Mapping[str, Any],
                     work_table: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
     """The work table a selection rule's sampling design (`selection_sampling_design`'s) is expanded over, from the challenger's own
-    `work_table`: a work rate's, each stratum of `program` under `query` with its floor at the rate (`draw.rate_table`), else
+    `work_table`: a work rate's, each stratum of `program` under `query` with its floor at the rate (`rate.rate_table`), else
     `work_table` itself. Raises `Refused` (`rate`) where the query doesn't apply, a work rate has no work table or it names
     no work for a stratum's template. The Lean verifier's `Select.Rule.tableOver` is this."""
     strata = RND.parse_strata_rate(rule.text) if isinstance(rule, SamplingDesign) else None
     if strata is None or not strata[0]:
         return work_table
     try:
-        return D.rate_table(program, query, strata[1], strata[2], work_table)
+        return RT.rate_table(program, query, strata[1], strata[2], work_table)
     except (P.QueryRefused, ValueError) as e:
         raise _refuse("rate", {"law": rule.text, "reason": str(e)}) from None
 
