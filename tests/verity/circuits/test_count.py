@@ -1,5 +1,5 @@
-"""`count`: a circuit's Boolean gate count from its own Boolean bodies, held to the census of the circuit lifted to bits and to
-the gate table, on the periods' chain and three small Definitions; and `count_vectors.jsonl`, the vectors Lean's count reads
+"""`count`: a circuit's Boolean gate count from its own Boolean bodies, held to the census of the circuit lifted to bits, on
+the periods' chain and three small Definitions; and `count_vectors.jsonl`, the vectors Lean's count reads
 (`uv run python tests/verity/circuits/test_count.py --write` rewrites them)."""
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ from verity.commitments.periods import interface as I
 PATH = Path(__file__).parent / "count_vectors.jsonl"
 REWRITE = "the count's vectors differ: a change meant to move them rewrites them (module docstring)"
 F32 = Value(32)
+BIT = Value(1)
 ADD = REGISTRY["F32Add_v2"]
 GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
 
@@ -102,11 +103,20 @@ def test_a_batch_and_a_scan_multiply_their_callees_count():
     assert K.count(_scan_of_adds())[descriptor_id(_scan_of_adds().root)] == one * 7
 
 
-def test_the_table_is_the_gate_tables_on_each_word_primitive():
+def _add_and_a_gate() -> Program:
+    def body(B, S, a, b, x):
+        return tuple_of(B.call(ADD, a, b), B.call(BL.and_gate(2), x))
+    return _wrap("CountAddAndAGate", (("a", F32), ("b", F32), ("x", Array(2, BIT))), Tuple(F32, BIT), body)
+
+
+def test_the_table_prices_each_primitive_the_root_reaches_a_gate_by_the_rule_and_a_word_by_its_body():
+    program = _add_and_a_gate()
+    assert K.table(program) == K.table(canonical_json(encode_program(program))) == {ADD.id: 2257, BL.and_gate(2).id: 1}
     for name in sorted(CASES):
         program = CASES[name]()
-        table, unpriced = V.gate_table([program.root])
-        assert not unpriced and K.table(program) == {k: v for k, v in table.items() if k in program.boolean}, name
+        got = K.count(program)
+        assert set(K.table(program)) >= set(program.boolean), name
+        assert all(got[k].gates == v for k, v in K.table(program).items()), name
 
 
 def test_the_rule_is_the_censuss():

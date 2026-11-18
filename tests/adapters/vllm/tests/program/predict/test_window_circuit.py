@@ -22,6 +22,7 @@ import numpy as np
 import pytest
 from verity.circuits import boolean as BL
 from verity.circuits import census as CE
+from verity.circuits import count as K
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.evaluation import evaluate_batch
@@ -1236,16 +1237,15 @@ def test_the_tiny_class_wired_program_is_its_members_fed_by_hand(tiny_wired):
 
 @pytest.mark.slow
 def test_every_tiny_class_template_lifts_to_its_block_circuit_from_the_programs_boolean_table(tiny_wired):
-    """Each template's block circuit, from the Program's one Boolean table: Boolean, its census gates the Count's by
-    `gate_table`, and every composite it reaches σ of its word Definition. Only the whole class reaches composites whose
+    """Each template's block circuit, from the Program's one Boolean table: Boolean, its census gates the Count's by the
+    Program's gate table (`count.table`), and every composite it reaches σ of its word Definition. Only the whole class reaches composites whose
     callees have no Boolean version of their own (the lift's recursion), and its hand pieces."""
     circuit, prog, _ = tiny_wired
     table = V.boolean_table(prog)
     assert len(table) == 137
     memo: dict = {}
     version = partial(V.block_circuit, table=table, memo=memo)
-    counts, unpriced = V.gate_table([fn for fn, _ in circuit.templates])
-    assert not unpriced
+    counts = K.table(prog)
     for fn, _n in circuit.templates:
         bits = version(fn)
         assert BL.is_boolean(bits) and CE.boolean_gates([bits]) == [BC.gates(fn, counts)[0]], descriptor_id(fn)

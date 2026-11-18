@@ -108,10 +108,24 @@ def count(c: Any) -> dict[str, Count]:
 
 
 def table(c: Any) -> dict[str, int]:
-    """Each word primitive of ``c``'s `boolean` map, by id, at its body's two-input gates: the count's primitives, which a
-    count of a block reads."""
-    got = count(c)
-    return {fid: got[fid].gates for fid in sorted(_decoded(c).boolean)}
+    """Each primitive the root of ``c`` reaches, inputs aside, by descriptor key at its two-input gates: a gate by the rule, a
+    word primitive by its body. A count of a block reads it (`InferenceOnlyCheck.Count`'s ``table``)."""
+    P = _decoded(c)
+    got = count(P)
+    keys: set[str] = set()
+    seen: set[int] = set()
+    todo = [P.root]
+    while todo:
+        fn = todo.pop()
+        if id(fn) in seen:
+            continue
+        seen.add(id(fn))
+        if isinstance(fn, PrimitiveDefinition):
+            if input_id(fn.id) is None:
+                keys.add(descriptor_id(fn))
+        else:
+            todo += [nd.fn for nd in fn.body.nodes]
+    return {k: got[k].gates for k in sorted(keys)}
 
 
 def of_block(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]]) -> Count:

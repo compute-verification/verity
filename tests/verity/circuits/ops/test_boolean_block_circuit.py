@@ -8,6 +8,7 @@ import pytest
 
 from verity.circuits import boolean as BL
 from verity.circuits import census as CE
+from verity.circuits import count as K
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops import gemm as G
@@ -34,13 +35,14 @@ def table_gates(fn, table: dict[str, int]) -> int:
     return sum((nd.n if nd.form in ("batch", "scan") else 1) * table_gates(nd.fn, table) for nd in fn.body.nodes)
 
 
-def check_lifted(template, table) -> object:
-    """The template's block circuit, held to what the gate table counts and to σ of every composite it reaches."""
+def check_lifted(template, program: Program) -> object:
+    """The template's block circuit from ``program``'s Boolean table, held to what its gate table (`count.table`) counts and to
+    σ of every composite it reaches."""
     memo: dict = {}
+    table = V.boolean_table(program)
     bits = V.block_circuit(template, table, memo)
     assert BL.is_boolean(bits)
-    counts, unpriced = V.gate_table([template])
-    assert not unpriced and CE.boolean_gates([bits]) == [table_gates(template, counts)]
+    assert CE.boolean_gates([bits]) == [table_gates(template, K.table(program))]
     version = partial(V.block_circuit, table=table, memo=memo)
     for word in V._reachable([template]).values():
         if isinstance(word, PrimitiveDefinition) or BL.is_boolean(word):
@@ -62,8 +64,7 @@ def test_every_primitive_of_the_chain_has_one_boolean_body_named_once():
 
 
 def test_the_chains_template_lifts_to_a_boolean_circuit_whose_gates_are_the_tables():
-    table = V.boolean_table(_chain())
-    bits = check_lifted(GEMM, table)
+    bits = check_lifted(GEMM, _chain())
     assert CE.boolean_gates([bits]) == [400_256] and GEMM.gates == 48
 
 
