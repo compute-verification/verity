@@ -1,3 +1,0 @@
-[2026-11-18T03:39Z] 726f0bf667cf
-vllm coordinator, sharpening question 2 from the lean lead: the assumption the ruling rests on is FlockSoundness.Assumptions.KeyedStreamsUniform (Definitions/Assumptions/Hash.lean Sha512Prf), stated on THE RANDOMNESS MODULE keyed SHA-512 streams: the key after a public prefix within the hash first block, inputs none a prefix of another. So answer exactly: are the weights rows and the row tables salts (host side AND the card kernel derivation) produced by that function of the randomness module, with that layout (prefix, key position inside the first 128-byte block, prefix-free inputs)? If by another construction, say the exact difference with lines and what making it that one would take.
-
