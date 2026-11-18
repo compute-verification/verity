@@ -10,7 +10,8 @@
   clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field;
   with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
 - `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set and not another, else the run's machine's
-  `[properties]`'; `card_sku(name)` and `card_arch(name)`: the `sku` and `arch` of the card `card_short` finds, and
+  `[properties]`'; `card_sku(name)` and `card_arch(name)`: the `sku` and `arch` of the card `card_short` finds;
+  `card_nodes(sku)` the node files carrying a card, and `session_node(name, slot)` the node a PoUB session on it registers;
   `machine_arch()` the run's machine's card's.
   `benchmarks/kernels/machine.py` prints both for a shell script.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
@@ -243,6 +244,33 @@ def _card_named(name: str, directory: Path) -> dict:
 def card_sku(name: str, *, directory: Path | None = None) -> str:
     """The ``sku`` of the card record `card_short` finds for ``name``: its file's name in ``directory``."""
     return _card_named(name, directory or cards_directory())["sku"]
+
+
+def card_nodes(sku: str, *, directory: Path | None = None, cards: Path | None = None) -> list[str]:
+    """The node files' kinds in ``directory`` (``calibration/hardware/nodes`` by default) whose ``device.sku`` is ``sku``."""
+    from verity.device import load_node, node_kinds
+
+    cards = cards or cards_directory()
+    directory = directory or cards.parent / "nodes"
+    return [k for k in node_kinds(directory=directory)
+            if load_node(k, directory=directory, cards_directory=cards)["device"]["sku"] == sku]
+
+
+def session_node(name: str | None, slot: str | int, *, kind: str | None = None, directory: Path | None = None,
+                 cards: Path | None = None) -> str:
+    """The node a PoUB session registers, ``local/<kind>/<slot>``: ``kind`` where given, else the one node file carrying
+    the card nvidia-smi names ``name``, else that card's ``sku`` where none does, and ``cpu`` for a session with no card
+    (``name`` None); refused, naming the files, where several node files carry the card."""
+    if kind is not None:
+        return f"local/{kind}/{slot}"
+    if name is None:
+        return f"local/cpu/{slot}"
+    sku = card_sku(name, directory=cards)
+    nodes = card_nodes(sku, directory=directory, cards=cards)
+    if len(nodes) > 1:
+        raise SystemExit(f"the node files {', '.join(nodes)} all carry {sku}, the card here: name the session's node "
+                         "with --node")
+    return f"local/{nodes[0] if nodes else sku}/{slot}"
 
 
 def card_arch(name: str, *, directory: Path | None = None) -> str:

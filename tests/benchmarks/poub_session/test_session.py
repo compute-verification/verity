@@ -1745,3 +1745,13 @@ def test_the_predicted_rate_is_the_samples_chance_to_miss_every_dropped_receipt(
     assert summary.miss(20, 2, 2) == pytest.approx(18 / 20 * 17 / 19)
     U, f, s = 68 << 22, 2.0 ** -14, 2773
     assert summary.miss(U, round(f * U), s) == pytest.approx((1 - f) ** s, rel=1e-4)
+
+
+@pytest.mark.parametrize("module", ["prover", "node"])
+def test_a_session_started_naming_no_node_is_refused_before_it_connects(module, capsys, tmp_path, monkeypatch):
+    """No default names a machine: the node a session registers is the launcher's `--node`, its node file's
+    (`kit.session_node`)."""
+    monkeypatch.setattr(sys, "argv", [f"{module}.py", "--out", str(tmp_path)])
+    with pytest.raises(SystemExit) as e:
+        __import__(module).main()
+    assert e.value.code == 2 and "--node" in capsys.readouterr().err.splitlines()[-1]

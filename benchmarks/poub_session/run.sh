@@ -529,7 +529,11 @@ fi
 "${LEASE[@]}" bash -c '
   if [ -n "$CPU" ]; then
     DEV=(--cpu "$CPU" --codec "$CODEC")
+    SNODE=$(python3 benchmarks/kernels/machine.py session-node cpu 0)
   else
+    SNODE=$(python3 benchmarks/kernels/machine.py session-node "$(nvidia-smi --query-gpu=name --format=csv,noheader \
+      -i "${GPU_LEASE_UUID%%,*}" | head -1)" "$(nvidia-smi --query-gpu=index --format=csv,noheader -i "${GPU_LEASE_UUID%%,*}" \
+      | head -1)" 2>&1) || { echo "run.sh: no node for the session to register: $SNODE"; exit 3; }
     nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
       --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
     CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "${GPU_LEASE_UUID%%,*}" | head -1)
@@ -559,7 +563,7 @@ fi
       setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- "${PIN[@]}")
   fi
   "${PIN[@]}" "$PY" verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
-    "${DEV[@]}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
+    "${DEV[@]}" --node "${SESSION_NODE:-$SNODE}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
   P=$?
   W=0
   if [ -n "$V" ]; then

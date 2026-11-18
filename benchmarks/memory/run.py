@@ -91,7 +91,7 @@ from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
 
-from verity.device import load_card, load_node, node_kinds
+from verity.device import load_card, load_node
 from verity.protocol import no_bound
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger as poub_ledger
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts, timing
@@ -526,8 +526,7 @@ def sheet_of(name: str) -> tuple[str, str | None]:
     except SystemExit as e:
         raise CouldNotRun(f"{e}; and a node file of it to calibration/hardware/nodes/ for a share; a result against a "
                           "sheet not on main is not comparable, and its digest says so") from None
-    nodes = [k for k in node_kinds(directory=NODE_FILES)
-             if load_node(k, directory=NODE_FILES, cards_directory=CARD_FILES)["device"]["sku"] == sku]
+    nodes = kit.card_nodes(sku, directory=NODE_FILES, cards=CARD_FILES)
     if len(nodes) > 1:
         raise CouldNotRun(f"the node files {', '.join(nodes)} all carry {sku}, the card here: name the one this "
                           "machine is with LOCAL_NODE")
@@ -664,7 +663,8 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
            "ENGINE_ARGS": " ".join(filter(None, [ENGINE_ARGS, f"--arena-gib {arena} --util {util:g}",
                                                  given.get("ENGINE_ARGS")])),
            "NODE_ARGS": " ".join(filter(None, [NODE_ARGS, f"--model-dir {shlex.quote(str(snap))}",
-                                               f"--node local/{kind}/serving", given.get("NODE_ARGS")])),
+                                               given.get("NODE_ARGS")])),
+           "SESSION_NODE": kit.session_node(name, "serving", kind=kind),
            "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--node",
                                                    shlex.quote(f"{held}/{NODE_FILE}"), "--hbm-bytes", str(hbm_bytes)]))}
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():

@@ -1169,8 +1169,8 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
     assert machine.fetches() == [[str(tmp_path / "vllm" / "python"), "-c", M.FETCH, pin["repo"], pin["revision"],
                                   *sorted(pin["files"])]]
     assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {ARENA} --util 0.88"
-    assert env["NODE_ARGS"] == (f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap} "
-                                "--node local/h200-sxm-141gb-x1/serving")
+    assert env["NODE_ARGS"] == f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap}"
+    assert env["SESSION_NODE"] == "local/h200-sxm-141gb-x1/serving"
     assert (env["PACED"], env["PACE_PASS_MS"]) == ("1:1000:2773:7", "0"), "run.sh passes the form, once"
     assert env["VERIFIER_ARGS"] == (f"--node {env['RESEARCH_RUN_DIR']}/{M.NODE_FILE} "
                                     f"--hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}")
@@ -1248,7 +1248,7 @@ def test_an_h100_runs_the_session_on_the_card_alone_and_prints_no_share(store, c
     ((_, env),) = machine.runs()
     assert env["ENGINE_ARGS"] == "--step-hz 2 --align-steps --arena-gib 58 --util 0.88"
     assert env["VERIFIER_ARGS"] == f"--hbm-bytes {80 * GIB}"
-    assert env["NODE_ARGS"].endswith("--node local/h100-sxm-80gb/serving")
+    assert env["SESSION_NODE"] == "local/h100-sxm-80gb/serving"
     text, doc, _ = printed(capsys)
     assert text[0].startswith(f"memory: no number: {why}") and doc["value"] is None
 
