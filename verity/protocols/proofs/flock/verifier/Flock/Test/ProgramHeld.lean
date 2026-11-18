@@ -2,8 +2,10 @@ module
 
 public import Flock.ProvedScope
 public import Flock.Registered
+public import Flock.Test.RegProgram
 meta import Flock.ProvedScope
 meta import Flock.Registered
+meta import Flock.Test.RegProgram
 
 @[expose] public section
 
@@ -211,12 +213,22 @@ def code (e : String) : String := ((e.splitOn ": ")[1]?).getD ""
 -- against the population: the last block ends at it
 #guard code (why (HmRow.checkBlocksCover (withBlocks template chain) 7)) == "blocks-range"
 #guard code (why (HmRow.checkBlocksCover (withBlocks template chain) 9)) == "blocks-gap"
--- where the setup evaluates the query: the units derived and a sample's strata
-#guard code (match HmRow.deriveTemplateUnits (bound template) (withBlocks template (pairs [(0, 1000)])) mine #[] with
+/-- A template query over `RegProgram.reg`, whose instances of `TStep_v1` are its population. -/
+def steps : Json := object (sha Flock.Test.RegProgram.reg) "Q_template_instance" 0 (Json.mkObj [("template", Json.str "TStep_v1")])
+
+def strata (obj : Json) : String :=
+  match HmRow.stratifiedSamplingDesign obj Flock.Test.RegProgram.reg 1 with
+  | .error e => e
+  | .ok (_, pop) => s!"{pop}"
+
+def pop : Nat := (strata steps).toNat!
+
+-- where the setup evaluates the query: a sample's strata and the units derived
+#guard pop > 0 && strata (withBlocks steps (pairs [(0, pop)])) == s!"{pop}"
+#guard code (strata (withBlocks steps (pairs [(0, pop + 1)]))) == "blocks-range"
+#guard code (strata (withBlocks steps (pairs [(0, pop - 1)]))) == "blocks-gap" || pop == 1
+#guard code (match HmRow.deriveTemplateUnits default (withBlocks steps (pairs [(0, pop + 1)])) Flock.Test.RegProgram.reg #[] with
   | .error e => e
   | .ok note => note) == "blocks-range"
-#guard code (match HmRow.stratifiedSamplingDesign (withBlocks template (pairs [(0, 1000)])) mine 1 with
-  | .error e => e
-  | .ok _ => "") == "blocks-range"
 
 end Flock.Test.ProgramHeld
