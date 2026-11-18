@@ -465,10 +465,8 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_live.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_outer.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_residuals.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_session.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_sparse.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstar.py",
     "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1window.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py",
@@ -494,9 +492,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
     "verity/protocols/resource_accounting/network/prover/n2_zk.py",
     "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
-    "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
-    "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
 ]
 
 [[place]]

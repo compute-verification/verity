@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 import verity
+from verity.commitments import docket_digest as DD
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.protocols.resource_accounting.network.verifier import head_check as HC, io_request as Q, service as SVC, \
@@ -27,7 +28,6 @@ from verity.protocols.resource_accounting.network.verifier import head_check as 
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.commitments import registered_value as RV
 
 import standin
@@ -129,7 +129,7 @@ def test_an_honest_link_is_tied(tmp_path):
     assert [r.cells for r in SERVED.releases] == [(0, 1), (0, 1, 1), (0, 1)]
     assert run.link(inputs) == [True, True]
     verdict = run.verdict(inputs)
-    regs = tuple(R.digest(r) for r in run.stream.log)
+    regs = tuple(DD.digest(r) for r in run.stream.log)
     assert verdict == TS.IoTieVerdict(LINK, regs, TS.digest(inputs), (True, True))
     assert run.stream.records[-1]["public"] == {"verdict": 1, "inputs": TS.digest(inputs)}
     assert run.stream.log[0]["roots"][0]["root"] == run.cells[0].root.hex()
@@ -198,7 +198,7 @@ def test_the_tie_source_gives_the_verdict_only_on_its_own_link_and_stream(tmp_pa
     run = Run(tmp_path / "honest")
     assert run.link(inputs) == [True, True]
     ties = TS.Ties(run.tie, run.stream, SERVED.releases)
-    assert ties.registrations(LINK) == tuple(R.digest(r) for r in run.stream.log)
+    assert ties.registrations(LINK) == tuple(DD.digest(r) for r in run.stream.log)
     assert ties.verdict(LINK, inputs, PROFILE) == run.verdict(inputs) and all(run.verdict(inputs).accepted)
     with pytest.raises(ValueError, match="not 'another'"):
         ties.verdict("another", inputs, PROFILE)

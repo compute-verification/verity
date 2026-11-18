@@ -38,6 +38,7 @@ Run from the tree's root: PYTHONPATH=. python3 tests/adapters/vllm/tests/remotet
 """
 import hashlib
 
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as C
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as W
@@ -77,5 +78,5 @@ for program in (I2, H1):
     print(f"3. R7's domain for row-table/0/k{K} under {'I2' if program == I2 else 'H1'}'s Program == ROOTS1's:",
           r7 == h1_a["domain"])
 
-print("   the three readers' digest of H1's Commit record:", R.digest(h1_commit)[:16], "...;",
-      "of a V3c-shaped record:", R.digest({**h1_commit, "program": I2, "registered": v3c_registered})[:16], "...")
+print("   the three readers' digest of H1's Commit record:", DD.digest(h1_commit)[:16], "...;",
+      "of a V3c-shaped record:", DD.digest({**h1_commit, "program": I2, "registered": v3c_registered})[:16], "...")

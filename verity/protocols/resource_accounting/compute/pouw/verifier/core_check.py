@@ -81,11 +81,11 @@ import sys
 from fractions import Fraction
 from typing import Any, NamedTuple
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.verifier import coins as Co
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.profile import Work, WorkStratum
@@ -346,7 +346,7 @@ def commitment(b: bytes) -> dict:
 
 def digest(c: dict) -> bytes:
     """`registration.record_digest` over the record's own bytes: SHA-512(format || 0 || the canonical record)."""
-    return R.record_digest(c["format"], c["bytes"])
+    return DD.record_digest(c["format"], c["bytes"])
 
 
 # ---- the evidence, as `Core.Answer.ofJson` and `Core.Integrity.ofJson` read it (with `Flock.J`'s messages) ------------

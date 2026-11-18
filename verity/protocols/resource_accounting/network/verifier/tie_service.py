@@ -71,6 +71,7 @@ from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -634,13 +635,13 @@ class IngressTie:
             reg = log[w] if w < len(log) else None
             if reg is None or reg.get("window") != self.provenance(w):
                 break
-            body = outcomes.get(R.digest(reg))
+            body = outcomes.get(DD.digest(reg))
             verdict = ((body or {}).get("audit") or {}).get("verdicts", {}).get(VERIFIER) or {}
             ok.append(body is not None and body["symbol"] == S.ACCEPT and body["public"].get("inputs") == name
                       and verdict.get("decided_by") == "proof")
         held = len(log) == len(ok) == n and framed and released
         accepted = tuple(held and x for x in ok) + (False,) * (len(log) - len(ok))
-        return IoTieVerdict(self.link, tuple(R.digest(r) for r in log), name, accepted)
+        return IoTieVerdict(self.link, tuple(DD.digest(r) for r in log), name, accepted)
 
 
 @dataclass(frozen=True)
@@ -668,7 +669,7 @@ class Ties:
 
     def registrations(self, link: str) -> tuple[str, ...]:
         self._on(link)
-        return tuple(R.digest(r) for r in self.stream.log)
+        return tuple(DD.digest(r) for r in self.stream.log)
 
     def verdict(self, link: str, inputs: IngressInputs, profile: AdvisedProfile) -> IoTieVerdict:
         self._on(link)

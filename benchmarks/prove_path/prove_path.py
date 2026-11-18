@@ -207,6 +207,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -1140,10 +1141,10 @@ def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound
     import a5 as A5
 
     w = rec.get("window") or {}
-    ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == A5.CHALLENGER,
+    ok = {"after-the-draw": receipt.get("registration") == DD.digest(rec) and receipt.get("verifier") == A5.CHALLENGER,
           "compiler": w.get("compiler") == bound["compiler"], "advice": w.get("advice") == bound["advice"]}
     return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
-            "detail": {"drawn_after": receipt.get("registration"), "registration": R.digest(rec), "received": receipt.get("received")}}
+            "detail": {"drawn_after": receipt.get("registration"), "registration": DD.digest(rec), "received": receipt.get("received")}}
 
 
 def advice_after_sample(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping[str, Any], opening: Mapping[str, Any], mine: Any,
@@ -1396,7 +1397,7 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     if first is not None:
         Path(a.deployment_record).write_text(json.dumps(first, indent=1) + "\n")
     return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out,
-            **({"deployment": R.digest(first)} if first is not None else {})}
+            **({"deployment": DD.digest(first)} if first is not None else {})}
 
 
 def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
@@ -1844,12 +1845,12 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
         h1w, meta, _tables = tie
         values |= CT.reuse(h1w, meta["layout"], int(meta["steps"]), Path(a.h1_key).read_bytes(), filled.value)
-        previous = R.digest(h1w)
+        previous = DD.digest(h1w)
     elif pearl is not None:
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
         pw, manifests, rounds, _tables = pearl
         values |= PWR.reuse(pw, manifests, filled.value, rounds)
-        previous = R.digest(pw)
+        previous = DD.digest(pw)
     lap("rows")
     win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, registered=values, forms=WRS.FORMS)
     win.supply()
