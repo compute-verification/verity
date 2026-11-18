@@ -45,8 +45,9 @@ def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod(
     assert S.changes_of("prod-record") == ["the step record", "the served ids", "the canonical top-k"]
     # an arm is costed over the nearest stock arm above it: at the recipe's settings, stock at those settings
     assert [S.stock_of(a) for a in ("prod-again", "prod-record", "prod", "published")] == ["prod", "prod", "published", "compiled"]
-    assert {S.stock_of(a) for a in S.ARMS if a not in ("prod", "prod-again", "prod-record", "prod-seeded", "prod-trace",
-                                                  "prod-record-bisect")} == {"compiled"}
+    prods = ("prod", "prod-again", "prod-record", "prod-seeded", "prod-trace", "prod-tick", "prod-all-on",
+             "prod-record-bisect")
+    assert {S.stock_of(a) for a in S.ARMS if a not in prods} == {"compiled"}
     assert S.stock_of("no such arm") == "compiled" and all(n in S.ARMS and not S.changes_of(n) for n in S.STOCK)
     # the recipe is one model's; its arms serve at the job's context limit, the same for the three
     for arm in ("prod", "prod-again", "prod-record"):
@@ -88,7 +89,7 @@ def test_what_prod_record_differs_from_prod_by_is_read_apart_by_two_arms(tmp_pat
     assert S.same_engine("prod-again", "prod") and not S.same_engine("prod-seeded", "prod")
     assert not any(S.same_engine(a, b) for a in names for b in names if a < b)
     # no other arm is sent seeds without keeping the record
-    assert [n for n, a in S.ARMS.items() if a.seeds] == ["prod-seeded"]
+    assert [n for n, a in S.ARMS.items() if a.seeds] == ["prod-seeded", "prod-tick"]
 
 
 def test_an_arms_meta_holds_the_value_settings_in_force_in_the_environment_its_server_is_started_with(
