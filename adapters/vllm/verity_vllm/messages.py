@@ -216,6 +216,18 @@ class Exchange:
             if takes is None or isinstance(event, takes):
                 fn(event)
 
+    @contextmanager
+    def unheard(self) -> Iterator[None]:
+        """No scheme hears the block's pass, which is never a record (the learn-only warm-up): its events reach no
+        subscriber, its inputs start at once and its blocks are the workload's own."""
+        subscribers, requests = self.subscribers, self.requests
+        self.subscribers = {h: [] for h in H.HOOKS}
+        self.requests = [(n, r) for n, r in requests if not isinstance(r, (H.StartOnBoundary, H.ComputeBlockWith))]
+        try:
+            yield
+        finally:
+            self.subscribers, self.requests = subscribers, requests
+
     def compute(self, due: H.BlockDue, original: Callable[[Mapping[str, H.Handle] | None], H.Handle]) -> H.Handle:
         """A due block's output: emitted to ``blocks``' subscribers, then computed by the filed kernels, the workload's
         ``original`` innermost; inputs a kernel hands inward replace the block's for every kernel inside it."""

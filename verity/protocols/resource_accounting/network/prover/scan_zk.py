@@ -987,6 +987,13 @@ def _bits(reg: ADV.Committed, i: int) -> list[int]:
     return [row[k // 8] >> k % 8 & 1 for k in range(reg.n_bits)]
 
 
+def _refusal(e: Exception) -> dict:
+    """What a refused, pending or failed stream call says of itself, as a record's `refused` field."""
+    if isinstance(e, S.Refused):
+        return e.verdict.to_json()
+    return {"pending": e.args[0] if e.args else None} if isinstance(e, S.Pending) else {"stream": str(e)}
+
+
 def header_refusal(ports: dict, entries: dict) -> str | None:
     """The first rule of Lean's registered reads (`Flock.Registered.check`): a statement's header names a port
     registered only where the verifier's own ports do, since a header entry carries no root and its rows would open
@@ -1672,7 +1679,7 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
         o, result = outcome(stream, sample, ev)
         told = {"stream": stream.digest, "record": o.record, "accepted": o.accepted, "codes": list(o.verdict.codes)}
     except (S.Refused, S.Pending) as e:
-        result, told = None, {"stream": stream.digest, "accepted": False, "refused": AC._refusal(e)}
+        result, told = None, {"stream": stream.digest, "accepted": False, "refused": _refusal(e)}
     if result is not None and why is not None:
         result = {**result, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                   "checks": {**result["checks"], "coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}}}
@@ -1689,7 +1696,7 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
             got, audit = outcome(s, d, evidence)
             accepted, side = got.accepted, AC.lean_side(audit)
         except (S.Refused, S.Pending, ValueError, AC.Ch.CoinError) as e:
-            accepted, side = None, {"refused": AC._refusal(e)}
+            accepted, side = None, {"refused": _refusal(e)}
         py = reason(evidence, window, held)
         step = ((side or {}).get("step"), (side or {}).get("codes"))
         neg[name] = {"refused": py is not None and accepted is False and step == AC.SELECT_COINS, "accepted": accepted,

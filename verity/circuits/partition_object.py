@@ -43,7 +43,16 @@
 * **Every query** applies only to a topological program: every node of every body names only its body's parameters and earlier
   nodes (a body's `ret` any node).  `evaluate` checks it once, before any query (`order_violation`), so every query and `verify`
   refuse the same programs (`query-inapplicable`, with the definition, node, argument and reference).
-* `validate` checks the object's form (exact keys; a known query with exactly its parameters); `digest` digests only a valid object.
+* **Blocks.** A template query's object may carry ``"blocks": [[lo, hi], ...]``, the population's proof blocks: each a range
+  [lo, hi) of units numbered as the query numbers them (`TemplatePartition`: node order, then member), ascending, the first
+  starting at 0, each starting where the one before ends and the last ending at the population, so every unit is in exactly
+  one. Being in the object, the grouping is under its digest. An object without it names no grouping, and its digest is
+  unchanged. `validate` refuses a ``blocks`` that isn't a non-empty list of integer pairs 0 <= lo < hi (`blocks-form`), one on
+  a query that is not a template query (`blocks-query`), a pair starting before the one before it (`blocks-unsorted`), or
+  inside it (`blocks-overlap`), or after its end or a first pair not at 0 (`blocks-gap`). `verify` then refuses a last pair
+  ending past the population (`blocks-range`) or before it (`blocks-gap`).
+* `validate` checks the object's form (exact keys, ``blocks`` optional; a known query with exactly its parameters); `digest`
+  digests only a valid object.
   `verify` evaluates the query and checks every Call's cut on its derived graph (the invariant, the width rule), and, given what serving
   commits, holds it to the derived committed set: every Call that commits must be given and no other key (`served-missing`,
   `served-unknown`).  `tests/verity/circuits/qword_vectors.json` pins every refusal code of both.  For the template queries `verify` checks that the
@@ -58,7 +67,7 @@ from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .codec import canonical_json, descriptor_id, program_digest
-from .codec import SCHEMA, SCHEMA_V1
+from .codec import SCHEMA
 from .cut import (CALL_X, RECOMPUTE, WIRING, CallCut, CallGates, CallGraph, DefinitionCut, QueryInapplicable, call_committed, call_gates,
                   check_call_cut, check_cut, derived_committed, evaluate_call, evaluate_definition, member_refs)
 from .layout import resolve
@@ -68,6 +77,7 @@ from .refs import Concat, Explicit, Grid
 
 FORMAT = "verity/partition/v1"
 _KEYS = {"format", "program", "query"}
+BLOCKS = "blocks"
 _QUERY_KEYS = {"name", "version", "params"}
 _SHA512 = re.compile(r"^[0-9a-f]{128}$")
 
@@ -105,10 +115,10 @@ QueryRefused = QueryInapplicable
 
 
 def _program(program_or_desc: Any) -> str:
-    """The `program` field: `codec.program_digest` of a v1 descriptor (a program's, streamed, is `codec.SCHEMA`'s)."""
+    """The `program` field: `codec.program_digest` of a `codec.SCHEMA` descriptor, a program's streamed."""
     schema = program_or_desc.get("schema") if isinstance(program_or_desc, dict) else SCHEMA
-    if schema != SCHEMA_V1:
-        raise ValueError(f"the program digest is over a {SCHEMA_V1} descriptor, not {schema!r}")
+    if schema != SCHEMA:
+        raise ValueError(f"the program digest is over a {SCHEMA} descriptor, not {schema!r}")
     return program_digest(program_or_desc)
 
 
@@ -147,9 +157,46 @@ def template_instances_query(templates: Sequence[Any]) -> dict[str, Any]:
     return {"name": Q_TEMPLATE_INSTANCES[0], "version": Q_TEMPLATE_INSTANCES[1], "params": {"templates": [template_id(t) for t in templates]}}
 
 
-def build(program: Any, q: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """The object naming `program`'s partition as the query `q` (default `Q_word{X=16, W=32}` v1)."""
-    return {"format": FORMAT, "program": _program(program), "query": dict(q or query())}
+def build(program: Any, q: Mapping[str, Any] | None = None, blocks: Iterable[Sequence[int]] | None = None) -> dict[str, Any]:
+    """The object naming `program`'s partition as the query `q` (default `Q_word{X=16, W=32}` v1), with `blocks`, its proof
+    blocks as [lo, hi) unit ranges, when given."""
+    obj = {"format": FORMAT, "program": _program(program), "query": dict(q or query())}
+    if blocks is not None:
+        obj[BLOCKS] = [[lo, hi] for lo, hi in blocks]
+    return obj
+
+
+def blocks(obj: Mapping[str, Any]) -> list[tuple[int, int]] | None:
+    """The object's proof blocks, each (lo, hi), or None when it names no grouping."""
+    return None if BLOCKS not in obj else [(lo, hi) for lo, hi in obj[BLOCKS]]
+
+
+def _blocks_form(b: Any, template: bool, fail: Callable[[str, Any], None]) -> None:
+    def pair(p: Any) -> bool:
+        return isinstance(p, list) and len(p) == 2 and all(_is_int(x) for x in p) and 0 <= p[0] < p[1]
+
+    if not isinstance(b, list) or not b or not all(map(pair, b)):
+        fail("blocks-form", next((p for p in b if not pair(p)), b) if isinstance(b, list) and b else b)
+        return
+    if not template:
+        fail("blocks-query", len(b))
+    if b[0][0] != 0:
+        fail("blocks-gap", [0, b[0][0]])
+    for prev, p in zip(b, b[1:]):
+        if p[0] < prev[0]:
+            fail("blocks-unsorted", [prev, p])
+        elif p[0] < prev[1]:
+            fail("blocks-overlap", [prev, p])
+        elif p[0] > prev[1]:
+            fail("blocks-gap", [prev[1], p[0]])
+
+
+def _blocks_cover(b: Sequence[Sequence[int]], population: int, bad: dict[str, list]) -> None:
+    end = b[-1][1]
+    if end > population:
+        bad.setdefault("blocks-range", []).append([end, population])
+    elif end < population:
+        bad.setdefault("blocks-gap", []).append([end, population])
 
 
 def canonical(obj: Mapping[str, Any]) -> bytes:
@@ -165,8 +212,8 @@ def digest(obj: Mapping[str, Any]) -> str:
 
 
 def validate(obj: Any) -> CutVerdict:
-    """The object's own form: exactly `format`, `program`, `query` (nothing derived is stored); a SHA-512 program; a query of `QUERIES`
-    with exactly its parameters, each an integer in 1..PARAM_MAX."""
+    """The object's own form: exactly `format`, `program`, `query` (nothing derived is stored), and optionally `blocks` (module
+    docstring); a SHA-512 program; a query of `QUERIES` with exactly its parameters, each an integer in 1..PARAM_MAX."""
     bad: dict[str, list] = {}
 
     def fail(code: str, what: Any) -> None:
@@ -174,8 +221,8 @@ def validate(obj: Any) -> CutVerdict:
 
     if not isinstance(obj, Mapping):
         return CutVerdict(False, ("not-an-object",), {"not-an-object": {"n": 1, "gates": []}})
-    if set(obj) != _KEYS:
-        fail("keys", sorted(set(obj) ^ _KEYS, key=repr))
+    if set(obj) - {BLOCKS} != _KEYS:
+        fail("keys", sorted((set(obj) - {BLOCKS}) ^ _KEYS, key=repr))
     if obj.get("format") != FORMAT:
         fail("format", obj.get("format"))
     if not isinstance(obj.get("program"), str) or not _SHA512.fullmatch(obj["program"]):
@@ -189,6 +236,9 @@ def validate(obj: Any) -> CutVerdict:
             fail("query-unknown", [q["name"], q["version"]])
         elif not isinstance(q["params"], Mapping) or set(q["params"]) != set(known[0]) or not known[1](q["params"]):
             fail("query-params", q["params"])
+    if BLOCKS in obj:
+        template = isinstance(q, Mapping) and (q.get("name"), q.get("version")) in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES)
+        _blocks_form(obj[BLOCKS], template, fail)
     codes = tuple(bad)
     return CutVerdict(not codes, codes, {k: {"n": len(v), "gates": v[:64]} for k, v in bad.items()})
 
@@ -472,6 +522,8 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
         part = evaluate(program, obj["query"])
         if not template:
             _verify_calls(part, served, bad, report)
+        elif BLOCKS in obj:
+            _blocks_cover(obj[BLOCKS], part.population, bad)
     except QueryInapplicable as e:
         bad["query-inapplicable"] = [e.detail]
     verdict = _verdict(bad)
@@ -520,4 +572,4 @@ def _verdict(bad: dict[str, list]) -> CutVerdict:
 
 __all__ = ["FORMAT", "QUERIES", "PARAM_MAX", "QueryInapplicable", "QueryRefused", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCES", "Q_CALL", "Q_WORD",
            "call_query", "CallPartition", "template_id", "template_instance_query", "template_instances_query", "TemplatePartition", "ranges_digest", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
-           "owners_digest", "program_sha512", "verify"]
+           "owners_digest", "program_sha512", "verify", "BLOCKS", "blocks"]

@@ -1,6 +1,6 @@
 module
 
-public import Flock.Tmpl
+public import Flock.TmplUnroll
 public import Circuits.Program
 
 /-!
@@ -17,12 +17,17 @@ Definition's own structure, in the description's size, and never from unrolled r
   place: XOR and NOT add forms and write no row, a constant is a form, and an AND of two forms neither constant writes one
   row `(c, A, B)`, `z_c = (A·z)(B·z)`; an AND of more inputs is that, left to right. A `call` node is a `CALL` of one copy,
   and a `batch` node one `CALL` of `n` copies whose inputs step per copy, the steps read off the argument's references
-  (`bindAt`), never member by member. A scan is refused.
+  (`stepping`), never member by member. A `scan` node is two `CALL`s: its first iteration on `init`, then the rest, each
+  reading the previous one's carry (`Work.scan`).
 - **Bindings and returns are columns.** A call's input that is not one reference, and a Definition's returned leaf that is
   not one of its own columns, is committed first: one row `(c, form, 1)`.
 - **The block.** The root holds the input rows (`z_c = z_c·z_c`, bit `i` at column `i`), places `d` once at the end of
   the input rows' words, copies `d`'s returns to the output rows, aligned to the output group's words, and ends with the
   constant, as `Flock.ReadNet.readTmpl` lays a read out. Input bit `i` is port bit `i`, the ports `inPorts` concatenated.
+
+`lower` ends by running the reader's checks on what it wrote (`selfCheck`), so its output passes them
+(`lower_checked`) and unrolls (`FlockSoundness.Lower.lower_unrolls`). A refusal there is `SELF_CHECK`'s, a completeness
+failure of the lowering, never a refusal of its input; the tests hold it to never happening on an honest Definition.
 
 `render` writes the template as `Tmpl.parse` reads it, and `inBit`/`outBit` name port bit `k`'s column. That the
 unrolled template evaluates as the Definition is a named premise of the guarantees over the door, not stated here.
@@ -71,12 +76,16 @@ a Definition whose leaf `l` is its column `rets[l]`. -/
 inductive Out where
   | gate (f : Form)
   | copies (base stride : Nat) (rets : Array Nat)
+  /-- a scan's `n` iterations at `base + m · stride`, each returning its `c` carry leaves then its `y`: the node's leaf
+  `j < c` is the last iteration's carry leaf `j`, leaf `c + m · |y| + t` iteration `m`'s `y` leaf `t` -/
+  | scan (base stride : Nat) (rets : Array Nat) (c n : Nat)
   deriving Inhabited
 
 /-- A call's binding of its callee's input before the caller's columns are counted: copy `m` reads atom `a + m · step`. -/
 structure Bind where
   a : Nat
   step : Nat
+  deriving Inhabited
 
 structure Pending where
   def_ : Nat
@@ -138,7 +147,12 @@ def Work.formOf (w : Work) (st : Array Nat) (r : Ref) : V Form :=
     | some (.copies base stride rets) =>
       if rets.isEmpty then throw s!"node {r.i}: returns nothing"
       else pure (Form.own (base + r.j / rets.size * stride + rets[r.j % rets.size]!))
-    | none => throw s!"node {r.i}: not lowered (a scan, or not an earlier node)"
+    | some (.scan base stride rets c n) =>
+      let y := rets.size - c
+      if r.j < c then pure (Form.own (base + (n - 1) * stride + rets[r.j]!))
+      else if y == 0 then throw s!"node {r.i}: a scan's leaf {r.j} past its carry, of no y"
+      else pure (Form.own (base + (r.j - c) / y * stride + rets[c + (r.j - c) % y]!))
+    | none => throw s!"node {r.i}: not an earlier node"
 
 /-- Reference `r` stepping by `s` leaves a copy, as one atom and its step: a parameter's leaves, or a node's copies whose
 members the step crosses whole. -/
@@ -151,12 +165,26 @@ def Work.stepOf (w : Work) (st : Array Nat) (r : Ref) (s : Nat) : V Bind :=
       let L := rets.size
       if L == 0 || s % L != 0 then throw s!"node {r.i}: a batch argument stepping {s} leaves across its copies of {L}"
       else pure ⟨2 * (base + r.j / L * stride + rets[r.j % L]!), 2 * (s / L * stride)⟩
+    | some (.scan base stride rets c _) =>
+      let y := rets.size - c
+      if r.j < c || y == 0 || s % y != 0 then
+        throw s!"node {r.i}: an argument stepping {s} leaves through a scan's carry, or across its iterations' y of {y}"
+      else pure ⟨2 * (base + (r.j - c) / y * stride + rets[c + (r.j - c) % y]!), 2 * (s / y * stride)⟩
     | some (.gate _) => throw s!"node {r.i}: a batch argument stepping across one gate"
-    | none => throw s!"node {r.i}: not lowered (a scan, or not an earlier node)"
+    | none => throw s!"node {r.i}: not an earlier node"
 
 /-- The part of `q` holding reference `k`. -/
 def partIx (q : Seq) (k : Nat) : Nat :=
   (List.range q.parts.size).foldl (fun i x => if q.starts[x]! ≤ k then x else i) 0
+
+/-- References `k0 + m · L` of `q` for `m < n`, as reference `k0` stepping `L` leaves a copy: within one affine part. -/
+def stepping (q : Seq) (k0 n L : Nat) (what : String) : V (Ref × Nat) :=
+  if n ≤ 1 then pure (q.get k0, 0) else
+  let i := partIx q k0
+  if partIx q (k0 + (n - 1) * L) != i then throw s!"{what} across two parts of its references"
+  else match q.parts[i]! with
+    | .affine p ix b _ => pure (⟨p, ix, b + (k0 - q.starts[i]!)⟩, L)
+    | _ => throw s!"{what} stepping through references that are not affine"
 
 /-- Copy `m`'s reference `t` of argument `a` of a batch of `n`, for every `m` at once: where copy 0's is, and the leaves
 it steps a copy. An argument mapped over an axis steps by its element's leaves within one affine part; one not mapped is
@@ -165,14 +193,7 @@ def bindRef (a : Arg) (n t : Nat) : V (Ref × Nat) :=
   match a.dims with
   | none => pure (a.seq.get t, 0)
   | some (d, L) =>
-    let k0 := (t / L * d) * L + t % L
-    if n ≤ 1 then pure (a.seq.get k0, 0) else
-    let k1 := k0 + (n - 1) * L
-    let i := partIx a.seq k0
-    if partIx a.seq k1 != i then throw "a batch argument across two parts of its references"
-    else match a.seq.parts[i]! with
-      | .affine p ix b _ => pure (⟨p, ix, b + (k0 - a.seq.starts[i]!)⟩, L)
-      | _ => throw "a batch argument stepping through references that are not affine"
+    stepping a.seq ((t / L * d) * L + t % L) n L "a batch argument"
 
 /-- A Definition's resolved rows and calls, its columns counted. -/
 def Work.finish (w : Work) (ins : Nat) : Tmpl.Def :=
@@ -240,6 +261,54 @@ def Work.binds (w : Work) (st : Array Nat) (callee : Defn) (x : Node) : V (Work 
       else out := out.push (← w.stepOf st r s)
   return (w, out)
 
+/-- Reference `r` bound for every copy, stepping `s` leaves a copy: committed first when it is a form the same for every
+copy (`s = 0`). -/
+def Work.bindOne (w : Work) (st : Array Nat) (r : Ref) (s : Nat) : V (Work × Bind) := do
+  if s == 0 then
+    let (w', at_) := w.commit (← w.formOf st r)
+    return (w', ⟨at_, 0⟩)
+  else return (w, ← w.stepOf st r s)
+
+/-- A scan node's `n` iterations of template Definition `e` (`cols` columns, its returns `rets`, the first `c` its carry):
+copy 0 bound to `init`, copies `1 … n − 1` one `CALL` whose carry inputs are the previous copy's carry returns, stepping
+one copy; an `xs` argument steps its element's leaves an iteration, a shared one binds every copy alike. -/
+def Work.scan (w : Work) (st : Array Nat) (callee : Defn) (x : Node) (e cols : Nat) (rets : Array Nat) : V Work := do
+  let n := x.n
+  if n == 0 then throw s!"{callee.id}: a scan of no iterations"
+  let c := (callee.params[0]!.2).leaves
+  let mut w := w
+  let mut first := #[]
+  let mut rest := #[]
+  let mut carries := #[]
+  for i in [0:x.args.size] do
+    let a := x.args[i]!
+    let cnt := (callee.params[i]!.2).leaves
+    for t in [0:cnt] do
+      if i == 0 then
+        let (w', b) ← w.bindOne st (a.seq.get t) 0
+        w := w'
+        first := first.push b
+        carries := carries.push t
+        rest := rest.push b
+      else if i ≤ x.nxs then
+        let (r, s) ← stepping a.seq t n cnt "a scan's xs"
+        let (w', b) ← w.bindOne st r s
+        w := w'
+        first := first.push b
+        rest := rest.push ⟨b.a + b.step, b.step⟩
+      else
+        let (w', b) ← w.bindOne st (a.seq.get t) 0
+        w := w'
+        first := first.push b
+        rest := rest.push b
+  let base := w.next
+  rest := (Array.range rest.size).map fun k =>
+    if k < c then ⟨2 * (base + rets[carries[k]!]!), 2 * cols⟩ else rest[k]!
+  let calls := w.calls.push { def_ := e, count := 1, base, stride := cols, binds := first }
+  let calls := if n > 1 then calls.push { def_ := e, count := n - 1, base := base + cols, stride := cols, binds := rest }
+    else calls
+  return { w with calls, next := base + n * cols, outs := w.outs.push (.scan base cols rets c n) }
+
 /-- Composite Definition `d` lowered, its callees first: its template Definition and its returns' columns. `fuel` bounds the
 call depth; a callee has a smaller index than its caller. -/
 def lowerDef (P : Prog) : Nat → Nat → M (Nat × Array Nat)
@@ -253,7 +322,12 @@ def lowerDef (P : Prog) : Nat → Nat → M (Nat × Array Nat)
     let mut w : Work := {}
     for x in body.nodes do
       let callee := P.defs[x.fn]!
-      if x.form == .scan then throw s!"{defn.id}: a scan node is not lowered yet"
+      if x.form == .scan then
+        if callee.prim then throw s!"{defn.id}: a scan of a primitive"
+        let (e, rets) ← lowerDef P fuel x.fn
+        let cols := ((← get).defs[e]!).cols
+        w ← liftM (w.scan st callee x e cols rets)
+        continue
       if callee.prim then
         let some g := gateOf? callee.id | throw s!"{callee.id}: not a Boolean gate (PROTOCOL.md §9)"
         if x.form == .batch then
@@ -289,7 +363,7 @@ def alignUp (n span : Nat) : Nat := (n + span - 1) / span * span
 /-- **The block's template**: Definition `d` of `P` and every Definition it reaches, one template Definition each, callees
 first, then the root: the input rows (port bit `i` at column `i`, every port bit a row), `d` placed once on them, its returns copied to the
 output rows, and the constant. `inPorts`/`outPorts` are the port widths in bits, ports concatenated, low bit first. -/
-def lower (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl := do
+def build (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl := do
   let some defn := P.defs[d]? | throw s!"no Definition {d}"
   let N := defn.paramLeaves
   let Mo := defn.outLeaves
@@ -314,6 +388,44 @@ def lower (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl := d
                    segs := if N == 0 then #[] else #[{ len := N, at_ := 0, step := 0, reps := 1, rstride := 0 }] }] }
   return { name := defn.key, root := s.defs.size, inGroups := #[⟨0, inW, inPorts⟩],
            outGroups := #[⟨oStart / WORD, outW, outPorts⟩], defs := s.defs.push root }
+
+/-- The prefix of a refusal at `selfCheck`: the lowering wrote a template the reader refuses, a completeness failure of
+`lower`, never a refusal of its input. -/
+def SELF_CHECK : String := "lower: completeness failure"
+
+/-- The first of the reader's five checks `t` fails. -/
+def selfWhy (t : Tmpl.Tmpl) : String :=
+  if !t.wellFormed then "not well-formed"
+  else if !t.apart then "a Definition's rows or copies overlap or leave its columns"
+  else if !t.ordered then "a row reads a column out of order, or an input column that is not a port bit"
+  else if !t.inputsT then "an input row is not a self row or empty, or an input port bit has no self row"
+  else "a port group is not an aligned power of two of words holding its ports"
+
+/-- `t` if it passes the checks the reader runs on every template (`Tmpl.unrollOk`'s, the layouts' aside), else refused
+under `SELF_CHECK`. -/
+def selfCheck (t : Tmpl.Tmpl) : V Tmpl.Tmpl :=
+  if t.wellFormed && t.apart && t.ordered && t.inputsT && t.groupsOk then pure t
+  else throw s!"{SELF_CHECK}: the template of {t.name} written by `lower` fails the reader's check: {selfWhy t}"
+
+/-- **The block's template** (`build`), refused under `SELF_CHECK` unless it passes the reader's checks. -/
+def lower (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl :=
+  build P d inPorts outPorts >>= selfCheck
+
+/-- **What `lower` writes is a template the verifier's checks pass**: well formed, its copies apart, its rows and
+bindings in order, its input rows self rows over its port bits, its port groups aligned. -/
+theorem lower_checked {P : Prog} {d : Nat} {inP outP : Array Nat} {t : Tmpl.Tmpl}
+    (hl : lower P d inP outP = .ok t) :
+    t.wellFormed = true ∧ t.apart = true ∧ t.ordered = true ∧ t.inputsT = true ∧ t.groupsOk = true := by
+  unfold lower at hl
+  cases hb : build P d inP outP with
+  | error e => simp [hb, bind, Except.bind] at hl
+  | ok t' =>
+    simp only [hb, bind, Except.bind, selfCheck] at hl
+    split at hl
+    · rename_i h
+      cases hl
+      simpa [Bool.and_eq_true, and_assoc] using h
+    · cases hl
 
 /-! ## The text -/
 

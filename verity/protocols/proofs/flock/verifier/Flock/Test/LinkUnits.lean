@@ -43,9 +43,10 @@ def res (r : Except String Nat) : String :=
 -- over the population, the check is the reference walk's: units that read only circuit inputs pass ...
 #guard res (HmLinks.check lane (at_ [0, 1]) none plain) == "ok 0"
 #guard res (HmLinks.checkRef lane (at_ [0, 1]) plain) == "ok 0"
--- ... and a scan iteration that reads another unit's output with no link row refuses, in both
+-- ... and a scan iteration that reads another unit's output refuses, in both: the lane's circuit names no template of
+-- C, so in(S)'s layout is the hole `OneCircuit.io`
 #guard res (HmLinks.check lane (at_ [0, 13]) none plain) == res (HmLinks.checkRef lane (at_ [0, 13]) plain)
-#guard (res (HmLinks.check lane (at_ [0, 13]) none plain)).startsWith "links: cut wire: unit 13's parameter leaf 0 reads unit 0's output"
+#guard (res (HmLinks.check lane (at_ [0, 13]) none plain)).startsWith "one-circuit: not derived yet: io"
 
 -- a sample that proves only the first unit checks only its wires; one that proves the scan iteration refuses
 #guard res (HmLinks.check lane (at_ [0, 13]) (some #[0]) plain) == "ok 0"

@@ -52,14 +52,8 @@ def prove_path_arm(out: Path, name: str, *, proof: str = "zk", forged: bool = Fa
     return arm
 
 
-@pytest.fixture(autouse=True)
-def per_block(monkeypatch):
-    """The figures a proof block published (`PL.PUBLISH_PER_BLOCK`), as every test here but the held ones reads them."""
-    monkeypatch.setattr(PL, "PUBLISH_PER_BLOCK", True)
-
-
 def held_arm(out: Path, name: str, keep: Path | None = None) -> Path:
-    """`prove_path_arm` as prove_path's public log writes it since the draw counts are held: no ``draw_counts`` or
+    """`prove_path_arm` as prove_path's public log writes it since 5e1564861b9: no ``draw_counts`` or
     ``population``, and of ``per_unit`` only ``proof_bytes``; with ``keep``, its whole copy there, named in the run's
     `PL.PRIVATE_PATHS`."""
     whole = prove_path_arm((keep or out.parent / "whole"), name)
@@ -84,37 +78,19 @@ def held_arm(out: Path, name: str, keep: Path | None = None) -> Path:
     return arm
 
 
-def test_the_figures_a_proof_block_are_held_unless_published():
-    assert PL.PUBLISH_PER_BLOCK is True
-    import importlib
-    assert importlib.reload(PL).PUBLISH_PER_BLOCK is False
-
-
-def test_held_a_result_gives_its_statements_totals_and_names_why_on_a_new_and_an_old_run(tmp_path, monkeypatch):
-    monkeypatch.setattr(PL, "PUBLISH_PER_BLOCK", False)
-    for given in (held_arm(tmp_path / "new" / "out", "llama"), prove_path_arm(tmp_path / "old" / "out", "llama")):
-        result = PL.read("zk", str(given))
-        assert result.accepted and (result.prover_s, result.lean_s, result.proof_bytes) == (6.0, 2.0, 1700000.0)
-        assert result.per == "over 1 sampled statement" and not result.per_block and result.held == PL.HELD_PER_BLOCK
-        assert PL.HELD_PER_BLOCK in result.notes
-    assert PL.read("zk", str(tmp_path / "new" / "out" / "llama")).workload == f"arm llama: {PL.HELD_COUNT}"
-
-
-def test_published_without_the_runs_keep_a_new_run_refuses_its_figures_a_proof_block_by_name(tmp_path):
+def test_a_new_runs_public_copy_alone_refuses_its_figures_a_proof_block_by_name(tmp_path):
     result = PL.read("zk", str(held_arm(tmp_path / "out", "llama")))
     assert result.accepted and (result.prover_s, result.lean_s, result.proof_bytes) == (None, None, None)
-    assert result.workload == f"arm llama: {PL.HELD_COUNT}" and result.held == PL.HELD_COUNT
-    assert f"no figure a proof block: {PL.HELD_COUNT}" in result.notes
-    assert PL.render([result]).startswith(f"prove layers: no number: zk: {PL.HELD_COUNT}\n")
+    assert result.workload == f"arm llama: {PL.NO_COUNT}" and result.uncounted == PL.NO_COUNT
+    assert f"no figure a proof block: {PL.NO_COUNT}" in result.notes
+    assert PL.render([result]).startswith(f"prove layers: no number: zk: {PL.NO_COUNT}\n")
 
 
-def test_published_a_new_run_reads_its_draw_counts_from_the_keep_its_run_names(tmp_path):
-    keep = tmp_path / "keep"
-    result = PL.read("zk", str(held_arm(tmp_path / "run" / "out", "llama", keep=keep)))
+def test_a_new_run_reads_its_draw_counts_from_the_keep_its_run_names(tmp_path):
+    result = PL.read("zk", str(held_arm(tmp_path / "run" / "out", "llama", keep=tmp_path / "keep")))
     assert result.accepted and (result.prover_s, result.lean_s, result.proof_bytes) == (3.0, 1.0, 850000.0)
-    assert result.workload == f"arm llama: {PL.HELD_COUNT}" and result.held is None
-    assert not any("x 2 sampled" in x or "of 8" in x for x in PL.render([result]).splitlines())
-    assert any(str(keep / "llama") in n for n in result.notes)
+    assert result.per_block and result.uncounted is None
+    assert result.workload == f"arm llama: SiluMul_v2{{I=8192}} x 2 sampled of 8 proof blocks ({PL.FROM_KEEP})"
 
 
 MACHINE = ("ubuntu\nnode\nabc\nrow dir /w/r/llama32-1b__int8__h200__tp1__b4\nCUDA_HOME /w/cuda\n"
@@ -249,12 +225,22 @@ def table_lines(text: str) -> dict[str, str]:
     return {x.split(" | ")[0][2:]: x for x in text.splitlines() if x.startswith("| ") and not x.startswith("| layer ")}
 
 
-def test_held_a_layer_writes_null_under_its_figures_a_proof_block_and_names_why(tmp_path, monkeypatch):
-    monkeypatch.setattr(PL, "PUBLISH_PER_BLOCK", False)
-    results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path)))]
-    assert results[2].accepted and results[2].prover_s is not None
+def test_an_a5_run_without_its_draw_counts_writes_null_under_its_figures_a_proof_block_and_names_why(tmp_path):
+    out = a5_out(tmp_path)
+    for f in (f for f in out.rglob("*") if f.is_file() and "draw_counts" in f.read_text()):
+        if f.suffix == ".json":
+            f.write_text(json.dumps({k: v for k, v in json.loads(f.read_text()).items() if k != "draw_counts"}))
+            continue
+        lines = []
+        for line in f.read_text().splitlines():
+            tag, _, rest = line.partition(" ")
+            if rest.startswith("{") and "draw_counts" in rest:
+                line = f"{tag} " + json.dumps({k: v for k, v in json.loads(rest).items() if k != "draw_counts"})
+            lines.append(line)
+        f.write_text("\n".join(lines) + "\n")
+    results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(out))]
     own = [m for m in PL.measured(results, IDS) if m["member"] == SERVES and IDS[m["name"]] != "build_s"]
-    assert own and all(m["value"] is None and m["why"] == PL.HELD_PER_BLOCK for m in own)
+    assert own and all(m["value"] is None and m["why"] == PL.NO_COUNT for m in own)
 
 
 def test_a_plain_sampling_result_writes_null_with_why_under_every_id(tmp_path):

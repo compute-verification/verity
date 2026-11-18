@@ -1,7 +1,7 @@
 """The streamed program digest (`codec.descriptor_chunks`) against the codec before it: the same bytes, digests and refusals.
 
 `old_encode_program` and `old_jcs_domain_error` are the codec's `encode_program` and `jcs_domain_error` before the digest
-streamed, verbatim but for their names (the reference, as `test_ports_one_use.OldUses` is the port check's): every Program
+streamed, verbatim but for their names and the Boolean map's bodies, walked last (the reference, as `test_ports_one_use.OldUses` is the port check's): every Program
 here, random ones and the other tests' own, is encoded by both, under both schemas and at several node batch sizes, and the
 descriptor's canonical JSON, `program_digest` and `descriptor_size` must agree byte for byte. The pinned digest itself is
 `test_format_spec`'s."""
@@ -86,6 +86,9 @@ def old_encode_program(program, schema: str = C.SCHEMA) -> dict:
     visit(root)
     for f in _program_fn_functions(program):
         visit(f)
+    bodies = C._boolean(program)
+    for f in bodies.values():
+        visit(f)
     for fid, fn in duplicates:
         if _encode_definition(fn) != _encode_definition(seen[fid]):
             raise IdentityConflict(f"E_IDENTITY: two different definitions claim the specialization {fid!r}")
@@ -94,6 +97,7 @@ def old_encode_program(program, schema: str = C.SCHEMA) -> dict:
         "root": descriptor_id(root),
         "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
         "definitions": defs,
+        "boolean": {k: descriptor_id(f) for k, f in bodies.items()},
         "annotations": dict(program.annotations),
     }
     if tables is not None:
@@ -342,15 +346,15 @@ def test_a_descriptor_outside_the_domain_is_refused_as_before(statics):
 
 
 def test_an_identity_conflict_is_refused_as_before():
-    """Two different definitions under one specialization id: the old codec's E_IDENTITY, from each entry point."""
+    """Two different definitions under one specialization id: E_IDENTITY, now at the Program's build, whose Boolean map walks
+    the definitions."""
     a = bind(CompositeDefinition("CodecStreamTwin", 1, (), lambda S: ((("x", V16),), V16),
                                  lambda B, S, x: B.call(Add16, x, x), register=False))
     b = bind(CompositeDefinition("CodecStreamTwin", 1, (), lambda S: ((("x", V16),), V16),
                                  lambda B, S, x: B.call(Mul16, x, x), register=False))
-    prog = Program(CompositeDefinition("CodecStreamTwins", 1, (), lambda S: ((("x", V16),), V16),
-                                       lambda B, S, x: B.call(Add16, B.call(a, x), B.call(b, x)), register=False))
-    assert outcome(old_bytes, prog)[0] == "IdentityConflict"
-    assert_same(prog)
+    with pytest.raises(IdentityConflict, match="CodecStreamTwin_v1"):
+        Program(CompositeDefinition("CodecStreamTwins", 1, (), lambda S: ((("x", V16),), V16),
+                                    lambda B, S, x: B.call(Add16, B.call(a, x), B.call(b, x)), register=False))
 
 
 def _plant(r: random.Random, depth: int) -> Any:

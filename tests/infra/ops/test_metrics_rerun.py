@@ -66,7 +66,7 @@ class Pod:
         self.ages, self.states, self.lines, self.launched = ages or {}, states or {}, [], []
         self.listed, self.on_refresh, self.named, self.registered = listed, on_refresh, 0, set()
         self.out = out or (lambda n: f"research: run {run_id(n)} launched\n")
-        self.rang, self.ring_fails = [], ring_fails
+        self.rang, self.ring_fails, self.kept = [], ring_fails, []
 
     def log(self, msg):
         self.lines.append(msg)
@@ -98,9 +98,10 @@ class Pod:
             raise RuntimeError("ring-run exited 1: slack is down")
         self.rang.append((run, rc, owner, text))
 
-    def launch(self, argv):
+    def launch(self, argv, keys=frozenset()):
         i = argv.index("--id")
         self.launched.append(argv[:i] + argv[i + 2:])
+        self.kept.append(sorted(keys))
         said = self.out(len(self.launched))
         if f"run {argv[i + 1]} launched" in said:
             self.registered.add(argv[i + 1])
@@ -563,9 +564,10 @@ def control(i, command=LANDING, every="12h"):
 
 
 def write_list(tmp_path, entries):
-    """The pod's list of CONTROL rows, as infra writes it on the pod: [[row]] id, command."""
+    """The pod's list of CONTROL rows, as infra writes it on the pod: [[row]] id, command and, in a third place, keys."""
     p = tmp_path / "metrics-rerun.control.toml"
-    p.write_text("".join(f"[[row]]\nid = {json.dumps(i)}\ncommand = {json.dumps(c)}\n\n" for i, c in entries))
+    p.write_text("".join(f"[[row]]\nid = {json.dumps(i)}\ncommand = {json.dumps(c)}\n"
+                         + (f"keys = {json.dumps(list(k[0]))}\n" if k else "") + "\n" for i, c, *k in entries))
     return p
 
 
@@ -654,8 +656,9 @@ def test_a_runs_value_but_control_or_rows_of_one_command_that_disagree_are_refus
 
 COMMUNICATION = "research run --project verity --cwd source -- uv run python benchmarks/communication/response.py"
 #: the entries infra writes in the pod's list for the tree's CONTROL rows
+LINEAR = ("LINEAR_CLIENT_ID", "LINEAR_CLIENT_SECRET")
 ENTRIES = [("ci/plain-mark-to-main-p90", LANDING), ("ci/lean-mark-to-main-p90", LANDING),
-           ("top/lead-response-p90-minutes", COMMUNICATION), ("top/lead-asks-open-over-30-min", COMMUNICATION)]
+           ("top/lead-response-p90-minutes", COMMUNICATION, LINEAR), ("top/lead-asks-open-over-30-min", COMMUNICATION, LINEAR)]
 
 
 def the_trees_control_rows(tmp_path, **kw):
@@ -716,6 +719,14 @@ def test_each_row_of_a_shared_command_must_be_listed(tmp_path):
     assert "ci/plain's" not in state["numbers"]["ci/lean"]["why"]
 
 
+def test_the_fix_for_a_row_whose_listed_sibling_names_keys_names_them_too(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain"), control("ci/lean")]},
+                control_rows=write_list(tmp_path, [("ci/plain", LANDING, LINEAR)]))
+    state, _ = run(cfg, Pod(out=here))
+    assert state["numbers"]["ci/lean"]["why"].endswith(
+        f'a [[row]] with id = "ci/lean", command = "{LANDING}", keys = ["LINEAR_CLIENT_ID", "LINEAR_CLIENT_SECRET"]')
+
+
 @pytest.mark.parametrize("contents, said", [(None, "is missing"), ("[[row]]\nid = 1\n", "is unreadable (ValueError: "),
                                             ("[[row\n", "is unreadable (TOMLDecodeError: ")])
 def test_a_missing_or_unreadable_list_runs_none_of_the_trees_control_rows_and_says_so_once(tmp_path, contents, said):
@@ -725,8 +736,8 @@ def test_a_missing_or_unreadable_list_runs_none_of_the_trees_control_rows_and_sa
     cfg = the_trees_control_rows(tmp_path, control_rows=lst)
     pod = Pod(out=here)
     state, _ = run(cfg, pod)
-    assert pod.launched == [] and {i: state["numbers"][i]["reason"] for i, _ in ENTRIES} == dict.fromkeys(
-        (i for i, _ in ENTRIES), "control-unlisted")
+    assert pod.launched == [] and {i: state["numbers"][i]["reason"] for i, *_ in ENTRIES} == dict.fromkeys(
+        (i for i, *_ in ENTRIES), "control-unlisted")
     assert sum(ln.startswith(f"the control pod's list of rows {lst} {said}") for ln in pod.lines) == 1, pod.lines
     assert sorted({r[2] for r in pod.rang}) == ["ci", "infra", "top"]
     assert all(len(r[3]) <= 600 for r in pod.rang), "a doorbell carries 600 characters (slack.DOORBELL_MAX): the fix is whole"
@@ -738,8 +749,12 @@ def test_the_entries_for_the_trees_control_rows_run_them_on_the_pod(tmp_path):
     cfg = the_trees_control_rows(tmp_path, control_rows=write_list(tmp_path, ENTRIES))
     pod = Pod(out=here, states={run_id(n): ("done", 0, True, {"here": True}) for n in (1, 2)})
     state, _ = run(cfg, pod)
-    assert sorted(i for e in state["launches"] for i in e["metrics"]) == sorted(i for i, _ in ENTRIES)
+    assert sorted(i for e in state["launches"] for i in e["metrics"]) == sorted(i for i, *_ in ENTRIES)
     assert {e["machine"] for e in state["launches"]} == {"control"} and pod.rang == []
+    assert {tuple(sorted(e["metrics"])): e.get("keys") for e in state["launches"]} == {
+        ("top/lead-asks-open-over-30-min", "top/lead-response-p90-minutes"): list(LINEAR),
+        ("ci/lean-mark-to-main-p90", "ci/plain-mark-to-main-p90"): None}, "the landing rows' entries name no key"
+    assert sorted(pod.kept) == [[], list(LINEAR)]
 
 
 def test_a_node_row_is_untouched_by_the_list(tmp_path):
@@ -766,12 +781,121 @@ def test_classify_reads_the_pods_list_only_when_given_it(tmp_path):
     assert R.census(cfg.tree, lines.append, control_rows=write_list(tmp_path, ENTRIES)) == {"runnable": 4}
 
 
-def test_a_control_rows_environment_keeps_the_linear_apps_keys_and_no_other_of_the_pods():
+def test_a_launch_keeps_only_the_pods_keys_its_rows_entries_name():
     pods = {"JOBS_TOKEN": "j", "SLACK_BOT_TOKEN": "s", "LINEAR_CLIENT_ID": "i", "LINEAR_CLIENT_SECRET": "c",
             "LINEAR_API_KEY": "k", "RESEARCH_STORE": "r", "AWS_ACCESS_KEY_ID": "a", "PATH": "p"}
-    assert sorted(R.environment(pods, here=False)) == ["AWS_ACCESS_KEY_ID", "PATH", "RESEARCH_STORE"]
-    assert sorted(R.environment(pods, here=True)) == ["AWS_ACCESS_KEY_ID", "LINEAR_CLIENT_ID", "LINEAR_CLIENT_SECRET", "PATH",
-                                                      "RESEARCH_STORE"]
+    assert sorted(R.environment(pods, frozenset())) == ["AWS_ACCESS_KEY_ID", "PATH", "RESEARCH_STORE"]
+    assert sorted(R.environment(pods, frozenset(LINEAR))) == ["AWS_ACCESS_KEY_ID", *LINEAR, "PATH", "RESEARCH_STORE"]
+
+
+def test_a_control_row_whose_entry_names_no_key_gets_none_and_a_node_row_never_does(tmp_path):
+    """The keys follow the entry, not the word: a listed row whose entry names none runs with none of the pod's keys, and a
+    row a node runs takes none whatever the list says of its id."""
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain")],
+                           "benchmarks/compute": [row("compute-accounting/share", CPU)]},
+                control_rows=write_list(tmp_path, [("ci/plain", LANDING), ("compute-accounting/share", CPU, LINEAR)]))
+    pod = Pod(out=lambda n: here(n) if n == 2 else f"research: run {run_id(n)} launched\n",
+              states={run_id(2): ("done", 0, True, {"here": True})})
+    state, _ = run(cfg, pod)
+    assert [e["machine"] for e in state["launches"]] == ["vy-nebius-cpu-12", "control"]
+    assert pod.kept == [[], []] and all("keys" not in e for e in state["launches"])
+
+
+def test_rows_of_one_command_whose_entries_name_different_keys_run_nowhere(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain"), control("ci/lean")]},
+                control_rows=write_list(tmp_path, [("ci/plain", LANDING, LINEAR), ("ci/lean", LANDING)]))
+    pod = Pod(out=here)
+    state, _ = run(cfg, pod)
+    assert pod.launched == [] and state["numbers"]["ci/plain"]["reason"] == "control-unlisted"
+    assert ("their entries name different keys (ci/plain's ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET']; ci/lean's []), and "
+            "one launch measures them all") in state["numbers"]["ci/plain"]["why"]
+
+
+def list_of(tmp_path, keys):
+    lst = tmp_path / "metrics-rerun.control.toml"
+    lst.write_text(f"[[row]]\nid = \"ci/plain\"\ncommand = {json.dumps(LANDING)}\nkeys = {json.dumps(keys)}\n")
+    return lst
+
+
+@pytest.mark.parametrize("name", ["SLACK_BOT_TOKEN", "JOBS_TOKEN", "LINEAR_API_KEY", "AWS_SECRET_ACCESS_KEY"])
+def test_an_entry_may_give_only_the_names_of_entry_keys(tmp_path, name):
+    """The pod's site and Slack keys, and every name but the Linear app's two, are no key an entry may give."""
+    lst = list_of(tmp_path, ["LINEAR_CLIENT_ID", name])
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain")]}, control_rows=lst)
+    pod = Pod(out=here)
+    state, _ = run(cfg, pod)
+    assert pod.launched == [] and state["numbers"]["ci/plain"]["reason"] == "control-unlisted"
+    assert (f"the control pod's list of rows {lst} is unreadable (ValueError: ci/plain's keys name '{name}', which is not a "
+            "name an entry may give (ENTRY_KEYS: LINEAR_CLIENT_ID, LINEAR_CLIENT_SECRET)), so no row runs on the control pod"
+            ) in pod.lines
+
+
+@pytest.mark.parametrize("keys", [["LINEAR_CLIENT_ID", "LINEAR_CLIENT_ID"], "LINEAR_CLIENT_ID"])
+def test_an_entry_gives_each_name_once_in_a_list(tmp_path, keys):
+    lst = list_of(tmp_path, keys)
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain")]}, control_rows=lst)
+    pod = Pod(out=here)
+    run(cfg, pod)
+    assert pod.launched == [] and any(ln.startswith(f"the control pod's list of rows {lst} is unreadable (ValueError: "
+                                                    f"ci/plain's keys {keys!r} are no list of distinct names") for ln in pod.lines)
+
+
+def test_an_entry_giving_the_linear_apps_two_names_is_taken(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain")]}, control_rows=list_of(tmp_path, list(LINEAR)))
+    pod = Pod(out=here, states={run_id(1): ("done", 0, True, {"here": True})})
+    state, _ = run(cfg, pod)
+    assert pod.kept == [list(LINEAR)] and state["launches"][0]["keys"] == list(LINEAR)
+    assert R.ENTRY_KEYS == frozenset(LINEAR)
+
+
+def test_a_failed_control_runs_ring_says_how_it_ended_and_nothing_it_printed(tmp_path):
+    """What a run here prints, or its failure's line, may hold what only the pod reads (Linear's asks, the landing log): the
+    ring carries how it ended and where its output is, and the pass's log on the pod keeps the rest."""
+    cfg = listed(tmp_path, {"benchmarks/landing": [control("ci/plain")], "benchmarks/landing2": [
+        control("ci/lean", "research run -- bash benchmarks/landing2/run.sh")]})
+    pod = Pod(out=lambda n: here(1) if n == 1 else "Traceback: PRIVATE-OUTPUT\n",
+              states={run_id(1): ("failed", 1, True, {"here": True, "class": "workload", "why": "PRIVATE-LINE"})})
+    state, _ = run(cfg, pod)
+    assert sorted(e["state"] for e in state["launches"]) == ["failed", "unlaunched"]
+    assert len(pod.rang) == 2 and not any("PRIVATE" in r[3] for r in pod.rang), pod.rang
+    assert any("PRIVATE-OUTPUT" in e["why"] for e in state["launches"]), "the record on the pod keeps it"
+    assert all("its output is on the control pod, in run " in r[3] for r in pod.rang)
+    assert any("failed (failed (failed, rc 1, workload))" in r[3] for r in pod.rang)
+
+
+class Launcher:
+    """`subprocess.Popen` for Pod.launch: a launch that is still going when its wait runs out, then ends once killed."""
+
+    def __init__(self, cmd, **kw):
+        self.pid, self.kw, self.waits = 31337, kw, 0
+        Launcher.made.append(self)
+
+    def communicate(self, timeout=None):
+        self.waits += 1
+        if self.waits == 1:
+            raise R.subprocess.TimeoutExpired("research", timeout)
+        return "research: run r1 registered\n", ""
+
+
+@pytest.mark.parametrize("on, groups", [((), [31337, 4242]), (("--on", "vy-nebius-cpu-12"), [31337])])
+def test_the_launchs_backstop_kills_its_group_and_a_run_heres_workload_group(tmp_path, monkeypatch, on, groups):
+    """`research run` starts the workload in a process group of its own, which outlives a launcher killed alone: the backstop
+    ends the launcher's whole group and, for a run here, the group its status.json names."""
+    monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
+    (tmp_path / "runs" / run_id(1)).mkdir(parents=True)
+    (tmp_path / "runs" / run_id(1) / "status.json").write_text(json.dumps({"state": "running", "pgid": 4242}))
+    Launcher.made, killed = [], []
+    monkeypatch.setattr(R.subprocess, "Popen", Launcher)
+    monkeypatch.setattr(R.os, "killpg", lambda g, sig: killed.append((g, sig)))
+    pod = R.Pod(setup(tmp_path, {}), log=lambda m: None)
+    rc, out = pod.launch(["research", "run", "--id", run_id(1), *on, "--", "bash", "x.sh"])
+    assert (rc, out) == (None, "research: run r1 registered\n")
+    assert Launcher.made[0].kw["start_new_session"] and killed == [(g, R.signal.SIGKILL) for g in groups]
+
+
+def test_a_launch_on_a_machine_is_never_handed_the_pods_keys(tmp_path):
+    with pytest.raises(ValueError, match="keeps none of the pod's keys"):
+        R.Pod(setup(tmp_path, {})).launch(["research", "run", "--on", "m", "--", "x"], frozenset(LINEAR))
 
 
 def test_the_pod_reads_a_run_here_from_its_own_directory(tmp_path, monkeypatch):
