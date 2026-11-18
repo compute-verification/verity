@@ -45,7 +45,7 @@ unit's reads (`hpr`) and the wires' order (`hw`).
 
 namespace FlockSoundness.Discharge.PlainHJ
 
-open Flock FlockLevel3 Game Model Accounting Refine FlockSoundness.Audit HiddenExec Placed
+open Flock FlockLevel3 Game Model Accounting Refine Spot.Sampling HiddenExec Placed
 open FlockSoundness.Discharge.Exec (Inputs)
 open FlockSoundness.Discharge.Inst
 open FlockSoundness.Discharge.Composed (nTab drawJ partOf partS mem_partS)

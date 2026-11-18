@@ -14,7 +14,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
@@ -27,7 +27,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 terms in closed form:
 * `zk_session_soundJ_custody_reg`: one `--zk` session of `J` tables at the record's custody, at the live subset sample, is
   sound against the public file, `Pr[verity-verify-proof accepts ∧ at least K₀ units wrong on it] ≤ miss(K₀) + ε_ks + ε_bind`;
-* `FlockSoundness.Audit.SamplingDesign.subset_miss`: the uniform `kd`-subset's `miss(K₀)` is `C(n − K₀, kd) / C(n, kd)` at `K₀ ≤ n`;
+* `Spot.Sampling.SamplingDesign.subset_miss`: the uniform `kd`-subset's `miss(K₀)` is `C(n − K₀, kd) / C(n, kd)` at `K₀ ≤ n`;
 * `linkBoundZC`: at a prover whose link finders satisfy A2 (`LinkCRZC`), `ε_bind` is its closed form.
 
 `EndToEnd_refSetup` shows the statement's reference setup `y₀` is no extra condition: every sample verity-verify-proof accepts
@@ -38,7 +38,7 @@ gives one, at any number of tables.
 
 namespace Flock.SecurityProofs
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- **Flock's one-stage audit, end to end.** -/
 theorem EndToEnd : Flock.Guarantees.EndToEnd := by

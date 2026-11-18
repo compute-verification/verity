@@ -67,7 +67,7 @@ to `VStmt.Loads` (`loads_of_verifiesV`), and `RecursiveAudit`'s (i) reads it in 
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg FailClosed
 
 /-- The verifier's own inner shape at an inner statement `st` set up with `spec`: `RecVStar.innerOf`'s value, its `m`,

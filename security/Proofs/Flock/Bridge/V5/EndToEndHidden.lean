@@ -22,7 +22,7 @@ public import Proofs.Flock.Bridge.EndToEndHiddenC
 
 namespace FlockSoundness.Discharge.Layout
 
-open Flock FlockLevel3 FlockSoundness.Audit Placed
+open Flock FlockLevel3 Spot.Sampling Placed
 
 /-- **`keyProgP`'s proof blocks read only their own gates and input gates** (`keyProg_readsOwn`). -/
 theorem keyProgP_readsOwn (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : HmIn.Ports)
@@ -34,7 +34,7 @@ end FlockSoundness.Discharge.Layout
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
   Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
@@ -107,7 +107,7 @@ end FlockSoundness.Discharge.ZkHidden
 
 namespace Flock.Bridge
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.ZkLink
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.ZkLink
 
 /-- **`OpeningsCanonTargetV5` gives `EndToEndHiddenV5`**: the session's bound at the verifier's sample under the sampling design,
 whose missProb of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_escape_le`). -/

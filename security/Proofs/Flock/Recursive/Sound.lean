@@ -27,7 +27,7 @@ transfer bounds the decoded message not being `same k` as that.
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game FlockSoundness.Audit StrictCR
+open Game Spot.Sampling StrictCR
 open scoped ENNReal
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}

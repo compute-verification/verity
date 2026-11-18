@@ -158,7 +158,7 @@ theorem unitRows_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh 
 
 /-- **The decoded values satisfy each of the unit's gates**: at a witness the statement accepts, each gate of a placed
 unit holds its operation applied to the values the unit's block decodes. -/
-theorem _root_.FlockSoundness.UnitPlace.apply_decode {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n}
+theorem _root_.FlockSoundness.UnitPlace.apply_decode {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n}
     {S : Model.Statement} {u : Fin n} (pl : UnitPlace P S u) {z : Model.Witness S.m} (hz : S.Satisfies z) (g : Fin C.N)
     (hg : P.unit g = some u) : pl.decode z g = (C.op g).apply (pl.decode z) := by
   obtain ⟨i, rfl⟩ := pl.inst.onto g hg
@@ -166,7 +166,7 @@ theorem _root_.FlockSoundness.UnitPlace.apply_decode {C : Verity.Boolean.Circuit
   show pl.inst.decode _ _ = _
   rw [pl.inst.op i, pl.inst.decode_wire ha]
   refine (pl.placed.rowsSat hz pl.o i).trans ?_
-  simp only [Verity.Boolean.Op.apply, FlockSoundness.Audit.xorSum_map]
+  simp only [Verity.Boolean.Op.apply, Spot.Sampling.xorSum_map]
   congr 1 <;> exact Verity.Boolean.xorSum_congr fun c _ => (pl.inst.decode_wire ha c).symm
 
 variable {c : _root_.Flock.Circuit} (hU : Built c.unit) {n : ℕ}

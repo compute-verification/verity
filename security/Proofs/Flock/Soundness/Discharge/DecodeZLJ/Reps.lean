@@ -31,7 +31,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 
 namespace FlockSoundness.Discharge.DecodeZLJ
 
-open Flock Refine Exec Game Model Accounting FlockSoundness.Audit
+open Flock Refine Exec Game Model Accounting Spot.Sampling
 open FlockSoundness.Discharge.Tables FlockSoundness.Discharge.DecodeZL
 open Lean (Json)
 

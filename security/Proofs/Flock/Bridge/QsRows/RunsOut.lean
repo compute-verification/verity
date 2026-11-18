@@ -28,7 +28,7 @@ therefore runs out only if one of its `k` steps rejects its first word.
 
 @[expose] public section
 
-namespace FlockSoundness.Audit.SampleExec
+namespace Spot.Sampling.SampleExec
 
 open FlockSoundness
 
@@ -230,9 +230,9 @@ theorem subset_none_le (k n L : ℕ) (hk : k ≤ n) (hL : k * Flock.Draw.width n
       (k : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ :=
   (prCoin_mono fun f h => subset_none_failL f k n h).trans (failL_le n L k 0 L (by omega) hL)
 
-end FlockSoundness.Audit.SampleExec
+end Spot.Sampling.SampleExec
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
 
 open FlockSoundness
 
@@ -376,4 +376,4 @@ theorem execOS_subset_sample_card_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {L :
     exact (card_filter_mem_le n d.units).trans
       (le_of_eq (_root_.Properties.Spot.SecurityProofs.subset_size (runOS_subset_some (t ω) k n d hd)))
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign

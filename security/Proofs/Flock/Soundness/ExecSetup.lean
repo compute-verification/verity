@@ -518,7 +518,7 @@ instance in the audit circuit, whose inputs on one gate carry one value there (`
 noncomputable def unitPlace_of_setupH (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Verity.Boolean.Circuit} {n : ℕ}
-    {P : FlockSoundness.Audit.Partition C n} {u : Fin n}
+    {P : Spot.Sampling.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv))
     (o : Fin (2 ^ ((setupH_layout ht h).model regs).nbl)) {g : ℕ} (hg : g < st.c.g)
     (hal : (setupH_layout ht h).Aliased regs inst o hg) :

@@ -318,7 +318,7 @@ theorem accHolds_of_units {sh : Shape} {d : RepData} {acc : ℕ → Array F128} 
 section outer
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open FlockVBridge.Compiled (Accepted layers AccChains)
 

@@ -41,7 +41,7 @@ cap `rec-top-L0`, needs such an entry. So:
 namespace FlockC3.RegLevels
 
 open Flock
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 
 /-- **A value the verifier's shared rows register, or R's tops** (`checkShared`'s two cases). -/
 def SharedValue (rows : Option (Array Flock.Registered.Port)) (v : String) : Prop :=
@@ -104,7 +104,7 @@ theorem shared_of_checkShared {s s' : VStar.Stmt} {own own' : Array Flock.Regist
 section Family
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]

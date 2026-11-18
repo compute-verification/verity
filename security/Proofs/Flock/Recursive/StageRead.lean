@@ -36,7 +36,7 @@ agrees with them on the read wires decodes alike (`VDecodesR`), so that wire is 
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg
 open scoped ENNReal
 

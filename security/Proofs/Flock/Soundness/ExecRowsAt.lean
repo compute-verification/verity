@@ -5,7 +5,7 @@ public import Properties.Flock.Circuit.Rows
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Proofs.Flock.Soundness.ExecParse
 import Proofs.Flock.Soundness.SparseRows
 
@@ -24,7 +24,7 @@ committed net read through `pos`. No verifier path reads `ofRowsAt` yet.
 
 namespace FlockSoundness
 
-open Flock FlockSoundness.Audit
+open Flock Spot.Sampling
 
 /-- **A net's first `w` rows hold at `z`**: each row's column is the AND of its `A` and `B` rows' XOR sums under `z`
 (`Rows.Sat`'s equation, read off the net's matrices). -/

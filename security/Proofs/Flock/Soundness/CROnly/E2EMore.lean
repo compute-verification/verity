@@ -19,7 +19,7 @@ import Proofs.Flock.Soundness.CROnly.Link
 
 namespace FlockSoundness.CROnly
 
-open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/
@@ -127,9 +127,9 @@ theorem uprog_e2e_sampled
 at the per-run cost `strictRunCost t' q`. -/
 theorem uprog_e2e_count_classes
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
-    (cls : ∀ S R u, u ∈ S → TableClass (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S)
+    (cls : ∀ S R u, u ∈ S → TableClass (Spot.Sampling.Partition.tabOf plan tab S R u).S)
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
-    (blk : ∀ S R u, u ∈ S → Fin (2 ^ (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.nbl))
+    (blk : ∀ S R u, u ∈ S → Fin (2 ^ (Spot.Sampling.Partition.tabOf plan tab S R u).S.nbl))
     (hrd : ∀ S R u (h : u ∈ S), (p.spec hone u).Reads (cls S R u h))
     (hcp : ∀ S R u (h : u ∈ S), (cls S R u h).Copies (slot S R u h) (p.srcOf u))
     {Dh : Type} {Hc : List UInt8 → Dh}
@@ -151,9 +151,9 @@ theorem uprog_e2e_count_classes
 at the per-run cost `strictRunCost t' q`. -/
 theorem uprog_e2e_sampled_classes
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
-    (cls : ∀ S R u, u ∈ S → TableClass (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S)
+    (cls : ∀ S R u, u ∈ S → TableClass (Spot.Sampling.Partition.tabOf plan tab S R u).S)
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
-    (blk : ∀ S R u, u ∈ S → Fin (2 ^ (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.nbl))
+    (blk : ∀ S R u, u ∈ S → Fin (2 ^ (Spot.Sampling.Partition.tabOf plan tab S R u).S.nbl))
     (hrd : ∀ S R u (h : u ∈ S), (p.spec hone u).Reads (cls S R u h))
     (hcp : ∀ S R u (h : u ∈ S), (cls S R u h).Copies (slot S R u h) (p.srcOf u))
     {Dh : Type} {Hc : List UInt8 → Dh}
@@ -175,9 +175,9 @@ theorem uprog_e2e_sampled_classes
 at the per-run cost `strictRunCost t' q`. -/
 theorem uprog_e2e_count_classes_zero
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
-    (cls : ∀ S R u, u ∈ S → TableClass (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S)
+    (cls : ∀ S R u, u ∈ S → TableClass (Spot.Sampling.Partition.tabOf plan tab S R u).S)
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
-    (blk : ∀ S R u, u ∈ S → Fin (2 ^ (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.nbl))
+    (blk : ∀ S R u, u ∈ S → Fin (2 ^ (Spot.Sampling.Partition.tabOf plan tab S R u).S.nbl))
     (hrd : ∀ S R u (h : u ∈ S), (p.spec hone u).Reads (cls S R u h))
     (hcp : ∀ S R u (h : u ∈ S), (cls S R u h).Copies (slot S R u h) (p.srcOf u))
     {zer : ℕ} (hzk : zer < kIn) (hz1 : zer ≠ one)
@@ -202,9 +202,9 @@ theorem uprog_e2e_count_classes_zero
 at the per-run cost `strictRunCost t' q`. -/
 theorem uprog_e2e_sampled_classes_zero
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
-    (cls : ∀ S R u, u ∈ S → TableClass (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S)
+    (cls : ∀ S R u, u ∈ S → TableClass (Spot.Sampling.Partition.tabOf plan tab S R u).S)
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
-    (blk : ∀ S R u, u ∈ S → Fin (2 ^ (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.nbl))
+    (blk : ∀ S R u, u ∈ S → Fin (2 ^ (Spot.Sampling.Partition.tabOf plan tab S R u).S.nbl))
     (hrd : ∀ S R u (h : u ∈ S), (p.spec hone u).Reads (cls S R u h))
     (hcp : ∀ S R u (h : u ∈ S), (cls S R u h).Copies (slot S R u h) (p.srcOf u))
     {zer : ℕ} (hzk : zer < kIn) (hz1 : zer ≠ one)

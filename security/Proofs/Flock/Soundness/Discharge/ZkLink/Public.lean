@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -33,7 +33,7 @@ essentially every value exists, so there it adds nothing to correctness in `X`.
 
 @[expose] public section
 
-namespace FlockSoundness.Audit.Partition
+namespace Spot.Sampling.Partition
 
 open FlockSoundness
 
@@ -76,11 +76,11 @@ theorem correct_eval {u : Fin n} (hr : P.ReadsOwn u) {Xv : Fin C.N → Bool} (hc
     · rw [hc g hgc hgu, P.localEval_eq_eval hr Xv g.val g rfl hgu]
     · exact (C.eval_input Xv ((P.input_iff g).1 hgn)).symm
 
-end FlockSoundness.Audit.Partition
+end Spot.Sampling.Partition
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting FlockSoundness.Audit ZkSession
+open Game Model Accounting Spot.Sampling ZkSession
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}

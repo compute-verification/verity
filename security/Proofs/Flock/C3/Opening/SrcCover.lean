@@ -276,7 +276,7 @@ end Cover
 section Sessions
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 open FlockVBridge.Decode (fill)
 open FlockVBridge.OfVStar (fill_rowCol readCol_rsAt)

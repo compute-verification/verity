@@ -32,7 +32,7 @@ as `VStarFamily.files` and `rep₀` are). Each stage's obligation is its piece's
 namespace FlockC3.Compose
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 
 /-- **Candidate 3's inner run, stage by stage**, at the parameters `e`: the level-0 cap, the link points, each rep's

@@ -36,7 +36,7 @@ bounded.
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game FlockSoundness.Audit Model Accounting Refine Partition
+open Game Spot.Sampling Model Accounting Refine Partition
 open scoped ENNReal
 
 variable {n : ℕ}

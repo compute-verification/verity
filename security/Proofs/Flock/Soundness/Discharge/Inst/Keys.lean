@@ -34,7 +34,7 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Inst
 
-open Model FlockSoundness.Audit Binding Placed _root_.FlockSoundness.Discharge.Layout
+open Model Spot.Sampling Binding Placed _root_.FlockSoundness.Discharge.Layout
 
 /-! ## A wire-fed input is no input -/
 

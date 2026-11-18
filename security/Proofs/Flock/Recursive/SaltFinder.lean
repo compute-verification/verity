@@ -65,12 +65,12 @@ end FlockC3.RegLevels
 
 namespace FlockSoundness.Registered
 
-open Game Refine Binding FlockSoundness.Audit
+open Game Refine Binding Spot.Sampling
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : FlockSoundness.Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+  {decode : Spot.Sampling.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : Binding.Layout P plan tab decode} {rs : HmRowsX lay}
 
 /-- **A registered read clashes with `rows` under `salt`**: at some registered read `p`, the hm96 pair of the
@@ -112,7 +112,7 @@ end FlockSoundness.Registered
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting StrictCR
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting StrictCR
 open scoped ENNReal
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ : Type} {I : Inner}

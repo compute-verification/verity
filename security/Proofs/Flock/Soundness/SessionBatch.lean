@@ -24,7 +24,7 @@ table, this gives the form the audit's randomized-extractor analysis consumes:
 
 For a unit read from table `j`, these are the unit's `ksFail` (`failProbB`), its `linkFail`
 (`extractProbB` of the link event), its `cover` (`one_le_fail_add_B'`) and its knowledge bound
-(`joint_le_B'`), in `ℝ≥0∞` as `FlockSoundness.Audit.ExtractionAnalysis` takes them.
+(`joint_le_B'`), in `ℝ≥0∞` as `Spot.Sampling.ExtractionAnalysis` takes them.
 -/
 
 @[expose] public section

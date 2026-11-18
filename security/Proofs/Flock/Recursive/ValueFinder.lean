@@ -50,7 +50,7 @@ in all.
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game FlockSoundness.Audit Refine StrictCR
+open Game Spot.Sampling Refine StrictCR
 open scoped ENNReal
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}

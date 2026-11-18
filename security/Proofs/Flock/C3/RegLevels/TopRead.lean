@@ -35,7 +35,7 @@ entry. `RecCoins.checkStackedLevel` holds that entry to the verifier's (`checkTo
 namespace FlockC3.RegLevels
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 
 /-- **R's level `l`'s `out` reads its tops at each opening's node**: the reads file's first `out` port is R's level-`l`

@@ -32,7 +32,7 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Zero
 
-open Model FlockSoundness.Audit
+open Model Spot.Sampling
 
 /-! ## Δ's copy positions at the zero -/
 

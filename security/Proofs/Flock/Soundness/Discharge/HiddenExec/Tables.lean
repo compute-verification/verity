@@ -47,7 +47,7 @@ outputs, the table is `stmtOf` of the statement it accepted.
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model Refine FlockSoundness.Audit
+open Flock FlockLevel3 Model Refine Spot.Sampling
 open FlockSoundness.Discharge.Exec (Inputs Accepts recordDraw)
 open FlockSoundness.Discharge.Integrate (SampleSetup)
 

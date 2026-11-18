@@ -68,7 +68,7 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg
 open ZkHidden (planZHJ tabZHJ planZHJ_length SampleSetupZHJ TagsOkZHJ SampleOkZKHJ layShHJ)
 open FlockSoundness.Discharge.Tables (LiveOutJ liveSession)

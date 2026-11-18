@@ -45,7 +45,7 @@ verity-verify-proof's own arithmetic. This file splits them:
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Discharge.DecodeZLJ (partJson)
 open Lean (Json toJson)

@@ -37,7 +37,7 @@ and `sampleOkZKHJ_of_fileSt`.
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
   Composed Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Discharge.DecodeZLJ (partJson)

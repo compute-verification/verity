@@ -27,7 +27,7 @@ inputs), its outputs `Layout.outsOfP`, the sites `sitesAtHP`, and the registrati
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} {I : Inputs} {own : Option ByteArray} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}

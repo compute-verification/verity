@@ -41,9 +41,9 @@ theorem bytesAt_length {m N : ℕ} (z) (a : Fin N → Fin 8 → Fin (2 ^ m)) :
   simp [FlockSoundness.Binding.bytesAt]
 
 /-- **A committed input of unit `u` has an owner**: an input wire in `u`'s `io` is one `u` reads. -/
-theorem owner_ne_none_of_io {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n}
+theorem owner_ne_none_of_io {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n}
     {u : Fin n} {g : Fin C.N} (hg : g ∈ P.io u) (hin : P.unit g = none) : owner P g ≠ none := by
-  unfold FlockSoundness.Audit.Partition.io at hg
+  unfold Spot.Sampling.Partition.io at hg
   obtain ⟨-, hgu | ⟨h, hh, hga⟩⟩ := Finset.mem_filter.1 hg
   · rw [hin] at hgu
     cases hgu
@@ -57,7 +57,7 @@ end Flock.Bridge
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model FlockSoundness.Audit Binding Placed
+open Flock FlockLevel3 Model Spot.Sampling Binding Placed
 open FlockSoundness.Discharge.Layout (keyN keyRowOf portRowW OutColAt outDecode OutsOut KeysRow)
 
 variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {Reg : Type} {mPts : ℕ}
@@ -100,7 +100,7 @@ end FlockSoundness.Discharge.HiddenExec
 
 namespace Flock.Guarantees
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkSession
 open FlockSoundness.Discharge.Tables (LiveOutJ)
@@ -226,7 +226,7 @@ theorem _root_.Flock.Bridge.openingsCanon_const
       (Discharge.Layout.outsOf D.unroll hU n) S R u hu c (by rw [hc, h2]; exact Finset.mem_singleton_self _) _ hz
     rw [← hc]
     unfold UnitPlace.decode
-    rw [FlockSoundness.Audit.Partition.IsRowsUnit.decode_wire _ (UnitPlace.agree _ hz), hzero]
+    rw [Spot.Sampling.Partition.IsRowsUnit.decode_wire _ (UnitPlace.agree _ hz), hzero]
     rfl
 
 /-- **`OpeningsCanonTarget` holds**: at the constant and the zero by `openingsCanon_const`; at any other committed wire

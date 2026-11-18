@@ -12,7 +12,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 `zk_session_soundJ_custody_sampled_reg` is `zk_session_soundJ_custody_reg`'s:
 
 * `execRefinesZK_tables_sampledA`: `execRefinesZK_tables_sampled` at any acceptance `acc` (`simZJA`);
-* `ZkLink.zk_flock_sampledC_regC`: `FlockSoundness.Audit.extraction_audit_sampled` at `analysisZCRegC`, so in the compiled batched audit
+* `ZkLink.zk_flock_sampledC_regC`: `Spot.Sampling.extraction_audit_sampled` at `analysisZCRegC`, so in the compiled batched audit
   `Pr[accepts ∧ some drawn proof block is in incorrectRegZc] ≤ ε_ks + ε_bind`;
 * `MemberV5.accepted_drawnIncorrect_le`: a member's session accepts at its `own` with a sampled proof block incorrect, at V5's
   canonical openings, with probability at most `ε_ks + ε_bind` at its sampling design. Custody at `own` and one table
@@ -24,7 +24,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
@@ -76,7 +76,7 @@ end FlockSoundness.Discharge.Composed
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting FlockSoundness.Audit ZkSession
+open Game Model Accounting Spot.Sampling ZkSession
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
@@ -110,7 +110,7 @@ end FlockSoundness.Discharge.ZkLink
 
 namespace Flock.Guarantees.MemberV5
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkSession
 open scoped ENNReal

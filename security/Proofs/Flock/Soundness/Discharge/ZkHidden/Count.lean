@@ -28,7 +28,7 @@ in `tableAtZKH`'s statements (`AcceptsZKAcceptedH`).
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Model Accounting FlockSoundness.Audit ZkSession StrictCR ZkLink Exec
+open Game Model Accounting Spot.Sampling ZkSession StrictCR ZkLink Exec
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

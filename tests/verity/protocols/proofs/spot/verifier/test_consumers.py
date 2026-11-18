@@ -113,7 +113,7 @@ def test_the_bound_is_at_least_audit_exfiltration_evaluated_in_lean():
     `harm_bound` is at least H and below H + b; `location_bits` is at least log2 admissible and within log2(n + 1) of
     it, and n once K >= n / 2; so `exfiltration_bound` is at least log2 of the numerator."""
     data = json.loads(LEAN_VECTORS.read_text())
-    assert data["statement"] == "FlockSoundness.Audit.Partition.audit_exfiltration" and len(data["vectors"]) == 24
+    assert data["statement"] == "Spot.Sampling.Partition.audit_exfiltration" and len(data["vectors"]) == 24
     for v in data["vectors"]:
         n, K, H, b, admissible = v["n"], v["K"], v["H"], v["bits"], v["admissible"]
         p = IntegrityProfile(("unit",), (n,), {"unit": Subset(v["k"])}, 2.0 ** v["delta_log2"])

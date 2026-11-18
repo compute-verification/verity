@@ -39,7 +39,7 @@ is set up:
 
 namespace FlockSoundness.Discharge.HiddenDec
 
-open Flock Refine Exec Game Model Accounting FlockSoundness.Audit
+open Flock Refine Exec Game Model Accounting Spot.Sampling
 open FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.HiddenExec
 

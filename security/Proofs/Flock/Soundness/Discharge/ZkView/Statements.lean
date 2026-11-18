@@ -30,7 +30,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Level3
 import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
-import Proofs.Flock.Soundness.Audit.Flock
+import Proofs.Flock.SpotFlock.Sampling.Flock
 import Proofs.Flock.Soundness.Binding.E2E
 import Proofs.Flock.Soundness.Binding.Weights
 import Proofs.Flock.Soundness.CROnly

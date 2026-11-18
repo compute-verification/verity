@@ -36,7 +36,7 @@ item 5, from `claimO` to the source's claims).
 namespace FlockC3.Opening
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 
 /-- **A run's own steps past both sparse phases** are its opening, its Ligerito and the openings. -/

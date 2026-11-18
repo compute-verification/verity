@@ -48,7 +48,7 @@ namespace FlockC3.Reps
 
 namespace HAlg
 
-open Flock FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open Flock FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 
 /-! ## The list -/
 
@@ -384,7 +384,7 @@ end HAlg
 section family
 
 open Flock FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg FlockLevel3 Accounting ZkBind Integrate Placed
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg FlockLevel3 Accounting ZkBind Integrate Placed
 open StrictCR DecodeZL FlockVBridge.Compiled
 open FlockC3.PubRows (ChecksAccepted)
 open FlockC3.Compose

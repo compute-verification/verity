@@ -57,7 +57,7 @@ verifier's tree once (`4n` for the leaves, row digest, salt digest, `treeLeaf` a
 namespace FlockC3.RegLevels
 
 open Flock
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockSoundness.Refine (H512)
 open FlockSoundness.Binding (hm96Input hm96Pair hm96Pair_spec hm96_treeLeaf)
 open FlockSoundness.Discharge.HiddenExec (encPortH)
@@ -437,10 +437,10 @@ theorem valueColl_spec {reg : Registered.Port} {rows : Array (Array ℕ)} {salt 
 
 section Reads
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : FlockSoundness.Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+  {decode : Spot.Sampling.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : FlockSoundness.Binding.Layout P plan tab decode} {rs : FlockSoundness.Binding.HmRowsX lay}
 
 /-- **A registered read of a value the verifier registers itself**: where `checkRows` accepted the port `port` at

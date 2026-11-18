@@ -48,7 +48,7 @@ at every unit. At the checked family (`C3Family.checked`) the sessions' records 
 namespace FlockC3.Compose
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 
 /-- **A session's record covers the rows its reads file names**: every row of a port `own` names is a registered read
@@ -241,7 +241,7 @@ end FlockSoundness.Discharge.ZkReg
 namespace FlockC3.Compose
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.FailClosed (pubZ)
 

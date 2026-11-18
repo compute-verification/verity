@@ -13,7 +13,7 @@ proofs=$root/security/Proofs
 pkg=$(cd "${1:-$proofs}" && pwd)
 one=$(mktemp)
 two=$(mktemp)
-(cd "$pkg" && lake build Proofs.Flock.Soundness.Audit.Influence Proofs.Flock.Soundness.Audit.StratifiedMiss \
+(cd "$pkg" && lake build Proofs.Spot.Sampling.Influence Proofs.Spot.Sampling.StratifiedMiss \
   Proofs.Flock.SamplingGeneric.TwoTable >&2 && lake env lean --run "$here/ExfiltrationVectors.lean" > "$one" &&
   lake env lean --run "$here/ExfiltrationTwoVectors.lean" > "$two")
 python3 - "$one" "$two" "$here" "$pkg" <<'PY'

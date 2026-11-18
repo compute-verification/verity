@@ -53,7 +53,7 @@ audit, the link theorem and knowledge soundness, all on `main`. Each piece not y
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

@@ -29,7 +29,7 @@ challenger's per-round coins (A6) as the audit's coins, and the live event `bad`
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}

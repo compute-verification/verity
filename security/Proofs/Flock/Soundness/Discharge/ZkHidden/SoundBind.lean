@@ -47,7 +47,7 @@ lp-zkbind's `sitesZAt`, `layZAt`, `rsZAt` and `rsZAt_computes` (`ZkBind/At.lean`
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Flock FlockLevel3 Game Model Accounting Refine FlockSoundness.Audit ZkSession ZkLink ZkExec ZkBind HiddenExec Placed
+open Flock FlockLevel3 Game Model Accounting Refine Spot.Sampling ZkSession ZkLink ZkExec ZkBind HiddenExec Placed
 open FlockSoundness.Discharge.Exec (Inputs)
 open scoped ENNReal
 
@@ -56,12 +56,12 @@ local notation "𝔽" => FlockLevel3.GF128
 /-! ## A unit's place along an equality of statements -/
 
 /-- A unit's place in `T`, as one in `T' = T`. -/
-def placeCast {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {T' T : Statement} {u : Fin n} (e : T' = T)
+def placeCast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {T' T : Statement} {u : Fin n} (e : T' = T)
     (p : UnitPlace P T u) : UnitPlace P T' u := by
   subst e
   exact p
 
-theorem decode_placeCast {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {T' T : Statement} {u : Fin n}
+theorem decode_placeCast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {T' T : Statement} {u : Fin n}
     (e : T' = T) (p : UnitPlace P T u) (z : Witness T'.m) : (placeCast e p).decode z = p.decode (witOf e z) := by
   subst e
   rfl

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Types.Dag
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 
 /-!
 # A type DAG's Boolean circuit (phase 1 S4a: `flatten`, `flatten_eval`)
@@ -26,7 +26,7 @@ unchanged.
 
 namespace FlockSoundness.Types.Flatten
 
-open Flock Flock.DeriveAll FlockSoundness.Audit Types Types.Dag
+open Flock Flock.DeriveAll Spot.Sampling Types Types.Dag
 
 /-! ## Gates -/
 

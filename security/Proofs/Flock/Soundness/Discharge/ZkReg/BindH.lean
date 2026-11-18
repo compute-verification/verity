@@ -33,7 +33,7 @@ set_option Elab.async false
 
 namespace FlockSoundness.Discharge.ZkReg
 
-open Flock FlockLevel3 Game Model Accounting Refine FlockSoundness.Audit ZkSession ZkLink ZkExec ZkBind ZkHidden HiddenExec Placed
+open Flock FlockLevel3 Game Model Accounting Refine Spot.Sampling ZkSession ZkLink ZkExec ZkBind ZkHidden HiddenExec Placed
 open FlockSoundness.Discharge.Exec (Inputs)
 open scoped ENNReal
 

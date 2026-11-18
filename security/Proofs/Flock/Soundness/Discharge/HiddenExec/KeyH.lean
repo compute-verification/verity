@@ -53,7 +53,7 @@ bit region "out" pins (`Layout.outBitOf`), is here a bit of an output row whose 
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model FlockSoundness.Audit Binding Placed
+open Flock FlockLevel3 Model Spot.Sampling Binding Placed
 open FlockSoundness.Discharge.Layout (keyN keyRowOf portRowW OutColAt outDecode OutsOut KeysRow)
 
 variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ}

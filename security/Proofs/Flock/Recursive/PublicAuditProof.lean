@@ -52,7 +52,7 @@ the same way. The compiled table ignores the last round's coin, as its pick does
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
 
 /-- **The model's leaf is the executable's**: `innerAt` runs the compiled table at `Refine.leafPlain`, and at a statement
 Lean's verifier accepts, set up at `RecVStar.innerTags` (`acceptsStmt_merkle`), that leaf is its Merkle scheme's
@@ -114,7 +114,7 @@ end FlockSoundness.Discharge.Recursion
 namespace Flock.SecurityProofs
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 

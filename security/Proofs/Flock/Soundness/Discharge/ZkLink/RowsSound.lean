@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -23,14 +23,14 @@ commitments are the registered ones:
 * `ideal_le_trialZC`: `ideal_mass_leZC`'s step from the trial to the audit's extractor, for any trace;
 * `analysisZCRows`, `zk_rowsBindSoundC`: the analysis, and its binding error at `rowsBoundZC`, `ε_bind + δ_rows` with
   `δ_rows` at most `ε_bind`'s closed form;
-* `zk_flock_sampledC_rows`: `FlockSoundness.Audit.extraction_audit_sampled` at it.
+* `zk_flock_sampledC_rows`: `Spot.Sampling.extraction_audit_sampled` at it.
 -/
 
 @[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition ZkSession
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition ZkSession
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}

@@ -145,7 +145,7 @@ theorem coinsAt_rep {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))} {ts : 
 end unit
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockVBridge.Family (skOf maskOf)
 open FlockC3.Compose

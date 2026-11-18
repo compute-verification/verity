@@ -43,7 +43,7 @@ Each takes the circuit, the public file and the conditions `scopeGenH` gives fro
 
 namespace FlockSoundness.Discharge.FailClosed
 
-open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Inst
 open scoped ENNReal
 
@@ -120,7 +120,7 @@ end Hidden
 
 section Zk
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
   Composed Placed StrictCR DecodeZL ZkHidden
 open FlockSoundness.Discharge.General (rsZG rsZG_computes rsZHJG rsZHJG_computes layShHJG rsShHJG)
 open FlockSoundness.Discharge.ZkReg (AcceptsZKR LiveAcceptsZKR OwnReadsHJ regPathsHJ acceptsZK_of_R

@@ -1,9 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchL
-public import Proofs.Flock.Soundness.Audit.FlockBatched
+public import Proofs.Flock.SpotFlock.Sampling.FlockBatched
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -41,7 +41,7 @@ named assumption; `ε_bind` stays named (`BindSound`).
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting FlockSoundness.Audit FlockSoundness.Audit.Partition
+open Game Model Accounting Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

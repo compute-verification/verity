@@ -55,7 +55,7 @@ only the registered digests (`ValueBindingZ.cs`, from the public file). V*'s ses
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg
 open ZkHidden (planZHJ tabZHJ)
 open scoped ENNReal

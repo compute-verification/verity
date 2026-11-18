@@ -36,7 +36,7 @@ stratified sample at several tables.
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL Composed
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL Composed
   Finset
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 

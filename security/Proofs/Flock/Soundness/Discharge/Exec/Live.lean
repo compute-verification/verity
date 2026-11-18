@@ -34,7 +34,7 @@ more than one table (the circuit prover's default is one, `--session-tables 1`);
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

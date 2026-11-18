@@ -19,7 +19,7 @@ transfer:
 
 namespace FlockSoundness.SampledGeneric
 
-open Game FlockSoundness.Audit LinkFinder
+open Game Spot.Sampling LinkFinder
 open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type} {Dh : Type} {Hc : List UInt8 → Dh} {B : Binding Reg Hc} {PS : ProofSystem n Reg}

@@ -23,7 +23,7 @@ registered root the verifier holds, at the position the verifier's own program r
 
 namespace FlockSoundness.Registered
 
-open Refine Binding FlockSoundness.Audit
+open Refine Binding Spot.Sampling
 
 /-- Two openings of one position `pos` under one registered root (`port`): two leaves, each with its path. -/
 structure TwoOpenings where
@@ -48,10 +48,10 @@ def pair (o : TwoOpenings) : List UInt8 × List UInt8 :=
 
 end TwoOpenings
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : FlockSoundness.Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+  {decode : Spot.Sampling.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
 
 /-- **A layout's registered reads.** The commit strings whose rows the session reads from a value registered before
 (`isRead`), each an `hm96-sha512/row/v1` row (`read_row`); at each, the registered root the verifier holds (`port`, from

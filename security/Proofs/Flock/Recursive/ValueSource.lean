@@ -38,7 +38,7 @@ are their ties:
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game FlockSoundness.Audit
+open Game Spot.Sampling
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
 

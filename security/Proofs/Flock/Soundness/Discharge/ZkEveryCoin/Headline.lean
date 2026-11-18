@@ -54,7 +54,7 @@ No coin vector is left: the outer coin `1`, where the view would not be simulate
 
 namespace FlockSoundness.Discharge.ZkEveryCoin
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model ZkSession ZkLink ZkExec DecodeZL Composed ZkView
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model ZkSession ZkLink ZkExec DecodeZL Composed ZkView
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000

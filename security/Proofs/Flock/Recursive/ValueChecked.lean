@@ -44,7 +44,7 @@ namespace FlockSoundness.Discharge.Recursion
 
 section Tie
 
-open Game FlockSoundness.Audit
+open Game Spot.Sampling
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
   {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
@@ -234,7 +234,7 @@ end Tie
 section Session
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
-open FlockSoundness.Refine FlockSoundness.Model FlockSoundness.Audit
+open FlockSoundness.Refine FlockSoundness.Model Spot.Sampling
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
 open FlockSoundness.Discharge.ZkReg FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
 open FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL

@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedL
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchAccL
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -33,7 +33,7 @@ resistance (`Assumptions.SHA512CRExpected`).
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting FlockSoundness.Audit FlockSoundness.Audit.Partition
+open Game Model Accounting Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

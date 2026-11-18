@@ -33,7 +33,7 @@ stages' obligations reads a step past the openings, so at the honest family `HTa
 namespace FlockC3.PubRows
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 open FlockVBridge.InnerAccepts (firstSteps)
 

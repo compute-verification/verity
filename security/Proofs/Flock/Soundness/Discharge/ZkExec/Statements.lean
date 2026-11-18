@@ -39,7 +39,7 @@ Each statement is a `Prop` here; its theorem (`theorem … : G`) is in the file 
 namespace FlockSoundness.Discharge.ZkExec
 
 open Lean (Json)
-open Game FlockSoundness.Audit Exec Refine Flock
+open Game Spot.Sampling Exec Refine Flock
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

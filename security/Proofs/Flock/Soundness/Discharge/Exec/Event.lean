@@ -3,7 +3,7 @@ module
 public import Flock.HmRow
 public import Flock.Norm
 public import Flock.Verify
-public import Proofs.Flock.Soundness.Audit.OneStage
+public import Proofs.Spot.Sampling.OneStage
 
 /-!
 # verity-verify-proof's acceptance, as an event of the audit
@@ -31,7 +31,7 @@ event, on an audit whose outcome carries the transcript.
 namespace FlockSoundness.Discharge.Exec
 
 open Lean (Json)
-open Game FlockSoundness.Audit
+open Game Spot.Sampling
 open scoped ENNReal
 
 /-- What `verity-verify-proof verify` reads besides the session directory: the statement's tags (`--statement`, as `verifyCmd`

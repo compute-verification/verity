@@ -146,7 +146,7 @@ end FlockComplete
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game FlockSoundness.Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
+open Game Spot.Sampling Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
 
 local notation "𝔽" => FlockLevel3.GF128
 

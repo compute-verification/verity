@@ -42,7 +42,7 @@ that plays the recursive audit once and outputs its pair (`valueFinder`, `Recurs
 namespace FlockC3.RegLevels
 
 open Flock
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockSoundness.Refine (H512)
 open FlockSoundness.Binding (hm96Input hm96Pair)
 
@@ -104,7 +104,7 @@ end FlockC3.RegLevels
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game FlockSoundness.Audit Refine StrictCR
+open Game Spot.Sampling Refine StrictCR
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
 

@@ -236,7 +236,7 @@ end Flock.Bridge
 
 namespace Flock.Guarantees
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open FlockSoundness.Discharge.ZkReg (rsZHJS rsZHJS_computes)

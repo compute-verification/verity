@@ -30,7 +30,7 @@ numeric conditions. verity-verify-proof refuses a statement failing `hscope` or 
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec
 open scoped ENNReal
 

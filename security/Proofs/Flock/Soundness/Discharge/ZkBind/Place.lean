@@ -48,7 +48,7 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.ZkBind
 
-open Model FlockSoundness.Audit Placed ZkSession Exec ZkExec
+open Model Spot.Sampling Placed ZkSession Exec ZkExec
 
 /-! ## Every table of a `--zk` acceptance is an accepted untyped statement -/
 

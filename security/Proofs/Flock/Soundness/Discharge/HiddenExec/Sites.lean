@@ -44,7 +44,7 @@ set_option Elab.async false
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model Refine FlockSoundness.Audit
+open Flock FlockLevel3 Model Refine Spot.Sampling
 open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ}

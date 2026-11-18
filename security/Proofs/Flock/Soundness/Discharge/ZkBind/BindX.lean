@@ -35,12 +35,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 
 namespace FlockSoundness.Discharge.ZkBind
 
-open Game Model Accounting Refine FlockSoundness.Audit ZkSession ZkLink Binding
+open Game Model Accounting Refine Spot.Sampling ZkSession ZkLink Binding
 
 section Rows
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
-  {A : Arith F K} {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type}
+  {A : Arith F K} {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type}
   {planZ : Finset (Fin n) → Reg → List (TabZK F mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length}
   {decode : DecoderZK (C := C) planZ tab}
@@ -107,7 +107,7 @@ section Shadow
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type} {mPts : ℕ}
   {planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length}
   {planS : Finset (Fin n) → Reg → List (TabSpec mPts)}

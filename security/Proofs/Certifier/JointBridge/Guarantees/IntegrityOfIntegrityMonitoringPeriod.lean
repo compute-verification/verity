@@ -19,7 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # The integrity audit of a period is Flock's integrity audit over a monitoring period's sampling blocks (trusted)
 
-A period's SPOT audit (`FlockSoundness.Audit.sampled`) is Flock's integrity audit over the period's sampling blocks
+A period's SPOT audit (`Spot.Sampling.sampled`) is Flock's integrity audit over the period's sampling blocks
 (`Flock.Guarantees.IntegrityPooled`): `T` sampling blocks `W t`, each a `--zk` session under hidden outputs with a
 fresh live subset sample, against one adaptive prover. `RealizesIntegrityOfIntegrityMonitoringPeriod` ties a `PeriodRun` to it: the
 sampled audit's own coins drive the period's game at the prover's strategy, its verdict is verity-verify-proof's on every
@@ -76,7 +76,7 @@ structure RealizesIntegrityOfIntegrityMonitoringPeriod {Î¹ : Type} {d : Device Î
 
 namespace Guarantees.Bridge
 
-open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
+open Spot.Sampling FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.ZkHidden in
 /-- **The integrity audit of a period, from Flock's integrity audit over a monitoring period.** For a period `r` whose
 SPOT audit realizes Flock's integrity audit over `T` sampling blocks `W t`

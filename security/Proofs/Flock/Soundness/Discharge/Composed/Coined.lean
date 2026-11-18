@@ -30,7 +30,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game FlockSoundness.Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
+open Game Spot.Sampling Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

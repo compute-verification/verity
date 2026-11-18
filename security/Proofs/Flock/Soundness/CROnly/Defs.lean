@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.FlockLink
+public import Proofs.Flock.SpotFlock.Sampling.FlockLink
 import Mathlib.Combinatorics.Matroid.Init
 
 /-!
@@ -22,7 +22,7 @@ of the same finders stopped at a budget `q` fixed in advance. These are the defi
 
 namespace FlockSoundness.CROnly
 
-open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

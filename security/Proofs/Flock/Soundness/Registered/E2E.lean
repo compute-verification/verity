@@ -24,7 +24,7 @@ refinement `ExecRefines`) that `bc_registered` and `tr` name.
 
 namespace FlockSoundness.Registered
 
-open Game Model Accounting Extract LinkFinder Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Binding
+open Game Model Accounting Extract LinkFinder Refine Spot.Sampling Spot.Sampling.Partition Binding
 open scoped ENNReal
 
 /-- The executable's field. -/

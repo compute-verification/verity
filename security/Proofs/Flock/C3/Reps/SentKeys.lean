@@ -760,7 +760,7 @@ theorem unitMsgs_lig_read (nX : ℕ) (sh : Flock.Shape) {b b' : ValsSrc} {d d' :
 end slices
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockVBridge.Family (maskOf skOf IoColAt mem_skOf_inl)
 open FlockVBridge.AccChain (levelLanes)

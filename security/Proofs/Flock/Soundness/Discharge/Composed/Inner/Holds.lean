@@ -34,7 +34,7 @@ index (`batch_of_rows`). The triple's three rows vanish at the honest `(ρ_in, �
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game FlockSoundness.Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL FlockLevel3 ZkView
+open Game Spot.Sampling Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL FlockLevel3 ZkView
 
 /-- **The batch holds where its rows vanish**: `⟨λ, h⟩ = θ` over `PadIdx` once each row vanishes at `h` by layout index
 (`padEquiv`). -/

@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.E2E
 public import Proofs.Flock.Soundness.ComposeDag
 public import Proofs.Flock.Soundness.Types.Flatten
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 
 /-!
 # A partition's units: correct on its rows, correct on its gates (verified-lowering phase 1, S4)
@@ -29,7 +29,7 @@ open Flock Flock.DeriveAll
 
 namespace FlockSoundness
 
-open FlockSoundness.Audit Types.Dag Types.Flatten Compose
+open Spot.Sampling Types.Dag Types.Flatten Compose
 
 /-- A gate as a `Verity.Boolean.Op`, its arguments renamed by `w`. -/
 def Types.Flatten.Gate.lift {N : ℕ} (w : ℕ → Fin N) : Gate → Verity.Boolean.Op N
@@ -116,10 +116,10 @@ theorem Rows.one_ne_comp (R : Rows) : ∀ i, R.one ≠ R.comp i := fun i h => by
 
 end FlockSoundness
 
-namespace FlockSoundness.Audit.Partition
+namespace Spot.Sampling.Partition
 
 open FlockSoundness
-open FlockSoundness.Audit Types.Dag Types.Flatten Compose
+open Spot.Sampling Types.Dag Types.Flatten Compose
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
@@ -232,13 +232,13 @@ theorem localEval_compose (hd : deriveChecked types ls info words unit = .ok don
 
 end IsRowsUnit
 
-end FlockSoundness.Audit.Partition
+end Spot.Sampling.Partition
 
 namespace FlockSoundness
 
-open FlockSoundness.Audit Types.Dag Types.Flatten Compose
+open Spot.Sampling Types.Dag Types.Flatten Compose
 
-open FlockSoundness.Audit.Partition
+open Spot.Sampling.Partition
 
 /-- **One unit's rows and gates, and how the Boolean circuit's values are read off the audit's** (`m`). On `C` the unit is
 an instance of the rows `deriveChecked` composes for layout `idx`, of type `t`; on `CB`, of `t`'s unit gates. Through `m`,

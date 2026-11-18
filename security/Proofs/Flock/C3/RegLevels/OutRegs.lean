@@ -17,7 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.PubRows.Check
 import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 import Proofs.Flock.Verifier.HmNets
 
@@ -49,7 +49,7 @@ output row (`HiddenExec.rowOfH`, `outRowOf`): copy `j`'s output `o`, bit `t`, is
 namespace FlockC3.RegLevels
 
 open Flock
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge FlockVBridge.AccChain
 
 /-! ## V*'s output rows -/
@@ -224,7 +224,7 @@ theorem regOut_of_outBitRow {u : Fin nv} {j : ℕ} (hj : j < c.upv) {j' t' : ℕ
   have hv : zo.rd.wv (zo.lay.pos ((Const.Prog.instC (Placed.keyProg c hU nv) (Layout.outsOf c hU nv) u).wire x')) =
       Decode.regVal zo (.inl (u, q)) := congrArg zo.rd.wv hpos
   rw [hw]
-  refine ⟨FlockSoundness.Audit.Partition.mem_committed_of_output _ hmem, (congrArg zo.rd.isRead hpos).mpr hread, ?_⟩
+  refine ⟨Spot.Sampling.Partition.mem_committed_of_output _ hmem, (congrArg zo.rd.isRead hpos).mpr hread, ?_⟩
   refine (Decode.lay_bit zo _ _).trans ((congrArg (fun v => bitK c hU nv v _) hv).trans ?_)
   simp only [bitK, idxK, hrowH]
 

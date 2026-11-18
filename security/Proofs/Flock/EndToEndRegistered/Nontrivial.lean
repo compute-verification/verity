@@ -74,7 +74,7 @@ of `portW`, a registered value of two rows whose root the row's leaf climbs to t
 namespace FlockSoundness.Discharge.ZkReg.Witness
 
 open Lean (Json)
-open Exec Binding Registered FlockSoundness.Audit Refine
+open Exec Binding Registered Spot.Sampling Refine
 open FlockSoundness.Discharge.Composed (drawJ partOf)
 
 /-- **`regPathsHJ` is empty** at a read whose public file, sampled at the record's sample, names no registered tables. -/
@@ -95,7 +95,7 @@ abbrev circ0 : Verity.Boolean.Circuit where
   topo g := g.elim0
   outputs := ∅
 
-abbrev part0 : FlockSoundness.Audit.Partition circ0 1 where
+abbrev part0 : Spot.Sampling.Partition circ0 1 where
   unit g := g.elim0
   input_iff g := g.elim0
 
@@ -130,7 +130,7 @@ abbrev plan0 : Finset (Fin 1) → Unit → List (TabSpec 16) := fun _ _ => [tabW
 
 abbrev tab0 : (S : Finset (Fin 1)) → (R : Unit) → Fin 1 → Fin (plan0 S R).length := fun _ _ _ => ⟨0, by simp⟩
 
-abbrev decode0 : FlockSoundness.Audit.Partition.DecoderB (C := circ0) (Reg := Unit) plan0 tab0 := fun _ _ _ _ g => g.elim0
+abbrev decode0 : Spot.Sampling.Partition.DecoderB (C := circ0) (Reg := Unit) plan0 tab0 := fun _ _ _ _ g => g.elim0
 
 /-! ## The circuit file, the layout and the read -/
 

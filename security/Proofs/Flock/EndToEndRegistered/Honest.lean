@@ -46,7 +46,7 @@ neither is a premise that can never hold.
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition ZkSession StrictCR
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition ZkSession StrictCR
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
@@ -145,7 +145,7 @@ end FlockSoundness.Discharge.ZkReg.Witness
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition ZkSession StrictCR
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition ZkSession StrictCR
 
 /-- **`EndToEndRegistered`'s premises hold together.** The unit net is built, the inputs carry the templated
 statement's tags, and every prover's link and session finders satisfy the collision premises at budgets `2^256` and

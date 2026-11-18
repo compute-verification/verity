@@ -32,7 +32,7 @@ proves `hout` for it, in an untyped circuit whose unit returns the outputs (`c.o
 
 namespace FlockSoundness.Discharge.Layout
 
-open Flock FlockLevel3 Model FlockSoundness.Audit Binding Placed
+open Flock FlockLevel3 Model Spot.Sampling Binding Placed
 
 /-! ## A stacked computed column's place -/
 

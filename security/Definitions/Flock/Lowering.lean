@@ -35,7 +35,7 @@ makes every placed unit correct.
 
 namespace FlockSoundness
 
-open FlockSoundness.Audit Model
+open Spot.Sampling Model
 
 /-- **A template's rows**, as the verifier parses them: columns `0 … nIn − 1` are the unit's input
 bits, column `nIn + i` is computed row `i`, and the last column `nIn + nComp` is the constant. Every
@@ -68,10 +68,10 @@ end Rows
 
 end FlockSoundness
 
-namespace FlockSoundness.Audit.Partition
+namespace Spot.Sampling.Partition
 
 open FlockSoundness
-open FlockSoundness.Audit Model
+open Spot.Sampling Model
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
@@ -102,11 +102,11 @@ def Agree (z : Fin R.w → Bool) : Prop :=
 
 end IsRowsUnit
 
-end FlockSoundness.Audit.Partition
+end Spot.Sampling.Partition
 
 namespace FlockSoundness
 
-open FlockSoundness.Audit Model
+open Spot.Sampling Model
 
 /-! ## Rows placed in a statement -/
 
@@ -134,7 +134,7 @@ def PlacedSat (S : Statement) (R : Rows) (col : Fin R.w → Fin (2 ^ S.kLog)) : 
 block and columns where the table's statement holds its rows. The unit's input columns on one gate
 carry one value in every witness satisfying the statement (`aliased`): they copy one source's
 position, or forced-zero rows. -/
-structure UnitPlace {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (S : Statement) (u : Fin n) where
+structure UnitPlace {C : Verity.Boolean.Circuit} {n : ℕ} (P : Spot.Sampling.Partition C n) (S : Statement) (u : Fin n) where
   R : Rows
   inst : P.IsRowsUnit u R
   o : Fin (2 ^ S.nbl)
@@ -145,7 +145,7 @@ structure UnitPlace {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.A
 
 namespace UnitPlace
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {S : Statement} {u : Fin n}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {S : Statement} {u : Fin n}
 
 /-- The transcript a witness gives for a placed unit, read from its block. -/
 noncomputable def decode (pl : UnitPlace P S u) (z : Witness S.m) : Fin C.N → Bool :=
@@ -179,7 +179,7 @@ end Verity.Boolean.Op
 
 namespace FlockSoundness
 
-open FlockSoundness.Audit Model
+open Spot.Sampling Model
 
 /-- **A program of template units**, unit by unit: `k` input gates, then each unit's computed rows.
 A unit's input columns are wired to earlier gates, several possibly to one, and its constant to an
@@ -272,7 +272,7 @@ def circuit {N n : ℕ} (p : Prog N n) (outs : Finset (Fin N)) : Verity.Boolean.
   ⟨N, p.op, p.topo, outs⟩
 
 /-- The program's partition into its units. -/
-def partition {N n : ℕ} (p : Prog N n) (outs : Finset (Fin N)) : FlockSoundness.Audit.Partition (p.circuit outs) n :=
+def partition {N n : ℕ} (p : Prog N n) (outs : Finset (Fin N)) : Spot.Sampling.Partition (p.circuit outs) n :=
   ⟨p.unit, p.input_iff⟩
 
 /-- Each unit's template rows. -/

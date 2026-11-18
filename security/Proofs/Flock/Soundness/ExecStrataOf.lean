@@ -29,7 +29,7 @@ on the statement's form: they follow from the verifier accepting.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace FlockSoundness.Audit
+namespace Spot.Sampling
 
 open FlockSoundness
 
@@ -508,4 +508,4 @@ theorem execStrata_of_ofJson {j : Lean.Json} {D : UnitSample} {k : ℕ} {S : Arr
 
 end SamplingDesign
 
-end FlockSoundness.Audit
+end Spot.Sampling

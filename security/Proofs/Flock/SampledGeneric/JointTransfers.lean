@@ -18,7 +18,7 @@ extractor and its trials, with the knowledge term at most `κ`.
 
 namespace FlockSoundness.SampledGeneric
 
-open Game FlockSoundness.Audit LinkFinder
+open Game Spot.Sampling LinkFinder
 open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type} {Dh : Type} {Hc : List UInt8 → Dh} {B : Binding Reg Hc} {PS : ProofSystem n Reg}
@@ -156,7 +156,7 @@ end JointExtractor
 
 end FlockSoundness.SampledGeneric
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.SampledGeneric in
 /-- **The textbook form** (`Flock.Guarantees.GenericSampledKSJoint`): `GenericSampledKSPa` at the extractor that is a
 game and its trials, whose knowledge term is at most `κ` at every sampled proof block. -/
 theorem Flock.SecurityProofs.GenericSampledKSJoint : Flock.Guarantees.GenericSampledKSJoint := by

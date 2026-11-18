@@ -28,7 +28,7 @@ under `subset kd` (`sampleFileZK_of_toJson_subset`).
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
   Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Discharge.DecodeZLJ (partJson)

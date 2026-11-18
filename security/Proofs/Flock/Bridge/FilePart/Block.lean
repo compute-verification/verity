@@ -16,13 +16,13 @@ are `k + 3m·u, …, k + 3m·(u + 1) − 1` (`unitGates_of`). On `k = 2 + n·B` 
 
 namespace Flock.Bridge.FilePart
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-! ## A partition of `k` input gates and `n` units of `m` rows -/
 
 section abstract
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {k m : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Spot.Sampling.Partition C n) {k m : ℕ}
 
 theorem off_of (hsize : ∀ g : Fin C.N, gateSize (C.op g) = if g.val < k then 1 else 3) :
     ∀ j, j ≤ C.N → off C j = min j k + 3 * (j - k)

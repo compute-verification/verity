@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Tables.Session
 public import Proofs.Flock.Soundness.Binding.RowsX
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
 import Proofs.Flock.Soundness.Discharge.Exec.Headline
 import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
@@ -32,7 +32,7 @@ reads the plan only through the positions the sample reads and `ρ`, a bound on 
 
 namespace FlockSoundness.Discharge.Tables
 
-open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Exec
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Exec
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

@@ -51,7 +51,7 @@ the kernel can't evaluate: setupH hashes and parses the inputs), `RecordsLiveZKJ
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
 variable {n mPts : ℕ}

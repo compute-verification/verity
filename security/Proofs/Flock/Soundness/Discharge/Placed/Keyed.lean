@@ -26,10 +26,10 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Placed
 
-open Model FlockSoundness.Audit
+open Model Spot.Sampling
 
 /-- An instance carried along equal rows wires each column where the original wires it. -/
-theorem wire_cast {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {R R' : Rows} (e : R = R')
+theorem wire_cast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {u : Fin n} {R R' : Rows} (e : R = R')
     (inst : P.IsRowsUnit u R) (x : Fin R'.w) :
     (e ▸ inst).wire x = inst.wire (Fin.cast (congrArg Rows.w e).symm x) := by
   subst e; rfl

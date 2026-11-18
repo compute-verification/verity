@@ -159,7 +159,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 
 ## Where things are
 
-- **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Flock/Soundness/Audit/`,
+- **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Spot/Sampling/`,
   whose `README.md` lists every theorem; `Audit/Flock*.lean` instantiate them for Flock.
   The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`).
 - **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`verity-verify-proof draw`): the

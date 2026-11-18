@@ -39,7 +39,7 @@ The Bernoulli sampling design's live sample is `Proofs.Flock.Claims.Sampling.Exe
 
 @[expose] public section
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
 
 open FlockSoundness
 
@@ -576,4 +576,4 @@ theorem sampleOS_def (samplingDesign : Flock.Draw.SamplingDesign) (pop : ℕ) :
         | throw (IO.userError "unreachable")
       return d) := rfl
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign

@@ -32,8 +32,8 @@ messages, cut at the coins of the rep's spine, must be the decoder's groups.
 
 namespace FlockSoundness.Discharge.PlaysCoin
 
-open Flock FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge.Exec Model Accounting FlockSoundness.Audit
-  FlockSoundness.Audit.Partition
+open Flock FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge.Exec Model Accounting Spot.Sampling
+  Spot.Sampling.Partition
 
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256

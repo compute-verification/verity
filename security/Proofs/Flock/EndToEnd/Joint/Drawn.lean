@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.EndToEnd.Joint.Statement
 public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
-public import Proofs.Flock.Soundness.Audit.HarmBound
+public import Proofs.Spot.Sampling.HarmBound
 
 /-!
 # A sampling block stratified by subcircuit: its sampled proof blocks, its sample's miss, and its one budget
@@ -22,7 +22,7 @@ public import Proofs.Flock.Soundness.Audit.HarmBound
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game FlockSoundness.Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
+open Game Spot.Sampling Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -78,7 +78,7 @@ end FlockSoundness.Discharge.Composed
 
 namespace Flock.Guarantees.StratifiedBlock
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.HiddenDec
   FlockSoundness.Discharge.ZkSession

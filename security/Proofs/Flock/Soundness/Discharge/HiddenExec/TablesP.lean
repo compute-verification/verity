@@ -32,7 +32,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model Refine FlockSoundness.Audit
+open Flock FlockLevel3 Model Refine Spot.Sampling
 open FlockSoundness.Discharge.Exec (Inputs)
 open FlockSoundness.Discharge.Integrate (SampleSetup)
 

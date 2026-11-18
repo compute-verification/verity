@@ -18,7 +18,7 @@ premise on a stream generator is left on the salts:
 
 * `saltOfBytes`, `saltEquiv`: 192 bytes as a salt, in `bitsOf`'s order (bit `t` is bit `t % 8` of byte `t / 8`), a
   bijection. `saltBytes_saltOfBytes`: the bytes a leaf hashes for that salt are the OS's bytes themselves
-  (`FlockSoundness.Audit.SamplingDesign.streamOf`), so the executable's leaf under the OS's salt is the model's leaf at `saltOfBytes`
+  (`Spot.Sampling.SamplingDesign.streamOf`), so the executable's leaf under the OS's salt is the model's leaf at `saltOfBytes`
   (`leaf_os`, from `leafSplit`). `saltsEquiv n`: `n` salts from `n` streams of 192 bytes.
 * `uniformRandomBytesTest_of`: A3's every-event form gives the per-test form at every test, at `η = 0`.
 * `prCoin_os`, `prCoin_os_prod`: an event of values decoded bijectively from the OS's bytes has, within `η` either way,
@@ -73,8 +73,8 @@ theorem saltOfBytes_apply (b : Fin 192 → Fin 256) (i : Fin 192) (j : Fin 8) (h
 theorem bytesOf_eq_streamOf {k : ℕ} (x : Fin (8 * k) → ZMod 2) (b : Fin k → Fin 256)
     (h : ∀ (i : Fin k) (j : Fin 8) (hij : 8 * i.val + j.val < 8 * k),
       x ⟨8 * i.val + j.val, hij⟩ = if (b i).val.testBit j.val then 1 else 0) :
-    bytesOf x = FlockSoundness.Audit.SamplingDesign.streamOf b := by
-  unfold bytesOf FlockSoundness.Audit.SamplingDesign.streamOf
+    bytesOf x = Spot.Sampling.SamplingDesign.streamOf b := by
+  unfold bytesOf Spot.Sampling.SamplingDesign.streamOf
   congr 1
   refine congrArg Array.ofFn (funext fun i => ?_)
   rw [← byteOf_testBit_fin (b i)]
@@ -82,13 +82,13 @@ theorem bytesOf_eq_streamOf {k : ℕ} (x : Fin (8 * k) → ZMod 2) (b : Fin k �
 
 /-- **The leaf's salt bytes are the OS's bytes**: the 192 bytes the executable's leaf hashes for `saltOfBytes b`
 (`saltBytes`) are `b` itself, as a byte stream. -/
-theorem saltBytes_saltOfBytes (b : Fin 192 → Fin 256) : saltBytes (saltOfBytes b) = FlockSoundness.Audit.SamplingDesign.streamOf b :=
+theorem saltBytes_saltOfBytes (b : Fin 192 → Fin 256) : saltBytes (saltOfBytes b) = Spot.Sampling.SamplingDesign.streamOf b :=
   bytesOf_eq_streamOf (k := 192) (saltOfBytes b) b fun i j h => saltOfBytes_apply b i j h
 
 /-- **The executable's leaf at the OS's salt bytes** is the model's at `saltOfBytes`: for a 64-byte digest `x`,
 `Default512.leaf x b = H(x ⊕ M·y, c(y))` with `y = saltOfBytes b` (`leafSplit`). -/
 theorem leaf_os (x : ByteArray) (b : Fin 192 → Fin 256) (hx : x.size = 64) :
-    Flock.Hm96.Default512.leaf x (FlockSoundness.Audit.SamplingDesign.streamOf b) =
+    Flock.Hm96.Default512.leaf x (Spot.Sampling.SamplingDesign.streamOf b) =
       leafH (bitsOf x + My (saltOfBytes b), saltHash (saltOfBytes b)) := by
   rw [← saltBytes_saltOfBytes]
   exact leafSplit x _ hx

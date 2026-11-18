@@ -27,7 +27,7 @@ since computed columns are the unit's own gates and the constant's is on `one`.
 
 @[expose] public section
 
-namespace FlockSoundness.Audit
+namespace Spot.Sampling
 
 open FlockSoundness
 
@@ -279,4 +279,4 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_sampled_classes_zero
 
 end Partition
 
-end FlockSoundness.Audit
+end Spot.Sampling

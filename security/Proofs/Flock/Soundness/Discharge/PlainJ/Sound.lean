@@ -42,7 +42,7 @@ The assumptions are `flock_headline_exec`'s: A3 (`hA3`), `cr/sha-512` for the kn
 
 namespace FlockSoundness.Discharge.PlainJ
 
-open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.Tables
 open FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.Composed (TagsOkZJ)

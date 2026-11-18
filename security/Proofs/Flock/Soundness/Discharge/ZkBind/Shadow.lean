@@ -22,7 +22,7 @@ satisfying public message is one about every satisfying `--zk` message.
 
 namespace FlockSoundness.Discharge.ZkBind
 
-open Game Model Accounting Refine FlockSoundness.Audit ZkSession ZkLink Binding
+open Game Model Accounting Refine Spot.Sampling ZkSession ZkLink Binding
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -83,7 +83,7 @@ theorem wit_surj {mPts : ℕ} (T : TabSpec mPts) (z : Witness T.S.m) :
 
 section Shadow
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type} {mPts : ℕ}
   {planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length}
   {planS : Finset (Fin n) → Reg → List (TabSpec mPts)}

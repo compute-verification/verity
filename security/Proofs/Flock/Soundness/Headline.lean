@@ -38,7 +38,7 @@ states, and which covers the challenger's keyed coin tree: `verify` refuses a se
 
 @[expose] public section
 
-namespace FlockSoundness.Audit
+namespace Spot.Sampling
 
 open FlockSoundness
 
@@ -100,4 +100,4 @@ theorem _root_.FlockSoundness.Prog.flock_headline
     hk hRw hM hρ hr ht K σ hCR hKS tr hT).trans
     (add_le_add (add_le_add (add_le_add (SamplingDesign.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K) le_rfl) le_rfl) le_rfl)
 
-end FlockSoundness.Audit
+end Spot.Sampling

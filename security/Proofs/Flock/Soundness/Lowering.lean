@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Flock.Lowering
-public import Proofs.Flock.Soundness.Audit.Circuit
+public import Proofs.Spot.Sampling.Circuit
 import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
 
@@ -36,7 +36,7 @@ columns, where every satisfying witness carries one value on the unit's inputs t
 
 namespace FlockSoundness
 
-open FlockSoundness.Audit Model
+open Spot.Sampling Model
 
 namespace Rows
 
@@ -51,10 +51,10 @@ end Rows
 
 end FlockSoundness
 
-namespace FlockSoundness.Audit.Partition
+namespace Spot.Sampling.Partition
 
 open FlockSoundness
-open FlockSoundness.Audit Model
+open Spot.Sampling Model
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
@@ -127,11 +127,11 @@ theorem correct_decode {z : Fin R.w → Bool} (hz : R.Sat z) (ha : I.Agree z) : 
 
 end IsRowsUnit
 
-end FlockSoundness.Audit.Partition
+end Spot.Sampling.Partition
 
 namespace FlockSoundness
 
-open FlockSoundness.Audit Model
+open Spot.Sampling Model
 
 /-! ## Rows placed in a statement -/
 
@@ -212,7 +212,7 @@ theorem PlacedSat.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ 
 /-- **The compiled lowering, for every template.** If a witness satisfies a statement in which unit
 `u`'s rows are placed in block `o` at the columns `col`, and the unit's inputs on one gate carry one
 value there, the transcript decoded from that block makes `u` correct. -/
-theorem lowering_sound {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {R : Rows}
+theorem lowering_sound {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {u : Fin n} {R : Rows}
     (I : P.IsRowsUnit u R) {S : Statement} {col : Fin R.w → Fin (2 ^ S.kLog)}
     (hpl : Placement S R col) (o : Fin (2 ^ S.nbl)) {z : Witness S.m} (hz : S.Satisfies z)
     (ha : I.Agree fun c => bit (S.block z o (col c))) :
@@ -221,7 +221,7 @@ theorem lowering_sound {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundnes
 
 namespace UnitPlace
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {S : Statement} {u : Fin n}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {S : Statement} {u : Fin n}
 
 theorem agree (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
     pl.inst.Agree fun c => bit (S.block z pl.o (pl.col c)) :=

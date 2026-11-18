@@ -31,7 +31,7 @@ where the registered reads (`Registered.ReadsX`) are read.
 
 namespace FlockSoundness.Discharge.ZkReg
 
-open Flock FlockLevel3 Game Model Accounting Refine FlockSoundness.Audit ZkSession ZkLink ZkExec ZkBind ZkHidden HiddenExec Placed
+open Flock FlockLevel3 Game Model Accounting Refine Spot.Sampling ZkSession ZkLink ZkExec ZkBind ZkHidden HiddenExec Placed
   Composed
 open FlockSoundness.Discharge.Exec (Inputs)
 open scoped ENNReal

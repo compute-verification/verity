@@ -104,7 +104,7 @@ end FlockSoundness.Discharge.ZkView
 
 namespace FlockSoundness.Discharge.ZkEveryCoin
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model ZkSession ZkLink ZkExec DecodeZL Composed ZkView
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model ZkSession ZkLink ZkExec DecodeZL Composed ZkView
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
@@ -154,7 +154,7 @@ end FlockSoundness.Discharge.ZkEveryCoin
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
   Placed StrictCR DecodeZL
 open scoped ENNReal
 

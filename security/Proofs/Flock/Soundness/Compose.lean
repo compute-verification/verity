@@ -5,7 +5,7 @@ public import Definitions.Flock.Lowering
 import Mathlib.Data.List.GetD
 import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 
 /-!
 # A unit's rows in logical order (verified-lowering phase 1, 1d step 1)
@@ -35,7 +35,7 @@ open Flock Flock.Derive
 
 namespace FlockSoundness
 
-open FlockSoundness.Audit
+open Spot.Sampling
 
 namespace Compose
 

@@ -1,7 +1,7 @@
 module
 
 public import Flock.Derive
-public import Proofs.Flock.Soundness.Audit.Circuit
+public import Proofs.Spot.Sampling.Circuit
 
 /-!
 # Derived rows compute their circuit type (flat types)
@@ -23,7 +23,7 @@ about how `place` arranges groups. Calls, exported inputs and reads come later.
 
 namespace FlockSoundness.Types
 
-open Flock Flock.Derive FlockSoundness.Audit
+open Flock Flock.Derive Spot.Sampling
 
 /-- A form's value: the XOR of its wires' values, and its constant. -/
 def formVal (v : ℕ → Bool) (f : Form) : Bool := Bool.xor (Verity.Boolean.xorSum f.ws.toList v) (decide (f.c = 1))

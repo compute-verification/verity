@@ -158,7 +158,7 @@ theorem sampleOf_mem (samplingDesign : Draw.SamplingDesign) (pop : ℕ) (S : Fin
 theorem sampleOf_size (samplingDesign : Draw.SamplingDesign) (pop : ℕ) (S : Finset (Fin n)) : (drawOf samplingDesign pop S).units.size = S.card := by
   simp [drawOf, card_image_of_injective _ Fin.val_injective]
 
-open FlockSoundness.Audit.SamplingDesign in
+open Spot.Sampling.SamplingDesign in
 /-- At a sample file of every unit that `UnitSample.ofJson` decodes under the strata `St`, every stratum samples all its units. -/
 theorem sum_ks_of_univ {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (stratum σs s).card)
     (St : Fin m → Draw.Stratum) (hS : ExecStrata σs ks St) (Kd pop : ℕ) {j : Lean.Json}
@@ -190,12 +190,12 @@ units: when the record's sample file is the verifier's sample under the live sam
 source's bytes (every unit) included. -/
 theorem sampleOkZK_of_exec (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (FlockSoundness.Audit.SamplingDesign.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : FlockSoundness.Audit.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Spot.Sampling.SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : Spot.Sampling.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
     SampleOkZK I dj (mPtsOf c.g (∑ s, ks s))
-      ((FlockSoundness.Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
+      ((Spot.Sampling.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
   have hc' : (if (zkTags I).typed then HmRow.parseTyped (zkTags I) I.circuitFile I.tables
       else HmRow.parse (zkTags I) I.circuitFile I.tables) = .ok c := by
     rw [zkTags_typed, ht]; exact hc

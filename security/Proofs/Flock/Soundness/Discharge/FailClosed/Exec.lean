@@ -39,7 +39,7 @@ feed neither, so the unit returns the outputs (`Layout.outNet_of_wiresFeed`); wh
 
 namespace FlockSoundness.Discharge.FailClosed
 
-open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec
 open scoped ENNReal
 

@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.FlockPublic
+public import Proofs.Flock.SpotFlock.Sampling.FlockPublic
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkedL
 import Mathlib.Combinatorics.Matroid.Init
@@ -34,7 +34,7 @@ committed values remains in their place, only these two facts about the statemen
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

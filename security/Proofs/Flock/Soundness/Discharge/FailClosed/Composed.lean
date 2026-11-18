@@ -47,7 +47,7 @@ The `Composed` headlines remain, as lemmas.
 
 namespace FlockSoundness.Discharge.FailClosed
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open Composed
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Discharge.DecodeZLJ (partJson)

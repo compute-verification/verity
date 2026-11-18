@@ -42,7 +42,7 @@ unit's input groups or on where the outputs are returned.
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition Flock
 open FlockSoundness.Discharge.Exec
 open FlockSoundness.Discharge.Inst
 open FlockSoundness.Discharge.Layout (portRowW)

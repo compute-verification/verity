@@ -17,7 +17,7 @@ the challenger's live-coin part's samples (`SampleOkZKHJP`). `decodesOnZKJA_of_r
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
   HiddenExec Composed
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal

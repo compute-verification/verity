@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Guarantees.Window
-public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Spot.Sampling.Extraction
 public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 
 /-!
@@ -29,7 +29,7 @@ at the knowledge bound `ksBoundAccZ`, with its joint inequality discharged (`joi
 the table's own terms and `rateZ = N₀/(ek) < 1`. So `FlockKnowledgeSound` holds with `κ = 0` and
 `g S R τ = ⨆_j ofReal (ksBoundAccZ_j / (1 − rateZ_j))` at `zcStrat τ`, the state's collision finders' advantages, and
 these are the `κ_c` and `g_c` `ExecutionPhaseDelta` reads through `ofFlock_knowledgeSound`: the relative term sits in the
-denominator, not in `κ`. `ksJoint_le` (`Proofs/Flock/Soundness/Audit/FlockCompiled.lean`, `κ = 2^logLen/(e·Kr)`) is the
+denominator, not in `κ`. `ksJoint_le` (`Proofs/Flock/SpotFlock/Sampling/FlockCompiled.lean`, `κ = 2^logLen/(e·Kr)`) is the
 non-ZK plain-leaf table's, which main's window doesn't run. The binding error `εbind_c` stays `BindSoundIn`, Flock's link
 finder at the window's state.
 -/
@@ -45,13 +45,13 @@ section Call
 variable {Reg Tr : Type} {C : ℕ} {n : Fin C → ℕ}
 
 /-- **A call's analysis from Flock's.** Call `c`'s session is Flock's session `fsess`, and `AF` is Flock's
-randomized-extraction analysis of it (`FlockSoundness.Audit.ExtractionAnalysis`, at any sampling design `LF`, which its
+randomized-extraction analysis of it (`Spot.Sampling.ExtractionAnalysis`, at any sampling design `LF`, which its
 `ks`, `link` and `cover` don't read). `proj Xw` is the window transcript `Xw` read as Flock's transcript of the call, and
 `hwrong` says the window's units' statements are the session's: a unit of the call that is incorrect in `Xw`
 (`UnitStmts.incorrect`, at its seed inputs) is incorrect in `proj Xw`. The window's `ks`, `link` and `cover` are Flock's. -/
 def CallAnalysis.ofFlock (U : UnitStmts Tr n) (c : Fin C)
-    {fsess : Finset (Fin (n c)) → Reg → Game Bool} {LF : FlockSoundness.Audit.SamplingDesign (n c)}
-    (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (proj : Tr → AF.Tr)
+    {fsess : Finset (Fin (n c)) → Reg → Game Bool} {LF : Spot.Sampling.SamplingDesign (n c)}
+    (AF : Spot.Sampling.ExtractionAnalysis LF Reg fsess) (proj : Tr → AF.Tr)
     (hwrong : ∀ Xw u, (⟨c, u⟩ : WUnit n) ∈ U.incorrect Xw → u ∈ AF.incorrect (proj Xw)) :
     CallAnalysis U c fsess where
   ks := AF.ks
@@ -63,14 +63,14 @@ def CallAnalysis.ofFlock (U : UnitStmts Tr n) (c : Fin C)
 (`analysisZC`) it holds with `κ = 0` and `g = ⨆_j ofReal (ksBoundAccZ_j / (1 − rateZ_j))` at `zcStrat τ`
 (`flockKnowledgeSound_analysisZC`, module doc). -/
 def FlockKnowledgeSound {m : ℕ} {fsess : Finset (Fin m) → Reg → Game Bool}
-    {LF : FlockSoundness.Audit.SamplingDesign m} (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (κ : ℝ≥0∞)
+    {LF : Spot.Sampling.SamplingDesign m} (AF : Spot.Sampling.ExtractionAnalysis LF Reg fsess) (κ : ℝ≥0∞)
     (g : (S : Finset (Fin m)) → (R : Reg) → Strategy (fsess S R) → ℝ≥0∞) : Prop :=
   ∀ S R τ u, u ∈ S → AF.ks S R τ u ≤ κ + g S R τ
 
 /-- **Flock's pointwise bound is the call's knowledge soundness in the window.** -/
 theorem CallAnalysis.ofFlock_knowledgeSound (U : UnitStmts Tr n) (c : Fin C)
-    {fsess : Finset (Fin (n c)) → Reg → Game Bool} {LF : FlockSoundness.Audit.SamplingDesign (n c)}
-    (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (proj : Tr → AF.Tr)
+    {fsess : Finset (Fin (n c)) → Reg → Game Bool} {LF : Spot.Sampling.SamplingDesign (n c)}
+    (AF : Spot.Sampling.ExtractionAnalysis LF Reg fsess) (proj : Tr → AF.Tr)
     (hwrong : ∀ Xw u, (⟨c, u⟩ : WUnit n) ∈ U.incorrect Xw → u ∈ AF.incorrect (proj Xw)) {κ : ℝ≥0∞}
     {g : (S : Finset (Fin (n c))) → (R : Reg) → Strategy (fsess S R) → ℝ≥0∞}
     (h : FlockKnowledgeSound AF κ g) : (CallAnalysis.ofFlock U c AF proj hwrong).KnowledgeSound κ g :=
@@ -82,7 +82,7 @@ end Pouw.Window
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting FlockSoundness.Audit ZkSession
+open Game Model Accounting Spot.Sampling ZkSession
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}

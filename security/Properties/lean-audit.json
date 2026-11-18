@@ -1196,7 +1196,7 @@
   "Properties.Core",
   "CoreProtocol.Site",
   "RegistrationLog",
-  "Definitions.Flock.Audit",
+  "Definitions.Spot.Sampling",
   "Definitions.Flock.Game",
   "Properties.Flock.Nets",
   "Properties.Challenger",
@@ -2581,9 +2581,9 @@
    "why": "what Rankin's factor's upper bound bounds is stated against its own function (`Spot.FactorUpper`, on Lean core) and the factors Rankin's bound multiplies (`Definitions.Claims.SamplingTwoRankin`), never a proof"
   },
   "Properties.Spot.PlanCheck": {
-   "imports": ["Definitions.Flock.Audit", "Spot"],
+   "imports": ["Definitions.Spot.Sampling", "Spot"],
    "except": [],
-   "why": "what the planner's checker's acceptance means is stated against its own functions (`Spot.PlanCheck`, on Lean core) and the sampling designs and partitioning targets the guarantees read (`Definitions.Flock.Audit`), never a proof"
+   "why": "what the planner's checker's acceptance means is stated against its own functions (`Spot.PlanCheck`, on Lean core) and the sampling designs and partitioning targets the guarantees read (`Definitions.Spot.Sampling`), never a proof"
   },
   "Properties.Spot.TwoStageCheck": {
    "imports": ["Spot.TwoStageCheck", "Properties.Spot.FactorUpper"],

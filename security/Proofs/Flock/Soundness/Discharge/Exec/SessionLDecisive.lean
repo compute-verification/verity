@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
-public import Proofs.Flock.Soundness.Audit.OneStage
+public import Proofs.Spot.Sampling.OneStage
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Opening
 
@@ -36,7 +36,7 @@ tiling). No table needs to be satisfiable and no schedule needs a side condition
 
 namespace FlockSoundness.Discharge.Exec.SessionLDecisive
 
-open Game Model Accounting FlockSoundness.Audit
+open Game Model Accounting Spot.Sampling
 
 section Defs
 

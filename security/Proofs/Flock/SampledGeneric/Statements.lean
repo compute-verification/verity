@@ -8,7 +8,7 @@ public import Proofs.Flock.SampledGeneric.Defs
 Proof material, listed in no lock: the statement is the claims core's (`Claims.SamplingGeneric`).
 
 Take any proof system for proof blocks (`ProofSystem`) with a knowledge extractor (`Extractor`, `Trials`), a binding
-commitment to the trace (`Binding`) and a sampling design (`FlockSoundness.Audit.SamplingDesign`). The sampled audit (`FlockSoundness.Audit.audit`: the prover
+commitment to the trace (`Binding`) and a sampling design (`Spot.Sampling.SamplingDesign`). The sampled audit (`Spot.Sampling.audit`: the prover
 registers, the verifier samples proof blocks with live coins after the registration, the proof system's session proves
 the sample) accepts a trace with incorrect set `F` with probability at most the sampling design's acceptance
 probability `P_a(F)`, plus the knowledge error at one sampled proof block, plus the binding term `ε_bind`, which is
@@ -35,7 +35,7 @@ Flock is an instance (`SampledGeneric/Flock.lean`), at a bound no worse than `zk
 
 namespace Flock.Guarantees
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.SampledGeneric
 open scoped ENNReal
 
 /-- **The sampled audit's knowledge soundness, generic in the proof system** (event form). For a proof system `PS`

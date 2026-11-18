@@ -72,7 +72,7 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg FlockSoundness.Registered
 open FlockSoundness.Discharge.HiddenExec (encPortH)
 
@@ -177,7 +177,7 @@ namespace FlockC3.HPort
 noncomputable section
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockC3.Compose
 open FlockVBridge (wbit wbit_elem bitOf)
