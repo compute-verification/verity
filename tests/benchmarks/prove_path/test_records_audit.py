@@ -802,9 +802,10 @@ assert ids and all(descriptor_id(WT.catalog_resolve(t)) == descriptor_id(RA.cata
 
 
 def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
-    """The summary's ``tie`` names W's digest and the values tied to it. Tied to Pearl+'s W (its window names a Pearl-C
-    scheme) it also says what holds W's roots to the credited ones, Pearl+'s verdict, which reads the prover's salt key and
-    opens sampled rows in the clear; tied to H1's W, whose window names none, it doesn't."""
+    """The summary's ``tie`` names W's digest and the values tied to it. Tied to Pearl+'s W (its window's entry Pearl+'s
+    declared option, its scheme the one that entry names) it also says what holds W's roots to the credited ones, Pearl+'s
+    verdict, which reads the prover's salt key and opens sampled rows in the clear; tied to H1's W, to a W under another
+    Pearl-C kernel's option, or to one whose scheme isn't its entry's, it doesn't."""
     entry = {"value": "pearl-a/0/0", "root": "00" * 64, "leaves": 16, "words": K, "domain": "00" * 32, RV.WIDTH_KEY: 32}
     outputs = {"pearl-a/0/0": {"record": "", "value": "pearl-a/0/0"}}
     pearl = {"format": DM.REGISTRATION, "window": {"kind": "served", "entry": "pouw:pearl-c-h100-v1-h3",
@@ -816,7 +817,16 @@ def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
     assert "development verifier" in got["credited_by"] and "salt key" in got["credited_by"]
     assert RA.tie_row({"log": [h1], "outputs": outputs}) == {"record": DD.digest(h1), "values": ["pearl-a/0/0"]}
     c4 = {**pearl, "window": {**pearl["window"], "scheme": "pearl-c-nvfp4-v0"}}
-    assert "credited_by" not in RA.tie_row({"log": [c4], "outputs": outputs}), "pearl-c-nvfp4-v0's family is pearl-c4"
+    assert "credited_by" not in RA.tie_row({"log": [c4], "outputs": outputs}), "pearl-c-nvfp4-v0 is not its entry's"
+    assert RA.why_not_pearl(c4) == "its scheme pearl-c-nvfp4-v0 is not the one its entry pouw:pearl-c-h100-v1-h3 names"
+    sm120 = {**pearl, "window": {**pearl["window"], "entry": "pouw:pearl-c-sm120-v1-h3", "scheme": "pearl-c-sm120-v1-h3"}}
+    assert "credited_by" not in RA.tie_row({"log": [sm120], "outputs": outputs})
+    assert RA.why_not_pearl(sm120) == ("its entry pouw:pearl-c-sm120-v1-h3 is not Pearl+'s declared option "
+                                       "pouw:pearl-c-h100-v1-h3")
+    other = {**pearl, "window": {**pearl["window"], "scheme": "pearl-c-sm120-v1-h3"}}
+    assert "credited_by" not in RA.tie_row({"log": [other], "outputs": outputs})
+    assert RA.why_not_pearl(other) == "its scheme pearl-c-sm120-v1-h3 is not the one its entry pouw:pearl-c-h100-v1-h3 names"
+    assert RA.why_not_pearl(pearl) is None
 
 
 @dataclass(frozen=True)

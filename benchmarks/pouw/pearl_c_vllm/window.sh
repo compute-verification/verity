@@ -78,7 +78,9 @@ UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}
 export E2E_GPU_UUID=$UUID
 if [ "${STATEMENT:-}" = build ]; then
   CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || fail STATEMENT "no CUDA toolkit 13.0 to build hm96_rows.cu"
-  "$CUDA_HOME/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$OUT/hm96_rows.cubin" \
+  GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") \
+    || fail STATEMENT "no -gencode for this machine's card to build hm96_rows.cu"
+  "$CUDA_HOME/bin/nvcc" -O3 -std=c++17 -gencode "$GENCODE" -cubin -o "$OUT/hm96_rows.cubin" \
     verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
   STATEMENT=$OUT/hm96_rows.cubin
 fi

@@ -146,7 +146,7 @@ from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, KEY_BLOCKS, LAYOUTS, PACKED,  # noqa: F401
                                                     PART_OF, PARTS, SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
-                                                    chain_ways, final_hits, part, template, unit_templates)
+                                                    chain_ways, final_hits, part, proved_as, template, unit_templates)
 from verity_vllm.pipeline.window_sampling_design import sampling_design_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 

@@ -344,7 +344,7 @@ def test_a_salts_buffer_of_the_wrong_length_or_alignment_is_refused_before_any_l
     count = 4
     values, salts = host.put(bytes(64 * count)), host.put(salts_of("aligned", count + 1))
     p = SimpleNamespace(dev=host, keys={"hm": host.put(audit.hm96_kernel_constants()), "dom_b": host.put(bytes(64))},
-                        b={"tree_b": host.alloc(64 * count), "salts_b": salts + 1})
+                        b={"tree_b": host.alloc(64 * count), "salts_b": salts + 1}, salt_bytes={"b": M.HM_SALT * count})
     launched, launch = [], host.launch
     host.launch = lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw)
     try:
@@ -355,8 +355,43 @@ def test_a_salts_buffer_of_the_wrong_length_or_alignment_is_refused_before_any_l
         for given in (M.HM_SALT * (count - 1), M.HM_SALT * (count + 1), M.HM_SALT * count - 1):
             with pytest.raises(ValueError, match=f"tree 'b''s salts: {given} bytes for {count} leaves, which take {M.HM_SALT * count}"):
                 M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts, salt_bytes=given)
+        with pytest.raises(ValueError, match=f"tree 'b''s salts: its owner stated no length, and the launch reads {M.HM_SALT * count}"):
+            M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts)
         assert not launched
         M.Pipeline.hm_level0(p, "b", values, count, "dom_b", salts=salts, salt_bytes=M.HM_SALT * count)
+        assert launched == ["hm_leaves", "s512_frame_leaves"]
+    finally:
+        host.launch = launch
+
+
+@pytest.mark.parametrize("run", ["pearl_c_sm120/run.py", "pearl_c_sm90/run.py"])
+def test_a_callers_salts_buffer_states_its_length_or_is_refused_before_any_launch(host, run):
+    """A caller that owns ``salts_<tree>`` gives it in ``bufs`` as (address, bytes).  `Pipeline.salts` refuses, by the
+    buffer's name and with both byte counts, one given as a bare address (no length is assumed) and one whose stated length
+    is a salt too few, a salt too many or a byte short of what the launch reads; the stated length launches, and travels
+    with the buffers a pipeline lends another (`lent`)."""
+    M = load(run)
+    count = 4
+    need = M.HM_SALT * count
+    values, salts = host.put(bytes(64 * count)), host.put(salts_of("stated", count))
+    keys = {"hm": host.put(audit.hm96_kernel_constants()), "dom_b": host.put(bytes(64))}
+    launched, launch = [], host.launch
+    host.launch = lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw)
+
+    def pipe(given):
+        b, said = M.stated_salts({"tree_b": host.alloc(64 * count), "salts_b": given})
+        return SimpleNamespace(dev=host, keys=keys, b=b, salt_bytes=said)
+    try:
+        with pytest.raises(ValueError, match=f"salts_b: its owner stated no length, and the launch reads {need} bytes"):
+            M.Pipeline.hm_level0(pipe(salts), "b", values, count, "dom_b")
+        for given in (need - M.HM_SALT, need + M.HM_SALT, need - 1):
+            with pytest.raises(ValueError, match=f"salts_b: {given} bytes for {count} leaves, which take {need}"):
+                M.Pipeline.hm_level0(pipe((salts, given)), "b", values, count, "dom_b")
+        assert not launched
+        p = pipe((salts, need))
+        assert p.b["salts_b"] == salts and M.Pipeline.lent(p)["salts_b"] == (salts, need)
+        assert M.stated_salts(M.Pipeline.lent(p)) == (p.b, p.salt_bytes)
+        M.Pipeline.hm_level0(p, "b", values, count, "dom_b")
         assert launched == ["hm_leaves", "s512_frame_leaves"]
     finally:
         host.launch = launch
@@ -391,8 +426,9 @@ def test_sm120_h3_phases_are_the_verifiers(host, monkeypatch, sha):
     pipe = S.Pipeline(host, m, n, k, "sm120", {name: host.put(v) for name, v in keys.items()}, host.put(b"".join(a_rows)),
                       host.put(b"".join(b_rows)), m_real=mr, sha=sha)
     assert {t: pipe.size[f"salts_{t}"] for t in R.SALTED} == {t: len(x) for t, x in salts.items()}
+    assert pipe.salt_bytes == {t: len(x) for t, x in salts.items()}   # its own buffers' lengths are its own sizes
     with pytest.raises(NotImplementedError, match="salts_b"):   # its own buffers hold no salts until they are put
-        pipe.salts("b")
+        pipe.salts("b", n)
     for t, x in salts.items():
         pipe.put_salts(t, x)
     for name, words in (("c", c), ("u", u)):
