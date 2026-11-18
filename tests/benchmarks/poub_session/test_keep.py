@@ -81,6 +81,19 @@ def test_the_engine_and_the_prover_keep_through_keep_py():
     assert 'out["engines"] = [keep.export_kept(e) for e in exports]' in node
 
 
+def test_the_commits_run_table_and_memory_map_are_refused_by_name(tmp_path):
+    """`runs.jsonl` carries an unsalted digest of the served tokens and `memory_map.jsonl` digests of KV payloads: a keeper
+    that asks for either (as one on the shared branch did) is refused before anything is copied."""
+    src, dst = tmp_path / "row", tmp_path / "out"
+    (src / "commit").mkdir(parents=True)
+    for rel in ("commit/verdict.json", "commit/runs.jsonl", "commit/memory_map.jsonl", "commit/step_trace.7.jsonl.gz"):
+        (src / rel).write_text("{}")
+    with pytest.raises(ValueError, match="commit/runs.jsonl, commit/memory_map.jsonl, commit/step_trace.7.jsonl.gz"):
+        keep.keep(src, dst, ["commit/verdict.json", "commit/runs.jsonl", "commit/memory_map.jsonl",
+                             "commit/step_trace.7.jsonl.gz"])
+    assert not dst.exists() or not any(dst.rglob("*"))
+
+
 def test_the_command_line_keeps_the_rows_list(tmp_path):
     src, dst = tmp_path / "row", tmp_path / "out"
     (src / "commit").mkdir(parents=True)
