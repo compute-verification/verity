@@ -16,7 +16,7 @@ from verity_vllm.pipeline import advice as A
 
 
 def test_every_declared_message_is_a_type():
-    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUSStore"} <= M.TYPES.types
+    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUSStore"} <= M.types().types
 
 
 def test_a_type_no_protocol_declares_is_refused():
@@ -245,7 +245,7 @@ def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_ent
         ex.request("pearl", eager)
         return "front"
 
-    pearl = NS(name="pearl", settings={"coins": "", "tie": False}, attach=attach, requests=lambda ctx: (eager, world))
+    pearl = NS(name="pearl", settings={"coins": "", "tie": False}, check_settings=lambda s: None, attach=attach, requests=lambda ctx: (eager, world))
     ex = M.Exchange()
     assert ex.attach(pearl, {"coins": "live"}, submit=print) == "front"
     assert seen == [{"settings": {"coins": "live", "tie": False}, "build": ex.key, "submit": print}]

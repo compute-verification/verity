@@ -330,7 +330,7 @@ def test_a_build_in_one_process_installs_the_fused_rope_and_producers_on_its_mod
     fake.set("vllm:LLM", _LLM)
     fake["vllm.envs"].VLLM_BATCH_INVARIANT = False
     messages.close()
-    messages.build().attach(NS(name="pearl", settings={"coins": ""}, attach=lambda ex, ctx: None, requests=lambda ctx: ()),
+    messages.build().attach(NS(name="pearl", settings={"coins": ""}, check_settings=lambda s: None, attach=lambda ex, ctx: None, requests=lambda ctx: ()),
                             {"coins": "live"})
     with caplog.at_level(logging.INFO, logger="verity_vllm"):
         eng = build.build_engine(checkpoints, case="M", execution="eager")
