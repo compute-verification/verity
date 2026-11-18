@@ -43,7 +43,6 @@ reads'), and both routings' switches.
 """
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from typing import Any, Mapping, NamedTuple, Sequence
 
@@ -144,13 +143,6 @@ def commit_rows(steps: Sequence[Sequence[Row]], tokens: Sequence[Sequence[int]],
     """Each step's `c00.input/ids` row as the Commit holds it (`io_tie.port_row`): its rows' input ids in batch order,
     request q's position p being tokens[q][p] (its prompt, then its outputs)."""
     return [IT.port_row([tokens[r.q][r.start + t] for r in rows for t in range(r.n)], P) for rows in steps]
-
-
-def commit(rows: Sequence[bytes], seed: bytes = b"commit") -> tuple[tuple[bytes, ...], list[list[bytes]], bytes]:
-    """The fake Commit's tree of the rows under fake salts: (salts, levels, domain id)."""
-    salts = tuple(IT.fake_salt(seed, s) for s in range(len(rows)))
-    dom = IT.domain(hashlib.sha512(seed).digest(), len(rows)).domain_id
-    return salts, IT.rows_levels(dom, rows, salts), dom
 
 
 # --- the verifier's map ----------------------------------------------------------------------------------------------

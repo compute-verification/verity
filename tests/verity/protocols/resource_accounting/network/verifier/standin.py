@@ -8,6 +8,7 @@ opened to the verifier's own copy, the output row, the attestations and the sync
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Sequence
@@ -16,6 +17,7 @@ from verity.commitments import hm96
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.resource_accounting.network.verifier import service as SVC, tie_service as TS, network_attester_rows as WR
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF, registered as G
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
@@ -26,6 +28,21 @@ SALTS = {"pub": b"\x51" * 192, "wit": b"\x52" * 192, "o0": b"\x53" * 192}
 
 def _bc(data: bytes, bits: int, salt: bytes) -> bytes:
     return _INST.commit_string(_INST.default_key, sha512_row_v2_digest(data, bits), salt)
+
+
+def fake_salt(seed: bytes, i: int) -> bytes:
+    """Test data: a hiding salt fixed by `seed` and `i`, so that a fake upstream's tree is the same each run."""
+    out = b""
+    while len(out) < _INST.salt_bytes:
+        out += hashlib.sha512(seed + i.to_bytes(8, "big") + len(out).to_bytes(4, "big")).digest()
+    return out[:_INST.salt_bytes]
+
+
+def fake_commit(rows: Sequence[bytes], seed: bytes = b"commit") -> tuple[tuple[bytes, ...], list[list[bytes]], bytes]:
+    """A fake upstream Commit's tree of the rows under `fake_salt`s: (salts, levels, domain id)."""
+    salts = tuple(fake_salt(seed, s) for s in range(len(rows)))
+    dom = IT.domain(hashlib.sha512(seed).digest(), len(rows)).domain_id
+    return salts, IT.rows_levels(dom, rows, salts), dom
 
 
 def prove(lw: SVC.TransferBlocks, opening: SVC.Hidden, sample: S.Draw, syncs: Sequence[Any], out: Path, *,

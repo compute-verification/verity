@@ -31,6 +31,8 @@ from verity.protocols.resource_accounting.network.verifier.link_frame import DAT
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.resource_accounting.network.verifier.grid import Certifier
 
+import standin
+
 #: the circuits' shape: three bucket rows of 4 lanes of r = 2 slots, each bucket's 4 port rows of 4 ids from a session
 #: of 8 steps, M = 16 routed positions
 SMALL = IT.Shape(256, 3, 8, P=4, S=4, DS=3)
@@ -124,8 +126,8 @@ def commit(shape: IT.Shape, link: Link, window: int, seed: bytes = b"w", order: 
                                 link.order if order is None else order)
     cells = [c for t in range(shape.T) for c in link.rows[window * shape.T + t]]
     cd, pd = IT.domain(_h(b"cells" + seed), shape.T), IT.domain(_h(b"port" + seed), len(link.port))
-    cs = [IT.fake_salt(seed + b"c", t) for t in range(shape.T)]
-    ps = [IT.fake_salt(seed + b"p", s) for s in range(len(link.port))]
+    cs = [standin.fake_salt(seed + b"c", t) for t in range(shape.T)]
+    ps = [standin.fake_salt(seed + b"p", s) for s in range(len(link.port))]
     levels = IT.rows_levels(pd.domain_id, link.port, ps)
     opened = [IT.open_port(levels, link.port, ps, st) for st in steps]
     return IT.Instance(shape, tuple(cells), tuple(cs), IT.rows_root(cd.domain_id, IT.bucket_rows(shape, cells), cs),
@@ -250,7 +252,7 @@ def test_the_map_is_the_network_attesters_slots():
 def test_a_rows_root_is_its_domains_tree_and_a_path_opens_its_row():
     for count in (2, 3, 5, 8):
         dom = IT.domain(_h(b"d"), count)
-        rows, salts = [bytes([i]) * 40 for i in range(count)], [IT.fake_salt(b"s", i) for i in range(count)]
+        rows, salts = [bytes([i]) * 40 for i in range(count)], [standin.fake_salt(b"s", i) for i in range(count)]
         leaves = [row_leaf(dom, i, GB.hiding_value(r, s), IT.SCHEMA) for i, (r, s) in enumerate(zip(rows, salts))]
         root = IT.rows_root(dom.domain_id, rows, salts)
         assert root == tree_levels(dom, leaves)[-1][0]
@@ -456,7 +458,7 @@ def test_the_ports_reads_are_the_commits_registration():
     rows."""
     link = small()
     inst, count = commit(SMALL, link, 0), len(link.port)
-    binding, salts = _h(b"portw"), [IT.fake_salt(b"wp", s) for s in range(count)]
+    binding, salts = _h(b"portw"), [standin.fake_salt(b"wp", s) for s in range(count)]
     assert ADV.commit(link.port, 32 * SMALL.P, binding, salts).root == inst.port_root
     assert ADV.domain(binding, count).domain_id == IT.domain(binding, count).domain_id == inst.port_domain
     ports = IT.port_reads(inst.steps, inst.port_root, inst.port_domain, count, SMALL.P, reads_from=3)
@@ -490,7 +492,7 @@ def test_a_port_that_isnt_the_commits_is_refused(link, big):
         return replace(big, **{field: _set(getattr(big, field), t, tuple(value))})
 
     for name, inst in {"a row": at("port", _set(big.port[t], 1, bytes(row))),
-                       "a salt": at("port_salts", _set(big.port_salts[t], 1, IT.fake_salt(b"x", 0))),
+                       "a salt": at("port_salts", _set(big.port_salts[t], 1, standin.fake_salt(b"x", 0))),
                        "a sibling": at("paths", _set(big.paths[t], 1, tuple(path))),
                        "a step": at("steps", steps),
                        "another commitment's root": replace(big, port_root=other.port_root)}.items():

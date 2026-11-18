@@ -25,6 +25,8 @@ from verity.protocols.resource_accounting.network.verifier import network_attest
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 
+import standin
+
 PL = (5, 60, 12, 100, 1)
 B, P = 512, 16
 PARAMS = W.NetworkAttesterParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
@@ -77,7 +79,7 @@ def _link(sources, ps=None, tokens=None, shape=SHAPE):
     link = Q.serve(PARAMS, reqs, ARRIVALS, RATES, buckets=BUCKETS)
     steps = _steps(sources)
     rows = I.commit_rows(steps, _tokens(ps) if tokens is None else tokens, P)
-    salts, levels, dom = I.commit(rows)
+    salts, levels, dom = standin.fake_commit(rows)
     out = []
     for t, row in enumerate(link.rows):
         lanes_ = Q.lanes(shape.request, PL, link.releases, t)
@@ -153,7 +155,7 @@ def test_the_read_rows_are_the_commits_at_the_maps_steps():
     insts, count = _link(ACROSS), len(_steps(ACROSS))
     seed = hashlib.sha512(b"commit").digest()
     rows = I.commit_rows(_steps(ACROSS), _tokens(_prompts(ACROSS)), P)
-    salts = [IT.fake_salt(b"commit", s) for s in range(count)]
+    salts = [standin.fake_salt(b"commit", s) for s in range(count)]
     root = ADV.commit(rows, 32 * P, seed, salts).root
     assert root == insts[0].port_root
     dom = IT.domain(seed, count)
@@ -173,7 +175,7 @@ def test_the_read_rows_are_the_commits_at_the_maps_steps():
     steps = list(b.map.steps)
     steps[0] = (steps[0] + 1) % count
     for name, bad in {"a row": b._replace(port=(b.port[0], bytes(row), *b.port[2:])),
-                      "a salt": b._replace(port_salts=(IT.fake_salt(b"x", 0), *b.port_salts[1:])),
+                      "a salt": b._replace(port_salts=(standin.fake_salt(b"x", 0), *b.port_salts[1:])),
                       "a step": b._replace(map=b.map._replace(steps=tuple(steps)))}.items():
         assert not I.reads_open(SHAPE, bad) and not I.reference(SHAPE, bad), name
         assert any(refusals([*insts[:u], bad, *insts[u + 1:]])), name
@@ -187,7 +189,7 @@ def test_a_second_tree_of_the_users_ids_is_refused_under_the_commits_registratio
     tokens = _tokens(_prompts(ACROSS))
     tokens[2][5] ^= 1
     rows = I.commit_rows(_steps(ACROSS), tokens, P)
-    salts, levels, dom_id = I.commit(rows)
+    salts, levels, dom_id = standin.fake_commit(rows)
     registered = ADV.commit(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
     forged = _link(ACROSS)
     assert registered.root == levels[-1][0] != forged[0].port_root and forged[0].port_domain == dom_id
