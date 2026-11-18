@@ -266,7 +266,7 @@ def quant(out: Path, models: tuple[str, ...], ms: tuple[int, ...], reps: int,
     e = kgate.E()
     recs = []
     l2 = torch.cuda.get_device_properties(0).L2_cache_size
-    for k in sorted({k for model in models for _, k in kgate.MODELS[model]["linears"].values()}):
+    for k in sorted({k for model in models for _, k in kgate.MODELS[model].linears.values()}):
         for m in ms:
             rec, fns = {"k": k, "m": m, "plans": {}}, {}
             copies = max(2, -(-2 * l2 // (2 * m * k)))
