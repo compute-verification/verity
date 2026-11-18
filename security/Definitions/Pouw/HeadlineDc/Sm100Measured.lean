@@ -7,7 +7,7 @@ public import Definitions.Pouw.HeadlineDc.Sm100
 
 Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
-this file. `Accounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
+this file. `ResourceAccounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
 
 * `rowNames`, `dc100ri`, `machine`: the measured vector DC-100-ri, 9 rows of SMSP-cycles a warp instruction at its
   epoch's census, each sparse over `Sm100.classes`; every facet SM-clocked, f_max 1965 MHz. `UNLISTED` is A2's catch-all
@@ -27,9 +27,9 @@ this file. `Accounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.Sm100Measured
+namespace ResourceAccounting.TS.Headline.Sm100Measured
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- DC-100-ri's rows, in index order. -/
 def rowNames : List String := [
@@ -123,4 +123,4 @@ noncomputable def flat : Labelled (Fin 52) :=
 noncomputable def lamStar : Fin 9 → ℝ :=
   cert 9 [(0, 1, 1)]
 
-end Accounting.TS.Headline.Sm100Measured
+end ResourceAccounting.TS.Headline.Sm100Measured

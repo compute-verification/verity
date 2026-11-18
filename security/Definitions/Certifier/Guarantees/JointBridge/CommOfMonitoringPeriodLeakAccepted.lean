@@ -34,30 +34,30 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The network certifier's per-period guarantee, on a run that realizes its period of sampled audits (trusted)
+# The network attester's per-period guarantee, on a run that realizes its period of sampled audits (trusted)
 
 `CommOfMonitoringPeriodLeakAccepted` is the network audit's `PeriodRun.Sound`, the coins model's per-period guarantee,
-for a run whose communication audit is the network certifier's period of sampled audits
-(`Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted`), at the error of
+for a run whose communication audit is the network attester's period of sampled audits
+(`ResourceAccounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted`), at the error of
 `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`: `n · (δ + ε_ks + ε_bind + ε_tap)` over the period's `n` windows.
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Bridge
+namespace ResourceAccounting.Guarantees.Bridge
 
-open Claims Claims.Sampling NetTiming Accounting.JointBridge
+open Claims Claims.Sampling NetTiming ResourceAccounting.JointBridge
 open Claims.SamplingGeneric (Arg Compiled)
 
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
 
-/-- **The network certifier's per-period guarantee.** On a run that realizes the network certifier's period of `n`
-sampled audits at the claim `c.K`, whose deployed network certifier runs its code on its host (`trusted-device`, the
+/-- **The network attester's per-period guarantee.** On a run that realizes the network attester's period of `n`
+sampled audits at the claim `c.K`, whose deployed network attester runs its code on its host (`trusted-device`, the
 realization's `trusted`), at a compiled sampled verifier `D` where `Claims.SamplingGeneric.Compiled.KS` holds and the
 trace's commitment binds (`CommitmentScheme.Binds`), at `δ ≥ 0`,
 where each window's prover has `κ − δ + √(γ·Pr[B]) ≤ ε_ks`, `Pr[B_ext] ≤ ε_bind` and `Pr[B_tap] ≤ ε_tap` (`ε_ks` and
-`ε_bind` as in `Compiled.KS`'s errors, `B_tap` the collisions against the network certifier's openings), the
+`ε_bind` as in `Compiled.KS`'s errors, `B_tap` the collisions against the network attester's openings), the
 network audit's `PeriodRun.Sound` holds at `n · (δ + ε_ks + ε_bind + ε_tap)`. -/
 def CommOfMonitoringPeriodLeakAccepted : Prop :=
   ∀ {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type}
@@ -74,4 +74,4 @@ def CommOfMonitoringPeriodLeakAccepted : Prop :=
       εtap),
     r.Sound c p .network (n * (δ + εks + εbind + εtap))
 
-end Accounting.Guarantees.Bridge
+end ResourceAccounting.Guarantees.Bridge

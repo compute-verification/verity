@@ -9,7 +9,7 @@ public import Proofs.Flock.EndToEnd.Joint.V5.Layout
 # The claim at a window: the units its trace doesn't bind are the window's incorrect proof blocks
 
 The statement that carries the integrity claim across a window of several members: at the window's committed files
-read as one circuit (`Verity.ExecutionPhaseFiles`), every unit the trace doesn't bind (`Accounting.unbound`) is an incorrect
+read as one circuit (`Verity.ExecutionPhaseFiles`), every unit the trace doesn't bind (`ResourceAccounting.unbound`) is an incorrect
 proof block of the window (`Flock.Guarantees.JointAuditV5.incorrectSet`), the set the window's bound is about. It is the
 one-statement chain (`Verity.Sampled.Live.unbound_subset_faulty_part`, then the transport inside
 `Flock.Bridge.assemblyTargetV5`) a member at a time, with the members side by side (`Verity.Partition.unbound_beside`).
@@ -159,7 +159,7 @@ unit of its committed files unbound in the trace is faulty in the member's sampl
 trace. -/
 def UnboundFaulty : Prop :=
   ∀ (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) (tr : r.circuit.Trace)
-    (Xv : Fin m.Cc.N → Bool), m.ReadAt r op tr Xv → (Accounting.unbound r.parts op tr).image Fin.val ⊆ m.faulty Xv
+    (Xv : Fin m.Cc.N → Bool), m.ReadAt r op tr Xv → (ResourceAccounting.unbound r.parts op tr).image Fin.val ⊆ m.faulty Xv
 
 /-- **A member's incorrect proof blocks are incorrect proof blocks**: at files that pass the verifier's checks, a unit faulty in
 the member's sampling statement at a trace is incorrect at that trace and every registration. -/
@@ -240,7 +240,7 @@ at `τ`. -/
 def UnboundIncorrect : Prop :=
   w.Laid → ∀ (R : Verity.ExecutionPhaseFiles) (op : (g : Fin R.circuit.N) → BitVec (R.circuit.w g) → Prop)
     (tr : R.circuit.Trace) (τ : Strategy w.game), w.ReadsAt R op tr τ →
-      (Accounting.unbound R.parts op tr).image Fin.val ⊆ (w.incorrectSet τ).image Fin.val
+      (ResourceAccounting.unbound R.parts op tr).image Fin.val ⊆ (w.incorrectSet τ).image Fin.val
 
 variable {w}
 
@@ -248,7 +248,7 @@ variable {w}
 transfer reads. -/
 theorem UnboundIncorrect.card_le (h : w.UnboundIncorrect) (hl : w.Laid) (R : Verity.ExecutionPhaseFiles)
     (op : (g : Fin R.circuit.N) → BitVec (R.circuit.w g) → Prop) (tr : R.circuit.Trace) (τ : Strategy w.game)
-    (hr : w.ReadsAt R op tr τ) : (Accounting.unbound R.parts op tr).card ≤ (w.incorrectSet τ).card := by
+    (hr : w.ReadsAt R op tr τ) : (ResourceAccounting.unbound R.parts op tr).card ≤ (w.incorrectSet τ).card := by
   have hs := Finset.card_le_card (h hl R op tr τ hr)
   rwa [Finset.card_image_of_injective _ Fin.val_injective, Finset.card_image_of_injective _ Fin.val_injective] at hs
 

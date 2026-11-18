@@ -34,7 +34,7 @@ namespace Verity.Sampled
 open Lean (Json)
 open Spot Spot.Challenger
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- Each line of `pre` opening a coin tree's round gives its coins as a string. -/
 def CoinsStr (pre : List String) (_ : Array LoggedTree) : Prop :=

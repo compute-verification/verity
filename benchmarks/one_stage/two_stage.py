@@ -163,7 +163,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
@@ -1233,7 +1233,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     the challenger's key and the verifier's copy of main's history as the session's start had them (`a5_coins.held`),
     and the order is read under them; a ``local`` challenger is kept where the second stage reopens it
     (`challenger_host`)."""
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     root = pubs[0]["run"]
@@ -1356,7 +1356,7 @@ def challenger_host(a: argparse.Namespace, made: Path | None = None) -> Path | N
     it); None for a challenger on another machine, whose key the verifier has on record. `Ch.CoinError` (`NO_HOST`)
     for a ``local`` one with neither, or, where the command makes none (``made`` None), for a directory that holds no
     challenger."""
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     if a.challenger != "local":
         return None
@@ -1412,7 +1412,7 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
     opens (`first_coins`). ``summary.json`` under ``--out`` says what happened, and what it cost (module docstring: the
     interior's commitment by ``clock``, the replay's own record's seconds); exit 0 when the second stage held
     (`held`)."""
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     out = Path(a.out)

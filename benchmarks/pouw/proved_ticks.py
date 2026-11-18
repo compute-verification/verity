@@ -16,10 +16,10 @@ compiled):
   `eps_budget.floor_skip` counts them.
 - B_♭, the floor program ♭'s bound a unit in SMSP-cycles on the sheet's machine: `eps_budget.prices`' ♭ (the tensor
   route at the operand floor φ_del and the fold, no filler) with ε_skip's free compute in it, B_♭ = B/(1 − ε_skip),
-  ε_skip `eps_budget.design_skip` at the sheet's vector, as Lean's ♭ (`Accounting.TS.Headline.Sm120.flat`) is.
+  ε_skip `eps_budget.design_skip` at the sheet's vector, as Lean's ♭ (`ResourceAccounting.TS.Headline.Sm120.flat`) is.
   For H1 + fx1 on DS-120, ♭ binds DS_issue alone: an IMMA.16832, 0.025641 LDSM_X4 and fx1's 8 ALU and 8 IMAD warp
   instructions, 17.025641, and 0.4207% skippable, so B_♭ = 17.097571.
-- 4 · SMs · f_max: the credit is T_cred = B_♭/f_max a unit on one SMSP (`Accounting.TS.Model.credit`), and a GPU's
+- 4 · SMs · f_max: the credit is T_cred = B_♭/f_max a unit on one SMSP (`ResourceAccounting.TS.Model.credit`), and a GPU's
   4 · SMs SMSPs share the window's units. SMs is data/table.toml's (188 on sm_120), f_max the family's
   card's `clock.sm` (`FMAX_MHZ`; the card its model.toml names).
 - ε, PoUW's headline at the sheet: outside δ = 2^-40, an accepted window takes at least (1 − ε) · T_cred a unit over
@@ -37,13 +37,13 @@ W's is an LP over their union and not this sum, so `units` refuses it.
 
 What it rests on:
 
-- the TS model on the data-sheet machine and its named assumptions A1–A7 (`Accounting.Assumptions.Sheet`): A1 the SM
+- the TS model on the data-sheet machine and its named assumptions A1–A7 (`ResourceAccounting.Assumptions.Sheet`): A1 the SM
   clock at most f_max, A2 and A2u dispatch (a uniform instruction takes an issue slot), A3 the tensor peak, A4 the
   pipes, A5 shared memory, A6 words written, A7 semantics;
-- FOLD-OPT at π* (`Accounting.Assumptions.TS.FoldOptFoldedAt`): fx1 at 4 lane instructions a word is the cheapest fold
+- FOLD-OPT at π* (`ResourceAccounting.Assumptions.TS.FoldOptFoldedAt`): fx1 at 4 lane instructions a word is the cheapest fold
   at the words a run folds, checked within a stated menu (`Sm120SheetHeadline`'s docstring); a run that skips a fold is
   charged at the whole-unit luck ½;
-- A5b (`Accounting.Assumptions.TS.SheetSmem`): a bulk or TMA instruction holds the shared-memory bytes it moves in the
+- A5b (`ResourceAccounting.Assumptions.TS.SheetSmem`): a bulk or TMA instruction holds the shared-memory bytes it moves in the
   banks at A5's rate, a reading no vendor document states;
 - ε's source above, on the full-checking layer: ε_sample and the Fiat–Shamir premium are separate lines;
 - the node's work, in its G GPUs' ticks: the headline is per node (= A), the work of its GPUs, host CPU and
@@ -75,12 +75,12 @@ __all__ = [
 
 SMSPS = 4                          # SMSPs an SM
 #: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the family's card's `clock.sm` (Lean's
-#: `Accounting.TS.Headline.Sm120.ds120.fmax`)
+#: `ResourceAccounting.TS.Headline.Sm120.ds120.fmax`)
 FMAX_MHZ = {"sm_120": int(number(card(device("sm_120"))["clock"]["sm"]))}
-#: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `Accounting.SecurityProofs.TS.Sm120SheetHeadline`
+#: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `ResourceAccounting.SecurityProofs.TS.Sm120SheetHeadline`
 SHEET_EPS = 5860 / 100000
 KINDS = tuple(f"mac:{p}" for p in PRODUCTS)
-#: PoUW's compile pass for H1 + fx1 on sm_120 (`verity.protocols.accounting.pouw.prover.circuit.h1tile.SCHEME`)
+#: PoUW's compile pass for H1 + fx1 on sm_120 (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.h1tile.SCHEME`)
 SCHEME = "eps1-sm120-h1fx1"
 #: its one-stream form, whose units are `PouwH1Tile_v3` (`h1tile.SCHEME_V3`)
 SCHEME_V3 = "eps1-sm120-h1fx1-os"
@@ -144,7 +144,7 @@ class Tile:
         """Every int8 product census/v1 counts in the tile (none served, no tail): the lanes' segment dots', r·c·(K + 32m)
         (`PouwSegDot_v2` and `PouwSegDot0_v2`), and on v1 `z`'s own (Lean's `h1Rows` dotMacs). v3 has none of its own:
         its z is recombined from the lanes' folded words, so its products are the segment dots' alone."""
-        from verity.protocols.accounting.pouw.prover.circuit import h1tile
+        from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile
         lanes = self.r * self.c * (self.k + 32 * h1tile.Layout(self.r, self.c, self.k).m)
         return lanes + (self.linears if self.version == 1 else 0)
 
@@ -153,7 +153,7 @@ def tiles(program, calls: Collection[int] | None = None) -> Counter:
     """The H1 tile units a Program `SCHEME` or `SCHEME_V3` compiled runs in its root Calls `calls` (all of them by default), by shape,
     each once per activation (a batch or scan multiplies its callee's, as `logical.work` counts)."""
     from verity.circuits.program import is_input
-    from verity.protocols.accounting.pouw.prover.circuit import h1tile
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile
     versions = {id(h1tile.PouwH1Tile): 1, id(h1tile.PouwH1Tile3): 3}
     memo: dict[int, Counter] = {}
 

@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.Guarantees.FillerLuck
 public import Proofs.Pouw.TS.Rounds
-public import Proofs.Accounting.Lemmas.FillerLuck
+public import Proofs.ResourceAccounting.Lemmas.FillerLuck
 
 /-!
 # The filler's per-check luck
@@ -20,9 +20,9 @@ A pinned receipt's sample passes with probability at most one less its wrong sha
 
 open Claims renaming Ex → expect
 
-namespace Accounting.SecurityProofs.FillerLuck
+namespace ResourceAccounting.SecurityProofs.FillerLuck
 
-open Finset Accounting.Filler Accounting.TS Pouw.RelativeSecurity
+open Finset ResourceAccounting.Filler ResourceAccounting.TS Pouw.RelativeSecurity
 
 /-! The helpers sit in `Cell` so that they can't clash with a name in a file that imports this one. -/
 
@@ -151,7 +151,7 @@ theorem cellWord_products {K : ℕ} {Y A : Type} [CommRing A] (c : Y → Fin K �
     Products K (cellWord c) :=
   ⟨fun k x => bit (x k), fun k y => c y k, 0, 0, fun x y => by simp [cellWord]⟩
 
-theorem parityLuck : Accounting.Guarantees.FillerLuck.ParityLuck := by
+theorem parityLuck : ResourceAccounting.Guarantees.FillerLuck.ParityLuck := by
   intro Y A _ _ φ K c R P hc hP
   obtain ⟨f, g, a, b, hP⟩ := hP
   have key : ∀ xy : (Fin K → ZMod 2) × Y, P xy.1 xy.2 = cellWord c xy.1 xy.2 →
@@ -482,44 +482,44 @@ end Cell
 
 open Cell
 
-theorem ParityLuck : Accounting.Guarantees.FillerLuck.ParityLuck := parityLuck
+theorem ParityLuck : ResourceAccounting.Guarantees.FillerLuck.ParityLuck := parityLuck
 
-theorem FillerParityBalanced : Accounting.Guarantees.FillerLuck.FillerParityBalanced := fun K =>
+theorem FillerParityBalanced : ResourceAccounting.Guarantees.FillerLuck.FillerParityBalanced := fun K =>
   ⟨balanced_bits toF2 K, balanced_bits _ K, balanced_bu toF2 K, balanced_bu _ K⟩
 
-theorem FillerCellLuck : Accounting.Guarantees.FillerLuck.FillerCellLuck := by
+theorem FillerCellLuck : ResourceAccounting.Guarantees.FillerLuck.FillerCellLuck := by
   intro K ρ ν _ _ _ _ r s R
   obtain ⟨h1, h2, h3, h4⟩ := FillerParityBalanced K
   exact ⟨fun W hW => tile_cell_le _ _ h1 W r s R hW, fun W hW => tile_cell_le _ _ h2 W r s R hW,
     fun W hW => tile_cell_le _ _ h3 W r s R hW, fun W hW => tile_cell_le _ _ h4 W r s R hW⟩
 
-theorem FillerLuckAt : Accounting.Guarantees.FillerLuck.FillerLuckAt := by
+theorem FillerLuckAt : ResourceAccounting.Guarantees.FillerLuck.FillerLuckAt := by
   intro K ρ ν Y A _ _ _ _ _ _ φ c S g hc hg
   exact luckAt_full φ c hc g hg
 
-theorem FillerBudget : Accounting.Guarantees.FillerLuck.FillerBudget := by
+theorem FillerBudget : ResourceAccounting.Guarantees.FillerLuck.FillerBudget := by
   intro K ρ ν Y A _ _ _ _ _ _ φ c S g hc hg
   exact budget_spot φ c hc g hg
 
-theorem FillerBlocksDeficit : Accounting.Guarantees.FillerLuck.FillerBlocksDeficit := by
+theorem FillerBlocksDeficit : ResourceAccounting.Guarantees.FillerLuck.FillerBlocksDeficit := by
   intro K ρ ν Y A Ω₀ _ _ _ _ _ _ _ φ c p₀ δ S g hc hp₀ hδ hg
-  have := Accounting.SecurityProofs.TS.budget_tail g 1 one_pos (budget_blocks φ c hc hp₀ g hg) (Real.log (1 / δ))
+  have := ResourceAccounting.SecurityProofs.TS.budget_tail g 1 one_pos (budget_blocks φ c hc hp₀ g hg) (Real.log (1 / δ))
   have hexp : Real.exp (-Real.log (1 / δ)) = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
   rwa [one_mul, hexp] at this
 
-theorem PinnedFillLuckAt : Accounting.Guarantees.FillerLuck.PinnedFillLuckAt := by
+theorem PinnedFillLuckAt : ResourceAccounting.Guarantees.FillerLuck.PinnedFillLuckAt := by
   intro D C τ V _ _ F S g hg
   exact luckAt_pinned F g hg
 
-theorem PinnedFillBudget : Accounting.Guarantees.FillerLuck.PinnedFillBudget := by
+theorem PinnedFillBudget : ResourceAccounting.Guarantees.FillerLuck.PinnedFillBudget := by
   intro D C τ V _ _ F S g hg
   exact budget_spot_pinned F g hg
 
-theorem PinnedFillBlocksDeficit : Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit := by
+theorem PinnedFillBlocksDeficit : ResourceAccounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit := by
   intro D C τ V Ω₀ _ _ _ F p₀ δ S g hp₀ hδ hg
-  have := Accounting.SecurityProofs.TS.budget_tail g 1 one_pos (budget_blocks_pinned F hp₀ g hg)
+  have := ResourceAccounting.SecurityProofs.TS.budget_tail g 1 one_pos (budget_blocks_pinned F hp₀ g hg)
     (Real.log (1 / δ))
   have hexp : Real.exp (-Real.log (1 / δ)) = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
   rwa [one_mul, hexp] at this
 
-end Accounting.SecurityProofs.FillerLuck
+end ResourceAccounting.SecurityProofs.FillerLuck

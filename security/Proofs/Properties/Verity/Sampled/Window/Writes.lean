@@ -154,7 +154,7 @@ theorem ExecutionPhase.joint_getElem? (W : ExecutionPhase) (t i : ℕ) {m : Floc
   obtain ⟨m', h1, h2⟩ := Option.map_eq_some_iff.1 h'
   exact ⟨m', h1, h2.symm⟩
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 

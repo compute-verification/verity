@@ -52,7 +52,7 @@ empty commitment, at files that pass the commit phase's check. Remote's witnesse
 
 namespace Verity
 
-open Accounting Core
+open ResourceAccounting Core
 open scoped ENNReal
 
 /-- **What a composite's verifier accepts, it accepted as a `same` composition**: an accepted composition of
@@ -118,7 +118,7 @@ variable {ι α : Type} [Fintype α] {d : Device ι}
 lists. -/
 theorem targets_onsite (V : Vocab d α) (hS : V.SpotSound .onsite) (hW : V.PouwSound .onsite)
     (hI : V.InferenceOnlySound .onsite) (hP : V.PousSound .onsite) (hB : V.BandwidthAuditSound .onsite)
-    (hN : V.NetworkCertifierSound .onsite) (hX : V.WipeSound .onsite) :
+    (hN : V.NetworkAttesterSound .onsite) (hX : V.WipeSound .onsite) :
     ∀ a ∈ subprotocols .onsite, V.Target .onsite a := by
   intro a _
   cases a
@@ -271,11 +271,6 @@ theorem OpenTree.next_round {T : OpenTree} {s n : ℕ} {p : Fin T.spec.streams.s
     · cases h
   · cases h
 
-/-- **Opening a round counts it**: once stream `s`'s next round is opened, its count is one more and every other stream's
-is unchanged, so with `OpenTree.next_round` a stream's rounds are opened in order, each at most once. -/
-theorem OpenTree.bump_opened (T : OpenTree) (s j : Fin T.spec.streams.size) :
-    (T.bump s).opened j = if j = s then T.opened s + 1 else T.opened j := rfl
-
 /-- The device's releases have a strategy from any coins and coin trees left: the prover's close. -/
 theorem releases_nonempty : (k : ℕ) → (fs : List (String × ℕ)) → (ts : List OpenTree) →
     Nonempty (Game.Strategy (releases k fs ts))
@@ -336,25 +331,25 @@ namespace Vocab
 variable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
 
 /-- **PoUW's claim where composite `k` lists Pearl+'s id is Pearl+'s**, in MACs at the credit its check published. -/
-theorem holds_pouw_of_mem {k : Verity.Registration.Composite} (hk : PouwCheck.PearlPlus.Protocol.protocolId ∈ k)
+theorem holds_pouw_of_mem {k : Verity.Registration.Composite} (hk : PouwVerifier.PearlPlus.Protocol.protocolId ∈ k)
     {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {o : Exchange} :
     V.Holds k θ F c σ .pouw o ↔ ∃ w, PearlPlusCredits k o.sent w ∧
       (1 - (w.rho : ℝ)) * (1 - (w.epsilon : ℝ)) * w.macs ≤ V.macs θ F c σ o := by
   simp only [Holds, if_pos hk]
 
 /-- **PoUW's claim where composite `k` doesn't list Pearl+'s id is the period's.** -/
-theorem holds_pouw_of_not_mem {k : Verity.Registration.Composite} (hk : PouwCheck.PearlPlus.Protocol.protocolId ∉ k)
+theorem holds_pouw_of_not_mem {k : Verity.Registration.Composite} (hk : PouwVerifier.PearlPlus.Protocol.protocolId ∉ k)
     {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {o : Exchange} :
     V.Holds k θ F c σ .pouw o ↔ (V.live k θ F c).Holds (V.certOf θ) σ .pouw o := by
   simp only [Holds, if_neg hk]
 
-/-- **A target of a subprotocol that decides an `Audit` is the per-period guarantee** `Accounting.PeriodLive.Sound` at
+/-- **A target of a subprotocol that decides an `Audit` is the per-period guarantee** `ResourceAccounting.PeriodLive.Sound` at
 the period `live`, read in the one vocabulary, except PoUW's at remote, which is Pearl+'s claim in MACs. -/
 theorem target_audit (k : Verity.Registration.Composite) (b : Audit) (hb : k = .onsite ∨ b ≠ .pouw) :
     V.Target k (.ofAudit b) ↔ ∀ θ F c, (V.live k θ F c).Sound (V.certOf θ) b (V.error (.ofAudit b) θ F c) := by
   cases b
   case pouw =>
-    have hk : PouwCheck.PearlPlus.Protocol.protocolId ∉ k := by
+    have hk : PouwVerifier.PearlPlus.Protocol.protocolId ∉ k := by
       rcases hb with rfl | h
       · decide
       · exact absurd rfl h
@@ -369,13 +364,13 @@ theorem holds_sampled_of_opens (k : Verity.Registration.Composite) (θ : ByteArr
     (σ : Game.Strategy (V.game θ F c)) (o : Exchange)
     (hc : ∀ u, (V.partsOf θ F).Correct (V.extract θ F c σ) u) (ho : ∀ g, V.Opens θ F c g (V.extract θ F c σ g))
     (hε : 0 ≤ (V.certOf θ).ε) : V.Holds k θ F c σ .sampled o := by
-  have hu : Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) = ∅ := by
+  have hu : ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) = ∅ := by
     classical
     refine Finset.filter_eq_empty_iff.2 fun u _ => ?_
     rintro (hw | ⟨g, -, hg⟩)
     · exact hw (hc u)
     · exact hg (ho g)
-  show ((Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ)).card : ℝ) ≤
+  show ((ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ)).card : ℝ) ≤
     (V.certOf θ).ε * V.units θ F
   rw [hu, Finset.card_empty, Nat.cast_zero]
   exact mul_nonneg hε (Nat.cast_nonneg _)
@@ -403,11 +398,6 @@ theorem namedFinder_collides {h : Option Hash.Digest} {F R : Array ByteArray} (h
   unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   rw [Finset.filter_true_of_mem fun s _ => hs s, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
-
-/-- **A file finder's SHA-512 calls**: two on its one coin, at most `0 · calls(τ) + 2`. -/
-theorem namedFinder_calls (h : Option Hash.Digest) (F R : Array ByteArray) (x : (namedFinder h F R).S) (n : ℕ) :
-    (namedFinder h F R).cost x ≤ 0 * n + 2 := by
-  simp [namedFinder]
 
 /-- **`ecr/sha-512` at a further finder asked under it gives its premise**: its calls are within its budget on every
 coin (`FinderSpec.calls`), so where it meets `Claims.ExpectedCR` it finds a collision with probability at most its
@@ -451,7 +441,7 @@ namespace Idle
 /-- At `unbounded`, every subprotocol's error is `⊤`. -/
 theorem error_unbounded (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (unbounded.game θ F c)) :
     unbounded.error a θ F c σ = ⊤ := by
-  unfold Vocab.error Accounting.condError
+  unfold Vocab.error ResourceAccounting.condError
   split_ifs <;> simp [unbounded, vocab]
 
 /-- At `unbounded`, every subprotocol meets its target at every composite. -/
@@ -481,7 +471,7 @@ theorem forger_pr (verify : Hash.Msg → Hash.Msg → Hash.Msg → Bool) : forge
 /-- At `exact`, every subprotocol's error is `0`: its finder and forger meet their premises, and every term is `0`. -/
 theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (exact.game θ F c)) :
     exact.error a θ F c σ = 0 := by
-  unfold Vocab.error Accounting.condError
+  unfold Vocab.error ResourceAccounting.condError
   rw [if_pos ⟨trivial, trivial, (finder_pr _).trans_le
     (div_nonneg (Claims.Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)), fun _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
@@ -493,7 +483,7 @@ theorem pouw_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Arr
     (σ : Game.Strategy (exact.game θ F .empty)) (o : Exchange)
     (ho : o.params = θ ∧ o.files = F ∧ o.commitment = .empty) : ¬ exact.Holds k θ F .empty σ .pouw o := by
   intro h
-  by_cases hk : PouwCheck.PearlPlus.Protocol.protocolId ∈ k
+  by_cases hk : PouwVerifier.PearlPlus.Protocol.protocolId ∈ k
   · obtain ⟨_, ⟨_, c', _, ⟨_, hc, _⟩, _⟩, _⟩ := (exact.holds_pouw_of_mem hk).1 h
     have h64 : ¬ ByteArray.empty.size = 64 := by decide
     change Composition.decodeCommitment o.commitment = .ok c' at hc
@@ -536,7 +526,7 @@ theorem soundness_at_of_targets_nontrivial : ¬ Idle.exact.SoundnessFor .onsite 
 theorem soundness_of_subprotocols_honest :
     Idle.unbounded.SpotSound .onsite ∧ Idle.unbounded.PouwSound .onsite ∧
       Idle.unbounded.InferenceOnlySound .onsite ∧ Idle.unbounded.PousSound .onsite ∧
-      Idle.unbounded.BandwidthAuditSound .onsite ∧ Idle.unbounded.NetworkCertifierSound .onsite ∧
+      Idle.unbounded.BandwidthAuditSound .onsite ∧ Idle.unbounded.NetworkAttesterSound .onsite ∧
       Idle.unbounded.WipeSound .onsite :=
   ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
     Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩

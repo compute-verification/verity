@@ -5,12 +5,12 @@ public import Definitions.Compose.Additive
 /-!
 # Compute additivity's capacity from the machine model 𝓜 (trusted)
 
-Compute additivity (W: `Accounting.Assumptions.RateComputeAdditive` for a joint run,
-`Accounting.Remote.Assumptions.ComputeAdditive` for PoUB) says the works the subprotocols certify on one
+Compute additivity (W: `ResourceAccounting.Assumptions.RateComputeAdditive` for a joint run,
+`ResourceAccounting.Remote.Assumptions.ComputeAdditive` for PoUB) says the works the subprotocols certify on one
 node add under its capacity. 𝓜 (`Verity.Accel.Machine`) gives the capacity part, counted once per resource:
 
 * **Rates add over runs back to back** (`AccelRate`). A device's period is runs of 𝓜 back to back
-  (`Accounting.AccelRun`), and its instructions are one stream. Runs that each use at most `ρ_r` units of each resource
+  (`ResourceAccounting.AccelRun`), and its instructions are one stream. Runs that each use at most `ρ_r` units of each resource
   `r` a second over their own seconds use at most that over the period's seconds, their sum. 𝓜's rate (G2,
   `Machine.Fits`) is that bound, run by run.
 * **Disjoint instructions share the capacity** (`AccelAdditive`). Instructions that different subprotocols run are
@@ -27,7 +27,7 @@ The proofs are in `security/Proofs/Compose/Additive.lean`.
 
 open scoped NNRat
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
 open Finset Verity.Accel
 
@@ -49,4 +49,4 @@ def AccelAdditive : Prop :=
       (∀ i j, i ≠ j → Disjoint (S i) (S j)) → ∀ r : Res,
         ∑ j, ∑ p ∈ S j, occUse iss r p ≤ m.card.ρ r * T
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

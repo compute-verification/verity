@@ -200,7 +200,7 @@ def machine_of(doc: dict) -> str | None:
 
 
 def check_panel(idx, now: datetime) -> dict:
-    """Every `check` Attempt of the last 24 hours, with the main commit that landed it from its `landed` label (`research merge`)."""
+    """Every `check` Attempt of the last 24 hours, with the main commit that landed it from its `landed` label (`merge.label_landed`)."""
     since = iso(now - timedelta(hours=24))
     landed = dict(idx.sql("SELECT target, value FROM labels WHERE key = 'landed' AND by = 'research-merge' ORDER BY ts"))
     rows, ends = [], []
@@ -216,7 +216,7 @@ def check_panel(idx, now: datetime) -> dict:
                  ["Run", "Started (UTC)", "Minutes", "Result", "Commit", "Landed as", "Machine"], rows,
                  updated_at=iso(max(ends)) if ends else iso(now), source="evidence store: tool=check Attempts and their landed labels",
                  note="Landed as is main's commit whose Check: trailer names the run (its `landed` label); the others are checks of "
-                      "branches or of trains that didn't land. Attempts are published when a check ends, so one in progress isn't listed.")
+                      "branches or of candidates that didn't land. Attempts are published when a check ends, so one in progress isn't listed.")
 
 
 # ---------------------------------------------------------------------------------------------------------------- node1 group
@@ -643,10 +643,10 @@ def n1_pool_loops(proc: Path = Path("/proc")) -> dict[str, set[tuple[str, str]]]
             if not _n1_lease_loop((p / "cmdline").read_bytes().split(b"\0")):
                 continue
             raw = (p / "environ").read_bytes()
-        except (FileNotFoundError, ProcessLookupError):
-            continue
         except OSError as e:
-            raise LookupError(f"can't read the environment of n1_lease.py loop {p.name}: {type(e).__name__}") from None
+            if not isinstance(e, (FileNotFoundError, ProcessLookupError)):
+                raise LookupError(f"can't read the environment of n1_lease.py loop {p.name}: {type(e).__name__}") from None
+            continue
         if not raw:  # exited since its cmdline was read
             continue
         env = {}

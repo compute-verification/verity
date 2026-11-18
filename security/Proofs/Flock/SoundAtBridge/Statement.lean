@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # PoUW's proof premise from Flock's rows link (trusted)
 
-`Flock.Guarantees.SoundAtBridge` concludes the proof layer's soundness (`Accounting.TS.ProofLayer.SoundAt`, the
+`Flock.Guarantees.SoundAtBridge` concludes the proof layer's soundness (`ResourceAccounting.TS.ProofLayer.SoundAt`, the
 layer whose relation reads the path's coins) from Flock's `Flock.Guarantees.EndToEndRegisteredRows`, applied once
 per unit, when proof `i` of round `w` on the window's path `x` is a Flock session `sess x w i` (a `RowsSession`)
 with outcome `out x w i`. It closes the three gaps between the two as follows:
@@ -65,7 +65,7 @@ composition over any family of sessions, `Proofs.Flock.SoundAtBridge.Union`, imp
 
 namespace Flock.SoundAtBridge
 
-open FlockSoundness FlockSoundness.Discharge.ZkReg Accounting.TS
+open FlockSoundness FlockSoundness.Discharge.ZkReg ResourceAccounting.TS
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
@@ -105,12 +105,12 @@ end Flock.SoundAtBridge
 
 namespace Flock.Guarantees
 
-open Flock.SoundAtBridge Accounting.TS
+open Flock.SoundAtBridge ResourceAccounting.TS
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
 /-- **PoUW's proof premise from Flock's rows link, at `δ_ZK = δo + δ`.** For any window of proofs
-(`pf : Accounting.TS.ProofLayer Ω S nπ V`, its relation on the path) whose proof `i` of round `w` on the
+(`pf : ResourceAccounting.TS.ProofLayer Ω S nπ V`, its relation on the path) whose proof `i` of round `w` on the
 path `x` is the Flock session `sess x w i` (`EndToEndRegisteredRows`' setting with one registrant's opening per
 unit, `RowsSession`) with outcome `out x w i`, and a reading `rows s` of a session's value layer as a layer value:
 given `EndToEndRegisteredRows`' named assumptions at every session and every unit's opening (`RowsSession.CR`), the

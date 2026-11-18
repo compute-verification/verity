@@ -49,7 +49,7 @@ import Mathlib.Topology.Sheaves.Init
   inside the period). What is left is that the node is within the model: its runs take at least the model's
   wall time, from the coins they read to what the certifier sees arrive.
 
-  `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads all three, beside the network certifier's count
+  `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads all three, beside the network attester's count
   (`Definitions.Pouw.Assumptions.Dither.CertifierSeesImports`).
 * `MonitoringPeriodInventory`, the period's devices are its inventory. It is stated and held: no guarantee reads it
   until it is decided whether the node's host CPUs and DPUs are devices of the period (the recommendation) or the
@@ -66,7 +66,7 @@ open Pouw.Dither
 /-- `pouw-root-after-coin` (proposed; physical causality, the node within the model). **A commitment arrives no
 sooner than the work that computed it**: sampling block `b`'s work reads the dither coins the challenger issues at
 `t ob b` (its signed issue time, as the verdict reads it from the readings `ob = dev A o x`), so the network
-certifier, watching the replica's boundary, can't see the block's root arrive (`arrive ob b`, its signed time)
+attester, watching the replica's boundary, can't see the block's root arrive (`arrive ob b`, its signed time)
 before `t ob b` plus the work's wall time in the model. The challenger's and the certifier's clocks are the
 auditor's devices. That the node takes at least the model's wall time is the node's being within the model, not a
 property of the clocks. -/
@@ -77,7 +77,7 @@ def RootAfterCoin (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (dev : R
 
 /-- `pouw-commit-after-work` (proposed; physical causality, the node within the model). **An operand root arrives
 no sooner than the commit phase that computed it**: sampling block `b + 1`'s commit phase reads the state after
-block `b`'s work, which reads the dither coins the challenger issues at `t ob b`, so the network certifier,
+block `b`'s work, which reads the dither coins the challenger issues at `t ob b`, so the network attester,
 watching the replica's boundary, can't see block `b + 1`'s operand root arrive (`opArrive ob (b + 1)`, its signed
 time) before `t ob b` plus the work's and the commit phase's wall times in the model. The first block's commit
 phase starts no sooner than the period, at time 0: what a prover computes before the period is its start state,
@@ -98,7 +98,7 @@ def CommitAfterWork (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (dev :
 
 /-- `pouw-answer-after-work` (proposed; physical causality, the node within the model). **A selected answer
 arrives no sooner than its block's dither coins plus its own run**: sampling block `b`'s answer reads the state
-after the block's work, which reads the dither coins issued at `t ob b`, so the network certifier can't see a
+after the block's work, which reads the dither coins issued at `t ob b`, so the network attester can't see a
 selected block's answer arrive (`ansAt ob b`) before `t ob b` plus the answer's wall time in the model. It isn't
 anchored at the check coin: the answer's run may start at the block's root, before the check coin is issued, and a
 deadline from the check coin bounds it only through this. An unselected block's answer never runs.
@@ -114,7 +114,7 @@ def AnswerAfterWork (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (dev :
 
 /-- `pouw-period-inventory` (proposed, and held until it is decided whether host CPUs and DPUs are devices of the
 period; class 1, the accelerator model at θ, extended to the period's other processors). **The period's devices are
-its inventory**: every processor the period's cards reach without crossing a network certifier (the cards, host CPUs
+its inventory**: every processor the period's cards reach without crossing a network attester (the cards, host CPUs
 over PCIe or NVLink-C2C, DPUs) is a device of the period (`Devices`: the cards, and `Others` at their θ rows), and
 what those processors together compute within `t` seconds (`can F t`, on any code), some program of `G` computes on
 every input within `t` seconds, exchanging nothing. With `Assumptions.CardWithinAccel` for the cards, it is what

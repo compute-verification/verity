@@ -5,13 +5,13 @@ public import Definitions.Pouw.Dither
 /-!
 # The onsite PoUW protocol's verdict on a monitoring period (trusted)
 
-The onsite protocol (`Core.Onsite.components`: the network certifier's period check beside PoUW's) accepts a
+The onsite protocol (`Core.Onsite.components`: the network attester's period check beside PoUW's) accepts a
 monitoring period when both its checks do:
 
 * **the work check** `vw`: the proof system's verdict on the transcript alone (the sampling blocks' instances,
   commitments and answers), which reads no device: the served check, whose remote form is
   `Definitions.Pouw.Assumptions.OnsiteFreed.RemoteWorkFloor`;
-* **the network certifier's check** `vn`: its verdict on the transcript and the certifier's signed readings of the
+* **the network attester's check** `vn`: its verdict on the transcript and the certifier's signed readings of the
   registered devices' links (`NetworkCheck.Period`), whose signed counts of the bits the period's programs exchange
   with machines outside those devices it refuses past `K` (`CountedWithin`, with
   `Definitions.Pouw.Assumptions.Dither.CertifierSeesImports`).
@@ -25,7 +25,7 @@ frees.
 
 namespace Pouw.Dither
 
-/-- **The onsite verdict**: the work check `vw` on the transcript, which reads no device, and the network certifier's
+/-- **The onsite verdict**: the work check `vw` on the transcript, which reads no device, and the network attester's
 check `vn` on the transcript and the devices' readings. -/
 def onsiteVerdict {P : RoundProto} {k : ℕ} {Obs : Type} (vw : Verdict P k Unit) (vn : Verdict P k Obs) :
     Verdict P k Obs :=

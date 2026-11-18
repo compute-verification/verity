@@ -33,7 +33,7 @@ bound over the passes and the `G` candidates gives `P·G` times the per-pass err
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -283,67 +283,67 @@ theorem pr_unpaid_le {τ : ℕ} (A : GrindChain P N b h ρ S L q r s G) (tier : 
 
 end GrindChain
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (pr)
 open scoped ENNReal
 
 /-- **A chained pass is a fresh audit, with side sources that ignore the oracle**
-(`Accounting.Guarantees.RateChainPassRO`). -/
-theorem RateChainPassRO : Accounting.Guarantees.RateChainPassRO := by
+(`ResourceAccounting.Guarantees.RateChainPassRO`). -/
+theorem RateChainPassRO : ResourceAccounting.Guarantees.RateChainPassRO := by
   intro P N b h ρ S L q r s k F cTag cEnc lam A hA j
   exact Chain.pr_short_le A cTag cEnc F _ _ j (fun η =>
     RateAuditInteractiveRO N b h ρ S L q s k F cTag cEnc lam (A.device j η) (hA j η))
 
-/-- **A chained pass is a fresh audit, with any side sources** (`Accounting.Guarantees.RateChainPass`). -/
-theorem RateChainPass : Accounting.Guarantees.RateChainPass := by
+/-- **A chained pass is a fresh audit, with any side sources** (`ResourceAccounting.Guarantees.RateChainPass`). -/
+theorem RateChainPass : ResourceAccounting.Guarantees.RateChainPass := by
   intro P N b h ρ S L q r s k m F cTag cEnc lam A j
   exact Chain.pr_short_le A cTag cEnc F _ _ j (fun η =>
     RateAuditInteractive N b h ρ S L q s k m F cTag cEnc lam (A.device j η))
 
 /-- **A window of chained passes certifies the sum over its passes, with side sources that ignore the oracle**
-(`Accounting.Guarantees.RateChainRO`). -/
-theorem RateChainRO : Accounting.Guarantees.RateChainRO := by
+(`ResourceAccounting.Guarantees.RateChainRO`). -/
+theorem RateChainRO : ResourceAccounting.Guarantees.RateChainRO := by
   intro P N b h ρ S L q r s k F cTag cEnc lam c A hA
   exact Chain.mul_pr_sum_le A cTag cEnc F _ c _ (fun j =>
     RateChainPassRO P N b h ρ S L q r s k F cTag cEnc lam A hA j)
 
 /-- **A window of chained passes certifies the sum over its passes, with any side sources**
-(`Accounting.Guarantees.RateChain`). -/
-theorem RateChain : Accounting.Guarantees.RateChain := by
+(`ResourceAccounting.Guarantees.RateChain`). -/
+theorem RateChain : ResourceAccounting.Guarantees.RateChain := by
   intro P N b h ρ S L q r s k m F cTag cEnc lam c A
   exact Chain.mul_pr_sum_le A cTag cEnc F _ c _ (fun j =>
     RateChainPass P N b h ρ S L q r s k m F cTag cEnc lam A j)
 
 /-- **A window's correct receipts are paid for pass by pass, with side sources that ignore the oracle**
-(`Accounting.Guarantees.RateChainPaidRO`). -/
-theorem RateChainPaidRO : Accounting.Guarantees.RateChainPaidRO := by
+(`ResourceAccounting.Guarantees.RateChainPaidRO`). -/
+theorem RateChainPaidRO : ResourceAccounting.Guarantees.RateChainPaidRO := by
   intro P N b h ρ S L q r s lam τ tier A hA
   exact Chain.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun j η =>
     (Bandwidth.pr_mono (fun _ hx => by omega)).trans (RatePaidRO N b h ρ S L q lam τ tier (A.device j η) (hA j η)))
 
 /-- **A window's correct receipts are paid for pass by pass, with any side sources**
-(`Accounting.Guarantees.RateChainPaid`). -/
-theorem RateChainPaid : Accounting.Guarantees.RateChainPaid := by
+(`ResourceAccounting.Guarantees.RateChainPaid`). -/
+theorem RateChainPaid : ResourceAccounting.Guarantees.RateChainPaid := by
   intro P N b h ρ S L q r s m lam τ tier A
   exact Chain.pr_unpaid_le A tier (S + (L - ρ) + lam + m * b) _ (fun j η =>
     (Bandwidth.pr_mono (fun _ hx => by omega)).trans (RatePaid N b h ρ S L q m lam τ tier (A.device j η)))
 
 /-- **Grinding roots costs a factor `G`, with side sources that ignore the oracle**
-(`Accounting.Guarantees.RateGrindPaidRO`). -/
-theorem RateGrindPaidRO : Accounting.Guarantees.RateGrindPaidRO := by
+(`ResourceAccounting.Guarantees.RateGrindPaidRO`). -/
+theorem RateGrindPaidRO : ResourceAccounting.Guarantees.RateGrindPaidRO := by
   intro P N b h ρ S L q r s G lam τ tier A hA
   exact GrindChain.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun j η c =>
     (Bandwidth.pr_mono (fun _ hx => by omega)).trans
       (RatePaidRO N b h ρ S L q lam τ tier (A.device j η c) (hA j η c)))
 
-/-- **Grinding roots costs a factor `G`, with any side sources** (`Accounting.Guarantees.RateGrindPaid`). -/
-theorem RateGrindPaid : Accounting.Guarantees.RateGrindPaid := by
+/-- **Grinding roots costs a factor `G`, with any side sources** (`ResourceAccounting.Guarantees.RateGrindPaid`). -/
+theorem RateGrindPaid : ResourceAccounting.Guarantees.RateGrindPaid := by
   intro P N b h ρ S L q r s G m lam τ tier A
   exact GrindChain.pr_unpaid_le A tier (S + (L - ρ) + lam + m * b) _ (fun j η c =>
     (Bandwidth.pr_mono (fun _ hx => by omega)).trans (RatePaid N b h ρ S L q m lam τ tier (A.device j η c)))
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

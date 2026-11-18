@@ -7,7 +7,7 @@ public import Mathlib.Data.Set.Card
 import Mathlib.Data.Sym.Sym2.Init
 
 /-!
-# The network certifier's guarantees
+# The network attester's guarantees
 
 Each guarantee is a `def G : Prop`, stated over `Protocol`'s definitions with the assumptions it rests on as hypotheses
 (`Assumptions`). Its proof is the theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and a guarantee without

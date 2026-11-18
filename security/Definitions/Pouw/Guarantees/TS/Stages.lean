@@ -7,7 +7,7 @@ public import Definitions.Compose.Assumptions.Stages
 # SPOT under per-stage coins (trusted)
 
 STEER-PROOF's route A, each `def G : Prop` proved as
-`Accounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS.Stages`:
+`ResourceAccounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS.Stages`:
 
 * `StageBudget`: the same for per-stage coins: under `StageLuck` at `p` and work weights at most `r` times the sampling design,
   `Λ = r/ln(1/p)`.
@@ -23,9 +23,9 @@ sample.
 
 @[expose] public section
 
-namespace Accounting.Guarantees.TS
+namespace ResourceAccounting.Guarantees.TS
 
-open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- **The budget under per-stage coins.** For every window of rounds of `M` stages with per-stage coins and `s ≥ 2`
 samples a round over whole units (tickets `tk`, any sampling design with rational weights), with work weights `w ≥ 0` at most `r`
@@ -78,4 +78,4 @@ def StageIdeal : Prop :=
       (1 - Z.epsSkip H.prog lam - Z.epsMand H.prog lam - Z.epsMachine H.prog lam -
         Z.epsJl H.prog lam p (δ - S * (δbind + nπ * δzk)) S) * (1 - Z.epsSched H) * (1 - Z.epsClock H)) ≤ δ
 
-end Accounting.Guarantees.TS
+end ResourceAccounting.Guarantees.TS

@@ -5,7 +5,7 @@
 #   research run --on MACHINE --pool proofs --project verity --source . --cwd source \
 #     --mem-gb G --declared-output 'out/*' --env H1L_MEM_GB=G -- bash benchmarks/pouw/h1_lanes/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving build, the Lean verifier, a venv), PoUW's pouw-leaf-own-window
-#      and, under H1_TMPL=structural, the prover's flock-tmpl-unit (verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean, which
+#      and, under H1_TMPL=structural, the prover's flock-tmpl-unit (tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean, which
 #      unrolls the unit and so is no part of the verifier), built beside the Lean verifier's sources
 #   2. leaf.py prepare: the statements' Programs, the leaf's registered values and partials, every statement staged (WORK/plan.tsv),
 #      each circuit flat, or under H1_TMPL=structural the templated statement of its structural lowering (h1unit.layout),
@@ -32,22 +32,22 @@ RUN=$H/leaf.py K=${H1L_K:-448} PAR=${H1L_PAR:-3} LPAR=${H1L_LPAR:-8}
 WK=$W/work
 mkdir -p "$OUT/lean"
 setup
-build_own() {       # build_own DEST: DEST/verity/protocols/accounting/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
+build_own() {       # build_own DEST: DEST/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1
   rm -rf "$D.tmp" && mkdir -p "$D.tmp" \
     && (cd "$SRC" && tar --exclude=.lake --exclude=__pycache__ -cf - verity) | tar -xf - -C "$D.tmp" \
-    && (cd "$D.tmp/verity/protocols/accounting/pouw/verifier/lean/check" && lake build pouw-leaf-own-window) && rm -rf "$D" && mv "$D.tmp" "$D"
+    && (cd "$D.tmp/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-leaf-own-window) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 OWN=:
 if [ -z "${H1L_J10R:-}" ]; then
-  OWN=$(cached leafownwin "$(tree_key verity)" build_own)/verity/protocols/accounting/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
+  OWN=$(cached leafownwin "$(tree_key verity)" build_own)/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
   [ -x "$OWN" ] || { log "pouw-leaf-own-window build FAILED: $(tail -20 "$OUT/build-leafownwin.log")"; exit 1; }
   sha256sum "$OWN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
 fi
 TU= TUP=
 if [ "${H1_TMPL:-flat}" != flat ]; then
-  cached tmplunit "$(lean_key "$SRC/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean")" build_tmpl_unit > "$W/tu.dir" &
+  cached tmplunit "$(lean_key "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean")" build_tmpl_unit > "$W/tu.dir" &
   TUP=$!
 fi
 log "h1-lanes: $(basename "$RUN") K=$K tile=${H1_TILE:-v1} form ${H1_TMPL:-flat} sessions $PAR at a time, Lean $LPAR at a time"

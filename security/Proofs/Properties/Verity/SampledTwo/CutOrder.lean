@@ -480,7 +480,7 @@ theorem order_binds (dev : Exchange → History) (θ : ByteArray) (hF : FirstRea
 
 /-! ## The cut where the device's ledger orders the two sessions -/
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The cut where the device's ledger orders the two sessions**: where the sampled verdict accepts only where the
 form does (`Wired`), the first stage's coins are read under the parameters' key (`FirstReads`), an accepted play on two

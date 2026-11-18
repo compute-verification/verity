@@ -4,7 +4,7 @@ beside its bits, and whether the string decodes back to the trace.
 The split is `verity_vllm.pipeline.advice_code.by_class` (`bits_by_class`: a window's parts sum to
 `codec.bits_by_window`'s charge for it; `closed`: the fields the registration holds at 0, each with its rule and the
 rule's line). This module reads a trace as `v1.py` does, encodes it under the uniform book of the table's bounds
-(`v1.TABLE_CAPS`; under the certified tick `v1.TICK_TABLE_CAPS`, which are the code's own and code nothing), and
+(`v1.TABLE_CAPS`; under the attested tick `v1.TICK_TABLE_CAPS`, which are the code's own and code nothing), and
 reports per window the charge, its parts by class (`by_class.CLASSES`), the two classes with no field
 (`by_class.NO_FIELD`), and the events (`EVENTS`) that say whether each class's case arose in the window at all: a
 class with 0 bits and none of its events (`OF`) reads "not exercised", since its 0 then says nothing.
@@ -17,8 +17,8 @@ class with 0 bits and none of its events (`OF`) reads "not exercised", since its
   whose lookup an eviction cut short and the blocks they lost, the requests a step left waiting (and those it left
   waiting on a full batch, `max_num_seqs` running or the step's token budget spent), the steps that left one waiting
   by what held it, the preemptions and the resumptions;
-- from the certified record: the requests released and the distinct release buckets they fall in (a request's
-  last-frame mark, which under the certified tick is what admits it), and how each request ended (`stop` or
+- from the attested record: the requests released and the distinct release buckets they fall in (a request's
+  last-frame mark, which under the attested tick is what admits it), and how each request ended (`stop` or
   `length`), at its length term's window.
 A window's requests that waited and its release buckets are distinct counts, so the trace's are counted over the
 trace and are not the windows' sums.
@@ -26,8 +26,8 @@ trace and are not the windows' sums.
 **Aborts** (`aborts`). The code has no field for an abort: the reader refuses a trace that holds one, so a trace that
 has a table holds none and its count of aborted requests is 0 in every window. What the trace's directory records of
 them is read without the reader and reported either way: the requests the engine freed by finish reason, the requests
-released that the engine never freed, the connections the network certifier failed, by reason and by whether their
-request had been released, and, for a trace served under the certified tick, the aborted requests by the window their
+released that the engine never freed, the connections the network attester failed, by reason and by whether their
+request had been released, and, for a trace served under the attested tick, the aborted requests by the window their
 release falls in. A trace the reader refuses is one row: the refusal and those counts, and that the run shows the
 advice of none of that record's windows.
 
@@ -51,7 +51,7 @@ window sends, those that kept a draft and the drafts they kept) and column, and 
 line says whether it was served with a draft, and with how many a row.
 
 **The serve** (`serve_of`), read from the directory without the reader: the served model's name, its cards, the vLLM
-version the server's log prints, where the network certifier ran, and whether the server had a draft. With
+version the server's log prints, where the network attester ran, and whether the server had a draft. With
 ``--beside LABEL=DIR`` a second serve's trace is read the same way and set beside each trace that has a table
 (`beside`): each class the trace did not exercise, with the other serve's counts of its events; each event of the
 classes it did exercise that happened in the other serve only; then what the two serves share and where they
@@ -129,7 +129,7 @@ Rows = list[list[tuple[int, int, int]]]
 
 
 def registration(trace: Any, stop_ids: Sequence[int], T: int) -> Registered:
-    """The trace's registration: under the certified tick, its tick and the code's own book (`codec.TICK_CAPS`'s, the
+    """The trace's registration: under the attested tick, its tick and the code's own book (`codec.TICK_CAPS`'s, the
     table's); otherwise the uniform book of the table's bounds."""
     if trace.releases is not None:
         return Registered(trace.engine, tuple(stop_ids), T=T, tick=trace.releases.tick)
@@ -204,10 +204,10 @@ def classes(reg: Registered) -> dict[str, dict[str, Any]]:
 def aborts(d: Path, T: int = 600) -> dict[str, Any]:
     """What a trace's directory records of aborts, read without the reader that refuses them: the requests the engine
     freed by finish reason and those it ended on neither a stop id nor its length; where every request has its
-    certified release bucket (a trace served under the certified tick), the windows of `T` buckets that hold a
+    attested release bucket (a trace served under the attested tick), the windows of `T` buckets that hold a
     release and the aborted requests in each that has one, a request's window counted from the first release as the
     reader counts it; where the directory has the client's rows (one a released request), the released requests the
-    engine never freed (dropped before it, or unfinished); and where it has the network certifier's log, the
+    engine never freed (dropped before it, or unfinished); and where it has the network attester's log, the
     connections it failed, by reason, apart for those whose request it had released: failing one closes its
     connection to the server, which is how a request the engine holds is aborted."""
     d = Path(d)
@@ -245,7 +245,7 @@ def serve_of(d: Path) -> dict[str, Any]:
     """What a trace's directory says of its serve, read without the reader: the served model's name, the cards (the
     tensor-parallel size, 1 where the server names none), whether the server had a draft (an argument that begins
     ``--speculative``), the vLLM version its log's engine line prints (no other line's: a log names other programs'
-    versions too), and where the network certifier ran (the note meta.json's tick has of it); None for what the
+    versions too), and where the network attester ran (the note meta.json's tick has of it); None for what the
     directory doesn't say."""
     d = Path(d)
     meta = json.loads((d / "meta.json").read_text())

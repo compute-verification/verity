@@ -37,12 +37,12 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # PoUB's named assumptions (trusted)
 
-What PoUB's node-level bounds (`Accounting.SecurityProofs.Remote`) assume beyond the model's rows, each a
+What PoUB's node-level bounds (`ResourceAccounting.SecurityProofs.Remote`) assume beyond the model's rows, each a
 named `Prop` on a run:
 
 * `Identity` is statement C's: no undeclared device of any kind. Every location that could read, hold or rebuild a
   word is a declared device of the node (a fleet audited at once is one node, `Node.fleet`), so outside the node
-  nothing reads, holds or rebuilds one. Conservation (`Accounting.SecurityProofs.Remote.Conservation`) assumes no
+  nothing reads, holds or rebuilds one. Conservation (`ResourceAccounting.SecurityProofs.Remote.Conservation`) assumes no
   location.
 * `ComputeAdditive` is W at the rebuild pricing: the node's work at π_r outside PoUW's account and PoUW's account's add
   within the Compute row's `Φ_r · T`. PoUW certifies `W_r` of the latter (`Run.Certified`), and the two give the
@@ -52,15 +52,15 @@ named `Prop` on a run:
 * `ZCost` is PoUW's conjecture as the receipt binds it: `z_b` bits of a prior tile's noised output `z` cost `W_tile` at
   PoUW's pricing, wherever and for whatever weights they are computed, except with probability `δ`.
 
-WorkHardness, the codec's cost of a partial completion, is `Accounting.Assumptions.WorkHardness`; the route it gives
+WorkHardness, the codec's cost of a partial completion, is `ResourceAccounting.Assumptions.WorkHardness`; the route it gives
 here is `Run.Rebuild`.
 -/
 
 @[expose] public section
 
-namespace Accounting.Remote.Assumptions
+namespace ResourceAccounting.Remote.Assumptions
 
-open Accounting.Remote
+open ResourceAccounting.Remote
 
 variable {τ : Type} {N : Node τ} {a : Audit} {Ω : Type}
 
@@ -81,4 +81,4 @@ pricing, except with probability `δ` when the audit accepts. -/
 def ZCost [Fintype Ω] (r : Run N a Ω) (Wtile δ : ℝ) : Prop :=
   r.Holds δ fun ω => (r.zOut ω : ℝ) * Wtile ≤ a.zb * r.workOut ω
 
-end Accounting.Remote.Assumptions
+end ResourceAccounting.Remote.Assumptions

@@ -55,8 +55,8 @@ every period of 39 windows or more.
 namespace Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
 
 open Properties.Pouw.MonitoringPeriodJ10R
-open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposeMonitoringPeriod
+open ResourceAccounting.TS ResourceAccounting.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
 section By
 

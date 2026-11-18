@@ -78,7 +78,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
 
-from . import quick_tier
+from . import quick_tier, suite_layout
 from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, LAUNCH_LOST_S, LEAN_AUDIT_RE, LEAN_STEP,
                       NOT_STARTED, OWN_TRAIN, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
                       _suite_log, elsewhere, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps,
@@ -130,7 +130,8 @@ STORE_SAYS = re.compile(r"^\s*tamper: |the evidence store is not reachable", re.
 #: would leave without a memory limit (`telemetry.cgroup.uncapped`), in its wording before and after its rename
 MACHINE_SAYS = re.compile(r"refused to start the workload: this machine (?:limits|caps) each login session")
 #: the code that decides every suite's verdict, which every suite's key holds (`suites.RUNNER`)
-SUITE_RUNNER = ("tools/check/suites.py", "tools/check/settings.py", "tools/check/guard")
+SUITE_RUNNER = ("tools/check/suites.py", "tools/check/settings.py", "tools/check/guard",
+                "tools/research/src/research/suite_layout.py")
 #: a Lean file's imports: each module of each `import` line (`public`, `meta`, `private` and `all` as Lean 4 writes them),
 #: and each file it reads as it is compiled (`include_str`, relative to it)
 IMPORT_RE = re.compile(r"^\s*(?:public\s+|private\s+)?(?:meta\s+)?import\s+(?:all\s+)?([^\n]+)", re.M)
@@ -203,7 +204,7 @@ def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
     when the declaration can't be loaded."""
     audit, files = _declaration(), sorted(set(files))
     under: dict[str, list[str]] = {f.rpartition("/")[0]: [] for f in files
-                                   if f.rpartition("/")[2] in LEAN_PACKAGE_FILES and not f.startswith(audit.LEAN_TOOL)}
+                                   if f.rpartition("/")[2] in LEAN_PACKAGE_FILES and not f.startswith((audit.LEAN_TOOL, f"tests/{audit.LEAN_TOOL}"))}
     if "" in under:
         return ("**",)
     for f in files:
@@ -698,15 +699,15 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     allow = base or tip
     dirs = [d for ds in driver._shards(rec) for d in ds]
     if check:
-        judged = _gate(driver, rec)
+        view = shard_steps(driver._shards(rec), [any(states[r][1] == 0 for r in g) for g in rec.get("groups") or [ids]])
+        judged = _gate(driver, rec, view)
         if not lost and any(unread_suites(d) & {*judged} for d in dirs):
             return Verdict(PENDING)
-        view = shard_steps(driver._shards(rec), [any(states[r][1] == 0 for r in g) for g in rec.get("groups") or [ids]])
         passes = shard_passed(view, driver._allowed_steps(allow, dirs))
         missed = [s for s in judged if s not in passes]
     else:
-        off = driver._policy(tip).off_gate
-        judged = [s for s in SLIM_JUDGED if (s in rec["steps"] or s not in SLIM_STEPS) and s not in off]
+        off, ran = driver._policy(tip).off_gate, _ran(rec, shard_steps([dirs], [True]))
+        judged = [s for s in SLIM_JUDGED if (s in rec["steps"] or s not in SLIM_STEPS or s in ran) and s not in off]
         missed = driver._unrun(ids, judged, allow)
     if not missed:
         return _keep(rec, Verdict(PASS), judged)
@@ -743,10 +744,19 @@ def _gated(driver: Landing, rec: dict) -> set[str]:
     return {*SLIM_JUDGED, *driver._gating(at)} - {*driver._policy(at).off_gate, *driver.warn_steps}
 
 
-def _gate(driver: Landing, rec: dict) -> list[str]:
-    """The steps the check that gates (``rec``) is judged on: those it answers for (`_gated`) that it ran, and the preflights."""
-    gate = _gated(driver, rec)
-    return [s for s in CHECK_STEPS if s in gate and (s in rec["steps"] or s in PREFLIGHT)]
+def _gate(driver: Landing, rec: dict, view: list[dict[str, str | None]] | None = None) -> list[str]:
+    """The steps the check that gates (``rec``) is judged on: those it answers for (`_gated`) that it ran, the preflights, and
+    those its launch skipped by name that a shard of ``view`` ran all the same (`_ran`)."""
+    gate, ran = _gated(driver, rec), _ran(rec, view)
+    return [s for s in CHECK_STEPS if s in gate and (s in rec["steps"] or s in PREFLIGHT or s in ran)]
+
+
+def _ran(rec: dict, view: list[dict[str, str | None]] | None) -> set[str]:
+    """The steps ``rec``'s launch skipped by name (``skip``) that a shard of ``view`` (`shard_steps`') holds neither skipped nor
+    stopped: check.py decides from the candidate's own tree whether lean-agreement runs, whatever the launch asked, and a step
+    it ran counts as one the launch sent does."""
+    skip = set(rec.get("skip") or ())
+    return {s for v in view or () for s, x in v.items() if s in skip and x not in ("skipped", "stopped")}
 
 
 def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
@@ -766,6 +776,7 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     tip, base = rec["tip"], rec.get("base")
     allow, dirs = base or tip, driver.evidence(driver.repo, said)
     allowed = driver._allowed_steps(allow, dirs)
+    gate = _gate(driver, rec, shard_steps([[d] for d in dirs], [True] * len(dirs)))
     keys: dict[str, str] = {}
     got: dict[str, list[Read]] = {}
     at: list[float] = []
@@ -773,7 +784,7 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
         if implicated(d) is None and killed(d):
             continue                                     # a kill, as `judge` reads it at the end: infra, never an early red
         ended, unread = {st.get("step"): st for st in step_records(d)}, unread_suites(d)
-        for s in _gate(driver, rec):
+        for s in gate:
             if (st := ended.get(s)) is not None:
                 if (st.get("status") != "failed" or not_run(st) or s in allowed or s in unread
                         or isinstance(rc := st.get("rc"), int) and (rc < 0 or rc in KILLED_RC)):
@@ -792,7 +803,7 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     if not got:
         return Verdict(PENDING)
     v = Verdict(FAIL, tuple(_failure(s, keys[s], key(driver.repo, base, s) if base else None, got[s])
-                            for s in _gate(driver, rec) if s in got))
+                            for s in gate if s in got))
     first = [t for t in (*at, (rec.get("early") or {}).get("at")) if t is not None]
     rec["early"] = {**_doc(v), "at": min(first, default=driver.now())}
     return v
@@ -814,7 +825,7 @@ def _passed_early(driver: Landing, rec: dict, states: dict) -> Verdict:
     if not all(shards):
         return Verdict(PENDING)
     view = shard_steps(shards, [any(states.get(r, (None, None))[1] == 0 for r in g) for g in groups])
-    judged = _gate(driver, rec)
+    judged = _gate(driver, rec, view)
     passes = shard_passed(view, driver._allowed_steps(rec.get("base") or rec["tip"], dirs))
     if view is None or any(s not in passes for s in judged):
         return Verdict(PENDING)
@@ -1010,14 +1021,14 @@ def suite_reads(repo: Path, commit: str, suite: str) -> tuple[frozenset[str] | N
     """(every path suite ``suite`` (its directory) may read at ``commit``, the directories among them), as `suites.py`'s
     `inputs_of` allows its guard: its directory and its declared inputs; unless it declares `inputs_only`, what each workspace
     package it depends on ships (`_ships`), its dependencies, extras and dependency groups and theirs but their groups
-    (`suites.closure`); the workspace's pyproject.toml, `SUITE_RUNNER` and `ENV`.  (None, none) for the repository's own
-    suite, whose directory is the tree."""
+    (`suites.closure`), each with its tests under the root's `tests/` (`suite_layout.mirrors`); the workspace's
+    pyproject.toml, `SUITE_RUNNER` and `ENV`.  (None, none) for the repository's own suite, whose directory is the tree."""
     suite = suite.strip("/") or "."
     if suite == ".":
         return None, frozenset()
     data = suite_pyproject(repo, commit, suite)
     tests = data.get("tool", {}).get("verity", {}).get("tests", {})
-    out = {suite, *map(str, tests.get("inputs") or ()), "pyproject.toml", *SUITE_RUNNER, *ENV}
+    ins = {suite, *map(str, tests.get("inputs") or ())}
     if tests.get("inputs_only") is not True:
         pkgs, seen = _members(repo, commit), set()
         todo = [n for n in _requires(data) if n in pkgs]
@@ -1026,9 +1037,11 @@ def suite_reads(repo: Path, commit: str, suite: str) -> tuple[frozenset[str] | N
                 continue
             seen.add(n)
             todo += [r for r in _requires(suite_pyproject(repo, commit, pkgs[n]), groups=False) if r in pkgs]
-        out |= {p for n in seen if pkgs[n] != suite for p in _ships(repo, commit, pkgs[n])}
+        ins |= {p for n in seen if pkgs[n] != suite for p in _ships(repo, commit, pkgs[n])}
     r = _git(repo, "rev-parse", "--verify", "-q", f"{commit}^{{tree}}", check=False)
     files = [p for p, _ in _files(repo, r.stdout.strip())] if not r.returncode else []
+    out = ins | suite_layout.mirrors(ins, lambda p: _is_file(files, p) or _is_dir(files, p))
+    out |= {"pyproject.toml", *SUITE_RUNNER, *ENV}
     return frozenset(out), frozenset(p for p in out if "*" not in p and "?" not in p and _is_dir(files, p))
 
 
@@ -1040,8 +1053,12 @@ def _is_dir(files: list[str], path: str) -> bool:
     return i < len(files) and files[i].startswith(path.rstrip("/") + "/")
 
 
-def _norm(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
+def _is_file(files: list[str], path: str) -> bool:
+    """Whether ``path`` is a file of the tree whose files (in git's order) are ``files``."""
+    import bisect
+
+    i = bisect.bisect_left(files, path)
+    return i < len(files) and files[i] == path
 
 
 def _requires(data: dict, groups: bool = True) -> list[str]:
@@ -1050,16 +1067,16 @@ def _requires(data: dict, groups: bool = True) -> list[str]:
     project = data.get("project", {})
     reqs = [*project.get("dependencies", []), *(r for extra in project.get("optional-dependencies", {}).values() for r in extra)]
     reqs += [r for g in data.get("dependency-groups", {}).values() if groups for r in g if isinstance(r, str)]
-    return [_norm(m[0]) for r in reqs if (m := re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r))]
+    return [suite_layout.norm(m[0]) for r in reqs if (m := re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r))]
 
 
 def _members(repo: Path, commit: str) -> dict[str, str]:
     """{distribution: directory} of the workspace packages at ``commit`` (`suites.members`), the root's own under "."."""
     root = suite_pyproject(repo, commit, ".")
-    out = {_norm(n): "." for n in [root.get("project", {}).get("name")] if isinstance(n, str)}
+    out = {suite_layout.norm(n): "." for n in [root.get("project", {}).get("name")] if isinstance(n, str)}
     for path in root.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", []):
         if isinstance(n := suite_pyproject(repo, commit, path).get("project", {}).get("name"), str):
-            out[_norm(n)] = path
+            out[suite_layout.norm(n)] = path
     return out
 
 

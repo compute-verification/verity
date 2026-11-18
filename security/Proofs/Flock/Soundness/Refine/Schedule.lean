@@ -2,7 +2,7 @@ module
 
 public import Definitions.Flock.Compiled
 public import Flock.Schedule
-public import Proofs.Flock.Soundness.Model.Compiled
+public import Proofs.Flock.Soundness.Merkle
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 

@@ -1,16 +1,16 @@
 """The network chain's steps after N2 and the proofs, over varied traffic: the advice (I1 v0,
-`verity.protocols.accounting.certifier.verifier.advice`), its bits per execution phase (v0's `bits_by_window` beside the derived rules'
+`verity.protocols.resource_accounting.network.verifier.advice`), its bits per execution phase (v0's `bits_by_window` beside the derived rules'
 residual, `encodings/derived.py`) and the prove path's audit of a committed run's step units compiled from that advice
 (`benchmarks/prove_path`). Each stage's result says what it stood on; `stubs` lists what is still a stand-in.
 
 * **The advice** (`advice`, a file): I1's JSON (`to_json`), its `encode` bytes, or a prove-path run's stand-in
   advice from before v0 fixed ``release`` and ``sources`` (its ``advice/advice.json``), upgraded as
   `advice_windows.advice_of_workload` now writes it: no sources, each kept output released in its step's bucket. It is
-  bound to the runs only on the advice profile, by the honest run's certified I/O (``io.json``): every advice request is
-  a certified request (its ``user``), once.
+  bound to the runs only on the advice profile, by the honest run's attested I/O (``io.json``): every advice request is
+  an attested request (its ``user``), once.
 * **Bits per execution phase** (`bits`), T the honest run's egress window in buckets: v0's (I1's
   `bits_by_window`) and, given the registered serving config (`derived.Config`'s fields, or a step
-  trace's ``config``) and the certified I/O the advice is bound to, whose tokens the residual reads (canonical sources,
+  trace's ``config``) and the attested I/O the advice is bound to, whose tokens the residual reads (canonical sources,
   derived hits), the residual's (`derived.residual`), unshaped (release sent) and shaped (release derived), charged by
   I1's rule (`derived.charge`), with the forced fields' share. `derived.reconstruct` must give back every step of the
   advice and every output length from the residual, the config and the tokens, and `derived.rebuild` the whole advice
@@ -18,9 +18,9 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
 * **The endpoint's own advice** (`served_advice`, a served run's records): `verity-vllm advice` over a `verity-vllm
   serve-openai` endpoint's records (`ENDPOINT`), one window advice (`verity_vllm.pipeline.window_advice`) a closed
   Commit window, each registered (its hiding root, under the window's Commit) with its opening beside it. The honest
-  run's windows are bound to it (each window opened to its registered root, every certified request admitted in
+  run's windows are bound to it (each window opened to its registered root, every attested request admitted in
   exactly one window, a window that carries requests in joined to the window before it, `window_chain.join`) and each
-  chain of windows rebuilt from its certified I/O under the config read off the endpoint's records
+  chain of windows rebuilt from its attested I/O under the config read off the endpoint's records
   (`endpoint_config`), its bits placed in the run's execution phases.
 * **The prove path** (`prove_path`, a directory or a gzipped tar): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
@@ -49,8 +49,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-from verity.protocols.accounting.certifier.prover import window_chain as WC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import advice as I1  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import window_chain as WC  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import advice as I1  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments import advice as AC  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
@@ -100,8 +100,8 @@ def advice(path: Path):
 
 
 def holdings(adv, io: list[dict]):
-    """The certified I/O (``io.json``'s requests, in ingress order) as `derived.Holdings`, and each advice request's
-    certified index; or None and why, when the advice's requests aren't the certified ones, each once."""
+    """The attested I/O (``io.json``'s requests, in ingress order) as `derived.Holdings`, and each advice request's
+    attested index; or None and why, when the advice's requests aren't the attested ones, each once."""
     users = [r["user"] for r in io]
     ids = [q.id for q in adv.requests]
     if sorted(users) != sorted(ids) or len(set(ids)) != len(ids):
@@ -113,7 +113,7 @@ def holdings(adv, io: list[dict]):
 
 def bits(adv, T: int, windows: int, config: dict | None, io: list[dict] | None) -> dict:
     """The advice's bits per egress window of T buckets: v0's, and with ``config`` and an ``io`` it is bound to the
-    residual's (the module's docstring); ``io``, the certified I/O, binds the advice to the run, and its tokens are what
+    residual's (the module's docstring); ``io``, the attested I/O, binds the advice to the run, and its tokens are what
     the residual reads and rebuilds the advice from."""
     v0 = I1.bits_by_window(adv, T)
     out = {"T": T, "v0_total": I1.total_bits(adv), "config": config, "bound": None, "public_fields": None,
@@ -158,7 +158,7 @@ def bits(adv, T: int, windows: int, config: dict | None, io: list[dict] | None) 
 # --- the endpoint's own advice ----------------------------------------------------------------------------------------
 
 ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
-SLACK_S = 1.0  # the endpoint's clock against the certifier's: a Commit window opening this soon before the run's origin
+SLACK_S = 1.0  # the endpoint's clock against the attester's: a Commit window opening this soon before the run's origin
 COUNTS = ("v0_bits", "derived_bits", "derived_shaped_bits", "forced_bits")
 ROW_ORDER = {"runner": "batch", "scheduling": "scheduling"}
 
@@ -221,10 +221,10 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
     `SLACK_S`). A window that carries requests in joins the window before it into a chain (``chain``), joined into one
     I1 v0 advice (`window_chain.join`): its carried requests and their state are the earlier window's, as that window's
     registered advice closed them, never its own string's, so each request and step is charged once. The advice is
-    bound to the run when each window's requests are certified ones, every certified request is admitted in exactly one
+    bound to the run when each window's requests are attested ones, every attested request is admitted in exactly one
     window, each window's opening opens its registered root and its registration names the window's Commit
     (``windows.jsonl``), and each chain joins: a window that carries a request in follows the window before it, which
-    the run holds, and no window is left owing a carry. Each chain's advice is rebuilt from its certified I/O under the
+    the run holds, and no window is left owing a carry. Each chain's advice is rebuilt from its attested I/O under the
     config read off the endpoint (`endpoint_config`) by `bits`, charged per bucket (T 1) and placed at its first
     window's first step's bucket, each later window's release counted from its own first step's, so its bits land in
     the execution phases of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first
@@ -632,7 +632,7 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
                    "registered.")
     if served:
         out.append("Advice in the clear: the rehearsal opens each Commit window's advice to its report, where only its "
-                   "registration is public; the compile unit, which takes it hidden, isn't run here.")
+                   "registration is public; the compile slice's proof block, which takes it hidden, isn't run here.")
     out.append("Coded bits: the chain doesn't run the advice code (encodings/code_v1.py).")
     p = c.get("prove_path")
     if p is None:
@@ -671,20 +671,20 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
             out.append(f"I/O tie: {next(t['why'] for t in ties if not t['ran'])}.")
         else:
             out.append("I/O tie: `io_tie`'s reference in the clear on a fake upstream's cells and Commit port of the "
-                       "advice and the given ids, not the network certifier's cells under its root and the endpoint's Commit "
+                       "advice and the given ids, not the network attester's cells under its root and the endpoint's Commit "
                        "proved in an IoTieWindow unit.")
     t = c.get("tie")
     if t is not None and t["ran"]:
         out.append("I/O tie: `io_tie`'s reference in the clear on the negatives' stand-ins (each window's certified "
-                   "frames held to their head and committed under fake salts in place of the network certifier's cells, the "
+                   "frames held to their head and committed under fake salts in place of the network attester's cells, the "
                    f"sampled ids from {t['from']} under fake salts in place of the Commit's port), not the endpoint's "
-                   "Commit and the network certifier's cells in an IoTieWindow unit.")
+                   "Commit and the network attester's cells in an IoTieWindow unit.")
     where = str(r.get("where") or "")
     if where.startswith("off the developer's node"):
-        out.append("Auditor device: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
+        out.append("Auditor device: the attester ran on another node than the endpoint's, through an ssh forward, not on "
                    "the auditor device (--from takes a gate run's fetch).")
     elif not where.startswith("gate: "):
-        out.append("Auditor device: the certifier ran off the gate (--from takes a gate run's fetch).")
+        out.append("Auditor device: the attester ran off the gate (--from takes a gate run's fetch).")
     return out
 
 

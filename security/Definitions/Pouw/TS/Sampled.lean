@@ -84,7 +84,7 @@ noise).
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Pouw.RelativeSecurity
 
@@ -253,11 +253,11 @@ open Classical in
 /-- **The share covers every unit that isn't good**: on an accepted path, the weight `wt w j` (unit `j`'s words in round
 `w`) of the units that aren't good under the run's modes is at most the ideal game's deficiency times `N_w`. A property
 of the share's definition, proved for each game, not assumed: a share that charges each unit the run didn't pay for its
-`coneWt` covers (`Accounting.SecurityProofs.TS.SampledLayer.covers_of_cone`). -/
+`coneWt` covers (`ResourceAccounting.SecurityProofs.TS.SampledLayer.covers_of_cone`). -/
 def Covers [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U)
     (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (wt : Fin S → J → ℝ) (Nw : ℝ) : Prop :=
   ∀ x, P.accepts x → (∑ w, ∑ j, if pf.Good mode x w j then 0 else wt w j) ≤ P.game.deficiency x * Nw
 
 end SampledLayer
 
-end Accounting.TS
+end ResourceAccounting.TS

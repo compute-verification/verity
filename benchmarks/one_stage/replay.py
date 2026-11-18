@@ -513,17 +513,18 @@ class Case:
 def params(program, query: dict, sampling_design: dict, ports: dict, leaf_layer: str | None, delta: str, *, partition: dict | None = None,
            log: list | None = None, anchors: list | None = None, work_table: dict | None = None,
            registered: dict | None = None, scheme: str = SCHEME, outputs: dict | None = None,
-           schemas: dict | None = None) -> dict:
-    """``outputs`` and ``schemas`` (a docket reusing an earlier record's values, `registration.check`'s) appear only
-    when given, ``schemas`` under the Lean's name ``row_schemas``; with ``registered``, ``parameters`` (the program
-    function's, which the descriptor doesn't carry), which `OneStage.paramsOfJson` requires of a verifier expecting values
-    registered."""
+           schemas: dict | None = None, window_root: str | None = None) -> dict:
+    """``outputs``, ``schemas`` (a docket reusing an earlier record's values, `registration.check`'s) and
+    ``window_root`` appear only when given, ``schemas`` under the Lean's name ``row_schemas``; with ``registered``,
+    ``parameters`` (the program function's, which the descriptor doesn't carry), which `OneStage.paramsOfJson` requires
+    of a verifier expecting values registered."""
     return {"anchors": list(anchors or []), "delta": delta, "law": sampling_design, "leaf_layer": leaf_layer, "log": list(log or []),
             "partition": partition, "ports": ports, "program": descriptor(program), "query": query,
             "registered": registered, "scheme": scheme, "work_table": work_table,
             **({"parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]]} if registered is not None else {}),
             **({"outputs": outputs} if outputs is not None else {}),
-            **({"row_schemas": schemas} if schemas is not None else {})}
+            **({"row_schemas": schemas} if schemas is not None else {}),
+            **({"window_root": window_root} if window_root is not None else {})}
 
 
 def evidence(a: dict, *, instances: int, sessions: list[str], session_roots: dict | None, served: list[int] | None) -> dict:
@@ -590,7 +591,7 @@ def python(c: Case) -> dict:
         R.PROTOCOL, verdict, reason, digest, public, profile)
     codes = R.check(rec, program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                     p["partition"], p["work_table"], p["registered"], outputs=p.get("outputs"),
-                    schemas=p.get("row_schemas")).codes
+                    schemas=p.get("row_schemas"), window_root=p.get("window_root")).codes
     if codes:
         return out("reject", f"registration: {', '.join(codes)}")
     try:
@@ -614,7 +615,7 @@ def python(c: Case) -> dict:
         of_record = [(k, v) for k, v in vs if v.get("of_record")]
         if not of_record:
             return out("undecided", "no verifier of record")
-        return out("undecided", f"the verifier of record {next(k for k, v in of_record if v.get('accepted') is None)} has not run")
+        return out("undecided", f"the verifier {next(k for k, v in of_record if v.get('accepted') is None)} has not run")
     profile = audit.profile(rec, e["draw"], delta).to_json()
     wrong = a["wrong_units"]
     public = {"bound": wrong["bound"], audit.COMPLETE: a["complete"], "drawn": list(e["draw"]["units"]),
@@ -709,7 +710,7 @@ OUTSIDE = {
     "statement-binds-another-partition": "M0's statement bindings (`a0.bindings`)",
     "m0-selftest-unit-draw-session": "M0's selftest",
     "prover-ignores-the-draw (M0 selftest)": "M0's selftest",
-    "wrong-output-word": "the verifier of record (verity-verify-proof, M0) on a tampered copy of the set, whose record the run did not keep",
+    "wrong-output-word": "the verifier (verity-verify-proof, M0) on a tampered copy of the set, whose record the run did not keep",
     "lean-reads-another-root-of-W": "verity-verify-proof's registered reads (`--registered`), opening each table row against the reads "
                                     "file's root; the protocol reads the roots the verdict opened against (replayed as "
                                     "registered-read-opened-against-another-root)",
@@ -1562,7 +1563,8 @@ def registered_gemm(run: Run) -> Iterator[Case]:
 #: what the era's code imports from a run's commit: each part's path in every layout it has had, oldest first. These are
 #: paths into history, read at the run's commit: a move adds its new path at the end and never rewrites these.
 ERA_PARTS = {"verity": ("verity",), "catalog": ("catalog/verity_catalog",), "kernels": ("kernels/verity_kernels",),
-             "served_zk": ("benchmarks/pouw/served_zk", "verity/protocols/accounting/pouw/prover/kernels/served_zk")}
+             "served_zk": ("benchmarks/pouw/served_zk", "verity/protocols/accounting/pouw/prover/kernels/served_zk",
+                           "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk")}
 
 
 def era_path(commit: str, part: str, exists: Callable[[str, str], bool] | None = None) -> str:
@@ -1637,8 +1639,8 @@ SERVED_OUTSIDE = (
     (r"receive-after-draw", "the challenger's record order (`Challenger.register`, late-registration): each window is received "
                             "before the epoch's draw coin is released"),
     (r"(outcome|deliver)-again|retry-.*", "the service's stream: one delivery, a final outcome, the failure budget"),
-    (r"open-.*", "served_zk's opening check (a proof's rows are the drawn unit's), a verdict beside the verifier of record's"),
-    (r"lean-.*", "the verifier of record (Lean `verity-verify-proof verify --zk`) on one unit's session; the protocol reads its verdict"),
+    (r"open-.*", "served_zk's opening check (a proof's rows are the drawn unit's), a verdict beside the verifier's"),
+    (r"lean-.*", "the verifier (Lean `verity-verify-proof verify --zk`) on one unit's session; the protocol reads its verdict"),
     (r"firewall-.*", "the ZK server's checks on a delivered proof, before the outcome"),
 )
 
@@ -1653,8 +1655,8 @@ def served_window(run: Run) -> Iterator[Case]:
     scheme is `served_commit.SCHEME` and the audit took no sessions; in it (`verity/proof-service/outcome/v0`) the scheme
     is the service's and the audit took the delivered sessions. Neither took the served sample or the sessions' roots, and
     no verdict of record reports registered reads."""
-    from verity.protocols.accounting.pouw.verifier import window as Wd
-    from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc8
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L, pc8
     from verity.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
     pv = run.json("out/request/params.json")
     rec = run.json("out/request/registration.json")
@@ -1801,7 +1803,7 @@ def served_audit(run: Run) -> Iterator[Case]:
     no sessions and none of the later checks' inputs. Before `served_commit.run_of` the verifier took the run its served
     domains bind from the record's own window, not the request's binding, so the other request's docket passed R3
     (`receive-foreign` RECEIVED, the run's failed check)."""
-    from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc8
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L, pc8
     from verity.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
     if commit is None:

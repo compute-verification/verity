@@ -34,18 +34,18 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/word_codec/paged.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/paged.py").parent))
 sys.path.insert(0, str(HERE.parent / "codec_tensor"))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sketch_receipt.py").parent))
 
 import paged as P  # noqa: E402
 from paged import K, KB  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 
-sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "tests")]
-import poub_vectors as RV  # noqa: E402
-from verity.protocols.accounting.poub.verifier import codec as RC  # noqa: E402
+sys.path.insert(0, str(HERE.parents[1]))
+from verity.protocols.resource_accounting.memory.poub.verifier import codec as RC  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import vectors as RV  # noqa: E402
 
 RTOL = 8e-3  # step.py's for the tensor-core form, which rounds P (and here the output) to bf16
 BLOCKS, BS, LAYERS = 96, 16, 2
@@ -59,7 +59,7 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, main_rc) -> dict:
 
     - `pinned` (a library at PoUB's codec, `codec.DEFAULT`): `vectors.json`'s `codec.bound` blocks
       (PoUB's payloads j = 0 and 20 under their bound keys) and its `codec.coin` blocks (the same payloads
-      appended under the append coin's form b_j(c_a), PROTOCOL.md §3), each appended as one token's K and V at the
+      appended under the append coin's form b_j(c_a), `codec.binding`), each appended as one token's K and V at the
       slot and layer whose store-order block is j (store base 0) under b_j, and at another slot with the index
       difference folded into its offset (b_j + tau W (j − there)): the token-layer's words equal the pinned block (its
       SHA-512 and first word) both times, so a page encodes at its store index whatever slot holds it. The `codec.coin`
@@ -218,7 +218,7 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, main_rc) -> dict:
 
 def deferred_gate(lib: P.PagedLib, torch, k: int, plain, enc, bjs, rows, lay: P.CacheShape, bt, btd, lens, q, rng,
                   main_rc, log) -> dict:
-    """The plaintext flag (deferred residency, poub's PROTOCOL.md §4) on `bound_gate`'s random caches: each
+    """The plaintext flag (deferred residency, poub's `audit.Params.deferred`) on `bound_gate`'s random caches: each
     slot of both layers appended as it is (its flag set) or encoded under its offset (flag clear), at random, so every
     decode's tiles mix both.
 

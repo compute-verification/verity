@@ -3,6 +3,7 @@ front door as a served model (`derive_graph.derive_graph`), with the training ru
 
     step_program(model, loss_fn, optimizer, example_batch, mode="reference", cc=None) -> Program | Unsupported
     structure_program(model, loss_fn, optimizer, example_batch, cc=cc) -> Program | Unsupported   the step at a cc, cells unread
+    steps_program(step_fns, model, example_batch, measured=i, optimizers=opts) -> Program | Unsupported   consecutive steps
 
 The step is one function of everything a step reads,
 
@@ -27,6 +28,10 @@ takes each refused one's output as a field of the `run` input (a hole, `rules.tr
 refusal at once and the census of everything else, without a Program. A hole is a value no gate checks, which a prover would
 choose, so a Program with holes is no statement (`check_identity` refuses it); `step_program` never surveys.
 
+Consecutive steps of one run, each any ``step_fn(model, batch, optimizers)`` with torch's own optimizers, are traced as one graph
+by `export_steps` (`train_trace`: on a fake copy of the model and fresh copies of the optimizers, its markers giving each node's
+step and phase), and derived as one Program by `steps_program`.
+
 A witness block is a `query_ast.GateSet` over the step Program: its gates are `GateSet.size()`, and its reads beyond the start's
 weights are `in_bits_beyond_theta(program, gates)`.
 """
@@ -41,11 +46,12 @@ import re
 import sys
 import types
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
-from typing import cast
+from dataclasses import dataclass, field
+from typing import Any, cast
 
 import torch
 import torch.nn.functional as F
+import torch.utils._pytree as pytree
 from torch.func import functional_call, grad_and_value
 from torch.overrides import TorchFunctionMode
 from verity.circuits import parts
@@ -124,7 +130,10 @@ class _Loss(torch.nn.Module):
 class StepLayout:
     """Which Program input and output is which: the parameters' and buffers' fqns in order, the host scalars, the batch; and how
     the step was traced: as a GPU runs it (`gpu`), and then with cuda.matmul.allow_tf32 on (`tf32`) and under deterministic
-    algorithms (`deterministic`)."""
+    algorithms (`deterministic`). Of consecutive steps (`export_steps`), whose graph reads the parameters and buffers as its
+    attributes: each such attribute as (kind, fqn, aliases) (`attrs`), the optimizer state after the steps (`state`: optimizer,
+    param, key, shape and dtype), the step measured (`measured`; None: the steps are not marked) and whether the first of them
+    is not the run's first (`mid_run`)."""
     params: list[str]
     buffers: list[str]
     scalars: tuple[str, ...]
@@ -133,6 +142,10 @@ class StepLayout:
     gpu: bool = False
     tf32: bool = False
     deterministic: bool = False
+    attrs: dict[str, tuple[str, str, tuple[str, ...]]] = field(default_factory=dict)
+    state: list[dict] = field(default_factory=list)
+    measured: int | None = None
+    mid_run: bool = False
 
     def to_json(self) -> dict:
         return {"params": self.params, "buffers": self.buffers, "scalars": list(self.scalars), "inputs": self.inputs,
@@ -460,23 +473,98 @@ def structure_program(model: torch.nn.Module, loss_fn: Callable, optimizer: Adam
     return report.result
 
 
-def export_steps(step_fns: Sequence[Callable[[torch.nn.Module, torch.Tensor, list[torch.optim.Optimizer]], object]],
-                 model: torch.nn.Module, example_batch: torch.Tensor, *, measured: int,
-                 optimizers: Sequence[AdamW | torch.optim.Optimizer] | None = None, mid_run: bool = False,
-                 gpu: bool = False) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
-    """`export_step` for step `measured` of consecutive steps of one run, each written as ``step_fn(model, batch, optimizers)``
-    on one model and one set of fresh `optimizers`: its graph reads what the steps before it wrote, and its outputs include
-    what the step after it reads. `mid_run`: the first of `step_fns` is not the run's first, so the values the steps write
-    are the run's own where the first reads them, not theta's."""
-    raise NotImplementedError("export_steps: goal training/one-pytorch-translator")
+def export_steps(step_fns: Sequence[Callable[[torch.nn.Module, Any, list[torch.optim.Optimizer]], object]],
+                 model: torch.nn.Module, example_batch: Any, *, measured: int | None,
+                 optimizers: Sequence[torch.optim.Optimizer] = (), mid_run: bool = False,
+                 device: str | torch.device | None = None) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
+    """Consecutive steps of one run, each written as ``step_fn(model, batch, optimizers)`` on one model and one set of fresh
+    copies of `optimizers`, each on a batch of its own of `example_batch`'s shapes (a pytree of tensors), traced as one graph
+    (`train_trace`): the `make_fx` `GraphModule`, its placeholders' fakes (each step's batch tensors in turn) and its
+    `StepLayout`. The graph reads the parameters and buffers as its attributes (`StepLayout.attrs`) and writes them in place,
+    so a step reads what the steps before it wrote, and the steps after it read what it writes. `measured`: the step the
+    trace measures, whose nodes and every other step's carry their step (``meta["te_step"]``); None for steps not marked.
+    `mid_run`: the first of `step_fns` is not the run's first, so the values the steps write are the run's own where the first
+    reads them, not theta's. `device`: the device the fakes are on (default: each tensor's own, a meta tensor's CPU). A step
+    the trace can't take raises `train_trace.CaptureRefused`."""
+    from verity_torch.frontend.train_trace import _trace
+
+    if measured is not None and not 0 <= measured < len(step_fns):
+        raise ValueError(f"export_steps: measured is {measured}, and there are {len(step_fns)} steps")
+    leaves, spec = pytree.tree_flatten(example_batch)
+    gm, metas, attrs, state = _trace(list(step_fns), model, list(optimizers), leaves, spec, device, measured)
+    params = [name for kind, name, _ in attrs.values() if kind == "parameter"]
+    buffers = [name for kind, name, _ in attrs.values() if kind == "buffer"]
+    inputs = [n.name for n in gm.graph.nodes if n.op == "placeholder"]
+    return gm, metas, StepLayout(params, buffers, (), inputs, [], attrs=attrs, state=state, measured=measured, mid_run=mid_run)
 
 
-def steps_program(step_fns: Sequence[Callable[[torch.nn.Module, torch.Tensor, list[torch.optim.Optimizer]], object]],
-                  model: torch.nn.Module, example_batch: torch.Tensor, *, measured: int,
-                  optimizers: Sequence[AdamW | torch.optim.Optimizer] | None = None, mid_run: bool = False,
-                  mode: str = "reference", cc: tuple[int, int] | None = None) -> Program | Unsupported:
-    """`step_program` for step `measured` of consecutive steps of one run, as `export_steps` exports it."""
-    raise NotImplementedError("steps_program: goal training/one-pytorch-translator")
+def _written(gm: torch.fx.GraphModule, metas: list[torch.Tensor], layout: StepLayout) -> tuple[torch.fx.GraphModule,
+                                                                                             list[torch.Tensor], list[str]]:
+    """`export_steps`' graph as a function: each parameter and buffer attribute an input before the batches (named
+    `param_<fqn>` or `buf_<fqn>`), no profiler marker, functionalized, and its outputs the value each such input holds after
+    the steps. Returns it, its inputs' fakes and its inputs' names."""
+    from torch._subclasses.fake_tensor import FakeTensorMode
+    from torch.fx.experimental.proxy_tensor import make_fx
+
+    g = gm.graph
+    first = next(n for n in g.nodes if n.op == "placeholder")
+    lifted, names = {}, []
+    for target, (kind, fqn, _) in layout.attrs.items():
+        names.append(_ident(f"{'param' if kind == 'parameter' else 'buf'}_{fqn}"))
+        with g.inserting_before(first):
+            lifted[target] = g.placeholder(names[-1])
+        lifted[target].meta["val"] = getattr(gm, target)
+    for n in list(g.nodes):
+        if n.op == "get_attr" and n.target in lifted:
+            n.replace_all_uses_with(lifted[n.target])
+            g.erase_node(n)
+    for n in reversed(list(g.nodes)):
+        if n.op == "call_function" and getattr(n.target, "namespace", None) == "profiler" and not n.users:
+            g.erase_node(n)
+    gm.recompile()
+    k = len(lifted)
+    with FakeTensorMode(allow_non_fake_inputs=True):
+        fakes = [torch.empty(t.shape, dtype=t.dtype, device=t.device) for t in [lifted[a].meta["val"] for a in lifted] + metas]
+
+    def steps(*args):
+        gm(*args)
+        return tuple(args[:k])
+
+    fg = make_fx(torch.func.functionalize(steps, remove="mutations"), tracing_mode="fake")(*fakes)
+    phs = [n for n in fg.graph.nodes if n.op == "placeholder"]
+    after = {}
+    for n in list(fg.graph.nodes):
+        if n.op == "call_function" and n.target is torch.ops.aten.copy_.default and n.args[0] in phs[:k]:
+            after[n.args[0]] = n.args[1]
+            n.replace_all_uses_with(n.args[1])
+            fg.graph.erase_node(n)
+    next(n for n in fg.graph.nodes if n.op == "output").args = (tuple(after.get(p, p) for p in phs[:k]),)
+    fg.graph.eliminate_dead_code()
+    fg.recompile()
+    return fg, fakes, names + layout.inputs
+
+
+def steps_program(step_fns: Sequence[Callable[[torch.nn.Module, Any, list[torch.optim.Optimizer]], object]],
+                  model: torch.nn.Module, example_batch: Any, *, measured: int | None,
+                  optimizers: Sequence[torch.optim.Optimizer] = (), mid_run: bool = False,
+                  mode: str = "reference") -> Program | Unsupported:
+    """Consecutive steps of one run as one `Program`, as `export_steps` exports them, or the `Unsupported` that says which op of
+    them no rule lowers (`rules.training`). Its inputs are each parameter and buffer the steps read, then each step's batch
+    tensors; its outputs are each of those parameters and buffers after the last step (`annotations["train_step"]`). The
+    parameters are its theta, the start's weights, unless the steps are `mid_run`, whose first step reads the run's own
+    weights and so has no theta. The optimizers' state is made inside it, by their first step."""
+    from verity_torch.frontend.rules.training import training_rules
+
+    gm, metas, layout = export_steps(step_fns, model, example_batch, measured=measured, optimizers=optimizers, mid_run=mid_run)
+    fg, fakes, names = _written(gm, metas, layout)
+    lifted = names[:len(layout.attrs)]
+    theta = [] if mid_run else [n for n, (kind, _, _) in zip(lifted, layout.attrs.values()) if kind == "parameter"]
+    layout.inputs = names
+    layout.outputs = [f"{'param' if kind == 'parameter' else 'buf'}:{fqn}" for kind, fqn, _ in layout.attrs.values()]
+    rep = derive_graph(fg, fakes, mode=mode, rules=training_rules(), name="TrainSteps", input_names=names, theta=theta)
+    if rep.program is not None:
+        rep.program.annotations["train_step"] = {**layout.to_json(), "measured": measured, "mid_run": mid_run}
+    return rep.result
 
 
 def in_bits_beyond_theta(program: Program, gates: GateSet) -> int | parts.Unsupported:

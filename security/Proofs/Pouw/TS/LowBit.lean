@@ -3,7 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.TS.LowBit
 public import Mathlib.Data.FinEnum
 public import Mathlib.Data.Fintype.Card
-public import Proofs.Accounting.Lemmas.TS.LowBit
+public import Proofs.ResourceAccounting.Lemmas.TS.LowBit
 
 /-!
 # A one-register fold's low bit
@@ -17,9 +17,9 @@ an XOR.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 namespace LowBit
 
@@ -118,7 +118,7 @@ end LowBit
 
 open LowBit
 
-theorem OneRegisterLowBit : Accounting.Guarantees.TS.OneRegisterLowBit := by
+theorem OneRegisterLowBit : ResourceAccounting.Guarantees.TS.OneRegisterLowBit := by
   intro w N g hg
   choose H hH using hg
   have lat : ∀ i a e, H i a e = (a ^^ e ^^ H i false false) := by
@@ -140,7 +140,7 @@ theorem OneRegisterLowBit : Accounting.Guarantees.TS.OneRegisterLowBit := by
   exact (foldl_lowBit N (fun i => (g i).1) (fun i => H i false false) (fun i s e => (hH i s e).trans (lat i _ _))
     s d).trans (foldl_xor_split N (fun i => (d i).getLsbD 0) (fun i => H i false false) ((s 0).getLsbD 0))
 
-theorem LiLowBit : Accounting.Guarantees.TS.LiLowBit := by
+theorem LiLowBit : ResourceAccounting.Guarantees.TS.LiLowBit := by
   intro n hs
   induction hs with
   | nil => intro y; rfl
@@ -149,4 +149,4 @@ theorem LiLowBit : Accounting.Guarantees.TS.LiLowBit := by
     simp only [List.map_cons, Pouw.Receipt.liChain, List.foldl_cons, Pouw.Receipt.LiOddHalfStep.val] at ih ⊢
     rw [ih, liHalf_lowBit _ hd.2.1.2]
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

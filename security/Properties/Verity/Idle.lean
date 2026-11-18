@@ -30,7 +30,7 @@ that charges nothing and accepts everything (`periodRun`), whose claim, a gate o
 
 namespace Verity.Idle
 
-open Accounting
+open ResourceAccounting
 open scoped ENNReal
 
 noncomputable section
@@ -45,7 +45,7 @@ def fileRead : FileRead := ⟨Flock.Tags.netlistV1, .empty, [], .empty⟩
 def step : Step Unit Unit := ⟨fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ => 0⟩
 
 /-- **The world**: every resource on the one account, an empty window, the schedule that charges nothing, and every
-bound on what the network certifiers saw met. -/
+bound on what the network attesters saw met. -/
 def world : World device Unit where
   acct _ := ()
   win := ⟨0, 0⟩
@@ -149,7 +149,7 @@ instance instFintypeSpotsUnbounded : Fintype unbounded.Spots := inferInstanceAs 
 instance instNonemptySpotsUnbounded : Nonempty unbounded.Spots := inferInstanceAs (Nonempty Unit)
 
 /-- **The period run that charges nothing and accepts everything**, on the committed files' circuit over one coin: no
-work, no memory held, nothing read, every bound on what the network certifiers saw met, and every audit's verdict
+work, no memory held, nothing read, every bound on what the network attesters saw met, and every audit's verdict
 accepting. -/
 def periodRun : PeriodRun device Unit fileRead.circuit fun _ : Unit => Unit where
   units := fileRead.units

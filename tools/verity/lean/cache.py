@@ -78,10 +78,11 @@ DEP = "dep."
 BUILD_LOG = "build.log"
 #: where the sandbox binds a package's fetched dependencies read-only; `build` works on its own copy at `.lake/packages`
 DEPS_RO = "deps"
-TOOL = "tools/verity/lean/"
 STATE_URL = "https://website-docs-sage.vercel.app/api/lean-cache/state"
 STATE_TTL_S = 300
 KEY_FILE = "/etc/verity/lean-cache.env"
+#: the directory under the user's cache (`XDG_CACHE_HOME`) where `get` keeps what it downloaded
+DOWNLOADS = "verity-lean-cache"  # pragma: allowlist secret
 #: the read-only credential every development machine holds (the Cursor secrets)
 READ_ENV = ("LEAN_CACHE_R2_ACCESS_KEY_ID", "LEAN_CACHE_R2_SECRET_ACCESS_KEY", "LEAN_CACHE_R2_ENDPOINT", "LEAN_CACHE_BUCKET")
 #: under HOME, the same credential as `KEY=value` lines where a node's research user holds it (0600)
@@ -368,9 +369,16 @@ def check_record(raw: bytes, ident: dict, rev: str) -> dict:
 # ---------------------------------------------------------------- the client
 
 def packages(root: Path) -> list[str]:
-    """The packages `check.py --all` audits: directories with a tracked `lean-audit.json`, the auditor's fixtures aside."""
+    """The packages `check.py --all` audits: directories with a tracked `lean-audit.json`, the auditor's fixtures aside
+    (`check.FIXTURES`, where `check.py` is beside this file; none where it isn't, in another repository's copy)."""
+    p, fixtures = Path(__file__).resolve().with_name("check.py"), ()
+    if p.is_file():
+        spec = importlib.util.spec_from_file_location("lean_check_for_cache", p)
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        fixtures = (f"{m.FIXTURES.relative_to(m.ROOT).as_posix()}/",)
     r = subprocess.run(["git", "-C", str(root), "ls-files", "*lean-audit.json"], capture_output=True, text=True)
-    return sorted({f.rsplit("/", 1)[0] for f in r.stdout.split() if "/" in f and not f.startswith(TOOL)})
+    return sorted({f.rsplit("/", 1)[0] for f in r.stdout.split() if "/" in f and not f.startswith(fixtures)})
 
 
 def ancestors(root: Path, n: int = 2000) -> list[str]:
@@ -542,7 +550,7 @@ def get(root: Path, pkgs: list[str], env=os.environ, log=print, now=time.time, f
     if s3 is None:
         log(f"lean-cache: no read credential ({', '.join(READ_ENV)}); building from source")
         return 0
-    cache = Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity-lean-cache"
+    cache = Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / DOWNLOADS
     ok, q, why = state(env.get("LEAN_CACHE_STATE_URL") or STATE_URL, cache, now(), fetch_state)
     if not ok:
         log(f"lean-cache: {why}; building from source")

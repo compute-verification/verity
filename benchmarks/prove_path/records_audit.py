@@ -60,7 +60,9 @@ the free inputs. Those it reads as ties (a wired loop's activations: an output p
 takes, `tied_values`) are pinned from the docket beside ``--registered``'s (`window_pins`), so Lean's registered
 reads tie each reader's row to its writer's. One it reads only through input ports is opened against its committed root
 too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). PoUW's H1 tiles
-have theirs pinned through ``--registered``, from the window's entries.
+have theirs pinned through ``--registered``, from the window's entries. A value the registration registers for its
+execution phase (the scan's state: an entry under the domain its Program binds to the run root, `phase_values`) is one
+of the window's own values too, and the summary's ``registered.own`` names them all.
 
 A circuit whose program takes values ahead of its templates' parameters (`interface.Registered.values`: a served window's
 H1 tables, or each Pearl+ call's A rows and y, which its proof blocks make where the model makes them) has them registered
@@ -77,7 +79,7 @@ the prover's development verifier (`PEARL_CREDIT`). Once the records are read an
 audit stopped before its proofs end still says what it was tied to.
 
 ``--day N --day-log LOG``: the window is day N's, and the deployment's registration log declares the day's one circuit
-(`verity.protocols.accounting.registration.verifier.registration.Declaration`). R2 holds the docket's program to
+(`verity.protocols.registration.verifier.registration.Declaration`). R2 holds the docket's program to
 it (`declared_day`, one-stage's Declared day), a negative moves the declaration to another program, and the summary's
 ``day`` names the day's declared program and where the day came from (`DAY_SOURCES`). ``--day`` and the prover's log
 are the development fallback: they bind the day to no time the auditor's device signed. ``--day-ledger LEDGER`` reads
@@ -108,7 +110,7 @@ quotes the warm's beside it.
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
 
-``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
+``period``: a window's audit as one compute audit of the network attester's period (`NetworkCheck.Period`'s rows form),
 the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
 docket (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
 ``window/program.json``, the one the docket names), the audit's one-stage answer (`served_integrity.answer`:
@@ -191,8 +193,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from verity import device as ST  # noqa: E402
-from verity.protocols.accounting.registration.verifier import registration as G  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.registration.verifier import registration as G  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import blocks as NB  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
@@ -204,6 +207,10 @@ PORTS = range(10000, 32000)
 #: a compile command's exit code for advice it refuses (not advice it compiles: malformed, over its cap, or a choice it can't
 #: compile), the reason on stderr; any other nonzero exit is an error. Either fails the compile check (``compiles``).
 REFUSED = 2
+#: the values an execution phase registers afresh under its open root, never an earlier record's: the scan's state, which
+#: the network verifier ties to its scan (stateTied); a circuit names it among its values and marks nothing else, so any
+#: other value it takes is W's
+PHASE_OWN = frozenset({NB.SCAN_STATE})
 
 
 def catalog_resolve(tid: str) -> Any:
@@ -486,7 +493,7 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     """The registered values' entries the verifier pinned before the run (``--registered``), by parameter, each refused
     (ValueError) unless it names its parameter and its domain is the one core's ``registered.domain`` makes of the pin's
     program, the value and its rows: a root is pinned under its domain, never the prover's word for one. A list of pins
-    is their values together, each under its own program (the weights under the model's, the output a network certifier
+    is their values together, each under its own program (the weights under the model's, the output a network attester
     relayed under the reading program's), a value pinned once."""
     if isinstance(doc, list):
         out: dict[str, dict[str, Any]] = {}
@@ -537,11 +544,12 @@ def tied_values(circuit: Mapping[str, Any], values: Iterable[str], resolve: Call
     return {v for v in values if v in taken and taken[v] <= written.get(v, set())}
 
 
-def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any],
-                resolve: Callable[[str], Any] = IF.resolve) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
-    """The per-window values the circuit reads (its registered parameters among the docket's ``activations``), by
-    parameter, each refused (ValueError) unless it names its value and a root and its domain binds the window's run root,
-    as ``(ties, untied)``. The ties (`tied_values`: a wired loop's activations, each written by an output port and read by
+def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any], resolve: Callable[[str], Any] = IF.resolve,
+                registration: Mapping[str, Any] | None = None) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """The per-window values the circuit reads (its registered parameters among the docket's ``activations``, each refused
+    (ValueError) unless it names its value and a root and its domain binds the window's run root, and among
+    ``registration``'s registered entries those under a domain the registration's Program binds to the run root,
+    `phase_values`), by parameter, as ``(ties, untied)``. The ties (`tied_values`: a wired loop's activations, each written by an output port and read by
     an input port) are pinned: the docket fixes them before the sample, and the Lean verifier's registered reads open
     each writer's and each reader's rows against the same root, so a reader's rows are its writer's. An untied value (read
     only by input ports) is opened against its committed root too, since the Lean verifier opens every registered read, but
@@ -554,12 +562,16 @@ def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any],
                           window=w.get("run")).domain_id.hex()
         if e.get("value") != v or e.get("domain") != want or not isinstance(e.get("root"), str):
             raise ValueError(f"the window's value {v!r} names another value or a domain not bound to its run root, or no root")
+    own = {} if registration is None else phase_values(registration, params)
+    if twice := sorted(set(own) & set(values)):
+        raise ValueError(f"the window commits {twice} both in its activations and in its registration")
+    values |= own
     ties = tied_values(circuit, values, resolve)
     return {v: e for v, e in values.items() if v in ties}, {v: e for v, e in values.items() if v not in ties}
 
 
-def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None,
-           prefix: str | None) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str | None,
+           own: Mapping[str, Mapping[str, Any]] | None = None) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     """The window's tie to ``w`` (``--tie``: W, the earlier docket that registered first the values the circuit's
     program takes, `interface.Registered.values`): a5's ``tie``, one-stage's ``log`` (W), ``registered`` (each value's
     words), ``outputs`` (each value W's entry of it) and ``schemas`` (each value's rows, `interface.value_format`), and the
@@ -568,12 +580,21 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None,
     `credit.window_table` (PoUW H1's docket of the window, each value a Commit table in ``row/v2`` rows), or, with
     no prefix, by the value's own name (Pearl+'s window record, `pearl_c.window`: each call's A rows and y, FP32 words in
     ``row-seg/v1`` rows, beside each weight's B rows, which the circuit doesn't take). ``({}, {})`` for a circuit that
-    takes no values with no W. Refused (ValueError) for values without W, W without values, and W registering a value
-    other than once."""
+    takes no values with no W. A value of ``own`` (`phase_values`) that is the execution phase's own (`PHASE_OWN`) is
+    registered afresh, under the execution phase's open root: it is in ``registered`` and ``schemas`` and never W's. Refused
+    (ValueError) for values without W, W without values, W registering a value other than once, and W registering a
+    value the execution phase registers afresh."""
     reg = IF.declarations(circuit)[2]
     values = tuple(reg.values) if reg is not None else ()
+    mine = {v: own[v] for v in values if v in (own or {}) and v in PHASE_OWN}
+    values = tuple(v for v in values if v not in mine)
+    named = {e.get("value") for e in ((w or {}).get("registered") or ()) if isinstance(e, Mapping)}
+    if both := sorted(v for v in mine if (v if prefix is None else CR.window_table(v, prefix)) in named or v in named):
+        raise ValueError(f"the execution phase registers {both} afresh, and the earlier registration registers them too")
+    fresh = {"registered": {v: int(e["words"]) for v, e in mine.items()},
+             "schemas": {v: IF.value_format(reg, v)[0] for v in mine}}
     if not values and w is None:
-        return {}, {}
+        return (fresh if mine else {}), {}
     if w is None:
         raise ValueError(f"the circuit takes values {list(values)}, an earlier registration's: tie the audit to it (--tie W, "
                          "and --tie-prefix P for a W that names its tables under a PREFIX)")
@@ -590,8 +611,8 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None,
                              "not once" + ("" if prefix is not None else " (a W naming its tables under its descriptor's "
                                                                           "PREFIX, H1's: give --tie-prefix)"))
         pins[v], outputs[v] = {**got[0], "value": v}, {"record": d, "value": name}
-    return ({"log": [dict(w)], "registered": {v: int(pins[v]["words"]) for v in values}, "outputs": outputs,
-             "schemas": {v: IF.value_format(reg, v)[0] for v in values}}, pins)
+    return ({"log": [dict(w)], "registered": {**fresh["registered"], **{v: int(pins[v]["words"]) for v in values}},
+             "outputs": outputs, "schemas": {**fresh["schemas"], **{v: IF.value_format(reg, v)[0] for v in values}}}, pins)
 
 
 #: what holds the roots of Pearl+'s window record to the ones its passes credited, which an audit tied to it rests on
@@ -653,7 +674,7 @@ def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, byt
     one-stage R2's shape: the UTC day of the window open's signed ``started_utc``, and the declarations its lane signed
     before that open), never ``--day``. The tied W's naming is held to `registration.Declaration` rebuilt from the
     device's entry of its day. ValueError (`challenger.CoinError`) where the reader refuses the ledger."""
-    from verity.protocols.proofs.spot.device import challenger as Ch
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
     got = Ch.declared_day(lines, {"root": root}, key, verify)
     day = got["day"]
     declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
@@ -671,6 +692,19 @@ def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
     scheme = (w.get("window") or {}).get("scheme")
     pearl = isinstance(scheme, str) and scheme.startswith("pearl-c-")
     return {"record": R.digest(w), "values": sorted(tied["outputs"]), **({"credited_by": PEARL_CREDIT} if pearl else {})}
+
+
+def phase_values(rec: Mapping[str, Any], params: Iterable[str]) -> dict[str, dict[str, Any]]:
+    params, run, out = set(params) & PHASE_OWN, (rec.get("window") or {}).get("run"), {}
+    for e in rec.get("registered") or ():
+        v = e.get("value") if isinstance(e, Mapping) else None
+        if v not in params or not isinstance(e.get("root"), str) or not isinstance(run, str):
+            continue
+        want = REG.domain(rec.get("program", ""), v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+                          window=run).domain_id.hex()
+        if e.get("domain") == want:
+            out[v] = dict(e)
+    return out
 
 
 def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -782,10 +816,10 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
 
 
 def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dict[str, Any]:
-    """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
+    """The window's audit as one compute audit of the network attester's period (module docstring's ``period``):
     ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ``tied`` is the window
-    value the period ties to its scan's state tree (``stateTied``): the network certifier's scan-state value, which the
-    caller passes, since SPOT reads the certifier's output as a certified input and never imports it. ValueError where the
+    value the period ties to its scan's state tree (``stateTied``): the network attester's scan-state value, which the
+    caller passes, since SPOT reads the attester's output as a certified input and never imports it. ValueError where the
     circuit isn't the one the docket binds, the window commits no ``tied`` value its circuit reads, the audit wrote no
     Program or another than the docket names, or its answer commits to another docket."""
     from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI
@@ -795,7 +829,7 @@ def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dic
     if hashlib.sha512(body).hexdigest() != own.get("circuit"):
         raise ValueError(f"{window / 'circuit.json'} is not the circuit record the registration binds")
     doc = json.loads(body)
-    ties, untied = window_pins(own, doc, catalog_resolve)
+    ties, untied = window_pins(own, doc, catalog_resolve, rec)
     if tied not in ties | untied:
         raise ValueError(f"the window commits no {tied} its circuit reads: the period has no state to tie to its scan's")
     count = declared_count(doc, 0, catalog_resolve, pins={**pins, **pin_roots({**ties, **untied})},
@@ -1011,7 +1045,7 @@ def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
     import a5 as A5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
@@ -1023,12 +1057,13 @@ def audit(a: argparse.Namespace) -> int:
             return sets[t][1] if t in sets else catalog_resolve(t)
         docket = json.loads((wdir / "registration.json").read_text())
         own = docket.get("window") or {}
-        ties, untied = window_pins(own, doc, resolve)
+        ties, untied = window_pins(own, doc, resolve, docket)
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
         pins |= ties | untied
         w_tie = json.loads(Path(a.tie_file).read_text()) if a.tie_file else None
-        tied, tie_pins = tie_of(doc, w_tie, a.tie_prefix)
+        decl = IF.declarations(doc)[2]
+        tied, tie_pins = tie_of(doc, w_tie, a.tie_prefix, phase_values(docket, decl.values if decl else ()))
         if twice := sorted(set(tie_pins) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")
         pins |= tie_pins
@@ -1042,7 +1077,7 @@ def audit(a: argparse.Namespace) -> int:
         pins |= histories
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
         if a.day_ledger:
-            from verity.protocols.proofs.spot.device import challenger as Ch, remote as SPR
+            from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
             day = device_day(SPR.ledger_lines(a.day_ledger), mine.run, key, AC.lms_verify, w_tie)
         else:
@@ -1074,7 +1109,7 @@ def audit(a: argparse.Namespace) -> int:
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
                              own=set(ties) | set(untied) | set(tie_pins))
     a.tie, a.declared = tied, day
-    if tied:
+    if tied.get("log"):
         named = {**tie_row(tied), "previous": rec.get("previous"), "chained": rec.get("previous") == R.digest(tied["log"][0])}
         (out / "tie.json").write_text(json.dumps(named, indent=1, sort_keys=True))
         print("TIE " + json.dumps(named, sort_keys=True), flush=True)
@@ -1096,16 +1131,17 @@ def audit(a: argparse.Namespace) -> int:
         manager.shutdown()
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.sampling_design,
+           "sampling_design": a.sampling_design,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
-                                    "timing", "outputs", "negative_workers")}}
+                                    "timing", "outputs", "negative_workers", "plain", "arm", "coin_trees")}}
     bits = int((held["advice"] or {}).get("bits", 0))
     counted = pin_roots(pins)
     row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
                    if {*IF.DECLARED, IF.WINDOW_INGRESS} & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
-        row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
-    if tied:
+        row["registered"] = {"pins": counted, "roots": roots, "members": len(reads), "own": {**ties, **untied}}
+    if tied.get("log"):
         row["tie"] = tie_row(tied)
     if day:
         row["day"] = {"day": day["day"], "declared": [d["program"] for d in day["declarations"] if d["day"] == day["day"]],
@@ -1193,6 +1229,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
     p.add_argument("--zk-server", required=True)
+    p.add_argument("--gpus", type=A5.cards, help="as a5's --gpus: the proof server's cards, their indices comma-separated "
+                   "(0,1), as nvidia-smi numbers them; default the CPU")
     p.add_argument("--out", required=True)
     p.add_argument("--delta", type=float, default=0.5)
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose --ports ports are "
@@ -1215,6 +1253,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--deployed-key", action="store_true",
                    help="with --challenger local: the session's key at the deployed LMS parameters (a5_coins.start's deployed), "
                    "its whole tree made over this machine's cores")
+    p.add_argument("--plain", action="store_true", help="with --challenger and a stratified rate: plain sessions, not --zk "
+                   "(a5's plain audit, `a5.plain_refusal` its scope)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
@@ -1263,7 +1303,7 @@ def main(argv: list[str] | None = None) -> int:
                    "window_weights.weights_registration), with --pin's (repeatable)")
     p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
                    "to the pins (none: no root is the window's, and every registered read is free)")
-    p = sub.add_parser("period", help="a window's audit as one compute audit of the network certifier's period (`period`)")
+    p = sub.add_parser("period", help="a window's audit as one compute audit of the network attester's period (`period`)")
     p.add_argument("--window", required=True, type=Path, help="the window's directory: circuit.json, registration.json")
     p.add_argument("--audit", required=True, type=Path, help="the audit's --out: summary.json, window/program.json, "
                    "window/audit.json")
@@ -1271,7 +1311,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="as count's")
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="as count's")
     p.add_argument("--tied", required=True, metavar="VALUE", help="the value the period ties to its scan's state tree: the "
-                   "network certifier's scan-state value (its verifier's `blocks.SCAN_STATE`)")
+                   "network attester's scan-state value (its verifier's `blocks.SCAN_STATE`)")
     a = ap.parse_args(argv)
     if a.cmd == "period":
         try:

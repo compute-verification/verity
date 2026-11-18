@@ -9,7 +9,7 @@
   annotations excluded) -- the bytes the evaluator's input is defined over; a descriptor of another schema is refused.  It carries no
   domain prefix (the object and owners digests do).
 * **Query.** Nothing about the partition is stored: owners, units and the committed set are what `evaluate(program, query)` computes,
-  deterministically, from the program (`QUERIES`).  Any change to a query's behaviour bumps its version; `verity/circuits/tests/test_partition_object.py`
+  deterministically, from the program (`QUERIES`).  Any change to a query's behaviour bumps its version; `tests/verity/circuits/test_partition_object.py`
   pins a program, its object digest and the digest of its evaluated owners (`owners_digest`).
 * **Q_word v1** (`cut.evaluate_definition`, the algorithm in `verity.circuits.cut`'s docstring).  The Calls are the root body's nodes other
   than its Input nodes, in canonical order; each is cut as its Definition's activation (parameters as inputs).  Units are numbered by
@@ -38,7 +38,7 @@
   instance of the template (a unit, not a node: a batch of 0 members is no instance).
 * **Q_template_instances v0**, `params = {"templates": [<descriptor id>, ...]}` (non-empty, distinct, order as given).  The same, a node
   an instance of any listed template, every listed template with at least one instance; the unit order is node order, not list order.
-  `verity/circuits/tests/test_template_instance.py` pins both (`template_instance_vectors.json`).  Like every query, both apply only to a
+  `tests/verity/circuits/test_template_instance.py` pins both (`template_instance_vectors.json`).  Like every query, both apply only to a
   topological program (below), so an instance never reads its own gates.
 * **Every query** applies only to a topological program: every node of every body names only its body's parameters and earlier
   nodes (a body's `ret` any node).  `evaluate` checks it once, before any query (`order_violation`), so every query and `verify`
@@ -46,7 +46,7 @@
 * `validate` checks the object's form (exact keys; a known query with exactly its parameters); `digest` digests only a valid object.
   `verify` evaluates the query and checks every Call's cut on its derived graph (the invariant, the width rule), and, given what serving
   commits, holds it to the derived committed set: every Call that commits must be given and no other key (`served-missing`,
-  `served-unknown`).  `verity/circuits/tests/qword_vectors.json` pins every refusal code of both.  For the template queries `verify` checks that the
+  `served-unknown`).  `tests/verity/circuits/qword_vectors.json` pins every refusal code of both.  For the template queries `verify` checks that the
   query applies to the program; `served` is Q_word's.
 """
 from __future__ import annotations

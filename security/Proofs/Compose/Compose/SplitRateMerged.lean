@@ -1,20 +1,20 @@
 module
 
 public import Proofs.Compose.Compose.SplitRateClosed
-public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.Compose
 
 /-!
 # The merged rate: proof
 
-`Accounting.Guarantees.Compose.SplitRateMerged`, from `SplitRateClosed` at `p = p0 = q`: there the whole branch is the
+`ResourceAccounting.Guarantees.Compose.SplitRateMerged`, from `SplitRateClosed` at `p = p0 = q`: there the whole branch is the
 larger (`a ≤ b`), and lower lucks only raise `SplitRateAt`'s right side (`splitRateAt_anti`).
 -/
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Compose.Rates
+namespace ResourceAccounting.SecurityProofs.Compose.Rates
 
-open Accounting.Compose
+open ResourceAccounting.Compose
 
 /-- Lower lucks keep `SplitRateAt` at the same `ν, ν₀`. -/
 theorem splitRateAt_anti {K : ℕ} {ρ p p0 q q0 a b wmax Λ ν ν0 : ℝ} (hp : p ≤ q) (hp0 : p0 ≤ q0)
@@ -25,7 +25,7 @@ theorem splitRateAt_anti {K : ℕ} {ρ p p0 q q0 a b wmax Λ ν ν0 : ℝ} (hp :
   have h0 := mul_nonneg hν0 (mul_nonneg (sub_nonneg.mpr hp0) (by linarith : (0 : ℝ) ≤ W0))
   linarith
 
-theorem splitRateMerged : Accounting.Guarantees.Compose.SplitRateMerged := by
+theorem splitRateMerged : ResourceAccounting.Guarantees.Compose.SplitRateMerged := by
   intro K ρ p p0 q a b wmax hK hρ hw hρw hq0 hpq hp0q hq1 ha hab
   have hb : 0 < b := lt_of_lt_of_le ha hab
   have hc : 0 ≤ 1 + (K : ℝ) * ρ * wmax := by
@@ -37,4 +37,4 @@ theorem splitRateMerged : Accounting.Guarantees.Compose.SplitRateMerged := by
   obtain ⟨ν, ν0, h⟩ := h
   exact ⟨ν, ν0, splitRateAt_anti hpq hp0q h⟩
 
-end Accounting.SecurityProofs.Compose.Rates
+end ResourceAccounting.SecurityProofs.Compose.Rates

@@ -2,7 +2,7 @@
 ``allowlists/repo_env_reads.json``, so no area adds one while its owner builds the settings registry that declares each
 variable once.
 
-The integration has its own settings rule (P7, ``adapters/vllm/tests/lint/test_p07_declared_inputs.py``), so it isn't
+The integration has its own settings rule (P7, ``tests/adapters/vllm/tests/lint/test_p07_declared_inputs.py``), so it isn't
 held here (``LEFT_OUT``).  A read is ``os.environ[...]``, ``os.environ.get(...)``,
 ``os.environ.setdefault(...)``, ``os.getenv(...)``, a membership test (``"X" in os.environ``), and ``os.environ.pop(...)``
 whose value is used, through any alias (``from os import environ``, ``import os as o``, ``env = os.environ``), ``os.environb``
@@ -13,7 +13,9 @@ than is found doesn't: the list can run ahead of a tree, holding the reads of PR
 deletes and lowers what this tree no longer finds.
 
 An area's settings registry is where reads belong, so it is exempt: a module named ``settings.py``, or one the list marks
-``{"file": PATH, "registry": true}``.  A file that moves takes its entries with it, in the same change (``--move``): this lint
+``{"file": PATH, "registry": true}``.  A file a registry names in its ``STANDALONE`` counts zero when every read in it is of a
+name that registry declares (its shared registry's included); one undeclared read, and all its reads count.  A file that
+moves takes its entries with it, in the same change (``--move``): this lint
 reads no history, so a renamed file's reads count under its new path.  The ratchet gate (``adapters/vllm/tools/
 ratchet_gate.py``) fails a change whose Python gains a read, or that grows this list or leaves a renamed file's entries
 behind, and judges a change to this module by running it as the change's base has it on the change's tree.  So it imports only
@@ -28,6 +30,7 @@ from __future__ import annotations
 import ast
 import bisect
 import json
+import posixpath
 import re
 import subprocess
 import sys
@@ -39,13 +42,14 @@ NAME = "repo_env_reads"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 #: the integration's own settings rule holds it
-LEFT_OUT = ("adapters/vllm/",)
+LEFT_OUT = ("adapters/vllm/", "tests/adapters/vllm/")
 #: a settings registry's module name: reads belong there
 REGISTRY = "settings.py"
 TEMPLATE = "tools/config/verity_config/settings.py"
+SHARED = TEMPLATE
 FIX = (f"Read the variable through your area's settings registry, which declares each one once (under verity/, tools/config/verity_config/verity_settings.py, "
        f"the distribution's one, on the machinery every registry is built on; elsewhere the one beside your pyproject.toml, as "
-       f"{TEMPLATE} says, with tools/config/tests/test_settings.py), or create one: a module named `{REGISTRY}`, or one "
+       f"{TEMPLATE} says, with tests/tools/config/test_settings.py), or create one: a module named `{REGISTRY}`, or one "
        f"tests/lint/allowlists/{NAME}.json marks "
        f'{{"file": PATH, "registry": true}}. If the file moved, move its entries in the same change: '
        f"`python3 tests/lint/test_{NAME}.py --move OLD NEW`.")
@@ -181,6 +185,61 @@ def is_registry(path: str, marks: frozenset[str]) -> bool:
     return PurePosixPath(path).name == REGISTRY or path in marks
 
 
+def registry_of(source: str) -> tuple[tuple[str, ...], frozenset[str], bool]:
+    tree = ast.parse(source)
+    setting, registry, listed = {"Setting"}, set(), ()
+    for n in tree.body:
+        if isinstance(n, ast.ImportFrom) and (n.module or "").startswith("verity_config"):
+            setting |= {a.asname or a.name for a in n.names if a.name == "Setting"}
+            registry |= {a.asname or a.name for a in n.names if a.name == "Registry" and n.module == "verity_config.settings"}
+        elif isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name):
+            if isinstance(n.value, ast.Name) and n.value.id in setting:
+                setting.add(n.targets[0].id)
+            elif n.targets[0].id == "STANDALONE" and isinstance(n.value, (ast.Tuple, ast.List)):
+                listed = tuple(e.value for e in n.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str))
+
+    def lit(e: ast.AST) -> str | None:
+        return e.value if isinstance(e, ast.Constant) and isinstance(e.value, str) else None
+
+    names, shared = set(), False
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in setting and n.args:
+            names.add(lit(n.args[0]))
+        elif isinstance(n, (ast.GeneratorExp, ast.ListComp)) and isinstance(n.elt, ast.Call) and isinstance(n.elt.func, ast.Name) \
+                and n.elt.func.id in setting and isinstance(n.generators[0].iter, ast.Tuple):
+            names |= {lit(t.elts[0]) for t in n.generators[0].iter.elts if isinstance(t, ast.Tuple) and t.elts}
+        elif isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in registry:
+            shared |= not any(k.arg == "shared" and isinstance(k.value, ast.Constant) and k.value.value is False
+                              for k in n.keywords)
+    return listed, frozenset(names - {None}), shared
+
+
+@lru_cache(maxsize=None)
+def standalone(marks: frozenset[str]) -> dict[str, tuple[str, frozenset[str]]]:
+    def text(path: str) -> str:
+        p = ROOT / path
+        return p.read_text(encoding="utf-8", errors="replace") if p.is_file() else ""
+
+    shared = registry_of(text(SHARED))[1]
+    out = {}
+    for reg in files():
+        if is_registry(reg, marks) and "STANDALONE" in (source := text(reg)):
+            listed, names, reads_shared = registry_of(source)
+            for rel in listed:
+                out[posixpath.normpath(posixpath.join(posixpath.dirname(reg), rel))] = (reg, names | shared if reads_shared
+                                                                                        else names)
+    return out
+
+
+def undeclared(what: list[str], names: frozenset[str]) -> list[str]:
+    return sorted({w.rsplit(" (", 1)[0] for w in what} - names)
+
+
+def counted(sites: dict[str, list[str]], marks: frozenset[str], held: dict[str, tuple[str, frozenset[str]]]) -> Counter:
+    return Counter({f: len(w) for f, w in sites.items()
+                    if not is_registry(f, marks) and (f not in held or undeclared(w, held[f][1]))})
+
+
 def files() -> list[str]:
     """The tracked Python files it reads, outside ``LEFT_OUT``: a tracked symlink is its target's second path, read there."""
     out = subprocess.run(["git", "ls-files", "-z", "--", "*.py"], cwd=ROOT, capture_output=True, check=True).stdout
@@ -200,15 +259,28 @@ def allowed() -> tuple[Counter, frozenset[str]]:
 
 
 def found(marks: frozenset[str]) -> Counter:
-    return Counter(f for f, *_ in scan() if not is_registry(f, marks))
+    sites: dict[str, list[str]] = {}
+    for f, _, what in scan():
+        sites.setdefault(f, []).append(what)
+    return counted(sites, marks, standalone(marks))
+
+
+def unheld(f: str, what: list[str], held: dict[str, tuple[str, frozenset[str]]]) -> str:
+    if f not in held:
+        return ""
+    names = undeclared(what, held[f][1])
+    return (f"\n    {f} is {held[f][0]}'s STANDALONE, but {', '.join(names)} is not declared there: declare it there, or pass "
+            f"it in, and the file's reads count zero")
 
 
 def test_no_new_reads() -> None:
     have, marks = allowed()
+    held = standalone(marks)
     sites: dict[str, list[tuple[int, str]]] = {}
     for f, line, what in scan():
         sites.setdefault(f, []).append((line, what))
     new = [f"  {f}: {n} found, {have[f]} allowed\n" + "\n".join(f"    {f}:{line} {what}" for line, what in sites[f])
+           + unheld(f, [w for _, w in sites[f]], held)
            for f, n in sorted(found(marks).items()) if n > have[f]]
     assert not new, (f"direct environment reads: {len(new)} file(s) read the environment more often than "
                      f"tests/lint/allowlists/{NAME}.json allows. {FIX}\n" + "\n".join(new))
@@ -263,6 +335,24 @@ def test_a_settings_registry_is_exempt_and_the_list_is_well_formed() -> None:
             raise AssertionError(f"{bad} parsed")
     assert moved(Counter({"a/x.py": 2, "b.py": 1}), frozenset({"a/settings_x.py"}), "a", "c") == (
         Counter({"c/x.py": 2, "b.py": 1}), frozenset({"c/settings_x.py"}))
+
+
+def test_a_standalone_file_counts_zero_while_its_registry_declares_every_read() -> None:
+    reg = ("from verity_config.settings import Registry, Setting as S\n"
+           "STANDALONE = ('ship/run.py',)\n"
+           "REGISTRY = Registry(__file__, ('PX_',), S('PX_N', int, 3, 'value', 'a count'), standalone=STANDALONE)\n")
+    assert registry_of(reg) == (("ship/run.py",), frozenset({"PX_N"}), True)
+    assert registry_of(reg.replace("standalone=STANDALONE", "shared=False"))[2] is False
+    assert registry_of("from verity_config.verity_settings import Setting\nS = Setting\n"
+                       "X = [S(*a) for a in (('A', 1), ('B', 2))]\n")[1] == {"A", "B"}
+    held = {"r/ship/run.py": ("r/settings.py", frozenset({"PX_N", "CUDA_HOME"}))}
+    sites = {"r/ship/run.py": ["PX_N (os.environ.get)", "CUDA_HOME (os.getenv)"], "a.py": ["PX_N (os.environ.get)"]}
+    assert counted(sites, frozenset(), held) == Counter({"a.py": 1}) and unheld("a.py", sites["a.py"], held) == ""
+    sites["r/ship/run.py"].append("PX_TYPO (os.environ.get)")
+    assert counted(sites, frozenset(), held) == Counter({"r/ship/run.py": 3, "a.py": 1})
+    why = unheld("r/ship/run.py", sites["r/ship/run.py"], held)
+    assert "r/settings.py's STANDALONE, but PX_TYPO is not declared there" in why
+    assert counted({"r/ship/run.py": ["<computed> (os.environ[...])"]}, frozenset(), held) == Counter({"r/ship/run.py": 1})
 
 
 def moved(counts: Counter, marks: frozenset[str], old: str, new: str) -> tuple[Counter, frozenset[str]]:

@@ -1,8 +1,8 @@
-"""cover_count.py (COVER | art:ID) [--card CARD] [--form boolean|listed] [--check]: how many of a request's block types
-have no statement the Lean verifier accepted, recounted from a request cover record (`cover.json`, schema
+"""cover_count.py (COVER | art:ID) [--card CARD] [--form boolean|listed] [--check]: how many of a request's proof-block
+types have no statement the Lean verifier accepted, recounted from a request cover record (`cover.json`, schema
 `circuits/request-cover/v7`, or v8: v7 with `card`, the card it is of, by its `source`, `path` and `tree`).
 
-`--card CARD` holds the record to a sampling plan's card (`benchmarks/sampling_plan/glm53_blocks.json`): the record's
+`--card CARD` holds the record to a sampling plan's card (`calibration/sampling_plan/glm53_blocks.json`): the record's
 on-card types must be exactly the card's `definitions`, else it is refused (exit 2), naming up to five types on each
 side.
 
@@ -19,9 +19,10 @@ any disagreement, an unknown schema or an extra naming no listed type on the car
 stderr and the exit status is 2.
 
 `--form listed` counts a type as accepted only in its listed form; the default, `--form boolean`, also counts a type
-whose listed form has none when its Boolean version was accepted. It prints the types and blocks on the card, those
+whose listed form has none when its Boolean version was accepted. It prints the types and proof blocks on the card, those
 accepted in the listed form, those accepted on the Boolean version only, those with none by family (each with the
-record's reason and its blocks), and last a line that starts with the count. `--check` exits 1 when the count is not 0.
+record's reason and its proof blocks), and last a line that starts with the count. `--check` exits 1 when the count is not 0.
+`--record` also writes the count into the run's result (`metrics.toml`), marked as a recount of the record named.
 """
 from __future__ import annotations
 
@@ -36,6 +37,7 @@ from collections import Counter
 from pathlib import Path
 
 KNOWN_SCHEMAS = ("circuits/request-cover/v7", "circuits/request-cover/v8")
+METRIC = "circuits/proof-block-kinds-without-statement"
 ROOT = Path(__file__).resolve().parents[2]
 #: a block type's family, as `fifth_pass.by_family` names it: its Definition's name without the version
 FAMILY = re.compile(r"(\w+?)_v\d+\{")
@@ -198,14 +200,14 @@ def report(c: dict, recount: dict, form: str) -> tuple[list[str], int]:
     types, total = recount["types"], recount["total"]
 
     def line(what: str, ts: list) -> str:
-        return f"{what}: {len(ts)} types, {sum(t['blocks'] for t in ts):,} blocks"
+        return f"{what}: {len(ts)} types, {sum(t['blocks'] for t in ts):,} proof blocks"
 
     listed = [t for t in types if t["listed"]]
     boolean = [t for t in types if t["boolean_only"]]
     none = [t for t in types if not t["accepted"]]
     card = c.get("card")
     out = [f"record: {c['schema']}, tree {c.get('tree')}" + (f", of the card {card['source']}" if card else ""),
-           f"on the card: {len(types)} types, {total:,} blocks",
+           f"on the card: {len(types)} types, {total:,} proof blocks",
            line("accepted in the listed form", listed),
            line("accepted on the Boolean version only", boolean)
            + (" (not counted: --form listed)" if form == "listed" else ""),
@@ -216,8 +218,8 @@ def report(c: dict, recount: dict, form: str) -> tuple[list[str], int]:
     for f in sorted(blocks_of, key=lambda f: (-blocks_of[f], f)):
         ts = sorted((t for t in none if t["family"] == f), key=lambda t: t["tag"] or "")
         out.append("  " + line(f, ts))
-        out += [f"    {t['tag'] or '-'}  {t['blocks']:,} blocks  {t['reason']}  {t['block']}" for t in ts]
-    out.append(f"{len(none)} of {len(types)} block types have no statement the Lean verifier accepted (--form {form})")
+        out += [f"    {t['tag'] or '-'}  {t['blocks']:,} proof blocks  {t['reason']}  {t['block']}" for t in ts]
+    out.append(f"{len(none)} of {len(types)} proof-block types have no statement the Lean verifier accepted (--form {form})")
     return out, len(none)
 
 
@@ -229,19 +231,35 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--form", choices=("boolean", "listed"), default="boolean",
                     help="listed: count only a type's listed form; boolean (default): its Boolean version too")
     ap.add_argument("--check", action="store_true", help="exit 1 when the count is not 0")
+    ap.add_argument("--record", action="store_true",
+                    help=f"write the count as {METRIC} into the run's result, a recount of this record (needs --card)")
     a = ap.parse_args(argv)
+    if a.record and not a.card:
+        ap.error("--record needs --card, whose model the point names")
     try:
         with tempfile.TemporaryDirectory() as tmp:
             path = fetch(a.cover, Path(tmp)) if a.cover.startswith("art:") else Path(a.cover)
             c = json.loads(path.read_text())
         if a.card:
             held_to_card(c, a.card)
-        out, n = report(c, count(c, a.form), a.form)
+        recount = count(c, a.form)
+        out, n = report(c, recount, a.form)
     except RecordError as e:
         print(f"cover_count: {e}", file=sys.stderr)
         return 2
     print("\n".join(out))
+    if a.record:
+        record(recount, n, a.form, a.cover, json.loads(a.card.read_text())["model"].split()[0])
     return 1 if a.check and n else 0
+
+
+def record(recount: dict, n: int, form: str, cover: str, model: str) -> None:
+    from verity_bench import kit
+    fields = {"model": model, "kinds_on_card": len(recount["types"]),
+              "kinds_on_boolean_version_only": sum(t["boolean_only"] for t in recount["types"]),
+              "form": form, "recount_of": cover, "fresh_cover": False}
+    m = kit.writer("out").measurement(METRIC, n, "kinds", mark="measured", member=f"{model.lower()}-{form}", extra=fields)
+    print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", *fields)}), flush=True)
 
 
 if __name__ == "__main__":

@@ -17,17 +17,17 @@ pooled sample a window. Proofs are in `security/Proofs/Poub/RateAudit/Deployed.l
 * `RemoteRunConservationDeployed`: at the deployed parameters (masked `p = 2^1024 − 105` at `k = 3` rounds, 4 KiB
   blocks, SHA-512 receipts, 2,773 openings a window, `d̄ = 0.15%`, `d_w = 1%`, at most `2^55` compressions), where
   the sample's two terms are each at most `2^-40` from seven windows on.
-* `RemoteRunRoutes`: the session as a run of PoUB (`Accounting.Remote.Run.ofDeployed`) meets its routes
+* `RemoteRunRoutes`: the session as a run of PoUB (`ResourceAccounting.Remote.Run.ofDeployed`) meets its routes
   `Sampled d̄` and `Paid`, at the errors above.
-* `RemoteMonitoringPeriodConservation`: `Accounting.SecurityProofs.Remote.Conservation` at those routes, read at the node: the
+* `RemoteMonitoringPeriodConservation`: `ResourceAccounting.SecurityProofs.Remote.Conservation` at those routes, read at the node: the
   run's tier reads are at least `(1 − (d̄ + μ))·C`, the same `γ̄` as `RemoteRunConservation`'s pooled reading.
-* `RemoteWindowRunConservation`: the same for each window (`Accounting.Remote.Run.ofDeployedWindow`) at `γ_w`.
+* `RemoteWindowRunConservation`: the same for each window (`ResourceAccounting.Remote.Run.ofDeployedWindow`) at `γ_w`.
 * `RemoteRunConservationRelay`, `RemoteMonitoringPeriodConservationRelay`, `RemoteWindowRunConservationRelay`: the three
   readings with side sources that may depend on the oracle (relayed receipts), at `m` relayed words a pass.
 
 It rests on the random oracle (the game's; its pass seeds are Fiat–Shamir, `fiat-shamir`), and on two named assumptions:
-`Accounting.Assumptions.WorkHardness` (completing `x` of a word's `b` bits costs `x/b` of `rounds · c_root`) and
-`Accounting.Assumptions.SquaringCeiling` (a pass's completions cost at most the node's measured squaring capacity `F`).
+`ResourceAccounting.Assumptions.WorkHardness` (completing `x` of a word's `b` bits costs `x/b` of `rounds · c_root`) and
+`ResourceAccounting.Assumptions.SquaringCeiling` (a pass's completions cost at most the node's measured squaring capacity `F`).
 The other measured capacities (the on-chip state `S`, the link `L`, the tiers) are the game's bounds, as in every
 guarantee it composes.
 
@@ -35,14 +35,14 @@ The receipt here is the oracle's tag of the whole block; the deployed receipt ha
 also supports 64 rows). For the verbatim-sector class the sketch receipt is proved directly:
 `RemoteRunConservationSketch` (the product form, each grinding candidate at its own query cap) and
 `RemoteRunConservationSketchDeployed` (at the deployed 16-row parameters, under the per-pass hash budget
-`Accounting.Assumptions.SketchHashBudget`: the sum form, whose query term stays non-vacuous at the measured caps).
+`ResourceAccounting.Assumptions.SketchHashBudget`: the sum form, whose query term stays non-vacuous at the measured caps).
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting Accounting.Rate
+open ResourceAccounting ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 
@@ -76,7 +76,7 @@ shortfall is `d̄` over the monitoring period and `d_w` in each window. The prov
 which device, machine or party reads, completes or holds a word. Reads are counted over the tiers, so `R·T` is their
 sum's capacity; the term `G` is the grinding the Fiat–Shamir seed allows (`fiat-shamir`).
 
-**The proof** (`Accounting.SecurityProofs.RemoteRunConservation`): each pass device is simulated by an interactive
+**The proof** (`ResourceAccounting.SecurityProofs.RemoteRunConservation`): each pass device is simulated by an interactive
 device of `RatePaidNamedRO`'s class whose side sources also answer the completed bits, so its link carries
 `L + b·F/(rounds·c_root)` (`WorkHardness` and `SquaringCeiling`), with the same tier reads, receipts and oracle-free
 side sources and nothing rebuilt; `RatePaidNamedRO` bounds each pass at each candidate root (a union over the `G`
@@ -116,7 +116,7 @@ most
 The capacities `S`, `L`, `F` and the tier split are the node's, measured; `γ̄ − d̄` and `γ_w − d_w` are the same sum
 of named terms.
 
-Proof: `Accounting.SecurityProofs.RemoteRunConservationDeployed`, from `RemoteRunConservation`, with
+Proof: `ResourceAccounting.SecurityProofs.RemoteRunConservationDeployed`, from `RemoteRunConservation`, with
 `1 + x ≤ e^x` and `log 2 < 0.6931471808`.
 
 Frozen (no-function, hash): as `RemoteRunConservation`. -/
@@ -138,7 +138,7 @@ def RemoteRunConservationDeployed : Prop :=
 
 /-- **The deployed session meets PoUB's routes.** Read as a run of PoUB on a node `Nd` whose
 declared capacity over `a`'s interval is the session's `n·P·N·b` bits, with `a`'s passes the session's `n·P`, its word
-`b` and its slack `λ` (`Accounting.Remote.Run.ofDeployed`, at `b·F/(rounds·c_root)` bits completed a pass), every
+`b` and its slack `λ` (`ResourceAccounting.Remote.Run.ofDeployed`, at `b·F/(rounds·c_root)` bits completed a pass), every
 deployed session under `RemoteRunConservation`'s hypotheses meets
 
 * `Sampled d̄` (μ_sample) except with probability `(1 − d̄)^(d·n)`: the pooled samples pass while the correct receipts
@@ -147,7 +147,7 @@ deployed session under `RemoteRunConservation`'s hypotheses meets
   run paid for them (its tier reads, its on-chip state, the side link beyond the stream, its completed bits) and its
   `n·P` slacks `λ`.
 
-**The reading.** These are the routes `Accounting.SecurityProofs.Remote.Conservation` composes, proved for the runs the
+**The reading.** These are the routes `ResourceAccounting.SecurityProofs.Remote.Conservation` composes, proved for the runs the
 deployed game realizes; the run's fields are the game's (`Run.ofDeployed`), so its `paid` is the session's tier reads
 and the `n·P` passes' `S + (L − ρ) + b·F/(rounds·c_root)` bits.
 
@@ -165,16 +165,16 @@ def RemoteRunRoutes : Prop :=
         ((n * P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam))
 
 /-- **The deployed session conserves its words as a run of PoUB, at the same `γ`.** Under
-`RemoteRunRoutes`' hypotheses, the probability that the run of the session (`Accounting.Remote.Run.ofDeployed`)
+`RemoteRunRoutes`' hypotheses, the probability that the run of the session (`ResourceAccounting.Remote.Run.ofDeployed`)
 accepts while its correct receipts cover less than `(1 − d̄)·C`, or its tier reads are less than `(1 − γ̄)·C`, is at
 most the two routes' errors summed:
 
   `γ̄ = d̄ + μ_chip + μ_link + μ_rebuild + μ_λ`,   the error `(1 − d̄)^(d·n) + n·P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
 
-**The reading.** `Accounting.SecurityProofs.Remote.Conservation` gives `(1 − d̄ − λ)·C` of payments at every
+**The reading.** `ResourceAccounting.SecurityProofs.Remote.Conservation` gives `(1 − d̄ − λ)·C` of payments at every
 location; the run's payments other than its tier reads are its state, its side link beyond the stream and its
 completed bits, which are `μ_chip`, `μ_link` and `μ_rebuild` of `C`, and the remote model's `λ` share
-(`Accounting.Remote.muLambda`) is `μ_λ`. So this is `RemoteRunConservation`'s pooled reading, the same `γ̄`, with
+(`ResourceAccounting.Remote.muLambda`) is `μ_λ`. So this is `RemoteRunConservation`'s pooled reading, the same `γ̄`, with
 the window's term dropped.
 
 Frozen (no-function, hash): as `RemoteRunConservation`. -/
@@ -195,11 +195,11 @@ def RemoteMonitoringPeriodConservation : Prop :=
             ((Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
 /-- **Each window of the deployed session conserves its words as a run of PoUB, at the same `γ_w`.**
-Window `w` read as a run of PoUB (`Accounting.Remote.Run.ofDeployedWindow`) on a node `Nd` whose declared
+Window `w` read as a run of PoUB (`ResourceAccounting.Remote.Run.ofDeployedWindow`) on a node `Nd` whose declared
 capacity over `a`'s interval is the window's `P·N·b` bits, with `a`'s passes the window's `P`: under
 `RemoteRunConservation`'s hypotheses and `d_w ≤ 1`, the run meets `Sampled d_w` except with probability
 `(1 − d_w/n)^(d·n)` and `Paid` except with `P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`, and
-`Accounting.SecurityProofs.Remote.Conservation` at them gives: the probability that every window's sample passes while
+`ResourceAccounting.SecurityProofs.Remote.Conservation` at them gives: the probability that every window's sample passes while
 window `w`'s correct receipts cover less than `(1 − d_w)·C`, or its tier reads are less than `(1 − γ_w)·C`,
 `γ_w = d_w + μ_chip + μ_link + μ_rebuild + μ_λ`, is at most
 
@@ -245,7 +245,7 @@ completed bits no more than in `RemoteRunConservation`: completions are counted 
 compression's term is `2^q/2^λ` in place of `2^N/2^λ`, since naming the words needs collision-free queries, which
 relayed answers can break.
 
-**The proof** (`Accounting.SecurityProofs.RemoteRunConservationRelay`): each pass device is simulated by an
+**The proof** (`ResourceAccounting.SecurityProofs.RemoteRunConservationRelay`): each pass device is simulated by an
 interactive device whose device memory also answers the completed bits from the store (`PIDevice.toInteractiveMem`), on
 the same side sources and link, with its tier reads the device's plus its completed bits; `RatePaid` bounds each pass
 at each candidate root, and the session is as in `RemoteRunConservation`.
@@ -268,14 +268,14 @@ def RemoteRunConservationRelay : Prop :=
 
 /-- **The deployed session with relaying side sources conserves its words as a run of PoUB.**
 `RemoteMonitoringPeriodConservation` without the hypothesis that the side sources ignore the oracle, for every `m`, with the
-run's slack `a.λ = λ + m·b` a pass: the probability that the run (`Accounting.Remote.Run.ofDeployed`) accepts while its
+run's slack `a.λ = λ + m·b` a pass: the probability that the run (`ResourceAccounting.Remote.Run.ofDeployed`) accepts while its
 correct receipts cover less than `(1 − d̄)·C`, or its tier reads are less than `(1 − γ̄)·C`, with
 `γ̄ = d̄ + μ_chip + μ_link + μ_rebuild + (λ + m·b)/(N·b)`, is at most
 
   `(1 − d̄)^(d·n) + n·P·G·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`.
 
 **The reading.** `RemoteRunConservationRelay`'s pooled reading through
-`Accounting.SecurityProofs.Remote.Conservation`: the relayed receipts are the run's `λ` share beyond the compression's,
+`ResourceAccounting.SecurityProofs.Remote.Conservation`: the relayed receipts are the run's `λ` share beyond the compression's,
 `m` words a pass.
 
 Frozen (no-function, hash): as `RemoteRunConservation`. -/
@@ -367,7 +367,7 @@ def RemoteRunConservationSketch : Prop :=
 `RemoteRunConservationSketch`'s game at 4 KiB tiles (`m = 128` 32-byte sectors), 16 sketch rows, SHA-512 tags,
 rank `r = 12`, 2,773 pooled openings per window, `d̄ = 0.15%` and `d_w = 1%`, with one added named assumption: across
 each pass's `G` grinding candidates the oracle queries total at most `qtot`
-(`Accounting.Assumptions.SketchHashBudget`). The receipt term is the sum form — queries add across a pass's
+(`ResourceAccounting.Assumptions.SketchHashBudget`). The receipt term is the sum form — queries add across a pass's
 candidates, and grinding multiplies only the tag-guess term. From seven windows on, the two sample terms are at most
 `2^-40` each:
 
@@ -377,10 +377,10 @@ candidates, and grinding multiplies only the tag-guess term. From seven windows 
 pass reads `qtot = 2^55`, where the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`) and the guess term
 `n·P·G·N/2^512` stays negligible at `G ≤ 2^55`. The multiplicative bound `n·P·G·(N/2^512 + q/2^96)` is the special
 case `qtot = G·q` that the per-candidate caps alone give (`Prover.budget_of_bounded`;
-`Accounting.SecurityProofs.RemoteRunConservationSketchDeployedProduct` keeps it stated), which at those caps was
+`ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployedProduct` keeps it stated), which at those caps was
 vacuous: its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`).
 
-Proof: `Accounting.SecurityProofs.RemoteRunConservationSketchDeployed`, from
+Proof: `ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployed`, from
 `RemoteRunConservationSketchSum`'s budgeted union over the queries each pass's candidates actually make.
 
 Frozen (no-function, hash): `RemoteRunConservationSketch`'s game at the deployed parameters, under the per-pass
@@ -407,4 +407,4 @@ def RemoteRunConservationSketchDeployed : Prop :=
         (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
           (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96)
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

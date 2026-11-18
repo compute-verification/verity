@@ -17,7 +17,7 @@ def enumerators() -> set[tuple[str, str]]:
 def handed_packages() -> tuple[str, ...]:
     """The packages and modules whose circuits circuit-check is handed and names none of: the served Definitions' package and
     PoUW's four Pearl-C tile modules, whose sidecars hand their circuits as the catalog's do."""
-    pouw = "verity.protocols.accounting.pouw.prover.circuit"
+    pouw = "verity.protocols.resource_accounting.compute.pouw.prover.circuit"
     return ("verity_vllm.definitions", *(f"{pouw}.pearl_c_{m}" for m in ("call", "forming", "noise", "tile")))
 
 

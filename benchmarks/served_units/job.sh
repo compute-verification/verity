@@ -52,7 +52,7 @@ stage_one() {   # stage_one SPEC D O: D holds the proof block's staged files, fr
 run_units() {
   local spec tag D O
   for spec in $CONFIGS; do
-    tag=$(echo "$spec" | tr ':,=' '---' | tr 'A-Z' 'a-z')
+    tag=$(echo "$spec" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9._\n-' '-')
     D=$W/$tag O=$OUT/$tag
     mkdir -p "$D" "$O"
     log "$tag: staging $spec"

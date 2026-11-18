@@ -27,7 +27,7 @@ they take; each coin reaches the node only through what crosses from `V`, at the
 
 @[expose] public section
 
-namespace Accounting.PouwWork
+namespace ResourceAccounting.PouwWork
 
 open Finset
 
@@ -77,4 +77,4 @@ open Classical in
 `V` read during the window, `in_{X ∪ V}([ts, td))`. -/
 noncomputable def help (X : Finset L) (r : Ω) : ℕ := (S r).A.ingress (X ∪ P.V) (Set.Ico P.ts P.td)
 
-end Accounting.PouwWork
+end ResourceAccounting.PouwWork

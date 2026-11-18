@@ -34,7 +34,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The cells**: each outer block of the design's replay partition with each stratum of `Pt`. -/
 def grid (dd : Claims.Sampling.Design.Two) (Pt : Claims.Sampling.Partition) : Finset (ℕ × ℕ) :=
@@ -114,7 +114,7 @@ def UnitsAreInner (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : B
     (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition)
     (dd : Claims.Sampling.Design.Two) (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F)) : Prop :=
   ∃ e : Fin (V.units θ F) ↪ ℕ, ∀ (w : Claims.Sampling.Wit) (u : Fin (V.units θ F)),
-    u ∈ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w) → e u ∈ incorrectInner H Cm s Pt dd w
+    u ∈ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w) → e u ∈ incorrectInner H Cm s Pt dd w
 
 /-- **The claim holds on a witness the relation takes**: where the units map into the inner blocks and the design caps
 the claim's share `ε · n` of inner blocks at `δ`, a witness in the two-stage relation at `δ` makes the claim hold on
@@ -130,20 +130,20 @@ theorem holds_of_rTwo_inner (V : Vocab d α) (θ : ByteArray) (F : Array ByteArr
     (hU : UnitsAreInner V θ F c H Cm s Pt dd readX)
     (hcap : CellCapsAt dd Pt ((V.certOf θ).ε * V.units θ F) δ) (w : Claims.Sampling.Wit)
     (hR : Claims.Sampling.RTwo H Cm parse partition two δ x w) :
-    Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (readX w) (V.certOf θ).ε := by
+    ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (readX w) (V.certOf θ).ε := by
   classical
   obtain ⟨e, he⟩ := hU
   have hle : ((incorrectInner H Cm s Pt dd w).card : ℝ) ≤ (V.certOf θ).ε * V.units θ F := by
     by_contra hlt
     exact not_rTwo_of_incorrectInner H Cm parse partition two δ _ x s Pt dd hs hP hd hcap w (not_le.1 hlt) hR
-  have hmap : (Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w)).map e ⊆
+  have hmap : (ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w)).map e ⊆
       incorrectInner H Cm s Pt dd w := by
     intro v hv
     obtain ⟨u, hu, rfl⟩ := Finset.mem_map.1 hv
     exact he w u hu
   have hc := Finset.card_le_card hmap
   rw [Finset.card_map] at hc
-  unfold Accounting.IntegrityHolds
+  unfold ResourceAccounting.IntegrityHolds
   exact le_trans (by exact_mod_cast hc) hle
 
 end Verity.SampledTwo

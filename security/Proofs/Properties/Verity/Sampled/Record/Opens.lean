@@ -434,7 +434,7 @@ correct, whatever its interior values. At a session v2 sets up (`SetsUp`, one ta
 (`units_of_checkBlobsAt`), the kept sample file proves every sampled proof block (`provedIn_of_range`); and where the record's
 commitment is the deployed one (`hcd`; `record_commit` at a circuit of `sha512/row/v2` rows), an opening under it is
 one under `A`'s, whose equal roots have one domain (`hroots`). -/
-theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
+theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : ResourceAccounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
     {p : _root_.Spot.OneStageZk.Params} {bs : Core.Blobs}
     (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false) {rd : _root_.Spot.OneStageZk.Reads}

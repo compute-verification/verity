@@ -22,7 +22,7 @@ from math import ceil
 from typing import Any
 
 import figure1 as f1
-from verity.protocols.proofs.spot.device.challenger import COIN_BYTES, MAX_COINS
+from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES, MAX_COINS
 from verity.protocols.proofs.spot.prover.optimize import Cell
 
 #: the bytes SPOT[Flock]'s stages read of one round's coin, 65,536 field elements of 16 bytes (Lean's `SpotFlock.L`)

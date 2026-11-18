@@ -49,7 +49,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from verity.circuits import boolean as BL
@@ -133,7 +133,7 @@ DsaTopKReadRowsCut = CompositeDefinition(
     "DsaTopKReadRowsCut", 1, ("N", "TOPK", "BLOCK", "READ"), _signature, _body, refuse=R.DsaTopKReadRows.refuse,
     conformance="model-untested: DsaTopKReadRows_v1's ok as its cut (dsa_topk_reads.cut) where index rows c[k] = k and "
                 "i[k] = k, its read units' outputs that Definition's kv: both held to DsaTopKReadRows_v1 at small statics by "
-                "adapters/vllm/tests/pipeline/test_long_row.py; the check that would hold it to the model is "
+                "tests/adapters/vllm/tests/pipeline/test_long_row.py; the check that would hold it to the model is "
                 "DsaTopKReadRows_v1's",
     doc="DsaTopKReadRows_v1{N,TOPK,BLOCK,READ}'s ok as its cut, the chunks' and slots' index rows (c, i) its last two "
         "parameters: every unit serving proves the row by is a call reading whole parameter rows and whole outputs, and "
@@ -225,7 +225,7 @@ def links(check: SpecializedDefinition, n_rho: int, tables: bool = False) -> tup
     for u in X.plan(N, TOPK, block):
         if u.keys[1] <= u.keys[0]:
             continue
-        t, b = descriptor_id(u.defn), bl.index(tuple(u.keys))
+        t, b = descriptor_id(u.defn), bl.index(cast(tuple[int, int], tuple(u.keys)))
         if any(x.template == t for x in out):
             raise ValueError(f"{t} is two units of an instance: its units would read two blocks' scores")
         out += [IL.Operand(t, "scores", value("scores"), n_rho * len(bl), tuple(i * len(bl) + b for i in every),

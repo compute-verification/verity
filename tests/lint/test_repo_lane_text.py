@@ -22,7 +22,7 @@ records how the tree got here or who is working on it, which the tree can't keep
 
 Declared data isn't read at all (``*.json``, ``*.csv`` and every other file not named above: ``artifacts.json``,
 each ``lean-audit.json``'s records, the handle registry, the manifests), nor what ``SKIP`` names, each with its reason.
-This lint takes over P11's docstring patterns (``adapters/vllm/tests/lint/test_p11_names.py``: board ids, ``[lane ``,
+This lint takes over P11's docstring patterns (``tests/adapters/vllm/tests/lint/test_p11_names.py``: board ids, ``[lane ``,
 rounds and dates), for the whole tree.
 
 Sites are counted per file, the key the ratchet gate counts by too: an entry ``{"file", "count"}`` allows ``count`` sites in
@@ -60,7 +60,7 @@ LEFT_OUT = ()
 #: prose that is data, by path prefix (or a whole path), each with its reason
 SKIP = {
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
-    "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
+    "calibration/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the lane text it refuses",
 }
 #: the kinds a path prefix's prose may hold, each with its reason

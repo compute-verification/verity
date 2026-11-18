@@ -37,10 +37,10 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A registered circuit's proof blocks, commit coins, seed preimages and sample are the service's (`Spot.Slots.layout`, `Select.select`)
 
-`Accounting.Compose.Declared` gives each gate its proof block (`Declared.unit`), each value its commit coin
+`ResourceAccounting.Compose.Declared` gives each gate its proof block (`Declared.unit`), each value its commit coin
 (`Declared.commitRound`) and each round the values its seed names (`Declared.seedNames`), and the composed credit
 (`Definitions.Compose.Guarantees.Compose`) samples, proves and charges tiles by them, its sample `Pouw.Window.subsetDraw`
-(`Accounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the registered circuit is the service's on a
+(`ResourceAccounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the registered circuit is the service's on a
 program `p` and query:
 * **units**: the service samples and proves the units of the verifier's own partition of its program
   (`Spot.Slots.layout`: the population's proof blocks, each its unit and its gates, then the input
@@ -51,7 +51,7 @@ program `p` and query:
 * **commit coins**: the code's schedule. PoUW's coins are one salt a window and the sample (`PouwCommit.LABELS`): the
   salt is opened after the weights' root (`PouwCommit.epochSalt`), and the sample after the transcript's
   (`PouwCommit.drawCoin` at `PouwCommit.drawAfter`). So a registered input is committed before coin `0`, and every
-  other value the prover writes before the sample, coin `rounds`. Under that schedule `Accounting.Compose.LayerCommitted`
+  other value the prover writes before the sample, coin `rounds`. Under that schedule `ResourceAccounting.Compose.LayerCommitted`
   fails wherever a value's IR cut is before the sample and it isn't a computed value only its own unit reads (every run
   input any gate reads, `Properties.Served.SeededScheduleNotLive`), which is why the live statements credit nothing
   on today's code;
@@ -59,7 +59,7 @@ program `p` and query:
 * **seed preimages**: what the code's seeds name (`Declared.seedNames`). Each unit's seed is `seeds.PouwSeed` of the
   salt, its position and its seed group's `pouw.roots` slot; the salt's derivation reads the weights' root
   (`PouwCommit.saltOf`), and `pouw.roots` is a Program input that no check ties to the unit's operand rows. So a
-  seed names a value exactly when it is a registered input, and `Accounting.Compose.SeedNamed` fails wherever a
+  seed names a value exactly when it is a registered input, and `ResourceAccounting.Compose.SeedNamed` fails wherever a
   seeded round reads an activation (a run input or an earlier round's output), which is why the seeded statements
   credit nothing on today's code either;
 * **the sample**: the code's sample under the `subset:K_d` sampling design, from `L` uniform bytes (`Select.select`, its sampled proof blocks
@@ -88,7 +88,7 @@ input and before the sample (`Cd.rounds`) otherwise, PoUW's salt-and-draw schedu
 population is `N_p` units, the code's `subset:K_d` sample from `L` uniform bytes is accepted and misses a set `U` of
 units with probability at most the model's sample's (`Pouw.Window.subsetDraw K_d` of a uniform permutation of
 `Fin N_p`). -/
-def UnitsOfLayout {ι : Type} (Cd : Accounting.Compose.Declared ι) (Np Kd : ℕ) (p : Spot.Program)
+def UnitsOfLayout {ι : Type} (Cd : ResourceAccounting.Compose.Declared ι) (Np Kd : ℕ) (p : Spot.Program)
     (query : Json) : Prop :=
   ∀ l, Spot.Slots.layout p query = .ok l →
     (∀ i, i < Cd.dag.length → Cd.binding i = none →

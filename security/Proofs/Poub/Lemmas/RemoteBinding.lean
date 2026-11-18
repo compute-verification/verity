@@ -45,9 +45,9 @@ the proofs: no record pins it.
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Remote
+namespace ResourceAccounting.Guarantees.Remote
 
-open Accounting.Remote.Sample
+open ResourceAccounting.Remote.Sample
 
 /-- **The receipts' binding term, in its fork form.** For a session `D` on the first blocks `prf` and fallbacks `rest`,
 its receipts `R`, and sets `L_t` holding every receipt window `t` opens, the binding term is at most
@@ -62,4 +62,4 @@ def ReceiptsBindingOfFork : Prop :=
     (R.binding D prf rest).toReal ≤
       ∑ t, √((L t).card * s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal))
 
-end Accounting.Guarantees.Remote
+end ResourceAccounting.Guarantees.Remote

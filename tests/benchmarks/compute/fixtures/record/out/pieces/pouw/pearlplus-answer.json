@@ -1,0 +1,20 @@
+{
+ "protocol": "verity/pouw/pearl-plus/v1",
+ "verdict": "accept",
+ "reason": null,
+ "commitment": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
+ "public": {
+  "work": {
+   "credited": 134502518410,
+   "macs": 136201633792,
+   "epsilon": "1/100"
+  },
+  "unit": "MAC",
+  "scheme": "pearl-c-h100-v1-h3"
+ },
+ "profile": {
+  "delta": "1/100",
+  "draws": 459,
+  "source_from": "node"
+ }
+}

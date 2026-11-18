@@ -23,13 +23,15 @@ at all (it kept no files, or its rate file is no list of rows) could have been a
 
 **`run SPEC --direct NODE`** (`dispatch`) launches each point without a passing run, and each `--again` names
 (`jobs.again`), as one recorded run on a GPU slot of the node (`direct_command`), in the spec's order: the booked slot
-and card where `--cores` and `--card` name them.
+and card where `--cores` and `--card` name them, and by the booked period's end where `--end` states it (a point that
+could not finish by then is not started).
 """
 
 from __future__ import annotations
 
 import json
 import sys
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,7 +39,7 @@ from typing import Any
 
 from verity_config import sha256
 
-from verity_bench import jobs, prove_records, served_table, steady, steady_spec
+from verity_bench import jobs, kit, prove_records, served_table, steady, steady_spec
 from verity_bench.steady_spec import SteadyPoint, SteadySpec
 
 #: beside a labelled art's rows of a run (`prove_records.ART_RATES`): how each field the art added to the run's own rows
@@ -213,8 +215,8 @@ class Labelled:
 def labelled_rows(store: Any, record: str) -> list[Labelled]:
     """Each row of the record's runs: the runs labelled into it and the runs its labelled arts name. A run's rows are
     its own rate file's, or, where one standing labelled art holds them completed (`completed_rows`, `completed`), the
-    art's; two standing arts that complete one run complete it for neither. A run that kept no files, or whose rate
-    file gives no rows, is one entry without a row, which says so. A superseded run and the runs of a superseded art
+    art's; two standing arts that complete one run complete it for neither. A trial run (`kit.trial_why`), a run that
+    kept no files, or one whose rate file gives no rows, is one entry without a row, which says so. A superseded run and the runs of a superseded art
     give none."""
 
     runs: dict[str, None] = {}
@@ -235,13 +237,16 @@ def labelled_rows(store: Any, record: str) -> list[Labelled]:
     for run in runs:
         if _superseded(store, run):
             continue
+        if why := kit.trial_why(run, store.get_attempt(run) or {}):
+            found.append(Labelled(run, None, None, why))
+            continue
         files = run_files(store, run)
         if files is None:
-            found.append(Labelled(run, None, None, "the run kept no files"))
+            found.append(Labelled(run, None, None, f"{steady.CANNOT_TELL}: the run kept no files"))
             continue
         own = steady_spec.rows(files)
         if isinstance(own, str):
-            found.append(Labelled(run, None, files, own.removeprefix(f"{steady.CANNOT_TELL}: ")))
+            found.append(Labelled(run, None, files, f"{steady.CANNOT_TELL}: {own.removeprefix(f'{steady.CANNOT_TELL}: ')}"))
             continue
         standing = arts.get(run, [])
         taken = (completed(own, standing[0]) if len(standing) == 1 else untaken.get(run) if not standing else
@@ -308,7 +313,7 @@ class SteadyCompletion:
                                    params={"identity": identity}, any_source=True)["attempts"]
         return [a["id"] for a in reversed(attempts)
                 if (a.get("status") or {}).get("rc") in (0, steady_spec.NOT_PASSED)
-                and (a.get("source") or {}).get("dirty") is False]
+                and (a.get("source") or {}).get("dirty") is False and not kit.trial_attempt(a)]
 
     def __call__(self, spec: SteadySpec, item: SteadyPoint, identity: str) -> tuple[str | None, str | None]:
         self._pull()
@@ -328,7 +333,7 @@ class SteadyCompletion:
             self._labelled[record] = labelled_rows(store, record)
         for found in sorted(self._labelled[record], key=lambda found: found.run, reverse=True):
             if found.row is None or found.files is None:
-                whys.append(f"{found.run} (labelled `{record}`): {steady.CANNOT_TELL}: {found.held}")
+                whys.append(f"{found.run} (labelled `{record}`): {found.held}")
                 continue
             blocks = steady_spec.row_blocks(found.row)
             if (found.row.get("pin") != item.row.pin or found.row.get("provers") != item.provers
@@ -375,9 +380,11 @@ def make_plan(source: str | Path, *, root: Path | None = None, lookup: Lookup | 
 
 
 def direct_command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint, root: Path, node: str, *,
-                   card: int | None = None, cores: str | None = None) -> list[str]:
+                   card: int | None = None, cores: str | None = None, end: float | None = None,
+                   now: Callable[[], float] = time.time) -> list[str]:
     """The point as a `research run --on NODE` through one of the node's GPU slots, which gives it its cores: the slot
-    of `cores` where given (a booked slot's, `jobs.slot_run`), else the first free one. The node side takes the card
+    of `cores` where given (a booked slot's, `jobs.slot_run`), else the first free one, waiting for it no later than
+    `end` allows (`jobs.slot_run`). The node side takes the card
     itself, in one lease, so that the lease has ended and left its usage line among the run's files before the run's
     verdict is computed: `card` where given (a booked card's, `steady_node --card`), else one on the NUMA node of the
     run's cores. A point whose row names its statement in the store runs with a read-only key to it."""
@@ -387,17 +394,19 @@ def direct_command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint,
         raise TypeError(f"{point.id} is a vLLM point: jobs runs it")
     return jobs.slot_run(
         spec, root, node, campaign="steady-point", tool="verity_bench.tool:STEADY_POINT",
-        store_read=point.row.stored is not None, cores=cores,
-        env=[flag for name, setting in jobs.point_environment(spec).items() for flag in ("--env", f"{name}={setting}")],
+        store_read=point.row.stored is not None, cores=cores, end=end, now=now,
+        env=[flag for name, setting in jobs.point_environment(spec).items() for flag in ("--env", f"{name}={setting}")]
+        + (["--env", f"{kit.TRIAL}=1"] if kit.is_trial() else []),
         job=["bash", "benchmarks/harness/steady_point.sh", "--spec", jobs._relative_spec(source, root),
              "--point", item.point.id, "--identity", item.identity, *(["--card", str(card)] if card is not None else [])])
 
 
 def dispatch(plan: jobs.Plan, source: str | Path, *, root: Path | None = None, execute: jobs.Executor = jobs._execute,
-             direct: str | None = None, card: int | None = None, cores: str | None = None) -> int:
+             direct: str | None = None, card: int | None = None, cores: str | None = None, end: float | None = None,
+             now: Callable[[], float] = time.time) -> int:
     """Launch one recorded run for each point without a passing run, on `direct`'s GPU slots: the harness's one
-    dispatch (`jobs.dispatch`), with a steady-state point's command, on the booked `card` and `cores` where given. A
-    steady-state spec has no queued form."""
+    dispatch (`jobs.dispatch`), with a steady-state point's command, on the booked `card` and `cores` and by the booked
+    period's `end` where given. A steady-state spec has no queued form."""
 
     if direct is None:
         raise ValueError(f"spec {plan.spec.id!r} is a steady-state spec: its points run on a node's own card, through a "
@@ -407,6 +416,6 @@ def dispatch(plan: jobs.Plan, source: str | Path, *, root: Path | None = None, e
                          "NUMA node than the card, which the node side refuses")
 
     def command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint, root: Path, node: str) -> list[str]:
-        return direct_command(plan, source, item, root, node, card=card, cores=cores)
+        return direct_command(plan, source, item, root, node, card=card, cores=cores, end=end, now=now)
 
     return jobs.dispatch(plan, source, root=root, execute=execute, direct=direct, command=command)

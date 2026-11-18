@@ -4,7 +4,7 @@ public import Proofs.Pouw.TS.Rounds
 public import Proofs.Pouw.TS.ReceiptLi
 public import Proofs.Pouw.TS.ReceiptDuoCP
 public import Proofs.Pouw.Receipt.Fx1
-public import Proofs.Accounting.Lemmas.TS.Receipt
+public import Proofs.ResourceAccounting.Lemmas.TS.Receipt
 
 /-!
 # (I7) from the receipt: proofs
@@ -31,9 +31,9 @@ round's error is a nonzero degree-2 function, which vanishes at uniform bits wit
 
 open Claims renaming Ex → expect
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity Pouw.Receipt
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity Pouw.Receipt
 
 namespace ReceiptLemmas
 
@@ -142,35 +142,35 @@ theorem operandLuck_incorrectWords {Ω : Type} [Fintype Ω] :
     rw [zero_mul]
     exact (prob_mono (q := fun _ => False) fun ω h => hw ω h.2 h.1).trans Rounds.prob_false.le
 
-theorem LuckOfReceipt : Accounting.Guarantees.TS.LuckOfReceipt :=
+theorem LuckOfReceipt : ResourceAccounting.Guarantees.TS.LuckOfReceipt :=
   fun G p pr => luck_of_receipt G p pr
 
-theorem ReceiptLuckCaseA : Accounting.Guarantees.TS.ReceiptLuckCaseA :=
+theorem ReceiptLuckCaseA : ResourceAccounting.Guarantees.TS.ReceiptLuckCaseA :=
   fun G => receiptLuck_caseA G
 
-theorem LuckCaseA : Accounting.Guarantees.TS.LuckCaseA := fun G p hpin hA hop => by
+theorem LuckCaseA : ResourceAccounting.Guarantees.TS.LuckCaseA := fun G p hpin hA hop => by
   have h := luck_of_receipt G p 0 hpin hop (receiptLuck_caseA G hA) zero_le_one
   rwa [mul_zero, add_zero] at h
 
-theorem OperandLuckCube : Accounting.Guarantees.TS.OperandLuckCube :=
+theorem OperandLuckCube : ResourceAccounting.Guarantees.TS.OperandLuckCube :=
   fun R _ _ _ _ _ _ _ G => operandLuck_cube R G
 
-theorem LuckCaseACube : Accounting.Guarantees.TS.LuckCaseACube :=
+theorem LuckCaseACube : ResourceAccounting.Guarantees.TS.LuckCaseACube :=
   fun R _ _ _ _ _ _ _ G hpin hA hcube => LuckCaseA G (3 / 4) hpin hA (operandLuck_cube R G hcube)
 
-theorem LiSegmentsBind : Accounting.Guarantees.TS.LiSegmentsBind :=
+theorem LiSegmentsBind : ResourceAccounting.Guarantees.TS.LiSegmentsBind :=
   fun D ω => LiLemmas.right_of_same D ω
 
-theorem LiExecutionPhaseUnbound : Accounting.Guarantees.TS.LiExecutionPhaseUnbound :=
+theorem LiExecutionPhaseUnbound : ResourceAccounting.Guarantees.TS.LiExecutionPhaseUnbound :=
   fun n D ω => LiLemmas.executionPhaseUnbound n D ω
 
-theorem DuoSegmentsBind : Accounting.Guarantees.TS.DuoSegmentsBind :=
+theorem DuoSegmentsBind : ResourceAccounting.Guarantees.TS.DuoSegmentsBind :=
   fun D ω => DuoCPLemmas.right_of_same D ω
 
-theorem Fx1SegmentsBind : Accounting.Guarantees.TS.Fx1SegmentsBind :=
+theorem Fx1SegmentsBind : ResourceAccounting.Guarantees.TS.Fx1SegmentsBind :=
   fun D ω => DuoCPLemmas.fx1_right_of_same D ω
 
-theorem LuckCaseAKeyed : Accounting.Guarantees.TS.LuckCaseAKeyed :=
+theorem LuckCaseAKeyed : ResourceAccounting.Guarantees.TS.LuckCaseAKeyed :=
   fun G hpin hA hw => LuckCaseA G 0 hpin hA (operandLuck_incorrectWords G hw)
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

@@ -49,7 +49,7 @@ namespace Verity.SampledTwo.Messages
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The verifier's step -/
 

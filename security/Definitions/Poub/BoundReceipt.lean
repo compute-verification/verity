@@ -34,16 +34,16 @@ answer relayed across the link and used inside a location's computation is outsi
 (`InteractiveNode.QueryDetermined`).
 
 **The ideal tile.** The tile outputs are uniform, and the rest has none of them except over the link or by tile work:
-that is the PoUW tile's unpredictability below its work (`Accounting.Guarantees.TileUnpredictable`, from PoUW's
+that is the PoUW tile's unpredictability below its work (`ResourceAccounting.Guarantees.TileUnpredictable`, from PoUW's
 named assumptions), read in the generic model.
 -/
 
 @[expose] public section
 
-namespace Accounting.BoundReceipt
+namespace ResourceAccounting.BoundReceipt
 
 open Pous (Bits)
-open Accounting.Rate (Store Oracle Chip World Prover)
+open ResourceAccounting.Rate (Store Oracle Chip World Prover)
 
 /-- The mix at the window's fresh challenge: block `j`'s receipt is `Mix(j, E_j, z_j)`, an `h`-bit receipt of the
 block's index, its encoded contents (`b` bits) and the tile output its receipt binds (`a` bits). -/
@@ -194,4 +194,4 @@ end InteractiveNode
 from the GPU, `λ` bits of slack and `F_z/w` tiles' work give it, at `a` bits each. -/
 def covered (a w Lz Fz lam : ℕ) : ℕ := ((Lz + lam) * w + Fz * a) / (a * w)
 
-end Accounting.BoundReceipt
+end ResourceAccounting.BoundReceipt

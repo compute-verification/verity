@@ -48,23 +48,23 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The leak through the network certifier over a monitoring period, with the checked inputs left out
+# The leak through the network attester over a monitoring period, with the checked inputs left out
 
 `monitoringPeriodLeakChecked` is `Guarantees.MonitoringPeriodLeakChecked`, in two steps, each over the checked form of what it reads.
 
-**Each window's bound.** On the audit's scope, the sampling relation at a trace that agrees with the network certifier
-wherever both open a gate gives the leak relation at the network certifier's rows with a valid run, where the run at
-those rows (`certifierRun`) is `valid` (`rLeakCertifierChecked_of`). The trace filled in with the network certifier's
+**Each window's bound.** On the audit's scope, the sampling relation at a trace that agrees with the network attester
+wherever both open a gate gives the leak relation at the network attester's rows with a valid run, where the run at
+those rows (`certifierRun`) is `valid` (`rLeakCertifierChecked_of`). The trace filled in with the network attester's
 values carries its records (`TapProof.carries_fillTrace`), so `accepted_of` gives `Accepted` with the incorrect proof
 blocks' committed gates held at the filled values, the advice the count charges. A held gate's input value is never
 read, any other input in a proof block is opened, and no egress gate depends on an input in none (an unread input,
 `Prog.Unread`), so the inputs move back to the trace's own values (`valOver_congr_held`), pinned at the free inputs:
-the run the relation accepts at is the run at the network certifier's rows. An accepted audit escapes the relation
-only where `Compiled.KS` fails, the trace disagrees with a passing opening of the network certifier, which is a
+the run the relation accepts at is the run at the network attester's rows. An accepted audit escapes the relation
+only where `Compiled.KS` fails, the trace disagrees with a passing opening of the network attester, which is a
 collision (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`), or one of the two checks misses on that run,
 which `CheckedWitness` at `certifierRun` bounds (`monitoringPeriodChecked_first`).
 
-**The count.** A window that meets `ExecutionPhaseGoodChecked`, whose observations the network certifier registers, has them
+**The count.** A window that meets `ExecutionPhaseGoodChecked`, whose observations the network attester registers, has them
 among the sequences `AccSeqsChecked` counts at its registration (`mem_accSeqsChecked_of_executionPhaseGoodChecked`). A period's
 records whose every window is such a sequence, each window's operator reading the windows before it, are, at the
 incorrect sets they are accepted with, runs over the empty pool that restart at no window, which `encard_carried_le`
@@ -74,7 +74,7 @@ at `reg ∪ chk` (`encard_monitoringPeriodChecked_le`). The client's view reads 
 (`monitoringPeriodChecked_second`).
 
 `rLeakCertifier_of_rLeakCertifierChecked` and `rLeakCertifierChecked_of_rLeakCertifier` move between the leak relation
-at the network certifier's rows and its checked form, the second at a check every run passes;
+at the network attester's rows and its checked form, the second at a check every run passes;
 `RecordFormat.readsBy_read` reads every record format back under its own schedule as the parameter. They carry
 `MonitoringPeriodLeakAccepted` to its instance of this statement.
 -/
@@ -92,7 +92,7 @@ theorem asReg_congr {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) (
   · rw [h1 g hg hf, h g hg]
   · rw [h1 g hg hf, ← h g hg]
 
-/-- **The leak relation at the network certifier's rows with a valid run gives the leak relation there**: a sequence
+/-- **The leak relation at the network attester's rows with a valid run gives the leak relation there**: a sequence
 accepted with a valid run is accepted. -/
 theorem rLeakCertifier_of_rLeakCertifierChecked {H : Msg → Msg} {Cm : CommitmentScheme Bool}
     {parse : Msg → Option AuditStatement} {partition : AuditStatement → Option Partition} {L K S : ℕ}
@@ -106,7 +106,7 @@ theorem rLeakCertifier_of_rLeakCertifierChecked {H : Msg → Msg} {Cm : Commitme
   obtain ⟨hl', hD', F, hF, a, ha, free, hfree, -, hacc⟩ := h op o hC hCov hl hD
   exact ⟨hl', hD', F, hF, a, ha, free, hfree, hacc⟩
 
-/-- **At a check every run passes, the leak relation at the network certifier's rows is its checked form.** -/
+/-- **At a check every run passes, the leak relation at the network attester's rows is its checked form.** -/
 theorem rLeakCertifierChecked_of_rLeakCertifier {H : Msg → Msg} {Cm : CommitmentScheme Bool}
     {parse : Msg → Option AuditStatement} {partition : AuditStatement → Option Partition} {L K S : ℕ}
     {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ}
@@ -204,7 +204,7 @@ open Claims.SamplingGeneric (Arg Compiled)
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **A window that meets its good event holds an accepted sequence**: where the network certifier registers the
+/-- **A window that meets its good event holds an accepted sequence**: where the network attester registers the
 window's observations at the operator `op`, the layout fits the window's registration and the observations are among
 the sequences `AccSeqsChecked` counts there, at the registration's values. -/
 theorem mem_accSeqsChecked_of_executionPhaseGoodChecked {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
@@ -322,9 +322,9 @@ open Claims.SamplingGeneric (Arg Compiled)
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **At the network certifier's rows, with a valid run**: on the audit's scope at `δ ≥ 0`, the sampling relation at a
-trace that agrees with the network certifier wherever both open a gate gives the leak relation at the network
-certifier's rows with a valid run, where every run at those rows (`certifierRun`) is `valid`. The run the relation
+/-- **At the network attester's rows, with a valid run**: on the audit's scope at `δ ≥ 0`, the sampling relation at a
+trace that agrees with the network attester wherever both open a gate gives the leak relation at the network
+attester's rows with a valid run, where every run at those rows (`certifierRun`) is `valid`. The run the relation
 accepts at, on the inputs pinned to the trace's, is that run. -/
 theorem rLeakCertifierChecked_of (H : Msg → Msg) (D : Compiled Coin A) {L K S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (hδ : 0 ≤ δ)
@@ -393,8 +393,8 @@ theorem rLeakCertifierChecked_of (H : Msg → Msg) (D : Compiled Coin A) {L K S 
     exact rowOf_congr fun σ g hg => (hv1 g (not_unread_of_out (hfit.1 t ht ℓ σ g hg).1)).trans (hv2 g)
 
 /-- **Each window's bound**: the first part of `Guarantees.MonitoringPeriodLeakChecked`. An accepted run whose extracted witness
-is not in the leak relation at the network certifier's rows with a valid run is outside the sampling relation, which
-`Compiled.KS` bounds, or disagrees with a passing opening of the network certifier, a collision
+is not in the leak relation at the network attester's rows with a valid run is outside the sampling relation, which
+`Compiled.KS` bounds, or disagrees with a passing opening of the network attester, a collision
 (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`), or has a run at those rows that one of the two checks
 refuses, which `CheckedWitness` at `certifierRun` bounds (`rLeakCertifierChecked_of`). -/
 theorem monitoringPeriodChecked_first (H : Msg → Msg) (D : Compiled Coin A) (hks : D.KS H) (hb : D.commit.Binds H) (L K S : ℕ)
@@ -448,8 +448,8 @@ namespace NetTiming
 
 open Claims Claims.Sampling
 
-/-- **The leak through the network certifier over a monitoring period, with the checked inputs left out**:
-`Guarantees.MonitoringPeriodLeakChecked`, from each window's bound at the network certifier's rows with a valid run
+/-- **The leak through the network attester over a monitoring period, with the checked inputs left out**:
+`Guarantees.MonitoringPeriodLeakChecked`, from each window's bound at the network attester's rows with a valid run
 (`TapProof.monitoringPeriodChecked_first`) and the held and counted parts at the two checks together
 (`monitoringPeriodChecked_second`). -/
 theorem monitoringPeriodLeakChecked : Guarantees.MonitoringPeriodLeakChecked := by

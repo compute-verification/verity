@@ -2,7 +2,7 @@
 
 A permanent scheme beside frame-v3 (:mod:`..merkle`), selectable by backends.  Spec: ``PROTOCOL.md``
 beside this file.  Conformance vectors: ``vectors.json`` beside it, which
-``adapters/vllm/tests/commitments/vectors.py`` renders from this module.  This module is the plain reference: stdlib ``hashlib``
+``tests/adapters/vllm/tests/commitments/vectors.py`` renders from this module.  This module is the plain reference: stdlib ``hashlib``
 only, no fast paths; every byte below is what the integration and its CUDA kernels hash.
 
 The tree rule (pairs ``node``, an odd trailing child ``lift``, zero leaves ``empty``) and the id leaf are the ones

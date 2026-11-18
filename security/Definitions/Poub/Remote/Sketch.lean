@@ -5,7 +5,7 @@ public import Definitions.Poub.RateAuditSketch
 /-!
 # The receipts' sketch over a PoUB session: the seeds' keys and the passes' devices (trusted)
 
-The model `Accounting.Remote.Held.Assumptions.SketchBound` is derived on (`Accounting.Guarantees.Remote`'s
+The model `ResourceAccounting.Remote.Held.Assumptions.SketchBound` is derived on (`ResourceAccounting.Guarantees.Remote`'s
 `SketchBoundRun`). A PoUB session over a registered store of `N` blocks runs `P` credited passes. Pass `j`'s
 seed (`seed_i` in `poub.receipts`) fixes its key: the `k_s × 4096` signs `S_i` it derives and the receipt
 hash at that seed, `y = SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be(j) ‖ σ)` with `σ = S_i·e_j`, an `h`-bit
@@ -16,7 +16,7 @@ candidate's (`kept`).
 **The outcome** (`Outcome`) is the prover's own coins `β`, the registered store (`N` blocks of `m` 32-byte sectors)
 and `Hs`, what SHA-512's outputs are read over, all uniform and independent. The session's keys are SHA-512's at its
 candidate seeds (`Run.keys`, any function of the outcome). That they are uniform, whatever the prover's coins and
-the store, is the named premise `Accounting.Assumptions.SketchHashRandom` (`random-oracle`), not the coin type.
+the store, is the named premise `ResourceAccounting.Assumptions.SketchHashRandom` (`random-oracle`), not the coin type.
 
 **The model's coins** (`ModelCoins`) are the prover's own, the store and every candidate's key: its signs, and the receipt
 hash at its seed as a function (`RateSketch.Oracle`). `Run.coins` reads them off an outcome.
@@ -29,9 +29,9 @@ reads from node memory, takes in over a link, or rebuilds (`Prover.obtained`).
 
 @[expose] public section
 
-namespace Accounting.Remote.Sketch
+namespace ResourceAccounting.Remote.Sketch
 
-open Accounting.RateSketch
+open ResourceAccounting.RateSketch
 
 /-- A seed's key: the signs it derives and the receipt hash at the seed. -/
 abbrev Key (N m h ks : ℕ) : Type := SketchSigns ks m × Oracle N 0 h Sector (Fin ks → ZMod (2 ^ 32))
@@ -98,4 +98,4 @@ def Whole (A : Run β Hs P N m h S L q ks G) (ω : Outcome β Hs N m) (j : Fin P
 
 end Run
 
-end Accounting.Remote.Sketch
+end ResourceAccounting.Remote.Sketch

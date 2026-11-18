@@ -14,7 +14,7 @@ directories and the slot files and never changes any of them.
 
 **The queues** (`queues`): each of the node's ClusterQueues as it is now (quotas, preemption, stop policy) as `shadow-<name>`;
 `shadow-checks`, whose resource `vy.dev/check-slot` counts the check slots, the `only=trains` ones in a flavor tainted
-`vy.dev/trains` that only a `--priority` (train) check tolerates; and `shadow-lean`, one resource `vy.dev/lean-<pool>` per
+`vy.dev/trains` that only a `--priority` check (a candidate's) tolerates; and `shadow-lean`, one resource `vy.dev/lean-<pool>` per
 Lean pool, as many as the pool's N.
 
 **The demand** (`demand`), one `Item` per allocation or waiter, its key stable from waiting to running:
@@ -22,12 +22,12 @@ Lean pool, as many as the pool's N.
   (their pod template's `verity.dev/gpu-pool` label), whose GPUs are the leases below;
 - a `gpu-lease` lease or waiter of a pool (`POOLS`): its GPUs, on the pool's ClusterQueue at the pool's priority class.
   Fences (`who=kubernetes`) are not leases;
-- a check slot's holder or waiter: one `vy.dev/check-slot`, a train check's at priority 1;
+- a check slot's holder or waiter: one `vy.dev/check-slot`, a candidate's check's at priority 1;
 - a Lean slot's holder or waiter: one `vy.dev/lean-<pool>`.
 
 **The comparison** (`compare`), on two ticks in a row: an item the node runs that Kueue holds pending is `node-ran` (the node let it past Kueue's
 quota, or Kueue would have preempted it); an item the node keeps waiting that Kueue admitted is `kueue-ran` (a rule outside
-Kueue held it back: a pool's `max` or expired `borrow-until`, a slot reserved for trains). Each tick appends one record to
+Kueue held it back: a pool's `max` or expired `borrow-until`, a slot reserved for candidates). Each tick appends one record to
 `--out` (`cluster/kueue-shadow/v1`): the time, the item and divergence counts, and each divergence's key and reason.
 
 Not covered yet, and needed before Kueue can be the only scheduler: `research run --on vy-nebius-1` direct runs on
@@ -59,7 +59,7 @@ FLAVOR = "vy-nebius-1"
 SLOT_FLAVOR = "vy-shadow-slots"
 TRAIN_FLAVOR = "vy-shadow-train-slots"
 TRAINS_TAINT = {"key": "vy.dev/trains", "value": "only", "effect": "NoSchedule"}
-#: which slot a holder has, as its flavor's node label: Kueue would otherwise put a train holding a trains-only slot in the
+#: which slot a holder has, as its flavor's node label: Kueue would otherwise put a candidate's check holding an `only=trains` slot in the
 #: first flavor it tolerates, and count it against the slots everyone may take
 SLOT_KIND = "vy.dev/slot-kind"
 CHECK_SLOT = "vy.dev/check-slot"
@@ -77,7 +77,7 @@ TICK_S = 60
 class Item:
     """One allocation or waiter as a Workload: `key` names it from waiting to running, `queue` is its shadow ClusterQueue,
     `pod_sets` the Workload's podSets, `priority` its value (with `priority_class` the WorkloadPriorityClass it came from),
-    `running` what the node did, `since` when it arrived (ISO), and `trains` whether it may take a trains-only check slot."""
+    `running` what the node did, `since` when it arrived (ISO), and `trains` whether it may take an `only=trains` check slot."""
     key: str
     queue: str
     pod_sets: tuple[dict[str, Any], ...]
@@ -189,7 +189,7 @@ def demand(workloads: list[dict], local_queues: dict[str, str], leases: dict[str
         for s in slots["slots"]:
             h = s.get("holder")
             if h:
-                # a holder's ticket said whether it was a train; a held trains-only slot can only be one
+                # a holder's ticket said whether it was a candidate's check; a held `only=trains` slot can only be one
                 out.append(Item(key=f"slot/{h.get('run') or h['pid']}", queue=shadow_name("checks"),
                                 pod_sets=(_pod_set({CHECK_SLOT: "1"}, toleration if s.get("trains") else (),
                                                    {SLOT_KIND: "trains" if s.get("trains") else "any"}),),

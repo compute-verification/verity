@@ -44,24 +44,24 @@ import Proofs.Certifier.SampledCharge
 import Proofs.Certifier.SampledLeak
 
 /-!
-# At the network certifier's rows: the filled trace, and a disagreement as a collision
+# At the network attester's rows: the filled trace, and a disagreement as a collision
 
-The network certifier registers its records at the transfer gates (`CertifierRegisters`). On the sampling relation
+The network attester registers its records at the transfer gates (`CertifierRegisters`). On the sampling relation
 (`R δ`), every proof block outside the incorrect set is correct on the trace's committed values, so the trace opens
 every transfer gate there (each is committed: an output or an input). Where the trace opens a transfer gate it agrees
-with the network certifier, unless the two openings collide (below). Fill in the network certifier's value at every
+with the network attester, unless the two openings collide (below). Fill in the network attester's value at every
 gate the trace leaves unopened (`fillTrace`): a correct proof block stays correct (`Prog.correct_mono`, it reads only
-opened values), and the filled trace carries the network certifier's records at every transfer gate
+opened values), and the filled trace carries the network attester's records at every transfer gate
 (`carries_fillTrace`), the incorrect proof blocks' included, since the trace's own value there, where it has one, is
-the network certifier's. `MonitoringPeriodChecked` takes the leak relation at the network certifier's rows from it
+the network attester's. `MonitoringPeriodChecked` takes the leak relation at the network attester's rows from it
 (`rLeakCertifierChecked_of`).
 
-An extracted trace that disagrees with the network certifier opens a transfer gate to a value the network certifier's
+An extracted trace that disagrees with the network attester opens a transfer gate to a value the network attester's
 opening there doesn't. The compiled extractor checked that opening with its own calls (`Compiled.passes_found`,
-`Compiled.ownLog_E`), so under `CommitmentScheme.Binds` its calls and those that check the network certifier's opening
+`Compiled.ownLog_E`), so under `CommitmentScheme.Binds` its calls and those that check the network attester's opening
 collide, and `B_tap` finds the collision (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`).
 
-The collision step follows the registration's (proofs' P1b), at the network certifier's openings.
+The collision step follows the registration's (proofs' P1b), at the network attester's openings.
 -/
 
 @[expose] public section
@@ -70,7 +70,7 @@ namespace NetTiming.TapProof
 
 open Claims Claims.Sampling NetTiming NetTiming.SampledAuditProof
 
-/-! ### The trace filled in with the network certifier's values -/
+/-! ### The trace filled in with the network attester's values -/
 
 theorem fillTrace_ext {ref : ℕ → Option Bool} {tv : ℕ → Bool} : ∀ g b, ref g = some b → fillTrace ref tv g = some b :=
   fun g b h => by simp [fillTrace, h]
@@ -92,9 +92,9 @@ theorem traceVal_fillTrace_of {C : Prog} {ref : ℕ → Option Bool} {tv : ℕ �
     rfl
   · exact traceVal_fillTrace (fun b h => hk ⟨b, h⟩) hag
 
-/-- **The filled trace carries the network certifier's records**: where the trace opens a transfer gate the network
-certifier opens, at the network certifier's value, the trace filled in with the network certifier's values carries every
-record the network certifier registers. -/
+/-- **The filled trace carries the network attester's records**: where the trace opens a transfer gate the network
+attester opens, at the network attester's value, the trace filled in with the network attester's values carries every
+record the network attester registers. -/
 theorem carries_fillTrace {L K S : ℕ} {H : Msg → Msg} {Cm : CommitmentScheme Bool} {lay : BoundaryGates L S} {k : ℕ}
     {op : ℕ → List (Obs L K S) → List Bool} {s : AuditStatement} {ops : List (Opening Bool)} {o : List (Obs L K S)}
     {ref : ℕ → Option Bool} (hfit : lay.Fits s.prog k) (htap : CertifierRegisters H Cm lay k op s ops o)
@@ -110,7 +110,7 @@ theorem carries_fillTrace {L K S : ℕ} {H : Msg → Msg} {Cm : CommitmentScheme
     rw [hfit.2.1 t ht g hg] at h
     cases h
 
-/-! ### A disagreement with the network certifier is a collision -/
+/-! ### A disagreement with the network attester is a collision -/
 
 section Compiled
 
@@ -131,17 +131,17 @@ theorem certifierLog_valid (H : Msg → Msg) (Cm : CommitmentScheme Bool) (roots
   obtain ⟨o, -, hpo⟩ := List.mem_flatMap.1 hp
   exact OC.eval_log H _ p hpo
 
-/-- A collision against the network certifier's openings: the extraction's own calls and the checks of the network
-certifier's openings hold two different inputs with one output. -/
+/-- A collision against the network attester's openings: the extraction's own calls and the checks of the network
+attester's openings hold two different inputs with one output. -/
 def CertifierColl (H : Msg → Msg) (D : Compiled Coin A)
     (tops : AuditStatement → List (Opening Bool)) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : Ω × (Fin (D.V.k x) → Coin) × D.E.C x) : Prop :=
   LogColl (ownLog H (run H P D.V x s.1) (D.E.ext x s.2.1 s.2.2) ++
     ((D.parse x).map fun st => certifierLog H D.commit st.roots (tops st)).getD [])
 
-/-- **A disagreement with the network certifier is a collision**: at an accepted run, an extracted trace that opens a
-gate the network certifier opens to a value other than the network certifier's makes, with the network certifier's
-opening there, calls that collide among the extraction's own and the checks of the network certifier's openings. -/
+/-- **A disagreement with the network attester is a collision**: at an accepted run, an extracted trace that opens a
+gate the network attester opens to a value other than the network attester's makes, with the network attester's
+opening there, calls that collide among the extraction's own and the checks of the network attester's openings. -/
 theorem certifierColl_of_disagree (H : Msg → Msg) (D : Compiled Coin A) (hb : D.commit.Binds H)
     (tops : AuditStatement → List (Opening Bool)) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : Ω × (Fin (D.V.k x) → Coin) × D.E.C x) {st : AuditStatement} (hst : D.parse x = some st)
@@ -170,7 +170,7 @@ theorem certifierColl_of_disagree (H : Msg → Msg) (D : Compiled Coin A) (hb : 
     (fun t ht => List.mem_append_left _ (hql' t ht))
     (fun t ht => List.mem_append_right _ (List.mem_flatMap.2 ⟨o', ho', ht⟩))
 
-/-- **The reduction's probability step**: the collisions against the network certifier's openings have probability at
+/-- **The reduction's probability step**: the collisions against the network attester's openings have probability at
 most `B_tap`'s. -/
 theorem Pr_certifierColl_le_Btap (H : Msg → Msg) (D : Compiled Coin A)
     (tops : AuditStatement → List (Opening Bool)) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :

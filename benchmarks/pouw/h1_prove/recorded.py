@@ -12,7 +12,7 @@ challenger and the verifier never hold a row, a salt or a served value):
    what ``scaled_mm_zy`` writes), and the calls' B rows (each with its s_w) as the weights' b/<K> (`window.py commit`),
    and the salt coin opens after those roots are recorded;
 2. the prover serves every tile's receipt under the unit salt, PoUW's window salt (`h1unit.unit_salt`: `pouw_salt` of the
-   coin's stand-in for the certifier's reveal, the execution phase as the execution phase, a stand-in stream and prover) and commits them
+   coin's stand-in for the network attester's reveal, the execution phase as the execution phase, a stand-in stream and prover) and commits them
    (`window.py serve`); the registration (the execution phase's commitment and its receipt root) is recorded, and the sampling coin
    opens after it. The verifier builds the execution phase's public Program and its template-instance partition from the
    commitment's public shape (`window_program`: WORK/verifier/program.json and partition.json, Lean's ``--program`` and
@@ -36,7 +36,7 @@ challenger and the verifier never hold a row, a salt or a served value):
    ok is 1, its record the tile's product and dequant. Lean (``verify --zk --registered``) derives each instance's unit
    from its own Program, and an accepted check must say so (``units: derived``), and opens each A row, B row, record and
    ok row against its registered root at the position its Program reads, so ok is bound through the verifier's
-   registration (`Accounting.Guarantees.TS.CheckedSessionSound`'s port ``ok`` of ``own``), not through its public file.
+   registration (`ResourceAccounting.Guarantees.TS.CheckedSessionSound`'s port ``ok`` of ``own``), not through its public file.
 
 The negatives are on ``honest``'s units, the sampled proof blocks of the first sampled proof block's call.
 
@@ -135,15 +135,15 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from verity.protocols.accounting.pouw.prover.lowering import h1unit as U  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
 
 import h1form as F  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.randomness import derive  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import verifier  # noqa: E402
-from verity.protocols.accounting.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import verifier  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
 

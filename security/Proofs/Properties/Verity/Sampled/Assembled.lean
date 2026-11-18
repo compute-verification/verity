@@ -55,7 +55,7 @@ open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The sample's coins at `m` frames**: the session's bytes as `m` fresh frames' coins (`srcCoins`) where the session
 reads `m` frames' bytes, else none. -/

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One streamed wipe of one GPU's memory, as one Attempt. wipe_run's subprotocol on this node: the prover keeps the
-# fill in device memory (wipe_store.Cuda, the CUDA driver through ctypes: no toolkit, no build), the memory challenger
+# fill in device memory (wipe_store.Cuda, the CUDA driver through ctypes: no toolkit, no build), the memory attester
 # streams it natively (wipe_stream.c, built and gated on the challenger's host) and times its spot reads (--reads), and
 # the Lean (wipe-protocol, verity/wipe/v0) and the Python judge the signed session and must agree. cwd = a clone (the
 # Lean builds into it):
@@ -8,7 +8,7 @@
 #   research run --on NODE --project verity --source . --cwd clone --timeout 90m -- \
 #     bash benchmarks/pous/streamed_wipe/demo.sh [--dry-run] [OPTIONS]
 #
-#   --dry-run            a 64-segment (2 GiB) fill with the memory challenger on this node: every step of the hour's
+#   --dry-run            a 64-segment (2 GiB) fill with the memory attester on this node: every step of the hour's
 #                        run but the size and the placement (a rehearsal, no bound)
 #   --segments N         the fill in 32 MiB segments (default: the device's free memory less --reserve-gib; 64 dry)
 #   --reserve-gib G      device memory left out of the fill (default 1; a fraction too: 0.0625 is 64 MiB);
@@ -20,22 +20,22 @@
 #                        chooses its own (its --challenger-command's wipe_party --reads K), and the subprotocol refuses a
 #                        session at another count
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
-#                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
-#                        there, e.g. 'python -m verity.protocols.accounting.pous.device.wipe_challenger --device D --listen 0.0.0.0:P
+#                        the memory attester on a host of its own (all three; infra's wiring of wipe_party's side
+#                        there, e.g. 'python -m verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger --device D --listen 0.0.0.0:P
 #                        --reads 5231 --streamer build'); without them it runs on this node, a rehearsal
-#   --trusted-sha512 HEX the SHA-512 of the memory challenger's public key, in 128 lowercase hex digits: the one key
+#   --trusted-sha512 HEX the SHA-512 of the memory attester's public key, in 128 lowercase hex digits: the one key
 #                        the verifier trusts, a session signed under another rejected. --challenger takes it; a
 #                        challenger here signs under a key this run makes, trusted without it. trusted-device holds only
 #                        under a committed configuration (VERITY_CONFIGURATION, its hash) for a key its pins give the
 #                        wipe (VERITY_PINS, its [[pin]] entries as JSON), which period.json's deployment carries; under
 #                        any other the record reads a rehearsal with no bound
-#   --simulated          the memory challenger here, named the stand-in for one on its own host (placement
+#   --simulated          the memory attester here, named the stand-in for one on its own host (placement
 #                        `simulated`, a label; its key in this run's scratch, so a rehearsal all the same)
 #   --foreign-gb G|fM    the cheat: the prover keeps G GB (10^9 bytes) of prior content in place of the fill's first
 #                        labels, or fM, one label past the foreign_bits published at the reads; a cheat's run
 #                        expects reject
 #   --expect accept|reject  the verdict that exits 0 (default accept; reject with --foreign-gb)
-#   --egress-bits N      the network certifier's egress count over the session, in bits, which the verifier's check
+#   --egress-bits N      the network attester's egress count over the session, in bits, which the verifier's check
 #                        takes as evidence in whole MiB, wherever the challenger runs (default: none, the bound
 #                        vacuous); no challenger is given it and the session signs none
 #   --link NAME=TO@VIA   a link leaving this node besides the control link and the challenger's, which the record names
@@ -180,12 +180,12 @@ EOF
     ip -br link 2>/dev/null; for i in /sys/class/net/*; do echo "$(basename "$i") $(cat "$i/speed" 2>/dev/null || echo -) Mb/s"; done
   } > "$O/env.txt" 2>&1
   uv sync -q --all-packages --extra torch-cpu
-  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/accounting/pous/device/wipe_stream.c -o "$S/wipe_stream-check"
+  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/resource_accounting/memory/pous/attester/wipe_stream.c -o "$S/wipe_stream-check"
   if [ -n "$WIPE_PROTOCOL" ]; then
     [ -x "$WIPE_PROTOCOL" ] || { echo "REFUSED: --wipe-protocol $WIPE_PROTOCOL is not an executable"; exit 3; }
     TOOLS="{\"wipe-protocol\": \"$WIPE_PROTOCOL\"}"
   else
-    L=verity/protocols/accounting/pous/device/lean
+    L=verity/protocols/resource_accounting/memory/pous/attester/lean
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash tools/verity/lean/setup.sh "$L" > "$O/lake-setup.log" 2>&1
     (cd "$L" && lake build wipe-protocol) > "$O/lake-build.log" 2>&1 \

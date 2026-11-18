@@ -1,4 +1,4 @@
-"""The H1 tile unit (``verity/protocols/accounting/pouw/prover/lowering/h1unit.Shape``) through `verity_flock.struct_lower`, for ``struct_tmpl.sh``.
+"""The H1 tile unit (``verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.Shape``) through `verity_flock.struct_lower`, for ``struct_tmpl.sh``.
 
     python benchmarks/verifier_cost/struct_unit.py K [R C] [--support S] [--first-appearance]
         [--scattered-returns] [--out UNIT.tmpl] [--flat | --check]

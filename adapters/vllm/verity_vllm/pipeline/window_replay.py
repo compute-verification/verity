@@ -35,8 +35,8 @@ from __future__ import annotations
 import bisect
 import hashlib
 import math
-from dataclasses import dataclass, field
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -215,7 +215,7 @@ def _plan(circuit: IF.Circuit) -> _Plan:
 
     args = []
     for t, at, n in ranges:
-        node = []
+        node: list[tuple[int | None, Any, tuple[tuple[str, int, View], ...]]] = []
         for p, ty in sigs[t][0]:
             port = ports[t, p]
             while port.nxt < len(port.wires) and port.wires[port.nxt].at <= at:
@@ -231,11 +231,12 @@ def _plan(circuit: IF.Circuit) -> _Plan:
             L, first = port.leaves, port.free
 
             def unit(u: int, bands: Any = bands, free: Any = free, port: _Port = port, L: int = L, first: int = first,
-                     rows: int = 1) -> list[tuple[str, int, View]]:
+                     at: int = at, rows: int = 1) -> list[tuple[str, int, View]]:
                 """Units ``u`` to ``u + rows``' rows of the port; more than one unit only of a port of one band."""
                 got: list[tuple[str, int, View]] = []
                 for j0, j1, w in bands:
                     if w is None:
+                        assert port.param is not None
                         lo = (first + (u - at) * len(free) + free.index(j0)) * L
                         got.append(("p", port.param, (lo, 1, 1, 0, (rows * (j1 - j0)) * L)))
                     else:

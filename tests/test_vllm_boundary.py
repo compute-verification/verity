@@ -44,7 +44,7 @@ ALLOWED = {
                     "vllm.LLM beside it"),
     "benchmarks/kv_filler/serve.py": "memory-accounting: a stock vllm.LLM serving under the KV filler's top-up",
     "benchmarks/pous/p2_v1/scale.py": "memory-accounting: P2's store held beside a stock vllm.LLM serving",
-    **dict.fromkeys(("benchmarks/remote_session/engine.py", "benchmarks/remote_session/serve.py"),
+    **dict.fromkeys(("benchmarks/poub_session/engine.py", "benchmarks/poub_session/serve.py"),
                     "memory-accounting: an in-process LLMEngine under PoUB's binder"),
     "benchmarks/network_traces/record.py": "network-accounting: per-token timing of served requests (SamplingParams)",
     # the stock kernels a benchmark times or gates against
@@ -65,12 +65,9 @@ ALLOWED = {
                     "kernels: Dither's served arms, a stock vllm.LLM per arm with its int8 linears swapped in process"),
     **dict.fromkeys(("benchmarks/kernels/exactlin/percall.py", "benchmarks/kernels/exactlin/share.py"),
                     "kernels: sbench's served arms over stock vLLM int8 (TritonInt8ScaledMMLinearKernel)"),
-    **dict.fromkeys(("benchmarks/kernels/moe_align/served.py", "benchmarks/kernels/moe_align/stress.py"),
-                    "kernels: verity_vllm.engine.moe_align's canonical moe_align_block_size held to vLLM's op and to its "
-                    "Marlin MoE path, served at TP8"),
     **dict.fromkeys(("benchmarks/vllm_encoded/kernels.py",
                      "benchmarks/vllm_encoded/serve.py", "benchmarks/vllm_encoded/stack.py",
-                     "benchmarks/vllm_encoded/tests/properties/encoded_kv_append_capture_gpu.py"),
+                     "tests/benchmarks/vllm_encoded/properties/encoded_kv_append_capture_gpu.py"),
                     "memory-accounting: the encoded-weights stack inside vLLM, its linears, attention and KV append in "
                     "place of vLLM's"),
     # vLLM general plugins and the engine-core internals they patch
@@ -82,8 +79,7 @@ ALLOWED = {
     **dict.fromkeys(("benchmarks/dsa_topk/dsa_topk.py", "benchmarks/dsa_topk/stress.py"),
                     "proofs: a general plugin making the DSA indexer's top-k (_custom_ops) a function of its inputs, and "
                     "its stress"),
-    **dict.fromkeys(("benchmarks/replay_ladder/ladder.py", "benchmarks/replay_ladder/topk_probe.py"),
-                    "proofs: each ladder model's window replayed by a stock engine, and a probe of its DSA prefill top-k"),
+    "benchmarks/replay_ladder/topk_probe.py": "proofs: a probe of a ladder replay's DSA prefill top-k",
     **dict.fromkeys(("benchmarks/serve_tax/rebuild.py", "benchmarks/serve_tax/replay.py", "benchmarks/serve_tax/restore.py",
                      "benchmarks/serve_tax/servetax_plugin.py", "benchmarks/serve_tax/tp_edge.py",
                      "benchmarks/serve_tax/tp_restore.py", "benchmarks/serve_tax/tp_state.py"),
@@ -96,7 +92,7 @@ ALLOWED = {
     "benchmarks/spot_proved/discover.py": "proofs: a rehearsal of the capture on a GLM-5.3 vllm.LLM with dummy weights",
     "benchmarks/route_capture/route_capture_plugin.py": "proofs: a general plugin recording each served step's launch-shape "
                                                         "class and kernels",
-    "benchmarks/route_capture/tests/test_plugin.py": "proofs: the route capture's plugin on stand-ins for vLLM's model "
+    "tests/benchmarks/route_capture/test_plugin.py": "proofs: the route capture's plugin on stand-ins for vLLM's model "
                                                      "runners, imported under vLLM's module names",
 }
 
@@ -105,7 +101,7 @@ def _importers(texts: dict[str, str]) -> dict[str, list[str]]:
     """Each file of ``texts`` (repository path -> source) outside the integration that imports vLLM, with where."""
     out = {}
     for rel, text in texts.items():
-        if rel.startswith(INTEGRATION) or "vllm" not in text:
+        if rel.removeprefix("tests/").startswith(INTEGRATION) or "vllm" not in text:
             continue
         hits = sorted({(line, name) for name, line, imported in _imports(ROOT / rel, ROOT, (), ast.walk(ast.parse(text, filename=rel)))
                        if imported and name.split(".")[0] == "vllm"})

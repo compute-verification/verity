@@ -70,14 +70,14 @@ def SampledLeakCarried : Prop :=
               (incorrectSets s.design P δ).card * 2 ^ ((incorrectSets s.design P δ).sup (faultyBits s.prog P)) *
               Dj ^ k s : ℕ) : ℕ∞)
 
-/-- **The leak through the network certifier over a monitoring period whose runs carry the pool** (conditional on its
+/-- **The leak through the network attester over a monitoring period whose runs carry the pool** (conditional on its
 named inputs). Over `m` runs on independent live coins, run `i` registered as `sw i` (partition `Pw i`, values `ρ i` at
 the registered inputs, operator `op i`, which reads the runs before it), with `n i` proof blocks, each run's check pinning
 its checked inputs (`CheckedUnique`) and its closing row at `nrow` (`CheckedClosing`); the record rule's restarts
 `chains` and opened rows `genesis` (at run 0 the previous period's closing row or the empty pool's, and the empty pool's
 at a restart), serving's choice at each secret and sample of the coins, which where every audit accepts lie in a
 registered finite set `Cs` (`ResetsIn`) and have the runs open the root of the row the rule names (`CarriedRoots`, at the
-`sha512/row-seg/v1` digest over `G`); with the network certifier running its code by `trusted-device`, its one run giving
+`sha512/row-seg/v1` digest over `G`); with the network attester running its code by `trusted-device`, its one run giving
 the cells the client receives and its record of them, the runs' observations; a covert sender's channel
 (`MonitoringPeriodChannel`), each run's acceptance and incorrect set reading only the earlier runs' coins (`MonitoringPeriodAdaptive`), the
 conditional escape (`MonitoringPeriodMissProb`), and the leak relation at each run's own incorrect set from its extracted rows `rin`,

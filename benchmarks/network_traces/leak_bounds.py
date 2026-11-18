@@ -1,15 +1,15 @@
-"""leak-bounds: K, the bits a covert sender in the server can move through the network certifier's accepted transcripts
+"""leak-bounds: K, the bits a covert sender in the server can move through the network attester's accepted transcripts
 over a monitoring period, beside its share of one copy of the served model's weights (`WEIGHTS`) and ε, the union of
 its scans' δ. It is the one calculator of K, and it scales K in two ways:
 
-* by requests (`table`, which `verity bench certifier_term` prints): the network certifier's own terms at the load
+* by requests (`table`, which `verity bench certifier_term` prints): the network attester's own terms at the load
   of a node, the census's reference datacenter and the world, all a scope serves counted by each check's own rule
   (At a scope's load, below);
-* by links (`per_link`, `datacenter`, `at_link_rate`): one link at the rate a run certified, and as many of them
-  summed, whatever the scope they stand for serves. `chain_record.py leak` reads it on a network certifier run, and
+* by links (`per_link`, `datacenter`, `at_link_rate`): one link at the rate a run attested, and as many of them
+  summed, whatever the scope they stand for serves. `chain_record.py leak` reads it on a network attester run, and
   the slowdown is derived from both bounds.
 
-A link is one network certifier on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
+A link is one network attester on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
 second of one scan class (`ingress_scan.Class`, or a window class's `scan`). Its sampling blocks are each 2T transfer
 blocks, T buckets of τ seconds each way, and the start unit the state they read is copied in, 2T + 1 proof blocks,
 every proof block sampled, each sampling block's scan at δ_scan. K's terms are those of `NetworkCheck.Period`'s rows form (`rowsTerms`) in the generator reading
@@ -21,7 +21,7 @@ of the scan's statement:
   outputs, NR·T / EVERY slot entries of NE bits (`ingress_scan.entry_bits`), so they are that audit's free inputs,
   which the rows form charges to the sampling block (`tiedAudits`). If ``prog`` is an input only at its anchored
   entries, they are an entry's 33 + KO·IDB bits a request (`ingress_scan.entry_layout`);
-* no faulty proof block, every one being drawn;
+* no incorrect proof block, every one being drawn;
 * the jitter term at D_j = `JITTER_BOUND`, ⌈log2 D_j^T⌉ = T bits a sampling block, one a bucket (`JITTER`).
 
 A link runs m = s / (T·τ) sampling blocks and certifies rate·s requests over a monitoring period of s seconds
@@ -37,20 +37,20 @@ scans' knowledge and collision errors. K takes one of two forms:
 
 **At a scope's load.** A scope (`scopes`) is a node, one machine of the world fleet's GPUs; the census's reference
 datacenter; or the world, the slowdown calculator's world fleet, which is the census's inference at the fleet's serving MFU. Each machine
-is behind one network certifier. Over a monitoring period a scope serves GPU-seconds × MFU × a GPU's peak FLOP/s /
+is behind one network attester. Over a monitoring period a scope serves GPU-seconds × MFU × a GPU's peak FLOP/s /
 (a request's tokens × 2 × the served MACs a token) requests of the served model (`MODEL`), the rule
 `benchmarks/spot_figures/figure1.py`'s `scopes` plans with, each on one connection. Which request that is is one of
 `COUNTS`, and every row names its one: by default the sampling plan's (`plan`), so that the rows count the requests
 the compute audit's plan prices; the census's where a caller asks; or none, where a caller gives the world's requests
-a year. No run has certified a class for that model, so the class is assumed (`Assumed`): the most ids a response
+a year. No run has attested a class for that model, so the class is assumed (`Assumed`): the most ids a response
 holds, an id's bits, and an execution phase's buckets. `table` counts each of the seven `ROWS` by its check's own
 rule, and never by requests what a check counts by capacity:
 
-* the scan, `rowsTerms`'s terms (`terms`). The network certifier's own are the schedules and the fail cells,
+* the scan, `rowsTerms`'s terms (`terms`). The network attester's own are the schedules and the fail cells,
   ⌈log2(egress_cells + 1)⌉ each a connection of the period's parameters, counted by request, and the jitter,
   ⌈log2 D_j^T⌉ an execution phase of each link, which is a bit a bucket at D_j = 2 and 0 at D_j = 1. The term of
   record is the one at D_j = 2 (`OF_RECORD`), two release schedules, and it is printed first. The term at D_j = 1 is
-  what a network certifier with a set-time card, a network card that releases at a set time, would be charged. The
+  what a network attester with a set-time card, a network card that releases at a set time, would be charged. The
   card is simulated, an input of its own (`inputs`' ``set_time_card``, marked ``simulated``, its source the clause
   it rests on, `SET_TIME_CLAUSE`): none is deployed, so a figure at D_j = 1 is printed only under its label
   (`SET_TIME`). The entries, the tied compute audits' free inputs, are the compute side's. The check charges every
@@ -65,9 +65,9 @@ rule, and never by requests what a check counts by capacity:
   either D_j, which rests on the simulated set-time card, so a row under this change carries the label at either
   D_j, in the document and in its printed name; and the entries charged through the compute audit, whose own bound
   then stands in their place and is not counted here;
-* the design, which no run has behind it: head checks, a lengths unit on the network certifier's records, and a stop
-  block sampled on a served audit. How its stop class is charged is read from a served run's verdict records and
-  from nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths unit holds a
+* the design, which no run has behind it: head checks, a lengths proof block on the network attester's records, and a
+  stop block sampled on a served audit. How its stop class is charged is read from a served run's verdict records and
+  from nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths proof block holds a
   response's length to its Program's output count and the stop block holds that count to the ids, so the lengths
   are held and its term is the jitter, the pooled failures and the count (below). With no record read, or one
   verdict lacking, each connection is charged its schedule and the row is the one before it. The entries are the
@@ -76,7 +76,7 @@ rule, and never by requests what a check counts by capacity:
   output count to the ids, so the server picks it and each connection is still charged its schedule, as the scan
   charges it. Its failed connections, jitter, count and entries are the design's.
 
-**The count.** Under the design the network certifier signs, for each execution phase of a link, a head over its
+**The count.** Under the design the network attester signs, for each execution phase of a link, a head over its
 tables, and a content class's tables are the rows it holds and no other. So the head states how many of the execution
 phase's releases each class holds: one of R + 1 values a class, R being the most connections the schedule releases in
 an execution phase (`phase_releases`). A link's execution phase is charged classes · log2(R + 1) bits for it
@@ -91,7 +91,7 @@ the count alone: no tick holds when a head leaves, so the line says the head's t
 
 **The stop class's verdicts.** Every row that holds the lengths by a stop block (`Kind.verdicts`: `lengths`,
 `all three` and the design's) is charged below its schedules only on the execution phases a `Stop` holds: the
-answer of the network certifier's own rule (`class_charge.charge`) on a served run's signed heads and verdict
+answer of the network attester's own rule (`class_charge.charge`) on a served run's signed heads and verdict
 records, which `stop_verdicts` reads from the evidence store's runs of record and a caller passes to `table` and
 `document`. A row's execution phases are its scope's over its monitoring period, never the ones a run kept a
 registration for: the answer says how many of a link's execution phases are held (`Stop.held`), that share of the
@@ -131,18 +131,20 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.protocols.accounting.certifier.prover import ingress_scan as IS
-from verity.protocols.accounting.certifier.prover import stop_verdicts as SV
-from verity.protocols.accounting.certifier.verifier import class_charge as CC
-from verity.protocols.accounting.certifier.verifier import network_certifier as W
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+from verity.protocols.resource_accounting.network.prover import stop_verdicts as SV
+from verity.protocols.resource_accounting.network.verifier import class_charge as CC
+from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity import protocol
-from verity.protocols.accounting.certifier.verifier.scan_answer import JITTER_BOUND
+from verity.protocols.resource_accounting.network.verifier.scan_answer import JITTER_BOUND
 
 #: the monitoring periods' seconds, by name
 PERIODS: dict[str, int] = dict(protocol.MONITORING_PERIODS)
 DELTAS: tuple[Fraction, ...] = protocol.DELTAS
-#: a bucket's seconds when a link names none: the network certifier's default τ
-TAU = Fraction(W.NetworkCertifierParams().bucket_ms, 1000)
+#: the device's name, as every text of the term names it
+ATTESTER = "network attester"
+#: a bucket's seconds when a link names none: the network attester's default τ
+TAU = Fraction(W.NetworkAttesterParams().bucket_ms, 1000)
 #: a sampling block's scan's δ when a link names none: `scan_zk --delta`'s default
 SCAN_DELTA = Fraction(1, 2 ** 20)
 #: the error a row at a scope's load is to carry at most over its monitoring period: where a caller gives no δ, each
@@ -150,10 +152,10 @@ SCAN_DELTA = Fraction(1, 2 ** 20)
 PERIOD_ERROR = Fraction(1, 2 ** 20)
 JITTER = "J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel)"
 ROOT = Path(__file__).resolve().parents[2]
-CENSUS = ROOT / "benchmarks" / "census"
+CENSUS = ROOT / "calibration" / "census"
 #: the files the scale is read from: the census's world, reference datacenter and GPU peak, the slowdown calculator's world fleet and its
 #: machine's GPUs, and the served model's workload card
-ADVERSARY, DEPLOYMENTS, HARDWARE = (f"benchmarks/census/{name}.json"
+ADVERSARY, DEPLOYMENTS, HARDWARE = (f"calibration/census/{name}.json"
                                     for name in ("adversary", "deployments", "hardware"))
 SLOWDOWN, SLOWDOWN_HARDWARE = "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml"
 WORKLOAD = "benchmarks/spot_figures/cards/workload.glm-5.3.json"
@@ -199,14 +201,14 @@ CHANGES = {"lengths": "a response's length held to its Program's output count, a
                       "audit: the schedules are 0, and the connections that fail are charged pooled over the "
                       "period, which of them failed and where each one's stream ended",
            "timing": "the release times taken once, by the compute side's tick: the jitter is 0, which rests on a "
-                     "set-time card, a network card of the network certifier that releases at a set time; the card "
+                     f"set-time card, a network card of the {ATTESTER} that releases at a set time; the card "
                      "is simulated, and none is deployed",
            "entries": "the entries charged through the compute audit: the compute side's own bound stands in their "
                       "place, and is not counted here"}
 
 
 class Terms(NamedTuple):
-    """A check's terms over a period, in bits: the network certifier's own (the schedules, the fail cells, the jitter
+    """A check's terms over a period, in bits: the network attester's own (the schedules, the fail cells, the jitter
     and the count) and the entries, the tied compute audits' free inputs, which are the compute side's and None where
     its own bound stands in their place. The count is what the heads of the links' execution phases state of each
     content class's held rows (`counted`), 0 on a row whose check reads no such head."""
@@ -217,8 +219,8 @@ class Terms(NamedTuple):
     count: Any = 0
 
     @property
-    def certifier(self) -> Any:
-        """The network certifier's own term."""
+    def attester(self) -> Any:
+        """The network attester's own term."""
         return self.schedules + self.cells + self.jitter + self.count
 
 
@@ -295,7 +297,7 @@ class Bound(NamedTuple):
 
 @dataclass(frozen=True)
 class LinkLoad:
-    """What one network certifier on one uplink certifies: its scan class, its certified requests a second, its
+    """What one network attester on one uplink certifies: its scan class, its attested requests a second, its
     sampling block's T buckets each way of ``tau`` seconds, its egress cells a connection and its scan's δ."""
     scan: IS.Class
     rate: float | Fraction
@@ -367,7 +369,7 @@ class LinkLoad:
         """K over ``period`` (a `PERIODS` name, or its seconds) in ``reading``: the per-period form, or with ``delta``
         the pooled form."""
         t = self.terms(period, reading)
-        k = float(t.certifier + t.entries)
+        k = float(t.attester + t.entries)
         if delta is None:
             return k
         f = fmax(delta)
@@ -401,14 +403,14 @@ def _reference(name: str) -> dict:
 
 
 def datacenter_links() -> int:
-    """The census's reference datacenter's links (`deployments.json`): one network certifier on each machine's
+    """The census's reference datacenter's links (`deployments.json`): one network attester on each machine's
     uplink."""
     return _reference("deployments.json")["machines"]
 
 
 def world_links() -> int:
     """The world's links: the machines of the slowdown calculator's world fleet (`SLOWDOWN`'s ``fleet.world-h200``, the census's inference at
-    the fleet's serving MFU), one network certifier on each machine's uplink."""
+    the fleet's serving MFU), one network attester on each machine's uplink."""
     return round(_toml(SLOWDOWN)["fleet"][WORLD]["count"]["value"])
 
 
@@ -442,7 +444,7 @@ def per_link(cls: Any, rate: float | Fraction, period: str | float | Fraction, r
              egress_cells: int | None = None, scan_delta: float | Fraction = SCAN_DELTA,
              weights: Weights = WEIGHTS) -> Bound:
     """K over a monitoring period for one link (`link`'s arguments), the count `MonitoringPeriodLeakAccepted` bounds for one
-    network certifier on one uplink (δ None), or `PooledLeakAccepted`'s pooled at ``delta``."""
+    network attester on one uplink (δ None), or `PooledLeakAccepted`'s pooled at ``delta``."""
     one = link(cls, rate, T=T, tau=tau, egress_cells=egress_cells, scan_delta=scan_delta)
     bits = one.bits(period, reading, delta)
     statement = STATEMENTS["per_period" if delta is None else "pooled"]
@@ -490,13 +492,13 @@ def at_link_rate(one: LinkLoad, links: int, period: str | float | Fraction, read
                  delta: float | Fraction | None = None, *, weights: Weights = WEIGHTS) -> Bound:
     """The scaling by links: K over a monitoring period summed over ``links`` links (`datacenter_links`,
     `world_links`), each ``one``, which is `datacenter` over that many of it. Every link certifies ``one``'s rate
-    whatever the scope the links stand for serves, and the scope's requests past that rate are uncertified, so K
+    whatever the scope the links stand for serves, and the scope's requests past that rate are unattested, so K
     counts none of them: it is a run's rate held on every link, and not the scope's K, which `table` counts over
     every request the scope serves."""
     return datacenter({one: links}, period, reading, delta, weights=weights)
 
 
-# --- at a scope's load: the network certifier's term, scaled by requests ---------------------------------------------
+# --- at a scope's load: the network attester's term, scaled by requests ---------------------------------------------
 
 #: what an input is: measured by a run, modeled from other figures, assumed, or simulated, where a stand-in runs in
 #: place of a device that is not deployed and the figure is what that device would be charged
@@ -510,7 +512,7 @@ JITTERS = (1, 2)
 #: It and `JITTER_BOUND`, which K by links is charged at, are one bound, defined there
 OF_RECORD = JITTER_BOUND
 #: the label every figure that rests on a set-time card is printed under: a figure at D_j = 1, what a network
-#: certifier whose network card releases at a set time would be charged, and at either D_j a figure of a row whose
+#: attester whose network card releases at a set time would be charged, and at either D_j a figure of a row whose
 #: release times are taken once (`CHANGES`' timing). The card is simulated (`SET_TIME_CLAUSE`)
 SET_TIME = "with a simulated set-time card"
 #: the mark of the set-time card and of the figure printed under its label, one of `MARKS`
@@ -521,7 +523,7 @@ SIMULATED = "simulated"
 #: tests hold this string to it; `stop_verdicts` owns it
 RUN_NOT_PROVED = SV.RUN_NOT_PROVED
 #: what a figure under `SET_TIME` rests on, the source of the card's input and of that figure
-SET_TIME_CLAUSE = ("`trusted-device`, set-time card clause: the network certifier's card releases each bucket at the "
+SET_TIME_CLAUSE = (f"`trusted-device`, set-time card clause: the {ATTESTER}'s card releases each bucket at the "
                    "tick its record names, whatever the host and the server send it. It holds only of a calibrated "
                    "hardware card; no such card is deployed, and the software pacer that stands in for it does not "
                    "meet it.")
@@ -531,7 +533,7 @@ RESPONSE_IDS, ID_BITS, BUCKETS = 4096, 18, 1280
 #: the scan's slot stride in buckets, the scan class's default
 EVERY: int = IS.Class.__dataclass_fields__["EVERY"].default
 #: the lengths rows' cost runner, whose default schedule (`cost`'s) the count's inputs are read at
-COST_RUNNER = "verity/protocols/accounting/certifier/device/connection_rows_run.py"
+COST_RUNNER = "verity/protocols/resource_accounting/network/attester/connection_rows_run.py"
 #: that schedule: its content classes, its delay D in buckets, which its ingress buckets equal, its lanes and its
 #: execution phase's buckets. The count is at the first two where a caller names none; the last two are the schedule
 #: `render` prints the count at beside the command's own
@@ -569,7 +571,7 @@ class Kind(NamedTuple):
 #: how the stop class is charged, as a served run's verdict records say (`stop_verdicts`')
 Stop = SV.Stop
 
-#: the four verdicts a stop class owes, as the network certifier's rule names them
+#: the four verdicts a stop class owes, as the network attester's rule names them
 VERDICTS = CC.VERDICTS
 #: what a row that holds the lengths by a stop block, and is not the design's, says of how that block is read
 BY_VERDICTS = ("its stop class is charged as the row `design`'s is, by a served run's verdict records: with one "
@@ -593,7 +595,7 @@ SCAN_ACCEPT = ("its accept is run, not proved: it rests on verdicts the scan's d
 #: all three, and the design, without its stop block and with it
 ROWS = {
     "scan": Kind("on main", (),
-                 "the rows form on the network certifier's own run, as the check charges it: a schedule and a fail "
+                 f"the rows form on the {ATTESTER}'s own run, as the check charges it: a schedule and a fail "
                  "cell for each connection of the period's parameters, counted by request, and the jitter of each "
                  f"link's execution phase; {SCAN_ACCEPT}", mark=RUN_NOT_PROVED),
     **{name: Kind("a change to the scan", (name,),
@@ -606,15 +608,15 @@ ROWS = {
     "design, no stop block": Kind(
         "a design with no run behind it", ("lengths", "entries"),
         "the design before a stop block, a proof block that checks where a response's ids stop, has been sampled on "
-        "a served audit: the lengths unit holds a response's length to its Program's output count, but nothing "
+        "a served audit: the lengths proof block holds a response's length to its Program's output count, but nothing "
         "holds that count to the ids, so the server picks it and each connection is still charged its schedule, as "
         "the scan charges it; its failed connections' pooled charge, its jitter, its count and its entries are the "
         "design's",
         stop=False, count=True),
     "design": Kind("a design with no run behind it", ("lengths", "entries"),
-                   "head checks, a lengths unit on the network certifier's records, and a stop block sampled on a "
-                   "served audit. Its stop class is charged as a served run's verdict records say, by the network "
-                   "certifier's rule: below its schedule only with a count above 0 and its four verdicts, each "
+                   f"head checks, a lengths proof block on the {ATTESTER}'s records, and a stop block sampled on a "
+                   f"served audit. Its stop class is charged as a served run's verdict records say, by the {ATTESTER}'s "
+                   "rule: below its schedule only with a count above 0 and its four verdicts, each "
                    "accepted, complete and on the signed head of its execution phase. Then the lengths are held, the stop block holding a "
                    "response's output count to its ids, and its term is the jitter, the failed connections' "
                    "pooled charge and the count, what the head of each link's execution phase states of the rows "
@@ -628,7 +630,7 @@ ROWS = {
 
 @dataclass(frozen=True)
 class Assumed:
-    """What `rowsTerms` reads of a scan class, for a model no run has certified one for: at most KO output ids a
+    """What `rowsTerms` reads of a scan class, for a model no run has attested one for: at most KO output ids a
     response, of IDB bits each (`ingress_scan.Class`'s names, so that `ingress_scan.entry_bits` lays its slot entry
     out), in execution phases of T buckets of ``tau`` seconds."""
     KO: int
@@ -704,9 +706,9 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
     workload card). The world's requests a year follow from them and a request's tokens and served MACs a token:
     the sampling plan's (``requests`` = ``plan``, read from the planner by `plan`) or the census's tokens at the
     workload card's MACs (``census``); or they are ``world_requests`` where a caller gives them, whatever
-    ``requests`` is. ``request_count`` names which of `COUNTS` it is. The class is assumed, no run having certified
+    ``requests`` is. ``request_count`` names which of `COUNTS` it is. The class is assumed, no run having attested
     one for the served model: ``response_ids``, the most ids a response holds, ``id_bits``, an execution phase's
-    ``buckets`` of ``bucket_s`` seconds (by default the network certifier's), one connection a request and one link a
+    ``buckets`` of ``bucket_s`` seconds (by default the network attester's), one connection a request and one link a
     machine, and ``lanes``, the connections a link holds at once, which the entries and the count read: with None the
     entries are counted one a request and the count at the least lanes that serve a link's load (`counted`).
     ``classes``, ``delay`` and ``ingress_buckets`` are the rest of the schedule the count is at: its content classes,
@@ -762,16 +764,16 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
     out |= {
         "request_count": Input(counted, "", "assumed", COUNTS[counted]),
         "connections": Input(1, "connection/request", "assumed", "each request on its own connection"),
-        "links": Input(1, "link/machine", "assumed", "one network certifier on each machine's uplink"),
+        "links": Input(1, "link/machine", "assumed", f"one {ATTESTER} on each machine's uplink"),
         "response_ids": Input(response_ids, "id", "assumed",
                               f"no certified {MODEL} class: the most ids a response holds (--response-ids)"),
         "id_bits": Input(id_bits, "bit", "assumed",
                          f"no certified {MODEL} class: an id of the vocabulary "
-                         "(adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json's vocab_size)"),
+                         "(tests/adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json's vocab_size)"),
         "phase_buckets": Input(buckets, "bucket", "assumed",
                                f"no certified {MODEL} class: an execution phase's buckets (--phase-buckets)"),
         "bucket_s": Input(bucket_s, "s", "assumed",
-                          f"no certified {MODEL} class: a bucket's seconds, by default the network certifier's "
+                          f"no certified {MODEL} class: a bucket's seconds, by default the {ATTESTER}'s "
                           "(--bucket-s)"),
         "lanes": Input(lanes, "lane", "assumed",
                        "none given (--lanes): the entries are counted one a request, the least the check can charge, "
@@ -806,7 +808,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
 
 
 class Scope(NamedTuple):
-    """A scope: its machines, each behind one network certifier, and its GPUs."""
+    """A scope: its machines, each behind one network attester, and its GPUs."""
     name: str
     machines: int
     gpus: int
@@ -961,7 +963,7 @@ def _size(bits: Any) -> dict | None:
 def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_GB, commit: str | None = None,
              run: str | None = None, only: Iterable[str] = (), periods: Iterable[str] = (),
              stop: Stop = NO_RECORDS) -> dict:
-    """`table`'s rows as a document: each row's terms in bits and GB, the network certifier's term at each jitter
+    """`table`'s rows as a document: each row's terms in bits and GB, the network attester's term at each jitter
     bound beside ``target_gb`` and the weights, an execution phase of one link and a request; what each row counts
     and where it stands (`ROWS`); the inputs; and at the top the term of record, the term over the world's year as
     the scan's check charges it today at two release schedules (D_j = `OF_RECORD`), as ``value`` in ``unit``, with
@@ -1009,7 +1011,7 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
                "given (--scan-delta), and no scan has run at it")
 
     def term(r: Row, dj: int) -> dict:
-        t = Fraction(r.terms[dj].certifier)
+        t = Fraction(r.terms[dj].attester)
         return {**_size(t), "of_target": float(t / target), "of_weights": float(t / WEIGHTS.bits),
                 "bits_a_phase": float(t / r.phases), "bits_a_request": float(t / r.requests) if r.requests else None}
 
@@ -1038,8 +1040,8 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
     held = count.bits * head["phases"]
     floor = held + design["schedules"]["bits"]
     at_cost = phase_releases(COST_LANES, COST_BUCKETS, DELAY, DELAY)
-    return {"schema": "certifier-term/v2",
-            "name": f"the network certifier's term for {MODEL} over the world's year, as the scan's check charges "
+    return {"schema": "certifier-term/v3",
+            "name": f"the {ATTESTER}'s term for {MODEL} over the world's year, as the scan's check charges "
                     f"it today at two release schedules (D_j = {OF_RECORD})",
             "value": head["term"][str(OF_RECORD)]["GB"], "unit": "GB",
             "with_set_time_card": {"value": head["term"]["1"]["GB"], "unit": "GB", "label": SET_TIME,
@@ -1144,7 +1146,7 @@ def render(doc: dict) -> str:
         "schedules, the fail cells, the jitter and, on a row whose check reads the head that states it, the count. "
         "The entries are the compute side's.",
         f"The term of record is the one at D_j = {OF_RECORD}, two release schedules. The term at D_j = 1 is what a "
-        f"network certifier whose network card releases at a set time would be charged. That card is {card['mark']}, "
+        f"{ATTESTER} whose network card releases at a set time would be charged. That card is {card['mark']}, "
         "the input set_time_card, whose source is what the term rests on: none is deployed, so it is printed as "
         f"\"{card['label']}\".",
         "A row whose release times are taken once has a jitter of 0 at either D_j, which rests on the same card, so "
@@ -1201,7 +1203,7 @@ def render(doc: dict) -> str:
          "With its stop class charged its whole schedule"
          + (f" on all but {_n(st['held_phases'])} execution phase(s) of a link" if st["held_phases"] else "")
          + ", for want of the verdicts that hold the lengths by a stop block,")
-        + " and the release times taken once by a network certifier whose network "
+        + f" and the release times taken once by a {ATTESTER} whose network "
         f"card releases at a set time ({card['mark']}), the design's term over the world's year is the failed "
         "connections' charge"
         + (" and the count. " if st["below"] else ", the count and each connection's schedule. ")
@@ -1262,11 +1264,11 @@ def _head() -> str | None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """`verity bench certifier_term`: print the network certifier's term at each scope's load (`render`), or with
+    """`verity bench certifier_term`: print the network attester's term at each scope's load (`render`), or with
     ``--json`` its document (`document`)."""
     ap = argparse.ArgumentParser(
         prog="verity bench certifier_term",
-        description=f"The network certifier's term for {MODEL} at the load of a node, the census's reference "
+        description=f"The {ATTESTER}'s term for {MODEL} at the load of a node, the census's reference "
                     "datacenter and the world, over a week, a month and a year, in bits and GB: as the check on "
                     "main charges it by its own rule, under each of three changes to the scan's check, and for the "
                     "design that has no run behind it, without its stop block and with it: seven rows a scope and "
@@ -1281,7 +1283,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--phase-buckets", type=int, default=BUCKETS, metavar="T",
                     help=f"an execution phase's buckets (default {BUCKETS})")
     ap.add_argument("--bucket-s", type=Fraction, default=TAU, metavar="S",
-                    help=f"a bucket's seconds (default {TAU}, the network certifier's)")
+                    help=f"a bucket's seconds (default {TAU}, the {ATTESTER}'s)")
     ap.add_argument("--lanes", type=int, metavar="N",
                     help="the connections a link holds at once: the entries are then every slot's, by capacity, and "
                          "the count is at these lanes, which are refused where their schedule releases fewer "

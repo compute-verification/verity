@@ -68,9 +68,9 @@ honest play, not where honest's own kernel reads against the bound.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.HeadlineDcMeets
+namespace ResourceAccounting.SecurityProofs.TS.HeadlineDcMeets
 
-open Finset Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
+open Finset ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
 theorem prob_none {Ω : Type*} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p ω) : prob p = 0 := by
   have hp : p = fun _ => False := funext fun ω => propext ⟨h ω, False.elim⟩
@@ -92,7 +92,7 @@ noncomputable def honestUf (Ω : Type) : (n : ℕ) → Unfolded Ω n
   | n + 1 => .round 0 (fun _ => honestUf Ω n)
 
 /-- The honest round at its receipt: nothing skipped, nothing deficient. -/
-noncomputable def noSkip (Ω : Type) : Accounting.HMu.SkipRound Ω Unit Unit Unit where
+noncomputable def noSkip (Ω : Type) : ResourceAccounting.HMu.SkipRound Ω Unit Unit Unit where
   view _ := ()
   skipped _ := ()
   d _ := 0
@@ -514,7 +514,7 @@ end Run
 /-! ## The five witnesses -/
 
 theorem counts_nonneg {n : ℕ} (v : Sparse) (k : Fin n) : 0 ≤ Sparse.counts v k :=
-  Rat.cast_nonneg.mpr (Accounting.SecurityProofs.TS.Headline.coeff_nonneg v k.val)
+  Rat.cast_nonneg.mpr (ResourceAccounting.SecurityProofs.TS.Headline.coeff_nonneg v k.val)
 
 /-- **`Sm90SheetHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's IGMMA s8
 m64n256k32 (writer kind 19) heads every word and the design's li (route 0) folds every one. -/
@@ -607,4 +607,4 @@ theorem sm100Measured_meets :
     (Sparse.counts (Sm100Measured.d2s.folds.getD (0 : Fin 14).val [])) Sm100Measured.lamStar
     (Nat.cast_pos.mpr (by decide)) (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
-end Accounting.SecurityProofs.TS.HeadlineDcMeets
+end ResourceAccounting.SecurityProofs.TS.HeadlineDcMeets

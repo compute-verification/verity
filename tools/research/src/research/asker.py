@@ -50,6 +50,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from . import launcher
+
 SCHEMA = "research/asker/v1"
 #: a run that waits asks again at this minute of its wait and every so many after
 ASK_EVERY_MIN = 10
@@ -135,8 +137,8 @@ def leave(run_dir: Path, asks: dict, source: Path, what: dict, sends: list[Path]
                     + (f"; {unread} of them by a record that could not be read, counted as alive" if unread else "")
                     + f"), so this run will not move by itself: it waits in {asks['home']}'s line; `research status RUN` shows "
                       "when one of them has started or ended, and its asker ends at its next look after that")
-        git = subprocess.run(["git", "-C", str(source), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-                             capture_output=True, text=True, check=True).stdout.strip()
+        git = subprocess.run(launcher.git("-C", str(source), "rev-parse", "--path-format=absolute", "--git-common-dir"),
+                             capture_output=True, text=True, check=True, env=launcher.git_env()).stdout.strip()
         m = {"run": run_dir.name, "root": str(run_dir.parent), "git": git, **asks, "sends": {str(p): _sha256(str(p)) for p in sends},
              "launch": {**what, "job_namespaces": list(what.get("job_namespaces") or ())}}
         pid = start(run_dir.parent, m)
@@ -190,8 +192,8 @@ def files(git: str, commit: str, paths: Iterable[Path]) -> Iterator[Path]:
 
     top = Path(tempfile.mkdtemp(prefix="research-asker-"))
     try:
-        r = subprocess.run(["git", f"--git-dir={git}", "archive", "--format=tar", commit, "--", *map(str, paths)], cwd=top,
-                           capture_output=True)
+        r = subprocess.run(launcher.git(f"--git-dir={git}", "archive", "--format=tar", commit, "--", *map(str, paths)), cwd=top,
+                           capture_output=True, env=launcher.git_env())
         if r.returncode:
             raise OSError(f"no files of {commit[:12]} from {git}: {r.stderr.decode(errors='replace').strip()[-300:]}")
         with tarfile.open(fileobj=io.BytesIO(r.stdout)) as tar:
@@ -209,13 +211,14 @@ def tree(git: str, commit: str) -> Iterator[Path]:
     top = Path(tempfile.mkdtemp(prefix="research-asker-"))
     at = top / commit[:12]
     try:
-        r = subprocess.run(["git", f"--git-dir={git}", "worktree", "add", "--quiet", "--detach", str(at), commit],
-                           capture_output=True, text=True)
+        r = subprocess.run(launcher.git(f"--git-dir={git}", "worktree", "add", "--quiet", "--detach", str(at), commit),
+                           capture_output=True, text=True, env=launcher.git_env())
         if r.returncode:
             raise OSError(f"no checkout of {commit[:12]} from {git}: {r.stderr.strip()[-300:]}")
         yield at
     finally:
-        subprocess.run(["git", f"--git-dir={git}", "worktree", "remove", "--force", str(at)], capture_output=True)
+        subprocess.run(launcher.git(f"--git-dir={git}", "worktree", "remove", "--force", str(at)), capture_output=True,
+                       env=launcher.git_env())
         shutil.rmtree(top, ignore_errors=True)
 
 

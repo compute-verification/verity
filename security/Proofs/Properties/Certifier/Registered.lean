@@ -3,15 +3,15 @@ module
 public import Properties.Certifier.Registered
 
 /-!
-# The network certifier's link states its rate: the proof
+# The network attester's link states its rate: the proof
 
-`registered` finds the named link, refuses it unless it joins a network certifier and a host, and refuses it where it
+`registered` finds the named link, refuses it unless it joins a network attester and a host, and refuses it where it
 states no rate; what it returns carries the rate it found (`registeredLinkRated`).
 -/
 
 @[expose] public section
 
-open NetworkCheck (Registered)
+open NetworkVerifier (Registered)
 
 namespace Properties.Certifier.Registered
 

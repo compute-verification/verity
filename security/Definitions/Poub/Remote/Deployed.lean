@@ -7,8 +7,8 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # The deployed game's session as a run of PoUB (trusted)
 
-`Run.ofDeployed` reads a deployed session (`Accounting.Rate.DeployedRun`, `Definitions/Poub/RateAuditDeployed.lean`)
-as a run of PoUB (`Accounting.Remote.Run`) on a node `Nd` with parameters `a`, over the session's coins: the
+`Run.ofDeployed` reads a deployed session (`ResourceAccounting.Rate.DeployedRun`, `Definitions/Poub/RateAuditDeployed.lean`)
+as a run of PoUB (`ResourceAccounting.Remote.Run`) on a node `Nd` with parameters `a`, over the session's coins: the
 store and every window's coins, uniform. The audit's passes are the session's `n·P`; its declared capacity is meant to be
 the session's `n·P·N·b` bits, which the guarantees over it take as a hypothesis on `Nd` and `a`.
 
@@ -34,9 +34,9 @@ work, Mbw's independent data): each is `0`, and no route proved for this run rea
 
 @[expose] public section
 
-namespace Accounting.Remote
+namespace ResourceAccounting.Remote
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 
 variable {n P N b h ρ S L q r s d G τ : ℕ}
 
@@ -83,4 +83,4 @@ def Run.ofDeployedWindow (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n
   workOut _ := 0
   other _ := 0
 
-end Accounting.Remote
+end ResourceAccounting.Remote

@@ -65,7 +65,7 @@ structure Shared where
   innerCoins : Option String
   innerSession : Option String
   transcript : Option String
-  registration : Option String
+  docket : Option String
   innerStatement : Option String
   innerTables : Option (List (String × String))
   innerSample : Option String
@@ -77,12 +77,12 @@ structure Shared where
 def linksOf (links : Option (ByteArray × Nat)) : Option (String × Nat) := links.map fun l => (hexOf l.1, l.2)
 
 /-- **The shared inputs' digests**, from the bytes `verify` read. -/
-def Shared.ofFiles (recInner innerCircuit innerPublic innerPartition innerCoins innerSession transcript registration :
+def Shared.ofFiles (recInner innerCircuit innerPublic innerPartition innerCoins innerSession transcript docket :
     Option ByteArray) (innerStatement : Option String)
     (innerTables : Option (List (String × ByteArray))) (innerSample : Option ByteArray)
     (links : Option (ByteArray × Nat)) (innerProgram : Option ByteArray) : Shared :=
   ⟨recInner.map digest, innerCircuit.map digest, innerPublic.map digest, innerPartition.map digest,
-    innerCoins.map digest, innerSession.map digest, transcript.map digest, registration.map digest, innerStatement,
+    innerCoins.map digest, innerSession.map digest, transcript.map digest, docket.map digest, innerStatement,
     innerTables.map (·.map fun t => (t.1, digest t.2)), innerSample.map digest, linksOf links,
     innerProgram.map digest⟩
 
@@ -105,7 +105,7 @@ def Shared.toJson (s : Shared) : Json :=
   Json.mkObj [("rec_inner", optJson s.recInner), ("inner_circuit", optJson s.innerCircuit),
     ("inner_public", optJson s.innerPublic), ("inner_partition", optJson s.innerPartition),
     ("inner_coins", optJson s.innerCoins), ("inner_session", optJson s.innerSession),
-    ("inner_transcript", optJson s.transcript), ("inner_registration", optJson s.registration),
+    ("inner_transcript", optJson s.transcript), ("inner_registration", optJson s.docket),
     ("inner_statement", optJson s.innerStatement),
     ("inner_tables", match s.innerTables with
       | none => .null
@@ -154,7 +154,7 @@ def Shared.diff (s t : Shared) : String :=
     one "inner_coins" "a record of check 5's coins, --rec-inner-coins" s.innerCoins t.innerCoins <|>
     one "inner_session" "the inner session's record, --rec-inner-session" s.innerSession t.innerSession <|>
     one "inner_transcript" "the challenger's live-coin part's transcript, --rec-inner-transcript" s.transcript t.transcript <|>
-    one "inner_registration" "the circuit registration, --rec-inner-registration" s.registration t.registration <|>
+    one "inner_registration" "the circuit registration, --rec-inner-registration" s.docket t.docket <|>
     one "inner_statement" "how the inner statement is proved, --rec-inner-statement" s.innerStatement t.innerStatement <|>
     one "inner_tables" "the inner statement's lookup tables, --rec-inner-tables"
       (s.innerTables.map toString) (t.innerTables.map toString) <|>

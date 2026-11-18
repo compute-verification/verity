@@ -82,7 +82,7 @@ theorem publishes_publishedQBytes_iff : PublishedQBytes ↔
     ∀ (node : Node) (rec : Record) (a b e : ByteArray) (pub : Poub.Protocol.Public),
       Publishes node rec a b e pub →
       (pub.qBytes : ℝ) + (Poub.Codec.BLOCK_BYTES : ℝ) *
-          Accounting.Remote.Sample.pooled node.samples (fun c => min (rec.sampleReceiptsAt node c) receiptMax)
+          ResourceAccounting.Remote.Sample.pooled node.samples (fun c => min (rec.sampleReceiptsAt node c) receiptMax)
             (fun c => min node.params.samples (min (rec.sampleReceiptsAt node c) receiptMax))
             (Poub.Protocol.DELTA : ℝ) ≤
         (Poub.Codec.BLOCK_BYTES : ℝ) * ((rec.receipts node).toList.sum : ℕ) := by

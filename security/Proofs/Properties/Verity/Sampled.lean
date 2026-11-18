@@ -558,7 +558,7 @@ def OpensUnder (r : Verity.ExecutionPhaseFiles) (op : (g : Fin r.circuit.N) → 
 
 end Live
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The constructions the subprotocol reads, applied to a strategy of the period's game**: the projection, the device's other
 releases the strategy may ask for (`coins`) and the Flock live strategy it is read as at the session widened by them

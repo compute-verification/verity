@@ -21,8 +21,8 @@ computes none but the LM head's. A round's forward calls Pearl+ once a cut linea
 which the circuit reads as the call commits them: round s's call c, the c-th cut linear of a position's forward, has its A
 rows ``pearl-a/<s>/<c>`` (x widened to FP32, the round's m rows of the fixed load, `PearlTables.rows`, then zero rows up to
 the call's `PearlTables.a_rows`) and its y ``pearl-y/<s>/<c>`` (its N BF16 words a row widened to FP32, the round's m rows).
-Each cut linear is a unit `LinearARow_v1{K, R, ROUND, CALL}` (`registry.linear_cut`) whose output, x widened to FP32, is
-held to row i of its call's A rows, i its position's row (`FixedLoad.at`), and a unit `LinearOut_v1{N, W, ROUND, CALL}`
+Each cut linear is a unit `LinearARow_v3{K, R}` (`registry.linear_cut`) whose output, x widened to FP32, is held to row
+i of its call's A rows, i its position's row (`FixedLoad.at`), and a unit `LinearOut_v3{N, W}`
 that reads row i of its call's y and hands its BF16 words on to its readers in rows of W (`PearlTables.words`, doubled
 where a unit of N / W rows would be no proof block). The circuit's program takes them as its values, round by round and
 call by call the A rows then the y. Pearl+'s window record, at its version 2, registers each weight w's B rows too,
@@ -36,7 +36,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     a_value,
     b_value,
     NCP_SCHEMES as SCHEMES,
@@ -59,7 +59,7 @@ class WindowClass:
     ``outputs`` outputs, ``lanes`` of them anchored at each boundary, one every ``every`` scan buckets from the window's
     start (lanes 0: every slot at the window's one boundary). Slots are lane-major: slot ``nb · j + b`` is boundary b's lane j
     (nb = slots / lanes boundaries), anchored at bucket ``every · b``, and the window is ``buckets`` = every · nb buckets. Its
-    `scan` is the network certifier's scan class its slots are."""
+    `scan` is the network attester's scan class its slots are."""
     slots: int
     prompt: int
     outputs: int
@@ -98,11 +98,11 @@ class WindowClass:
 
     @property
     def scan(self) -> Any:
-        """The network certifier's scan class at its lanes, outputs, timestep and prompt ids (`scan_state.scan_class`)."""
+        """The network attester's scan class at its lanes, outputs, timestep and prompt ids (`scan_state.scan_class`)."""
         return SS.scan_class(self.lanes, self.outputs, self.every, self.prompt)
 
 
-#: the class of record, the network certifier's envelope at these fixed slots:
+#: the class of record, the network attester's envelope at these fixed slots:
 #: 8 slots a 32-bucket window, 4 at each of buckets 0 and 16 (EVERY 16, D 2.7 s), each of at most 1,024 prompt ids and 64
 #: outputs
 CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)

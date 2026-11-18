@@ -117,6 +117,7 @@ import hashlib
 import itertools
 import math
 import struct
+import sys
 from bisect import bisect_left
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -128,8 +129,8 @@ from verity.circuits.silicon import fp32
 from verity.circuits.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
 from verity.errors import InvalidArtifact
 
-from verity.protocols.accounting.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
-from verity.protocols.accounting.pouw.verifier.registration import (  # noqa: F401 - re-exported
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from verity.protocols.resource_accounting.compute.pouw.verifier.registration import (  # noqa: F401 - re-exported
     GAMMA_FOLD,
     HEAD_INTERLEAVE,
     REGISTRATION_STACKS,
@@ -139,10 +140,10 @@ from verity.protocols.accounting.pouw.verifier.registration import (  # noqa: F4
     check_registration,
 )
 
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from . import pearl_c4_c_L as CL
-from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_work import UnitRecord
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_work import UnitRecord
 
 R = 32
 ATOM = 64
@@ -1310,7 +1311,8 @@ class PearlC4:
             b, e_b = self._side(b_rows, tile.cols, ROLE_EB, ROLE_FB, noise.seed_b, noise.seed_b, k)
             ops = C.Ops(a, b, e_a, e_b, peel_factors_a(self.fmt, a, e_a, noise.seed_b, k),
                         peel_factors_b(self.fmt, b, e_b, noise.seed_b, k))
-        except P.Reject:
+        except P.Reject as e:
+            print(f"pearl-c4: a tile's operands are outside the scheme's domain, so it encodes to none ({e})", file=sys.stderr)
             ops = None
         self._encoded = (key, ops)
         return ops

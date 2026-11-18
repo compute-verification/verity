@@ -1,6 +1,6 @@
 """`pouw_h1.H1Run`'s call tables hashed on the GPU: a call's A table and z table, each
 `pouw_h1_requests.hiding_rows` of its leaves, computed by the Commit's row-table kernels
-(`verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu`, `row_table_kernels`) as a step of one table.
+(`verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cu`, `row_table_kernels`) as a step of one table.
 
 The kernels hash rows of K 8-bit codes then a 4-byte word, so a table's leaf value is that row followed by its 192-byte salt,
 and its root is `hiding_rows`' when the table's layout says so (`layout`): the domain id is ``audit.rows_domain``'s (the
@@ -36,13 +36,13 @@ from functools import cache
 from typing import Any
 
 import numpy as np
-from verity.protocols.accounting.pouw.verifier.audit import HM96, rows_domain
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, rows_domain
 
-from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as RTD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import row_table_kernels as RTD
 from verity_torch.pouw import row_table_device as RTL
-from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
-from verity.protocols.accounting.pouw.prover.serving.h1 import tables as TB
-from verity.protocols.accounting.pouw.prover.serving.h1.tables import _binding, _keep, settle
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import tables as TB
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.tables import _binding, _keep, settle
 
 __all__ = ["FUSE", "MODE", "Pending", "STREAMS", "available", "commit_tables", "device_hash", "device_lib", "device_roots",
            "flush", "host_roots", "layout", "path", "record_rows", "row_words", "settle", "take_z"]
@@ -117,7 +117,7 @@ def host_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> lis
 
 def nvcc() -> str | None:
     """`pouw_device`'s nvcc: its configured `TOOLCHAIN`'s, or nvcc on the path."""
-    from verity.protocols.accounting.pouw.prover.serving import device as pouw_device
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device
 
     return pouw_device.nvcc()
 
@@ -253,7 +253,7 @@ def row_words(t: Any, m: int, dtype: str) -> np.ndarray:
 
 def _fuses(run: Any, records: Any) -> bool:
     """Whether the call's z table, over ``records`` (on the GPU), waits for its registered ``zy@<c>`` (`take_z`)."""
-    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
     from verity_torch.pouw.h1 import registered_device as D
 
     return (FUSE and getattr(run, "served", None) is not None and records.dim() == 2 and records.is_contiguous()

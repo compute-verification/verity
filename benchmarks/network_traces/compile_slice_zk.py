@@ -1,7 +1,7 @@
-"""The compile slice (`compile_slice_v7.CompileSlice_v7`: CompileSlice_v1 that also charges each certified arrival's
+"""The compile slice (`compile_slice_v7.CompileSlice_v7`: CompileSlice_v1 that also charges each attested arrival's
 length term) proved in zero knowledge: one window of a few steps as one unit, proved by Flock `prove --zk` behind the
 Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--plain``), through the one-stage audit path
-(`network_certifier_zk._one_stage`: its stager, ZK server and received-pieces scan).
+(`network_attester_zk._one_stage`: its stager, ZK server and received-pieces scan).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean verity-verify-proof --out DIR
       [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--plain] [--dry]
@@ -9,7 +9,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
 
 * **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice_v7.demo`, 59,613 ANDs a
   unit, max_tokens 8, 16 and 255), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven
-  steps (`verity/protocols/accounting/certifier/verifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit, each
+  steps (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit, each
   arrival's max_tokens its request's), which `prove` first checks is the corpus's (`replay_vectors.vectors` on
   corpus-smallkv: the arrivals, the decisions and the replay's rows; `cache_vectors`' tokens of each arrival); or
   ``w212``, window 212 of vLLM's served run (the encodings' ``vllm-8eb1`` fixture) padded into the run's public engine
@@ -21,7 +21,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
   the trace header's.
 * **The charge** is `window_charge`'s ChargeLink_v2{D, 0, 0, K} from the session's carry under the registered book (the
   arith fixture's async-light stream's): the window's decisions as CompileSlice_v1 charges them, and a length term for
-  each certified arrival, bitlen(max_tokens) + 1 bits read from its ``cert`` row's max_tokens and output length, as
+  each attested arrival, bitlen(max_tokens) + 1 bits read from its ``cert`` row's max_tokens and output length, as
   code_v1 sends it (`lengths.widths`). The demo's and the corpus's window is the session's first, so its carry-in is
   the book's first carry under its public salt; w212's is the carry over windows 0 … 211 of the run, each window's
   decisions and its requests' length terms as its replay gives them, which `prove` commits window by window
@@ -33,7 +33,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
   (CompileSlice_v1's, the length terms left out); ``max-tokens``, on the demo and the corpus, the arrival whose length
   term its output length would most shorten with that max_tokens in its ``cert`` row, every check passing at the lower
   charge (w212's requests all stop at their cap, so no lower max_tokens fits their output); ``arrival``, arrival 1's
-  prompt one token longer in its ``cert`` row (an arrival not in the certified record); ``cleared``, advice that leaves
+  prompt one token longer in its ``cert`` row (an arrival not in the attested record); ``cleared``, advice that leaves
   the last asked decision uncommitted (a cleared enable; on w212 also ``cleared-read``, the window row cut too, so the
   scan reads past the count); ``carry``, a carry-out other than the charge's carry' (the book's first carry on the demo
   and the corpus, counts fitted to the window on w212); ``restart``, the charge from a carry-in of its own (zero counts
@@ -57,7 +57,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
   ``adv`` row is row i of the advice's hiding registration (`verity.commitments.advice`: its leaf from b‖c, its path
   to the registered root), its ``srv`` row j is leaf i·(P / G) + j of the served rows' registration
   (`served_rows.leaf`, `served_rows.leaf_ok`), its
-  ``cert`` row is the certified record's commitment (a stand-in: one ``cert`` row under the certifier's salt, b‖c as
+  ``cert`` row is the attested record's commitment (a stand-in: one ``cert`` row under the attester's salt, b‖c as
   `a7.opens` recomputes it; ``arrival``, ``tokens`` and ``max-tokens`` hold rows other than it, and ``max-tokens`` this
   check alone refuses), and its ``cin`` and ``cout`` rows are the window's carry rows in the session's chain
   (`window_charge.check_chain` on the earlier windows' openings and the unit's two).
@@ -98,20 +98,20 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO))
 
 from benchmarks.network_traces import zk_drivers  # noqa: E402
-from verity.protocols.accounting.certifier.prover import leak_scan as LS, network_certifier_zk as WZ  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import charge_chain as CC  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import leak_scan as LS, network_attester_zk as WZ  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import charge_chain as CC  # noqa: E402
 from verity_vllm.compiler import compile_slice as CS  # noqa: E402
 from verity_vllm.compiler import served_rows as SR  # noqa: E402
 from verity.commitments import advice as ADV  # noqa: E402
 from verity.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 from verity_vllm.compiler import compile_slice_v7 as V7  # noqa: E402
-from verity.protocols.accounting.certifier.prover import window_charge as WC  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import window_charge as WC  # noqa: E402
 
-FIXTURES = REPO / "verity/protocols/accounting/certifier/verifier/tests/fixtures"
+FIXTURES = REPO / "tests/verity/protocols/resource_accounting/network/verifier/fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
 W212 = FIXTURES / "compile_slice_w212_class_async.json"
-TRACE_8EB1 = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz"
+TRACE_8EB1 = REPO / "tests/benchmarks/network_e2e/encodings/fixtures/vllm-8eb1/advice_trace.jsonl.gz"
 WINDOW = 212
 #: counts fitted to w212, from which its decisions charge 25 bits in place of the session's 27
 FITTED = WC.WindowCarry(((1, 0), (16, 0), (64, 16)))
@@ -126,7 +126,7 @@ REFUSED = {
     "corpus": {**_BASE, "max-tokens": set(), "table": {"cache"}, "tokens": {"rows"}, "hit": {"cache", "rows"},
                "reread": {"steps", "rows"}, "untaken": {"steps", "rows"}, "sixpass": {"rows"}, "sixpass-own": set()},
     "w212": {**_BASE, "cleared-read": {"steps", "rows"}, "sixpass": {"rows"}, "sixpass-own": set()}}
-#: the kinds whose ``cert`` row isn't the certified record's
+#: the kinds whose ``cert`` row isn't the attested record's
 CERT = {"arrival", "tokens", "max-tokens"}
 #: the decision each slice's ``flip`` flips, and the passes of its ``sixpass``
 FLIP = {"demo": 2, "corpus": 5, "w212": 12}
@@ -279,12 +279,12 @@ def chain(x: SimpleNamespace, program: str, registration: str) -> SimpleNamespac
 
 def _corpus(tmp: Path) -> Path:
     """corpus-smallkv unpacked as the derived rules' tests read it
-    (`benchmarks/network_e2e/encodings/tests/test_v1.py`'s `_corpus`, which imports pytest): each batch in Model Runner
+    (`tests/benchmarks/network_e2e/encodings/test_v1.py`'s `_corpus`, which imports pytest): each batch in Model Runner
     V2's order, each stop-id finish marked `eos`."""
     import gzip
     import shutil
 
-    src = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/corpus-smallkv"
+    src = REPO / "tests/benchmarks/network_e2e/encodings/fixtures/corpus-smallkv"
     for f in ("meta.json", "server.log"):
         shutil.copy(src / f, tmp / f)
     out = []
@@ -427,7 +427,7 @@ def population(meta: dict, kinds: tuple[str, ...]) -> int:
 
 
 def certified(M, port, words: list[int], salt: bytes) -> bytes:
-    """The certified record's commitment b‖c (the stand-in: the honest ``cert`` row under the certifier's salt)."""
+    """The attested record's commitment b‖c (the stand-in: the honest ``cert`` row under the attester's salt)."""
     return M.CS.FC._commit_strings([port], {port.name: M.np.asarray([words], dtype=M.np.uint16)}, {port.name: [salt]})[port.name][0]
 
 

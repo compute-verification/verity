@@ -5,7 +5,7 @@ public import Definitions.Certifier.Run
 /-!
 # The Program's schedule: frames at their send ticks, one FIFO per execution block
 
-The Program gives every real frame a **send tick**: the bucket, on the network certifier's bucket clock, at which B(a_j)
+The Program gives every real frame a **send tick**: the bucket, on the network attester's bucket clock, at which B(a_j)
 hands it over. An execution block's span is `g·T` consecutive buckets. Its frames are handed in canonical order, each
 at `h(k) = max(send(k), h(k−1))` from the span's first bucket, and the certifier's own rule (FIFO at the allocation,
 left-packed: `fifoGrid`) fixes every row. The FIFO starts empty at each span's first bucket, and a frame handed at or
@@ -16,8 +16,8 @@ block, `Fin E → Adv`; the protocol's is a string of `|a|` bits, `Adv = Fin k �
 (content, send tick, canonical order) are `frames ins e (a e) ℓ`: a function of the ingress and of `e`'s own advice
 only, which is B's computation and is left abstract. So block `e`'s rows read no other block's advice.
 
-**The program.** The certifier program (`NetworkCertifier.Schedule`, `schedule.py`) computes each frame's hand tick from
-a declared clock sync per window (`NetworkCertifier.handingBuckets`). Its rows over its `W` windows are this schedule's
+**The program.** The certifier program (`NetworkAttester.Schedule`, `schedule.py`) computes each frame's hand tick from
+a declared clock sync per window (`NetworkAttester.handingBuckets`). Its rows over its `W` windows are this schedule's
 for one execution block of those windows, at send ticks its hand ticks (`Proofs.Certifier.Code`).
 
 **One clock per spatial unit.** Every egress link reads the same advice. **The allocation is the slot count `S`**, as

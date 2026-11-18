@@ -6,17 +6,17 @@ public import Definitions.Pouw.Basic.Prob
 /-!
 # PoUW's work floor on one node, an open conjecture (trusted)
 
-A3 of the converged model (v3.1), over `Accounting.PouwWork`'s vocabulary on the actual circuit: a `Prop` about one
-strategy `S` and the verifier `P`, taken as a hypothesis by `Accounting.Guarantees.PouwLocalOff`, never an `axiom`. It
+A3 of the converged model (v3.1), over `ResourceAccounting.PouwWork`'s vocabulary on the actual circuit: a `Prop` about one
+strategy `S` and the verifier `P`, taken as a hypothesis by `ResourceAccounting.Guarantees.PouwLocalOff`, never an `axiom`. It
 is an open conjecture, so it is not under `shape.premises`: it becomes a premise under `shape.conjectures` once it has a
 falsification test that runs. The other three premises are in `Definitions.Pouw.Assumptions.PouwWork`.
 -/
 
 @[expose] public section
 
-namespace Accounting.Assumptions
+namespace ResourceAccounting.Assumptions
 
-open Accounting.PouwWork
+open ResourceAccounting.PouwWork
 
 variable {Ω : Type} [Fintype Ω] {L : Type*} (S : Ω → Actual.Run L) (P : Verdict Ω L)
 
@@ -34,4 +34,4 @@ def PouwFloorOff (X : Finset L) (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, 
   ∃ Z : Ω → Prop, Pouw.pr Z ≤ δ ∧
     ∀ r, ¬ Z r → Nmin ≤ goodAll S P → Wb * Nmin ≤ credits S P X π m r + ρ * help S P X r
 
-end Accounting.Assumptions
+end ResourceAccounting.Assumptions

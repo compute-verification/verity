@@ -14,7 +14,7 @@ P1, P2) and the period's dual price:
 * `OutsourceWithinEgressPeriod`: an exchanged bit replaces at most `β` of priced timed work, over the period's
   programs together, the one premise that prices outside machines.
 
-The network certifier's count is `Definitions.Pouw.Assumptions.Dither.CertifierSeesImports`, the headline's.
+The network attester's count is `Definitions.Pouw.Assumptions.Dither.CertifierSeesImports`, the headline's.
 
 **Non-vacuity is open.** `RemoteWorkFloor` rests on `SAKMatmul` and `SAKResidual`. 𝓜 as `Definitions.Core.Accel`
 writes it prices register reductions, so the four Russians' method pays at least an `alu` lane a MAC, but `SAKMatmul`
@@ -74,7 +74,7 @@ carries `β K`.
 **The coins stay in the boundary.** It is a premise about exchanged bits, so it is claimed where a coin
 reaches a machine outside the registered devices only through a bit their programs exchange: the coins are
 confidential (`CoinsConfidential`). For the MVP that holds by placement: the device that runs a
-server's network certifier also produces that server's live coins, and private messages travel only on private links
+server's network attester also produces that server's live coins, and private messages travel only on private links
 (`WitnessPathPrivate`), so no coin leaves the boundary the certifier counts but through
 the links it counts. Trust in that device and its host provider is `trusted-device`. A coin readable outside the
 boundary falsifies the premise: an outside machine computes the block's words from it and returns the root in 512

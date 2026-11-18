@@ -479,7 +479,7 @@ end Session
 
 /-! ## The projection on the live audit -/
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- The link points' count at the session. -/
 abbrev Live.mP (A : Live) : ℕ :=

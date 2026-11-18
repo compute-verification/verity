@@ -28,7 +28,7 @@ that bound at each pass (`Chain.pr_unpaid_le`).
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -431,18 +431,18 @@ theorem pr_compress_any_named_le (A : RelayDevice N b h ρ S L q) (lam : ℕ) :
 
 end RelayDevice
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 open Bandwidth (pr_le_of_card pr_mono pr_or_le)
 
 /-- **Conservation over tiers with named words, with side sources that ignore the oracle**
-(`Accounting.Guarantees.RateConservationNamedRO`). -/
-theorem RateConservationNamedRO : Accounting.Guarantees.RateConservationNamedRO := by
+(`ResourceAccounting.Guarantees.RateConservationNamedRO`). -/
+theorem RateConservationNamedRO : ResourceAccounting.Guarantees.RateConservationNamedRO := by
   classical
   intro N b h ρ S L q k lam τ tier A hA
   rcases Nat.eq_zero_or_pos k with rfl | hk
@@ -469,8 +469,8 @@ theorem RateConservationNamedRO : Accounting.Guarantees.RateConservationNamedRO 
   have := InteractiveProver.taken_le A tier x.1 x.2.1 x.2.2
   exact Or.inr ⟨hk', by omega, hcol⟩
 
-/-- **Correct receipts are paid for, at every count, with named words** (`Accounting.Guarantees.RatePaidNamedRO`). -/
-theorem RatePaidNamedRO : Accounting.Guarantees.RatePaidNamedRO := by
+/-- **Correct receipts are paid for, at every count, with named words** (`ResourceAccounting.Guarantees.RatePaidNamedRO`). -/
+theorem RatePaidNamedRO : ResourceAccounting.Guarantees.RatePaidNamedRO := by
   classical
   intro N b h ρ S L q lam τ tier A hA
   have hA' := InteractiveProver.toRelay_side A hA
@@ -497,8 +497,8 @@ theorem RatePaidNamedRO : Accounting.Guarantees.RatePaidNamedRO := by
   omega
 
 /-- **The route `Sampled` with named words, with side sources that ignore the oracle**
-(`Accounting.Guarantees.RateChainSampledNamedRO`). -/
-theorem RateChainSampledNamedRO : Accounting.Guarantees.RateChainSampledNamedRO := by
+(`ResourceAccounting.Guarantees.RateChainSampledNamedRO`). -/
+theorem RateChainSampledNamedRO : ResourceAccounting.Guarantees.RateChainSampledNamedRO := by
   intro P N b h ρ S L q r s K lam τ tier A hA
   have h₁ := Chain.pr_pooled_le A K
   have h₂ := Chain.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun j η =>
@@ -510,4 +510,4 @@ theorem RateChainSampledNamedRO : Accounting.Guarantees.RateChainSampledNamedRO 
     rw [← Finset.sum_mul]
     exact Nat.mul_le_mul_right _ (by omega)
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

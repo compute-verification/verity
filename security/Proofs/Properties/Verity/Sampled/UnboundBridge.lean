@@ -7,7 +7,7 @@ public import Proofs.Flock.Bridge.FaultyRightC
 /-!
 # A unit unbound in the transcript a witness opens is faulty
 
-`Accounting.unbound` at a game circuit's partition (`Verity.Partition.ofAudit P`), the transcript a witness opens
+`ResourceAccounting.unbound` at a game circuit's partition (`Verity.Partition.ofAudit P`), the transcript a witness opens
 (`openedOf C κ val`) and any openings `opens` of the circuit's gates that hold at the constants `κ` fix and wherever
 `val` opens a value: a unit there is incorrect in the transcript, or one of its committed inputs and outputs (`io`) is not
 opened to its value. Either way its lowered gates `unitGates P u` are correct in `progOf C κ` at no interior values
@@ -68,12 +68,12 @@ theorem not_correct_of_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n
     (hK : ∀ g b, κ g = some b → opens g (BitVec.ofBool b))
     (hO : ∀ g b, κ g = none → val (posOf C g) = some b → opens g (BitVec.ofBool b))
     {u : Fin n}
-    (hu : u ∈ Accounting.unbound (Verity.Partition.ofAudit P) opens (Verity.Circuit.ofBits (openedOf C κ val)))
+    (hu : u ∈ ResourceAccounting.unbound (Verity.Partition.ofAudit P) opens (Verity.Circuit.ofBits (openedOf C κ val)))
     (ι : ℕ → Bool) :
     ¬ (progOf C κ).Correct ((progOf C κ).refIn (unitGates P u) val ι) (unitGates P u) := by
   classical
   intro hc
-  simp only [Accounting.unbound, Finset.mem_filter, Finset.mem_univ, true_and] at hu
+  simp only [ResourceAccounting.unbound, Finset.mem_filter, Finset.mem_univ, true_and] at hu
   rcases hu with hw | ⟨g, hg, hop⟩
   · have h1 : u ∉ P.incorrect (openedOf C κ val) := fun hm => P.mem_incorrect.1 hm (correct_of_progCorrect P u val ι hc)
     rw [← Verity.Partition.incorrect_ofAudit P] at h1
@@ -128,7 +128,7 @@ theorem unbound_subset_faulty_slots {n : ℕ} (P : FlockSoundness.Audit.Partitio
     (hκ : ∀ g b, κ g = some b → (C.op g).isInput = true)
     (hK : ∀ g b, κ g = some b → opens g (BitVec.ofBool b))
     (hO : ∀ g b, κ g = none → w.val H Cm s (posOf C g) = some b → opens g (BitVec.ofBool b)) :
-    (Accounting.unbound (Verity.Partition.ofAudit P) opens
+    (ResourceAccounting.unbound (Verity.Partition.ofAudit P) opens
         (Verity.Circuit.ofBits (openedOf C κ (w.val H Cm s)))).image Fin.val ⊆ faulty H Cm s Ps w := by
   classical
   intro v hv
@@ -149,7 +149,7 @@ theorem unbound_subset_faulty_partOf {n : ℕ} (P : FlockSoundness.Audit.Partiti
     (hκ : ∀ g b, κ g = some b → (C.op g).isInput = true)
     (hK : ∀ g b, κ g = some b → opens g (BitVec.ofBool b))
     (hO : ∀ g b, κ g = none → w.val H Cm s (posOf C g) = some b → opens g (BitVec.ofBool b)) :
-    (Accounting.unbound (Verity.Partition.ofAudit P) opens
+    (ResourceAccounting.unbound (Verity.Partition.ofAudit P) opens
         (Verity.Circuit.ofBits (openedOf C κ (w.val H Cm s)))).image Fin.val ⊆ faulty H Cm s (partOf P κ ns) w := by
   classical
   intro v hv
@@ -176,7 +176,7 @@ theorem unbound_subset_faulty_honest {n : ℕ} (P : FlockSoundness.Audit.Partiti
       κ g = some (v.getLsbD 0) ∨ ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, v.getLsbD 0, d⟩ = true) :
     (∀ g b, κ g = some b → opens g (BitVec.ofBool b)) ∧
       (∀ g b, κ g = none → (witDep C Cm H roots Xr).val H Cm s (posOf C g) = some b → opens g (BitVec.ofBool b)) ∧
-      Accounting.unbound (Verity.Partition.ofAudit P) opens
+      ResourceAccounting.unbound (Verity.Partition.ofAudit P) opens
         (Verity.Circuit.ofBits (openedOf C κ ((witDep C Cm H roots Xr).val H Cm s))) = ∅ := by
   classical
   have hK : ∀ g b, κ g = some b → opens g (BitVec.ofBool b) := fun g b hk =>
@@ -225,14 +225,14 @@ theorem unbound_subset_faulty_nontrivial (H : Claims.Msg → Claims.Msg) (roots 
     let Cm : CommitmentScheme Bool := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
     let s := stmtOf notPartition (fun _ => none) r desc q roots
     let w := witDep notCircuit Cm H roots (fun _ => false)
-    ¬ (Accounting.unbound (Verity.Partition.ofAudit notPartition) (fun _ _ => False)
+    ¬ (ResourceAccounting.unbound (Verity.Partition.ofAudit notPartition) (fun _ _ => False)
         (Verity.Circuit.ofBits (openedOf notCircuit (fun _ => none) (w.val H Cm s)))).image Fin.val ⊆
       faulty H Cm s (partOf notPartition (fun _ => none) ns) w := by
   intro Cm s w hsub
-  have hun : (0 : Fin 1) ∈ Accounting.unbound (Verity.Partition.ofAudit notPartition) (fun _ _ => False)
+  have hun : (0 : Fin 1) ∈ ResourceAccounting.unbound (Verity.Partition.ofAudit notPartition) (fun _ _ => False)
       (Verity.Circuit.ofBits (openedOf notCircuit (fun _ => none) (w.val H Cm s))) := by
     classical
-    simp only [Accounting.unbound, Finset.mem_filter, Finset.mem_univ, true_and]
+    simp only [ResourceAccounting.unbound, Finset.mem_filter, Finset.mem_univ, true_and]
     refine Or.inr ⟨⟨1, by decide⟩, ?_, by simp⟩
     simp only [Verity.Partition.io, Finset.mem_filter]
     exact ⟨(Verity.Partition.mem_committed_ofAudit notPartition _).2

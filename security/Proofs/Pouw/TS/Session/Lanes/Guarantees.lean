@@ -40,10 +40,10 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A leaf's 33 linked sessions realize one unit (the statement)
 
-`Accounting.Guarantees.TS.LeafLanesSound`: under option A a sampled 32 × 32 H1 leaf is proved as its 32 lanes
+`ResourceAccounting.Guarantees.TS.LeafLanesSound`: under option A a sampled 32 × 32 H1 leaf is proved as its 32 lanes
 (`h1zy.PouwH1LaneZy_v1{TILE}`) and their combine (`PouwH1Combine_v1{TILE}`), 33 Flock sessions over the leaf's
 committed rows and one post-draw partials record. Accepted together, they realize the one-unit proof layer
-`Accounting.TS.Lanes.leafLayer`, whose relation is the unit's served checks on the leaf's 32 × 32 cells (`UnitServed`:
+`ResourceAccounting.TS.Lanes.leafLayer`, whose relation is the unit's served checks on the leaf's 32 × 32 cells (`UnitServed`:
 `z = A·Bᵀ` and `y = dq(z)` at every cell, the receipt the XOR of its lanes' honest partials) unless two of the
 sessions' registrants' records exhibit a SHA-512 collision (`LeafColl`) or a session's known-content tie does
 (`LeafKnownColl`). Its acceptance includes verity-verify-proof's known-content, complete and known-read checks at each of
@@ -54,27 +54,27 @@ of its sample (`PouwWindow.Lanes.checkFull`: every unit of a non-empty populatio
 from the verifier's own `own`, every circuit port's row that `own` names read through `own`'s port at its one position,
 and only the rows, salts and paths the registrants committed come from them. It takes `CheckedSessionSound`'s
 hypotheses at each session as named premises, Flock's collision bounds and the window's sampling design
-(`Accounting.Premises.TS.SessionsCR`, `ExecutionPhaseDesigns`), but port uniqueness and the `ok` port, which that acceptance gives
+(`ResourceAccounting.Premises.TS.SessionsCR`, `ExecutionPhaseDesigns`), but port uniqueness and the `ok` port, which that acceptance gives
 (the known-read check's names, at known content naming `o0`), full checking (`kd = n`) and a unit (`0 < n`), which the
 sample check gives, and registered served roots (`RowsSession.ServedRegistered`), which the reads built from `own` and the
 one-read check give, and two named premises: the
 lanes' and the combine's circuits compute their pieces' compositions on bits, at their port rows, read through the
-layout's decodes (`Accounting.TS.Lanes.LaneLowers` and `CombineLowers` at `Lanes.decL`, `Lanes.decC`; the lane's dequant
+layout's decodes (`ResourceAccounting.TS.Lanes.LaneLowers` and `CombineLowers` at `Lanes.decL`, `Lanes.decC`; the lane's dequant
 is its Definition's word view, `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`), and its chain words are `h1tile._chain`'s,
-`Accounting.TS.Lanes.laneChain K nw` (`Pouw.H1Zy.h1Chain K` at the `pub` row's seeds); the complete check makes those
+`ResourceAccounting.TS.Lanes.laneChain K nw` (`Pouw.H1Zy.h1Chain K` at the `pub` row's seeds); the complete check makes those
 rows the registered reads). That the pieces'
-lowerings compose to the Definitions is proved (`Accounting.TS.Lanes.laneComputes_of_lowers`,
+lowerings compose to the Definitions is proved (`ResourceAccounting.TS.Lanes.laneComputes_of_lowers`,
 `combineComputes_of_lowers`, `Pouw.H1Zy.laneBits_bv`, `combineBits_bitsOf`), and that
 each Definition's `ok = 1` means the lane's or the combine's check
-(`Accounting.TS.Lanes.leafChecks_of_computes`, which gives `Accounting.Assumptions.TS.LeafChecks`), at a `K`
+(`ResourceAccounting.TS.Lanes.leafChecks_of_computes`, which gives `ResourceAccounting.Assumptions.TS.LeafChecks`), at a `K`
 the lanes bind at (`32 ∣ K`, `K < 2^17`), which the leaf verifier's tile check, part of the acceptance, gives
-(`PouwWindow.Lanes.Tile.check`, `Accounting.TS.Lanes.k_of_check`). The leaf the layer opens is the one the lanes' committed rows decode to, and the receipt it checks
-the one the combine's committed row decodes to (`Accounting.TS.Lanes.leafOf`, `receiptOf`): each A row as the lane
+(`PouwWindow.Lanes.Tile.check`, `ResourceAccounting.TS.Lanes.k_of_check`). The leaf the layer opens is the one the lanes' committed rows decode to, and the receipt it checks
+the one the combine's committed row decodes to (`ResourceAccounting.TS.Lanes.leafOf`, `receiptOf`): each A row as the lane
 `4 (r mod 8)` reads it, each B row as the lane `⌊(j mod 8)/2⌋` reads it, each cell of the record as the one lane whose
 cell it is, so no premise says which leaf the rows hold. The four lanes that read one A row, or one B row, read it in
 full (`PouwWindow.Lanes.readFull`) at one registered tree, so they decode it alike up to a clash of their registrants'
 records (`LeafColl`). The known content each session is handed is
-the path's public inputs' rows (`Accounting.TS.Lanes.knownOf`, `PouwWindow.Lanes.knownRows`), so that check and the
+the path's public inputs' rows (`ResourceAccounting.TS.Lanes.knownOf`, `PouwWindow.Lanes.knownRows`), so that check and the
 known-read check bind them, unasked: lane `l`'s `pub` row its salt, position, roots and index `l`, its `admit` row the
 admit bits, and every `o0` row `ok = 1`. That each session's registered file holds the layout's data ports
 (`PouwWindow.Lanes.ownOf` at one table per value, `roots`, each value placed in its table from a base row, `place`) is
@@ -87,17 +87,17 @@ partials row and the combine's `p<l>` are one row, the partials record is the ro
 of it is asked. The leaf is one unit of the registered circuit, and the partials are proof-layer values.
 Each proof is then accepted with a leaf that fails the unit's checks, and no collision in hand, with
 probability at most `33 δ`: `δ` a session from `CheckedSessionSound`, joined by a union bound. It is
-`Accounting.Guarantees.TS.LeafGroupSound`'s argument (`Accounting.TS.Group.group_soundAt`) at the 32 × 32 leaf, one
+`ResourceAccounting.Guarantees.TS.LeafGroupSound`'s argument (`ResourceAccounting.TS.Group.group_soundAt`) at the 32 × 32 leaf, one
 chunk a lane, where the group's premise `GroupRealizes` is proved from the two above
-(`Accounting.TS.Lanes.groupRealizes_lanes32`).
+(`ResourceAccounting.TS.Lanes.groupRealizes_lanes32`).
 It sits in the proofs package because the sessions do (`reads_exempt`).
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees.TS
+namespace ResourceAccounting.Guarantees.TS
 
-open Accounting.TS Accounting.TS.Lanes Flock.SoundAtBridge
+open ResourceAccounting.TS ResourceAccounting.TS.Lanes Flock.SoundAtBridge
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
@@ -123,21 +123,21 @@ on the session's record: `subset` of every unit of a non-empty population), and 
 (`PouwWindow.Lanes.checkOneRead`, which `pouw-leaf-own` runs too: every port of the file has one read), and of the
 tile (`PouwWindow.Lanes.Tile.check` at 32 × 32 and `K`, which `pouw-leaf-own` runs in `lane?` and `combine?`: `32 ∣ K`
 and `K < 2^17` among others), opening the leaf its lanes' committed rows
-decode to (`Accounting.TS.Lanes.leafOf` at the served tile: each A
+decode to (`ResourceAccounting.TS.Lanes.leafOf` at the served tile: each A
 row as lane `4 (r mod 8)` decodes it, each B row as lane `⌊(j mod 8)/2⌋` does, each cell of the record as the lane whose
 cell it is, at the registrants' commit-time openings), its relation the unit's served checks at the path's public
-inputs `pub` and the receipt the combine's committed row decodes to (`Accounting.TS.Lanes.receiptOf`), or a clash of two
+inputs `pub` and the receipt the combine's committed row decodes to (`ResourceAccounting.TS.Lanes.receiptOf`), or a clash of two
 of the sessions' registrants' records, `LeafColl`, or a collision of a session's known-content tie, `LeafKnownColl`):
 given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses as the named premises
-`Accounting.Premises.TS.SessionsCR` (`RowsSession.CR`) and `Accounting.Premises.TS.ExecutionPhaseDesigns` (the window's sampling design
-`Accounting.Assumptions.TS.ExecutionPhaseDesign` at each statement), and
+`ResourceAccounting.Premises.TS.SessionsCR` (`RowsSession.CR`) and `ResourceAccounting.Premises.TS.ExecutionPhaseDesigns` (the window's sampling design
+`ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign` at each statement), and
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta,$$
 `δ ≥ 0`), the 33 circuits computing
 their pieces' compositions on bits, at their port rows through the layout's decodes at
-the served tile (`Accounting.TS.Lanes.LaneLowers` at `servedTile K`: the s8 multiply's Baugh–Wooley steps and clamp,
+the served tile (`ResourceAccounting.TS.Lanes.LaneLowers` at `servedTile K`: the s8 multiply's Baugh–Wooley steps and clamp,
 `PouwZyCell_v2`, `PouwMuxBit_v2`, `PouwMask32_v2` and `PouwEq32_v2` at their lowerings, `Pouw.H1Zy.laneBits`, at the
 lanes' chain words `laneChain K nw` (`Pouw.H1Zy.h1Chain K`, the fx1 chain over the noise from σ_J keyed from σ_R, at
-the `pub` row's salt, position and roots) and the dequant's Definition `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`) on bits; and `Accounting.TS.Lanes.CombineLowers` at `decC nw (servedTile K)`: `PouwXor32_v2`, `PouwEq32_v2` and
+the `pub` row's salt, position and roots) and the dequant's Definition `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`) on bits; and `ResourceAccounting.TS.Lanes.CombineLowers` at `decC nw (servedTile K)`: `PouwXor32_v2`, `PouwEq32_v2` and
 `PouwAndBit_v2` at their lowerings, `Pouw.H1Zy.combineBits`; under the complete check every port the
 decodes read is registered and opens at its registered root), with the unit's served checks at the Definition's own
 dequant and partials (`dqOf Pouw.H1Zy.zyDequant`, `partOf (laneChain K nw)`), each
@@ -163,8 +163,8 @@ def LeafLanesSound : Prop :=
     (roots : Paths Ω S → Fin S → Fin nπ → String → _root_.Flock.Registered.Port)
     (place : Paths Ω S → Fin S → Fin nπ → String → String × ℕ)
     (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) (δ : ℝ),
-    Accounting.Premises.TS.SessionsCR sess →
-    Accounting.Premises.TS.ExecutionPhaseDesigns sess out →
+    ResourceAccounting.Premises.TS.SessionsCR sess →
+    ResourceAccounting.Premises.TS.ExecutionPhaseDesigns sess out →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     (∀ x w i, LaneLowers (servedTile K) (laneChain K nw) Pouw.H1Zy.zyDequant (sess x w i)) →
     (∀ x w i, CombineLowers (sess x w i) (decC nw (servedTile K))) →
@@ -176,4 +176,4 @@ def LeafLanesSound : Prop :=
       right).SoundAt
       (33 * δ)
 
-end Accounting.Guarantees.TS
+end ResourceAccounting.Guarantees.TS
