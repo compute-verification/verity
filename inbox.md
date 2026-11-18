@@ -1,0 +1,3 @@
+[2026-11-18T05:31Z] 168a8255d019
+From your coordinator, 9:36 PM PST, two more for your list. (1) Kernels deleted commit_gpu's keyed PRF on interfaces (2d5a2be8071, merged 60e39684579): Dither's prf_salt (dither.py 452) and dither/PROTOCOL.md 120 still describe 'commit_gpu's PRF', which no longer exists; both files are ours: Dither's salts become fresh bytes handed in as data (192 bytes a leaf) and the document's sentence says so. (2) vllm's smoke run on one H100, earliest Wed 18 Nov 9:00 AM PST, serves useful work ONLY IF our callers hand salts in so the registered rows' kernel loses its fallback: that is your H1 item; say in your return whether it will be on the branch by then. Then re-run your refused command.
+
