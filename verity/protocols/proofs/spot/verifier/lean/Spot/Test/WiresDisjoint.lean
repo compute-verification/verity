@@ -9,11 +9,12 @@ meta import Spot.Wires
 the live wires it compares, counted by `sweepWork`, at most a small multiple of the wires, where the pairwise test makes
 W(W−1)/2 comparisons. `kahn`'s order, the verifier's output, held to the loop it replaced (`kahnRef`: the first
 template by index not placed and reading none not placed, found by a scan at each step) on random wirings, acyclic and
-cyclic, with repeated template ids, and on a served class's shape: the same order or the same refusal. `check` and
+cyclic, with repeated template ids, and on a served class's shape: the same order or the same refusal. The order test's
+binary search (`orderedWireBin`) held to `orderedWire` on random orders that `orderOk` accepts and that it refuses. `check` and
 `orderOk`, compiled with their maps (`check_eq_fast`, `orderOk_eq_fast`), held to their bodies as written (`checkOld`,
 `orderOkOld`) on random wirings that reach every refusal, with stated orders and repeated ids; and the whole check on
-700k wires of the served shape, its order's work counted (`orderWork`: each wire's ranges of its reader, and of its
-writer in each reader range it meets).
+700k wires of the served shape, its order's comparisons counted (`orderWork`: each wire's search of its reader's ranges,
+and of its writer's in each reader range it meets), a small multiple of log₂ of a template's ranges.
 -/
 
 @[expose] public section
@@ -255,15 +256,54 @@ def cyclic : Wiring :=
 
 #guard code (check cyclic) == "cycle" && sameCheck (check cyclic) (checkOld cyclic)
 
-/-- `checkFast`'s order work: each wire's ranges of its reader, and of its writer in each reader range it meets. -/
+/-- An order over `names`' 8 units from seed `x`: each template's units cut into random pieces (contiguous, so
+`meetsIn` searches), or random ranges that overlap, leave gaps or run past the units (so it filters, and `orderOk`
+mostly refuses), in random ranks. -/
+def randomOrder (x : Nat) (names : List String) : List UnitRange :=
+  let (o, _) := names.foldl (fun (acc, x) n =>
+    let x := lcg (x + n.length)
+    if x / 2 ^ 40 % 3 == 0 then
+      let (rs, x) := (List.range 6).foldl (fun (rs, x) _ => let x := lcg x
+        ((n, x / 2 ^ 40 % 9, x / 2 ^ 50 % 4) :: rs, x)) ([], x)
+      (rs ++ acc, x)
+    else
+      let (cs, x) := (List.range 7).foldl (fun (cs, x) k => let x := lcg x
+        (if x / 2 ^ 40 % 2 == 0 then cs ++ [k + 1] else cs, x)) ([], x)
+      let cs := 0 :: cs ++ [8]
+      ((cs.zip cs.tail).map (fun (a, b) => (n, a, b - a)) ++ acc, x)) ([], x)
+  (o.zipIdx.map fun (b, i) => (lcg (x + i) / 2 ^ 40 % 1000, b)).mergeSort (fun a b => a.1 ≤ b.1) |>.map (·.2)
+
+def orderDraws : List (Wiring × List UnitRange) :=
+  (List.range 400).map fun i => let c := checkWiring i (1 + i % 4) 24 false false
+    (c, randomOrder i (c.templates.map (·.1)))
+
+#guard orderDraws.all fun (c, o) => c.wires.all fun w => orderedWireBin (orderIndex o) w == orderedWire o w
+#guard (orderDraws.filter fun (c, o) => orderOk c o).length ≥ 50
+#guard (orderDraws.filter fun (c, o) => !orderOk c o).length ≥ 50
+#guard (orderDraws.filter fun (c, o) => orderOk c o && !c.wires.all (orderedWire o)).length ≥ 20
+
+/-- `scanFrom`'s ranges looked at from `k`: up to the first starting at or past `hi`. -/
+def scanWork (A : Array (UnitRange × Nat)) (hi k : Nat) : Nat :=
+  ((A.toList.drop k).takeWhile (·.1.2.1 < hi)).length + 1
+
+/-- `meetsIn`'s comparisons: `lowerBound`'s halvings and the ranges `scanFrom` looks at, or every range filtered. -/
+def meetsWork (e : Array (UnitRange × Nat) × Bool) (lo hi : Nat) : Nat :=
+  if e.2 then Nat.log2 e.1.size + 1 + scanWork e.1 hi (lowerBound (endsPast e.1 lo) 0 e.1.size) else e.1.size
+
+/-- `checkFast`'s order comparisons: each wire's search of its reader's ranges, and of its writer's in each reader range
+it meets. -/
 def orderWork (c : Wiring) : Nat :=
   match orderOf c with
   | .error _ => 0
   | .ok o =>
-    let g := groupBy (·.1.1) o.zipIdx
+    let ix := orderIndex o
     c.wires.foldl (fun n w =>
-      let rs := g.getD w.reader []
-      n + rs.length + ((rs.filter fun (b, _) => w.readsIn b).length) * (g.getD w.writer []).length) 0
+      let er := ix.getD w.reader (orderEntry [])
+      let ew := ix.getD w.writer (orderEntry [])
+      n + meetsWork er w.start (w.start + w.readerUnits) +
+        ((meetsIn er w.start (w.start + w.readerUnits)).map fun (b, _) =>
+          let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
+          meetsWork ew s.1.toNat (s.2.toNat + 1)).sum) 0
 
 /-- The served shape at 696,966 wires: 100 templates of 137 layers, 13,700 root nodes. The file takes
 about seven minutes under the interpreter: a stage quadratic in the wires, templates or ranges would not return, which
@@ -272,7 +312,7 @@ def big : Wiring := servedWiring 100 137
 
 #guard big.wires.length == 696966
 #guard (check big).toBool
-#guard orderWork big ≤ 300 * big.wires.length
+#guard orderWork big ≤ 4 * (Nat.log2 137 + 3) * big.wires.length
 #guard !(check { big with wires := { big.wires.headD (wire "" "" 0 0 0 1) with start := 3 } :: big.wires }).toBool
 
 end Spot.Test.WiresDisjoint
