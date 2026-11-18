@@ -319,10 +319,12 @@ class FixRanges:
 
 @dataclass(frozen=True)
 class ReleaseValue:
-    """A scheme's request that registered value ``value``'s storage be released while no block reads it, and restored,
-    with the same bytes, before one does."""
+    """A scheme's request that registered value ``value``'s storage be released once it is resident, the scheme's
+    kernels computing every block that reads it (`ComputeBlockWith`), and restored to ``restore()``, the same bytes,
+    when the workload's memory hook comes off."""
 
     value: str
+    restore: Callable[[], Handle]
 
 
 @dataclass(frozen=True)
