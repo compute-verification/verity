@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.pipeline.serve_seal import GB
+
+GB = 10 ** 9
 
 
 class DiskFloor:
