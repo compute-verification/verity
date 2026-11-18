@@ -94,6 +94,7 @@
   "verity/protocols/resource_accounting/network/verifier/registered.py": 1
  },
  "scheme_package_imports": {
+  "benchmarks/attester_load/pacing.py": 3,
   "benchmarks/codec_tensor/wide.py": 2,
   "benchmarks/datacenter/datacenter/memory.py": 1,
   "benchmarks/harness/verity_bench/schemes.py": 1,
