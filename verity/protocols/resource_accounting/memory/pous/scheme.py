@@ -137,6 +137,9 @@ POUS = register(Scheme(
     check=period.answer,
     reader=_pous_reading,
     premises=(),
+    # Across forwards it holds C*, its own encoded store, and the decode's handle on C*'s rows; each registered weight
+    # is released, and a weight decoded from C* for a block lives for that one call.
+    keeps_weight_copy=False,
     **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
                     Lacks("not a kernel scheme")),
 ))
