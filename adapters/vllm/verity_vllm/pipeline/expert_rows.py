@@ -22,7 +22,8 @@ that the record declares as a table (`interface.Table`), with its root and domai
 row, salt and path an opening at the key ``in0`` that the verdict ``o1`` holds (`declarations`).  The committer commits each
 table the window reads from the weights it serves, under the salts its registration drew, at the program it names
 (`records.expert_tables`, `committer`, `commit_tables`), so the window's root of a table is the registered one exactly when it
-serves the registered rows, and its openings are of that root.
+serves the registered rows, and its openings are of that root; a window serving other rows is refused, publishing none of its
+tables.
 
 A pair is a pair row; its layer is the op_path of the router row its expert id reads, its slot k the id's place among the
 router's ids, and its token that router row.  Units go layer by layer, the layers in the order they first appear: a read's
@@ -394,7 +395,8 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     """Each table the window's reads read, committed from the weights served (each layer's stack as ``slices`` reads it,
     `serving_rows._slices`; `table_words`) as core's ``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows with its rows
     held, under the salts of ``committer``'s registration at the ``program`` it names (`committer`), by parameter.  Refused for
-    a table the registration holds no salts for."""
+    a table the registration holds no salts for, and, publishing none of them, where any table's root is not its registered
+    one (`_registered`)."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
         registered_commit,
@@ -418,7 +420,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
                 held = (g, _stack(slices, x, store, weights, int((arrivals or {}).get(x[0], 0)), arg, 8 if of == "w" else 32))
             out[param] = registered_commit(committer["program"], param, table_words(held[1], of, E, N, K, G_, n, b), bytes(32), 0,
                                            keep_rows=True, row_salts=ys, schema=G.SCHEMA_SEG)
-    return out
+    return _registered(out, committer)
 
 
 #: the serving process's embedding shards' tables (`commit_shard`), by the committer's salt file and program and the table's
@@ -430,16 +432,26 @@ _BNK: dict[tuple[str, str, str], Any] = {}
 
 def _salts(committer: Mapping[str, Any], param: str) -> bytes:
     """The salts ``committer``'s registration drew for ``param``'s rows, refused for a parameter it does not register."""
-    if param not in committer["values"]:
+    if param not in committer["roots"]:
         raise ValueError(f"{param}: the committer's registration holds no salts for the table (records.expert_tables)")
     return SF.read(committer["salts"], param)
+
+
+def _registered(got: Mapping[str, Any], committer: Mapping[str, Any]) -> Mapping[str, Any]:
+    """``got`` where every table's root is the one ``committer``'s registration names; else refused by the tables' names alone,
+    no root in the message, so nothing of them is published."""
+    if bad := sorted(p for p, v in got.items() if v.root.hex() != committer["roots"][p]):
+        raise ValueError(f"tables refused, nothing of them published: {bad} are served words whose root under the registration's "
+                         "salts is not the registered one")
+    return got
 
 
 def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable[[], np.ndarray]) -> Any:
     """The rank's ``(B, K, N)`` weight ``label`` in (B, N, K) order (`bnk_param`, `bnk_words` of ``field()``, its elements as
     served), committed as core's ``registered.Registered`` of ``hm96-sha512/row/v2`` rows with its rows held, under
     the salts of ``committer``'s registration at the program it names, once a process: a value this process committed is
-    handed back as held and ``field`` is not called.  Refused for a parameter the registration holds no salts for."""
+    handed back as held and ``field`` is not called.  Refused for a parameter the registration holds no salts for, and for one
+    whose root is not the registered one (`_registered`), which is then not held."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
         registered_commit,
     )
@@ -448,7 +460,8 @@ def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable
     ys = _salts(committer, param)
     at = (str(committer["salts"]), str(committer["program"]), param)
     if at not in _BNK:
-        _BNK[at] = registered_commit(at[1], param, bnk_words(field()), bytes(32), 0, keep_rows=True, row_salts=ys)
+        v = registered_commit(at[1], param, bnk_words(field()), bytes(32), 0, keep_rows=True, row_salts=ys)
+        _BNK[at] = _registered({param: v}, committer)[param]
     return _BNK[at]
 
 
@@ -459,12 +472,14 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
     commits an expert block's, once a process.  A table this process committed under the same salt file at the same program is
     handed back as held (`_SHARDS`) and ``shard`` is called only where one is not, so a window pays for the shard's
     tables only where no earlier window of its process has.  Refused for a table the registration holds no salts for: the
-    registration holds the shard's tables at its one width, and a table at any other is none of its."""
+    registration holds the shard's tables at its one width, and a table at any other is none of its; and, holding none of them,
+    where a table's root is not the registered one (`_registered`)."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
     W = shard_block(H)
     out: dict[str, Any] = {}
+    new: dict[tuple[str, str, str], Any] = {}
     words = None
     for b in range(H // W):
         param = shard_param(label, W, b)
@@ -474,21 +489,23 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
             if words is None:
                 words = shard()
             V, start = committer["vocab"][param]
-            _SHARDS[at] = registered_commit(at[1], param, shard_words(words, V, start, b), bytes(32), 0, keep_rows=True,
-                                            row_salts=ys, schema=G.SCHEMA_SEG)
-        out[param] = _SHARDS[at]
+            new[at] = registered_commit(at[1], param, shard_words(words, V, start, b), bytes(32), 0, keep_rows=True,
+                                        row_salts=ys, schema=G.SCHEMA_SEG)
+        out[param] = _SHARDS.get(at) or new[at]
+    _registered({at[2]: v for at, v in new.items()}, committer)
+    _SHARDS.update(new)
     return out
 
 
 def committer(reg: XT.ExpertTables, salts: str | Path) -> dict[str, Any]:
     """A window's committer's tables (`serving_rows.after_commit`'s ``tables``) from its registration ``reg`` and the salt file
-    ``salts`` its registration wrote (`verity.commitments.salt_file`): the rank's program and its tables; where it registers an embedding
+    ``salts`` its registration wrote (`verity.commitments.salt_file`): the rank's program and each table's registered root; where it registers an embedding
     shard's tables (`shard_param`), also the vocabulary each is registered over and the rank's first token of it (``vocab``:
     the entry's rows, and the rank's even share of them)."""
     if not set(reg.values) <= set(SF.params(salts)):
         raise ValueError(f"{salts}: the salt file holds no salts for some of the registration's tables; it is not this "
                          "registration's")
-    out = {"salts": Path(salts), "program": reg.program, "values": frozenset(reg.values)}
+    out = {"salts": Path(salts), "program": reg.program, "roots": {p: str(e["root"]) for p, e in reg.values.items()}}
     vocab = {p: (int(e["leaves"]), reg.rank * (int(e["leaves"]) // reg.world)) for p, e in reg.values.items() if p.endswith("/vocab")}
     return {**out, "vocab": vocab} if vocab else out
 

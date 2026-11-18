@@ -15,7 +15,7 @@ producer's (a node's output segment) or, for a leaf of the Definition's paramete
 parameters. A batch or scan of a family step, which the int8 Definitions don't have, counts all its lanes when both
 multiplicands have a run-time leaf (an upper bound).
 
-`int8_census` reads vLLM's exact-int8 Definitions (`int8_exact.py`): `Int8Linear_v1` (`Int8RowQuant`, then the s8×s8
+`int8_census` reads vLLM's exact-int8 Definitions (`int8_exact.py`): `Int8Linear_v3` (`Int8RowQuant`, then the s8×s8
 IMMA chain against registered weights), `Int8KvQuant_v1` (the KV head's quantizers) and `Int8LutAttentionRow_v1` (`Q′`,
 `Q′K′ᵀ`, the LUT softmax, `P V′`). The linear multiplies activations by registered weights, a linear map, so it has no
 data product; the KV quantizers have no family step; the attention row's `Q′K′ᵀ` and `P V′` multiply run-time values by
@@ -37,7 +37,7 @@ from verity.circuits import stacking as P
 
 #: (Definition, statics, which parameters depend on a run input): the served shapes measured, Llama-3.1-8B's head dim
 SHAPES: tuple[tuple[str, dict, tuple[bool, ...]], ...] = (
-    ("Int8Linear", {"K": 4096, "N": 64}, (True, False, False)),
+    ("Int8LinearV3", {"K": 4096, "N": 64}, (True, False, False)),
     ("Int8KvQuant", {"S": 64, "D": 128}, (True, True, True)),
     ("Int8LutAttentionRow", {"D": 128, "S": 64, "SCALE": 0.08838834764831845}, (True,) * 6),
 )

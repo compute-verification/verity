@@ -200,10 +200,11 @@ def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
 
     def linear(name: str, N: int, K: int) -> list[tuple[str, Type]]:
         """A decoder linear's parameters: its bf16 weight, or the exact-int8 checkpoint's s8 weight and f32 row scales
-        (`engine.int8_vllm.Int8PlainLinearMethod`'s `weight` [N, K] and `weight_scale` [N, 1], in that order)."""
+        (`engine.int8_vllm.Int8PlainLinearMethod`'s `weight` [N, K] and `weight_scale` [N, 1], in that order) as the u16 words
+        they are registered as, [N][K/2] and [N][2]."""
         if not C.int8:
             return [(name + ".weight", bf(N, K))]
-        return [(name + ".weight", _arr((N, K), 8)), (name + ".weight_scale", _arr((N, 1), 32))]
+        return [(name + ".weight", bf(N, K // 2)), (name + ".weight_scale", bf(N, 2))]
 
     out: list[tuple[str, Type]] = [("model.embed_tokens.weight", bf(V, C.H))]
     for L in range(C.NL):

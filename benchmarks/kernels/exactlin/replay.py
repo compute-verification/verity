@@ -1,6 +1,6 @@
 """The int8 Definitions' replay evaluators on the fused kernels' outputs: `Int8RowQuant_v1` (int8_rows.int8_row_quant_rows)
-on each dumped x against the kernel's xq and s_a, and `ScaledMmS8_v1` (int8_rows.scaled_mm, DOT=BlackwellS8ImmaDot32_v1)
-on the kernel's xq and s_a, row by row, against its y.  The npz files are `kgate.py --dump`'s (OUT/replay/), words
+on each dumped x against the kernel's xq and s_a, and `ScaledMmS8_v3` (int8_rows.scaled_mm, DOT=BlackwellS8ImmaDot32_v1)
+on the kernel's xq and s_a, row by row, w and sw as their u16 words, against its y.  The npz files are `kgate.py --dump`'s (OUT/replay/), words
 throughout; CPU only.
 
 `--evaluators` is an int8_rows.py to load in place of the installed `verity_vllm.definitions.numerics.int8_rows`, e.g. a
@@ -47,8 +47,10 @@ def check(ev: ModuleType, f: Path) -> dict:
     if hasattr(ev, "scaled_mm"):
         statics = {"K": k, "N": n, "DOT": ev.DOT}
         y_diff = 0
+        ww = np.ascontiguousarray(w.astype(np.uint8)).view("<u2")
+        sww = np.ascontiguousarray(np.asarray(sw).reshape(-1).astype("<u4")).view("<u2")
         for r in range(m):
-            out = ev.scaled_mm(statics, [xq[r], s[r:r + 1], w, sw])["0"]
+            out = ev.scaled_mm(statics, [xq[r], s[r:r + 1], ww, sww])["0"]
             y_diff += int((np.asarray(out, dtype=np.uint16) != y[r]).sum())
         doc["scaled_mm"] = {"y_diff": y_diff, "cells": m * n}
     doc["ok"] = (doc["row_quant"]["xq_diff"] == 0 and doc["row_quant"]["s_diff"] == 0

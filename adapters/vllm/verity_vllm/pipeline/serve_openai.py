@@ -587,6 +587,18 @@ class _Route:
         return self.answer
 
 
+def tick_admission(loop: EngineLoop, sched: Any, opts: Any) -> tuple[Any, TickAdmit]:
+    """``--admit tick`` on ``sched``: the gate and the frontend attached to this process's exchange, and the admission
+    hook, the one the build put on ``sched`` where it did."""
+    from verity_vllm.engine import admission
+    loop.gate = TickGate(Tick.of_ms(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms), hold_s=opts.admit_hold_ms / 1000)
+    loop.gate.attach(M.current())
+    loop.hook = admission.install(sched)
+    order = TickAdmit(loop.submit, loop.abort, loop.tick)
+    order.attach(M.current())
+    return loop.hook, order
+
+
 class HttpThread(threading.Thread):
     """``server`` on ``host:port`` in this thread's own event loop: ``ready`` is set once it listens (``address``), and
     `shutdown` stops it from any thread."""
@@ -785,13 +797,7 @@ def main(opts: Options) -> int:
     if opts.admit == "release-order":
         order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
     elif opts.admit == "tick":
-        from verity_vllm.engine import admission
-        from verity_vllm.engine.engine_driver import external_id
-        loop.gate = TickGate(Tick.of_ms(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms), hold_s=opts.admit_hold_ms / 1000)
-        loop.gate.attach(M.current())
-        ticked = loop.hook = admission.install(scheduler(engine), key=external_id)
-        order = TickAdmit(loop.submit, loop.abort, loop.tick)
-        order.attach(M.current())
+        ticked, order = tick_admission(loop, scheduler(engine), opts)
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
                     defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order,
                     arrive=ticked.arrive if ticked is not None else None)

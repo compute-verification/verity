@@ -6,8 +6,8 @@ the first window's coins as the record `records.expert_tables.ExpertTables`: the
 (``records_audit.py audit --registered``), so a window's table read and opening count registered exactly where the window's root
 for the table is this one.  The salts go to the salt file beside the record (`verity.commitments.salt_file`) and never leave the
 committer; a window's committer commits the tables it serves under those salts at the program the record names
-(`expert_rows.committer`, `serving_rows.after_commit`'s ``tables``), so a table served as registered has its registered root and
-any other's reads are free.
+(`expert_rows.committer`, `serving_rows.after_commit`'s ``tables``), so a table served as registered has its registered root, and a
+window serving any other is refused, publishing none of its tables.
 
 A stack's tables are its e4m3 weight's blocks of ``blocks[proj]`` rows (n, a power of two dividing N) and its f32 scales' rows, as
 the partition's read templates read them: a block of rows of ``H = n K / 2`` words, a scale row of ``H = 2 K / G``.  The rank's
