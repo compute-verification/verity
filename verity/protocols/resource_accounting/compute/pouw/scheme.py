@@ -524,6 +524,7 @@ PEARL_PLUS = register(Scheme(
     pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"), development="gate",
                               starts=("gate", "peer", "lane", "key-sha512", "main-file"),
                               starts_optional=("lane", "main-file"))},
+    answers=Lacks("has no piece that answers outside an exchange"),
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),

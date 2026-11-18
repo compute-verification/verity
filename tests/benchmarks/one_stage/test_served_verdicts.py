@@ -6452,7 +6452,7 @@ def test_the_hand_off_carries_pearlpluss_piece_of_record_which_the_compose_follo
     tied = [f"pearlplus/w7/tie/{f}" for f in (S.WINDOW_REGISTRATION, S.AUDIT_SUMMARY, S.CIRCUIT_RECORD)]
     assert set(listed) >= {*tied, *(f"private/compose/pieces/pouw/{f}" for f in PEARLPLUS_HANDED)}
     assert S.witness(listed) == []
-    rc, lines, order = _compose(tmp_path, H1_KEY_SHA512=pin)
+    rc, lines, order = _compose(tmp_path, H1_KEY_SHA512=pin, VERITY_HOLD_PLACEMENT=None)  # pin: the test's own key
     assert rc == 2 and order == ["composite", "record"], (lines, order)
     assert lines[0] == COMPOSED.format(audit="no V3c audit", sampled=STEP3, verdict="PASS")
     argv = json.loads((tmp_path / "order.record").read_text())
@@ -8388,3 +8388,24 @@ def test_a_run_of_record_refuses_a_challenger_key_other_than_the_one_of_record(t
         assert rc == 0 and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed"), lines
     else:
         assert rc == 3 and H1_KEY_REFUSED not in lines and lines[0].startswith("PREFLIGHT: with V3c off"), lines
+
+
+def test_every_piece_the_launcher_names_to_pieces_is_one_the_parser_takes(tmp_path, monkeypatch):
+    """Each ``--only``/``--skip`` word served_verdicts.sh passes to `served_verdicts.py pieces`, read off the script,
+    goes through the real parser to `pieces` as that word; a word the parser's choices lack exits 2 there."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    words = re.findall(r"--(only|skip) ([a-z][a-z-]*)", script)
+    assert {f for f, _w in words} == {"only", "skip"}, words
+
+    class Taken(Exception):
+        pass
+
+    def taken(*_a, only=None, skip=(), **_k):
+        raise Taken(only, skip)
+
+    monkeypatch.setattr(S, "pieces", taken)
+    for flag, word in words:
+        with pytest.raises(Taken) as got:
+            S.main(["pieces", "--serve-run", str(tmp_path), "--window", "0", "--out", str(tmp_path / "out"),
+                    f"--{flag}", word])
+        assert got.value.args[0 if flag == "only" else 1] == [word], (flag, word)

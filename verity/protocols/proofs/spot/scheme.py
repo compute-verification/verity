@@ -30,6 +30,7 @@ S.register(S.Scheme(
     depends=(),
     pieces={"workers": S.Launch(optional=("gate", "peer", "key", "gate-key", "loopback", "main-file"), reaches="challenger",
                                 starts=("loopback", "main-file"), starts_optional=("loopback", "main-file"))},
+    answers=S.Lacks("has no piece that answers outside an exchange"),
     record="integrity",
     symbol=CHARGES_NOTHING,
     published=CHARGES_NOTHING,
