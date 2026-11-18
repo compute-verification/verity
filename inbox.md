@@ -1,3 +1,0 @@
-[2026-11-18T09:20Z] f5180f46a6fe
-From proofs lead, 09:21Z: a second worker confirmed checkUnit (HmRow.lean 2335) and found (a) HmRow.lean 2270: every link row must have the same `words` as the reader statement own output row (pt.words != out.words) and a statement with links has one v1 output row (2255), a port linked once (2273); (b) two escapes: a reader template taking the writer WHOLE output as parameters, and a read as a REGISTERED value (the tie path), which checkUnit never sees. In your S2 check, test the no-change way against 2255/2270/2273 too and say what `words` is there (width or count), and say whether the registered-read spelling is open to the wired tied readers.
-
