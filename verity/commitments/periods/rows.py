@@ -237,6 +237,7 @@ class Member:
     link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the period's row table and rank it is
     wired: tuple[WI.Wired, ...] = ()             # per wired port: the leaves of its writer template's output tree its units read
+    values: tuple[str, ...] = ()                 # input ports whose rows are a registered value's, given as `ValueRows`: no tree
 
     def __post_init__(self) -> None:
         if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
@@ -359,6 +360,10 @@ class Binding:
                 raise ValueError(f"{m.key}: its rows lie in trees other members' rows share (its wired ports, or outputs of a "
                                  "template of several members), each opened by its path: make it a shared-row member "
                                  "(Member.tables)")
+            if m.values and (not m.tables or not set(m.values) <= {p for p, _ in m.rows}
+                             or set(m.values) & {w.port for w in m.wired}):
+                raise ValueError(f"{m.key}: its value ports {m.values} are input rows of a shared-row member (Member.tables), "
+                                 "none wired: each row opens its registered value's tree by its path, with no tree of its own")
             for w in m.wired:
                 if dict(m.tables).get(w.port) != len(self.leaves(m, w.port)):
                     raise ValueError(f"{m.key}: its wired {w.port!r} table is the {len(self.leaves(m, w.port))} leaves of "
@@ -462,9 +467,14 @@ class Binding:
         several members."""
         return bool(m.wired) or self.templates[m.template] != m.n
 
+    def held(self, m: Member, port: str) -> bool:
+        """Whether member ``m``'s port ``port`` is its own tree: not wired, not a registered value's (`Member.values`), and
+        not an output of a template of several members."""
+        return port not in m.values and self.tree(m, port) == m.port(port)
+
     def tree(self, m: Member, port: str) -> str:
         """The tree holding member ``m``'s port ``port``: its template's output tree for an output, its writer template's for
-        a wired port (`wiring.tree`), else its own, ``<member>/<port>``."""
+        a wired port (`wiring.tree`), else its own, ``<member>/<port>`` (a value port's is its registration's, `held`)."""
         if port in dict(m.outs):
             return WI.tree(m.template, port)
         w = self.wire(m, port)
@@ -497,11 +507,11 @@ class Binding:
     @cached_property
     def trees(self) -> dict[str, tuple[str, int]]:
         """Every tree of the period's members, its schema and leaves: one each (template, output field), and one each
-        member's input port that is not wired, in order."""
+        member's input port that is neither wired nor a registered value's, in order."""
         out: dict[str, tuple[str, int]] = {}
         for m in self.members:
             for p, _w in m.rows:
-                if self.wire(m, p) is None:
+                if self.wire(m, p) is None and p not in m.values:
                     out[m.port(p)] = (m.schema(p), dict(m.tables).get(p, m.n))
             for o, _w in m.outs:
                 out.setdefault(WI.tree(m.template, o), (m.schema(o), self.templates[m.template]))
@@ -582,13 +592,19 @@ class Committed:
 
     def frame_entry(self, k: int) -> dict[str, Any]:
         """The circuit prover's header ``frame_v3`` entry for member ``k``: its bare port names, as its statement reads them,
-        each at the tree holding it (`Binding.tree`)."""
-        m = self.window.members[k]
+        each at the tree over its own rows (its table's, in a shared-row member) that Flock holds its public file to. A port
+        that is not its own tree (`Binding.held`) gets that tree here from its public strings alone: a header root anyone
+        makes again from the public body, which the record never names."""
+        m, w = self.window.members[k], self.window
         names = [p for p, _ in m.all_rows]
-        held = {p: self.window.tree(m, p) for p in names}
-        return {"frame": "frame-v3-sha512", "roots": {p: self.roots[held[p]].hex() for p in names},
-                "domain_ids": {p: self.domains[held[p]].domain_id.hex() for p in names},
-                "bindings": {p: self.domains[held[p]].binding.hex() for p in names}, "owner": OWNER,
+        rows = {p: dict(m.tables).get(p, m.n) if p not in dict(m.outs) else m.n for p in names}
+        local = {p: w.domain(m.port(p), m.schema(p), rows[p]) for p in names if not w.held(m, p)}
+        made, _ = commit_ports({p: d for p, d in local.items()}, {}, {}, {}, schemas={p: m.schema(p) for p in local},
+                               strings={p: bytes(self.bc[m.port(p)]) for p in local})
+        doms = {p: local.get(p) or self.domains[m.port(p)] for p in names}
+        return {"frame": "frame-v3-sha512", "roots": {p: (made.get(p) or self.roots[m.port(p)]).hex() for p in names},
+                "domain_ids": {p: doms[p].domain_id.hex() for p in names},
+                "bindings": {p: doms[p].binding.hex() for p in names}, "owner": OWNER,
                 "schemas": {p: m.schema(p) for p in names}, "row_key_sha512": hashlib.sha512(INST.default_key).hexdigest()}
 
 
@@ -766,17 +782,23 @@ def _referenced(m: Member, kind: str, p: str, words: int, n: int, src: Any) -> b
     wired = isinstance(src, str) and src == WIRED
     if kind == "rows" and p in {w.port for w in m.wired} and not wired:
         raise ValueError(f"{m.port(p)}: a wired port commits nothing, its rows its writers' output rows: give it as {WIRED}")
+    if kind == "rows" and (p in m.values) != isinstance(src, ValueRows):
+        raise ValueError(f"{m.port(p)}: a registered value's rows are leafed once, in its registration's tree: a port reading "
+                         "them is named in Member.values and given as a ValueRows, and only such a port")
     if kind != "rows" or not (wired or isinstance(src, ValueRows)):
         return False
     if wired and p not in {w.port for w in m.wired}:
         raise ValueError(f"{m.port(p)}: given as {WIRED} rows, but no wire writes it")
     if isinstance(src, ValueRows):
         v, have = src.value, len(src.value.rows)
+        if v.word_bits in (16, 32) and value_words(v) != words:
+            raise NotImplementedError(
+                f"{m.port(p)}: reads {v.value!r}'s rows of {value_words(v)} 16-bit words at its width of {words}: a reader's "
+                "part reads the registered leaves' bits cut again at its width, low part first, which waits on circuits and "
+                "lean defining that cut once in the Program's Lean and Python")
         why = [reason for reason, bad in (
             (f"{len(src.positions)} rows, not {n}", len(src.positions) != n),
             (f"{v.word_bits}-bit leaves, not 16 or 32", v.word_bits not in (16, 32)),
-            (f"rows of {v.words} {v.word_bits}-bit leaves, not {words} 16-bit words",
-             v.word_bits in (16, 32) and value_words(v) != words),
             (f"{v.schema} rows, not {m.schema(p)}", v.schema != m.schema(p)),
             (f"positions outside its {have} rows", not all(0 <= i < have for i in src.positions)),
             (f"salts not one {SALT_BYTES}-byte salt a row",
@@ -1100,12 +1122,11 @@ def _commit_into(window: Binding, data: Iterable[dict[str, Any]], d: Path, *, sa
                     else:
                         v, at = src.value, src.positions[lo:hi]
                         y = value_salts(v, at) if src.salts is None else bytes(src.salts[lo * SALT_BYTES:hi * SALT_BYTES])
-                        run[p] = [None if p in left else value_rows(v, at), y, b"".join(bytes(v.bcs[i]) for i in at)]
-                        jobs[port] = _string_port(domains[port], run[p][2], schemas[port], lo)
-                        if p in left:
-                            if reads.setdefault(v.value, _Reads(v)).value is not v:
-                                raise ValueError(f"{m.key}: two registered values named {v.value!r}")
-                            reads[v.value].add(at, y)
+                        run[p] = [None, y, b"".join(bytes(v.bcs[i]) for i in at)]
+                        if reads.setdefault(v.value, _Reads(v)).value is not v:
+                            raise ValueError(f"{m.key}: two registered values named {v.value!r}")
+                        reads[v.value].add(at, y)
+                        continue
                     tasks += _chunks(port, n, chunk, lo, None if hi >= n else hi)
                 for q, _start, node, bc in _fold(jobs, tasks, workers):
                     nodes[q].append(node)
@@ -1402,21 +1423,19 @@ def shared_entries(window_dir: str | Path, win: Mapping[str, Any], k: int,
     """Header ``registered`` entries (`registered_header`'s form) for member ``k``'s ports held in shared trees
     (`shared_ports`): each as rows of the value `own_value` names for its tree, whose root and domain the registration
     holds, its table's row t at the tree's leaf the wiring gives in closed form, with its path. The tree is made from its
-    writers' public bodies under ``window_dir`` (cached in ``levels`` by tree). Refused where those rows don't make the
-    tree's ``frame_v3`` root."""
+    writers' public bodies under ``window_dir`` under its window domain (cached in ``levels`` by tree); the verifier holds
+    its root to the registration's."""
     d, levels = Path(window_dir), {} if levels is None else levels
     out = {}
     for p, (tid, o, tree, at) in shared_ports(win, k).items():
         docs = _template_docs(win, tid)
-        fv = docs[0][1]["frame_v3"]
+        schema = docs[0][1]["frame_v3"]["schemas"][o]
         if tree not in levels:
             bcs = np.concatenate([np.asarray(_doc_strings(d, win, j, o)) for j, _x in docs])
-            dom = CommitmentDomain(bytes.fromhex(fv["bindings"][o]), OWNER, RangeIndexedDomain(0, len(bcs)), hash="sha512")
-            lv = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bytes(bc)), fv["schemas"][o])
-                                   for i, bc in enumerate(bcs)])
-            if dom.domain_id.hex() != fv["domain_ids"][o] or lv[-1][0].hex() != fv["roots"][o]:
-                raise ValueError(f"{tree}: its writers' rows don't make its frame_v3 root")
-            levels[tree] = lv
+            bind = window_binding(win["partition"]["program"], win["partition_digest"], tree, schema, len(bcs), win["run"])
+            dom = CommitmentDomain(bind, OWNER, RangeIndexedDomain(0, len(bcs)), hash="sha512")
+            levels[tree] = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bytes(bc)), schema)
+                                             for i, bc in enumerate(bcs)])
         lv = levels[tree]
         out[p] = {"value": own_value(tree), "positions": at.tolist(),
                   "paths": [b"".join(level[(int(i) >> h) ^ 1] for h, level in enumerate(lv[:-1])).hex() for i in at]}
