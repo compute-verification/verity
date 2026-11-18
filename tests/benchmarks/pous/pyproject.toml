@@ -50,15 +50,6 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "adapters/vllm/verity_vllm/protocols/pous.py", "adapters/vllm/verity_vllm/engine/__init__.py",
           "adapters/vllm/verity_vllm/engine/hooks.py", "verity/hooks.py", "adapters/vllm/verity_vllm/errors.py",
           "adapters/vllm/verity_vllm/records/schema_ids.py",
-          # the adapter's protocols/__init__.py asks PoUW's serving schemes which installs form weight sides
-          "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/lead/__init__.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/lead/feed.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/lead/record.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/lead/rows.py",
-          "verity/protocols/resource_accounting/compute/pouw/verifier/kernel_schemes.py",
-          "verity/protocols/resource_accounting/compute/pouw/verifier/serving.py",
           # the adapter's pous.py reads its option from PoUS's declaration (memory/pous/scheme.py), which imports these
           "verity/hooks.py", "verity/protocols/resource_accounting/scheme.py",
           # its test reads the answer back as the composed run does: its row (and the core answer's decoder, with what
