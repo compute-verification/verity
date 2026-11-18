@@ -143,13 +143,6 @@ LINES: dict[tuple[str, ...], list[tuple[str, list[str], Any, Any]]] = {
         ("kv_cache_gib", ["--kv-cache-gib", "2"], 2, 4),
         ("rows", ["--rows", "4"], 4, 16),
     ],
-    ("topp-pin-check", "kernel"): [
-        ("out", ["--out", "o"], "o", NEEDED),
-    ],
-    ("topp-pin-check", "served"): [
-        ("workload", ["--workload", "w.json"], "w.json", NEEDED),
-        ("out", ["--out", "o"], "o", NEEDED),
-    ],
     ("topp-split-probe", "produce"): [
         ("out", ["--out", "o"], "o", NEEDED),
         ("record", ["--record", "r.json"], "r.json", None),
