@@ -19,6 +19,7 @@ from poub_fakes import Clock, Entropy
 from test_appends import N, pages, salts, store
 
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
+from verity.protocols.resource_accounting.memory.poub.prover.rota import REGISTRATION, Rota
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, schedule
 from verity.protocols.resource_accounting.memory.poub.verifier.audit import AuditRun, Params
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan
@@ -71,6 +72,7 @@ class Session:
         self.origins: list[tuple[str, int] | None] = []
         self.passes: list[audit_prover.Pass] = []
         self.by_window: dict[tuple[int, int], audit_prover.Pass] = {}
+        self.controlled: list = []
 
     def runs(self, what) -> tuple[int, int]:
         if type(what) is str:
@@ -236,25 +238,44 @@ def _canonical(runs: Sequence[tuple[int, int]]) -> tuple[tuple[int, int], ...]:
     return tuple((f, c) for f, c in out)
 
 
-def control(s: Session, t: int, kept: Sequence = (), keep: Sequence[str] = ()) -> list:
-    """The honest refresh rota's moves in window t, returning what its pass reads: a KV append F (2 pages) in window
-    0, and from window 1 a re-key of the whole registered store (R{t}) and of F (F{t}) each window but the last, each
-    read the window after, when F's payload has aged L = 2 windows; the registered store is read in windows 0 and
-    1, its key's lifetime.  A window's keys are released once a later one is read; `kept` registered blocks and
-    `keep` appends stay."""
-    last = s.p.windows - 1
+R1 = "R1@1"
+"""The rota's re-key of registered class 1 (blocks 4 … 7) joining window 1, the key it reads them under in windows 1
+and 2."""
+
+
+def control(s: Session, t: int, kept: Sequence[int] = (), keep: Sequence[str] = ()) -> list:
+    """The honest prover's moves in window t on the refresh rota (`rota.Rota`), returning what its pass reads: a KV
+    append F of 2 pages in window 0; the re-keys due at t, `R{c}@{t}` of registered class c's run and `F@{t}` of F;
+    the release of what the window before read under a key this one doesn't, but for `kept` registered blocks and
+    `keep` appends; and every chunk read under the key the rota gives it at t, F only once its probation is over."""
+    r = Rota(N, s.p.lifetime, s.p.windows)
     if t == 0:
         s.fresh("F", pages(N, 2))
-        return [REG]
-    if t >= 2:
-        gone = [(j, 1) for j in range(N) if j not in kept] if t == 2 else [n for n in (f"R{t - 2}", f"F{t - 2}")
-                                                                              if n not in keep]
-        if gone:
-            s.release(*gone)
-    if t < last:
-        s.rekey(f"R{t}", (REG, 0))
-        s.rekey(f"F{t}", "F")
-    return [REG] if t == 1 else [f"R{t - 1}", f"F{t - 1}"]
+    reads: list = []
+    for c in range(r.lifetime):
+        first, count = r.class_runs(c)
+        if count:
+            key = r.key(0, c, t, registered=True)
+            reads.append((first, count) if key == REGISTRATION else f"R{c}@{key}")
+    if (key := r.key(0, r.append_class(0), t, registered=False)) is not None:
+        reads.append(f"F@{key}")
+    gone = []
+    for w in s.controlled:
+        if w in reads:
+            continue
+        if type(w) is str:
+            gone += [] if w in keep else [w]
+        else:
+            gone += [(j, 1) for j in range(w[0], w[0] + w[1]) if j not in kept]
+    if gone:
+        s.release(*gone)
+    s.controlled = reads
+    for kind, a in r.due(t, {0: 0}):
+        if kind == "registered":
+            s.rekey(f"R{r.registered_class(a)}@{t}", (REG, a), count=dict(r.registered_due(t))[a])
+        else:
+            s.rekey(f"F@{t}", "F")
+    return reads
 
 
 def honest(s: Session) -> None:
@@ -267,10 +288,11 @@ def honest(s: Session) -> None:
 def plain_stacking(s: Session) -> None:
     """Two fresh appends in window 0, B's payload A's stored form, chosen once A's coin is out; both read in windows
     0 and 1, their key's lifetime."""
-    s.read(*control(s, 0))
+    reads = control(s, 0)
+    s.read(*reads)
     s.fresh("A", pages(16, 1))
     s.fresh("B", s.stored("A"))
-    s.read(REG, "A", "B")
+    s.read(*reads, "A", "B")
     s.next_window()
     s.read(*control(s, 1), "A", "B")
     for t in range(2, s.p.windows):
@@ -302,7 +324,7 @@ def forged_age(s: Session) -> None:
     s.read(*control(s, 0))
     s.next_window()
     s.read(*control(s, 1))
-    s.rekey("X", "F", payloads=s.stored(("R1", 0)) + s.stored(("R1", 1)))
+    s.rekey("X", "F", payloads=s.stored((R1, 0)) + s.stored((R1, 1)))
     s.next_window()
     s.read(*control(s, 2), "X")
     for t in range(3, s.p.windows):
@@ -325,7 +347,8 @@ def laundered_registered(s: Session) -> None:
 
 def laundered_rekey(s: Session) -> None:
     """In window 0 a re-key K2 naming registered blocks 2 and 3 whose payloads are their stored forms, never read,
-    so never opened, then a re-key K3 of K2, which carries them under K2's origin, read beside them."""
+    so never opened, then a re-key K3 of K2, which carries them under K2's origin, read beside them: credited only
+    were K3 born before the session, as K2 claims, rather than in the window K2 joined (`State.born`)."""
     reads = control(s, 0)
     s.rekey("K2", (REG, 2), payloads=s.stored((2, 2)), count=2)
     s.rekey("K3", "K2")
@@ -343,7 +366,7 @@ def early_plan(s: Session) -> None:
     s.read(*control(s, 0))
     s.next_window()
     s.read(*control(s, 1))
-    s.fresh("B", s.stored(("R1", 0)))
+    s.fresh("B", s.stored((R1, 0)))
     s.rekey("B1", "B")
     s.next_window()
     s.read(*control(s, 2), "B1")
@@ -358,16 +381,16 @@ def late_rekey(s: Session) -> None:
     s.read(*control(s, 0))
     s.next_window()
     s.read(*control(s, 1))
-    s.fresh("B", s.stored(("R1", 0)))
+    s.fresh("B", s.stored((R1, 0)))
     s.next_window()
     s.read(*control(s, 2))
     s.rekey("B2", "B")
     s.next_window()
-    reads = control(s, 3, keep=("R1",))
-    s.release(*[("R1", m) for m in range(1, N)])
-    s.read(*reads, ("R1", 0), "B2")
+    reads = control(s, 3, keep=(R1,))
+    s.release(*[(R1, m) for m in range(1, s.runs(R1)[1])])
+    s.read(*reads, (R1, 0), "B2")
     s.next_window()
-    s.release(("R1", 0), "B2")
+    s.release((R1, 0), "B2")
     s.read(*control(s, 4))
 
 
@@ -379,9 +402,11 @@ class Attack:
     failure: str
     """What the verifier names when the rule stops it."""
     play: Callable[[Session], None]
-    free_off: int
-    """The free receipts it earns with its rule off: a carried block a pass beside its carrier."""
+    free_off: int | None
+    """The free receipts it earns with its rule off, a carried block a pass beside its carrier; None where another
+    rule still rejects it (`off_failure`)."""
     gain: str
+    off_failure: str | None = None
 
 
 ATTACKS = (
@@ -394,8 +419,9 @@ ATTACKS = (
     Attack("laundered origin: registered", "origin path", "origin-path", laundered_registered, 4,
            "Y's stored forms answer for registered blocks 2 and 3: a payload chosen after the seed credited as "
            "registered"),
-    Attack("laundered origin: re-key of a re-key", "fresh origin", "append", laundered_rekey, 4,
-           "K3's stored forms answer for registered blocks 2 and 3 through K2, which nothing opens"),
+    Attack("laundered origin: re-key of a re-key", "fresh origin", "append", laundered_rekey, None,
+           "none: K3's birth is the window K2 joined, so probation holds it a full period past K2's commit",
+           off_failure="probation"),
     Attack("early plan", "payload timing", "probation", early_plan, 1,
            "B1's stored form answers for R1's first: credited at the next boundary after its commit"),
     Attack("late re-key", "key timing", "lifetime", late_rekey, 1,

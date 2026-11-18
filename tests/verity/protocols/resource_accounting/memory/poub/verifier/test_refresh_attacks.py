@@ -71,5 +71,6 @@ def test_each_attack_earns_free_receipts_only_with_its_rule_off(attack: ra.Attac
         off, on = ra.pair(attack)
     except ra.Pending as e:
         pytest.skip(str(e))
-    assert off == ra.Outcome(True, None, attack.free_off)
+    assert off == (ra.Outcome(False, attack.off_failure, None) if attack.free_off is None
+                   else ra.Outcome(True, None, attack.free_off))
     assert on == ra.Outcome(False, attack.failure, None)
