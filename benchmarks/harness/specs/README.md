@@ -53,7 +53,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm against compiled stock FP8 on one H200. It
   refuses the RTX PRO 6000, where its whole step served Pearl-C on sm_120, no declared scheme (compute-accounting's to
   declare); its runs there before are its record's (`pearl-c-whole-step`), read as `...@rtx-pro-6000`.
-- `llama32-1b-1gpu-pouw-protocol-served`: Pearl+ (`pouw:pearl-c-h100-v1-h3`, `pearl_c_sm90`'s kernel from its setup)
+- `llama32-1b-1gpu-pouw-protocol-served`: Pearl+ (the arm `pearl-plus`, the declared scheme by its name, `pearl_c_sm90`'s kernel from its setup)
   on Llama-3.2-1B's BF16 checkpoint on one H200 or H100, against eager and compiled stock FP8 at batch 32, 8,192 tokens a
   step (`served_pearlplus.sh`'s step).
 - `llama32-1b-1gpu-pearl-c-whole-served`: the same on one H100 with the whole-step arm beside its three arms: the ceiling
