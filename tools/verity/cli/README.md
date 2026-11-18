@@ -40,7 +40,9 @@ gate commands, so binding another host changes no hash. On the developer's node,
     verity run applications/onsite_full.toml --on prover-node --bindings BINDINGS --state STATE
     verity run applications/onsite_full.toml --on auditor-host --state STATE
 
-The gate's sides start when the developer's pieces open them.
+The gate's sides start when the developer's pieces open them. A memory attester's pins are read under the
+application's hash (`verity_cli/configurations.toml`): when that hash moves, hand the device its pins under the new
+one, or its sessions read as a rehearsal.
 
 By NAME, every party runs on this one host, and the record says coins `simulated`, since the challenger shares the
 developer's host. The bindings a party started first writes are bound for the others (`verity_cli/run.py`'s

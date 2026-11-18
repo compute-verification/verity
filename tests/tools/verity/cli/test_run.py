@@ -192,8 +192,8 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
 
 #: The onsite configuration's hash with neither the network attester's bound on a response's tokens nor its lengths
 #: rows' form set: a configuration that sets neither keeps it.
-UNBOUNDED_ONSITE = ("1cd21b0103bf0bf930af8d251e8d8f0a12153d66d56dfbc7d1583b1d3133c87f"
-                    "151b5f774ed98718aabd3453ed9e947fbab982e2b8a107459dbfc1d1d099e17a")
+UNBOUNDED_ONSITE = ("3b71c4373c1ebcb71983acacff58adb7e9c4be6af359e242d097a1c7230f177e"
+                    "df145e3b69b7bf2bf83fa6e90cd8eb7488c9acf7b2b005d348de0738738652ce")
 
 
 def bounded(tokens):

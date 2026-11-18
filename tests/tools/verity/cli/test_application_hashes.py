@@ -16,8 +16,8 @@ REG = R.registry()
 HASHES = {
     "onsite_compute": "f5ca90b1a0f6c0b201537a257c2c7070050a8f94629b4356ca437cca08d9b627"
                       "e3fbb2da763263e35fccb143ae171e908f3f7de57f120d206a17dda2c1554322",
-    "onsite_full": "29ddc537eb839e0115f3cbd66f5842a9a534eef5f64f389bad552b6df2ca7436"
-                   "024e372e061d5e818eb65f459b2ef6b91820597f21489fe55837a7f84773dffe",
+    "onsite_full": "82aff937b60219aebbabdd2aea04248fab4c80bea1b94aad68f5c2a2ed74f168"
+                   "d6afc30ea8401cab59c865871a52d727d3cf2820ddac71a808f121511af85943",
     "onsite_network": "9d9c1d03935955f17207629a34cc2001c04b90185587a00fe6a08bb88f342c59"
                       "cde7036cc73eef8d75abb2b9e14295857d7ab94207f3b2d7572fc78ef519f00e",
     "remote": "dac8166b62d4569e8c1259e1a71df0da959009e5200ac292fef50780e199ab08"
