@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from test_class_statement_unit_stager import _toy
+from test_lean_verifier import lake_build
 from test_struct_lower import TOY_READS, toy_reads  # noqa: F401
 from tmpl_toy import ROWS, toy_tmpl
 from verity.circuits import population as PN
@@ -295,7 +296,7 @@ def _verifier() -> Path:
         return Path(b)
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN, "verity-verify-proof")
     return BIN
 
 

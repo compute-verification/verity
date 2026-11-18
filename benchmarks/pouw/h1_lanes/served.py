@@ -6,7 +6,7 @@ registered tables at the rows the verifier reads them.
 * **extract** (the H1 venv: it unpickles the prover's saved window, whose classes import torch). From the window's record
   (``pouw-h1-calls.json``: its manifest checked by `pouw_h1_challenger.manifest_reason`, so the served trees' entries
   are the ones its ``calls_root`` binds), the sampled proof blocks (``--drawn``, `h1_prove/served.py`'s), the period's
-  descriptor and the prover's private directory (``--prover``, `pouw_h1_prover`: its salt key, each call's kept values
+  descriptor and the prover's private directory (``--prover``, `pouw_h1_prover`: its salt file, each call's kept values
   and the saved window ``state/`` `pouw_h1_handoff.FILE`): the verifier's own reads of the sampled proof block's call
   (`credit.registered_file` at the record's roots, the window's root, steps and Program salt), and for each of its data
   ports (the unit's 32 A rows, its 32 B rows and its z/y record; ``pub`` and ``o1`` are the verifier's own rows, which no

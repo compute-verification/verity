@@ -339,7 +339,7 @@ class ServingTrace:
             raise ValueError(f"a step of {pages} pages, its slots kept {headroom} steps after their free, frees and "
                              f"writes more than the pool's {len(self.slots)} slots")
         self.backend, self.registration, self.pages, self.rng = backend, registration, pages, rng
-        rng.getrandbits(64)  # the draw that once seeded the append salts: a seed's load stays as it was
+        rng.getrandbits(64)  # the sample that once seeded the append salts: a seed's load stays as it was
         self.lifetime, self.headroom = lifetime, headroom
         self.replay = memory_map.Replay(memory_map.Header(registration.digest, N), registration)
         self.steps, self.served, self.cursor, self.rekeyed = 0, 0, 0, 0
@@ -1048,7 +1048,8 @@ def main() -> int:
     ap.add_argument("--cpu", type=int, default=0, metavar="BLOCKS",
                     help="the driver's reference (`CpuBackend`) over a store of BLOCKS blocks, no GPU and none of "
                          "device.py's options")
-    ap.add_argument("--codec", default=rcodec.DEFAULT.name, help="the registration's codec, with --cpu")
+    ap.add_argument("--codec", default=rcodec.DEFAULT.name,
+                    help="the registration's codec; on a card --kv's kv.so must be built at its width and masking")
     ap.add_argument("--model-dir", type=Path, metavar="DIR",
                     help="with --cpu: the store is the checkpoint in DIR's (`poub.store.Store`): --engines arenas of "
                          "--arena-blocks, then the rest of the BLOCKS zero host filler")
@@ -1087,7 +1088,7 @@ def main() -> int:
                    defer_openings=not a.overlap_openings, warmup_ns=round(a.warmup_ms * 1e6), kv_every=a.kv_every,
                    kv_pool=a.kv_pool, kv_headroom=a.kv_headroom, ahead=a.ahead,
                    log=lambda m: print(m, flush=True))
-    cal = p.register(codec=wire.codec_named(a.codec), rows=a.rows) if a.cpu else p.register(rows=a.rows)
+    cal = p.register(codec=wire.codec_named(a.codec), rows=a.rows)
     print(f"prover: registered, calibration {json.dumps(cal)}", flush=True)
     stalls = getattr(backend, "calibration_trace", None)
     (a.out / "prover.json").write_text(json.dumps({"calibration": cal, "gates": backend.gates,

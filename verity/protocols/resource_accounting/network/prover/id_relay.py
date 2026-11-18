@@ -162,11 +162,19 @@ class Front:
                   arrived: float) -> None:
         """An id request (its head and fields, whole at `arrived`) answered in the id form from the server's stream of
         it, until that stream ends or `reader`'s side, the network attester's, does: either way the server's connection
-        is closed."""
-        rel = REL.release_of(head)
+        is closed. A malformed release header (`release.release_of`'s refusal) refuses the request: its record's ``why``
+        is the refusal, and the connection closes with no answer and no server connection."""
+        try:
+            rel, refused = REL.release_of(head), None
+        except ValueError as e:
+            rel, refused = None, str(e)
         n, run, bucket = rel if rel is not None else (None, None, None)
         rec: dict[str, Any] = {"n": n, "run": run.hex() if run else None, "bucket": bucket, "prompt": len(fields["prompt"]),
-                               "ids": 0, "ended": False, "why": None, "at": round(arrived - self.origin, 3), "ms": []}
+                               "ids": 0, "ended": False, "why": refused, "at": round(arrived - self.origin, 3), "ms": []}
+        if refused is not None:
+            if self.log is not None:
+                self.log(rec)
+            return
 
         def wrote() -> None:
             rec["ms"].append(round((self.clock() - arrived) * 1000, 1))

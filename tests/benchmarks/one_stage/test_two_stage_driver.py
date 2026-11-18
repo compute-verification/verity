@@ -32,6 +32,7 @@ from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
+from verity.circuits import replay_links as RL
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, docket as R
 from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import history as HT
@@ -450,8 +451,8 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
 
     defs = definitions(got.layout.program)
     cs = SS._callers_of(defs, defs[key])
-    shares = [x for k, node in enumerate(defs[key].body.nodes) for x in SS._node_links(cs, defs[key], k, node)]
-    runs = SS._gather(lambda x: (x.template, x.port), lambda a, b: a.value == b.value, cs.units, shares)
+    shares = [x for k, node in enumerate(defs[key].body.nodes) for x in RL._node_links(cs, defs[key], k, node)]
+    runs = RL._gather(lambda x: (x.template, x.port), lambda a, b: a.value == b.value, cs.units, shares)
     assert SS.replay_links(got.layout.program, key, got.record) is None
     assert {(x.template, x.port, SS._port_of(named, key, x.value), per, tuple(SS.row_at(rs, j) for j in range(cells)))
             for x, per, rs in runs} == {(x.template, x.port, x.value, x.per, x.at) for x in links}

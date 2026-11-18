@@ -63,7 +63,7 @@ Two kinds of committed run:
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --registration FILE \\
         --checkpoint-dir DIR --out DIR --sampling-design RATE [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--cap N] \\
-        [--workers N] [--window-registration W (--h1-key FILE | --pearl-passes DIR)] [--hf-config F] [--target F] \\
+        [--workers N] [--window-registration W (--h1-prover DIR | --pearl-passes DIR)] [--hf-config F] [--target F] \\
         [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
@@ -152,7 +152,7 @@ Two kinds of committed run:
   blocks (`window_design`), the design the stream holds its docket to. Each Program's Build is its own, from its
   compile (`own_builds`, beside ``--out``, as ``circuit``'s), so it commits a window at its close, before the row dir holds
   any (``advice_compile.py`` writes those once the serve is done). With ``--window-registration W`` (H1's
-  docket of the window) and ``--h1-key``, the circuit reads H1's tables where the model makes them (its rounds
+  docket of the window) and ``--h1-prover``, the circuit reads H1's tables where the model makes them (its rounds
   H1's steps, the class's outputs), and the window's docket ``--out``/registration.json is chained right after W
   and registers them as W's tables (`pouw_h1_commit.reuse`), refused unless the model made each as H1 committed it.
   With ``--window-registration W`` (Pearl+'s window record, ``served_passes.py retain --window-record W``) and
@@ -1660,15 +1660,15 @@ def h1_tie(a: argparse.Namespace, cls: Any, key: bool = True) -> tuple[dict[str,
     """With ``--window-registration``: H1's docket W of the window, its window Program's meta (the serve dir's
     ``h1/`` `pouw_h1.PROGRAM_META`) and the circuit's tables of it (`window_class.Tables`, `pouw_h1_commit.shape`); None
     without. The tables are W's Program's alone, so the verifier's ``window-circuit`` reads them with no key (not
-    ``key``). ValueError where there's no ``--h1-key`` (``key``: window-commit's, whose docket reuses W's salts), W
+    ``key``). ValueError where there's no ``--h1-prover`` (``key``: window-commit's, whose docket reuses W's salts), W
     is under another Program, or H1's rounds aren't the class's outputs, a table a round the circuit reads."""
     if not a.window_registration or getattr(a, "pearl_passes", None):
         return None
     from verity_vllm.program.predict import window_circuit as WC
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
-    if key and not a.h1_key:
-        raise ValueError("--window-registration: give --h1-key, H1's prover key, whose salts W's tables take")
+    if key and not a.h1_prover:
+        raise ValueError("--window-registration: give --h1-prover, H1's prover directory, whose kept salts W's tables take")
     w = json.loads(Path(a.window_registration).read_text())
     meta = json.loads((Path(a.serve_run) / "h1" / PH.PROGRAM_META).read_text())
     if not isinstance(w, dict) or w.get("program") != meta.get("program_digest"):
@@ -1696,7 +1696,7 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
     """With ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``: the window's passes, ``served.json`` and its retention):
     Pearl+'s window record W of them (``--window-registration``, ``retain --window-record W``'s), the retained passes'
     manifests, their rounds and the circuit's tables of them (`window_class.PearlTables` under W's scheme); None without.
-    ValueError without ``--window-registration``, beside ``--h1-key``, for a W that is no Pearl+ window record
+    ValueError without ``--window-registration``, beside ``--h1-prover``, for a W that is no Pearl+ window record
     (`records_audit.why_not_pearl`), or where the rounds retained aren't the class's outputs, round s the window's s-th
     step, whose calls the circuit cut at its linears reads."""
     if not getattr(a, "pearl_passes", None):
@@ -1705,8 +1705,9 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
     if not a.window_registration:
         raise ValueError("--pearl-passes: give --window-registration W, Pearl+'s window record of the passes "
                          "(served_passes.py retain --window-record W)")
-    if getattr(a, "h1_key", None):
-        raise ValueError("--h1-key is H1's prover key: a window tied to Pearl+'s W takes its salts from the passes' manifests")
+    if getattr(a, "h1_prover", None):
+        raise ValueError("--h1-prover is H1's prover directory: a window tied to Pearl+'s W takes its salts from the passes' "
+                         "manifests")
     w, d = json.loads(Path(a.window_registration).read_text()), Path(a.pearl_passes)
     scheme = str(((w if isinstance(w, dict) else {}).get("window") or {}).get("scheme"))
     if why := why_not_pearl(w):
@@ -1843,9 +1844,9 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     filled = WRS.Rows(low, slots, values)
     previous = None
     if tie is not None:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT, prover as PV
         h1w, meta, _tables = tie
-        values |= CT.reuse(h1w, meta["layout"], int(meta["steps"]), Path(a.h1_key).read_bytes(), filled.value)
+        values |= CT.reuse(h1w, meta["layout"], int(meta["steps"]), PV.salts_of(a.h1_prover), filled.value)
         previous = DD.digest(h1w)
     elif pearl is not None:
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
@@ -2080,8 +2081,8 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
                    "circuit reads H1's tables where the model makes them (`window_class.Tables`, from the serve dir's "
                    "h1/window-program.meta.json), and the window's registration registers them as W's tables, chained right "
                    "after W (`pouw_h1_commit.reuse`); with --pearl-passes, Pearl+'s window record W of the window's passes")
-    p.add_argument("--h1-key", help="with --window-registration: H1's prover key file (its prover dir's key), whose salts "
-                   "W's tables take")
+    p.add_argument("--h1-prover", metavar="DIR", help="with --window-registration: H1's prover directory, whose kept salts "
+                   "(pouw_h1_prover.SALTS) W's tables take")
     p.add_argument("--pearl-passes", metavar="DIR", help="with --window-registration W: the window's Pearl+ passes "
                    "(serve-openai's Pearl+ epoch pearl/w<k>/, retained by retain --window-record W): the circuit is cut "
                    "at its linears (`window_class.PearlTables` under W's scheme), each cut linear's y taken as served, and "

@@ -26,6 +26,7 @@ import pytest
 import verity_vllm
 from tests import fake_vllm
 from verity import hooks as H
+from verity.protocols.resource_accounting.scheme import Lacks
 from verity_vllm import config, messages
 from verity_vllm import llm as L
 from verity_vllm.config import EnginePin
@@ -258,7 +259,7 @@ def test_a_declared_schemes_option_is_refused_and_its_name_is_named(built):
 
 def test_listed_schemes_attach_by_name_in_their_order(built, monkeypatch):
     order: list[str] = []
-    stand_ins = {n: SimpleNamespace(name=n, option="", settings={}, check_settings=lambda own: None, requests=lambda ctx: (),
+    stand_ins = {n: SimpleNamespace(name=n, option="", settings={}, depends=(), resource=Lacks("a stand-in"), check_settings=lambda own: None, requests=lambda ctx: (),
                                     attach=lambda ex, ctx, n=n: order.append(n)) for n in ("a", "b")}
     monkeypatch.setattr(messages.declarations, "load", lambda: stand_ins)
     both = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="a,b")

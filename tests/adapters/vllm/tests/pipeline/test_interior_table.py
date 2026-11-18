@@ -36,6 +36,7 @@ from verity.commitments.gates import embedding as E
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods.interface import digest_words
 from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.circuits import replay_links as RL
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.prover import docket as DK
@@ -315,8 +316,8 @@ def test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give
     assert {r["port"] for r in served["roots"]} == {*BR.PORTS, *NAMES}
     defs = definitions(_boundary().program)
     cs = SS._callers_of(defs, defs[key])
-    shares = [x for k, node in enumerate(defs[key].body.nodes) for x in SS._node_links(cs, defs[key], k, node)]
-    runs = SS._gather(lambda x: (x.template, x.port), lambda a, b: a.value == b.value, cs.units, shares)
+    shares = [x for k, node in enumerate(defs[key].body.nodes) for x in RL._node_links(cs, defs[key], k, node)]
+    runs = RL._gather(lambda x: (x.template, x.port), lambda a, b: a.value == b.value, cs.units, shares)
     assert SS.replay_links(_boundary().program, key, served) is None
     assert {(x.template, x.port, f"{key}/{x.value}", per, tuple(SS.row_at(rs, j) for j in range(CELLS)))
             for x, per, rs in runs} == {(x.template, x.port, x.value, x.per, x.at) for x in LINKS}
