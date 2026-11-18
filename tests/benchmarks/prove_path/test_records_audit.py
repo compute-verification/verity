@@ -1897,3 +1897,11 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
         theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None)), s.data, LAYER0)
         v, bound = RA.compile_check(theirs, s.bound, opening, compilers, tmp_path / "c")
         assert (v["codes"], bound is None, reads(their_rows) == reads(own_rows)) == (codes, bool(codes), same_reads), name
+
+
+@pytest.mark.parametrize("ports", [(), (SimpleNamespace(name="scan-state", value=""),),
+                                   (SimpleNamespace(name="scan-state", value="a"), SimpleNamespace(name="scan-state", value="b"))])
+def test_the_phase_own_value_is_refused_by_name_without_exactly_one_scan_state_port(ports):
+    with pytest.raises(ValueError, match="the network-attester declaration declares the port 'scan-state'"):
+        RA.port_value(SimpleNamespace(name="network-attester", ports=ports), "scan-state")
+    assert RA.PHASE_OWN == {"verity/certifier/scan-state/v1"}

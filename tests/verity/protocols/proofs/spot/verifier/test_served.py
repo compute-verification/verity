@@ -1,4 +1,4 @@
-"""Served trees as registered ports (`one_stage.served.register_served`): the docket it builds passes R7 and the file
+"""Served trees as registered ports (`prover.served.register_served`): the docket it builds passes R7 and the file
 is `reads_file`'s, an earlier output keeps its port, a reused tree its earlier entry, and every malformed tree is
 refused."""
 from __future__ import annotations
@@ -17,7 +17,7 @@ from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
 from verity.commitments import registered_value as RV
-from verity.protocols.proofs.spot.verifier.one_stage.served import ServedTree, register_served
+from verity.protocols.proofs.spot.prover.served import ServedTree, register_served
 
 XOR8 = PrimitiveDefinition("ServedTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)
@@ -213,7 +213,7 @@ def test_a_malformed_tree_is_refused(change, why):
 def test_the_row_formats_are_the_commitment_layers():
     """`row_schema`'s values are the frame-v3-sha512 leaf schemas Flock's ports name (`Flock.HmRow.ROW_SCHEMA*`)."""
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
-    from verity.protocols.proofs.spot.verifier.one_stage.served import SCHEMAS
+    from verity.protocols.proofs.spot.prover.served import SCHEMAS
 
     assert SCHEMAS == RV.SCHEMAS == (SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
 

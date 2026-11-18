@@ -345,3 +345,15 @@ def test_a_scheme_attaches_nothing_by_default_and_registers_its_processes(monkey
     monkeypatch.setattr(S, "SCHEMES", {})
     S.register(_toy(processes={"toy-beside": start}))
     assert S.PROCESSES == {"toy-beside": start}
+
+
+def test_a_pieces_party_is_a_declared_developer_party_and_its_development_one_of_its_bindings() -> None:
+    from verity.protocol import Role
+    parties = (Role("prover", "developer"), Role("challenger", "auditor"), Role("verifier", "auditor"))
+    ok = _toy(parties=parties, pieces={"prover": S.Launch(optional=("address",), development="address")})
+    assert ok.pieces["prover"].development == "address"
+    for pieces, why in (({"challenger": S.Launch()}, "declared developer-side parties' \\['prover'\\], not 'challenger'"),
+                        ({"prover": S.Launch(development="host")}, "development binding 'host' is one of its binds"),
+                        ({"prover": S.Launch(reaches="prover")}, "reaches a declared auditor party, not 'prover'")):
+        with pytest.raises(ValueError, match=why):
+            _toy(parties=parties, pieces=pieces)

@@ -411,6 +411,16 @@ loads = [
 
 [[place]]
 paths = [
+    "verity/protocols/proofs/spot/prover/served.py",
+]
+loads = [
+    "verity/circuits",
+    "verity/commitments",
+    "verity/protocols/proofs/spot/verifier",
+]
+
+[[place]]
+paths = [
     "verity/protocols/proofs/spot/prover/workload.py",
 ]
 loads = [
@@ -472,6 +482,7 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_sparse.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
     "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
+    "verity/protocols/proofs/spot/prover/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1window.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.py",
@@ -541,6 +552,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/prover/produced.py",
+    "verity/protocols/proofs/spot/prover/served.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/protocols/resource_accounting/compute/pouw/scheme.py",
@@ -618,7 +630,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/schemes/pearl_c_work.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/schemes/pearl_kw.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/circuit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/names.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py",
@@ -635,7 +646,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_sample.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/tables.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/operands.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/lanes.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/manifest.py",
