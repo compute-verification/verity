@@ -15,9 +15,9 @@ torch's current stream, in the device's primary context:
   `fresh_weight_salts`), put once a weight; A's are fresh operating-system bytes a call, written before the call's launches
   or its graph's replay (`host.fresh_into`); the tiles' are fresh at the pass's end (`ends`); y's are fresh and kept
   beside its tree (`served_y_device`).  A retained pass keeps every salt beside the rows it salts.
-* **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact) are hashed
-  into B's row tree (phase ``epoch``), whose root must be the committed one.  Then, with the salt's seed_B, come E_B's
-  and the F lines, B's statistics and forming, B̃·F_A, G and P_B (phase ``job``).  B's FP32 copy is dropped after, so the
+* **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact; a weight
+  in any other format is refused, `_weight_words`) are hashed into B's row tree (phase ``epoch``), whose root must be the
+  committed one.  Then, with the salt's seed_B, come E_B's and the F lines, B's statistics and forming, B̃·F_A, G and P_B (phase ``job``).  B's FP32 copy is dropped after, so the
   weight side keeps about a byte per weight (B̃) beside the model's own weight.
 * **Each call** (`gemm`):
   - x's rows are widened into A's FP32 words, with zero filler rows up to m₁₆ (the domain's 16 | m; filler is committed as
