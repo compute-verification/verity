@@ -203,6 +203,6 @@ def test_the_served_road_refuses_a_wipe_of_another_server_by_name(exe):
     assert [a["verdict"] for a in own] == ["accept", "undecided"], own
     assert own[1]["reason"] == WP.UNSIGNED
     refused = _served(exe, other, [honest, unsigned])
-    for a in refused:
+    for a, mine in zip(refused, own, strict=True):
         assert (a["verdict"], a["reason"]) == ("reject", OTHER_SERVER.format(other)), a
-        assert a["commitment"] == own[0]["commitment"] and a["public"] is None
+        assert a["commitment"] == mine["commitment"] and a["public"] is None
