@@ -1,4 +1,4 @@
-"""machine.py toolkit VERSION | arch [NAME] | sku NAME: the kit's readers of the machine's record and the card's (`verity_bench.kit`),
+"""machine.py toolkit VERSION | arch [NAME] | gencode ARCH | sku NAME: the kit's readers of the machine's record and the card's (`verity_bench.kit`),
 printed for a shell script, or refused by name before the script takes a card.
 
     toolkit VERSION  `kit.toolkit`: $CUDA_HOME where it is set and not another version, else the directory the run's
@@ -7,6 +7,7 @@ printed for a shell script, or refused by name before the script takes a card.
                      Exit 3 where the properties are read and list no toolkit at that version.
     arch NAME        `kit.card_arch`: the `arch` of the card record whose `driver` holds NAME, the name nvidia-smi reports.
     arch             `kit.machine_arch`: the `arch` of the run's machine's card, with no card needed.
+    gencode ARCH     `kit.arch_gencode`: nvcc's -gencode value for the target ARCH (sm_90a), from its architecture file.
     sku NAME         `kit.card_sku`: the `sku` of the card record whose `driver` holds NAME.
 """
 from __future__ import annotations
@@ -32,6 +33,8 @@ def main(argv: list[str]) -> int:
             print(kit.card_arch(name))
         case ["arch"]:
             print(kit.machine_arch())
+        case ["gencode", arch]:
+            print(kit.arch_gencode(arch))
         case ["sku", name]:
             print(kit.card_sku(name))
         case _:

@@ -191,7 +191,7 @@ def test_the_gencode_is_the_cards_architecture_files(name, gencode):
 def test_a_card_whose_arch_has_no_architecture_file_is_refused_by_name(tmp_path):
     h200 = (kit.cards_directory() / "h200-sxm-141gb.toml").read_text()
     (tmp_path / "h200-sxm-141gb.toml").write_text(h200.replace('arch = "sm_90a"', 'arch = "sm_89"'))
-    with pytest.raises(SystemExit, match=r"^the card nvidia-smi names 'NVIDIA H200': no architecture 'sm_89'"):
+    with pytest.raises(SystemExit, match=r"^target 'sm_89': no architecture 'sm_89'"):
         kit.card_gencode("NVIDIA H200", directory=tmp_path)
 
 
