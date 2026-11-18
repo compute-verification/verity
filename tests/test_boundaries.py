@@ -1006,6 +1006,125 @@ def test_a_runtime_import_is_found() -> None:
         "verity/protocols/x/c.py": ["1: verity.runtime", "2: verity.runtime"],
     }
 
+#: The modules of a resource-accounting protocol: useful work, memory and network, and the experimental schemes of useful
+#: work.
+RESOURCE_ACCOUNTING = ("verity.protocols.resource_accounting", "verity.protocols.experimental")
+#: The modules of ``RESOURCE_ACCOUNTING`` the vLLM adapter may name: the one scheme interface, whose served-run messages
+#: are `verity.hooks`.
+RESOURCE_ACCOUNTING_SHARED = ("verity.protocols.resource_accounting", "verity.protocols.resource_accounting.scheme")
+
+
+def _resource_accounting_importers(texts: dict[str, str]) -> dict[str, list[str]]:
+    """``{file: ["line: module", ...]}`` for each file of the vLLM adapter outside its tests that names a module of a
+    resource-accounting protocol (``RESOURCE_ACCOUNTING`` but ``RESOURCE_ACCOUNTING_SHARED``): in an import statement,
+    or as a whole string (an import call's argument, a ``"module:attr"``, a registry's entry)."""
+    found: dict[str, list[str]] = {}
+    for rel, text in sorted(texts.items()):
+        if not rel.startswith("adapters/vllm/") or _is_test(rel) or not any(r in text for r in RESOURCE_ACCOUNTING):
+            continue
+        hits = set()
+        for node in ast.walk(ast.parse(text, filename=rel)):
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                names = [node.module]
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                names = [node.value.partition(":")[0]]
+            else:
+                continue
+            named = {n for n in names if any(n == r or n.startswith(r + ".") for r in RESOURCE_ACCOUNTING)}
+            hits |= {(node.lineno, n) for n in named if n not in RESOURCE_ACCOUNTING_SHARED}
+        if hits:
+            found[rel] = [f"{line}: {name}" for line, name in sorted(hits)]
+    return found
+
+#: Files of the vLLM adapter that name a module of a resource-accounting protocol all the same. It only shrinks: a scheme
+#: attaches through `verity_vllm.messages` and `verity.hooks`, and its own code moves to its package.
+RESOURCE_ACCOUNTING_IMPORTERS = (
+    "adapters/vllm/verity_vllm/acquire/h1_commit.py",
+    "adapters/vllm/verity_vllm/check/replay/pouw_circuit.py",
+    "adapters/vllm/verity_vllm/commit/history_tables_device.py",
+    "adapters/vllm/verity_vllm/commit/row_tables_device.py",
+    "adapters/vllm/verity_vllm/compiler/advice_check.py",
+    "adapters/vllm/verity_vllm/compiler/cache_step.py",
+    "adapters/vllm/verity_vllm/compiler/cache_step_v3.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v4.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v5.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v6.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v7.py",
+    "adapters/vllm/verity_vllm/compiler/served_statics.py",
+    "adapters/vllm/verity_vllm/compiler/served_tie.py",
+    "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
+    "adapters/vllm/verity_vllm/messages.py",
+    "adapters/vllm/verity_vllm/pipeline/advice.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/codec.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/derived.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/lengths.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_windows.py",
+    "adapters/vllm/verity_vllm/pipeline/c2_replay.py",
+    "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
+    "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
+    "adapters/vllm/verity_vllm/pipeline/ids_front.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_commit.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_head.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_pearl.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_protocol.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
+    "adapters/vllm/verity_vllm/pipeline/window_advice.py",
+    "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
+    "adapters/vllm/verity_vllm/program/predict/hits.py",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
+    "adapters/vllm/verity_vllm/program/predict/scan_state.py",
+    "adapters/vllm/verity_vllm/program/predict/steps.py",
+    "adapters/vllm/verity_vllm/program/predict/window_class.py",
+    "adapters/vllm/verity_vllm/program/predict/window_rows.py",
+    "adapters/vllm/verity_vllm/program/predict/window_weights.py",
+    "adapters/vllm/verity_vllm/protocols/__init__.py",
+    "adapters/vllm/verity_vllm/protocols/poub/binder.py",
+    "adapters/vllm/verity_vllm/protocols/poub/remote.py",
+    "adapters/vllm/verity_vllm/protocols/pous.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+)
+
+
+def test_the_vllm_adapter_imports_no_resource_accounting_protocol() -> None:
+    """No file of the vLLM adapter, outside its tests, names a module of a resource-accounting protocol, apart from
+    ``RESOURCE_ACCOUNTING_IMPORTERS``, which only shrinks."""
+    found = _resource_accounting_importers(_tracked_python())
+    offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in RESOURCE_ACCOUNTING_IMPORTERS for hit in hits]
+    assert not offenders, ("the vLLM adapter imports no resource-accounting protocol: emit the event or answer the request "
+                           "through `verity_vllm.messages` (the types are `verity.hooks`), and leave the scheme's code in "
+                           "its package. RESOURCE_ACCOUNTING_IMPORTERS only shrinks.\n" + "\n".join(offenders))
+    stale = sorted(set(RESOURCE_ACCOUNTING_IMPORTERS) - set(found))
+    assert not stale, f"RESOURCE_ACCOUNTING_IMPORTERS entries that no longer import one; remove them: {stale}"
+
+
+def test_a_resource_accounting_import_is_found() -> None:
+    """The check above isn't vacuous: a statement, a ``from`` import, an import call, a registry's string and an
+    experimental scheme are found; the scheme interface, a test and a file outside the adapter are not."""
+    pouw = "verity.protocols.resource_accounting.compute.pouw.prover.serving"
+    texts = {
+        "adapters/vllm/x/a.py": f"import {pouw}\nfrom {pouw} import Challenger\n",
+        "adapters/vllm/x/b.py": f"import importlib\nimportlib.import_module('{pouw}')\nT = {{'pouw': '{pouw}:X'}}\n",
+        "adapters/vllm/x/c.py": "from verity.protocols.experimental.dither import scheme\n",
+        "adapters/vllm/x/clean.py": "from verity.protocols.resource_accounting import scheme\nfrom verity import hooks\n",
+        "adapters/vllm/x/tests/test_a.py": f"import {pouw}\n",
+        "verity/protocols/x/d.py": f"import {pouw}\n",
+    }
+    assert _resource_accounting_importers(texts) == {
+        "adapters/vllm/x/a.py": [f"1: {pouw}", f"2: {pouw}"],
+        "adapters/vllm/x/b.py": [f"2: {pouw}", f"3: {pouw}"],
+        "adapters/vllm/x/c.py": ["1: verity.protocols.experimental.dither"],
+    }
+
 
 def _uses(tree: ast.AST, names: set[str]) -> list[tuple[str, int]]:
     """``(name, line)`` for each use of one of ``names``: a name, an attribute, an imported name, or a string equal to one

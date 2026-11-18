@@ -26,7 +26,8 @@ verity-bench plan SPEC       # expand a spec; each point's identity and its pass
 verity-bench run SPEC        # one recorded run per point without a passing run, queued for any free GPU
                              # (--direct NODE: on NODE itself, through its GPU slots, instead; --again POINT: that
                              # point too, though a passing run stands for it; plan takes --again to show it first;
-                             # --card INDEX --cores CPUS: a booked card and its slot's cores, with --direct)
+                             # --card INDEX --cores CPUS: a booked card and its slot's cores, with --direct;
+                             # --here: the one point in this research run, on this machine's given cards and CPUs)
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
@@ -69,6 +70,14 @@ runner imports it without vLLM or torch: `kit.lease` (the wait for a job's GPUs)
 `kit.report` (how `verity bench compute`, `verity bench memory` and `verity bench inference_only` print and write their
 number), `kit.record_dir` and `kit.record` (a run's record by directory or run id), and `kit.ran_with` (the core
 benchmarks' `ran with` line). Nothing it writes is a verdict of record.
+
+## The serving profiles
+
+`benchmarks/production.toml` holds the three serving profiles (`coding-agent`, `chat`, `fixed-size`): each one's
+dataset, requests, load on each card a model is served on, bounds and version, each model's stock launch and cards
+(the card files' `short`), and where the profiles differ from the published command. `verity_bench.profiles` reads it
+strictly into frozen objects and builds no command line: a profile's server and client are serve_tax's own
+(`run.sh --profile`). A profile's version rises with any change to what it reads, which a test pins.
 
 ## A steady-state spec
 
@@ -135,7 +144,11 @@ the node side refuses before the statement unless it is on the NUMA node of the 
 before `--end UTC` (a booked period's end), and then has `max_minutes`; its timeout is the two, so it ends before the
 end whichever `slot.py` the node runs, and `run` refuses a point whose `max_minutes` don't fit before `--end` at
 launch. On a node whose launcher
-takes a run only through `slot.py` (`/etc/vy/runs-via-slot`), the launcher refuses a `--cores` launch. The job is
+takes a run only through `slot.py` (`/etc/vy/runs-via-slot`), the launcher refuses a `--cores` launch.
+`verity-bench run SPEC --here`, inside a `research run` on a machine that is not ours (a Slurm job of VCF's cluster,
+`benchmarks/README.md`), runs a vLLM spec's one point to run in that run (`jobs.here_command`): the cards and CPUs the
+process was given, no lease, slot or node name, and no catalog lookup, so the commit is `RESEARCH_SOURCE_SHA`
+(`research run --tree-sha`) where the tree has no `.git`; the point's card check is the same. A steady-state point's job is
 `benchmarks/harness/steady_point.sh`, which sources the spec's `setup` in the source tree and runs
 `python -m verity_bench.steady_node` under the Python the setup names. The setup builds the prover and exports
 `VERITY_BENCH_STEADY_BIN` (the prover) and `VERITY_BENCH_STEADY_PY` (a Python the stager, the timing script and the

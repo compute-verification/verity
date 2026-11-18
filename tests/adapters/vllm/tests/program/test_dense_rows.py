@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import self_check
+
 from verity_vllm.definitions.numerics import dense_rows as DR
 from verity_vllm.definitions.numerics import derived_rows as D
 from verity_vllm.definitions.numerics import rows

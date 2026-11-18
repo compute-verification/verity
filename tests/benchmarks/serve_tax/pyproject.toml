@@ -8,7 +8,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # a test file that starts a program the read guard can't trace (bash, around run.sh): keyed on the suite's whole tree
-untraced = ["test_serve_tax.py"]
+untraced = ["test_serve_tax.py", "test_profile.py"]
 # `servetax_plugin` on a stand-in scheduler (tests/test_plugin.py): the integration's step trace and release order, and
 # the modules they import; the driver and the replay read the run's id and paths through verity_config's SHARED settings;
 # an arm names another benchmark's vLLM plugin by its file in this tree, which the driver's test checks is there; the
@@ -17,7 +17,7 @@ untraced = ["test_serve_tax.py"]
 # virtual clock, whose package imports the circuit language, the commitments and SPOT's verifier; the arm
 # behind the network attester names the network attester's program by its file in this tree, which its test (tests/test_certified.py,
 # both sides on stand-ins for the processes they start) checks is there
-inputs = ["benchmarks/serve_tax", "verity/errors.py",
+inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.py",
     "verity/circuits",
     "verity/commitments",
     # the record entry (`Record`): SPOT's challenger imports it, and the network attester's `active` imports SPOT's verifier
@@ -37,6 +37,19 @@ inputs = ["benchmarks/serve_tax", "verity/errors.py",
     "benchmarks/harness/verity_bench/kit_report.py",
     "benchmarks/harness/verity_bench/settings.py",
     "benchmarks/harness/verity_bench/overhead_node.py",
+    # a profile's job (tests/test_profile.py): the profiles' reader, and the code whose refusals a profile's result
+    # quotes, the boundary commitment's and the modules it imports
+    "benchmarks/harness/verity_bench/profiles.py",
+    "adapters/vllm/verity_vllm/commit/__init__.py",
+    "adapters/vllm/verity_vllm/commit/history_tables.py",
+    "adapters/vllm/verity_vllm/engine/sampler_capture.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_logits.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_span.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_stop.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_tables.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_windows.py",
+    "adapters/vllm/verity_vllm/records",
     "tools/config/verity_config",
     "verity/__init__.py",
     "tools/config/verity_config/verity_settings.py",
@@ -51,6 +64,18 @@ inputs = ["benchmarks/serve_tax", "verity/errors.py",
     "adapters/vllm/verity_vllm/engine/runner_step.py",
     "adapters/vllm/verity_vllm/engine/scheduler_step.py",
     "adapters/vllm/verity_vllm/engine/step_trace.py",
+    # the runner step's and the arena's messages, through the exchange: the hooks and the workloads that answer them
+    "adapters/vllm/verity_vllm/messages.py",
+    "verity/hooks.py",
+    "verity/protocol.py",
+    "verity/protocols/resource_accounting/compute/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/workload.py",
+    "verity/protocols/resource_accounting/memory/__init__.py",
+    "verity/protocols/resource_accounting/memory/pous/__init__.py",
+    "verity/protocols/resource_accounting/memory/pous/prover/__init__.py",
+    "verity/protocols/resource_accounting/memory/pous/prover/workload.py",
     "adapters/vllm/verity_vllm/pipeline/__init__.py",
     "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
     # the release front of prod-all-on (tests/test_release_front.py): the tick's routes and the corpus's stand-in

@@ -111,7 +111,9 @@ def rmsnorm_cuda_vector8(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> 
 def rmsnorm_fused_cuda_vector8(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
     """`RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}(x, res, w)`, and v3 (the same words) -> ports 0 (out) and 1 (the residual), N
     bf16 words each."""
-    from verity_vllm.definitions.numerics.cuda_rmsnorm_rows import fused_add_rms_norm_rows
+    from verity_vllm.definitions.numerics.cuda_rmsnorm_rows import (
+        fused_add_rms_norm_rows,
+    )
     N = int(statics["N"])
     got = fused_add_rms_norm_rows(_bf16(ops[0], N).reshape(1, N), _bf16(ops[1], N).reshape(1, N), _bf16(ops[2], N),
                                   _float(statics["EPS"]), int(statics["BLOCK"]))
@@ -153,7 +155,10 @@ def fp8_group_quant_ue8m0(statics: dict[str, Any], ops: Sequence[np.ndarray]) ->
 
 
 def _moe_expert_fp8(family: str, routed: bool, statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
-    from verity_vllm.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
+    from verity_vllm.definitions.numerics.fp8_moe_rows import (
+        TWIN_DOT_OF,
+        moe_expert_fp8_block_row,
+    )
     dot = prim_static(statics, "DOT", family)
     if dot not in TWIN_DOT_OF:
         raise Declined(f"{family}: no twin for DOT={dot} (k32 step twins: {sorted(TWIN_DOT_OF)})")
@@ -289,8 +294,19 @@ def check_targets(family: str) -> list:
     """The small specialisations `family`'s self-check binds (the served statics are too wide for the reference)."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-    from verity_vllm.definitions.registry import b1, boolean_rope, cuda_rmsnorm, deepgemm, dsa, fp8_moe_experts, hopper
-    from verity_vllm.definitions.registry import ll_bf16, moe, sparse_mla_split
+
+    from verity_vllm.definitions.registry import (
+        b1,
+        boolean_rope,
+        cuda_rmsnorm,
+        deepgemm,
+        dsa,
+        fp8_moe_experts,
+        hopper,
+        ll_bf16,
+        moe,
+        sparse_mla_split,
+    )
     hop = hopper.HopperBF16WgmmaDot16
     moe_cases = [dict(E=2, K=128, N=96, G=64, KB=64, SWAP=False, DOT=HopperE4m3QgmmaDot32),
                  dict(E=2, K=128, N=96, G=64, KB=32, SWAP=True, DOT=HopperE4m3MmaV2Dot32),

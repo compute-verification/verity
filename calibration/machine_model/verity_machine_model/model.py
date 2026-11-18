@@ -21,7 +21,7 @@ CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 __all__ = ["Attack", "CLAIMS", "COPIES", "Census", "DATA", "DEVICES", "Entry", "Floor", "Model", "Row", "STATUSES",
            "Vector", "all_attacks", "attacks", "card", "census", "census_files", "census_lines", "citations", "cites",
-           "device", "devices", "entries", "floors", "holds", "kind_lists", "measured_cost", "model", "rows",
+           "device", "device_cards", "device_of", "devices", "entries", "floors", "holds", "kind_lists", "measured_cost", "model", "rows",
            "run_lists", "u_of", "vector", "vectors"]
 
 DATA = Path(__file__).resolve().parents[1] / "data"
@@ -164,6 +164,29 @@ def devices() -> list[str]:
     """The devices a command can price: sm_120 and each device directory with a `model.toml`."""
     return [DEVICE, *sorted((p.name for p in DEVICES.glob("sm_*") if (p / "model.toml").is_file()),
                             key=lambda n: int(n[3:]))]
+
+
+def device_cards() -> dict[str, str]:
+    """Each device's card: the SKU its `model.toml` names as `card`."""
+    return {d: tomllib.loads((device(d) / "model.toml").read_text())["card"] for d in devices()}
+
+
+def device_of(sku: str) -> Path:
+    """The data directory of the device whose model is the card `sku`'s (a file of calibration/hardware/cards/); refused,
+    naming the card and its target, where no device's is, since a device's measured model holds for its own card
+    alone."""
+    from verity.device import load_card   # here: only a reader of the card needs verity
+
+    held = device_cards()
+    if found := [d for d, s in held.items() if s == sku]:
+        return device(found[0])
+    try:
+        arch = load_card(sku, directory=CARD_FILES).get("arch", "no arch")
+    except KeyError as e:
+        raise SystemExit(e.args[0]) from None
+    raise SystemExit(f"no measured model for {sku} ({arch}): the machine model's devices are "
+                     f"{', '.join(f'{d}, the {s}' for d, s in held.items())}; a device's model is its own census, in "
+                     f"data/devices/sm_NN/ with a model.toml whose card = \"{sku}\"")
 
 
 def _runs(s: str) -> tuple[str, ...]:

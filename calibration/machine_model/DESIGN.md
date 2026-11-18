@@ -150,7 +150,9 @@ for the design's noise, an arm that isn't a spec, and a filler off lanes.
 
 `data/` is sm_120's, the RTX PRO 6000 at the node's 2,092 MHz lock, and every command reads it unless `--device` or
 `--data` names another directory. Another device's measurements go in `data/devices/sm_NN/`: sm_90 (the H200) and
-sm_100 (the B200). `machine-model render devices` lists each directory a command can price, with its epochs, rows,
+sm_100 (the B200). Each directory's model is the one card its `model.toml` names (`card`), never another card of its
+target: `--card SKU` reads the directory whose model is that card's, and refuses a card none is (an H100, sm_90a like
+the H200, has none). `machine-model render devices` lists each directory a command can price, with its epochs, rows,
 census lines, vectors, designs and honest kernels. A device directory follows these rules:
 
 - It holds `rows.csv` and `census.csv` in `data/`'s schema, and its rows follow "Measure a facet". Its probe's
