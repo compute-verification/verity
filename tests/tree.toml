@@ -144,6 +144,10 @@ path = "verity/errors.py"
 means = "the shared exception classes"
 
 [[tree]]
+path = "verity/ports.py"
+means = "a loopback port the OS has free"
+
+[[tree]]
 path = "verity/hooks.py"
 means = "the events a served run emits and the requests a scheme files, in the circuit's words"
 
@@ -261,6 +265,10 @@ means = "PoUB as a resource scheme, registered as bandwidth"
 path = "verity/protocols/resource_accounting/network/"
 means = "network attestation: the network attester and its guarantee"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/resource_accounting/network/scheme.py"
+means = "the network attester as a resource scheme, registered as network-attester"
 
 [[tree]]
 path = "verity/protocols/workload_classification/training_detection/inference_only/"

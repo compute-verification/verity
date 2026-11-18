@@ -18,6 +18,7 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Array, Value
 from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
     ROW_ALIGN,
@@ -76,7 +77,7 @@ M = {0: 8, 1: 2}
 
 @pytest.fixture(scope="module")
 def low():
-    return WC.lower(_registered(), CLASS, None, GRAIN, provable=False, tables=PEARL)
+    return WC.lower(_registered(), CLASS, None, GRAIN, tables=PEARL)
 
 
 def _value_rows(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
@@ -120,14 +121,17 @@ def test_pearls_tables_are_named_by_round_and_call_at_the_rows_its_calls_commit(
 
 def test_a_calls_y_is_handed_on_in_the_fewest_doublings_of_words_its_unit_fits(low):
     """Each call's W is the least of ``words`` doubled that divides its N and leaves its `LinearOut_v3` (its y row and
-    N / W output rows) within the grain's rows: 16 for every call of TINY at 256 rows, gate/up's 256 words in rows of 32 at
-    12 rows and of 128 at 3, and a call no W fits is refused by name."""
-    assert WK.linears(low.fn, 16, 256, provable=False).calls == tuple((K, N, 16) for K, N in CALLS)
-    assert WK.linears(low.fn, 16, 12, provable=False).calls == tuple((K, N, 32 if N == 256 else 16) for K, N in CALLS)
-    assert WK.linears(low.fn, 16, 3, provable=False).calls == tuple((K, N, N // 2) for K, N in CALLS)
+    N / W output rows) within the grain's rows and a proof block Flock proves: 16 for every call of TINY at 256 rows,
+    gate/up's 256 words in rows of 32 at 12 rows and of 128 at 3, a 70B MLP's y of 28672 words at 256 rows in rows of 1024
+    (rows of 128 are within the rows, but no proof block), and a call no W fits is refused by name."""
+    assert [W for W in (128, 256, 512, 1024) if WK._hands_on(28672, W, 256)] == [1024]
+    assert WK.linears(low.fn, 16, 256).calls == tuple((K, N, 16) for K, N in CALLS)
+    assert WK.linears(low.fn, 16, 12).calls == tuple((K, N, 32 if N == 256 else 16) for K, N in CALLS)
+    assert WK.linears(low.fn, 16, 3).calls == tuple((K, N, N // 2) for K, N in CALLS)
     with pytest.raises(Unexpressible, match=r"linears \(K, N\) \[\(64, 64\), \(64, 128\), \(64, 256\), \(128, 64\)\], whose "
-                                            r"y no rows of Pearl\+'s 16 words doubled hand on in one unit within 1 rows$"):
-        WK.linears(low.fn, 16, 1, provable=False)
+                                            r"y no rows of Pearl\+'s 16 words doubled hand on in one unit within 1 rows that "
+                                            r"Flock proves$"):
+        WK.linears(low.fn, 16, 1)
 
 
 def test_the_cut_replaces_every_linear_but_the_lm_head(low):
@@ -138,7 +142,7 @@ def test_the_cut_replaces_every_linear_but_the_lm_head(low):
     its count, and no input is free."""
     c = low.circuit
     n = {_label(fn): k for fn, k in c.templates}
-    plain = {_label(fn): k for fn, k in WC.lower(_registered(), CLASS, None, GRAIN, provable=False).circuit.templates}
+    plain = {_label(fn): k for fn, k in WC.lower(_registered(), CLASS, None, GRAIN).circuit.templates}
     want = {"Gemm_v2{K=64,N=16}": 16 * 10, "Gemm_v2{K=64,N=1}": 10}
     for s, m in M.items():
         for ci, (K, N) in enumerate(CALLS):
@@ -225,7 +229,7 @@ def test_the_census_counts_each_cut_linear_by_shape_and_ties_none(low):
     n = {call: fn.bindings["N"] for (table, call), fn in reads if table == "pearl-y"}
     assert sum(r["macs"] for r in cen) == sum(fn.bindings["K"] * n[call] for (table, call), fn in reads
                                               if table == "pearl-a") == 737280
-    assert WK.census(WC.lower(_registered(), CLASS, None, GRAIN, provable=False)) == []
+    assert WK.census(WC.lower(_registered(), CLASS, None, GRAIN)) == []
 
 
 def test_a_fixed_load_window_is_the_cut_class_circuit_and_any_other_window_is_refused():
@@ -233,11 +237,11 @@ def test_a_fixed_load_window_is_the_cut_class_circuit_and_any_other_window_is_re
     `test_window_circuit`'s WINDOW (a prompt of 3 chunked across two steps) is refused by name, since its rows aren't the
     public rows Pearl+'s tables are read at."""
     reg = _registered()
-    fixed = WC.window_circuit(reg, S.compile_steps(reg, *S._session(*FIXED)), CLASS, GRAIN, provable=False, tables=PEARL)
+    fixed = WC.window_circuit(reg, S.compile_steps(reg, *S._session(*FIXED)), CLASS, GRAIN, tables=PEARL)
     assert IF.circuit_bytes(fixed.description()) == IF.circuit_bytes(
-        WC.class_circuit(reg, CLASS, None, GRAIN, provable=False, tables=PEARL).description())
+        WC.class_circuit(reg, CLASS, None, GRAIN, tables=PEARL).description())
     with pytest.raises(Unexpressible, match=r"not its class's fixed load .*, the rows Pearl\+'s tables are read at"):
-        WC.window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False, tables=PEARL)
+        WC.window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, tables=PEARL)
 
 
 @pytest.mark.parametrize("registered, grain, tables, cls, why", [
@@ -260,6 +264,7 @@ def test_the_cut_at_the_smallest_provable_class_is_proof_blocks_c_flock_proves()
     circuit is a proof block Flock's composer takes (`interface.check_proof_block`): the A rows (256 and 512 words) and
     the y rows (2N words) are past 111 bytes."""
     c = WC.class_circuit(S._registered(PROVABLE), PROVABLE_CLASS, None, PROVABLE_GRAIN, tables=PearlTables(SCHEME, words=64))
+    WC.check_provable(c)
     n = {_label(fn): k for fn, k in c.templates}
     P = PROVABLE_CLASS.positions * PROVABLE_CLASS.slots
     want = {"Gemm_v2{K=128,N=64}": 8 * P, "Gemm_v2{K=128,N=1}": P}
@@ -281,7 +286,7 @@ def filled(low):
     load's scan state, each slot's `Slot` taking the circuit's cut linears as registered): its weights, registered values,
     slots and rows."""
     fields = _weights(low.fn)
-    state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
+    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
                                  schema=CR.SCHEMA_V2)
     values = {**WW.weight_values(_registered(), fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
 
@@ -412,11 +417,11 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
     c = low.circuit
     for i, (name, v) in enumerate(_pearl_values(low, slots).items()):
         schema, bits = IF.value_format(c.registered, name)
-        values = {**values, name: CR.Registered.commit(PROGRAM, name, v.view(f"<u{bits // 8}").tolist(),
+        values = {**values, name: RV.Registered.commit(PROGRAM, name, v.view(f"<u{bits // 8}").tolist(),
                                                        [os.urandom(192) for _ in range(len(v))],
                                                        word_bits=bits, schema=schema)}
     win = IF.Window(c, RUN, DESIGN, 64, registered=values, forms=WR.FORMS)
-    win.supply(CR)
+    win.supply()
     rows.record(win)
     bad = {}
     for fn, n in c.templates:
@@ -434,7 +439,7 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
 
 @pytest.fixture(scope="module")
 def pearl_wired():
-    circuit = WC.class_circuit(_registered(), CLASS, None, GRAIN, provable=False, tables=PEARL)
+    circuit = WC.class_circuit(_registered(), CLASS, None, GRAIN, tables=PEARL)
     return circuit, *wired(circuit)
 
 

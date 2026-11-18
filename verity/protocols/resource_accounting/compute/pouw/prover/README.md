@@ -13,11 +13,12 @@ or for the one a resource scheme runs on a card:
 ~~~sh
 uv sync --all-packages --extra torch-cpu
 uv run python -c "
+from verity.protocols.resource_accounting.compute.pouw import scheme
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes
 from verity.protocols.resource_accounting.compute.pouw.verifier import kernel_schemes
 print(', '.join(kernel_schemes.BY_NAME))
 print(schemes.get('pearl-c-sm120-v1-h3').name)
-print(schemes.of('pearl-plus', 'h100', True).name)
+print(schemes.of(scheme.PEARL_PLUS, 'h100', pinned=True, arch='sm_90a').name)
 "
 ~~~
 

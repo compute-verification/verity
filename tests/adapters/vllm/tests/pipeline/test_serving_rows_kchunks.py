@@ -9,7 +9,6 @@ the first, middle and last ``MoeExpertFp8CoordinateChunk`` templates at every ch
 """
 from __future__ import annotations
 
-from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -21,14 +20,12 @@ from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.commitments.periods import wiring as WI
 from verity_flock.class_statement import UnitStager
 
-from verity_vllm.definitions.numerics import fp8_moe_rows as FR
-from verity_vllm.definitions.numerics.derived_rows import f2fp_bf16
 from verity_vllm.definitions.registry import boolean_fp8_moe as BFM
 from verity_vllm.definitions.registry import fp8_moe as FM
 from verity_vllm.definitions.registry import fp8_moe_experts as X
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import serving_rows as SRW
@@ -37,6 +34,9 @@ E, K, N, G, KB, KC_ = 3, 128, 5, 32, 32, 32
 NB, KG, C = -(-N // G), K // G, K // KC_
 GEMM = bind(X.MoeExpertFp8Gemm, E=E, K=K, N=N, G=G, KB=KB, SWAP=False, DOT=HopperE4m3MmaV2Dot32)
 
+
+#: `chain_rows.pieces`' refusal of a port reading several templates' trees
+NAME = "a wired port reads one template's tree"
 
 def chunk(first: bool, last: bool, k: int = KC_, boolean: bool = True) -> str:
     st = {"E": E, "K": k, "G": G, "KB": KB, "SWAP": False, "FIRST": first, "LAST": last}
@@ -100,7 +100,7 @@ def pairs(monkeypatch):
 def window(rows, tmpls=TMPLS):
     ms = KC.wire(SRW.members(tmpls, [rows] * len(tmpls), None, CAPS), tmpls, [rows] * len(tmpls))
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*IF.listed_program(defs, ()), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
+    return CS.Binding(*IF.listed_program(defs, ()), {"law": "subset", "k": 2}, "ab" * 32, tuple(CH.shared_tables(ms)))
 
 
 def test_a_w13_row_holds_its_first_middle_and_last_chunks_at_each_width():
@@ -122,61 +122,17 @@ def test_a_w13_row_holds_its_first_middle_and_last_chunks_at_each_width():
         SRW.members(TMPLS, [[("r0", None, {"i": 0}, {"statics": {"K": K, "N": N}})]] * 3, None, {})
 
 
-def test_the_chunks_compute_their_committed_outputs_and_the_last_the_served_words(pairs):
-    rows, ops, y, store = pairs
-    w = window(rows)
-    assert [sum(m.n for m in w.members if m.template == t) for t in TMPLS] == [2 * N, 2 * N * (C - 2), 2 * N]
-    got = SRW.read_all(w.members, [rows] * 3, store, None)
-    for m, (g, _entries) in zip(w.members, got):
-        stager(m.template).reference_check(g["rows"], g["outs"])
-    last = np.concatenate([g["outs"]["o0"] for m, (g, _e) in zip(w.members, got) if m.template == LAST]).reshape(-1)
-    assert last.tolist() == y.tolist()
-    k = len(w.members) // 2
-    assert w.members[k].template == MID
-    with pytest.raises(AssertionError, match="outputs are not the IR reference's"):
-        stager(MID).reference_check(got[k][0]["rows"], {"o0": got[k][0]["outs"]["o0"] ^ np.uint16(1)})
-    W, WS = ops[(9, 3)].reshape(E, N, K), ops[(9, 4)].view("<u4").reshape(E, NB, KG)
-    for p in range(2):
-        e = int(ops[(p, 2)][0])
-        accs = FR.moe_expert_fp8_block_accs(ops[(p, 0)], ops[(p, 1)].view("<u4"), W[e], WS[e], every=KC_, G=G, KB=KB, dot="mmav2")
-        twin, nonfinite = FR.moe_expert_fp8_block_row(ops[(p, 0)], ops[(p, 1)].view("<u4"), W[e], WS[e], G=G, KB=KB, dot="mmav2")
-        assert not nonfinite.any() and f2fp_bf16(accs[-1]).tolist() == twin.tolist() == y[p * N:(p + 1) * N].tolist()
-
-
-def test_each_acc_is_wired_to_the_chunk_before_it_and_the_wires_hold_on_the_public_bodies(pairs):
-    rows, _ops, _y, store = pairs
-    w = window(rows)
-    unit = {}
-    for t, cs in ((FIRST, [0]), (MID, range(1, C - 1)), (LAST, [C - 1])):
-        b = min(m.base for m in w.members if m.template == t)
-        for j, (p, n, c) in enumerate((p, n, c) for p in range(2) for n in range(N) for c in cs):
-            unit[(p, n, c)] = b + j
-    at = {u: key for key, u in unit.items()}
-    for m in w.members:
-        if m.template == FIRST:
-            assert m.wired == ()
-            continue
-        (port, out, writers), = m.wired
-        assert (port, out) == ("in3", "o0") and len(writers) == m.n
-        for i, wr in enumerate(writers):
-            p, n, c = at[m.base + i]
-            assert wr == unit[(p, n, c - 1)]
-    got = SRW.read_all(w.members, [rows] * 3, store, None)
-    c = CS.commit(w, [g for g, _e in got])
-    publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
-    assert WI.check(w.members, publics) == {}
-    k = next(k for k, m in enumerate(w.members) if m.wired)
-    (p, o, ws), = w.members[k].wired
-    other = replace(w, members=tuple(replace(m, wired=((p, o, ws[1:] + ws[:1]),)) if j == k else m for j, m in enumerate(w.members)))
-    assert list(WI.check(other.members, publics)) == [w.members[k].key]
-    bad = [dict(g, rows={**g["rows"], p: g["rows"][p] ^ np.uint16(1)}) if j == k else g for j, (g, _e) in enumerate(got)]
-    with pytest.raises(ValueError, match=f"{w.members[k].key}: a in3 row is not the o0 row"):
-        CS.commit(w, bad)
-
-
 def test_a_partition_without_a_writer_s_template_is_refused(pairs):
     rows, *_ = pairs
     for tmpls, missing in (([MID, LAST], "first"), ([FIRST, LAST], "mid")):
         with pytest.raises(ValueError, match=rf"\['{missing}'\] ones, which the partition does not name"):
             window(rows, tmpls)
     assert all(m.wired == () for m in window(rows, [FIRST]).members)
+
+
+def test_a_chunk_reading_the_first_and_a_middle_chunk_is_refused_by_name(pairs):
+    """A middle or last chunk's acc is the FIRST chunk's output at chunk 1 and a middle chunk's after it: one port reading
+    two templates' trees, which `chain_rows.pieces` refuses by name."""
+    rows, *_ = pairs
+    with pytest.raises(ValueError, match=NAME):
+        window(rows)

@@ -1,7 +1,6 @@
 """The harness kit: the calls benchmarks' runners share, each written once.
 
 - `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
-- `free_port()`: a loopback port the system has free now, for a server a runner starts.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `card_short(name)`: the card's name in a measurement's member, from the one card record under `cards_directory()` whose
@@ -80,7 +79,6 @@ import platform
 import re
 import shlex
 import shutil
-import socket
 import statistics
 import subprocess
 import sys
@@ -141,12 +139,6 @@ def lease(gpus: int, minutes: float, *, on: str | None = None, cores: str | None
         raise ValueError(f"a lease needs its bound in minutes, not {minutes!r}")
     return ["gpu-lease", str(gpus), "--wait", *(["--on", on] if on else []), *(["--cores", cores] if cores else []),
             "--max-min", str(math.ceil(minutes)), "--"]
-
-
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 # ---- the host stamp ----------------------------------------------------------------------------------------------------------
@@ -252,18 +244,6 @@ def card_record(name: str, *, directory: Path | None = None) -> dict:
 def card_short(name: str, *, directory: Path | None = None) -> str:
     """The ``short`` of `card_record`'s record for ``name``."""
     return card_record(name, directory=directory)["short"]
-
-
-def card_named_short(short: str, *, directory: Path | None = None) -> dict:
-    """The GPU card record in ``directory`` (`cards_directory` by default) whose ``short`` is ``short``, a member's card
-    part as a record stored it; refused, naming the shorts there are, unless exactly one has it."""
-    directory = directory or cards_directory()
-    cards = _gpu_cards(directory)
-    held = [c for c in cards if c.get("short") == short]
-    if len(held) != 1:
-        raise SystemExit(f"{len(held)} GPU card files under {directory} have `short` {short!r}: one of "
-                         f"{sorted(c['short'] for c in cards if c.get('short'))}")
-    return held[0]
 
 
 def card_sku(name: str, *, directory: Path | None = None) -> str:
@@ -526,7 +506,12 @@ def wrong_card(workload: str, short: str, card: str, *, directory: Path | None =
     directory = directory or cards_directory()
     if is_card(card, short, directory=directory):
         return None
-    want = " or ".join(d["value"] for c in _gpu_cards(directory) if c.get("short") == short for d in c.get("driver", ()))
+    from verity.device import gpu_card_called
+
+    try:
+        want = " or ".join(d["value"] for d in gpu_card_called(short, directory=directory).get("driver", ()))
+    except KeyError as e:
+        return f"spec {workload!r} names no one card: {e.args[0]}"
     return (f"the card is a {card}, not the {short} of spec {workload!r} ({want}): run it on a node whose card is a "
             f"{want}, or name this card where the spec lists it (`SPEC@CARD`)")
 

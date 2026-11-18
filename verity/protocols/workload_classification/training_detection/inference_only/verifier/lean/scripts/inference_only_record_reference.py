@@ -259,15 +259,21 @@ SHARED_UNHELD = ("the root hands one run of input leaves to more than one row, a
                  "registered read of the parameter whose leaves the run is, or give each row input leaves of its own.")
 
 
-def run_of(p):
-    """The Lean's `Record.runOf`: the run of input leaves `(node, first leaf, leaves)` part `p` reads, an affine part's
-    or a strided part's that hands every member the one run; None for any other part."""
+def input_at(nodes, i) -> bool:
+    """The Lean's `Record.inputAt`: node `i` of the root is an input node, a primitive or a batch of one."""
+    return 0 <= i < len(nodes) and is_input(nodes[i].fn) and nodes[i].form in ("primitive", "batch")
+
+
+def part_run(nodes, p):
+    """The Lean's `Record.partRun`: the run of input leaves `(node, first leaf, leaves)` part `p` reads and whether it
+    reads it more than once, an affine part's or a strided part's whose reference k is the run's leaf k mod the run;
+    None for any other part."""
     from verity.circuits.refs import Strided
-    if isinstance(p, Affine) and p.space == "n":
-        return p.idx, p.base, p.count
-    if (isinstance(p, Strided) and p.space == "n" and p.outer_stride == 0 and p.inner_stride == 1 and p.base >= 0
-            and p.inner > 0 and p.count % p.inner == 0):
-        return p.idx, p.base, min(p.inner, p.count)
+    if isinstance(p, Affine) and p.space == "n" and input_at(nodes, p.idx):
+        return (p.idx, p.base, p.count), False
+    if (isinstance(p, Strided) and p.space == "n" and input_at(nodes, p.idx) and p.outer_stride == 0
+            and p.inner_stride == 1 and p.base >= 0 and p.inner > 0 and p.count % p.inner == 0):
+        return (p.idx, p.base, min(p.inner, p.count)), p.inner < p.count
     return None
 
 
@@ -289,20 +295,13 @@ def edge_of(nodes):
 
 def row_runs(program) -> tuple[list, list] | None:
     """The Lean's `Record.rowRuns`: the runs of input leaves the root's argument parts that are no edge read, as
-    `(own, shared)`, `shared` those a strided part hands every member and those read by more than one part, in order,
-    once for each part after the first; None where a part is no run of an input node (a primitive or a batch), a batch
+    `(own, shared)`, `shared` those a strided part reads more than once over and those read by more than one part, in
+    order, once for each part after the first; None where a part is no run of an input node (`part_run`), a batch
     maps an argument over no axis, or two runs share a leaf and are not the same run."""
-    from verity.circuits.refs import Strided
     nodes = program.root.body.nodes
     units, edge = [node for node in nodes if not is_input(node.fn)], edge_of(nodes)
     parts = [p for node in units for a in node.args for p in _parts(a.refs) if not edge(p)]
-
-    def flagged(p):
-        r = run_of(p)
-        ok = r is not None and 0 <= r[0] < len(nodes) and is_input(nodes[r[0]].fn) \
-            and nodes[r[0]].form in ("primitive", "batch")
-        return (r, isinstance(p, Strided) and p.count > p.inner) if ok else None
-    runs = [flagged(p) for p in parts]
+    runs = [part_run(nodes, p) for p in parts]
     if any(node.form == "batch" and None in node.axes for node in units) or None in runs:
         return None
     runs = sorted((r for r in runs if r[0][2] > 0), key=lambda r: (r[0][0], r[0][1]))
@@ -326,10 +325,10 @@ def shared_of(program, shared: list) -> list[tuple[int, int, int, int, int, int]
         for j, a in enumerate(node.args):
             ps = _parts(a.refs)
             if len(ps) != 1:
-                if any(run_of(p) in shared for p in ps):
+                if any((part_run(nodes, p) or (None,))[0] in shared for p in ps):
                     return None
                 continue
-            r = run_of(ps[0])
+            r = (part_run(nodes, ps[0]) or (None,))[0]
             if r is None or r not in shared:
                 continue
             if node.form == "batch" and (node.axes[j] != 0 or a.type.elem.leaves != ps[0].count // node.n):

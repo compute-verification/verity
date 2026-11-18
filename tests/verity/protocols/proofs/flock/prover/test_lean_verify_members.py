@@ -340,11 +340,11 @@ def test_a_zk_member_on_registered_reads_gets_verifys_verdict_whichever_bytes_na
     import served_registered as SR
     from test_lean_served_registered import FIXTURES, STATEMENT
 
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments import registered_value as RV
 
     (tmp_path / "store").mkdir()
     try:
-        fx = ci.fetch_sessions(FIXTURES[G.SCHEMA], tmp_path / "store")
+        fx = ci.fetch_sessions(FIXTURES[RV.SCHEMA], tmp_path / "store")
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     st = fx / "stage"

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Core.Levels
+public import Proofs.Core.Draw
 
 /-!
 # The sampling step of SPOT's guarantee, for a bad set fixed before the coins
@@ -30,11 +31,6 @@ variable {U V : Type}
 /-- **A set fixed before the coins escapes the sample with probability its miss.** -/
 theorem prCoin_misses (D : SamplingDesign U) (T : Finset U) :
     prCoin (fun ω => Disjoint (D.draw ω) T) = D.missProb T := rfl
-
-/-- A set of at least `K` units escapes the sample no more often than the count curve at `K`. -/
-theorem missProb_le_miss (D : SamplingDesign U) {T : Finset U} {K : ℕ} (h : K ≤ T.card) :
-    D.missProb T ≤ D.miss K :=
-  le_iSup₂ (f := fun (B : Finset U) (_ : K ≤ B.card) => D.missProb B) T h
 
 /-- **The sampling step of soundness at a miss `δ`.** The prover's coins `p`, drawn before the sample and
 independently of it, fix its bad set `T p`. Where every accepted run's sample misses `T p` or a break occurs, the run

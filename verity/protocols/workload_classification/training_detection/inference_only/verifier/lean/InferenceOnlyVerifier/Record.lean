@@ -90,15 +90,17 @@ A root of any other form is refused: the form reads no row it cannot show to be 
 
 ## Shared runs
 
-A registered weight that every member of a batch reads, or that several nodes read, is one run of input leaves
-handed to more than one row. The wired builder spells it as a strided part with outer stride 0 and inner stride 1
-over an input node (every member handed the one run), or as the same affine run in parts of several nodes.
-`rowRuns` tells these runs (`shared`) from runs one row reads (`own`): two runs it reads are the same run or share no
-leaf, and any other overlap is refused. Two rows of one gate are one value only where the record declares both
-rows alike, so a shared run is admitted only where every row that reads it is held as a registered read of one
-parameter, which the registration commits once (`sharedHeld`). The block count counts a row whole for each unit that reads it, so
-it counts a shared weight once for each member that reads it: more than the circuit's inputs, which errs toward the
-bound.
+A registered weight that several members of a batch read, or that several nodes read, is one run of input leaves
+handed to more than one row. The wired builder spells it as a strided part over an input node with outer stride 0,
+inner stride 1, its inner count the run and its count a multiple of it: reference k is leaf k mod the run, so members
+of w leaves each read the run's successive stretches of w and, past the run, read them again (a matmul's members
+across slots sharing one row of its weight; where w is the run, every member reads all of it). Several nodes reading
+one weight are the same run in parts of each. `rowRuns` tells these runs (`shared`) from runs one row reads (`own`):
+two runs it reads are the same run or share no leaf, and any other overlap is refused. Two rows of one gate are one
+value only where the record declares both rows alike, so a shared run is admitted only where every row that reads it
+is held as a registered read of one parameter, which the registration commits once (`sharedHeld`). The block
+count counts a row whole for each unit that reads it, so it counts a shared weight once for each member that reads
+it: more than the circuit's inputs, which errs toward the bound.
 
 ## Wires whole
 
@@ -354,7 +356,7 @@ def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
       if Widths.homo ty == some 1 && !on.contains i then some name else none }
 
 /-- The runs of input leaves the root's argument parts read, `(input node, first leaf, leaves)` each, none empty:
-`own`, each read by one part, and `shared`, each read by one strided part that hands every member the one run or
+`own`, each read by one part, and `shared`, each read by one strided part that reads it more than once over or
 by more than one part ("Shared runs"), in the order of their nodes and first leaves, a run read by several parts
 once for each after the first. -/
 structure Runs where
@@ -362,14 +364,45 @@ structure Runs where
   shared : List (Nat × Nat × Nat)
   deriving Inhabited
 
+/-- Node `i` of the root is an input node, a primitive or a batch of one, whose leaves are its gates. -/
+def inputAt (P : Prog) (i : Nat) : Bool :=
+  ((P.defs[P.root]!).body.nodes[i]?.map fun n =>
+    Desc.isInputNode P n && (n.form == .prim || n.form == .batch)).getD false
+
+/-- The run of input leaves part `q` reads, `(input node, first leaf, leaves)`, and whether it reads it more than
+once: an affine part over an input node reads its run once; a strided part over one from a leaf at or after 0 with
+outer stride 0, inner stride 1 and a count a multiple of its inner run reads its reference k at the run's leaf k mod
+the run, more than once where its count passes the run. None for any other part. -/
+def partRun (P : Prog) : Part → Option ((Nat × Nat × Nat) × Bool)
+  | .affine false i base count => if inputAt P i then some ((i, base, count), false) else none
+  | .strided false i base inner os is count =>
+    if inputAt P i && os == 0 && is == 1 && 0 ≤ base && 0 < inner && count % inner == 0 then
+      some ((i, base.toNat, min inner count), inner < count)
+    else none
+  | _ => none
+
+/-- `rowRuns` over the parts `parts`: each a run (`partRun`), and two runs, of one argument or of two, the same run or
+sharing no leaf. It costs the parts, sorted. -/
+def runsOf (P : Prog) (parts : List Part) : Option Runs :=
+  let runs := parts.filterMap (partRun P)
+  let sorted := (runs.filter fun r => r.1.2.2 > 0).mergeSort fun a b =>
+    a.1.1 < b.1.1 || (a.1.1 == b.1.1 && a.1.2.1 ≤ b.1.2.1)
+  let next := sorted.zip sorted.tail
+  let prev := (none :: sorted.map (some ·.1)).zip sorted
+  if runs.length == parts.length &&
+      next.all (fun (a, b) => a.1 == b.1 || a.1.1 != b.1.1 || a.1.2.1 + a.1.2.2 ≤ b.1.2.1) then
+    some { own := (prev.zip (sorted.tail.map (some ·.1) ++ [none])).filterMap fun ((p, r), n) =>
+             if r.2 || p == some r.1 || n == some r.1 then none else some r.1,
+           shared := sorted.filterMap (fun r => if r.2 then some r.1 else none) ++
+             next.filterMap fun (a, b) => if a.1 == b.1 then some a.1 else none }
+  else none
+
 /-- **The root's rows as runs of input leaves** (the module docstring's "Rows of its own" and "Shared runs"), read
 from the root's body: every part of an argument of a root node that is no input node, but a part reading another
 such node's outputs (a grid, in every lane; an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is a run
-of leaves of one of the root's input nodes (an input node a primitive or a batch of one, a leaf a gate): an affine
-part, or a strided part from a leaf at or after 0 with outer stride 0, inner stride 1 and a count a multiple of its
-inner run, which hands the run to each of its members; a batch maps every argument over its members (each has the `dims`
-resolution reads a member's leaves by); and two runs, of one argument or of two, are the same run or share no leaf.
-None where the root is of another form. It costs the root's argument parts, sorted. -/
+of leaves of one of the root's input nodes (`partRun`); a batch maps every argument over its members (each has the
+`dims` resolution reads a member's leaves by); and two runs are the same run or share no leaf (`runsOf`). None where
+the root is of another form. -/
 def rowRuns (P : Prog) : Option Runs :=
   let nodes := (P.defs[P.root]!).body.nodes
   let units := nodes.toList.filter fun n => !Desc.isInputNode P n
@@ -378,26 +411,8 @@ def rowRuns (P : Prog) : Option Runs :=
     | .explicit it => it.any fun r => !r.p && (nodes[r.i]?.map fun n => !Desc.isInputNode P n).getD false
     | .grid _ lanes => lanes.all fun l => !l.p && (nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
     | _ => false
-  let input := fun (i : Nat) =>
-    (nodes[i]?.map fun n => Desc.isInputNode P n && (n.form == .prim || n.form == .batch)).getD false
-  let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
-  let runs := parts.filterMap fun
-    | .affine false i base count => if input i then some ((i, base, count), false) else none
-    | .strided false i base inner 0 1 count =>
-      if input i && 0 ≤ base && inner > 0 && count % inner == 0 then
-        some ((i, base.toNat, min inner count), count > inner)
-      else none
-    | _ => none
-  let sorted := (runs.filter fun r => r.1.2.2 > 0).mergeSort fun a b =>
-    a.1.1 < b.1.1 || (a.1.1 == b.1.1 && a.1.2.1 ≤ b.1.2.1)
-  let next := sorted.zip sorted.tail
-  let prev := (none :: sorted.map (some ·.1)).zip sorted
-  if units.all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) && runs.length == parts.length &&
-      next.all (fun (a, b) => a.1 == b.1 || a.1.1 != b.1.1 || a.1.2.1 + a.1.2.2 ≤ b.1.2.1) then
-    some { own := (prev.zip (sorted.tail.map (some ·.1) ++ [none])).filterMap fun ((p, r), n) =>
-             if r.2 || p == some r.1 || n == some r.1 then none else some r.1,
-           shared := sorted.filterMap (fun r => if r.2 then some r.1 else none) ++
-             next.filterMap fun (a, b) => if a.1 == b.1 then some a.1 else none }
+  if units.all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) then
+    runsOf P (units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·))
   else none
 
 /-- **Every unit's rows are input gates, each its own or a shared run's**: `rowRuns` reads the root. -/
@@ -708,27 +723,19 @@ structure Shared where
   count : Nat
   deriving Inhabited
 
-/-- The run of input leaves part `q` reads, as `rowRuns` reads it: an affine part's, or a strided part's that hands
-every member the one run. -/
-def runOf : Part → Option (Nat × Nat × Nat)
-  | .affine false i base count => some (i, base, count)
-  | .strided false i base inner 0 1 count =>
-    if 0 ≤ base && inner > 0 && count % inner == 0 then some (i, base.toNat, min inner count) else none
-  | _ => none
-
 /-- The arguments of the root that read a shared run (`sharedRuns`), each as `Shared`; none where a part that reads
 one is not its argument's one part, or a batch hands its members other than a stretch of the part each. -/
 def sharedOf (P : Prog) : Option (List Shared) :=
   let nodes := (P.defs[P.root]!).body.nodes
   let sh := sharedRuns P
-  let reads := fun (q : Part) => ((runOf q).map sh.contains).getD false
+  let reads := fun (q : Part) => ((partRun P q).map (sh.contains ·.1)).getD false
   let args := nodes.toList.zipIdx.flatMap fun (nd, k) =>
     if Desc.isInputNode P nd then [] else nd.args.toList.zipIdx.map fun (a, j) => (k, j, a.seq.parts.toList)
   let mapped := fun (k j c : Nat) => ((nodes[k]?).map fun nd =>
     nd.form != .batch || (nd.args[j]?.bind (·.dims)).map (·.2) == some (c / nd.n)).getD false
   args.foldr (fun (k, j, ps) acc => acc.bind fun out => match ps with
-    | [q] => match runOf q with
-      | some (i, base, inner) =>
+    | [q] => match partRun P q with
+      | some ((i, base, inner), _) =>
         if !sh.contains (i, base, inner) then some out
         else if mapped k j q.count then some ({ node := k, arg := j, input := i, base, inner, count := q.count } :: out)
         else none

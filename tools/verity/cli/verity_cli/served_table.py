@@ -1,6 +1,6 @@
 """The served window's table for `verity run` (`verity_cli.run.Registry`): onsite's and remote's components as a
 configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each application's subprotocols and the
-configuration its file holds (`DEMOS`, `configuration`), each party's piece (`PARTIES`), and the run of the pieces placed
+configuration its file holds (`listed`, `configuration`), each party's piece (`PARTIES`), and the run of the pieces placed
 on a machine (`live`).
 
 A piece is what one party does in the run (`Piece`), in one of four ways (``runs``):
@@ -43,16 +43,17 @@ import time
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, replace
+from functools import partial
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity import config as K
 from verity.config import Component, Workload
-from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
+from verity.protocol import Channel, ProtocolDef, Role, Starter
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.scheme import declared, settings
+from verity.protocols.resource_accounting.scheme import Scheme, declared, settings
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
@@ -81,11 +82,6 @@ BINDINGS = "bindings.json"
 WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_ATTESTER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_ATTESTER = P2.CLOSER_PARTY, NC.NETWORK_ATTESTER
-#: served_verdicts.py's record reads each piece's answer by its runner name
-RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
-                "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
-#: each component's row in the record: Pearl+'s is the one it declares
-ROWS = {v: k for k, v in RECORD_NAMES.items()} | {"pearl-plus": declared(schemes.get("pearl-plus"), "record")}
 #: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
 AS_WRITTEN = "as the served node wrote it"
 
@@ -103,15 +99,13 @@ def _design(sampling_design: str, params: Mapping[str, Any]) -> None:
                              "the proof blocks N the window's class registers: rate:K/N, or stratified-rate:K/N")
 
 
-def _pous(params: Mapping[str, Any]) -> dict[str, Any]:
-    """PoUS's served piece: ``challenges``, the memory attester's reads in the period (320: ε = 1% + 2^-128,
-    ``period.certify``'s, since more reads than a certificate's keep its ε)."""
-    if extra := sorted(set(params) - {"challenges"}):
-        raise Refused("unknown-key", f"[params.\"{SP.IDS['pous']}\"]: {', '.join(extra)} (known: challenges)")
-    k = params["challenges"]
-    if type(k) is not int or k < 1:
-        raise Refused("params", f"challenges is a positive integer, not {k!r}")
-    return {"challenges": k}
+def _settings(scheme: Scheme, given: Mapping[str, Any]) -> dict[str, Any]:
+    """``scheme``'s `settings` over ``given``, refused as ``unknown-key`` where it has no such setting and as ``params``
+    where it refuses a value, with `settings`' own text: every scheme's settings are checked here."""
+    try:
+        return settings(scheme, given)
+    except ValueError as e:
+        raise Refused("unknown-key" if set(given) - set(scheme.settings) else "params", str(e)) from None
 
 
 _CLASS = re.compile(r"[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*")
@@ -122,19 +116,16 @@ _CLASS = re.compile(r"[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*")
 PEARLPLUS_PARAMS = ("tie-uniform",)
 
 
-def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
-    """Pearl+'s served piece: its scheme's settings that are the application's (`PEARLPLUS_PARAMS`, checked by
-    `scheme.settings`), and ``class``, the table's own."""
+def _pearlplus_params(scheme: Scheme, cid: str, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Pearl+'s served piece, under its id ``cid``: its scheme's settings that are the application's (`PEARLPLUS_PARAMS`,
+    checked by `_settings`), and ``class``, the table's own."""
     own = {k: v for k, v in params.items() if k != "class"}
     if extra := sorted(set(own) - set(PEARLPLUS_PARAMS)):
         known = ", ".join(["class", *PEARLPLUS_PARAMS])
-        raise Refused("unknown-key", f"[params.\"{SP.IDS['pearl-plus']}\"]: {', '.join(extra)} (known: {known})")
+        raise Refused("unknown-key", f"[params.\"{cid}\"]: {', '.join(extra)} (known: {known})")
     if "class" in params and not (isinstance(params["class"], str) and _CLASS.fullmatch(params["class"])):
         raise Refused("params", f"class is SLOTS,PROMPT,OUTPUTS, three positive integers, not {params['class']!r}")
-    try:
-        own = settings(schemes.get("pearl-plus"), own)
-    except ValueError as e:
-        raise Refused("params", str(e)) from None
+    own = _settings(scheme, own)
     return {**({"class": params["class"]} if "class" in params else {}), **{k: own[k] for k in PEARLPLUS_PARAMS}}
 
 
@@ -165,53 +156,50 @@ _VERIFIER = Role(VERIFIER, "auditor", needs=("audit", "component", "product"))
 _PROVER = Role(PROVER, "developer", per="server", needs=("store",))
 
 
-def _named(manifest: Manifest, names: Mapping[str, str]) -> tuple[tuple[Role, ...], tuple[Channel, ...]]:
-    """``manifest``'s parties and channels with each of its roles as the configuration names its party (``names``)."""
-    def n(role: str) -> str:
-        return names.get(role, role)
+def _declared(name: str, check: Callable[[Scheme, str, Mapping[str, Any]], dict[str, Any]] | None = None) -> Component:
+    """The `Component` of the scheme ``name`` declares (`schemes.get`): its parties, channels, colocated pairs, needs,
+    and as ``requires`` its ``depends``. Its parameters are its settings (`_settings`, over their defaults), or what
+    ``check`` makes of them, given the scheme and the id. Its id is the one `SP.IDS` gives, the key of its ``[params]``,
+    which may differ from the declared ``protocol``."""
+    s = schemes.get(name)
+    cid = SP.IDS.get(name, s.protocol)
+    params = ({"params": partial(check, s, cid)} if check else
+              {"params": partial(_settings, s), "default_params": dict(s.settings)} if s.settings else {})
+    return Component(name, cid, parties=declared(s, "parties"), channels=declared(s, "channels"),
+                     colocated=declared(s, "colocated"), needs=declared(s, "needs"), requires=declared(s, "depends"),
+                     **params)
 
-    return (tuple(replace(r, name=n(r.name)) for r in manifest.parties),
-            tuple(replace(c, sender=n(c.sender), receiver=n(c.receiver)) for c in manifest.channels))
 
-
-#: PoUB's P2 parties and channels, its verifier the configuration's bandwidth verifier (its ``verifier`` is onsite's)
-_P2_PARTIES, _P2_CHANNELS = _named(P2.MANIFEST, {P2.VERIFIER: BANDWIDTH_VERIFIER})
-MANIFESTS: dict[str, Component] = {c.name: c for c in (
-    Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-              needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="rate:1/3481648"),
-    Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
-                                               Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
-              channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
-                        Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
-              needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
-    Component("pearl-plus", SP.IDS["pearl-plus"], params=_pearlplus_params,
-              **{f: declared(schemes.get("pearl-plus"), f) for f in ("parties", "channels", "needs")}),
-    Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
-    Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
-              channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("SignedRun",), after=("End",))),
-              needs=frozenset({"store"}), params=_pous, default_params=dict(schemes.get("pous").settings)),
-    Component("bandwidth", SP.IDS["bandwidth"], parties=(*_P2_PARTIES, _VERIFIER),
-              channels=(*_P2_CHANNELS, Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
-              needs=frozenset({"receipts"})),
-    Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
-              needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
-              colocated=((CHALLENGER, NETWORK_ATTESTER),)),
-    Component("wipe", "verity/wipe/v0", parties=(*WP.MANIFEST.parties, _VERIFIER),
-              channels=(*WP.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("WipeReport",), after=("End",)))),
+#: the components no scheme declares yet, each with its row in the record, which only shrinks
+#: (`tests/tools/verity/cli/test_undeclared_rows.py`)
+UNDECLARED: dict[str, tuple[Component, str]] = {c.name: (c, row) for c, row in (
+    (Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
+               needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="rate:1/3481648"),
+     "integrity"),
+    (Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
+                                                Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
+               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
+                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
+               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)), "work"),
+    (Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
+     "inference-only"),
+    (Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
+               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
+               colocated=((CHALLENGER, NETWORK_ATTESTER),)), "communication"),
 )}
+MANIFESTS: dict[str, Component] = {**{n: c for n, (c, _) in UNDECLARED.items()}, **{c.name: c for c in (
+    _declared("pearl-plus", _pearlplus_params),
+    _declared("pous"),
+    _declared("bandwidth"),
+    _declared("wipe"),
+)}}
+#: each component's row in the record, the one its scheme declares (`record`)
+ROWS: dict[str, str] = {n: row for n, (_, row) in UNDECLARED.items()} | {
+    n: declared(schemes.get(n), "record") for n in MANIFESTS if n not in UNDECLARED}
 SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receipts", "ingress-relay"}),
                   (Role(WORKERS, "developer", needs=("serve",)),), _served,
                   {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800",
                    "precision": "verity_int8", "slots": 4, "window-steps": 16, "load": "varied"})
-#: onsite's subprotocols, the seven `Core.Composites.composites` holds for it
-ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
-PROTOCOLS = ONSITE_COMPONENTS
-#: each application's subprotocols, the file `applications/NAME.toml` that `verity run NAME` runs: onsite's seven, its two smaller
-#: sets (`verity.config.UNACCEPTED`) and remote's
-DEMOS = {"onsite_full": ONSITE_COMPONENTS,
-         "onsite_compute": ("sampled-proofs", "pouw", "inference-only", "certifier", "wipe"),
-         "onsite_network": ("sampled-proofs", "certifier", "wipe"),
-         "remote": ("sampled-proofs", "pearl-plus", "inference-only")}
 PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host"
 #: remote's auditor parties' machine, which isn't at the site: remote puts no auditor's device there
 AUDITOR_REMOTE = "auditor-remote"
@@ -219,8 +207,9 @@ AUDITOR_REMOTE = "auditor-remote"
 PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_ATTESTER: GATE_HOST, MEMORY_ATTESTER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
+APPLICATIONS = ROOT / "applications"
 #: the configuration this table's application runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
-CONFIG = ROOT / "applications" / "onsite_full.toml"
+CONFIG = APPLICATIONS / "onsite_full.toml"
 _UNDECIDED = ("`verity run` records each period's verdict under that id, undecided unless the line says who",
               "combined it: no composite takes it.")
 #: the header of each application's file
@@ -246,17 +235,22 @@ HEADERS = {
 HEADER = HEADERS["onsite_full"]
 
 
+def listed(demo: str) -> tuple[str, ...]:
+    """The subprotocols `applications/<demo>.toml` lists, in its order (its ``protocols``)."""
+    return tuple(tomllib.loads((APPLICATIONS / f"{demo}.toml").read_text())["protocols"])
+
+
 def configuration(commit: str, demo: str = "onsite_full",
                   pins: Sequence[Mapping[str, str]] | None = None) -> dict[str, Any]:
     """The configuration `applications/<demo>.toml` holds, at program ``commit``: `config new`'s over the application's subprotocols
-    (`DEMOS`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
+    (`listed`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
     parameters stated, and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
     entries for the subprotocols the application lists: no code states a key)."""
-    protocols = DEMOS[demo]
+    protocols = listed(demo)
     cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
-    if "pous" in protocols:
-        cfg["params"] = {SP.IDS["pous"]: dict(MANIFESTS["pous"].default_params)}
+    if stated := {c.id: dict(c.default_params) for c in map(MANIFESTS.__getitem__, protocols) if c.default_params}:
+        cfg["params"] = stated
     for p in cfg["party"]:
         remote = demo == "remote" and p["principal"] == "auditor"
         p["machine"] = AUDITOR_REMOTE if remote else PLACEMENT[p["name"]]
@@ -667,10 +661,22 @@ def bindings_of(state: Path) -> dict[str, Any]:
     return json.loads(f.read_text()) if f.exists() else {}
 
 
+def launched(name: str) -> Mapping[str, Piece]:
+    """The pieces of the component ``name`` by party (`PARTIES`), refused (``unknown-protocol``) by name where no scheme
+    declares it and `UNDECLARED` doesn't hold it, or where this table has no pieces for it."""
+    if name not in schemes.DECLARATIONS and name not in UNDECLARED:
+        raise Refused("unknown-protocol", f"{name} is no declared scheme (verity.protocols.compose.schemes) and no "
+                                          "row of served_table.UNDECLARED: declare it, or list a declared one")
+    if name not in PARTIES:
+        raise Refused("unknown-protocol", f"{name} is declared, but served_table.PARTIES has no pieces for it: "
+                                          "add its pieces, keyed by its declared name, or list another")
+    return PARTIES[name]
+
+
 def pieces(cfg: Mapping[str, Any], party: str) -> list[Piece]:
     """``party``'s pieces under ``cfg``: the workload's, then each listed component's."""
     out = [SERVE] if party == WORKERS else []
-    return out + [PARTIES[c][party] for c in cfg["protocols"] if party in PARTIES.get(c, {})]
+    return out + [launched(c)[party] for c in cfg["protocols"] if party in launched(c)]
 
 
 #: the runner's variables that are flags, serve-openai's and served_piece.py's, which each piece adds its own to
@@ -684,7 +690,7 @@ def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, 
     bindings. A variable of `JOINED` is every piece's flags,
     in the pieces' order; any other is one piece's."""
     out = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg.get("pin", []), sort_keys=True)}
-    for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]:
+    for p in [SERVE, *(x for c in cfg["protocols"] for x in launched(c).values())]:
         for k, v in p.variables(cfg, bindings).items():
             out[k] = f"{out[k]} {v}" if k in JOINED and k in out else v
     return out
@@ -692,7 +698,7 @@ def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, 
 
 def unbound(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> list[str]:
     """Every listed piece's unbound bindings, each once: a runtime session's two sides read one ``address``."""
-    return list(dict.fromkeys(k for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]
+    return list(dict.fromkeys(k for p in [SERVE, *(x for c in cfg["protocols"] for x in launched(c).values())]
                               for k in p.unbound(bindings)))
 
 
@@ -783,6 +789,16 @@ def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, An
 VERDICTS = {"accept": "accept", "reject": "reject", "pending": "undecided"}
 
 
+def charges_nothing(component: str) -> str | None:
+    """Why a component whose declared scheme names no resource has no figure: its `Lacks`'s why ("charges nothing:
+    ..."), which a check's line reads where a figure would be (its ``charges_nothing``), never in place of the
+    component's verdict; None for any other component, declared or not."""
+    if component not in schemes.DECLARATIONS:
+        return None
+    resource = schemes.get(component).resource
+    return (resource.why or "charges nothing") if isinstance(resource, schemes.S.Lacks) else None
+
+
 #: what the served window publishes of the execution phase its record is of, under ``out/serve``: its seal's SHA-512
 #: (``seal_sha512``), never its number or steps, which `served_verdicts.py publish` keeps on the node
 PHASE = "phase.json"
@@ -793,8 +809,9 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     nothing else: the record (``record/verdicts.json``) of the execution phase ``serve/phase.json`` names, the line's
     ``block`` its seal's SHA-512, in `verity_cli.run`'s verdict form. The serving node composed that record, so each of
     its accepts, each row's and the combined verdict, reads undecided, `AS_WRITTEN` in the reason, whatever a row's
-    ``answer_from`` (printed, deciding nothing) says; a reject or an error stands. Refused (``window``, ``record``)
-    when either file isn't there."""
+    ``answer_from`` (printed, deciding nothing) says; a reject or an error stands. A component that charges nothing
+    keeps its row's verdict like any other; the line's ``charges_nothing`` says why it has no figure. Refused
+    (``window``, ``record``) when either file isn't there."""
     out = state / "out"
     phase, report = out / "serve" / PHASE, out / "record" / "verdicts.json"
     if not phase.is_file():
@@ -804,6 +821,7 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     seal = json.loads(phase.read_text())["seal_sha512"]
     doc = json.loads(report.read_text())
     rows = doc["protocols"]
+    free = {c: why for c in cfg["protocols"] if (why := charges_nothing(c))}
     components = {c: rows.get(ROWS[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
     answer_from = {c: rows[ROWS[c]].get("answer_from", AS_WRITTEN) for c in cfg["protocols"] if ROWS[c] in rows}
     absent = sorted(c for c, v in components.items() if v == "absent")
@@ -825,7 +843,7 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     on, developer = coins_on(cfg, bindings_of(state)), {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
     return {"block": seal, "components": components, "answer_from": answer_from, "product": product, "reason": reason,
             "registration": None, "coins": "simulated" if developer & set(on.values()) else coins_of(cfg),
-            "coins_on": on, "verdict": verdict}
+            "coins_on": on, "verdict": verdict, **({"charges_nothing": free} if free else {})}
 
 
 def _record_line(said: Path) -> dict[str, Any] | None:
@@ -846,6 +864,7 @@ def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
         raise Refused("record", f"the record in {base} is composed for {line.get('product')!r}, not remote")
     report = json.loads(f.read_text())
     rows = report.get("protocols", {}) if composed else {}
+    free = {c: why for c in cfg["protocols"] if (why := charges_nothing(c))}
     components = {c: rows.get(ROWS.get(c, c), {}).get("verdict", "absent") for c in cfg["protocols"]}
     held = sorted(f"{c} {v}" for c, v in components.items() if v != "accept")
     if components.get("inference-only") == "accept" \
@@ -860,7 +879,8 @@ def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     on, workload = gate_coins_on(cfg, bindings_of(state)), {p["name"]: p["machine"] for p in cfg["party"]}[WORKERS]
     return {"block": report.get("window"), "components": components, "product": REMOTE, "reason": reason,
             "registration": None, "coins": "simulated" if workload in on.values() else coins_of(cfg), "coins_on": on,
-            "verdict": "undecided" if verdict == "accept" and held else verdict}
+            "verdict": "undecided" if verdict == "accept" and held else verdict,
+            **({"charges_nothing": free} if free else {})}
 
 
 def pending(cfg: Mapping[str, Any], state: Path, rc: int) -> str | None:
@@ -909,7 +929,7 @@ def coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, s
     ``development`` binding: the attester's where it is bound, else the piece's own."""
     at = {p["name"]: p["machine"] for p in cfg["party"]}
     return {c: at[x.reaches] if x.development in x._bindings(bindings) else at[x.party] for c in cfg["protocols"]
-            for x in PARTIES.get(c, {}).values() if x.development}
+            for x in launched(c).values() if x.development}
 
 
 def gate_coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
@@ -917,7 +937,7 @@ def gate_coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[s
     optional: the challenger's where its gate is bound, else the workload's."""
     at = {p["name"]: p["machine"] for p in cfg["party"]}
     return {c: at[CHALLENGER] if "gate" in x._bindings(bindings) else at[WORKERS] for c in cfg["protocols"]
-            if (x := PARTIES.get(c, {}).get(WORKERS)) and x.reaches == CHALLENGER and "gate" in x.optional}
+            if (x := launched(c).get(WORKERS)) and x.reaches == CHALLENGER and "gate" in x.optional}
 
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
@@ -974,7 +994,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     return Result(out)
 
 
-__all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL", "SERVED",
-           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "live", "onsite_check", "pending", "pieces",
+__all__ = ["HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "REGISTRATION_GOAL", "SERVED",
+           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "launched", "listed", "live", "onsite_check", "pending", "pieces",
            "placement", "prepare", "registration", "remote_check", "request_bound", "served_window", "unbound",
            "variables"]

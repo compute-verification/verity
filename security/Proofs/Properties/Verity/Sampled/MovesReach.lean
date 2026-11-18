@@ -156,16 +156,16 @@ under retained rounds and SHA-512 digests at `A`'s digest, the log opens only th
 each round the record gives a stream gives coins (`hsome`) and each opening v2 read answers its round's digest
 (`hans`), the record's stream so named has round `k`, and it is the round `roundOf` makes of `w` and `cs`. -/
 theorem stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
-    {tables : Array String} {L : Fin A.rounds → Slot} {record : Exchange → Option Claims.Msg}
-    {recordDigest : Claims.Msg} {rd : Reading A.rounds} (hrd : rd = readingAt tables L record recordDigest)
+    {tables : Array String} {L : Fin A.rounds → Slot} {record : Exchange → Option Hash.Msg}
+    {recordDigest : Hash.Msg} {rd : Reading A.rounds} (hrd : rd = readingAt tables L record recordDigest)
     {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP}
     {B : RoundHold} {J N : ℕ} {β : Type} {fin : LiveOutJ J A.mP → β} {rootB : Array ByteArray}
     {pts : Fin 2 → Fin A.mP → 𝔽} {rs : Fin J → Fin 2 → List Flock.Round}
-    {q : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds)} (hq : q.Inv (roundCuts V θ F c rd))
+    {q : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds)} (hq : q.Inv (roundCuts V θ F c rd))
     {φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'} {o : β × CoinTape (V.game θ F c) σ}
     (hr : RoundsReach D M A.dg J B fin rootB pts N rs (q.toStop.rewrite φ).consume o)
     (hn : NoMiss V θ F c rd σ o.2) {j : Fin A.rounds} {r : Fin 2} {k : ℕ} (hLj : L j = .rep 0 r k)
-    (hj : (q.toStop.Ks j).isHere = true) {w : Claims.Msg} (hw : q.toStop.modes j = some w)
+    (hj : (q.toStop.Ks j).isHere = true) {w : Hash.Msg} (hw : q.toStop.modes j = some w)
     {cs : Fin (tailCount w) → 𝔽} {m L' : List Release} {i s n : ℕ} {b : ByteArray}
     (hlog : (CoinTape.run (V.game θ F c) σ o.2).log = m ++ ⟨.opening i s n, b, roundBits fieldEnc cs⟩ :: L')
     (hcut : CutsAt rd.reveal q.toStop m (CoinTape.run (V.game θ F c) σ o.2).log) (hk : openedOf m i s = k)
@@ -300,13 +300,13 @@ rounds of a stream of the tree read (`hkey`), the rounds the stops on that strea
 rounds of it (`repRounds`): by `stream_rounds` at the stream's openings, `stop_round` at each, and
 `openedOf_eq_recordRounds` for their count; a stream the record gives no rounds has no stop on it. -/
 theorem rep_rounds {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
-    (reg : Option Claims.Msg → A.Reg) {tables : Array String} {L : Fin A.rounds → Slot}
-    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
+    (reg : Option Hash.Msg → A.Reg) {tables : Array String} {L : Fin A.rounds → Slot}
+    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} {B : RoundHold} {J : ℕ} {β : Type}
     {fin : LiveOutJ J A.mP → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin A.mP → 𝔽}
     {o : β × CoinTape (V.game θ F c) σ} (hn : NoMiss V θ F c (readingAt tables L record recordDigest) σ o.2)
-    {as : List (Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))}
+    {as : List (Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))}
     {ms : List (List Release)} {L₀ L' : List Release}
     (hF : List.Forall₂ (fun a m => (decodersAt reg L).sub J a.1.toStop.modes = some a.2.1 ∧
       LoggedAfter (readingAt tables L record recordDigest).round a.1.toStop m (roundBits fieldEnc a.2.2)
@@ -450,9 +450,9 @@ every table and rep
 the rep rounds sit inside the writer's output with the roots and the link points, which the other clauses read at the
 same witness. -/
 theorem firstStop_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
-    (reg : Option Claims.Msg → A.Reg) {tables : Array String} {L : Fin A.rounds → Slot}
-    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) (hLJ : ∀ S R j t r k, L j = .rep t r k → t < A.J S R)
+    (reg : Option Hash.Msg → A.Reg) {tables : Array String} {L : Fin A.rounds → Slot}
+    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) (hLJ : ∀ S R j t r k, L j = .rep t r k → t < A.J S R)
     (hJ1 : ∀ S R, A.J S R = 1) {jl : Fin A.rounds} (hjl : L jl = .link) (hRN : A.rounds ≤ A.N + 1)
     {rd : Reading A.rounds} (hrd : rd = readingAt tables L record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg L) {label : String} {after : ByteArray} {m : ℕ}
@@ -762,8 +762,8 @@ statement `rep_rounds`'s premise `hans` is an instance of (`verdict_read`, `Sets
 record's tree from the session's coin tree, which `Record.decode` holds the record's to (`SetsUp.covers_logged`). -/
 theorem firstStop_reps_verdict {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
-    (reg : Option Claims.Msg → A.Reg) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) {rd : Reading A.rounds} (hrd : rd = readingAt A.tables A.layout record recordDigest)
+    (reg : Option Hash.Msg → A.Reg) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) {rd : Reading A.rounds} (hrd : rd = readingAt A.tables A.layout record recordDigest)
     {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String}
     {after : ByteArray} {m : ℕ} {κ : A.Ω → Fin m → Fin 512 → Bool} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP}
     (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ) (ω : (A.extend M.widening).L.Ω)

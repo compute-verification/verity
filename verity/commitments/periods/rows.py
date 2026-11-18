@@ -75,7 +75,7 @@ from typing import Any
 import numpy as np
 
 from verity.circuits import partition_object as PO, refs as RF
-from verity.commitments import hm96, row_table as RT
+from verity.commitments import domains as DM, hm96, registered_value as RV, row_table as RT
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
 from verity.commitments.window import WINDOW_DOMAIN, window_binding, window_domain
@@ -120,7 +120,7 @@ INDEX_RULE = "hm96-sha512/v1 leaf of SHA-512(\"verity/window-index/v1\\0\" || in
 @dataclass(frozen=True)
 class ValueRows:
     """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16- or
-    32-bit leaves (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by
+    32-bit leaves (``registered_value.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by
     row), committed under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts
     concatenated, when the caller has sampled them (`value_salts`), else sampled here."""
     value: Any
@@ -1503,8 +1503,8 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
                 continue
             wire = w.wire(m, p)
             ports[p] = {"value": own_value(port), "root": e["root"], "leaves": int(e["leaves"]), "words": words[p],
-                        "word_bits": registered.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
-                        **({"reads": w.reads(m, p).tolist(), registered.READS_FROM: m.base} if wire is None else
+                        "word_bits": RV.WORD_BITS, "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
+                        **({"reads": w.reads(m, p).tolist(), RV.READS_FROM: m.base} if wire is None else
                            {"tree": {"template": wire.writer, "field": wire.out}, "reads": []})}
         out[m.key] = {**f, "ports": dict(sorted(ports.items()))}
     return out
@@ -1757,7 +1757,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
            **({"row_tables": tables, "row_table_steps": segs} if tables else {}),
            **({"registered_paths": paths} if paths else {}), **({"value_rows": values} if values else {}),
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
-           "domain_tag": DOMAIN_TAG, "registration": registrar.FORMAT_V2 if entries else registrar.FORMAT,
+           "domain_tag": DOMAIN_TAG, "registration": DM.REGISTRATION if entries else DM.REGISTRATION_V1,
            "registration_digest": registrar.digest(rec),
            "leaf_layer": rec["leaf_layer"],
            "leaf_layer_rule": LEAF_LAYER, "index_leaf": leaf, "index_rule": INDEX_RULE,

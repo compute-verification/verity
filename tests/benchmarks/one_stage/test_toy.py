@@ -27,6 +27,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     docket as R,
     verifier as V,
 )
+from verity.commitments import registered_value as RV
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program
@@ -126,8 +127,8 @@ def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_bound
         file = reads[m.key]
         assert file["format"] == REG.READS_V1 and list(file["ports"]) == [x for x, _ in m.all_rows]
         e = file["ports"][p]
-        assert e["value"] == value == links[(m.template, p)] and e["reads"] == list(SAMPLE) and e[REG.READS_FROM] == m.base
-        assert (e["leaves"], e["domain"], e[REG.SCHEMA_KEY]) == (N, roots[value]["domain"], T.V2)
+        assert e["value"] == value == links[(m.template, p)] and e["reads"] == list(SAMPLE) and e[RV.READS_FROM] == m.base
+        assert (e["leaves"], e["domain"], e[RV.SCHEMA_KEY]) == (N, roots[value]["domain"], T.V2)
         assert e["words"] == dict(m.all_rows)[p] == port.words
         header = T.CS.registered_header(head, t)[p]
         assert header["value"] == value and header["positions"] == list(SAMPLE)
@@ -153,7 +154,7 @@ def test_every_other_port_reads_the_interior_record_at_its_own_leaves_or_its_wri
             e, header = reads[m.key]["ports"][p], T.CS.registered_header(head, t)[p]
             n = roots[value]["leaves"]
             assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], n, roots[value]["domain"])
-            assert e["reads"] == win.reads(m, p).tolist() and (e[REG.READS_FROM], e["words"]) == (m.base, words)
+            assert e["reads"] == win.reads(m, p).tolist() and (e[RV.READS_FROM], e["words"]) == (m.base, words)
             assert header["positions"] == win.leaves(m, p).tolist()
             held = rows_bc(c, m.port(p), len(header["positions"]))
             assert all(REG.verify_read(c.domains[value], c.roots[value], i, x, bytes.fromhex(path), T.V2)

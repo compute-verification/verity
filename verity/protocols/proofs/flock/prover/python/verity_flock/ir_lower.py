@@ -30,8 +30,9 @@ from . import fp
 from . import tail_pieces
 from .fp import ceil_pow2
 from .gf2 import Circuit, L, const_bits
+from verity.commitments.domains import FLOCK_IR_BLOCK
 
-FORMAT = "flock-ir-unit/v2"
+FORMAT = FLOCK_IR_BLOCK
 WORD = 128
 #: the circuit description's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past
 #: 100 KB), and the characters a digest encodes at a time
@@ -56,9 +57,9 @@ def _rope_out_add(C, x, y, c, s):
 @lru_cache(maxsize=None)
 def silu_table() -> tuple[int, ...]:
     """``bf16_rn(silu_f32(f32(g)))`` for every bf16 word g: the first half of ``SiluMulBf16``, from the primitive's own helpers."""
-    from verity_vllm.definitions.registry import prims as P
+    from verity.circuits.ops import fp32 as P
 
-    return tuple(P.f32_to_bf16_rn_bits(P._silu_f32_bits(P.bf16_to_f32_bits(g)), P.BF16_NAN_TORCH) for g in range(1 << 16))
+    return tuple(P.f32_to_bf16_rn_bits(P.f32_silu_bits(P.bf16_to_f32_bits(g)), P.BF16_NAN_TORCH) for g in range(1 << 16))
 
 
 def _silu_mul(C, g, u):
@@ -1374,8 +1375,7 @@ def cut_words(low: Lowering, flat_inputs: np.ndarray) -> np.ndarray:
 # --- the native tail, as the verifier evaluates it --------------------------------------------------------------------------
 
 #: The measured MUFU tables the tail primitives read, as raw u32 LE files (``write_tables``): their sha256s, pinned in the Rust
-#: verifier too (``live/src/ir_tail.rs``); they are ``verity_vllm``'s ``rms_relation.tables("cuda")``, whose xz files that
-#: module pins.
+#: verifier too (``live/src/ir_tail.rs``); they are ``verity.circuits.ops.mufu``'s ``table(name)``.
 TABLES = {"rsq": "218fc04d271773269367dedf4cff9ff719081b1218c3d67d248d8d6126040246",
           "sqrt": "4e017678de306e0be8bed66193c2ebf09e9c60a9600cad56cd05bb7b6c3f266f",
           "rcp": "c408381446132e07fa5581e930dc33fb790bea7ec4276ef3621e322df2492a55",
@@ -1410,16 +1410,15 @@ def _tail(low: Lowering) -> tuple[list[list], dict[int, int]]:
 
 def write_tables(out_dir) -> dict:
     """The MUFU tables as raw u32 LE files (``rsq.u32``, ``sqrt.u32``, ``rcp.u32``, ``ex2.u32``) for the verifier; checks
-    :data:`TABLES`. FA2's MUFU.RCP table (``fa2_relation.tables().rcp``) is ``rcp`` byte for byte."""
+    :data:`TABLES`."""
     from pathlib import Path
 
-    from verity_vllm.definitions.numerics import fa2_relation, rms_relation
+    from verity.circuits.ops import mufu
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    t, fa2 = rms_relation.tables("cuda"), fa2_relation.tables()
     for name, want in TABLES.items():
-        b = np.ascontiguousarray(getattr(fa2 if name == "ex2" else t, name), dtype="<u4").tobytes()
+        b = np.ascontiguousarray(mufu.table(name), dtype="<u4").tobytes()
         if hashlib.sha256(b).hexdigest() != want:
             raise ValueError(f"MUFU table {name}: sha256 differs from the pinned one")
         (out / f"{name}.u32").write_bytes(b)

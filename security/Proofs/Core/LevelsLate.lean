@@ -33,9 +33,9 @@ variable {G : Type} [Fintype G] [DecidableEq G]
 def Coins (L : Levels G) : Type :=
   (i : Fin L.levels.length) → (X : Finset G) → ((L.levels.get i).design X).Ω
 
-instance (L : Levels G) : Fintype L.Coins := by unfold Coins; infer_instance
+instance instFintypeCoins (L : Levels G) : Fintype L.Coins := by unfold Coins; infer_instance
 
-instance (L : Levels G) : Nonempty L.Coins := by unfold Coins; infer_instance
+instance instNonemptyCoins (L : Levels G) : Nonempty L.Coins := by unfold Coins; infer_instance
 
 /-- `Q_k`: the blocks drawn through level `k`, `Q₀ = {univ}`. -/
 def drawTo (L : Levels G) (ω : L.Coins) : ℕ → Finset (Finset G)

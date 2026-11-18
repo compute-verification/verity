@@ -152,7 +152,7 @@ on, the source's opening of `cm0` erased stops past the openings having sent lev
 from round `l.size`, the table `t` and the pads `padsL0`, for any table `t`. -/
 theorem ligeritoCut_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (rep : ℕ) (extra : ℕ → ℕ → F128) (src : RepSrc)
-    (tr : Transcript) (l : Array Claims.Msg) {j : ℕ} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0)
+    (tr : Transcript) (l : Array Hash.Msg) {j : ℕ} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0)
     (hlv : 2 ≤ sch.levels.size) (hood : lay.nOod0 = 1) (hlk : lay.k0 = sch.k0) :
     CutStop (fun L => L.toList = l.toList ++ (List.range (j + 1)).map
         (l0BodyAt coin l.size tr.pending.data.toList T (flat cm0.cap) sch t b lay
@@ -190,8 +190,8 @@ theorem masked_of_cutL0 {coin : ℕ → ℕ → F128} {p0 : ℕ} {P P' : List UI
 /-! ## The rep's level 0 bodies -/
 
 /-- A stop survives `eraseZ`: runs equal up to `eraseZ` stop at the same log. -/
-theorem cutStop_of_eraseZ {Q : Array Claims.Msg → Prop} {m m' : TMW PS Zk.ZkProof} (he : eraseZ <$> m = eraseZ <$> m')
-    {t : Transcript} {l : Array Claims.Msg} (h : CutStop Q ((m.run t).go l)) : CutStop Q ((m'.run t).go l) := by
+theorem cutStop_of_eraseZ {Q : Array Hash.Msg → Prop} {m m' : TMW PS Zk.ZkProof} (he : eraseZ <$> m = eraseZ <$> m')
+    {t : Transcript} {l : Array Hash.Msg} (h : CutStop Q ((m.run t).go l)) : CutStop Q ((m'.run t).go l) := by
   obtain ⟨L, hm, hQ⟩ := h
   refine ⟨L, ?_, hQ⟩
   have e := congrArg (fun z => (z.run t).go l) he
@@ -212,9 +212,9 @@ first `j + 1` bodies after `l₁`, at the coins from round `l₁.size`, the PIOP
 pads `padsL0`. -/
 theorem repCut_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (st : Setup) (sch : Schedule) (rep : ℕ) (dom : ByteArray)
     (cm0 : Commit) (extras : Array Claim) (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128))
-    (words : List ℕ) (t : Array F128) (rp : ℕ) (extra : ℕ → ℕ → F128) (tr : Transcript) (l : Array Claims.Msg)
+    (words : List ℕ) (t : Array F128) (rp : ℕ) (extra : ℕ → ℕ → F128) (tr : Transcript) (l : Array Hash.Msg)
     {j : ℕ} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0) (hlv : 2 ≤ sch.levels.size)
-    {res} {tr₁ : Transcript} {l₁ : Array Claims.Msg}
+    {res} {tr₁ : Transcript} {l₁ : Array Hash.Msg}
     (hp : ((piopCut (asksCut coin (l₁.size + j)) st (Zk.PadLayout.new st.m st.kLog sch.k0) src (flat cm0.cap) ic.root
       extras prior words).run tr).go l = (.ok (res, tr₁), l₁)) :
     CutStop (fun L => L.toList = l₁.toList ++ (List.range (j + 1)).map

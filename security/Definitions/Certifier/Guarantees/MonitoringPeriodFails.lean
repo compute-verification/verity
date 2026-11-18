@@ -100,10 +100,10 @@ are fixed for each pattern before the run, so they carry nothing of the secret b
 counts. Nothing else of the statement reads the pattern. -/
 def MonitoringPeriodLeakFails : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-    (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
+    (H : Hash.Msg → Hash.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg chk : AuditStatement → Finset ℕ)
-    (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Claims.Msg → ℝ) (Dj : ℕ)
+    (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Hash.Msg → ℝ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
     (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
@@ -119,7 +119,7 @@ def MonitoringPeriodLeakFails : Prop :=
     (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
     (hch : MonitoringPeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
-    (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
+    (x : Z → Fin n → Hash.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
     (hb : D.commit.Binds H) (bound : Conn → ℕ)
     (j : ℕ),
     (∀ m, ScopeAcc D lay k m →
@@ -162,10 +162,10 @@ window's operator and registered values may follow the network attester's fail c
 period, under one logarithm. -/
 def MonitoringPeriodLeakFailsAtMost : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-    (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
+    (H : Hash.Msg → Hash.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg chk : AuditStatement → Finset ℕ)
-    (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Claims.Msg → ℝ) (Dj : ℕ)
+    (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Hash.Msg → ℝ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
     (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
@@ -181,7 +181,7 @@ def MonitoringPeriodLeakFailsAtMost : Prop :=
     (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
     (hch : MonitoringPeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
-    (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
+    (x : Z → Fin n → Hash.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
     (hb : D.commit.Binds H) (bound : Conn → ℕ)
     (j : ℕ),
     (∀ m, ScopeAcc D lay k m →
@@ -222,10 +222,10 @@ every window meets `ExecutionPhaseGoodChecked` and whose run is charged at most 
 failures is the sender's choice, and the weight charges for it, so the charges of two periods add. -/
 def MonitoringPeriodLeakCharged : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-    (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
+    (H : Hash.Msg → Hash.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg chk : AuditStatement → Finset ℕ)
-    (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Claims.Msg → ℝ) (Dj : ℕ)
+    (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Hash.Msg → ℝ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
     (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
@@ -241,7 +241,7 @@ def MonitoringPeriodLeakCharged : Prop :=
     (Θ : Finset Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
     (hch : MonitoringPeriodChannelReg f allows (Θ : Set Par) Zs schedOf srvOf dec fun p => (run tap p).1)
-    (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
+    (x : Z → Fin n → Hash.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
     (hb : D.commit.Binds H) (bound : Conn → ℕ)
     (w : ℕ → ℚ≥0) (hw : KraftWeights w (Fintype.card Conn)) (T : ℕ),
     (∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s)

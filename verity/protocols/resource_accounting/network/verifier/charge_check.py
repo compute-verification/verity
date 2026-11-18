@@ -9,24 +9,24 @@ from collections.abc import Sequence
 from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.interface.charge import arith_encode as AE, charge_chain as CC, window_charge as WC
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 _INST = hm96.SHA512
 
 
 def opening(words: Sequence[int], salt: bytes) -> bytes:
     """A carry row's b‖c: its u16 words under `salt`."""
-    return _INST.commit_string(_INST.default_key, G.row_digest(words, CC.WORD_BITS, SCHEMA), salt)
+    return _INST.commit_string(_INST.default_key, RV.row_digest(words, CC.WORD_BITS, SCHEMA), salt)
 
 
 def start_opening(program: str, book: dict) -> bytes:
-    """b‖c of the priors' row under its public salt (`registered.supplied_salts`' row 0 of `VALUE`)."""
-    return opening(CC.row(CC.encode(AE.first_carry(book))), G.supplied_salts(program, CC.VALUE, 1)[0])
+    """b‖c of the priors' row under its public salt (`registered_value.supplied_salts`' row 0 of `VALUE`)."""
+    return opening(CC.row(CC.encode(AE.first_carry(book))), RV.supplied_salts(program, CC.VALUE, 1)[0])
 
 
 def window_start_opening(program: str, book: dict) -> bytes:
     """b‖c of `window_charge`'s first carry's row under its public salt."""
-    return opening(CC.row(WC.encode(WC.first_carry(book))), G.supplied_salts(program, WC.VALUE, 1)[0])
+    return opening(CC.row(WC.encode(WC.first_carry(book))), RV.supplied_salts(program, WC.VALUE, 1)[0])
 
 
 def check_chain(windows: Sequence[Sequence[bytes]], program: str, book: dict) -> str | None:

@@ -32,9 +32,9 @@ WORLD, CAP = 2, 2
 DESIGN = {"law": "stratified", "k": 2}
 TP_ROOT = "ab" * 64
 KEYS = ("run", "population", "partition_digest", "registration_digest", "seconds", "window")
-WIRES = (IF.Wire(GID, "x", GID, "o0", at=LAYER, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
-         IF.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=LAYER, step=(REQUESTS, 1)))
-REGISTERED = IF.Registered({"w": LAYERS * 256}, reads=(IF.Read(GID, "w", "w", 0, (LAYERS, LAYER), 0, (256, 0)),))
+WIRES = (IF.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(UNITS - REQUESTS,), base=0, step=(1,)),)
+REGISTERED = IF.Registered({"w": LAYERS * 256},
+                           reads=(IF.Read(GID, "w", "w", 0, (STEPS, LAYERS, REQUESTS), 0, (0, 256, 0)),))
 
 
 def _bf16(a: np.ndarray) -> np.ndarray:
@@ -42,8 +42,8 @@ def _bf16(a: np.ndarray) -> np.ndarray:
 
 
 def rank(r: int) -> NJ.Rank:
-    """Rank ``r``'s window: units in (layer, step, request) order, layer 1 reading layer 0's output at its step and
-    request, layer 0 at step s + 1 reading layer 1's at step s, the first step's ``x`` the prompt's (a boundary read)
+    """Rank ``r``'s window: units in (step, layer, request) order, each unit reading the output of the unit ``REQUESTS``
+    before it (layer 1 layer 0's at its step and request, layer 0 at step s + 1 layer 1's at step s), the first step's ``x`` the prompt's (a boundary read)
     and, at rank 0, the last units' outputs the served ids."""
     reads = [IF.Read(GID, "x", "prompt", 0, (REQUESTS,), 0, (16,))]
     if r == 0:
@@ -51,7 +51,7 @@ def rank(r: int) -> NJ.Rank:
     circuit = IF.Circuit(f"toy/rank{r}", ((GEMM, UNITS),), wires=WIRES, registered=REGISTERED,
                          boundary_reads=tuple(reads),
                          order=IF.ordered({GID: UNITS}, WIRES, {GID: range(0, UNITS, REQUESTS)}))
-    spans = {GID: tuple((a, REQUESTS, 0, (a // REQUESTS) % STEPS) for a in range(0, UNITS, REQUESTS))}
+    spans = {GID: tuple((a, REQUESTS, 0, a // LAYER) for a in range(0, UNITS, REQUESTS))}
     return NJ.Rank(r, circuit, (), spans, STEPS, {})
 
 
@@ -71,7 +71,7 @@ class Values:
                         x[layer, s, q] = y[0, s, q] if layer else y[1, s - 1, q]
                     y[layer, s, q] = np.asarray(evaluate_batch(GEMM, x[layer, s, q][None], self.w[layer][None],
                                                                kernel="reference"), dtype=np.uint16).reshape(16)
-        order = [(layer, s, q) for layer in range(LAYERS) for s in range(STEPS) for q in range(REQUESTS)]
+        order = [(layer, s, q) for s in range(STEPS) for layer in range(LAYERS) for q in range(REQUESTS)]
         self.x, self.y = np.stack([x[k] for k in order]), np.stack([y[k] for k in order])
         self.ws = self.w[[k[0] for k in order]]
 
