@@ -4850,8 +4850,9 @@ def _second_own(j):
     their sources (`supplied`, `second_stage.supplied_of`), and the names of those it pinned or holds to an earlier
     record (`fixed`), each null for none, the templates the auditor's params record as table reads with their
     tables' rows (`reads`, `{template: V}`, null for none), the registered tables they pin (`tables`,
-    `{parameter: entry}`, `service.pinned_tables`, null for none), and the words of the rows each wire joins (`widths`,
-    null for none). The wired key's switch is `second_stage.WIRED_KEY`'s: no input sets it."""
+    `{parameter: entry}`, `service.pinned_tables`, null for none), the words of the rows each wire joins (`widths`,
+    null for none), and the terms the interior registration's own entries were held to (`held`, `{program, window,
+    fixed}`, `second_stage.Held`, null for none). The wired key's switch is `second_stage.WIRED_KEY`'s: no input sets it."""
     j = _json(j)
     if not (isinstance(j, dict) and isinstance(j.get("sample"), list) and all(map(_nat, j["sample"]))):
         raise D.Reject("sample is not a list of replay blocks")
@@ -4899,10 +4900,18 @@ def _second_own(j):
     widths = () if j.get("widths") is None else SS.widths_of(j["widths"])
     if widths is None:
         raise D.Reject("widths is null or a list of {template, port, reads, writes}, two strings and two naturals")
+    held = j.get("held")
+    if held is not None:
+        if not (isinstance(held, dict) and isinstance(held.get("program"), str)
+                and (held.get("window") is None or isinstance(held.get("window"), str))
+                and isinstance(held.get("fixed"), list) and all(isinstance(v, str) for v in held["fixed"])):
+            raise D.Reject("held is null or {program, window, fixed}: a string, a string or null, a list of strings")
+        held = SS.Held(held["program"], held.get("window"), tuple(held["fixed"]))
     own = SS.Own(tuple(j["sample"]), SS.parts(len(j["sample"]), strata), j.get("interior"), j.get("boundary"),
                  tuple(j["drawn"]), links, audit.session_registered(verdicts), SS.verified_of(verdicts),
                  tuple((refs or {}).items()), tuple((ref_reads or {}).items()), wires, rows, returns, supplied,
-                 tuple(fixed or ()), tuple((reads or {}).items()), tuple(sorted((tables or {}).items())), widths)
+                 tuple(fixed or ()), tuple((reads or {}).items()), tuple(sorted((tables or {}).items())), widths,
+                 held=held)
     return own, statements
 
 
@@ -5666,7 +5675,10 @@ def second_statement_runs(draw) -> dict:
             ("ref_reads", "r"), ("supplied", []), ("supplied", {"v": 5}), ("supplied", {"v": [5]}),
             ("supplied", {"v": [[5]]}), ("supplied", {"v": [[{"bytes": 5}]]}),
             ("supplied", {"v": [[{"bytes": "00", "port": "x"}]]}), ("supplied", {"v": [[{}]]}), ("fixed", 5),
-            ("fixed", [5]), ("fixed", "v"), ("tables", 5), ("tables", []), ("tables", {"v": 5}), (None, None)]))
+            ("fixed", [5]), ("fixed", "v"), ("tables", 5), ("tables", []), ("tables", {"v": 5}), ("held", 5),
+            ("held", {"program": "p", "fixed": []}), ("held", {"program": "p", "window": 5, "fixed": []}),
+            ("held", {"program": 5, "window": None, "fixed": []}), ("held", {"program": "p", "window": None}),
+            ("held", {"program": "p", "window": None, "fixed": [5]}), (None, None)]))
         drop = draw(st.sampled_from(sorted(c)))
         c = {k: v for k, v in c.items() if k != drop} if key is None else {**c, key: value}
     return c
@@ -8074,6 +8086,82 @@ def test_round_two_holds_each_session_to_its_part(pieces):
          ["second-interior-order", "second-order"]),
         (odd, []),
         (placed(odd, replay_sample=[True, 3]), ["second-interior-order"]),
+    ]
+    for case, codes in cases:
+        got = second_statements(copy.deepcopy(case))
+        assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
+        assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
+
+
+def _registered_at(c: dict, t: str, value: str, program: str, window: str | None, both: bool = False) -> dict:
+    """`c` with template `t`'s `x` linked to read `value`, which the interior registers (Program `program`, window
+    `window`; six leaves of two words) and the verifier holds, and no tree of `x` of its own unless `both`; `t`'s
+    statement reads it at its slots' rows and its header binds it as that registration committed it; the interior
+    registration held under `c`'s program and the window `WINDOW_OPEN`."""
+    i = next(k for k, s in enumerate(c["statements"]) if s["template"] == t)
+    rec, s, q = c["interior"], c["statements"][i], len(c["sample"])
+    n, lo, per = s["header"]["instances"] // q, s["header"]["units"]["indices"][0], 3
+    d = RV.domain(program, value, 2, q * per, 16, window)
+    e = {"value": value, "root": "5b" * 64, "leaves": q * per, "words": 2, "domain": d.domain_id.hex()}
+    read = {"value": value, "root": e["root"], "domain": e["domain"], "leaves": e["leaves"], "reads_from": lo,
+            "reads": [(k // n) * per + k % n % per for k in range(q * n)]}
+    fv = s["header"]["frame_v3"]
+    header = {**s["header"], "frame_v3": {**fv, "roots": {**fv["roots"], "x": e["root"]},
+                                          "domain_ids": {**fv["domain_ids"], "x": e["domain"]},
+                                          "bindings": {**fv["bindings"], "x": d.binding.hex()}}}
+    registered = {"format": "verity/registered-reads/v1", "ports": {"x": read}}
+    roots = [r for r in rec["roots"] if both or r["port"] != f"{t}/x"]
+    lean = {**c["verdicts"]["lean"], "registered": {**c["verdicts"]["lean"].get("registered", {}),
+                                                    f"{t}/x": {"value": value, "root": e["root"]}}}
+    out = {**c, "interior": {**rec, "roots": roots, "registered": [*rec["registered"], e]},
+           "links": [*c["links"], {"template": t, "port": "x", "value": value}],
+           "rows": [*c["rows"], {"template": t, "port": "x", "per": per, "runs": _runs(n, per)}],
+           "verdicts": {**c["verdicts"], "lean": lean}, "fixed": [value],
+           "held": {"program": rec["program"], "window": WINDOW_OPEN, "fixed": []},
+           "ref_reads": {**c["ref_reads"], t: registered}}
+    return _second_with(out, i, header=header, registered=registered)
+
+
+#: The interior window's open root its registered values are bound under.
+WINDOW_OPEN = "5a" * 64
+
+
+def test_round_two_binds_a_registered_values_port_by_its_held_registration(pieces):
+    """Round 2's placing of a header's ports, Lean's the Python's whole: a port a link names to read a value the
+    interior registers is bound, in its template's reference header placed in the run, by the binding that value's
+    tree was committed under, recomputed from the held registration (its Program's digest and its window's open root,
+    `second_stage.registered_binding`) and held to the entry's domain: the honest statement passes, and one bound by
+    the window rule over the reader's own record is refused; the same name and leaves registered by another Program, or by another window of the
+    same Program under another open root, or a held registration under another open root, or none held, is refused
+    (`second-header`); a port its own tree and a registered value both place, or none of the three rules places, is
+    refused by name (`second-place-two`, `second-place-none`); and a wired port whose header carries a registered
+    value's binding is refused (`second-header`)."""
+    pair, triple = SECOND_MIXED.templates
+    sample, drawn = [0, 2], [1, 4, 6, 9]
+    honest = _second_case(SECOND_MIXED, True, sample, drawn)
+    prog = honest["interior"]["program"]
+    reg = _registered_at(honest, triple, "lg", prog, WINDOW_OPEN)
+    other = "6b" * 64
+    wired = _second_case(SECOND_MIXED, True, sample, drawn, wires=[(triple, pair)])
+    wh = wired["statements"][1]["header"]
+    as_registered = RV.domain(prog, "lg", 2, 6, 16, WINDOW_OPEN).binding.hex()
+    i = len(reg["links"]) - 1
+    rh, rec = reg["statements"][1]["header"], reg["interior"]
+    readers = window_binding(prog, rec["partition"], f"{triple}/x", SECOND_SCHEMAS["x"], 6, rec["window"]["run"]).hex()
+    cases = [
+        (reg, []),
+        (_second_with(reg, 1, header={**rh, "frame_v3": {**rh["frame_v3"], "bindings": {
+            **rh["frame_v3"]["bindings"], "x": readers}}}), ["second-header"]),
+        (_registered_at(honest, triple, "lg", "p-other", WINDOW_OPEN), ["second-header"]),
+        (_registered_at(honest, triple, "lg", prog, other), ["second-header"]),
+        ({**reg, "held": {**reg["held"], "window": other}}, ["second-header"]),
+        ({**reg, "held": None}, ["second-header"]),
+        ({**reg, "held": {**reg["held"], "fixed": ["lg"]}}, ["second-header"]),
+        (_registered_at(honest, triple, "lg", prog, WINDOW_OPEN, both=True), ["second-header", "second-place-two"]),
+        ({**reg, "links": reg["links"][:i] + [{**reg["links"][i], "value": "lg-none"}]},
+         ["second-header", "second-read", "second-place-none"]),
+        (_second_with(wired, 1, header={**wh, "frame_v3": {**wh["frame_v3"], "bindings": {
+            **wh["frame_v3"]["bindings"], "x": as_registered}}}), ["second-header"]),
     ]
     for case, codes in cases:
         got = second_statements(copy.deepcopy(case))
