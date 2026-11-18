@@ -155,7 +155,9 @@ Definition's and each gap's rows and each phase's tokens (`prove.summed`).
 (`verity_bench/prove_census.py`): each block type's proof blocks in each request and summed, its AND gates where the
 census gives a block's, and the steady-state rate of record that rates it at the stated provers and cores, or `none`.
 Then the gaps: Definitions whose served rows no block of the cut holds, each with its rows in each request and why,
-counted in no block total. Its totals are given only when every block type with blocks has a steady-state rate (under
+counted in no block total. The text prints a run of one family's Definitions that differ only in one static (as
+`Attention_v4{T=22..48,...}`) as one line, with how many it holds and their summed served rows, and names the gaps in
+the refusal by family and reason; the stored table keeps every Definition. Its totals are given only when every block type with blocks has a steady-state rate (under
 the cut of record), the census holds no gap and every other slot is labelled (`cut`, `flock-single`,
 `spot-sampling`, `lean-verify`, `flock-warm`). Otherwise the command refuses them by name, each block type with no
 rate, each gap and each slot with the label that would fill it, and exits 1. Under a research run it writes the census
