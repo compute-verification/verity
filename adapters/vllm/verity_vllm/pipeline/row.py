@@ -31,7 +31,6 @@ from importlib import metadata
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm import protocols as PO
 from verity_vllm import settings
 from verity_vllm.config import (
     ROOT,
@@ -192,6 +191,8 @@ def row_protocols(knob: Any, workload: dict[str, Any], *, world: int = 1) -> tup
     ``PROTOCOLS`` knob, else the workload's ``engine.target.protocols``; None for SPOT alone.  Either is the whole set,
     SPOT included.  `PO.Refused` names every refusal: a knob that contradicts the target, a set without SPOT, and the
     Commit's (`PO.commit_context`)."""
+    from verity_vllm import protocols as PO
+
     enabled, declared = PO.parse(knob), PO.parse((RowEngine.of(workload).target or {}).get("protocols"))
     if enabled and declared and enabled != declared:
         raise PO.refused([f"PROTOCOLS {list(enabled)} contradicts the workload target's protocols {list(declared)}"])
@@ -206,6 +207,8 @@ def row_protocols(knob: Any, workload: dict[str, Any], *, world: int = 1) -> tup
 
 
 def run_row(o: Run | Stage, stages: str) -> int:
+    from verity_vllm import protocols as PO
+
     wl = row_file(o.row)
     doc = json.loads(wl.read_text()) if wl.is_file() else {}
     try:

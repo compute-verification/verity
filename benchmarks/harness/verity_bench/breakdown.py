@@ -29,7 +29,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs, served_table
+from verity_bench import jobs, kit, served_table
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import expand_sweep, resolve_spec
 from verity_bench.vllm.runner import summarize
@@ -212,11 +212,19 @@ def _opt(value: float | None, form: str) -> str:
     return "—" if value is None else format(value, form)
 
 
+def cards_named() -> str:
+    """The cards `SPEC` lists, each by its card file's `name`."""
+    from verity.device import gpu_card_called
+
+    return " or ".join(gpu_card_called(short, directory=kit.cards_directory())["name"]
+                       for short in served_table.load_spec(SPEC).cards)
+
+
 def render(doc: Mapping[str, Any]) -> str:
     lines = [
         "# Where the bandwidth audit's time goes",
         "",
-        ("Llama-3.1-8B FP8 on one RTX PRO 6000, the bandwidth audit's encoded stack in vLLM. Each row is ms an output "
+        (f"Llama-3.1-8B FP8 on one {cards_named()}, the bandwidth audit's encoded stack in vLLM. Each row is ms an output "
          f"token, the mean over the point's paired reps ± its 95% half-width (Student t). `{AUDIT_SPANS}` over "
          f"`{PLAIN_SPANS}` is split into rows that sum to it: the top-up's contention from the arms with the top-up off, "
          "every other row a part of the spans arms with the top-up off. The credited lines' difference (spans off) is "
