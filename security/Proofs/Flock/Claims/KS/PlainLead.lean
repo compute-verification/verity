@@ -164,14 +164,14 @@ end Gen
 /-! ## At the plain simulator -/
 
 /-- The plain simulator's live strategy. -/
-noncomputable abbrev plainLive (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536)
+noncomputable abbrev plainLive (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536)
     {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x) :
     Strategy (liveSession (plainDg spec) 1 spec.mPts (plainN x)) :=
   liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSim P x spec st) x
     (ω, u)
 
 /-- The plain simulator's live strategy. -/
-noncomputable abbrev plainLiveK (keep : Bool → Bool) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536)
+noncomputable abbrev plainLiveK (keep : Bool → Bool) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536)
     {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x) :
     Strategy (liveSession (plainDg spec) 1 spec.mPts (plainN x)) :=
   liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSimK keep P x spec st) x
@@ -183,7 +183,7 @@ theorem leadsAfter_plainSimAt {spec : SessionSpec} {st : Stmt} (L : Layout st) (
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : PlainHDec L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x) {n : ℕ}
     (hS : ∀ pts, SchedL (plainDg spec) (plainLive x spec st hw P ω u).1 pts (plainN x) (fun _ _ => []) n

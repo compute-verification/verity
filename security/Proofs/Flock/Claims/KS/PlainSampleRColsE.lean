@@ -83,7 +83,7 @@ noncomputable def colsOf : Option Claims.Flock.ZkRun → List (ℕ × List Flock
 /-- **The column reader at `nextR rd`, on a view**: at the statement of the view's last message (`rd`), its messages
 and the coins its answers show (`outCoin`), the opened level-0 columns of table `j` of the run `runOfR` reads at what
 `decR` decides on. -/
-noncomputable def colsRV (rd : Claims.Msg → Option FinalP) (v : Claims.Seen) (j : ℕ) :
+noncomputable def colsRV (rd : Hash.Msg → Option FinalP) (v : Claims.Seen) (j : ℕ) :
     List (ℕ × List FlockLevel3.GF128) :=
   match ((v.msgs.map Prod.fst).getLast?).bind rd with
   | some fl =>
@@ -92,19 +92,19 @@ noncomputable def colsRV (rd : Claims.Msg → Option FinalP) (v : Claims.Seen) (
     | none => []
   | none => []
 
-theorem colsR_colsOf (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin)
+theorem colsR_colsOf (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin)
     (j : ℕ) : colsR rd x as cs j = colsOf (runOfR rd x as cs j) := rfl
 
-theorem runOfR_of_actR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem runOfR_of_actR {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} (h : actR rd x as cs = .decide s spec sts link c₁ mids f)
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} (h : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (j : ℕ) : runOfR rd x as cs j = runOfDecR ⟨s, spec, sts, link, c₁, mids, f⟩ j := by
   unfold runOfR
   rw [h]
   rfl
 
 /-- A decision's statement is its last message's (`rd`). -/
-theorem decR_rd {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_rd {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) : ∃ fl, (as.getLast?).bind rd = some fl ∧ d.f.stmt = fl.stmt := by
   simp only [decR, Option.bind_eq_bind, Option.pure_def] at h
   obtain ⟨_, -, h⟩ := Option.bind_eq_some_iff.1 h
@@ -122,14 +122,14 @@ theorem decR_rd {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List 
   exact (beq_iff_eq.1 hst).symm
 
 /-- `decR` reads the coins only at the first and between the first and the last. -/
-theorem decR_congr_coins (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg)
+theorem decR_congr_coins (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (as : List Hash.Msg)
     {cs cs' : List Coin} (h1 : cs.head? = cs'.head?) (h2 : cs.tail.dropLast = cs'.tail.dropLast) :
     decR rd x as cs = decR rd x as cs' := by
   unfold decR
   rw [h1, h2]
 
 /-- **`decR` doesn't read the last coin**, after two rounds. -/
-theorem decR_dropLast (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) {cs : List Coin}
+theorem decR_dropLast (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (as : List Hash.Msg) {cs : List Coin}
     (h : 2 ≤ cs.length) (c : Coin) : decR rd x as (cs.dropLast ++ [c]) = decR rd x as cs := by
   rcases cs with _ | ⟨a, _ | ⟨b, t⟩⟩
   · simp at h
@@ -151,7 +151,7 @@ local notation "𝔽" => FlockLevel3.GF128
 messages `ms` at the coins `cs` after `V false`'s rounds, at SHA-512, a view whose messages are `ms` and whose answers
 show `cs` but for the last coin has `colsR rd x ms cs` for its `colsRV rd`. The decision's checks fix its statement to
 `x` (`checksAtJ_ok`), and `decR` doesn't read the last coin (`decR_dropLast`). -/
-theorem colsRV_eq {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+theorem colsRV_eq {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
     {v : Claims.Seen} (hm : v.msgs.map Prod.fst = ms)
     (hcs : (v.msgs.map Prod.snd).map outCoin = cs.dropLast ++ [default]) (hk : cs.length = (FlockDeploy.V false).k x)
     (hacc : ((nextR rd x ms cs).eval sha512).1 = .acc) : colsRV rd v = colsR rd x ms cs := by
@@ -172,9 +172,9 @@ theorem colsRV_eq {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : Lis
 /-- **The deployment at the deployed reader**: `bdDeployed` with the element-level steps `nextR rd` and the columns
 `colsRV rd`. -/
 noncomputable abbrev bdR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (rd : Claims.Msg → Option FinalP) (wE : Claims.Msg → ℝ) (join : List Claims.Msg → Claims.Msg)
-    (rowIn : Claims.Msg → Claims.Msg) (final : Claims.Msg → Option (List (List (Claims.Msg × RecDeploy.Salt)) ×
-      Claims.Msg)) (w : Claims.Msg → ℝ) : Claims.Recursion.Bound Coin (List 𝔽) Claims.Flock.PlainTrace :=
+    (rd : Hash.Msg → Option FinalP) (wE : Hash.Msg → ℝ) (join : List Hash.Msg → Hash.Msg)
+    (rowIn : Hash.Msg → Hash.Msg) (final : Hash.Msg → Option (List (List (Hash.Msg × RecDeploy.Salt)) ×
+      Hash.Msg)) (w : Hash.Msg → ℝ) : Claims.Recursion.Bound Coin (List 𝔽) Claims.Flock.PlainTrace :=
   RecDeploy.bdDeployed rel (nextR rd) (colsRV rd) wE join rowIn final w
 
 /-- **An accepted run of the deployment reads `colsR` at its opened messages and coins**: on a run `IVStar` of `bdR`
@@ -182,10 +182,10 @@ accepts at SHA-512, at any prover, `final` reads the run's last message as `(os,
 messages at the run's coins, and the deployed columns of the run, `colsRV rd` at its view opened, are `colsR rd` there
 (`Bound.accFacts`, `colsRV_eq`). -/
 theorem deployCols_runR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (rd : Claims.Msg → Option FinalP) (wE : Claims.Msg → ℝ) (join : List Claims.Msg → Claims.Msg)
-    (rowIn : Claims.Msg → Claims.Msg)
-    (final : Claims.Msg → Option (List (List (Claims.Msg × RecDeploy.Salt)) × Claims.Msg)) (w : Claims.Msg → ℝ)
-    {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+    (rd : Hash.Msg → Option FinalP) (wE : Hash.Msg → ℝ) (join : List Hash.Msg → Hash.Msg)
+    (rowIn : Hash.Msg → Hash.Msg)
+    (final : Hash.Msg → Option (List (List (Hash.Msg × RecDeploy.Salt)) × Hash.Msg)) (w : Hash.Msg → ℝ)
+    {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
     (r : Fin ((bdR rel rd wE join rowIn final w).IVStar.k x) → Coin)
     (hacc : (Claims.run sha512 P (bdR rel rd wE join rowIn final w).IVStar x ω r).out = .acc) :
     ∃ os last, (bdR rel rd wE join rowIn final w).final
@@ -238,10 +238,10 @@ theorem deployCols_runR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
 decided statement carries the sample `d` and the deployed columns of the run look up no column off `C` at table 0,
 `plainVerdictAtJK id` holds at the decision's live outcome (`deployCols_runR`, `plainVerdictAtJK_of_nextR_cols`). -/
 theorem plainVerdictAtJK_of_runIVR (mPts : ℕ) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (rd : Claims.Msg → Option FinalP) (wE : Claims.Msg → ℝ) (join : List Claims.Msg → Claims.Msg)
-    (rowIn : Claims.Msg → Claims.Msg)
-    (final : Claims.Msg → Option (List (List (Claims.Msg × RecDeploy.Salt)) × Claims.Msg)) (w : Claims.Msg → ℝ)
-    {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+    (rd : Hash.Msg → Option FinalP) (wE : Hash.Msg → ℝ) (join : List Hash.Msg → Hash.Msg)
+    (rowIn : Hash.Msg → Hash.Msg)
+    (final : Hash.Msg → Option (List (List (Hash.Msg × RecDeploy.Salt)) × Hash.Msg)) (w : Hash.Msg → ℝ)
+    {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
     (r : Fin ((bdR rel rd wE join rowIn final w).IVStar.k x) → Coin)
     (hacc : (Claims.run sha512 P (bdR rel rd wE join rowIn final w).IVStar x ω r).out = .acc) :
     ∃ os last s spec sts link c₁ mids f,

@@ -85,7 +85,7 @@ open Flock Transcript Replay
 
 /-- **A returned ring switch's `ŝ`s are its switched vectors in turn**: claim `k`'s step pushes `sv k`. -/
 theorem ringSwitchCut_ss (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128) (claims : Array Claim)
-    {t t' : Transcript} {l l' : Array Claims.Msg} {ss : Array (Array F128)} {T : F128} {sws : Array Switched}
+    {t t' : Transcript} {l l' : Array Hash.Msg} {ss : Array (Array F128)} {T : F128} {sws : Array Switched}
     (h : ((ringSwitchCut (asksCut coin n) sv claims).run t).go l = (.ok ((ss, T, sws), t'), l')) :
     ss = pushes sv claims.size := by
   have hA : GoAlike (fun a b _ => a = b ∧ a.1 = pushes sv claims.size)

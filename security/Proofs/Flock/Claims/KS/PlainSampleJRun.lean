@@ -142,8 +142,8 @@ theorem liveOfJ_ok {spec : SessionSpec} {j : Json} {lv : Live} (h : FlockDeploy.
 
 /-- **What `checksAtJ` establishes**: the last message's statement is `x`, the value `v`'s live session reads
 (`liveOfJ`), and its custody passes (`checks_ok` at a parsed value). -/
-theorem checksAtJ_ok {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json}
+theorem checksAtJ_ok {s : Ins} {spec : SessionSpec} {x : Hash.Msg} {link : List ByteArray × List ByteArray}
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalJ} {v : Json}
     (h : checksAtJ s spec x link c₁ mids f v = .ok ()) :
     f.stmt = x ∧ ∃ lv, FlockDeploy.liveOfJ spec v = .ok lv ∧ custody spec lv link c₁ mids = .ok () := by
   unfold checksAtJ at h
@@ -154,8 +154,8 @@ theorem checksAtJ_ok {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : Lis
   exact ⟨beq_iff_eq.1 (FlockSoundness.Refine.check_ok_iff.1 h1), lv, h3, h4⟩
 
 /-- **`checksAtJ` runs the verifier's scope check** (`checks_scope` at a parsed value). -/
-theorem checksAtJ_scope {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json}
+theorem checksAtJ_scope {s : Ins} {spec : SessionSpec} {x : Hash.Msg} {link : List ByteArray × List ByteArray}
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalJ} {v : Json}
     (h : checksAtJ s spec x link c₁ mids f v = .ok ()) : s.read.check = .ok () := by
   unfold checksAtJ at h
   obtain ⟨_, -, h⟩ := ebind_ok h
@@ -308,8 +308,8 @@ open Flock
 
 /-- The decision at a parsed value against `H`: the verdict with `hOf H` at the substituted value, then `checksAtJ`
 there (`decisionAtK_eval` at a parsed value). -/
-theorem decisionAtJ_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
-    (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
+theorem decisionAtJ_eval (H : Hash.Msg → Hash.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
+    (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin))
     (f : FinalJ) :
     ((decisionAtJ s spec sts x link c₁ mids f).run.eval H).1 =
       (do verifyJWithM (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (coinSubJ spec c₁ mids f.j) f.proofs
@@ -326,8 +326,8 @@ theorem decisionAtJ_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessi
 
 /-- The decision at a parsed value against `H`: the setup with `hOf H`, then at its session `decisionAtJ_eval`'s
 verdict and checks (`decisionK_eval` at a parsed value). -/
-theorem decisionJF_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : FinalJ) :
+theorem decisionJF_eval (H : Hash.Msg → Hash.Msg) (s : Ins) (x : Hash.Msg)
+    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : FinalJ) :
     ((decisionJF s x link c₁ mids f).run.eval H).1 =
       (do let (spec, sts) ← setupWith (Claims.hOf H) s.read
           verifyJWithM (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (coinSubJ spec c₁ mids f.j) f.proofs
@@ -347,9 +347,9 @@ theorem decisionJF_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (x : Claims.Ms
 /-- **`nextJ`'s decision against `H`**: it accepts exactly when the setup with `hOf H` is `.ok`, and at its session the
 verdict with `hOf H` at the substituted value and `checksAtJ` there are `.ok` (`nextJ_decide`, `nextK_decide` at a
 parsed value). -/
-theorem nextJ_acc (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ}
+theorem nextJ_acc (H : Hash.Msg → Hash.Msg) {rd : Hash.Msg → Option FinalJ} {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalJ}
     (h : actJ rd x as cs = .decide s spec sts link c₁ mids f) :
     ((nextJ rd x as cs).eval H).1 = .acc ↔
       ∃ spec' sts', setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
@@ -373,9 +373,9 @@ theorem nextJ_acc (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option Fi
       | ok u' => simp [bind, Except.bind, hv, hc]
 
 /-- `nextJ` decides only on a statement that sets up plain, at its setup (`act_decide`). -/
-theorem actJ_decide {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem actJ_decide {rd : Hash.Msg → Option FinalJ} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalJ} (h : actJ rd x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : FinalJ} (h : actJ rd x as cs = .decide s spec sts link c₁ mids f) :
     setupOf false x = some (s, spec, sts) := by
   unfold actJ at h
   repeat' split at h
@@ -392,9 +392,9 @@ open Lean (Json)
 /-- **An accepting `nextJ` step at SHA-512**: the statement sets up at `(spec, sts)`, plain and without
 `--public-inputs`, `verifyJWithMK id` at SHA-512 accepts the substituted value and the proof files there, and
 `checksAtJ` passes there (`nextJ_acc` at the setup `actJ` read; `decideK_sha512` at a parsed value). -/
-theorem decideJ_sha512 {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decideJ_sha512 {rd : Hash.Msg → Option FinalJ} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalJ} (ha : actJ rd x as cs = .decide s spec sts link c₁ mids f)
+    {mids : List (Hash.Msg × Coin)} {f : FinalJ} (ha : actJ rd x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((nextJ rd x as cs).eval sha512).1 = .acc) :
     verifyJWithMK id With.std spec (tabsOf sts) (coinSubJ spec c₁ mids f.j) f.proofs = .ok () ∧
       checksAtJ s spec x link c₁ mids f (coinSubJ spec c₁ mids f.j) = .ok () ∧ s.setup = .ok (spec, sts) ∧
@@ -418,7 +418,7 @@ sets up at its sample `d` with no `--public-inputs`, `v` and the proof files are
 (`viewOfJ`) at the setup at `d` through every `keep`: the decoder's rounds are `liveOfJ`'s in coin count, coins and
 bytes (`decodeJWithK_live`), and custody retains every live round's bytes, so they agree after `Round.erase`. -/
 theorem recordsLiveAtDJK_of_checksJ (keep : Bool → Bool) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {x : Claims.Msg} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+    {x : Hash.Msg} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : FinalJ} {v : Json} {J mPts : ℕ} {d : Json} (hs : s.setup = .ok (spec, sts)) (hzk : s.read.zk = false)
     (hpi : s.read.publicInputs = none) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size)
     (hc : checksAtJ s spec x link c₁ mids f v = .ok ()) :
@@ -468,9 +468,9 @@ sample `d`, if the deployed plain reader looks up no column off `C` in the step'
 (`viewOfJ`, at any `mPts`) and its link's root. `verifyJWithMK id` accepts the step's session at the setup at `d`
 (`decideJ_sha512`, `setupAtD_plainInputs`), which records the outcome (`recordsLiveAtDJK_of_checksJ`), so it accepts
 what `wrPDJK` writes, and the reader's premise moves there (`txNoOffAtJK_of_records`). -/
-theorem plainVerdictAtJK_of_nextJ (mPts : ℕ) {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {d : Json}
+theorem plainVerdictAtJK_of_nextJ (mPts : ℕ) {rd : Hash.Msg → Option FinalJ} {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalJ} {d : Json}
     {N : ℕ} (C : Fin N → List 𝔽) (ha : actJ rd x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((nextJ rd x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d)
     (hno : TxNoOffAtJK id s.read.I d C ⟨coinSubJ spec c₁ mids f.j, f.proofs⟩) :

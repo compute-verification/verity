@@ -1,7 +1,7 @@
 """A size class of any partition (`verity.circuits.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
 ``flock-circuit`` per class.
 
-    python -m verity_flock.class_statement --model tiny --partition q-word --out DIR [--binary PATH] [--n 16] [--selftest]
+    python -m verity_flock.class_statement --definition ID --resolver MODULE:FUNC --partition q-word --out DIR [--binary PATH] [--n 16] [--selftest]
 
 M0's statement proves a template's identical units with every instance's input rows hashed in the circuit
 (``hm96-sha512/row/v1`` under frame-v3-sha512 trees). A class becomes such a template here:
@@ -1833,7 +1833,6 @@ def _selftest_cases(binary: str, d: Path, n: int, port: int, cases: Sequence[str
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     src = ap.add_mutually_exclusive_group(required=True)
-    src.add_argument("--model", choices=["tiny"])
     src.add_argument("--definition")
     src.add_argument("--program-module", help="MODULE:FUNC (FUNC() returns a Program); MODULE may be a .py path")
     src.add_argument("--program-graph", help="a served row's program graph: its distinct Call Definitions (distinct_calls)")

@@ -127,7 +127,7 @@ model's schedule, configuration and masking state but for `stopped`, as the stre
 round of it, with a stop exactly where the frames have one; the frames have stopped the session exactly where the
 model's run has; and every other rep stream of the setup is on another rep. -/
 structure RoundFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (seen : List String)
-    (stream : String) (n i r : Nat) (dom : ByteArray) (v : Claims.Msg) (σ : LoopAt) : Prop where
+    (stream : String) (n i r : Nat) (dom : ByteArray) (v : Hash.Msg) (σ : LoopAt) : Prop where
   coins : M.L.coins M.x (M.hist σ.c).length = n
   kind : M.L.kindAt M.x (M.hist σ.c).length = .masked
   next : (M.hist σ.c).length + 1 < M.nN M.x
@@ -153,7 +153,7 @@ so each rep of a stream with no round yet stays fresh. -/
 theorem slotCase_round {W Rr : Type} {M : LoopModel W Rr} {J : List String → State → LoopAt → Prop} {sid : Nat}
     {spec : SessionSpec} {sts : Array Stmt} {nonce : ByteArray} {stream : String} {n : Nat} (hOwn : M.Own)
     (hA : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
-      (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ → J seen st σ →
+      (v : Hash.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ → J seen st σ →
       σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
