@@ -785,18 +785,18 @@ def test_the_attester_and_the_policy_are_declared_from_their_manifests():
     assert (attester.id, attester.channels) == (NC.ID, NC.MANIFEST.channels)
     assert [r for r in NC.MANIFEST.parties if r not in attester.parties] == [NC.MANIFEST.role(NC.WORKERS)]
     assert all(r in NC.MANIFEST.parties for r in attester.parties)
-    assert set(D.PARTIES["network-attester"]) == {r.name for r in attester.parties}
+    assert set(D.PIECES["network-attester"]) == {r.name for r in attester.parties}
     assert [r.name for r in D.TOY.parties] == [NC.WORKERS]
-    assert NC.WORKERS not in {p for ps in D.PARTIES.values() for p in ps}
+    assert NC.WORKERS not in {p for ps in D.PIECES.values() for p in ps}
 
 
 def test_the_table_holds_what_the_listed_components_need():
     assert REG.components["network-attester"].needs <= REG.workloads["toy"].provides
     assert os.path.basename(D.__file__) == "step0.py"
-    live = {p for ps in D.PARTIES.values() for p, e in ps.items() if e == D.LIVE} | {
+    live = {p for ps in D.PIECES.values() for p, e in ps.items() if e == D.LIVE} | {
         r.name for w, (decl, e) in D.WORKLOADS.items() if e == D.LIVE for r in decl.parties}
     assert live == set(D.ROLES)
-    decided_live = {c for c, ps in D.PARTIES.items() if ps.get("verifier") == D.LIVE}
+    decided_live = {c for c, ps in D.PIECES.items() if ps.get("verifier") == D.LIVE}
     assert decided_live - {"sampled-proofs"} == set(D.CHECKS)
 
 

@@ -196,8 +196,8 @@ def test_served_passes_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name(monkeypatch
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
 
-    assert "pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on that card" in SP.undeclared(
-        ["pouw:pearl-c-sm120-v1-h3"])
+    for other in ("pouw:pearl-c-sm120-v1-h3", "pouw:pearl-c-nvfp4-v0"):
+        assert SP.undeclared(["pouw:pearl-c-h100-v1-h3", other]).startswith(f"{other} is no declared scheme's option")
     assert SP.undeclared(["pouw:pearl-c-h100-v1-h3"]) is None
     assert SP.SPEC.name == "llama32-1b-1gpu-pouw-protocol-served.toml"
 
