@@ -2,6 +2,7 @@ module
 
 public import Definitions.Spot.Sampling.SamplingDesign
 public import Proofs.Flock.Soundness.Game
+public import Proofs.Core.Draw
 import Mathlib.Algebra.BigOperators.Group.Finset.Sigma
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.Module.Field
@@ -101,33 +102,8 @@ theorem miss_eq_zero_of_sample_univ (L : SamplingDesign n) (hL : ∀ ω, L.draw 
 
 /-! ## The uniform `k`-subset -/
 
-theorem card_disjoint_subsets (k : ℕ) (B : Finset (Fin n)) :
-    (Finset.univ.filter fun S : {S : Finset (Fin n) // S.card = k} => Disjoint S.1 B).card =
-      (n - B.card).choose k := by
-  classical
-  rw [← Finset.card_map ⟨Subtype.val, Subtype.val_injective⟩]
-  have : (Finset.univ.filter fun S : {S : Finset (Fin n) // S.card = k} => Disjoint S.1 B).map
-      ⟨Subtype.val, Subtype.val_injective⟩ = Bᶜ.powersetCard k := by
-    ext S
-    simp only [Finset.mem_map, Finset.mem_filter, Finset.mem_univ, true_and,
-      Function.Embedding.coeFn_mk, Finset.mem_powersetCard, Finset.subset_compl_iff_disjoint_right]
-    constructor
-    · rintro ⟨S', hS', rfl⟩
-      exact ⟨hS', S'.2⟩
-    · rintro ⟨hS, hk⟩
-      exact ⟨⟨S, hk⟩, hS, rfl⟩
-  rw [this, Finset.card_powersetCard, Finset.card_compl, Fintype.card_fin]
-
-/-- **The hypergeometric missProb.** A uniform `k`-subset misses `B` with probability
-`C(n - |B|, k) / C(n, k)`. -/
-theorem subset_escape {k : ℕ} (hk : k ≤ n) (B : Finset (Fin n)) :
-    (subset n k hk).missProb B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := by
-  classical
-  unfold missProb
-  rw [prCoin_eq_card]
-  congr 1
-  · exact congrArg _ (card_disjoint_subsets k B)
-  · exact congrArg _ ((Fintype.card_finset_len k).trans (by rw [Fintype.card_fin]))
+/- The uniform `k`-subset's miss probability is core's (`Proofs.Core.Draw`). -/
+export Verity.SamplingDesign (card_disjoint_subsets subset_escape)
 
 /-- **The uniform `k`-subset's count curve**, exactly: `miss K = C(n - K, k) / C(n, k)`. -/
 theorem subset_miss {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n) :
@@ -137,7 +113,7 @@ theorem subset_miss {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n) :
     gcongr
   · obtain ⟨B, -, hB⟩ := Finset.exists_subset_card_eq (s := (Finset.univ : Finset (Fin n)))
       (by simpa using hK)
-    have := (subset n k hk).escape_le_miss (K := K) hB.ge
+    have := escape_le_miss (subset n k hk) (K := K) hB.ge
     rwa [subset_escape, hB] at this
 
 /-- A uniform `k`-subset of `n` misses one given unit with probability `(n − k)/n`. -/
