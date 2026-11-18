@@ -109,11 +109,10 @@ plan:
    under its salt and path at `j` under the payload root; an appended block under the bound key of its digest and its
    append's coin (an append's coin keys only its own blocks: `checkOpening` decodes block `j` under the coin of the
    append holding `j`, never another's), and, for a fresh append (the append holding `j`, `appendOf`), the payload's leaf at `j` under its
-   append's root, or, for a re-key, wherever it has an origin leaf (`originLeaf`), the opening names the origin's
-   position `q` and the payload's leaf is leaf `q` under the origin's root. For a re-key's block this gives the origin's
-   leaf under whatever append the list holds in the origin's slot, and nothing for a re-key whose origin slot holds none
-   (`verifyWindow` alone does not refuse it; `append` refuses a re-key of an empty slot, `State.slotOk`); that the slot
-   is the schedule's and its append fresh is `OriginsOnRota`, stated and not proved;
+   append's root, or, for a re-key, it has an origin leaf (`originLeaf`; `checkOpening` refuses with `origin` a re-key
+   whose origin slot holds no append), the opening names the origin's position `q` and the payload's leaf is leaf `q`
+   under the origin's root. For a re-key's block this gives the origin's leaf under whatever append the list holds in
+   the origin's slot; that the slot is the schedule's and its append fresh is `OriginsOnRota`, stated and not proved;
 5. the receipt recomputed from `j` and the block, under the pass's receipter, is `y`. -/
 def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecord) (i p : Nat) (o : Opening) :
     Prop :=
@@ -137,7 +136,7 @@ def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecor
               (appendDomain reg.digest a.first a.count).count j (hidden payload o.payloadSalt) SCHEMA
               o.payloadPath = true
           | .registered _ | .rekey _ =>
-            ∀ q oroot odom, originLeaf reg reg.digest appends a j = some (q, oroot, odom) →
+            ∃ q oroot odom, originLeaf reg reg.digest appends a j = some (q, oroot, odom) ∧
               o.originPosition = some q ∧
                 odom.verifyOpening oroot odom.count q (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)) ∧
       (receipterOf reg w i).receipt j o.block = y

@@ -83,6 +83,7 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
     refine ⟨Decidable.not_not.1 h2, ?_⟩
     split at h
     · simp at h
+    rename_i hnr
     cases ha : appendOf appends j with
     | none =>
       simp only [ha, Option.bind, Option.map] at h
@@ -119,9 +120,9 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
             | fresh => simpa using h4
             | registered x => simp [originLeaf, hor] at ho
             | rekey k =>
-              intro q' oroot' odom' hq'
-              rw [ho] at hq'
-              cases hq'
+              exfalso
+              have hne : (Origin.rekey k != Origin.fresh) = true := rfl
+              simp [ha, ho, hor, hne, Nat.le_of_not_lt hb] at hnr
           · simp at h
         · simp at h
       | some v =>
@@ -156,8 +157,8 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
               exact ⟨by simpa using hq, by simpa using h4⟩
             cases hor : a.origin with
             | fresh => simp [originLeaf, hor] at ho
-            | registered x => exact hro
-            | rekey k => exact hro
+            | registered x => exact ⟨q, oroot, odom, ho, hro q oroot odom ho⟩
+            | rekey k => exact ⟨q, oroot, odom, ho, hro q oroot odom ho⟩
           · simp at h
         · simp at h
 

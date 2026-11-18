@@ -317,7 +317,8 @@ theorem rel_boundary {R old} {s : State} {now : Nat} {r : Result} {s' : State} (
 theorem rel_append {R old} {s : State} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat} {r : Result} {s' : State} (h : Rel R old s)
     (he : append s root count origin slot = .ok (r, s')) : Rel R old s' := by
   unfold append at he
-  repeat' split at he
+  repeat' (first | split at he | (dsimp only at he; split at he))
+  all_goals (try simp only [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at he)
   all_goals (try dsimp only at he)
   all_goals cases he
   all_goals first

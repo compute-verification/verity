@@ -283,7 +283,8 @@ theorem keep_append {s : State} {root : ByteArray} {count : Int} {origin : _root
     {r : Result} {s' : State}
     (he : append s root count origin slot = .ok (r, s')) : Keep s.windows s'.windows := by
   unfold append at he
-  repeat' split at he
+  repeat' (first | split at he | (dsimp only at he; split at he))
+  all_goals (try simp only [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at he)
   all_goals (try dsimp only at he)
   all_goals cases he
   all_goals first
