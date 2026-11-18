@@ -183,10 +183,6 @@ OS_RANDOMNESS = {
     "protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py": "the prover's hm96 salt keys (`WEIGHT_KEY`, a run's "
                                                                "table key), no coin",
     "protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py": "the stager's hiding keys (`_random`), no coin",
-    "protocols/resource_accounting/compute/pouw/prover/serving/lead/feed.py": "`InProcessCertifier`'s bytes, a measurement whose coins "
-                                                             "credit nothing",
-    "protocols/resource_accounting/compute/pouw/prover/serving/lead/rows.py": "the keyed rows' key and salt, the prover's secrets and no "
-                                                             "coin",
     "protocols/proofs/spot/prover/audit/local_challenger.py": "the development challenger's session token and gate "
                                                               "secret, compose's service and no SPOT coin",
     "protocols/proofs/spot/verifier/one_stage/member_trees.py": "the tree relay's shared secret with its verifier "

@@ -63,7 +63,6 @@ import functools
 import gc
 import json
 import os
-import socket
 import sys
 import time
 import traceback
@@ -398,13 +397,6 @@ def _certificate(c) -> dict:
     return {k: (v.hex() if isinstance(v, bytes) else getattr(v, "code", v)) for k, v in asdict(c).items()}
 
 
-def _free_port() -> int:
-    """A loopback port the OS has free now. A pool's slots share a machine, so a fixed port collides across runs."""
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def other_subset(sampled: dict) -> list[int]:
     """A K-subset of the period's windows that isn't the sample's: the first K the sample didn't hold, then sampled ones
     from the start where it left fewer than K (none other at K = n)."""
@@ -464,7 +456,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
             raise SystemExit(f"{name} window {x.window}: the stream sampled {list(sample.units)}, not the one unit")
         sdir = wdir / "session"
         m = {"dir": x.statement.dir, "n": 1, "pin": sg.st.pin}
-        record, live, proc = M.a8.session(av, m, sdir, [0], port + j if port else _free_port(), env=env)
+        record, live, proc = M.a8.session(av, m, sdir, [0], port + j if port else proof_drivers.free_port(), env=env)
         sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
         delivered = SVC.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / "pub-1.bin", sessions), x.statement.salts,
                                   x.statement.output)

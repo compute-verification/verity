@@ -468,9 +468,8 @@ PEARL_PLUS = register(Scheme(
     needs=frozenset({"windows"}),
     depends=(),
     record="work",
-    symbol=Lacks("the record's work row is H1's (W_cert, in work); Pearl+'s certified quantity is its owner's to name"),
-    published=Lacks("Pearl+ declares its costs in MACs and its Lean instance in the reference work unit: the exact "
-                    "factor between them is its owner's to say"),
+    symbol="V",
+    published=("MACs", Fraction(1)),
     channel_schemas=Lacks("no Schema is declared for PearlSalt"),
     record_owner="compute-accounting",
 ))
