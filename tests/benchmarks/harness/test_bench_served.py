@@ -189,10 +189,11 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     settings(M.option("pouw:pearl-c-h100-v1-h3"), {**doc["pouw"], "coins": "in-process"})
 
 
-def test_served_passes_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name():
+def test_served_passes_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name(monkeypatch):
     """No declared scheme serves Pearl-C on sm_120 (`pouw:pearl-c-sm120-v1-h3` is no declared scheme's option), so
     ``served_passes.py`` refuses an arm of that entry by name (`undeclared`, which `pearl_c_arm` asks before any engine or
     challenger), and its default spec is Pearl+'s."""
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
 
     assert "pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on that card" in SP.undeclared(
@@ -206,6 +207,7 @@ def test_served_passes_serve_attaches_pearl_plus_by_name_with_its_settings_and_a
     option: the spec's arm settings that are Pearl+'s, its passes retained under DIR, and its salt in-process; under
     the challenger gate, a session an epoch under the lane as the peer, with the gate, its ledger and the private
     directory in its ctx, and refused by name without PEARLC_PRIVATE."""
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
     from verity.protocols.resource_accounting.scheme import settings
     from verity_vllm import messages as M
