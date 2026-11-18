@@ -51,6 +51,8 @@ PART = ((("c", 0, N_IN),), (("c", N_IN, NC), ("c", 0, 1), ("u", 0, 1, N_OUT)))
 FIELD = ((("c", 0, N_IN),), (("c", N_IN, NC), ("c", 0, 1), ("f", 0, 1, 0, 1)))
 #: layer 1 reads both of layer 0's return fields in one run
 FIELDS = ((("c", 0, N_IN),), (("c", N_IN, NC), ("f", 0, 0, 0, 1), ("f", 0, 1, 0, 1)))
+#: layer 1 reads layer 0's unit t's second output, then unit t + 1's first
+STRADDLE = ((("c", 0, N_IN),), (("c", N_IN, NC), ("w", 0, 0, 1, 2), ("w", 0, 1, 0, 1)))
 FLAT = ((("c", 0, N_IN),),)
 SPEC = "q-template-instance"
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
@@ -70,6 +72,8 @@ TWO_FIELDS = CompositeDefinition(
 def _read(c, us, t: int, p: tuple):
     if p[0] == "c":
         return c[t][p[1]:p[2]]
+    if p[0] == "w":
+        return us[p[1]][(t + p[2]) % N][p[3]:p[4]]
     return us[p[1]][t][p[2]:p[3]] if p[0] == "u" else us[p[1]][t][p[2]][p[3]:p[4]]
 
 
@@ -257,16 +261,27 @@ def field(tmp_path_factory):
 @pytest.fixture(scope="module")
 def unchecked(tmp_path_factory):
     """Stagings of a prover that skips its own field check (`CS._link_frame`): a reader of part of its writer's one return
-    field (``part``), and one of both of `TWO_FIELDS`' fields in one link (``fields``)."""
+    field (``part``), one of both of `TWO_FIELDS`' fields in one link (``fields``), and one of two writer units, its two
+    links made one (``straddle``)."""
     CS.cache_slot_circuits()
     checked = CS._link_frame
     CS._link_frame = lambda uc, starts, group, at: (sum(CS._words(w) for w in uc.out_widths[:at]),
                                                     sum(CS._words(w) for w in uc.out_widths))
     try:
-        return {k: (d, _stage(topo, d, True, unit)) for k, topo, unit in (("part", PART, U.UniversalUnit), ("fields", FIELDS, TWO_FIELDS))
-                for d in [tmp_path_factory.mktemp(k)]}
+        st = {k: (d, _stage(topo, d, True, unit)) for k, topo, unit in
+              (("part", PART, U.UniversalUnit), ("fields", FIELDS, TWO_FIELDS), ("straddle", STRADDLE, U.UniversalUnit))
+              for d in [tmp_path_factory.mktemp(k)]}
     finally:
         CS._link_frame = checked
+    d = st["straddle"][0]
+    os.rename(d / "honest", d / "two_links")
+
+    def one(m):
+        a, b = sorted(m["links"], key=lambda x: x["leaves"][0])
+        assert a["leaves"][1] == b["leaves"][0], m["links"]
+        m["links"] = [{**a, "leaves": [a["leaves"][0], b["leaves"][1]]}]
+    _edit_meta(d / "two_links", d / "honest", one)
+    return st
 
 
 def _meta(d: Path) -> dict:
@@ -472,7 +487,8 @@ def test_lean_accepts_a_read_of_one_return_field_and_refuses_a_made_up_one(field
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 @pytest.mark.parametrize("name,why", [("part", "read unit 0's outputs [1, 2), which are not one whole return field"),
-                                      ("fields", "read unit 0's outputs [0, 2), which are not one whole return field")])
+                                      ("fields", "read unit 0's outputs [0, 2), which are not one whole return field"),
+                                      ("straddle", "read unit 0's outputs and other leaves")])
 def test_lean_refuses_a_link_of_part_of_a_field_or_of_two_its_prover_staged_unchecked(unchecked, name, why):
     d, _st = unchecked[name]
     subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
