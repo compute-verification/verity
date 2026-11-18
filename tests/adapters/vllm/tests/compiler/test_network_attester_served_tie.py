@@ -24,7 +24,7 @@ from verity.commitments.rowleaf import (
     row_leaf,
     sha512_row_v2_digest,
 )
-from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.circuits.boolean import benes as BN
 
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SR
@@ -191,7 +191,7 @@ def test_a_run_start_routed_away_is_refused(x):
     T, Z = x.T, ST.widths(x.T)
     f = ST._fields(T, _srv(x, x.rows)[6 * Z.SB:7 * Z.SB])
     for perm in ([1, 0] + list(range(2, Z.M)), [0, 30] + [i for i in range(1, Z.M) if i != 30]):
-        moved = replace(x.honest, rows={**x.honest.rows, "sw_6": IT.benes(perm) + [0] * (len(x.honest.rows["sw_6"]) - Z.SW)})
+        moved = replace(x.honest, rows={**x.honest.rows, "sw_6": BN.benes(perm) + [0] * (len(x.honest.rows["sw_6"]) - Z.SW)})
         assert ST.reference(T, moved.rows) == {"count": True, "pos": False}
         assert ST.evaluate(x.st, [moved]) == [COUNT]
     assert ST.route(T, f, 30) == x.honest.rows["sw_6"][:Z.SW]
