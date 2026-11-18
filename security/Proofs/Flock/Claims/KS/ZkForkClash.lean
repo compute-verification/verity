@@ -100,7 +100,7 @@ table `j`'s rep `k` is an `Opening` of its position against the flattened `ℓ �
 verifier log (`zk_levelClash_tiedJ` at one row): its verdict accepts with SHA-512 answered within that log
 (`acc_within`), so level `ℓ`'s Merkle check passed on the rep's rows at those positions (`zkLevels_verifyWithM`), and
 the check, carried back to `OC`, logged them (`merkleCheck_logs`). -/
-theorem zk_levelOpeningJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_levelOpeningJ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j k ℓ q : ℕ} {a : List 𝔽}
     (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (ha : (q, a) ∈ zkRawLevelRowsJ (Claims.run sha512 P (V true) x ω r).seen j k ℓ) :
@@ -227,7 +227,7 @@ table `j`'s rep `k` is an `Opening` of its position against the flattened `ℓ �
 verifier log (`zk_levelClash_tiedJ` at one row): its verdict accepts with SHA-512 answered within that log
 (`acc_within`), so level `ℓ`'s Merkle check passed on the rep's rows at those positions (`zkLevels_verifyWithM`), and
 the check, carried back to `OC`, logged them (`merkleCheck_logs`). -/
-theorem zk_levelOpeningJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_levelOpeningJ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j k ℓ q : ℕ} {a : List 𝔽}
     (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (ha : (q, a) ∈ zkRawLevelRowsJ (Claims.run sha512 P (V true) x ω r).seen j k ℓ) :
@@ -304,7 +304,7 @@ recursive caps, and its openings at a level `ℓ ≥ 1` are its `zkLevelRowsOf` 
 the run's rep streams and proof files (`recordsLiveAtS_wrS`), so they are the run's level-`ℓ` rows
 (`rawLevelRows_zk`), each an `Opening` in the run's log against the flattened `ℓ − 1`-th of those caps
 (`zk_levelOpeningJ`, at the shape `runOf_shape_zk` reads). -/
-theorem zkViewOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkViewOpening {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -429,7 +429,7 @@ recursive caps, and its openings at a level `ℓ ≥ 1` are its `zkLevelRowsOf` 
 the run's rep streams and proof files (`recordsLiveAtS_wrS`), so they are the run's level-`ℓ` rows
 (`rawLevelRows_zk`), each an `Opening` in the run's log against the flattened `ℓ − 1`-th of those caps
 (`zk_levelOpeningJ`, at the shape `runOf_shape_zk` reads). -/
-theorem zkViewOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkViewOpening {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -482,7 +482,7 @@ variable [S : ZkSetup]
 log**: where the live verdict holds, `P`'s run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of
 the record it decides (`zkSimRunAt`), and there table `j`'s rep `r` records its proof's recursive caps and opens rows of
 them in the run's log (`zkViewOpening`). -/
-theorem zkAccOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkAccOpening {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -523,7 +523,7 @@ end Gen
 log**: where the live verdict holds, `P`'s run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of
 the record it decides (`zkSimRunAt`), and there table `j`'s rep `r` records its proof's recursive caps and opens rows of
 them in the run's log (`zkViewOpening`). -/
-theorem zkAccOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zkAccOpening {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -563,7 +563,7 @@ decode to `ForkEvZ` at table `j`'s rep `r`'s level `ℓ + 1` record one cap `d` 
 proof's `ℓ`-th recursive cap, so one cap of 64-byte digests (`capDig_inj`), and open one position of it to two
 different rows, each an `Opening` against that cap in its run's log (`zkAccOpening`), which collide in the joined
 logs (`tiedColl_of_openings`). -/
-theorem zkForkClash (x : Claims.Msg) : ZkForkClash x := by
+theorem zkForkClash (x : Hash.Msg) : ZkForkClash x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC u r₁ r₂ r ℓ hq _ _
   obtain ⟨a₁, a₂, ha₁, ha₂, hF⟩ := hq
   obtain ⟨dc, hc₁, hc₂, x₁, hx₁, x₂, hx₂, hq, hne⟩ := forkEvZ_entries hF
@@ -589,7 +589,7 @@ decode to `ForkEvZ` at table `j`'s rep `r`'s level `ℓ + 1` record one cap `d` 
 proof's `ℓ`-th recursive cap, so one cap of 64-byte digests (`capDig_inj`), and open one position of it to two
 different rows, each an `Opening` against that cap in its run's log (`zkAccOpening`), which collide in the joined
 logs (`tiedColl_of_openings`). -/
-theorem zkForkClash (x : Claims.Msg) : ZkForkClash x :=
+theorem zkForkClash (x : Hash.Msg) : ZkForkClash x :=
   Gen.zkForkClash (S := S₀) (x := x)
 
 end Live

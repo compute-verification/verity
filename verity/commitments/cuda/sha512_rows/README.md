@@ -28,7 +28,7 @@ E.frame_leaves(values, dids, rank0, schema)                # (T, n, 8): leaf (ra
 E.level(children, dids, level, first, pre=None)            # (T, w, 8) nodes first .. first + w - 1 over (T, 2w, 8)
 E.pads(dids, trees, first, n); E.root(leaves, dids)        # pads; each tree's root (tree_levels' padding)
 E.counts()                                                 # the host twin's compressions
-E.resalt(graph_exec, nodes, n, captured, salts)            # a captured graph's leaf launches read another salt buffer
+E.resalt(graph_exec, nodes, n, captured, salts, G, S, strides)  # a captured graph's leaf launches read another salt buffer
 ```
 
 `tensors` are (slots, …) with contiguous slot rows. A leaf's salt is data: `salts[g, s]` is row g's 192 bytes in slot s,

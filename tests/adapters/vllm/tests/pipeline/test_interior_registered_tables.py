@@ -23,6 +23,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ONE
@@ -41,6 +42,7 @@ from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 
 from verity_vllm.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
@@ -142,11 +144,11 @@ def _links() -> tuple[IR.Link, ...]:
 
 
 @functools.cache
-def _tables(seed: int = 0) -> dict[str, RG.Registered]:
+def _tables(seed: int = 0) -> dict[str, RV.Registered]:
     """The registered tables, by parameter: `E` rows of `K` e4m3 bytes each, committed in the reads' row format under
     salts of their own. ``seed``: 0 the registration the verifier pinned, any other a registration of other weights."""
     rng = np.random.default_rng(seed)
-    return {p: RG.Registered.commit(REGISTRATION, p, rng.integers(0, 0x70, (E, K), dtype=np.uint8).view("<u2").tolist(),
+    return {p: RV.Registered.commit(REGISTRATION, p, rng.integers(0, 0x70, (E, K), dtype=np.uint8).view("<u2").tolist(),
                                     [rng.bytes(192) for _ in range(E)], schema=RG.SCHEMA_SEG) for p in PARAMS}
 
 
@@ -193,7 +195,7 @@ def _span(seed: int, registration: int = 0) -> IR.Span:
 
 
 def _boundary_window() -> CS.Binding:
-    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), RND.parse_design(f"subset:{Q}"),
+    return CS.Binding(PN.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), RND.parse_design(f"subset:{Q}"),
                       "b0" * 64, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
 
 
@@ -278,8 +280,8 @@ def test_the_stream_registers_an_interior_of_fused_blocks_under_the_tables_the_v
     for x in SUPPLIES:
         assert c.given[m.port(x.port)].positions == tuple(s * T + a for s in range(Q) for a in AT)
         mine = RG.supplied_rows(stream.interior_program(Q), x.value, RG.sources(srcs)[x.value], it.record)
-        v = RG.Registered.commit(prog, x.value, [RG.bit_words(r, 1, 16) for r in mine],
-                                 RG.supplied_salts(prog, x.value, len(mine)), schema=m.schema(x.port))
+        v = RV.Registered.commit(prog, x.value, [RG.bit_words(r, 1, 16) for r in mine],
+                                 RV.supplied_salts(prog, x.value, len(mine)), schema=m.schema(x.port))
         assert [list(r) for r in v.rows] == [digest_words(bytes.fromhex(pins[n][x.port])) for _ in range(Q) for n in PARAMS]
         assert v.entry() == {k: got[x.value][k] for k in v.entry()} and got[x.value]["leaves"] == Q * T
     assert IR.span_values(SUPPLIES) == tuple((x.value, T, IR.DIGEST) for x in SUPPLIES)
@@ -377,7 +379,7 @@ def test_a_registered_table_without_a_pin_is_refused():
             fill(SUPPLIES, Q)
     with pytest.raises(ValueError, match=f"registered table {PARAMS[1]} is not held"):
         _interior(registered={PARAMS[0]: tables[PARAMS[0]]})
-    wide = RG.Registered.commit(REGISTRATION, PARAMS[0], np.zeros((2 * E, H), np.uint16).tolist(), schema=RG.SCHEMA_SEG)
+    wide = RV.Registered.commit(REGISTRATION, PARAMS[0], np.zeros((2 * E, H), np.uint16).tolist(), schema=RG.SCHEMA_SEG)
     with pytest.raises(ValueError, match=f"reads a table of {E} rows of {H} words, not registered table {PARAMS[0]}'s {2 * E}"):
         _interior(registered={**tables, PARAMS[0]: wide}, pins={**pins, PARAMS[0]: wide.entry()})
 
@@ -387,11 +389,11 @@ def test_the_links_are_the_ones_round_2_derives_from_the_replay_block():
     ``domain`` the verifier's with the registered tables a row (``tables``): a row a table, unit j reading row
     j // `W`. They are this module's by hand."""
     record = _boundary()[0]
-    got = IR.links(P.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
+    got = IR.links(PN.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
                    dict.fromkeys(IR.TABLE, PARAMS))
     assert len(got) == len(_links()) and set(got) == set(_links())
     with pytest.raises(ValueError, match="1 registered tables for its 2 rows a sampled span"):
-        IR.links(P.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
+        IR.links(PN.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
                  dict.fromkeys(IR.TABLE, PARAMS[:1]))
     with pytest.raises(ValueError, match="read it as two values"):
         IL.values((SUPPLIES[0], replace(SUPPLIES[0], tables=PARAMS[::-1])))

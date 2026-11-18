@@ -13,6 +13,7 @@ untraced = ["test_host_and_gamma.py", "test_run.py"]
 # gamma.py reads the RTX PRO 6000 node's file and its cards through verity.device (load_node reads every card)
 inputs = ["verity/__init__.py", "verity/device.py", "verity/channel.py", "verity/errors.py", "calibration/hardware/cards",
           "calibration/hardware/nodes/rtx-pro-6000-server-x8.toml", "calibration/rate_squaring",
+          "benchmarks/kernels/machine.py", "calibration/hardware/architectures",
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
           "tools/config/verity_config", "verity/__init__.py", "verity/errors.py"]

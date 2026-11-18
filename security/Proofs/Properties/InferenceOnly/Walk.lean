@@ -49,7 +49,7 @@ from `Resolve.BodiesOk`) and `OperandsEarlier` (every operand the walk locates i
 
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.Walk
 
-open Flock.Program (Prog Seq Part parsePartsIn)
+open Flock.Program (Prog Seq Part parsePartsIn Lane gridChecks parseGrid)
 
 /-- **A walk that lowers a potential finishes.** If every step from a state satisfying `Inv` either ends with a result
 satisfying `Good` or moves to a state satisfying `Inv` of lower potential, a walk from such a state with more fuel than
@@ -476,6 +476,160 @@ theorem except_bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except �
   · exact absurd h (by intro h; injection h)
   · exact ⟨a, rfl, h⟩
 
+private def loS : List (Nat × Int) → Int
+  | [] => 0
+  | (r, d) :: rest => ((r : Int) - 1) * min d 0 + loS rest
+
+private def hiS : List (Nat × Int) → Int
+  | [] => 0
+  | (r, d) :: rest => ((r : Int) - 1) * max d 0 + hiS rest
+
+private def prodR : List (Nat × Int) → Nat
+  | [] => 1
+  | (r, _) :: rest => r * prodR rest
+
+private theorem bounds_foldl (xs : List (Nat × Int)) (a b : Int) :
+    xs.foldl (fun (lo, hi) (r, d) => (lo + ((r : Int) - 1) * min d 0, hi + ((r : Int) - 1) * max d 0)) (a, b) =
+      (a + loS xs, b + hiS xs) := by
+  induction xs generalizing a b with
+  | nil => simp [loS, hiS]
+  | cons x xs ih =>
+    obtain ⟨r, d⟩ := x
+    simp only [List.foldl_cons, ih, loS, hiS, Prod.mk.injEq]
+    constructor <;> omega
+
+private theorem periods_foldl (xs : List (Nat × Int)) (c : Nat) :
+    xs.foldl (fun a (r, _) => a * r) c = c * prodR xs := by
+  induction xs generalizing c with
+  | nil => simp [prodR]
+  | cons x xs ih =>
+    obtain ⟨r, d⟩ := x
+    simp only [List.foldl_cons, ih, prodR, Nat.mul_assoc]
+
+private theorem one_level {t r : Nat} (d : Int) (ht : t < r) :
+    ((r : Int) - 1) * min d 0 ≤ (t : Int) * d ∧ (t : Int) * d ≤ ((r : Int) - 1) * max d 0 := by
+  have h0 : (0 : Int) ≤ t := Int.natCast_nonneg t
+  have h1 : (t : Int) ≤ (r : Int) - 1 := by omega
+  by_cases hd : 0 ≤ d
+  · rw [Int.min_eq_right hd, Int.max_eq_left hd, Int.mul_zero]
+    exact ⟨Int.mul_nonneg h0 hd, Int.mul_le_mul_of_nonneg_right h1 hd⟩
+  · have hd' : d ≤ 0 := by omega
+    rw [Int.min_eq_left hd', Int.max_eq_right hd', Int.mul_zero]
+    exact ⟨Int.mul_le_mul_of_nonpos_right h1 hd', Int.mul_nonpos_of_nonneg_of_nonpos h0 hd'⟩
+
+private theorem go_mem : ∀ (lv : List (Nat × Int)) (t : Nat), t < prodR lv →
+    loS lv ≤ Lane.leafAt.go lv t ∧ Lane.leafAt.go lv t ≤ hiS lv
+  | [], t, _ => by simp [loS, hiS, Lane.leafAt.go]
+  | [(r, d)], t, ht => by
+    simp only [prodR, Nat.mul_one] at ht
+    have := one_level d ht
+    simp only [loS, hiS, Lane.leafAt.go, Int.add_zero]
+    exact this
+  | (r, d) :: (r2, d2) :: rest, t, ht => by
+    simp only [prodR] at ht
+    have hr : 0 < r := Nat.pos_of_ne_zero (by rintro rfl; simp at ht)
+    have h1 := one_level d (Nat.mod_lt t hr)
+    have h2 := go_mem ((r2, d2) :: rest) (t / r) (by
+      simp only [prodR]; exact Nat.div_lt_of_lt_mul ht)
+    have e : Lane.leafAt.go ((r, d) :: (r2, d2) :: rest) t
+        = ((t % r : Nat) : Int) * d + Lane.leafAt.go ((r2, d2) :: rest) (t / r) := rfl
+    rw [e]
+    simp only [loS, hiS] at h2 ⊢
+    exact ⟨Int.add_le_add h1.1 h2.1, Int.add_le_add h1.2 h2.2⟩
+
+theorem leafAt_mem (l : Lane) {run t o : Nat} (ho : o < run) (ht : t < l.periods) :
+    (l.bounds run).1 ≤ l.leafAt t o ∧ l.leafAt t o ≤ (l.bounds run).2 := by
+  have hp : l.periods = prodR l.lv := by
+    simp only [Lane.periods, periods_foldl, Nat.one_mul]
+  rw [hp] at ht
+  have hb : l.bounds run = (l.b + loS ((run, l.e) :: l.lv), l.b + hiS ((run, l.e) :: l.lv)) := by
+    simp only [Lane.bounds]; exact bounds_foldl _ _ _
+  rw [hb]
+  have h1 := one_level l.e ho
+  have h2 := go_mem l.lv t ht
+  show l.b + (((run : Int) - 1) * min l.e 0 + loS l.lv) ≤ l.b + (o : Int) * l.e + Lane.leafAt.go l.lv t ∧
+    l.b + (o : Int) * l.e + Lane.leafAt.go l.lv t ≤ l.b + (((run : Int) - 1) * max l.e 0 + hiS l.lv)
+  constructor
+  · rw [Int.add_assoc]; exact Int.add_le_add_left (Int.add_le_add h1.1 h2.1) _
+  · rw [Int.add_assoc]; exact Int.add_le_add_left (Int.add_le_add h1.2 h2.2) _
+
+
+/-- What a grid the decoder accepts holds: one part, lanes of one period count, each inside its collection. -/
+theorem gridChecks_ok {j g : Lean.Json} {run : Nat} {lanes : Array Lane} {leaves : Bool → Nat → Option Nat}
+    {ps : Array Part} (h : gridChecks j g run lanes leaves = .ok ps) :
+    ps = #[.grid run lanes] ∧ (∀ l ∈ lanes, l.periods = lanes[0]!.periods) ∧ ∀ l ∈ lanes, l.fits leaves run = true := by
+  unfold gridChecks at h
+  split at h
+  · exact absurd h (by intro h; injection h)
+  rename_i h1
+  split at h
+  · exact absurd h (by intro h; injection h)
+  split at h
+  · exact absurd h (by intro h; injection h)
+  rename_i h3
+  injection h with h
+  refine ⟨h.symm, fun l hl => ?_, fun l hl => ?_⟩
+  · simp only [Array.any_eq_true, bne_iff_ne, ne_eq, not_exists, Decidable.not_not] at h1
+    obtain ⟨i, hi, rfl⟩ := Array.getElem_of_mem hl
+    exact h1 i hi
+  · have h3' : lanes.all (fun x => x.fits leaves run) = true := by
+      cases hc : lanes.all (fun x => x.fits leaves run) <;> simp_all
+    rw [Array.all_eq_true] at h3'
+    obtain ⟨i, hi, rfl⟩ := Array.getElem_of_mem hl
+    exact h3' i hi
+
+theorem parseGrid_ok {j g : Lean.Json} {leaves : Bool → Nat → Option Nat} {ps : Array Part}
+    (h : parseGrid j g leaves = .ok ps) : ∃ run lanes, ps = #[.grid run lanes] ∧
+      (∀ l ∈ lanes, l.periods = lanes[0]!.periods) ∧ ∀ l ∈ lanes, l.fits leaves run = true := by
+  rcases g with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+  all_goals try (delta parseGrid at h; injection h; done)
+  rcases l with _ | ⟨run, _ | ⟨ls, _ | ⟨y, l⟩⟩⟩
+  all_goals try (delta parseGrid at h; injection h; done)
+  rcases ls with _ | _ | _ | _ | ⟨⟨ls⟩⟩ | _
+  all_goals try (delta parseGrid at h; injection h; done)
+  delta parseGrid at h
+  conv at h => lhs; whnf
+  dsimp only [Array.getLit, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ] at h
+  split at h
+  · rename_i n hn
+    split at h
+    · exact absurd h (by intro h; injection h)
+    obtain ⟨lanes, -, h⟩ := except_bind_ok h
+    exact ⟨n, lanes, gridChecks_ok h⟩
+  · exact absurd h (by intro h; injection h)
+
+theorem grid_valid {run : Nat} {lanes : Array Lane} {leaves : Bool → Nat → Option Nat}
+    (hp : ∀ l ∈ lanes, l.periods = lanes[0]!.periods) (hf : ∀ l ∈ lanes, l.fits leaves run = true) :
+    PartValid leaves (.grid run lanes) := by
+  intro k hk
+  simp only [Part.count] at hk
+  have hg : 0 < lanes.size := Nat.pos_of_ne_zero (by intro h0; simp [h0] at hk)
+  have hrun : 0 < run := Nat.pos_of_ne_zero (by intro h0; simp [h0] at hk)
+  have hgr : 0 < lanes.size * run := Nat.mul_pos hg hrun
+  have hidx : k % (lanes.size * run) / run < lanes.size :=
+    Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm run]; exact Nat.mod_lt _ hgr)
+  have h0 : lanes[0]? = some lanes[0] := Array.getElem?_eq_getElem hg
+  rw [h0] at hk
+  simp only [Option.map_some, Option.getD_some] at hk
+  generalize hl : lanes[k % (lanes.size * run) / run]! = l
+  have hmem : l ∈ lanes := by
+    rw [← hl, getElem!_pos lanes _ hidx]; exact Array.getElem_mem hidx
+  have hper : l.periods = lanes[0].periods := by
+    rw [hp l hmem, getElem!_pos lanes 0 hg]
+  have ht : k / (lanes.size * run) < l.periods := by
+    rw [hper]; exact Nat.div_lt_of_lt_mul hk
+  have hb := leafAt_mem l (Nat.mod_lt k hrun) ht
+  have hfl := hf l hmem
+  show ∃ n, leaves (lanes[k % (lanes.size * run) / run]!).p (lanes[k % (lanes.size * run) / run]!).i = some n ∧
+    ((lanes[k % (lanes.size * run) / run]!).leafAt (k / (lanes.size * run)) (k % run)).toNat < n
+  rw [hl]
+  unfold Lane.fits at hfl
+  split at hfl
+  · rename_i n hn
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hfl
+    exact ⟨n, hn, by omega⟩
+  · cases hfl
+
 /-- One unfolding of `parsePartsIn`, with the nested call `b.1` assumed to return valid parts. Lean generates no
 equation lemmas for `parsePartsIn` (its `.arr #[…]` patterns), so this unfolds by `delta` and reduces each array
 pattern by `whnf` once its list has been cased to a literal. -/
@@ -681,7 +835,13 @@ theorem parsePartsIn_step (leaves : Bool → ℕ → Option ℕ) (args : ℕ →
               subst hp hi
               simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
               exact ⟨nn, hl, by show ll.toNat < nn; omega⟩
-            · exact absurd h (by intro h; injection h)
+            · split at h
+              · obtain ⟨run, lanes, rfl, hp, hf⟩ := parseGrid_ok h
+                intro q hq
+                simp only [Array.mem_singleton] at hq
+                subst hq
+                exact grid_valid hp hf
+              · exact absurd h (by intro h; injection h)
 
 /-- **Every reference a parsed sequence holds names a leaf**, given that every argument an alias may name holds only
 such references: affine and explicit parts by `within`'s check, strided ones by their corners' (`strided_corners`), and

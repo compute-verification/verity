@@ -1,6 +1,8 @@
 """The network attester as a resource scheme (`verity.protocols.resource_accounting.scheme`): what it bounds is egress,
 the bits that leave beyond what the registered circuit explains. Its Lean instance (`NetTiming.Attester.scheme`)
-is at one execution phase, and its charge there is a named premise (`NetTiming.Attester.Phase.ChargeHolds`)."""
+is at one execution phase, its charge there a named premise (`NetTiming.Attester.Phase.ChargeHolds`), and its
+incorrect blocks the record's where the committed values carry the attester's rows (`NetTiming.Attester.RowsCommitted`).
+Its check is the Lean program ``network-period`` alone (`verifier.period_check.answer`), with no Python twin."""
 
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ from verity.protocols.resource_accounting.network.verifier.io_request import IoT
 from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBucket, IoTieContent, IoTieRoute
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.scheme import Block, Charge, Layout, Order, Port, Scheme, Term, register
-from verity.protocols.resource_accounting.network.verifier import parties as NC
+from verity.protocols.resource_accounting.network.verifier import parties as NC, period_check
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay, workload
 from verity.protocols.resource_accounting.network.prover.ids_protocol import IdsProtocol
@@ -94,6 +96,11 @@ def _scan_state_layout(shape: Mapping[str, int]) -> Layout:
     return Layout(IS.state_bits(cls), IS.layout(cls), {"K0": cls.K0, "K": cls.K})
 
 
+def _reading(row: Mapping[str, Any]) -> S.Reading:
+    q = row["quantity"]
+    return S.Reading(int(q["K"]), Fraction(str(q["eps"])), "quantity.eps", {"windows": int(q["windows"])})
+
+
 NETWORK_ATTESTER = register(Scheme(
     name="network-attester",
     messages=workload.MESSAGES,
@@ -104,13 +111,18 @@ NETWORK_ATTESTER = register(Scheme(
     blocks=tuple(Block(d.id, output_bits(d)) for d in DEFINITIONS),
     assumptions=("trusted-device",),
     log=(Order("window", "sample"), Order("start", "first-tick")),
+    # advice is `Phase.freeBits`, and jitter, schedules and cells the factors of the channel `ChanAt` (`Dj ^ k`, `Ss`,
+    # `failAtMost cap j` ≤ ∏ (cap + 1)), so each is a term of `Phase.charges`, bounded under `Phase.ChargeHolds`
     charges=(
         Charge("advice", "scans[].free"),
         Charge("jitter", "scans[].jitter"),
         Charge("schedules", "schedules"),
         Charge("cells", "cells"),
-        Charge("start", "start"),
-        Charge("tied-entries", "scans[].faulty_entries"),
+        Charge("start", "start: a period's carried start at the state's full width, which `Phase` registers and no "
+                        "term of `Phase.charges` holds", bounded=False),
+        Charge("tied-entries", "scans[].faulty_entries: every slot entry bit a tied audit's incorrect blocks can set, "
+                               "a cost of blocks outside the phase's partition, which no term of `Phase.charges` "
+                               "holds", bounded=False),
     ),
     delta_scheme=Term("Claims.ecrBound", ("q",), lambda q: Fraction(q, 2**256)),
     over="bits: the ceiling of log2 of the number of records (the attester's rows and the channel) that committed values "
@@ -134,7 +146,11 @@ NETWORK_ATTESTER = register(Scheme(
     record="communication",
     symbol="K",
     published=("bits", Fraction(1)),
-    record_owner="network-accounting",
+    check=period_check.answer,
+    reader=_reading,
+    premises=("NetTiming.Attester.Phase.ChargeHolds", "NetTiming.Attester.RowsCommitted"),
+    **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
+                    S.Lacks("not a kernel scheme")),
 ))
 
 __all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "SETTINGS", "START_ID_RELAY", "attach", "output_bits", "requests",

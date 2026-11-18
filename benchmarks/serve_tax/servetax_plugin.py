@@ -135,7 +135,7 @@ def release_key(engine_id: str) -> tuple[str, int] | None:
 
 class TokenCommit:
     """Each window's tokens, 4 bytes each (little-endian u32) in the order the engine core saw them, committed as
-    ``rows-sha512`` rows under a fresh salt key (`step_rows.keyed_tensor_root`) on a thread of its own when the window
+    ``rows-sha512`` rows under fresh salts (`step_rows.tensor_root`) on a thread of its own when the window
     closes (`tick`, at the first schedule ``window_s`` after it opened, and at exit). ``sink`` gets each window's record."""
 
     def __init__(self, window_s: float, sink: Callable[[dict], None], clock: Callable[[], float] = time.monotonic,
@@ -214,11 +214,11 @@ class ServedIds:
 
 
 def rows_root(window: int, data: bytes) -> bytes:
-    """``data``'s root as ``rows-sha512`` rows (`step_rows.keyed_tensor_root`) under a fresh salt key."""
+    """``data``'s root as ``rows-sha512`` rows (`step_rows.tensor_root`) under fresh salts."""
     from verity_vllm.commit import step_rows
 
     entry = ["tokens", "u32", [len(data) // 4], len(data)]
-    return step_rows.keyed_tensor_root(bytes(step_rows.ID_BYTES), window, entry, data, os.urandom(step_rows.KEY_BYTES))
+    return step_rows.tensor_root(bytes(step_rows.ID_BYTES), window, entry, data, step_rows.fresh_tensor_salts(len(data)))
 
 
 def _public(cfg: Mapping[str, Any]) -> tuple[Path, ...]:

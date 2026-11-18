@@ -66,6 +66,11 @@ ARM_GAMMA = {"cap": "3/1000", "floor": "1/1000", "basis": "Derived at the device
 V2_HOT_872 = P.lookup(P.load(), "pearl-c-sm120/v2-hot", "cast-8.72", 8192, 8192)
 
 
+def passes(run_dir: Path) -> Path:
+    """Where `result`'s arm keeps its passes: private and outside the run's directory, as `bench.py --passes` keeps them."""
+    return run_dir.parent / "passes" / run_dir.name
+
+
 def result(run_dir: Path, var: dict | None, *, gamma=ARM_GAMMA, control: bool = True, lineage: dict | None = None,
            poisoned_by: str = "harness") -> Path:
     """A bench.py result for one arm `pc` at both headlines, with gates, controls, the SASS gate and a decode split."""
@@ -85,7 +90,7 @@ def result(run_dir: Path, var: dict | None, *, gamma=ARM_GAMMA, control: bool = 
                                                                   "hidden_by_side_ms": 0.008}}}}}
         shapes.append(shape)
     decl = {"per": "run", "transcript": "transcripts/{arm}/{shape}/manifest.json",
-            "commands": [["{python}", str(run_dir.parent / "v.py"), "{run_dir}"]]}
+            "commands": [["{python}", str(run_dir.parent / "v.py"), "{passes}"]]}
     if control:
         decl["control"] = "negative/{arm}/{shape}/manifest.json"
     build = {"binaries": [], "panel": {"line": "pearl-c-sm120", "version": "v2-hot"}, "scheme": "pearl-c-sm120-v2-hot-h3"}
@@ -104,14 +109,14 @@ def result(run_dir: Path, var: dict | None, *, gamma=ARM_GAMMA, control: bool = 
     (run_dir.parent / "v.py").write_text(VERIFIER)
     for label in SHAPES:
         for top, text in (("transcripts", f'{{"shape": "{label}"}}'), ("negative", f'{{"wrote": "nothing", "at": "{label}"}}')):
-            f = run_dir / top / "pc" / label / "manifest.json"
+            f = passes(run_dir) / top / "pc" / label / "manifest.json"
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_text(text)
     path = run_dir / "bench.json"
     poisoning = [{"arm": "pc", "shape": label, "by": poisoned_by, "poison": "0xA5", "written": {"root": 32}} for label in SHAPES]
     path.write_text(json.dumps({"harness": {"interface": A.VERSION}, "shapes": shapes, "arms": arms, "gates": gates,
                                 "negative_controls": negatives, "sass_gate": sass, "clocks": {"label": "locked-2100"},
-                                "poisoning": poisoning,
+                                "poisoning": poisoning, "args": {"passes": str(passes(run_dir))},
                                 "versions": {"driver": "580.173.02", "nvcc": "12.9.86"}}))
     return path
 
@@ -594,10 +599,21 @@ def test_bad_run_flags_are_usage_errors_and_nothing_is_written(tmp_path):
     assert not (run_dir / "ledger").exists()
 
 
+def test_a_result_naming_no_passes_directory_is_refused(tmp_path, capsys):
+    run_dir = tmp_path / RUN
+    path = result(run_dir, None)
+    res = json.loads(path.read_text())
+    del res["args"]
+    path.write_text(json.dumps(res))
+    assert V.main([str(path), "--run-id", RUN, "--commit", COMMIT]) == V.EXIT_USAGE
+    assert "the result names no passes directory (bench.py --passes)" in capsys.readouterr().err
+    assert not (run_dir / "ledger").exists()
+
+
 def test_a_control_the_verifier_accepts_rejects_its_row(tmp_path):
     run_dir = tmp_path / RUN
     path = result(run_dir, None)
-    (run_dir / "negative" / "pc" / PREFILL / "manifest.json").write_text('{"accept me": 1}')
+    (passes(run_dir) / "negative" / "pc" / PREFILL / "manifest.json").write_text('{"accept me": 1}')
     code, res = verify(path)
     assert code == V.EXIT_REJECTED
     p = res["shapes"][0]["arms"]["pc"]["panel"]
@@ -610,7 +626,7 @@ def test_a_control_the_verifier_accepts_rejects_its_row(tmp_path):
 def test_a_missing_control_leaves_the_row_accepted_without_a_negative_control(tmp_path):
     run_dir = tmp_path / RUN
     path = result(run_dir, variant(tmp_path))
-    (run_dir / "negative" / "pc" / DECODE / "manifest.json").unlink()
+    (passes(run_dir) / "negative" / "pc" / DECODE / "manifest.json").unlink()
     code, res = verify(path)
     assert code == V.EXIT_OK
     p = res["shapes"][1]["arms"]["pc"]["panel"]
@@ -635,7 +651,7 @@ def test_per_shape_control_runs_don_t_fail_the_step(tmp_path):
     assert code == V.EXIT_OK and res["verification"]["ok"]
     cmds = res["verification"]["commands"]
     assert [c["control"] for c in cmds] == [False, True, False, True] and [c["exit"] for c in cmds] == [0, 1, 0, 1]
-    control = (run_dir / "negative" / "pc" / PREFILL / "manifest.json").read_bytes()
+    control = (passes(run_dir) / "negative" / "pc" / PREFILL / "manifest.json").read_bytes()
     assert res["shapes"][0]["arms"]["pc"]["panel"]["negative_control"] == f"REJECT {RUN} sha256:" + hashlib.sha256(
         control).hexdigest()
 
@@ -703,7 +719,7 @@ def test_store_records_come_back_as_panel_rows_under_the_panel_s_rules(tmp_path)
 
     bare = tmp_path / "bare" / RUN
     path = result(bare, var)
-    (bare / "negative" / "pc" / PREFILL / "manifest.json").unlink()
+    (passes(bare) / "negative" / "pc" / PREFILL / "manifest.json").unlink()
     verify(path, "--tier", "2b", "--publish")
     refused = [x for x in L.panel_rows(L.attempts()) if x["run"] == RUN and x.get("store_refused")]
     assert refused and refused[0]["store_refused"] == "no verifier reject line, naming the run, on the negative control"

@@ -12,8 +12,8 @@ well-formed tile is admissible.
 The parameters are an (L, L′) pair of `PARAMETERS`, keyed by the card's short name (its card file's ``short``, under
 ``calibration/hardware/cards``) and whether registration pins B: the pairs the protocol settles for the RTX PRO 6000
 ("The segment and the noise period"), L = 1,024 with L′ = 128 when registration pins B, and L = 768 with L′ = 256 for
-weights the prover chooses. No pair is settled for the H200. PoUW's kernel schemes reach it as the resource scheme
-``dither`` on a card (`verity.protocols.resource_accounting.compute.pouw.prover.schemes.of`).
+weights the prover chooses. No pair is settled for the H200. PoUW builds it by name at a card's pair
+(`verity.protocols.resource_accounting.compute.pouw.prover.schemes.get` with ``card`` and ``pinned``).
 
 Three methods ask for what Dither has no code for, and raise `NotImplementedError` naming it:
 

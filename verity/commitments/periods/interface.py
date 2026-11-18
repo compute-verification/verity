@@ -137,7 +137,7 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.population import wired_population_program
 from verity.circuits.refs import recut
 from verity.circuits.types import Array
-from verity.commitments import advice as AC, history as HT
+from verity.commitments import advice as AC, history as HT, registered_value as RV
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 from . import rows as CS, wiring as WI
@@ -278,6 +278,14 @@ def _width(name: str, ty: Any, out: bool = False) -> int:
         raise ValueError(f"{name}: its leaves are {sorted(widths)} bits, {sum(ty.leaf_widths())} in all; a row is whole u16 "
                          f"words of leaves of one of {PACKED} bits")
     return next(iter(widths))
+
+
+def _leaf_width(fn: Any, port: str, width: int) -> int:
+    """The width ``port`` of ``fn`` reads a registered value's leaves in: one bit for a Boolean-profile port, whose
+    layout `width` is its word view's, else ``width``."""
+    params, ret = fn.signature()
+    ty = dict(params)[port] if port in dict(params) else _fields(ret)[int(port[1:])]
+    return 1 if ty.width_set() == {1} else width
 
 
 @dataclass(frozen=True)
@@ -1390,22 +1398,21 @@ def member_reads(members: Sequence[CS.Member], registered: Registered | None,
     return [_reads_of(m.template, a, m.n, index, dict(m.rows + m.outs)) for m, a in zip(members, own_units(members, ranges))]
 
 
-def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, Any]], program: str, *,
-             module: Any) -> dict[str, Any]:
+def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, Any]], program: str) -> dict[str, Any]:
     """The values a period's table reads and verdicts read (`committed_reads`), by name, each one row filled from the entry
     of its table's parameter alone (``entries``, core's ``Registered.entry()`` by parameter, as the verifier pinned it):
     the root's and the domain id's 64 bytes as a `Digest` port's 32 words (`digest_words`) and 1 as one word, each
-    committed as core's ``registered.Registered`` (``module``, core's ``one_stage.registered`` as the caller passes it)
-    under ``program`` (the period's partition digest) at its public salts (``supplied_salts``), so the prover and the
-    verifier make the same value and the prover chooses none of it. A history table is a parameter of its own, its entry
-    the verifier's pin of its root (`verity.commitments.periods.history`). A table whose parameter has no entry has none."""
+    committed as ``registered_value.Registered`` under ``program`` (the period's partition digest) at its public salts
+    (``supplied_salts``), so the prover and the verifier make the same value and the prover chooses none of it. A history
+    table is a parameter of its own, its entry the verifier's pin of its root (`verity.commitments.periods.history`). A
+    table whose parameter has no entry has none."""
     out = {}
     for t in (registered.readable.values() if registered is not None else ()):
         if (e := entries.get(t.param)) is None:
             continue
         for of, row in zip(SUPPLIED, (digest_words(bytes.fromhex(e["root"])), digest_words(bytes.fromhex(e["domain"])), [1])):
             name = supplied_param(t, of)
-            out[name] = module.Registered.commit(program, name, [row], module.supplied_salts(program, name, 1), schema=V2)
+            out[name] = RV.Registered.commit(program, name, [row], RV.supplied_salts(program, name, 1), schema=V2)
     return out
 
 
@@ -2469,7 +2476,7 @@ def registered_reads(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, M
     reads = committed_reads(reg)
     if not reads:
         return {}
-    pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.partition_digest, module=registered).items()}}
+    pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.partition_digest).items()}}
     out: dict[str, dict[str, Any]] = {}
     index = _ReadIndex(reads)
     for m, a in zip(w.members, own_units(w.members, ranges_of(doc["templates"], order_of(doc)))):
@@ -2482,13 +2489,13 @@ def registered_reads(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, M
             words = dict(m.rows + m.outs)[p]
             if e is None:
                 raise ValueError(f"{m.key} {p} reads registered parameter {param!r}, whose root the verifier didn't pin")
-            n, bits, want = e.get("words"), e.get("word_bits", registered.WORD_BITS), value_format(reg, param)[1]
+            n, bits, want = e.get("words"), e.get("word_bits", RV.WORD_BITS), value_format(reg, param)[1]
             if bits != want or type(n) is not int or n * bits != 16 * words or e.get("value") != param:
                 raise ValueError(f"{m.key} {p}: the pin of {param!r} is {e.get('value')!r} rows of {n} {bits}-bit leaves, not "
                                  f"the port's {words} 16-bit words in {want}-bit leaves")
             ports[p] = {"value": param, "root": e["root"], "leaves": int(e["leaves"]), "words": n, "word_bits": bits,
-                        "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
-                        "reads": [positions[int(i)] for i in refs], registered.READS_FROM: m.base}
+                        "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
+                        "reads": [positions[int(i)] for i in refs], RV.READS_FROM: m.base}
         out[m.key] = {"format": registered.READS_V1, "ports": ports}
     return out
 
@@ -2594,7 +2601,7 @@ class Window:
     proof system's sampling design of the period, as its sample parses it), in members of at most ``cap`` units, with ``advice`` its
     compiler and advice (`advice_binding`) when the circuit depends on run-time choices, and ``registered`` the values its
     registered reads read (`committed_reads`), by parameter: each committed once, before the run, as core's
-    ``one_stage.registered.Registered`` (rows of the reading port's words, its salts the prover's; a table's in its
+    ``registered_value.Registered`` (rows of the reading port's words, its salts the prover's; a table's in its
     opening's row format), which the verifier pinned by its entry, and its tables' supplied values (`supply`); ``forms``,
     the forms of unit the integration's lowering has, which a label's ``form`` names (`record`). Each template's units are
     `record`ed in order, then `close` commits them and `write` writes and registers the period."""
@@ -2623,7 +2630,8 @@ class Window:
             v = (self.registered or {}).get(r.param)
             lay = lays[r.reader][0]
             words, bits = dict(lay.rows + lay.outs)[r.port], value_format(self.circuit.registered, r.param)[1]
-            recut(bits, dict(zip((p for p, _ in lay.rows + lay.outs), lay.widths))[r.port])
+            recut(bits, _leaf_width(self.circuit._by_id[r.reader][0], r.port,
+                                    dict(zip((p for p, _ in lay.rows + lay.outs), lay.widths))[r.port]))
             if v is not None and (v.word_bits != bits or CS.value_words(v) != words
                                   or words * v.leaves != params[r.param]):
                 raise ValueError(f"{r.param}: committed as {v.leaves} rows of {v.words} {v.word_bits}-bit leaves, not the "
@@ -2641,20 +2649,19 @@ class Window:
         if self.advice is not None:
             self.advice = advice_binding(self.advice["compiler"], self.advice["advice"]["root"], self.advice["advice"]["bits"])
 
-    def supply(self, module: Any) -> None:
+    def supply(self) -> None:
         """Add its tables' supplied values (`supplied`) to ``registered``, from its tables' parameters' committed values (each
-        with core's ``entry()``, a history table's `history.HistoryTable.entry`) under the period's partition digest,
-        ``module`` core's ``one_stage.registered`` as the caller passes it."""
+        with core's ``entry()``, a history table's `history.HistoryTable.entry`) under the period's partition digest."""
         reg = dict(self.registered or {})
         tables = (self.circuit.registered or Registered({})).readable.values()
         entries = {p: v.entry() for p, v in reg.items() if p in {t.param for t in tables}}
-        self.registered = {**reg, **supplied(self.circuit.registered, entries, self.window.partition_digest, module=module)}
+        self.registered = {**reg, **supplied(self.circuit.registered, entries, self.window.partition_digest)}
 
     def give(self, param: str, rows: Sequence[bytes], module: Any) -> None:
         """Add ``param``, one of its circuit's ``Registered.supplied``, to ``registered``: ``rows`` its bytes for each unit
         that reads it in read order, as the verifier makes them from the unit's sampled index (its supplied value's
         ``{"bytes": hex}`` sources, `one_stage.registered.supplied_rows`, which read them by the parameter's leaf width),
-        committed under the public salts ``module.supplied_salts`` gives at the period's partition digest, so `close`
+        committed under the public salts ``registered_value.supplied_salts`` gives at the period's partition digest, so `close`
         leaves their salts out and the verifier's root of them is the record's. Not written."""
         raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled proof block "
                                   "(Window.give)")

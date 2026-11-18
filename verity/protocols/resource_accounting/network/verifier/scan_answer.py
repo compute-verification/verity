@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from pathlib import Path
 from typing import Sequence
+from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, docket as RG
 
 #: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
@@ -32,7 +33,7 @@ def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, 
     ``rests_on_period_check``), on whose period check the acceptance rests; else a reject naming ``reason``."""
     commitment = RG.digest(reg)
     if record is None:
-        return {"commitment": commitment, "profile": None, "protocol": RG.PROTOCOL, "public": None, "reason": reason,
+        return {"commitment": commitment, "profile": None, "protocol": DM.ONE_STAGE_PROTOCOL, "public": None, "reason": reason,
                 "verdict": "reject"}
     if record.get("accepted") is not True or RG.digest(record["registration"]) != commitment:
         raise SystemExit("an accepted scan's audit record is for another registration, or not accepted")

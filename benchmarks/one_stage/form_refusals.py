@@ -37,7 +37,9 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import forged_proofs as FP  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.ports import free_port  # noqa: E402
 from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.ops.fp32 import F32AddFtz  # noqa: E402
 from verity.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz  # noqa: E402
@@ -82,8 +84,6 @@ def forms(rng) -> dict:
 
 
 def main() -> int:
-    from verity_bench import kit
-
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True, help="flock-circuit, the proving build (sha512, glue)")
     ap.add_argument("--lean", required=True, help="verity-verify-proof")
@@ -95,7 +95,7 @@ def main() -> int:
     TG.load_registries()
     cases: dict[str, dict] = {}
     for name, (fn, in_rows, out_rows, rows, kw, statement) in forms(np.random.default_rng(20261019)).items():
-        program = P.mixed_population_program([(fn, FP.N)])
+        program = PN.mixed_population_program([(fn, FP.N)])
         part = P.partition(program, P.template_instances_query([fn]))
         d = work / name
         stage = d / "stage"
@@ -119,7 +119,7 @@ def main() -> int:
             subprocess.run([a.tmpl_unit, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(d / "unit.placed")],
                            check=True, capture_output=True)
             sd["tmpl_unit"] = d / "unit.placed"
-        record, live = a0.session(a.bin, sd, FP.N, f"subset:{FP.N}", kit.free_port(), d / "run", zk=True)
+        record, live = a0.session(a.bin, sd, FP.N, f"subset:{FP.N}", free_port(), d / "run", zk=True)
         lean = a0.lean_verify(a.lean, sd, FP.N, d / "run", zk=True)
         cases[name] = {"definition": getattr(fn, "name", str(fn)), "statement": statement, "live": live, "m0": (record or {}).get("verdict"),
                        "lean": lean, "draw": (record or {}).get("unit_draw")}

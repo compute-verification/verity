@@ -52,7 +52,7 @@ open Flock
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **`runOfRV rd`'s run at an accepted run is table 0's of the statement's setup**, at its `m`. -/
-theorem runOfRV_m {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem runOfRV_m {rd : Hash.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {c : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} (hs : setupOf false x = some (s, spec, sts))
     (hst : sts[0]? = some st) {rr : Claims.Flock.ZkRun}
@@ -78,8 +78,8 @@ theorem runOfRV_m {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Pr
 
 /-- **An accepted run of `VR rd` has no level columns at or past its schedule's last level**
 (`plainRawLevelCols_topK`'s proof, at `runOfRV_m`). -/
-theorem plainRawLevelColsRV_top {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω}
-    {x : Claims.Msg} {ω : Ω} {c : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω c).out = .acc)
+theorem plainRawLevelColsRV_top {rd : Hash.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω}
+    {x : Hash.Msg} {ω : Ω} {c : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω c).out = .acc)
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule}
     (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch)
     (r : ℕ) {ℓ : ℕ} (hℓ : sch.levels.size ≤ ℓ) :
@@ -105,7 +105,7 @@ theorem plainRawLevelColsRV_top {rd : Claims.Msg → Option FinalP} {Ω : Type} 
     split <;> simp [htop]
 
 /-- **`LevelTopAt` at `VR rd` and its level columns.** -/
-theorem levelTopAt_R (rd : Claims.Msg → Option FinalP) : LevelTopAt (VR rd) (fun _ => plainRawLevelColsRV rd) :=
+theorem levelTopAt_R (rd : Hash.Msg → Option FinalP) : LevelTopAt (VR rd) (fun _ => plainRawLevelColsRV rd) :=
   fun _ _ _ _ h _ _ _ _ _ hs hst hsch r _ hℓ => plainRawLevelColsRV_top h hs hst hsch r hℓ
 
 end FlockDeploy.KS

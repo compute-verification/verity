@@ -139,8 +139,7 @@ CLASS=$SLOTS,$PROMPT,$OUTPUTS
 # the kernel scheme PROTOCOL runs on the card it serves on, and that card's file
 read -r SCHEME SKU < <("$PY" -c 'import sys
 from verity_bench import kit, schemes
-short = kit.card_short(sys.argv[2])
-print(schemes.kernel_scheme(sys.argv[1], short, pinned=True), schemes.card(short)["sku"])' "$PROTOCOL" \
+print(schemes.kernel_scheme(sys.argv[1], kit.card_short(sys.argv[2]), pinned=True), kit.card_sku(sys.argv[2]))' "$PROTOCOL" \
   "$(cut -d, -f2 <<< "$card" | sed 's/^ *//')") && [ -n "$SKU" ] || { echo "no kernel scheme of $PROTOCOL on $card" \
   "(the traceback above names the table it read)" >&2; exit 3; }
 mkdir -p "$OUT/logs" "$PIECE" "$REC" || exit 3
@@ -313,7 +312,7 @@ case $COINS in
 import json, sys
 g = json.load(open(sys.argv[1]))
 print(g["gate"], g["peer"], g["lane"], sep="\n")' "$OUT/auditor-gate.json") || fail gate
-    export PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER PEARLC_CHALLENGER_LANE ;;
+    export PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER PEARLC_CHALLENGER_LANE PEARLC_PRIVATE=$W/private ;;
   in-process) ;;
   *) echo "COINS is local or in-process, not $COINS" >&2; exit 3 ;;
 esac

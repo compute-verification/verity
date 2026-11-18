@@ -30,7 +30,7 @@ namespace FlockComplete.ZkTables
 
 open Flock FlockDeploy FlockComplete
 
-variable (H : Claims.Msg → Claims.Msg)
+variable (H : Hash.Msg → Hash.Msg)
 
 /-- **`RepShapedZk` holds at the deployed relation**: `RepShapedT` beyond level 0's shape (`shapeRest`) at level 0's
 shape (`L0.proverShape`). -/
@@ -59,7 +59,7 @@ theorem complete_zk_of_verifier (hV : Level0.Verifier) : Claims.Flock.Complete H
 verifier can accept (`readyZk H`), in the session the numbers are stated at (`ZkIn`), in scope and with a witness, for
 every tape, masked completeness (`complete_zk_of_verifier`) bounds the probability of acceptance below by `1 - δc`, which
 is positive there (`Claims.Flock.Complete_meets_zk`). -/
-theorem accepts_zk_of_verifier (hV : Level0.Verifier) (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins}
+theorem accepts_zk_of_verifier (hV : Level0.Verifier) (h64 : Claims.Out64 H) {x : Hash.Msg} {s : Ins}
     {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} (hin : ZkIn x s spec sts) (hready : readyZk H x = true)
     {w : Claims.Flock.Wit} (hS : Claims.Flock.Scope (deployZk Readable.relation) x)
     (hR : Claims.Flock.R (deployZk Readable.relation).parse x w) (ω : (deployZk Readable.relation).Tape) :
@@ -76,7 +76,7 @@ theorem complete_masked : Claims.Flock.Complete H (deployZk Readable.relation) :
 /-- **The honest masked prover is accepted at some coins**: at a statement the masked verifier can accept (`readyZk H`),
 in the session the numbers are stated at (`ZkIn`), in scope and with a witness, for every tape (`accepts_zk_of_verifier`
 at `L0.verifier`). -/
-theorem accepts_masked (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem accepts_masked (h64 : Claims.Out64 H) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array _root_.Flock.Stmt} (hin : ZkIn x s spec sts) (hready : readyZk H x = true) {w : Claims.Flock.Wit}
     (hS : Claims.Flock.Scope (deployZk Readable.relation) x)
     (hR : Claims.Flock.R (deployZk Readable.relation).parse x w) (ω : (deployZk Readable.relation).Tape) :

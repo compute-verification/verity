@@ -36,6 +36,9 @@ ROOT = Path(R.ROOT)
 CONFIG = ROOT / "applications" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
+#: onsite's components, as its file lists them, and by their rows in the record
+PROTOCOLS = T.listed("onsite_full")
+NAMES = {T.ROWS[c]: c for c in PROTOCOLS}
 KEY = "0" * 128
 PIN = {p["protocol"]: p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"]}
 WIPE_PIN = PIN["wipe"]
@@ -44,7 +47,7 @@ BINDINGS = {
     "challenger": {"pouw": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}},
     "memory-challenger": {"pous": {"address": "192.0.2.1:7000"}, "wipe": {"address": "192.0.2.1:7001"}},
     "bandwidth-verifier": {"bandwidth": {"host": "192.0.2.2"}},
-    "network-certifier": {"certifier": {"gate": "user@gate-1", "peer": "peer-1"}},
+    "network-attester": {"network-attester": {"gate": "user@gate-1", "peer": "peer-1"}},
 }
 #: `BINDINGS` with the address PoUB's runtime parties read (`runtime`)
 RUNTIME_BINDINGS = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}}}
@@ -68,8 +71,8 @@ VARIABLES = {
                  f"--bw-trusted-sha512 {PIN['bandwidth']} --bw-host 192.0.2.2",
     "BANDWIDTH_CMD": '"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"',
 }
-KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "network-certifier.certifier.gate",
-        "network-certifier.certifier.peer"]
+KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "network-attester.network-attester.gate",
+        "network-attester.network-attester.peer"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
 RUNTIME = {
     ("memory-challenger", "pous"): ("verity/pous/memory-challenger", "memory-challenger", "auditor-host",
@@ -124,7 +127,7 @@ def test_the_configuration_is_the_tables_byte_for_byte():
     assert R.load(CONFIG, REG)["params"]["verity/pous/p2/v4/run"] == {"challenges": 320}
 
 
-@pytest.mark.parametrize("demo", sorted(set(T.DEMOS) - {"onsite_full"}))
+@pytest.mark.parametrize("demo", sorted(set(T.HEADERS) - {"onsite_full"}))
 def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(demo):
     """Each other application's file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
     (or onsite's smaller set) is its own id; only the subprotocols it lists have parameters and pins."""
@@ -133,7 +136,7 @@ def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(dem
     assert K.render(cfg, T.HEADERS[demo]) == path.read_text()
     assert K.composite(cfg["protocols"], REG.components) in {**K.COMPOSITES, **K.UNACCEPTED}
     assert K.composite(cfg["protocols"], REG.components) != T.ONSITE
-    assert {p["protocol"] for p in cfg["pin"]} == {"pous", "wipe"} & set(T.DEMOS[demo])
+    assert {p["protocol"] for p in cfg["pin"]} == {"pous", "wipe"} & set(T.listed(demo))
 
 
 def test_the_configuration_states_no_host_or_address():
@@ -214,19 +217,18 @@ def test_the_registration_writes_the_logs_configuration_item_of_the_runs_hash(tm
 
 def test_the_parties_are_the_manifests_names_and_onsite_is_the_product():
     cfg = R.load(CONFIG, REG)
-    assert cfg["protocols"] == list(T.PROTOCOLS)
-    assert {p["name"] for p in cfg["party"]} == {"workers", "firewall", "prover", "challenger", "network-certifier",
+    assert {p["name"] for p in cfg["party"]} == {"workers", "firewall", "prover", "challenger", "network-attester",
                                                  "memory-challenger", "bandwidth-verifier", "verifier"}
-    assert all(REG.components[c].product for c in T.PROTOCOLS)
+    assert all(REG.components[c].product for c in PROTOCOLS)
     assert K.composite(cfg["protocols"], REG.components) == T.ONSITE
-    assert sorted(T.PROTOCOLS) == sorted(K.COMPOSITES[T.ONSITE])
+    assert sorted(PROTOCOLS) == sorted(K.COMPOSITES[T.ONSITE])
 
 
 def test_the_attester_and_the_policy_are_declared_from_their_manifests_whole():
-    attester, policy = REG.components["certifier"], REG.components["inference-only"]
+    attester, policy = REG.components["network-attester"], REG.components["inference-only"]
     assert (attester.id, attester.parties, attester.channels) == (NC.ID, NC.MANIFEST.parties, NC.MANIFEST.channels)
     assert (policy.id, policy.parties, policy.channels) == (IO.ID, IO.MANIFEST.parties, IO.MANIFEST.channels)
-    assert list(REG.parties["certifier"]) == [NC.WORKERS, NC.NETWORK_ATTESTER, NC.VERIFIER]
+    assert list(REG.parties["network-attester"]) == [NC.WORKERS, NC.NETWORK_ATTESTER, NC.VERIFIER]
     assert list(REG.parties["inference-only"]) == [IO.VERIFIER]
     cfg = R.load(CONFIG, REG)
     sent = {(c["from"], c["to"]): c["messages"] for c in cfg["channel"]}
@@ -243,13 +245,13 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert len(got["channel"]) == len(cfg["channel"]) == 13
     assert got["dry"] == [{"configuration": K.digest(cfg), "parties": 8, "channels": 13, "entries": 21, "unbound": []}]
     pieces = {(x["party"], e["component"]) for x in got["plan"] for e in x["entries"]}
-    assert {c for _, c in pieces} == {*T.PROTOCOLS, T.SERVED_WINDOW}
+    assert {c for _, c in pieces} == {*PROTOCOLS, T.SERVED_WINDOW}
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
     assert all(hooks[k] == VARIABLES[k] for k in ("WIPE_CMD", "POUS_CMD", "BANDWIDTH_CMD"))
     assert " ".join(e["hooks"]["POUS_ARGS"] for x in got["plan"] for e in x["entries"]
                     if "POUS_ARGS" in e["hooks"]) == VARIABLES["POUS_ARGS"]
     assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
-            if "SERVE_ARGS" in e["hooks"]} == {"certifier": T.ID_FORM}
+            if "SERVE_ARGS" in e["hooks"]} == {"network-attester": T.ID_FORM}
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
     assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1") and "PP_CHALLENGER" not in hooks
     assert hooks["DEVELOPMENT"] == "1"
@@ -312,7 +314,7 @@ def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
     rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
     assert rc == 0 and [x["party"] for x in got["plan"]] == ["workers", "firewall", "prover"]
     assert [e["component"] for e in got["plan"][0]["entries"]] == [T.SERVED_WINDOW, "sampled-proofs", "pouw",
-                                                                   "certifier"]
+                                                                   "network-attester"]
 
 
 def test_the_runners_variables_and_the_bindings_keys_are_these():
@@ -322,14 +324,14 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(KEYS) == UNBOUND
     unbound = T.variables(cfg, {})
     assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS"} | set(deployed)
-    assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>' "
-                                               "--peer '<network-certifier.certifier.peer>'")
+    assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-attester.network-attester.gate>' "
+                                               "--peer '<network-attester.network-attester.peer>'")
     assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
 
 
 def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one(tmp_path, capsys):
     cfg = R.load(CONFIG, REG)
-    side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_ATTESTER]
+    side, device = REG.parties["network-attester"][NC.WORKERS], REG.parties["network-attester"][NC.NETWORK_ATTESTER]
     assert (side.runs, side.scripts, side.reaches, side.binds) == (T.SERVED_WINDOW, (T.ATTESTER_PIECE,),
                                                                     NC.NETWORK_ATTESTER, ("gate", "peer"))
     assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD",
@@ -344,7 +346,7 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
                if e.runs == T.SERVED_WINDOW)
     rc, got, _ = dry(capsys, "--bindings", bindings(tmp_path))
     plan = {x["party"]: {e["component"]: e for e in x["entries"]} for x in got["plan"]}
-    mine, its = plan[NC.WORKERS]["certifier"], plan[NC.NETWORK_ATTESTER]["certifier"]
+    mine, its = plan[NC.WORKERS]["network-attester"], plan[NC.NETWORK_ATTESTER]["network-attester"]
     assert rc == 0 and (mine["runs"], mine["reaches"], mine["scripts"]) == (T.SERVED_WINDOW, NC.NETWORK_ATTESTER,
                                                                             [T.ATTESTER_PIECE])
     assert (its["runs"], its["reaches"], its["scripts"], its["hooks"], its["unbound"]) == (T.GATE, NC.NETWORK_ATTESTER,
@@ -599,7 +601,7 @@ def test_the_workloads_piece_hands_the_runner_the_nodes_settings(tmp_path, capsy
 def test_serve_openais_flags_are_every_listed_pieces():
     cfg = R.load(CONFIG, REG)
     assert T.variables(cfg, BINDINGS)["SERVE_ARGS"] == T.ID_FORM == "--protocol ids --id-payload 503"
-    without = {**cfg, "protocols": [c for c in cfg["protocols"] if c != "certifier"]}
+    without = {**cfg, "protocols": [c for c in cfg["protocols"] if c != "network-attester"]}
     assert "SERVE_ARGS" not in T.variables(without, BINDINGS)
     # the runner's own preflight of the front reads the id form's flag as a word of SERVE_ARGS
     assert " --protocol ids " in f" {T.variables(cfg, BINDINGS)['SERVE_ARGS']} "
@@ -668,7 +670,7 @@ def written(*components: str, composed: bool = False) -> str:
 
 
 #: the components of the rows `published` writes by default
-BASE = ("certifier", "pous", "pouw", "sampled-proofs", "wipe")
+BASE = ("network-attester", "pous", "pouw", "sampled-proofs", "wipe")
 #: a row's ``answer_from`` that is not `AS_WRITTEN`, which the serving node may write all the same: served_verdicts.py's
 #: ``LEAN_HERE``, and anything else
 NOT_WRITTEN = ["recomputed on this host by the Lean verifier (vstar-recursive sampled check) from the proofs and public "
@@ -686,8 +688,8 @@ def undecided(components: dict) -> dict:
     ({"bandwidth": "accept", "inference-only": "accept"}, "accept", "undecided", 2,
      written(*BASE, "bandwidth", "inference-only", composed=True)),
     ({"bandwidth": "accept", "inference-only": "accept", "communication": "error"}, "reject", "reject", 1,
-     "certifier error"),
-    ({"bandwidth": "accept", "communication": "error", "work": "missing"}, "reject", "reject", 1, "certifier error"),
+     "network-attester error"),
+    ({"bandwidth": "accept", "communication": "error", "work": "missing"}, "reject", "reject", 1, "network-attester error"),
 ])
 def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(tmp_path, capsys, rows, composed,
                                                                               verdict, rc, reason):
@@ -703,13 +705,13 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
     assert {x["party"]: x["refused"] for x in said(out, "PARTY")} == {"verifier": None}
     (line,) = said(out, "VERDICT")
     assert line["verdict"] == verdict and line["block"] == SEAL and line["product"] == T.ONSITE
-    assert line["components"] == undecided({**{c: "accept" for c in T.PROTOCOLS}, "bandwidth": "absent",
+    assert line["components"] == undecided({**{c: "accept" for c in PROTOCOLS}, "bandwidth": "absent",
                                             "inference-only": "absent",
-                                            **{T.RECORD_NAMES[k]: v for k, v in rows.items()}})
+                                            **{NAMES[k]: v for k, v in rows.items()}})
     assert line["coins"] == "simulated" and line["reason"] == reason
     assert line["coins_on"] == {**{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")},
                                 **{c: T.GATE_HOST for c in ("sampled-proofs", "pouw")}}
-    assert line["answer_from"] == {T.RECORD_NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
+    assert line["answer_from"] == {NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
                                    for k in ("integrity", "work", "space", "communication", "wipe", *rows)}
 
 
@@ -721,7 +723,7 @@ def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp
     published(state, {"bandwidth": "accept", "inference-only": "accept"}, source=source)
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
     (line,) = said(capsys.readouterr().out, "VERDICT")
-    assert (line["verdict"], line["reason"]) == ("undecided", written(*T.PROTOCOLS, composed=True))
+    assert (line["verdict"], line["reason"]) == ("undecided", written(*PROTOCOLS, composed=True))
     assert set(line["components"].values()) == {"undecided"} and set(line["answer_from"].values()) == {source}
 
 
@@ -739,7 +741,7 @@ NETWORK = ROOT / "applications" / "onsite_network.toml"
 NETWORK_PIN = next(p["key-sha512"] for p in tomllib.loads(NETWORK.read_text())["pin"] if p["protocol"] == "wipe")
 NETWORK_BINDINGS = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
                                                    "command": "ssh auditor-1"}},
-                    "network-certifier": {"certifier": {"gate": "user@gate-1", "peer": "peer-1"}}}
+                    "network-attester": {"network-attester": {"gate": "user@gate-1", "peer": "peer-1"}}}
 
 
 def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party_of_it_raises(tmp_path, monkeypatch):
@@ -1015,9 +1017,9 @@ def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_ca
 
 
 @pytest.mark.parametrize("rows, composed, source, verdict, reason", [
-    ({}, "accept", None, "undecided", written("certifier", "sampled-proofs", "wipe", composed=True)),
-    ({}, "accept", NOT_WRITTEN[0], "undecided", written("certifier", "sampled-proofs", "wipe", composed=True)),
-    ({"communication": "reject"}, "reject", None, "reject", "certifier reject"),
+    ({}, "accept", None, "undecided", written("network-attester", "sampled-proofs", "wipe", composed=True)),
+    ({}, "accept", NOT_WRITTEN[0], "undecided", written("network-attester", "sampled-proofs", "wipe", composed=True)),
+    ({"communication": "reject"}, "reject", None, "reject", "network-attester reject"),
 ])
 def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_verdict(tmp_path, rows, composed,
                                                                                       source, verdict, reason):
@@ -1029,8 +1031,8 @@ def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_v
 
 
 @pytest.mark.parametrize("rows, composed, reason", [
-    ({}, "accept", written("certifier", "sampled-proofs", "wipe", composed=True)),
-    ({"communication": "reject"}, "reject", "certifier reject"),
+    ({}, "accept", written("network-attester", "sampled-proofs", "wipe", composed=True)),
+    ({"communication": "reject"}, "reject", "network-attester reject"),
 ])
 def test_a_set_no_lean_verifier_takes_is_undecided_under_its_own_id(tmp_path, capsys, rows, composed, reason):
     state = tmp_path / "state"

@@ -572,6 +572,6 @@ def arguments(shape: Shape, inst: Instance, route: Sequence[int], sort: Sequence
 
 
 __all__ = ["INPUT_IDS", "Instance", "IoTieIdsChain", "IoTieIdsFirst", "IoTieIdsKeys", "IoTieIdsLink", "IoTieIdsSlots",
-           "IoTieRequestIds", "Map", "Row", "SLOT", "Shape", "arguments", "bucket_map", "commit", "commit_rows", "entry",
+           "IoTieRequestIds", "Map", "Row", "SLOT", "Shape", "arguments", "bucket_map", "commit_rows", "entry",
            "fields_of", "instance", "matches", "port_reads", "reads_open", "reference", "root", "route_switches", "scan",
            "slots_arguments", "sort_switches", "unit_reference"]

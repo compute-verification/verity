@@ -13,16 +13,15 @@ An input is a request, by its key (``key`` reads it from vLLM's request id: on a
 (`register`), the client's X-Request-Id (`request_key`)), and an output a token. What each vLLM point
 emits, and what it asks:
 
-- ``add_request``: `InputArrived`, with the request's count of prompt ids and the first line and headers the server
-  gave for it (`Hook.arrive`); the request goes into the scheduler once every
+- ``add_request``: `InputArrived`, with the request's count of prompt ids and the first line, headers and user the
+  server gave for it (`Hook.arrive`); the request goes into the scheduler once every
   gate a scheme filed (`StartOnBoundary`) starts it (`Exchange.start`), and one still held when it is finished from
   outside never reaches the scheduler, which is never handed its id;
 - before each step, on each pass of the engine core's input loop: every gate is asked (`Exchange.ready`, with the
   scheduler's running, waiting and finished requests as `StepDue`) and holds the step while one says no;
 - ``schedule()``: `StepBegan`, every call one step numbered from 0, with its requests, its tokens less draft tokens (0
   for a step that scheduled none) and the requests left waiting;
-- ``update_from_output``: `OutputReleased` for each new token, `OutputsComplete` for each request that finished, then
-  `StepEnded`;
+- ``update_from_output``: `OutputsComplete` for each request that finished, then `StepEnded`;
 - ``finish_requests``: `OutputsComplete` for each request it ends; where vLLM names none, every gate is opened first.
 """
 from __future__ import annotations
@@ -76,17 +75,16 @@ class Hook(scheduler_step.Part):
         self.began: collections.deque[int] = collections.deque()    # steps scheduled whose outputs haven't come
         self.held: dict[str, str] = {}                      # vLLM's request id -> its input, until a gate starts it
         self.live: dict[str, str] = {}                      # vLLM's request id -> its input, in the scheduler
-        self.sent: dict[str, int] = {}                      # vLLM's request id -> its tokens released so far
-        self.heads: dict[str, tuple[str, Mapping[str, str]]] = {}   # input -> its first line and headers, until added
+        self.heads: dict[str, tuple[str, Mapping[str, str], str | None]] = {}   # input -> its first line, headers and user, until added
         self._removal: scheduler_step.Removal | None = None
 
     def around_add_request(self, call: Callable[..., Any], request: Any, *a: Any, **kw: Any) -> Any:
         rid = request.request_id
         input_ = self.held[rid] = self.key(rid)
-        first_line, headers = self.heads.pop(input_, ("", {}))
+        first_line, headers, user = self.heads.pop(input_, ("", {}, None))
         if self.ex.wants("steps"):
             n = int(getattr(request, "num_prompt_tokens", 0) or len(getattr(request, "prompt_token_ids", None) or ()))
-            self.ex.emit(H.InputArrived(input_, n, self.step, headers, first_line))
+            self.ex.emit(H.InputArrived(input_, n, self.step, headers, first_line, user))
 
         def start() -> None:
             if self.held.pop(rid, None) is not None:
@@ -111,16 +109,10 @@ class Hook(scheduler_step.Part):
         wants = self.ex.wants("steps")
         for batch in (outs or {}).values():
             for o in getattr(batch, "outputs", None) or ():
-                rid, k = o.request_id, len(o.new_token_ids or ())
+                rid = o.request_id
                 input_ = self.live.get(rid) or self.key(rid)
-                index = self.sent.get(rid, 0)
-                self.sent[rid] = index + k
-                if wants:
-                    for j in range(k):
-                        self.ex.emit(H.OutputReleased(input_, index + j, step))
                 if o.finish_reason is not None:
                     self.live.pop(rid, None)
-                    self.sent.pop(rid, None)
                     if wants:
                         self.ex.emit(H.OutputsComplete(input_, step))
         if wants:
@@ -134,12 +126,10 @@ class Hook(scheduler_step.Part):
             ended = [*self.held.values(), *self.live.values()]
             self.held.clear()
             self.live.clear()
-            self.sent.clear()
             rest = None
         else:
             rest, ended = [], []
             for rid in (request_ids,) if isinstance(request_ids, str) else request_ids:
-                self.sent.pop(rid, None)
                 if rid in self.held:
                     ended.append(self.held.pop(rid))
                     continue
@@ -151,10 +141,10 @@ class Hook(scheduler_step.Part):
                 self.ex.emit(H.OutputsComplete(input_, self.step))
         return call(rest, finished_status, *a, **kw)
 
-    def arrive(self, input: str, first_line: str, headers: Mapping[str, str]) -> None:
-        """The first line and headers (names lower-cased) input ``input`` came with, for its `InputArrived`: the
+    def arrive(self, input: str, first_line: str, headers: Mapping[str, str], user: str | None = None) -> None:
+        """The first line, headers (names lower-cased) and user input ``input`` came with, for its `InputArrived`: the
         server's, called before the input reaches the scheduler."""
-        self.heads[input] = (first_line, headers)
+        self.heads[input] = (first_line, headers, user)
 
     # --- the engine core's gate (`core_gate.Gate`) ----------------------------------------------------------------------
 

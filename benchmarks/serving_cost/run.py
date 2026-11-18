@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from benchmarks.prod_repro import priced  # noqa: E402
+from verity.device import gpu_card_called  # noqa: E402
 from verity_bench import kit, settings  # noqa: E402
 from verity_bench.kit_report import RUN_ID  # noqa: E402
 
@@ -270,9 +271,9 @@ def captured(run: str | None, by: str) -> tuple[Path, dict, dict]:
         refuse(by, f"capture run {run}'s fingerprint names no member parts (`served` {fp.get('served')!r}, `card` "
                    f"{fp.get('card')!r}); the record: {contract('capture')}")
     try:
-        kit.card_named_short(fp["card"])
-    except SystemExit as e:
-        refuse(by, f"capture run {run}'s fingerprint's `card`: {e}")
+        gpu_card_called(fp["card"], directory=kit.cards_directory())
+    except KeyError as e:
+        refuse(by, f"capture run {run}'s fingerprint's `card`: {e.args[0]}")
     arms: dict[str, int] = {}
     for x in sorted((d / "out").glob("*.*")):
         if (m := LIFETIME.fullmatch(x.name)) and (x / "meta.json").is_file():

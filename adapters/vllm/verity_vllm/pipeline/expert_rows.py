@@ -394,7 +394,7 @@ def _stack(slices: Callable, x: Row, store: Any, weights: Callable, arrive: int,
 def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[str, int] | None, slices: Callable,
                   committer: Mapping[str, Any]) -> dict[str, Any]:
     """Each table the window's reads read, committed from the weights served (each layer's stack as ``slices`` reads it,
-    `serving_rows._slices`; `table_words`) as core's ``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows with its rows
+    `serving_rows._slices`; `table_words`) as core's ``registered_value.Registered`` of ``hm96-sha512/row-seg/v1`` rows with its rows
     held, under the salts of ``committer``'s registration at the ``program`` it names (`committer`), by parameter.  Refused for
     a table the registration holds no salts for, and, publishing none of them, where any table's root is not its registered
     one (`_registered`)."""
@@ -449,7 +449,7 @@ def _registered(got: Mapping[str, Any], committer: Mapping[str, Any]) -> Mapping
 
 def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable[[], np.ndarray]) -> Any:
     """The rank's ``(B, K, N)`` weight ``label`` in (B, N, K) order (`bnk_param`, `bnk_words` of ``field()``, its elements as
-    served), committed as core's ``registered.Registered`` of ``hm96-sha512/row/v2`` rows with its rows held, under
+    served), committed as core's ``registered_value.Registered`` of ``hm96-sha512/row/v2`` rows with its rows held, under
     the salts of ``committer``'s registration at the program it names, once a process: a value this process committed is
     handed back as held and ``field`` is not called.  Refused for a parameter the registration holds no salts for, and for one
     whose root is not the registered one (`_registered`), which is then not held."""

@@ -20,6 +20,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from verity.circuits.codec import canonical_json
+from verity.commitments import domains as DM
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier import service as S
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS
@@ -176,7 +177,7 @@ def test_the_stop_streams_answer_carries_its_audit_records_complete(tmp_path, mo
     r = _resume(first)
     got, _ = _audit(first)
     a = SA.answer_of(r, got)
-    assert (a["verdict"], a["reason"], a["protocol"]) == ("accept", None, SA.R.PROTOCOL)
+    assert (a["verdict"], a["reason"], a["protocol"]) == ("accept", None, DM.ONE_STAGE_PROTOCOL)
     assert a["commitment"] == first["stop"]["registration"]
     units, others = sorted(first["stop"]["units"]), set(a["public"]) - {"bound", "complete", "per_template"}
     assert len(others) == 2 and "proved" in others and all(a["public"][k] == units for k in others)
@@ -196,7 +197,7 @@ def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
     r = NS(stream=NS(delta=0.5), docket=NS(digest="ab" * 64))
     entry = {"accepted": False, "checks": {"proved": {"ok": True}},
              "verdicts": {SA.LEAN: {"accepted": True}, SA.BOUNDARY_AUDIT: {"accepted": False}, SA.STOP_RULE: {"accepted": None}}}
-    reject = {"commitment": "ab" * 64, "profile": None, "protocol": SA.R.PROTOCOL, "public": None, "verdict": "reject"}
+    reject = {"commitment": "ab" * 64, "profile": None, "protocol": DM.ONE_STAGE_PROTOCOL, "public": None, "verdict": "reject"}
     assert SA.answer_of(r, {"accepted": False, "audit": entry}) == {**reject, "reason": f"verdicts: {SA.BOUNDARY_AUDIT}"}
     none = {**reject, "reason": "the stop stream refused the outcome"}
     assert SA.answer_of(r, {"accepted": False, "refused": {"codes": ["sessions"]}}) == none

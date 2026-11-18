@@ -32,7 +32,7 @@ root (``python -m verity.protocols.resource_accounting.memory.pous.prover.served
   ``hm96-sha512/row/v2`` (``tok`` in `Shape.tok_schema`, row/v2 by default; ``EmbeddingRead_v2``'s
   ``hm96-sha512/row-seg/v1`` with ``tok_rows="token"``), under the
   domain the verifier derives (``registered.registered_entries``, the value held across windows):
-  ``registered.domain(program_digest(program), name, words, leaves, word_bits)``, the word width the parameter's leaf
+  ``registered_value.domain(program_digest(program), name, words, leaves, word_bits)``, the word width the parameter's leaf
   width rounded up to 16 or 32 bits (an f32 scale read as one 32-bit leaf is 1 word of 32 bits, the same row bytes; a
   program named by its digest alone reads each tensor at `Tensor.word_bits`, 16: a Boolean program's one-bit leaves, as
   the served step's Program reads them). Row
@@ -69,6 +69,7 @@ from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.commitments import registered_value as RV
 
 FORMAT = "verity/seeded-weights/v1"
 MANIFEST = "verity/seeded-weights/manifest/v1"
@@ -109,6 +110,7 @@ PHASE1 = Shape("cmp92-phase1-h128-l2", 128, 2, 2, 64, 2, 512, 256, 32, 128)
 #: the smallest shape the tests commit whole
 TINY = Shape("tiny-h32-l1", 32, 1, 2, 16, 1, 64, 256, 8, 16)
 SHAPES = {s.name: s for s in (H200, PHASE1, TINY)}
+#: each shape's short name; ``h200`` names the model shape sized to fit that card, not a read of its card file
 ALIASES = {"h200": H200, "phase1": PHASE1, "tiny": TINY}
 
 
@@ -359,17 +361,17 @@ def salts(path: str | Path, name: str, first: int, n: int) -> bytes:
 def domain(t: Tensor, r: Reader) -> CommitmentDomain:
     """`t`'s domain under reader `r`, held across windows (no window root)."""
     b = r.word_bits(t.name)
-    return REG.domain(r.digest, t.name, registered_words(t, b), t.leaves, b)
+    return RV.domain(r.digest, t.name, registered_words(t, b), t.leaves, b)
 
 
-def commit(shape: Shape, seed: bytes, salts_at: str | Path, program: Program | str | Reader, name: str) -> REG.Registered:
+def commit(shape: Shape, seed: bytes, salts_at: str | Path, program: Program | str | Reader, name: str) -> RV.Registered:
     """Tensor `name` committed whole by core's ``Registered.commit`` (small shapes; `root` is the same root in parallel)."""
     i, t = next((i, t) for i, t in enumerate(tensors(shape)) if t.name == name)
     r = reader(shape, program)
     b = r.word_bits(name)
     rows = np.frombuffer(tensor_bytes(shape, seed, name), "<u2" if b == 16 else "<u4")
     s = salts(salts_at, name, 0, t.leaves)
-    return REG.Registered.commit(r.digest, name, rows.reshape(t.leaves, registered_words(t, b)).tolist(),
+    return RV.Registered.commit(r.digest, name, rows.reshape(t.leaves, registered_words(t, b)).tolist(),
                                  [s[k * _INST.salt_bytes:(k + 1) * _INST.salt_bytes] for k in range(t.leaves)],
                                  word_bits=b, schema=t.schema)
 
@@ -380,7 +382,7 @@ def chunk_bits(t: Tensor, chunk_bytes: int = CHUNK_BYTES) -> int:
 
 
 def _row_digests(t: Tensor, data: bytes) -> bytes:
-    """Each row's ``x`` (core's ``registered.row_digest``: a bit row's digest is its bytes', whatever its leaves' width)."""
+    """Each row's ``x`` (core's ``registered_value.row_digest``: a bit row's digest is its bytes', whatever its leaves' width)."""
     rb, out = 2 * t.words, bytearray()
     if t.schema == REG.SCHEMA_SEG:
         for k in range(len(data) // rb):
@@ -476,7 +478,7 @@ def entry(shape: Shape, program: Program | str | Reader, name: str, value_root: 
     t, r = tensor(shape, name), reader(shape, program)
     b = r.word_bits(name)
     return {"value": name, "root": value_root.hex(), "leaves": t.leaves, "words": registered_words(t, b),
-            **REG.width_entry(b), "domain": domain(t, r).domain_id.hex()}
+            **RV.width_entry(b), "domain": domain(t, r).domain_id.hex()}
 
 
 def entries(shape: Shape, program: Program | str | Reader, roots: dict[str, bytes]) -> list[dict[str, Any]]:

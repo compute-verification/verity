@@ -137,9 +137,9 @@ theorem forkC_simAt_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [No
 
 /-- **The live fork after `j` coins is the deployed runs' fork at round `j`**: two runs at coins sharing their first
 `j` (`Claims.forkCoins`). -/
-theorem forkC_liveStrat {nMax J mPts : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
-    (w : Claims.Msg → Wire nMax J mPts) (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) (ω : Ω) (F : LiveOutJ J mPts → LiveOutJ J mPts → ℝ) (j : Fin (N x + 2)) :
+theorem forkC_liveStrat {nMax J mPts : ℕ} (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray)
+    (w : Hash.Msg → Wire nMax J mPts) (H : Hash.Msg → Hash.Msg) {Ω : Type} (P : Claims.Prover Ω)
+    (x : Hash.Msg) (ω : Ω) (F : LiveOutJ J mPts → LiveOutJ J mPts → ℝ) (j : Fin (N x + 2)) :
     forkC F j.val (liveSession dg J mPts (N x))
         (Claims.Bridge.Live.liveStrat (fun _ => J) (fun _ => mPts) N dg w H P x ω) =
       Claims.Ex fun rr : (Fin (N x + 2) → LCoin nMax) × (Fin (N x + 2) → LCoin nMax) =>
@@ -198,7 +198,7 @@ abbrev PlainHDec {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)) : Prop :=
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)) : Prop :=
   ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
     DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
       (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
@@ -215,7 +215,7 @@ noncomputable def plainSimAt {spec : SessionSpec} {st : Stmt} (L : Layout st) (m
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : PlainHDec L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x) :=
   simAt execArith Refine.H512 Refine.enc512 Refine.leaf512 (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _
@@ -231,7 +231,7 @@ noncomputable def plainAdvAt {spec : SessionSpec} {st : Stmt} (L : Layout st) (m
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : PlainHDec L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (r : Fin 2)
     (ℓ : Fin (l₀ :: l₁ :: rest).length) (u : plainTape x) : ℝ :=
@@ -245,7 +245,7 @@ def PlainAlignQ {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : PlainHDec L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (r : Fin 2)
     (ℓ : Fin (l₀ :: l₁ :: rest).length) (j : ℕ) (u : plainTape x) : Prop :=
@@ -257,7 +257,7 @@ def PlainAlignQ {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l
 
 /-- **The live fork event at the concrete simulator**: the live outcomes at live coins `r₁` and `r₂` decode, at the
 verdict at the sample, to outputs with `ForkEvL` at rep `r`'s level `ℓ + 1`. -/
-def PlainLiveFork {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
+def PlainLiveFork {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (sch : FlockSoundness.Accounting.Schedule) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x)
@@ -273,7 +273,7 @@ def PlainLiveFork {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) 
 
 /-- **The live fork event gives `P`'s two accepting runs a collision**: wherever `PlainLiveFork` holds and `V false`
 accepts `P` at `plainΦ x` at both live coins, the verifier's calls in the two runs collide. -/
-def PlainForkQ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
+def PlainForkQ {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (sch : FlockSoundness.Accounting.Schedule) : Prop :=
@@ -289,7 +289,7 @@ def PlainForkQ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {sp
 hidden under hm96 leaves (`plainOpnH`, `plain_hdecHAt`), at each tape the fork at rep `r`'s level-`ℓ + 1` table node
 against the simulated strategy after `Commit` is at most the fork after `plainJ r ℓ` coins of `ForkEvL`
 (`PlainAlignQ`). -/
-def PlainForkAlign (x : Claims.Msg) : Prop :=
+def PlainForkAlign (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (h : tables false x = [(spec, st)]) (d : Json) (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -312,7 +312,7 @@ def PlainForkAlign (x : Claims.Msg) : Prop :=
 the plain decoders' openings where the outputs are public (`plainOpn`) and where they are hidden under hm96 leaves
 (`plainOpnH`), the live fork event at the concrete simulator gives `P`'s two accepting runs a collision
 (`PlainForkQ`). -/
-def PlainForkClash (x : Claims.Msg) : Prop :=
+def PlainForkClash (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (_ : tables false x = [(spec, st)]) (d : Json) (_ : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -333,7 +333,7 @@ open Classical in
 /-- **The fork advantage from the alignment and the live fork's pair**: `plainAdv` is at most the simulated fork at the
 plain fork round `plainJ r ℓ`, where at each tape the fork at the slot's node is at most the fork after `plainJ r ℓ`
 coins of `ForkEvL` and the live fork event gives the deployed runs' pair event. -/
-theorem plainAdv_le_of {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem plainAdv_le_of {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) (hL : plainN x + 2 = (V false).k x) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -369,7 +369,7 @@ theorem plainAdv_le_of {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
 
 /-- **A live fork event's pair**: where `P'` aborts on rejected runs, the live fork event gives two accepting runs,
 which collide by `PlainForkQ`. -/
-theorem pairEv_of_forkQ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
+theorem pairEv_of_forkQ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)} {sch : FlockSoundness.Accounting.Schedule}
     {C : Fin (wordLen false x) → List 𝔽}
@@ -385,7 +385,7 @@ theorem pairEv_of_forkQ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω 
 
 /-- **The fork bound from the alignment and the clash**: `PlainSimForkLe` from `PlainForkAlign` and `PlainForkClash`,
 by `plainAdv_le_of` at the abort (`plainSimAbortAt`). -/
-theorem plainSimForkLe_of {x : Claims.Msg} (ha : PlainForkAlign x) (hc : PlainForkClash x) : PlainSimForkLe x := by
+theorem plainSimForkLe_of {x : Hash.Msg} (ha : PlainForkAlign x) (hc : PlainForkClash x) : PlainSimForkLe x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω _ _ P ω
   have hL := plainN_add hset
   have hab := fun C : Fin (wordLen false x) → List 𝔽 =>
@@ -409,7 +409,7 @@ abbrev PlainHDecK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : L
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)) : Prop :=
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)) : Prop :=
   ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
     DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
       (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
@@ -426,7 +426,7 @@ noncomputable def plainSimAtK (keep : Bool → Bool) {spec : SessionSpec} {st : 
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : PlainHDecK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x) :=
   simAt execArith Refine.H512 Refine.enc512 Refine.leaf512 (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _
@@ -442,7 +442,7 @@ noncomputable def plainAdvAtK (keep : Bool → Bool) {spec : SessionSpec} {st : 
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : PlainHDecK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (r : Fin 2)
     (ℓ : Fin (l₀ :: l₁ :: rest).length) (u : plainTape x) : ℝ :=
@@ -456,7 +456,7 @@ def PlainAlignQK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : La
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : PlainHDecK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (r : Fin 2)
     (ℓ : Fin (l₀ :: l₁ :: rest).length) (j : ℕ) (u : plainTape x) : Prop :=
@@ -468,7 +468,7 @@ def PlainAlignQK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : La
 
 /-- **The live fork event at the concrete simulator, at `keep`** (`PlainLiveFork` at `plainVerdictAtK keep` and
 `plainSimK keep`). -/
-def PlainLiveForkK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+def PlainLiveForkK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
     {spec : SessionSpec} (st : Stmt) (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs)
     (d : Json) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (sch : FlockSoundness.Accounting.Schedule) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x)
@@ -483,7 +483,7 @@ def PlainLiveForkK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x 
       (plainSimK keep P x spec st) x (ω, u) r₂)
 
 /-- **The live fork event gives `P`'s two accepting runs of `VK keep` a collision** (`PlainForkQ` at `keep`). -/
-def PlainForkQK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec}
+def PlainForkQK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) {spec : SessionSpec}
     (st : Stmt) (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (sch : FlockSoundness.Accounting.Schedule) : Prop :=
@@ -496,7 +496,7 @@ def PlainForkQK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : C
 
 /-- **The simulated fork is aligned with the plain fork round, at `keep`** (`PlainForkAlign` at `PlainAlignQK keep`,
 with the decoders `plain_hdecAtK keep` and `plain_hdecHAtK keep`). -/
-def PlainForkAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
+def PlainForkAlignK (keep : Bool → Bool) (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (h : tables false x = [(spec, st)]) (d : Json) (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -516,7 +516,7 @@ def PlainForkAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
         C r ℓ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val u)
 
 /-- **The live fork event's collision, at `keep`** (`PlainForkClash` at `PlainForkQK keep`). -/
-def PlainForkClashK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
+def PlainForkClashK (keep : Bool → Bool) (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (_ : tables false x = [(spec, st)]) (d : Json) (_ : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -536,7 +536,7 @@ def PlainForkClashK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
 open Classical in
 /-- **The fork advantage from the alignment and the live fork's pair, at `keep`** (`plainAdv_le_of`'s proof at
 `plainSimK keep`). -/
-theorem plainAdv_le_ofK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem plainAdv_le_ofK (keep : Bool → Bool) {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) (hL : plainN x + 2 = (V false).k x) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -571,7 +571,7 @@ theorem plainAdv_le_ofK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionS
   exact Claims.Ex_mono fun rr => ind_le_ind fun h => hpair u _ _ h
 
 /-- **A live fork event's pair, at `keep`** (`pairEv_of_forkQ` at `PlainSimAbortK keep`). -/
-theorem pairEv_of_forkQK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem pairEv_of_forkQK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {spec : SessionSpec} {st : Stmt} {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs}
     {d : Json} {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
     {sch : FlockSoundness.Accounting.Schedule} {C : Fin (wordLen false x) → List 𝔽}
@@ -587,7 +587,7 @@ theorem pairEv_of_forkQK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover �
 
 /-- **The fork bound from the alignment and the clash, at `keep`**: `PlainSimForkLeK keep` from `PlainForkAlignK keep`
 and `PlainForkClashK keep`, by `plainAdv_le_ofK` at the abort (`plainSimAbortAtK`). -/
-theorem plainSimForkLe_ofK (keep : Bool → Bool) {x : Claims.Msg} (ha : PlainForkAlignK keep x)
+theorem plainSimForkLe_ofK (keep : Bool → Bool) {x : Hash.Msg} (ha : PlainForkAlignK keep x)
     (hc : PlainForkClashK keep x) : PlainSimForkLeK keep x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω _ _ P ω
   have hL := plainN_add hset

@@ -65,7 +65,7 @@ open Flock FlockDeploy
 
 namespace FlockComplete
 
-variable (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg)
+variable (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg)
 
 /-- **A bind's bodies in `PV`**: the first part's, then, where it returns, the rest's from the next index. -/
 theorem pv_sim_bind {α β : Type} (x : PV α) (f : α → PV β) (i : ℕ) :
@@ -89,7 +89,7 @@ theorem pv_sim_quiet {α β : Type} {x : PV α} {f : α → PV β} {i : ℕ} {a 
   rw [pv_sim_bind, hx]
   simp
 
-theorem pv_sim_head {α β : Type} {x : PV α} {f : α → PV β} {i : ℕ} {m : Claims.Msg}
+theorem pv_sim_head {α β : Type} {x : PV α} {f : α → PV β} {i : ℕ} {m : Hash.Msg}
     (hx : ∃ bs, (x.run.sim H resp i).1 = m :: bs) : ∃ bs', ((x >>= f).run.sim H resp i).1 = m :: bs' := by
   obtain ⟨bs, hx⟩ := hx
   rw [pv_sim_bind, hx]
@@ -101,7 +101,7 @@ theorem st_sim_quiet {σ α β : Type} {x : StateT σ PV α} {f : α → StateT 
   rw [StateT.run_bind]
   exact pv_sim_quiet H resp hx
 
-theorem st_sim_head {σ α β : Type} {x : StateT σ PV α} {f : α → StateT σ PV β} {s : σ} {i : ℕ} {m : Claims.Msg}
+theorem st_sim_head {σ α β : Type} {x : StateT σ PV α} {f : α → StateT σ PV β} {s : σ} {i : ℕ} {m : Hash.Msg}
     (hx : ∃ bs, ((x.run s).run.sim H resp i).1 = m :: bs) :
     ∃ bs', (((x >>= f).run s).run.sim H resp i).1 = m :: bs' := by
   rw [StateT.run_bind]
@@ -125,7 +125,7 @@ end FlockComplete
 
 namespace FlockComplete
 
-variable (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg)
+variable (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg)
 
 theorem liftTM_pv {α : Type} (x : Transcript.TM α) (t : Transcript) (i : ℕ) :
     ((liftTM x : TMW PV α).run t).run.sim H resp i = ([], x t) := by
@@ -156,7 +156,7 @@ end FlockComplete
 
 namespace FlockComplete
 
-variable (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg)
+variable (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg)
 
 theorem repPZk_pv_head (st : Setup) (sch : Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)

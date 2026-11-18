@@ -62,12 +62,13 @@ from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, Workload, activation_binding, commit_rows, fresh_salts, weight_binding
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as REG
 from verity.commitments import randomness as RND
 from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
 from verity.circuits.codec import canonical_json, program_digest
@@ -309,7 +310,7 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     ``registration.json``), and the verifier's own window and circuit record from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
     win = IF.Window(c, RUN, SAMPLING_DESIGN, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS)
-    win.supply(G)
+    win.supply()
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0}}
@@ -343,7 +344,7 @@ def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_
     it, and tied to W' refuse it: it is chained after W (``R6-previous``), and of its values only the flipped one's root is
     not the one W' registers (``R7-held``)."""
     R, W = written.R, toy.W
-    assert R["format"] == REG.FORMAT_V2 and R["previous"] == REG.digest(W)
+    assert R["format"] == DM.REGISTRATION and R["previous"] == REG.digest(W)
     assert sorted(R["registered"], key=lambda e: e["value"]) == sorted([*_calls(W), *written.own.values()],
                                                                        key=lambda e: e["value"])
     strata, readers = {s["template"]: s for s in R["law"]["strata"]}, {}

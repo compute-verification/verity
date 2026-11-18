@@ -324,7 +324,7 @@ open Claims.ZKMal (dropDom)
 /-- **The PIOP's body `jj`** after the pending bytes `P`: its frames (`piopFr`) and its squeeze, `P` ahead of round
 `0`'s. -/
 def piopBody (P : List UInt8) (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
-    (mk : ℕ → F128) (jj : ℕ) : Claims.Msg :=
+    (mk : ℕ → F128) (jj : ℕ) : Hash.Msg :=
   (if jj = 0 then P else []) ++
     (encs (piopFr m kLog digest cap root lay mk jj) ++ (Frame.sq (piopK jj) (piopN m jj)).enc)
 
@@ -420,7 +420,7 @@ theorem piopBodies_eq (P : List UInt8) {m kLog : ℕ} (digest cap root : ByteArr
   simp only [List.cons_append, List.nil_append, List.append_assoc]
 
 /-- A log's body `|l| + jj` where it is `l`, then the bodies `f 0, …`, then any more. -/
-theorem getElem!_of_toList_mid {L l : Array Claims.Msg} {N : ℕ} {f : ℕ → Claims.Msg} {rest : List Claims.Msg}
+theorem getElem!_of_toList_mid {L l : Array Hash.Msg} {N : ℕ} {f : ℕ → Hash.Msg} {rest : List Hash.Msg}
     (h : L.toList = l.toList ++ (List.range N).map f ++ rest) {jj : ℕ} (hj : jj < N) : L[l.size + jj]! = f jj := by
   have hs : l.size + jj < L.size := by
     have e := congrArg List.length h
@@ -440,7 +440,7 @@ and lincheck have room before the cut's stop `n` and the fold returns at the lin
 holds all `piopNR` of them. -/
 theorem piopCut_bodies_go {coin : ℕ → ℕ → F128} {n : ℕ} {st : _root_.Flock.Setup} {lay : _root_.Flock.Zk.PadLayout}
     {src : FlockComplete.RepSrc} {cap root : ByteArray} {extras : Array _root_.Flock.Claim}
-    {prior : Array (List F128)} {words : List ℕ} {t₀ : _root_.Flock.Transcript} {l : Array Claims.Msg} {v l₃}
+    {prior : Array (List F128)} {words : List ℕ} {t₀ : _root_.Flock.Transcript} {l : Array Hash.Msg} {v l₃}
     (hm : 14 ≤ st.m) (hN : l.size + piopNR st.m st.fold.kLog ≤ n)
     (hf : ∀ zp zc t₁ l₁, ((FlockComplete.zerocheckCut (FlockComplete.asksCut coin n) st.m st.digest cap root lay
         src.masked).run t₀).go l = (.ok ((zp, zc), t₁), l₁) →
@@ -483,7 +483,7 @@ theorem piopCut_bodies_go {coin : ℕ → ℕ → F128} {n : ℕ} {st : _root_.F
 values, the binding `st.digest`, `cap` and `root`, after the pending bytes it started from. -/
 theorem piopCut_bodies {coin : ℕ → ℕ → F128} {n : ℕ} {st : _root_.Flock.Setup} {lay : _root_.Flock.Zk.PadLayout}
     {src : FlockComplete.RepSrc} {cap root : ByteArray} {extras : Array _root_.Flock.Claim}
-    {prior : Array (List F128)} {words : List ℕ} {t₀ : _root_.Flock.Transcript} {l : Array Claims.Msg} {res t₃ l₃}
+    {prior : Array (List F128)} {words : List ℕ} {t₀ : _root_.Flock.Transcript} {l : Array Hash.Msg} {res t₃ l₃}
     (hm : 14 ≤ st.m)
     (h : ((FlockComplete.piopCut (FlockComplete.asksCut coin n) st lay src cap root extras prior words).run t₀).go l =
       (.ok (res, t₃), l₃)) {jj : ℕ} (hj : jj < piopNR st.m st.fold.kLog) :

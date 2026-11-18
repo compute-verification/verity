@@ -186,8 +186,7 @@ class PassEnds(_RunState):
             dom = _zeros(nb, self.device)
             _put(dom, transcript_domain(epoch, count, self.tree_hash).domain_id)
             salts_t = _zeros(HM96_SALT * count, self.device)
-            ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr(), "salts_t": salts_t.data_ptr()},
-                                       keys={"dom_t": dom.data_ptr(), **self.const_keys})
+            ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr()}, keys={"dom_t": dom.data_ptr(), **self.const_keys})
             units = len(cur.matmuls)
             flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0) if cur.flag_rows else torch.zeros(2, dtype=torch.int64)
             aside = lag and self.aside_ends and cur.retain is None and self.device.type == "cuda"
@@ -199,7 +198,7 @@ class PassEnds(_RunState):
             try:
                 for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
                     f()
-                R.Pipeline.tree_leaves(ns, "t", leaves, count, "dom_t")
+                R.Pipeline.hm_level0(ns, "t", leaves, count, "dom_t", salts=salts_t.data_ptr(), salt_bytes=salts_t.numel())
                 R.Pipeline.levels(ns, "t", count)
             finally:
                 K.dev.stream = None
@@ -351,12 +350,17 @@ class PassEnds(_RunState):
         this thread, and hard-linked after."""
         import torch
         d, nb = cast(Path, cur.retain), self.nb
+        sizes = {w: self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
+                 for w, wt in self.weights.items()}
+        kept = all(f"{w}.{p}" in self._weight_files for w in self.weights for p in ("rows.bf16", "tree", "salts"))
+        for w, wt in [] if kept else sorted(self.weights.items()):
+            if (got := _bytes(wt.b["tree_b"][sizes[w] - nb:sizes[w]])) != wt.root:
+                raise ValueError(f"{self.entry}: weight {w}'s tree on the device roots at {got.hex()[:16]}, not its build's "
+                                 f"{wt.root.hex()[:16]}: its tree_b was written after the build, so nothing is retained")
         wd = d / "weights"
         wd.mkdir(mode=0o700, parents=True, exist_ok=True)
         last = write_behind(((d / "leaves", self.leaves[:nb * count], True), (d / "tree_t", tree, True),
                              (d / "salts_t", salts_t, True)), cur.writes)
-        sizes = {w: self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
-                 for w, wt in self.weights.items()}
 
         def weight_files(read: Callable[[int, str], Callable[[], bytes]]) -> dict[str, dict]:
             return {str(w): {"n": wt.n, "k": wt.k, "root": wt.root.hex(), "excluded_b": list(wt.excluded),
@@ -376,7 +380,6 @@ class PassEnds(_RunState):
         def from_first(w: int, part: str) -> Callable[[], bytes]:
             return self._weight_files[f"{w}.{part}"][0].read_bytes
 
-        kept = all(f"{w}.{p}" in self._weight_files for w in self.weights for p in ("rows.bf16", "tree", "salts"))
         weights = None if kept else weight_files(from_device)
         head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
                 "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
