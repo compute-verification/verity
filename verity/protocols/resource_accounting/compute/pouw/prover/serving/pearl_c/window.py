@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import domains as DM
 from verity.commitments import CommitmentDomain
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
@@ -46,8 +47,8 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     rows_domain,
     weight_binding,
 )
+from verity.protocols.resource_accounting.scheme import declared
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
@@ -97,19 +98,25 @@ def coins_of(option: Any, reserved: Any = None) -> dict[str, Any]:
             "closed": option.info().get("challenger"), "manifest_head": session_head(c)}
 
 
+def tables() -> tuple[str, ...]:
+    """W's tables, of A rows, y and B rows: Pearl+'s (`Scheme.tables`)."""
+    from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS
+    return declared(PEARL_PLUS, "tables")
+
+
 def a_value(s: int, c: int) -> str:
     """Round ``s``'s call ``c``'s A rows."""
-    return f"pearl-a/{s}/{c}"
+    return f"{tables()[0]}/{s}/{c}"
 
 
 def y_value(s: int, c: int) -> str:
     """Round ``s``'s call ``c``'s y."""
-    return f"pearl-y/{s}/{c}"
+    return f"{tables()[1]}/{s}/{c}"
 
 
 def b_value(w: int) -> str:
     """Weight ``w``'s B rows."""
-    return f"pearl-b/{w}"
+    return f"{tables()[2]}/{w}"
 
 
 def _hm96(man: Mapping[str, Any], s: int) -> None:
@@ -229,7 +236,7 @@ def record(manifests: Sequence[Mapping[str, Any]], previous: str | None = None,
         raise ValueError(f"W is one epoch's: its passes are under salts {head['salt'][:16]}… and {other[:16]}…")
     at = _rounds(manifests, rounds)
     tied = version == VERSION
-    return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL,
+    return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL,
             "window": {"kind": "served", "entry": head["entry"], "scheme": head["scheme"], "salt": head["salt"],
                        **({"version": VERSION} if tied else {}), **named},
             "registered": [*(e for s, m in zip(at, manifests) for e in entries(m, s)),

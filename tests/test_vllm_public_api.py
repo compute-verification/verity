@@ -268,7 +268,7 @@ PUBLIC = {
     "verity_vllm.commit.scheme": "I7: the Commit path's vllm-v1 commitment scheme: its leaves, folds and roots (pos_leaf, "
                                  "POS_LEAF_TAG), which benchmarks/commitments prices",
     "verity_vllm.commit.step_rows": "I7: the Commit's rows-sha512 scheme over a step's stream: its row and key sizes, domains, "
-                                    "levels and roots (ROW_BYTES, KEY_BYTES, tensor_root, keyed_tensor_root, run_program_digest), "
+                                    "levels and roots (ROW_BYTES, KEY_BYTES, fresh_tensor_salts, tensor_root, run_program_digest), "
                                     "which benchmarks/served_commit times and benchmarks/serve_tax and benchmarks/one_stage "
                                     "commit under",
     "verity_vllm.commit.store_dump": "I7: a GPU-tree committer's committed store on disk, and back as a CPU store that opens and "
@@ -402,7 +402,6 @@ KNOWN = frozenset({
     "verity_vllm.engine.profiles.engine_classes",
     "verity_vllm.engine.served",
     "verity_vllm.engine.vllm_adapter",
-    "verity_vllm.observe.fold.patterns.pouw",
     "verity_vllm.pipeline.advice",
     "verity_vllm.pipeline.advice_windows",
     "verity_vllm.pipeline.build_instances",

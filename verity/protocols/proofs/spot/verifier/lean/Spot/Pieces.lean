@@ -61,6 +61,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   offsets and total, the honest prover's witnesses, and the witness for a named call;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
+* `session_setup`: the sampled proofs' own set-up of one statement and its refusal (`OneStageZk.sessionAt`);
 * `public_ports`: the record's roots by port as v2's one statement's public file names them (`OneStageZk.publicPorts`);
 * `session_registered`: the registered roots the verifiers report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
@@ -1071,6 +1072,27 @@ def fits (j : Json) : V Json := do
     ("inputs", why (OneStageZk.fitsWhy limit circuit pub tables program (given "partition") (given "registered"))),
     ("draw", why (OneStageZk.sampleFitsWhy limit (given "draw")))]
 
+/-- `{"circuit", "public", "tables", "program", "partition", "registered", "draw"}` to `{"refused"}`: the sampled proofs'
+own set-up of one statement (`OneStageZk.sessionAt` under the statement `OneStageZk.STATEMENT`, as `rootBTablesAt`
+reads the verifier's files), null when it sets the session up, else its refusal. The files are hex, the tables
+`[name, hex]` pairs, the program hex, and the registered reads and the sample null for none. -/
+def sessionSetup (j : Json) : V Json := do
+  let some tags := Flock.Tags.find? OneStageZk.STATEMENT | throw s!"the statement {OneStageZk.STATEMENT} is not known"
+  let circuitFile ← Flock.unhex (← Flock.J.str j "circuit" "the session's setup")
+  let publicFile ← Flock.unhex (← Flock.J.str j "public" "the session's setup")
+  let .arr ts := getD j "tables" | throw "tables is not a list"
+  let tables ← ts.toList.mapM fun
+    | .arr #[.str n, .str b] => do pure (n, ← Flock.unhex b)
+    | _ => throw "a table is not its name and its hex"
+  let program ← Flock.unhex (← Flock.J.str j "program" "the session's setup")
+  let given (k : String) : Option Json := match getD j k with
+    | .null => none
+    | x => some x
+  let I : Flock.Witness.Inputs :=
+    { tags, circuitFile, publicFile, count := 1, tables, partition := given "partition", program := some program }
+  let r := do OneStageZk.sessionAt I (← OneStageZk.readsOf (given "registered")) (given "draw")
+  return Json.mkObj [("refused", match r with | .ok _ => Json.null | .error e => Json.str e)]
+
 /-- `{"proofs", "query"}` to `{"circuits": [[template, circuit, header, registered], ...], "reads": [[template, V],
 ...], "tables": [[parameter, entry], ...]}`: a two-stage run's params naming each template's circuit file and its
 statements' reference header and registered reads, in the order the check's template query names the templates
@@ -1100,7 +1122,7 @@ def table : List (String × (Json → V Json)) :=
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
    ("select", select), ("design", design), ("slots", slots),
    ("file_population", FilePart.piece), ("tables_held", OneStageZk.tablesPiece),
-   ("own_tables", OneStageZk.ownTablesPiece),
+   ("own_tables", OneStageZk.ownTablesPiece), ("session_setup", sessionSetup),
    ("check_proved", checkProved),
    ("select_second", selectSecond), ("second_statements", secondStatements),
    ("second_interior_reads", secondInteriorReads), ("replay_links", replayLinks),

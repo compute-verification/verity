@@ -218,7 +218,8 @@ CERTIFIED = "certified-io.json"
 TRACED = ("arrive", "step", "finish")
 #: or a record with one of these fields: the trace's, requests.jsonl's and the attested I/O's request values
 VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
-HAND_START = ("serve-openai run directly (--required-manifest "
+HAND_START = ("serve-openai run directly (--out SERVE_DIR, the serve dir `endpoint` reads as --from, outside every "
+              "run's directory, where the serve refuses it; --required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start). VERITY_STAGING_BOUNDED stays unset: bounded "

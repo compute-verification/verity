@@ -40,8 +40,8 @@ theorem LoopModel.msgs_drop_headD {W Rr : Type} (M : LoopModel W Rr) {j : Nat} (
 
 /-- **At the link the deferred release is the ZK server's own message**, below the last round, whatever the worker
 sends. -/
-theorem nextD_link {W Rr : Type} (L : LeanRelease W Rr) (n : Claims.Msg → Nat) (wk : L.toSrv.Worker)
-    (x : Claims.Msg) (w : W) (ρ : Rr) (κ : L.toSrv.Chk) (h : List (Claims.Msg × Claims.Msg)) (h1 : h.length = 1)
+theorem nextD_link {W Rr : Type} (L : LeanRelease W Rr) (n : Hash.Msg → Nat) (wk : L.toSrv.Worker)
+    (x : Hash.Msg) (w : W) (ρ : Rr) (κ : L.toSrv.Chk) (h : List (Hash.Msg × Hash.Msg)) (h1 : h.length = 1)
     (hn : 2 < n x) : L.toSrv.nextD L.fillOf n wk x w ρ κ h = L.ownMsg x w ρ h := by
   have hk : L.kindAt x h.length = .recomputed := by
     rw [h1]

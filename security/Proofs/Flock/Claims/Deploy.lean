@@ -96,7 +96,7 @@ def Coin.at (c : Coin) (i : ℕ) : F128 := if h : i < 65536 then c ⟨i, h⟩ el
 def Coin.vals (c : Coin) (n : ℕ) : Array F128 := (Array.range n).map c.at
 
 /-- **The verifier's answer**: the coin's bytes, every element's 16 bytes in order. -/
-def Coin.bytes (c : Coin) : Claims.Msg := (List.finRange 65536).flatMap fun i => (c i).toBytes.data.toList
+def Coin.bytes (c : Coin) : Hash.Msg := (List.finRange 65536).flatMap fun i => (c i).toBytes.data.toList
 
 /-- The link's points: `spec.points` points of `spec.mPts` coordinates, the coin's first elements, point-major. -/
 def pointsOf (spec : SessionSpec) (c : Coin) : Array (Array F128) :=
@@ -105,10 +105,10 @@ def pointsOf (spec : SessionSpec) (c : Coin) : Array (Array F128) :=
 /-! ## Messages -/
 
 /-- The link message's body: each table's `root_B`, then each table's public words, in the session's table order. -/
-def linkBody (rootB publics : List ByteArray) : Claims.Msg := encList encBytes rootB ++ encList encBytes publics
+def linkBody (rootB publics : List ByteArray) : Hash.Msg := encList encBytes rootB ++ encList encBytes publics
 
 /-- The link message read back: tag `0`, then `linkBody`. -/
-def linkOf : Claims.Msg → Option (List ByteArray × List ByteArray)
+def linkOf : Hash.Msg → Option (List ByteArray × List ByteArray)
   | 0 :: body =>
     match (do let r ← rdList rdBytes; let p ← rdList rdBytes; pure (r, p) : Rd _).run body with
     | some (v, []) => some v
@@ -117,12 +117,12 @@ def linkOf : Claims.Msg → Option (List ByteArray × List ByteArray)
 
 /-- **The prover's last message**: the statement, the record's text and the proof files (`spec.repStreams` order). -/
 structure Final where
-  stmt : Claims.Msg
+  stmt : Hash.Msg
   record : String
   proofs : Array ByteArray
 
 /-- The last message: tag `1`, then the statement, the record's text and the proof files. -/
-def Final.encode (f : Final) : Claims.Msg :=
+def Final.encode (f : Final) : Hash.Msg :=
   1 :: (encNat f.stmt.length ++ f.stmt ++ encStr f.record ++ encList encBytes f.proofs.toList)
 
 def Final.read : Rd Final := do
@@ -133,7 +133,7 @@ def Final.read : Rd Final := do
   pure ⟨stmt, record, proofs.toArray⟩
 
 /-- The last message read back. -/
-def finalOf : Claims.Msg → Option Final
+def finalOf : Hash.Msg → Option Final
   | 1 :: body =>
     match Final.read.run body with
     | some (f, []) => some f
@@ -178,7 +178,7 @@ def liveOf (spec : SessionSpec) (record : String) : V Live := do
 first coin's, and its rounds, in order, the round messages with their coins: each round's retained bytes the message,
 its coins the first `n` of the message's coin. -/
 def custody (spec : SessionSpec) (lv : Live) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) : V Unit := do
+    (mids : List (Hash.Msg × Coin)) : V Unit := do
   Record.check (lv.rootB.toList == link.1) "live: the record's root_B is not the link message's"
   Record.check (lv.publics.toList == link.2) "live: the record's public words are not the link message's"
   Record.check (lv.points == pointsOf spec c₁) "live: the record's link points are not the first coin"
@@ -226,8 +226,8 @@ def setupCallsOf (h : ByteArray → ByteArray) (r : Readable.Read) : ℕ :=
 statement's whatever its key order (`sampleEq`: `JsonEquiv`, objects as finite maps, as the service's dict equality), the
 live session's custody, the verifier's scope check, a draw-less session's refusal, and last the record's canonical text
 (S0, `RecordText.check`: the record is what `printT` prints of what it parses to). -/
-def checks (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
-    (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) : V Unit := do
+def checks (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Hash.Msg) (link : List ByteArray × List ByteArray)
+    (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : Final) : V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
   Record.check (sampleEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw)
     "live: the record's draw is not the statement's"
@@ -237,15 +237,15 @@ def checks (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : L
   RecordText.check f.record
 
 /-- **The decision at a session**: the shipped verdict over `OC` on its tables, then the checks. -/
-def decisionAt (zk : Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) :
+def decisionAt (zk : Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Hash.Msg)
+    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : Final) :
     Claims.OCV Unit := do
   verdictM zk Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs
   monadLift (checks zk s spec x link c₁ mids f)
 
 /-- **The decision**: the statement's setup over `OC`, then the decision at its session. -/
-def decision (zk : Bool) (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : Final) : Claims.OCV Unit := do
+def decision (zk : Bool) (s : Ins) (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
+    (mids : List (Hash.Msg × Coin)) (f : Final) : Claims.OCV Unit := do
   let (spec, sts) ← setupM Claims.Hashes.oc s.read
   decisionAt zk s spec sts x link c₁ mids f
 
@@ -254,12 +254,12 @@ inductive Act where
   | rej
   | coin (c : Coin)
   | decide (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-      (mids : List (Claims.Msg × Coin)) (f : Final)
+      (mids : List (Hash.Msg × Coin)) (f : Final)
 
 /-- **The verifier's step** at the prover's messages `as` and the coins `cs` (one per message): no setup, refuse; the
 last message of tag `0`, answer its coin; of tag `1`, after the link message, decide on the link, its coin, the round
 messages with theirs, and the last message; anything else, refuse. -/
-def act (zk : Bool) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Act :=
+def act (zk : Bool) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : Act :=
   match setupOf zk x with
   | none => .rej
   | some (s, spec, sts) =>
@@ -281,7 +281,7 @@ def outOf (d : Claims.OCV Unit) : Claims.OC Claims.Out :=
     | .error _ => .rej)
 
 /-- The verifier's next message. -/
-def next (zk : Bool) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Claims.OC Claims.Out :=
+def next (zk : Bool) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : Claims.OC Claims.Out :=
   match act zk x as cs with
   | .rej => .ret .rej
   | .coin c => .ret (.msg c.bytes)
@@ -316,17 +316,17 @@ def V (zk : Bool) : Claims.Verifier Coin where
 
 /-! ## The verifier's steps against `H` -/
 
-theorem next_rej (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem next_rej (H : Hash.Msg → Hash.Msg) {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     (h : act zk x as cs = .rej) : (next zk x as cs).eval H = (.rej, []) := by
   simp only [next, h, Claims.OC.eval]
 
 /-- **A coin is answered with no query.** -/
-theorem next_coin (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem next_coin (H : Hash.Msg → Hash.Msg) {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {c : Coin} (h : act zk x as cs = .coin c) : (next zk x as cs).eval H = (.msg c.bytes, []) := by
   simp only [next, h, Claims.OC.eval]
 
 /-- The verdict over `OC` against `H` is the verdict with `hOf H`. -/
-theorem verdictM_eval (H : Claims.Msg → Claims.Msg) (zk : Bool) (spec : SessionSpec) (tabs : Array Setup)
+theorem verdictM_eval (H : Hash.Msg → Hash.Msg) (zk : Bool) (spec : SessionSpec) (tabs : Array Setup)
     (record : String) (proofs : Array ByteArray) :
     ((verdictM zk Claims.Hashes.oc spec tabs record proofs).run.eval H).1 =
       verdictWith zk (Claims.hOf H) spec tabs record proofs := by
@@ -336,7 +336,7 @@ theorem verdictM_eval (H : Claims.Msg → Claims.Msg) (zk : Bool) (spec : Sessio
   · exact Claims.Zk.verifyOC_eval H spec tabs record proofs
 
 /-- Its oracle log has the verdict's `shaCalls` entries. -/
-theorem verdictM_log_length (H : Claims.Msg → Claims.Msg) (zk : Bool) (spec : SessionSpec) (tabs : Array Setup)
+theorem verdictM_log_length (H : Hash.Msg → Hash.Msg) (zk : Bool) (spec : SessionSpec) (tabs : Array Setup)
     (record : String) (proofs : Array ByteArray) :
     ((verdictM zk Claims.Hashes.oc spec tabs record proofs).run.eval H).2.length =
       shaCallsOf zk (Claims.hOf H) spec tabs record proofs := by
@@ -346,15 +346,15 @@ theorem verdictM_log_length (H : Claims.Msg → Claims.Msg) (zk : Bool) (spec : 
   · exact Claims.Zk.verifyOC_log_length H spec tabs record proofs
 
 /-- The setup over `OC` against `H` is the setup with `hOf H`, and its oracle log has `setupCallsOf (hOf H)` entries. -/
-theorem setupM_eval (H : Claims.Msg → Claims.Msg) (r : Readable.Read) :
+theorem setupM_eval (H : Hash.Msg → Hash.Msg) (r : Readable.Read) :
     ((setupM Claims.Hashes.oc r).run.eval H).1 = setupWith (Claims.hOf H) r ∧
       ((setupM Claims.Hashes.oc r).run.eval H).2.length = setupCallsOf (Claims.hOf H) r :=
   ⟨Claims.setupOC_eval H _ _ _ _ _ _ _ _ _ _ _ _ _, Claims.setupOC_log_length H _ _ _ _ _ _ _ _ _ _ _ _ _⟩
 
 /-- The decision at a session against `H`: its verdict is the shipped verdict with `hOf H`, then the checks; its log is
 the verdict's. -/
-theorem decisionAt_eval (H : Claims.Msg → Claims.Msg) (zk : Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
-    (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
+theorem decisionAt_eval (H : Hash.Msg → Hash.Msg) (zk : Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
+    (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin))
     (f : Final) :
     ((decisionAt zk s spec sts x link c₁ mids f).run.eval H).1 =
         (do verdictWith zk (Claims.hOf H) spec (tabsOf sts) f.record f.proofs
@@ -380,8 +380,8 @@ theorem decisionAt_eval (H : Claims.Msg → Claims.Msg) (zk : Bool) (s : Ins) (s
 
 /-- The decision against `H`: its verdict is the setup with `hOf H`, then at its session the shipped verdict with
 `hOf H` and the checks; its log is the setup's, then the verdict's where the setup is `.ok`. -/
-theorem decision_eval (H : Claims.Msg → Claims.Msg) (zk : Bool) (s : Ins) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) :
+theorem decision_eval (H : Hash.Msg → Hash.Msg) (zk : Bool) (s : Ins) (x : Hash.Msg)
+    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : Final) :
     ((decision zk s x link c₁ mids f).run.eval H).1 =
         (do let (spec, sts) ← setupWith (Claims.hOf H) s.read
             verdictWith zk (Claims.hOf H) spec (tabsOf sts) f.record f.proofs
@@ -410,9 +410,9 @@ theorem decision_eval (H : Claims.Msg → Claims.Msg) (zk : Bool) (s : Ins) (x :
 /-- **The verifier's decision against `H`**: it accepts exactly when the setup with SHA-512 replaced by `H` is `.ok`,
 and at its session the shipped verdict with `hOf H` (`verifyWith (hOf H)`, or `Zk.verifyWith (hOf H)`) and the custody
 checks are `.ok`. -/
-theorem next_decide (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem next_decide (H : Hash.Msg → Hash.Msg) {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
     ((next zk x as cs).eval H).1 = .acc ↔
       ∃ spec' sts', setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
         verdictWith zk (Claims.hOf H) spec' (tabsOf sts') f.record f.proofs = .ok () ∧
@@ -433,9 +433,9 @@ theorem next_decide (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claims.Msg}
 
 /-- **The decision's oracle log**: the setup's `setupCallsOf (hOf H)` entries, then, where the setup is `.ok`, the
 shipped verdict's `shaCalls (hOf H)` (`Zk.shaCalls`) at its session. -/
-theorem next_decide_log (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg}
+theorem next_decide_log (H : Hash.Msg → Hash.Msg) {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
     ((next zk x as cs).eval H).2.length =
       setupCallsOf (Claims.hOf H) s.read +
         match setupWith (Claims.hOf H) s.read with
@@ -448,9 +448,9 @@ theorem next_decide_log (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claims.
 /-! ## At SHA-512 -/
 
 /-- A decision is made only on a statement that sets up, at its setup. -/
-theorem act_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+theorem act_decide {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
     setupOf zk x = some (s, spec, sts) := by
   unfold act at h
   split at h
@@ -460,7 +460,7 @@ theorem act_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : Lis
     all_goals first | (cases h; done) | (cases h; exact hs)
 
 /-- SHA-512 as an oracle on messages. -/
-def sha512 : Claims.Msg → Claims.Msg := fun m => Claims.toMsg (Sha512.hash (Claims.ofMsg m))
+def sha512 : Hash.Msg → Hash.Msg := fun m => Claims.toMsg (Sha512.hash (Claims.ofMsg m))
 
 theorem hOf_sha512 : Claims.hOf sha512 = Sha512.hash := by
   funext b
@@ -468,7 +468,7 @@ theorem hOf_sha512 : Claims.hOf sha512 = Sha512.hash := by
 
 /-- **At SHA-512 the shipped verdict is the deployed verifier's** (`verify`, `Zk.verify`), on every session the
 statement sets up. -/
-theorem verdictWith_sha512 {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem verdictWith_sha512 {zk : Bool} {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupOf zk x = some (s, spec, sts)) (record : String) (proofs : Array ByteArray) :
     verdictWith zk (Claims.hOf sha512) spec (tabsOf sts) record proofs =
       if zk then Zk.verify spec (tabsOf sts) record proofs else verify spec (tabsOf sts) record proofs := by
@@ -484,18 +484,18 @@ theorem setupWith_sha512 (r : Readable.Read) : setupWith Sha512.hash r = r.setup
   (Stmt.setupTables_eq_setupTablesWith _ _ _ _ _ _ _ _ _ _ _ _ _).symm
 
 /-- On a decision, the setup at the SHA-512 oracle is the statement's. -/
-theorem act_decide_setupWith {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+theorem act_decide_setupWith {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
     setupWith (Claims.hOf sha512) s.read = .ok (spec, sts) := by
   rw [hOf_sha512, setupWith_sha512]
   exact Ins.setup_read (setupOf_some (act_decide h)).2
 
 /-- **The verifier's decision at SHA-512**: it accepts exactly when the deployed verifier (`verify`, or `Zk.verify`)
 accepts the record and proof files and the custody checks pass. -/
-theorem next_decide_sha512 {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem next_decide_sha512 {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
     ((next zk x as cs).eval sha512).1 = .acc ↔
       (if zk then Zk.verify spec (tabsOf sts) f.record f.proofs else verify spec (tabsOf sts) f.record f.proofs) =
           .ok () ∧
@@ -509,9 +509,9 @@ theorem next_decide_sha512 {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {
     exact ⟨spec, sts, rfl, hv, hc⟩
 
 /-- **The decision's oracle log at SHA-512**: the setup's SHA-512 calls, then the shipped verdict's. -/
-theorem next_decide_log_sha512 {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem next_decide_log_sha512 {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
     ((next zk x as cs).eval sha512).2.length =
       setupCallsOf Sha512.hash s.read + shaCallsOf zk Sha512.hash spec (tabsOf sts) f.record f.proofs := by
   rw [next_decide_log sha512 h, act_decide_setupWith h, hOf_sha512]

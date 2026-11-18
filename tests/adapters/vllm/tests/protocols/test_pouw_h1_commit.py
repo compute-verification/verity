@@ -25,10 +25,11 @@ else:
     torch = pytest.importorskip("torch")
 
 from torch import nn
+from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
@@ -536,7 +537,7 @@ def _reusing(window, edit):
     tables = [(CR.commit_rows(s, K), f"{SV.PREFIX}a/{K}@{s}") for s in range(STEPS)]
     tables += [(CR.commit_ids(s), f"{SV.PREFIX}ids@{s}") for s in range(STEPS)]
     own = {"value": "scan/state", "leaves": 16, "words": 1, "root": "ab" * 64, "domain": "cd" * 64}
-    return edit({"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": AUDITED, "query": "01" * 64,
+    return edit({"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "program": AUDITED, "query": "01" * 64,
                  "partition": "02" * 64, "population": 4, "law": {"law": "subset", "k": 1}, "scheme": "hm96-sha512",
                  "roots": [], "leaf_layer": None, "anchors": [], "window": {"kind": "served", "run": "ef" * 64},
                  "registered": [own, *({**theirs[v], "value": name} for name, v in tables)],
@@ -570,7 +571,7 @@ def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_t
     record, run, _tap = _window(tmp_path, monkeypatch, commit_record=named)
     window, rec = named.got
     c = record["commitment"]
-    assert window["format"] == REG.FORMAT_V2 and window["previous"] == previous
+    assert window["format"] == DM.REGISTRATION and window["previous"] == previous
     assert window["program"] == run.served.program_digest and window["window"]["open_root"] == run.served.root
     assert window["registered"] == c["served"]["entries"]
     for e in window["registered"]:
@@ -599,7 +600,7 @@ def _fails(run):
      f"registers {CR.commit_ids(1)} not"),
     (_Named(edit=_registered(lambda r: [*r, r[1]])), f"registers {CR.commit_rows(0, K)} twice"),
     (_Named(edit=lambda rec: {**rec, "previous": None}), "previous is not the window registration's digest"),
-    (_Named(edit=lambda rec: {**rec, "format": REG.FORMAT}), "is not a Commit record credit reads"),
+    (_Named(edit=lambda rec: {**rec, "format": DM.REGISTRATION_V1}), "is not a Commit record credit reads"),
     (_Named(window=lambda w: {**w, "registered": w["registered"][1:]}), "the window's registration is not its own"),
     (_fails, "ValueError: window-commit refused the window"),
 ], ids=["a-table-root-off", "ids-table-missing", "a-table-twice", "not-chained-after-w", "v1", "not-its-registration",

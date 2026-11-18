@@ -1,12 +1,12 @@
 """PoUW's serving side: what runs beside a served model to commit its matrix multiplies, one directory a scheme (`h1`,
-`lead`, `pearl_c`, and `ncp` for ``ncp-v1`` and ``ncp-v2``) and the calls' operands, devices and circuits beside them.
+`pearl_c`), the live coins the schemes' windows draw (`coins`), and the calls'
+operands, devices and circuits beside them.
 
 A workload reaches it only through the names this module exports. Per call there are two:
 
 * `run_matmul(run, site, x, weight, bias)`: run this matrix multiply under PoUW, y = x weightᵀ (+ bias), served and
-  committed by ``run`` (a `MatmulRun`): ``ncp-v1`` (`NcpRun`), ``ncp-v2`` (`NcpCircuitRun`), the lead (`LeadRun`, whose
-  ``x`` is the arm's `QuantizedRows` and ``weight`` the linear its backend loaded), or a workload's own (Pearl-C's run on
-  the device is the workload's).
+  committed by ``run`` (a `MatmulRun`): a workload's own (Pearl-C's run on the device is the
+  workload's).
 * `observe_matmul(run, site, x, weight, y, ...)`: a matrix multiply the workload served itself, recorded by ``run`` (a
   `MatmulObserver`), which computes nothing: H1 (`H1Run`), whose ``x`` is the int8 arm's s8 rows. The workload hands
   H1 its arm's GEMM and dequantization first (`use_int8_arm`, `int8_arm.Int8Arm`).
@@ -25,7 +25,6 @@ settings."""
 from __future__ import annotations
 
 import importlib
-from dataclasses import dataclass
 from typing import Any, Protocol
 
 _POUW = "verity.protocols.resource_accounting.compute.pouw"
@@ -34,33 +33,24 @@ _SERVING = f"{_PROVER}.serving"
 #: each exported name's module and attribute, read from it at every lookup (never cached here), so an import inside a
 #: function sees the module's current attribute
 _LAZY = {
-    "NcpRun": (f"{_SERVING}.ncp", "NcpRun"),
-    "NcpCircuitRun": (f"{_SERVING}.ncp", "NcpCircuitRun"),
-    "NcpSettings": (f"{_SERVING}.ncp", "NcpSettings"),
-    "LayerRows": (f"{_SERVING}.ncp", "LayerRows"),
-    "weight_operands": (f"{_SERVING}.ncp", "weight_operands"),
-    "QUANTIZER": (f"{_SERVING}.ncp", "QUANTIZER"),
     "quantize": (f"{_SERVING}.operands", "quantize"),
-    "host_array": (f"{_SERVING}.ncp", "host"),
     "use_int8_arm": (f"{_SERVING}.int8_arm", "use"),
     "use_tensors": (f"{_SERVING}.tensors", "use"),
     "use_h1_device": (f"{_SERVING}.tensors", "use_h1"),
     "H1Run": (f"{_SERVING}.h1", "H1Run"),
-    "LeadRun": (f"{_SERVING}.lead", "LeadRun"),
     "PearlCKernel": (f"{_SERVING}.pearl_c.kernel", "Kernel"),
     "PearlC": (f"{_PROVER}.schemes.pearl_c", "PearlC"),
-    "H100": (f"{_PROVER}.schemes.pearl_c_device", "H100"),
-    "reserve_salt": (f"{_SERVING}.h1.window", "reserve_salt"),
-    "gate_of": (f"{_SERVING}.h1.window", "gate_of"),
+    "reserve_salt": (f"{_SERVING}.coins.window", "reserve_salt"),
+    "gate_of": (f"{_SERVING}.coins.window", "gate_of"),
     "served_passes": (f"{_SERVING}.pearl_c.window", "served_passes"),
     "coins_of": (f"{_SERVING}.pearl_c.window", "coins_of"),
     "SERVED_SCHEMA": (f"{_SERVING}.pearl_c.window", "SERVED_SCHEMA"),
-    "ADMISSIONS": (f"{_SERVING}.h1.requests", "ADMISSIONS"),
+    "ADMISSIONS": (f"{_SERVING}.coins.requests", "ADMISSIONS"),
     "COIN_DRAW": (f"{_POUW}.verifier.window", "DRAW"),
     "COIN_ROUND": (f"{_POUW}.verifier.window", "ROUND"),
     "Challenger": (f"{_POUW}.verifier.coins", "Challenger"),
     "CoinCommitment": (f"{_POUW}.verifier.coins", "CoinCommitment"),
-    "CoinWindow": (f"{_SERVING}.h1.window", "Window"),
+    "CoinWindow": (f"{_SERVING}.coins.window", "Window"),
     "CommitTap": (f"{_SERVING}.h1.commit", "CommitTap"),
     "CreditTrace": (f"{_SERVING}.credit_gate", "trace"),
     "DomainError": (f"{_POUW}.verifier.protocol", "DomainError"),
@@ -72,28 +62,25 @@ _LAZY = {
     "H1_WEIGHT_KEY": (f"{_SERVING}.h1", "WEIGHT_KEY"),
     "HM96": (f"{_POUW}.verifier.audit", "HM96"),
     "HM96_WEIGHTS": (f"{_POUW}.verifier.audit", "HM96_WEIGHTS"),
-    "LEAD_BACKEND": (f"{_SERVING}.lead", "BACKEND"),
-    "LEAD_SCHEME": (f"{_SERVING}.lead", "SCHEME"),
     "Matmul": (f"{_POUW}.verifier.protocol", "Matmul"),
     "NCP_SCHEMES": (f"{_POUW}.verifier.kernel_schemes", "IDENTIFIED"),
-    "NO_DRAW_SESSION": (f"{_SERVING}.h1.window", "NO_DRAW_SESSION"),
+    "NO_DRAW_SESSION": (f"{_SERVING}.coins.window", "NO_DRAW_SESSION"),
     "PEARL_C_CALL_CAPACITY": (f"{_SERVING}.pearl_c", "CALL_CAPACITY"),
-    "ROUND0": (f"{_SERVING}.h1.requests", "ROUND0"),
+    "ROUND0": (f"{_SERVING}.coins.requests", "ROUND0"),
     "SCHEDULES": (f"{_POUW}.verifier.serving", "SCHEDULES"),
     "Served": (f"{_SERVING}.h1.served", "Served"),
     "Shape": (f"{_POUW}.verifier.protocol", "Shape"),
     "Workload": (f"{_POUW}.verifier.audit", "Workload"),
-    "challenger_address": (f"{_SERVING}.h1.challenger", "address"),
-    "closed_on_error": (f"{_SERVING}.h1.window", "closed_on_error"),
+    "challenger_address": (f"{_SERVING}.coins.challenger", "address"),
+    "closed_on_error": (f"{_SERVING}.coins.window", "closed_on_error"),
     "commit_committed": (f"{_SERVING}.h1.commit", "committed"),
     "commit_rows": (f"{_POUW}.verifier.audit", "commit_rows"),
     "commit_site": (f"{_SERVING}.h1.commit", "site"),
     "draw_challenger": (f"{_POUW}.verifier.window", "draw_challenger"),
-    "finish_window": (f"{_SERVING}.h1.window", "finish"),
+    "finish_window": (f"{_SERVING}.coins.window", "finish"),
     "fresh_salts": (f"{_POUW}.verifier.audit", "fresh_salts"),
     "h1_weight_root": (f"{_SERVING}.h1", "weight_root"),
-    "in_process_draw": (f"{_SERVING}.h1.window", "in_process_draw"),
-    "lead_refusals": (f"{_SERVING}.lead", "refusals"),
+    "in_process_draw": (f"{_SERVING}.coins.window", "in_process_draw"),
     "live_challenger": (f"{_POUW}.verifier.window", "live_challenger"),
     "live_epoch_reason": (f"{_POUW}.verifier.window", "live_epoch_reason"),
     "ncp_scheme": (f"{_PROVER}.schemes", "get"),
@@ -101,16 +88,16 @@ _LAZY = {
     "pearl_c_refusals": (f"{_SERVING}.pearl_c", "refusals"),
     "pearl_c_schedule": (f"{_SERVING}.pearl_c", "schedule_of"),
     "pearl_c_scheme": (f"{_PROVER}.schemes", "get"),
-    "period_reason": (f"{_SERVING}.h1.window", "period_reason"),
-    "period_setting": (f"{_SERVING}.h1.window", "period_setting"),
+    "period_reason": (f"{_SERVING}.coins.window", "period_reason"),
+    "period_setting": (f"{_SERVING}.coins.window", "period_setting"),
     "program_salt": (f"{_SERVING}.h1", "program_salt"),
-    "reserved_of": (f"{_SERVING}.h1.window", "reserved_of"),
-    "salt_session": (f"{_SERVING}.h1.window", "salt_session"),
-    "session_setting": (f"{_SERVING}.h1.window", "session_setting"),
+    "reserved_of": (f"{_SERVING}.coins.window", "reserved_of"),
+    "salt_session": (f"{_SERVING}.coins.window", "salt_session"),
+    "session_setting": (f"{_SERVING}.coins.window", "session_setting"),
     "traced_as": (f"{_PROVER}.circuit", "traced_as"),
     "weight_binding": (f"{_POUW}.verifier.audit", "weight_binding"),
     "weights_root": (f"{_POUW}.verifier.audit", "weights_root"),
-    "window_refusals": (f"{_SERVING}.h1.window", "refusals"),
+    "window_refusals": (f"{_SERVING}.coins.window", "refusals"),
     "zy_host": (f"{_SERVING}.h1.records", "host"),
     "CommitRecord": (f"{_SERVING}.h1.commit", "CommitRecord"),
     "GateSessions": (f"{_SERVING}.h1.serve_gate", "GateSessions"),
@@ -121,19 +108,19 @@ _LAZY = {
     "MARGIN": (f"{_SERVING}.h1.serve_gate", "MARGIN"),
     "PEARL_C_ROW_ALIGN": (f"{_SERVING}.pearl_c", "ROW_ALIGN"),
     "POLLS": (f"{_SERVING}.h1.serve_gate", "POLLS"),
-    "REPLY_FIELDS": (f"{_SERVING}.h1.challenger", "REPLY_FIELDS"),
-    "SESSION_FIELDS": (f"{_SERVING}.h1.challenger", "SESSION_FIELDS"),
+    "REPLY_FIELDS": (f"{_SERVING}.coins.challenger", "REPLY_FIELDS"),
+    "SESSION_FIELDS": (f"{_SERVING}.coins.challenger", "SESSION_FIELDS"),
     "Sites": (f"{_SERVING}.h1.commit", "Sites"),
     "Writer": (f"{_SERVING}.h1.prover", "Writer"),
     "a_value": (f"{_SERVING}.pearl_c.window", "a_value"),
     "b_value": (f"{_SERVING}.pearl_c.window", "b_value"),
-    "challenger_carried": (f"{_SERVING}.h1.challenger", "carried"),
+    "challenger_carried": (f"{_SERVING}.coins.challenger", "carried"),
     "commit_registration": (f"{_SERVING}.h1.commit", "registration"),
     "committed_k": (f"{_POUW}.verifier.credit", "committed_k"),
-    "connect_window": (f"{_SERVING}.h1.window", "connect"),
+    "connect_window": (f"{_SERVING}.coins.window", "connect"),
     "declared_layout": (f"{_SERVING}.h1.served", "declared_layout"),
     "descriptor": (f"{_SERVING}.h1.served", "descriptor"),
-    "draw_k": (f"{_SERVING}.h1.challenger", "draw_k"),
+    "draw_k": (f"{_SERVING}.coins.challenger", "draw_k"),
     "drawn_reads": (f"{_SERVING}.h1.serve_sample", "drawn_reads"),
     "drawn_units": (f"{_SERVING}.h1.serve_sample", "drawn_units"),
     "dump_live": (f"{_SERVING}.h1.live", "dump"),
@@ -141,14 +128,14 @@ _LAZY = {
     "kept_bytes": (f"{_SERVING}.h1.prover", "kept_bytes"),
     "layout_of": (f"{_POUW}.verifier.credit", "layout_of"),
     "listening": (f"{_SERVING}.h1.serve_gate", "listening"),
-    "lms_verify": (f"{_SERVING}.h1.challenger", "lms_verify"),
-    "pins_head": (f"{_SERVING}.h1.challenger", "pins_head"),
+    "lms_verify": (f"{_SERVING}.coins.challenger", "lms_verify"),
+    "pins_head": (f"{_SERVING}.coins.challenger", "pins_head"),
     "prover_private": (f"{_SERVING}.h1.prover", "private"),
     "register_weights": (f"{_SERVING}.h1.served", "register_weights"),
     "registered_commit": (f"{_SERVING}.h1.registered", "commit"),
     "registered_salts": (f"{_SERVING}.h1.registered", "salts"),
     "served_declared": (f"{_SERVING}.h1.served", "declared"),
-    "session_of": (f"{_SERVING}.h1.challenger", "session_of"),
+    "session_of": (f"{_SERVING}.coins.challenger", "session_of"),
     "unit_of": (f"{_SERVING}.h1.served", "unit_of"),
     "weights_of": (f"{_SERVING}.h1.served", "weights_of"),
     "window_units": (f"{_SERVING}.h1.serve_sample", "units"),
@@ -186,14 +173,6 @@ class MatmulObserver(Protocol):
                 z: Any = None) -> None: ...
 
 
-@dataclass(frozen=True)
-class QuantizedRows:
-    """A call's rows as its arm quantized them: ``rows`` [m, K] s8 and their f32 ``scales`` [m]."""
-
-    rows: Any
-    scales: Any
-
-
 def run_matmul(run: MatmulRun, site: int, x: Any, weight: Any, bias: Any = None) -> Any:
     """Run this matrix multiply under PoUW: y = x weightᵀ (+ ``bias``) of the linear at ``site`` (its ordinal in the
     forward pass), on the caller's GPU buffers, served and committed by ``run``; y is a new buffer on x's device."""
@@ -222,13 +201,6 @@ def verifier_coins(n: int) -> bytes:
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
 
     return verifier.coins(n)
-
-
-def lead_in_process_certifier() -> Any:
-    """The lead's coin link held in this process (`lead.feed.InProcessCertifier`), whose coins credit nothing."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import feed
-
-    return feed.InProcessCertifier()
 
 
 def ready_verifier() -> Any:
@@ -262,5 +234,5 @@ def __dir__() -> list[str]:
     return sorted({*globals(), *_LAZY, *_FAMILIES})
 
 
-__all__ = ["MatmulObserver", "MatmulRun", "QuantizedRows", "in_process_coins", "observe_matmul", "pearl_c_salt_key",
-           "ready_verifier", "run_matmul", "verifier_coins", "lead_in_process_certifier", *_LAZY, *_FAMILIES]
+__all__ = ["MatmulObserver", "MatmulRun", "in_process_coins", "observe_matmul", "pearl_c_salt_key",
+           "ready_verifier", "run_matmul", "verifier_coins", *_LAZY, *_FAMILIES]

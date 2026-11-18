@@ -75,12 +75,12 @@ namespace MemberForm
 session's closing round is opened after the SHA-512 of (`Spot.OneStageZk.sessionEvidence`). None where the evidence
 has no such session or the verifier refuses its evidence. -/
 def sessionEvidenceAt (u : ℕ) (e : _root_.Spot.OneStageZk.Evidence) (bs : _root_.Core.Blobs) :
-    Option Claims.Msg :=
+    Option Hash.Msg :=
   e.sessions[u]?.bind fun s => (_root_.Spot.OneStageZk.sessionEvidence bs s).toOption.map fun b => b.data.toList
 
 /-- **The `u`-th session's evidence the verifier reads in the play that ended with `x`**, on the blobs sent
 (`sentRecordAt`, for the evidence). -/
-def sentEvidenceAt (u : ℕ) (x : Verity.Exchange) : Option Claims.Msg :=
+def sentEvidenceAt (u : ℕ) (x : Verity.Exchange) : Option Hash.Msg :=
   (caseOf x.sent).toOption.bind fun y => sessionEvidenceAt u y.2.2 (_root_.Core.Blobs.ofArray x.sent.blobs)
 
 /-- **The one table of a statement's session**: the table of the tags of the statement every member's session is

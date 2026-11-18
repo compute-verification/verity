@@ -58,7 +58,7 @@ namespace FlockComplete.Replay
 
 open Flock FlockDeploy FlockSoundness.Refine
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The statement the masked verifier parsed** at a good case: its tables are the case's, and the witness satisfies
 it. -/
@@ -145,7 +145,7 @@ open Flock FlockDeploy FlockSoundness.Refine FlockComplete.Replay
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **The extra claims' ring-switch algebra at the deployed relation**, from `RelS` alone. -/
-theorem rsExtrasZk (H : Claims.Msg → Claims.Msg) : RsExtrasZk H Readable.relation := by
+theorem rsExtrasZk (H : Hash.Msg → Hash.Msg) : RsExtrasZk H Readable.relation := by
   intro o i hi k hk
   obtain ⟨st, hsts, hwf, hrw, -, hsat⟩ := o.model
   obtain ⟨st', hsts', hspec, h25, -⟩ := o.table

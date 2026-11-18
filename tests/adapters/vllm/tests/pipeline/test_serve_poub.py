@@ -37,7 +37,7 @@ def test_without_a_registered_session_the_remote_verifier_is_not_implemented(mon
 
 
 def parse(*more: str) -> so.Options:
-    return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit", *more], environ={})
+    return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit", "--out", "/tmp/serve", *more], environ={})
 
 
 def refusal(opts: so.Options) -> str | None:
@@ -180,6 +180,5 @@ def test_a_sealing_server_reads_the_registered_bytes_once_under_its_weights_root
     assert w._extras_of(com, SimpleNamespace(weight_registration={"root": "ab"})) == ("tree", ["bytes"]) and len(calls) == 1
 
 
-@pytest.mark.parametrize("name", ["remote_session.json", "memory_map.jsonl"])
-def test_the_sessions_records_are_mirrored(name):
-    assert name in sc.MIRRORED
+def test_the_sessions_record_is_mirrored_and_its_memory_map_is_not():
+    assert "remote_session.json" in sc.MIRRORED and "memory_map.jsonl" not in sc.MIRRORED

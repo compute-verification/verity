@@ -158,7 +158,7 @@ end ParseFacts
 /-- **Every table passed `HmRow.parse`, at `Flock.check`**: wherever `Flock.check` holds at the deployed parser, the
 statement parses (`relS_of_check`), so at an untyped statement without public input words each table's circuit is
 one `HmRow.parse` returned. -/
-theorem parseFacts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem parseFacts_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size) :
     ∃ tags pre, FlockSoundness.ParseFactsU tags pre p.sts[t].c := by
@@ -280,7 +280,7 @@ theorem openingCols_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st
 
 /-- **A rec-sparse part's copies compute `outOf` at `Flock.check`** (`sparseOuts_of_satisfies` at every table, with
 the parser's `RecSparse.check`). -/
-theorem sparseOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem sparseOuts_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
     {sh : Flock.RecSparse.Shape} (hp : Flock.RecSparse.params p.sts[t].c.unit.name = some sh)
@@ -295,7 +295,7 @@ theorem sparseOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Ms
 /-- **A rec-open or R-level part's copies climb at `Flock.check`** (`climb_of_satisfies` or
 `climbStacked_of_satisfies` at every table, with the parser's `RecOpen.check`): a table whose unit is named for
 `LANES` and `H` under either name. -/
-theorem climbAt_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem climbAt_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size) {LANES H : ℕ}
     (hp : Flock.RecOpen.params p.sts[t].c.unit.name = some (LANES, H) ∨
@@ -325,7 +325,7 @@ def ResPart (c : Flock.Circuit) (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : �
 
 /-- **A table of residuals' copies compute them at `Flock.check`** (`partCols_of_satisfies` or
 `openingCols_of_satisfies` at every table, with the parser's `RecResiduals.check` or `RecOpening.check`). -/
-theorem resCols_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem resCols_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
     {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} (hpart : ResPart p.sts[t].c S ns nv)

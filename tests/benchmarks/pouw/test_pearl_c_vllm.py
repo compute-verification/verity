@@ -26,6 +26,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity_torch.pouw.pearl_c import ends as ENDS
@@ -2042,7 +2043,7 @@ def window_record(*paths: Path, version: int = 2) -> dict:
                 "value": f"pearl-b/{u['weight']}", "root": man["weights"][str(u["weight"])]["root"], "leaves": u["n"],
                 "words": u["k"], "word_bits": 32,
                 "domain": rows_domain(weight_binding(u["weight"]), -2, u["n"], HM96).domain_id.hex()})
-    return {"format": REG.FORMAT_V2, "window": {"kind": "served", **({"version": 2} if version == 2 else {})},
+    return {"format": DM.REGISTRATION, "window": {"kind": "served", **({"version": 2} if version == 2 else {})},
             "registered": [*reg, *(weights[w] for w in sorted(weights) if version == 2),
                            {"value": "input-ids/0", "root": "00", "leaves": 1, "words": 1, "domain": "00"}]}
 
@@ -2098,7 +2099,7 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
               f"{VR.V1_WEIGHTS} pearl-b/0: a W that registers the weights states version 2"),
              ({**w, "window": {"kind": "served", "version": 1}}, PWR.UNKNOWN_VERSION),
              ({**w, "window": {"kind": "served", "version": 3}}, PWR.UNKNOWN_VERSION),
-             ({**w, "format": REG.FORMAT}, f"W is no {REG.FORMAT_V2} record")]
+             ({**w, "format": DM.REGISTRATION_V1}, f"W is no {DM.REGISTRATION} record")]
     for bad, why in cases:
         r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=bad, test_instance=True)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
@@ -2145,7 +2146,7 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     r = VR.verify_passes([warm, a, b], 3, 1, "test", coins, b"verifier" * 4, window=w, test_instance=True)
     assert r["answer"]["verdict"] == "reject" and "W registers no pearl-a/0/0" in r["answer"]["reason"], r["line"]
     first, chained = tmp_path / "first.json", tmp_path / "w-chained.json"
-    first.write_text(json.dumps({"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "registered": [], "previous": None}))
+    first.write_text(json.dumps({"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "registered": [], "previous": None}))
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(chained), "--previous-record", str(first)]) == 0
     wc = json.loads(chained.read_text())
     assert w["previous"] is None and wc == {**w, "previous": REG.digest(json.loads(first.read_text()))}
@@ -2343,8 +2344,8 @@ def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_o
     --withhold``), marks the record with the reserve before its open, and returns the session's ``pouw/draw`` coin 0
     after C with the record's sample.  It refuses before reserving while the lane's period is open, and before its open
     when the gate reserves it plain or into a period; `live_draw` is None with neither setting and refused with one."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64
@@ -2406,7 +2407,7 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
     is lane vllm's first reserve after P's close, the one a compose takes (`pouw_h1_window.after_close`): it is refused
     before reserving while the ledger doesn't close P or the lane (``for``, else ``by``) reserved since, and before its
     coin is asked when another reserve of the lane reached the gate first; another lane's reserve doesn't count."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root, sid = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64, "s20261104T120000Z-dr01"
@@ -3122,7 +3123,7 @@ def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes
     in-process, untouched; one alone is refused, and a reserve while the lane's open period is H1's is refused before it
     is asked."""
     from verity_vllm.protocols import pouw
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate = "ssh -i KEY -o BatchMode=yes research@gate"

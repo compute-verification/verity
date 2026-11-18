@@ -292,8 +292,8 @@ after a log `L₀` that opens none (`LoggedAfter`, the link's round) and its cut
 session `--zk` sets up at `A`. -/
 theorem firstStop_rootB {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A)
-    {record₀ : Verity.Exchange → Option Claims.Msg} {recordDigest : Claims.Msg} {rd : Reading A.rounds}
-    (hrd : rd = readingAt A.tables A.layout record₀ recordDigest) {reg : Option Claims.Msg → A.Reg}
+    {record₀ : Verity.Exchange → Option Hash.Msg} {recordDigest : Hash.Msg} {rd : Reading A.rounds}
+    (hrd : rd = readingAt A.tables A.layout record₀ recordDigest) {reg : Option Hash.Msg → A.Reg}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {σ : Strategy (V.game θ F c)}
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} {B : RoundHold} {ω : (A.extend M.widening).L.Ω}
     {φ : CoinTape (firstStop V θ F c A rd σ M ω).g' (firstStop V θ F c A rd σ M ω).s' →

@@ -232,8 +232,8 @@ theorem repJ_same_first (T : ZKMal.CoinLayer.TableData)
     (hR : Count.RealTabs sts (real M.x M.w M.ρ))
     (hP : ∀ k, k < spec.repStreams.size → sts[k / 2]!.mPts = spec.mPts ∧ 0 < spec.mPts ∧
       spec.points * spec.mPts ≤ _root_.Flock.ZkServer.Frames.COIN_MAX)
-    {sid : Nat} {st : State} {pl : Placed} {stream : String} {i r : Nat} {dom : ByteArray} {v : Claims.Msg} {e : Env}
-    {σ σ' : LoopAt} {e0 : Claims.Msg × Claims.Msg} {h1 : List (Claims.Msg × Claims.Msg)} {q₀ : Nat}
+    {sid : Nat} {st : State} {pl : Placed} {stream : String} {i r : Nat} {dom : ByteArray} {v : Hash.Msg} {e : Env}
+    {σ σ' : LoopAt} {e0 : Hash.Msg × Hash.Msg} {h1 : List (Hash.Msg × Hash.Msg)} {q₀ : Nat}
     (hmem : (i, r, stream) ∈ spec.repStreams.toList) (hh : M.hist σ.c = e0 :: h1) (hq : h1.length = q₀ + 1)
     (hk : nextAt spec sts (M.hist σ.c) = (2 * i + r, 0)) {m₀ : Masker}
     (hA₀ : M.L.answered M.x M.ρ (M.hist σ.c) = .ok m₀) (hlast : (M.hist σ.c).length < M.L.last M.x)
@@ -255,7 +255,7 @@ theorem repJ_same_first (T : ZKMal.CoinLayer.TableData)
     (hu₀ : unstop q.st.m = unstop m₀)
     {o : ByteArray} (ho : e.round = .ok o) {a : ByteArray} (ha : e.ans = some a) (hb : byte? a 0 = some 2)
     (hs : (st.answer (.round stream (loopNr M.x h1.length)) a).1.stop = none) (hco : e.coins = .ok ())
-    {m' : Claims.Msg} (hh' : M.hist σ'.c = M.hist σ.c ++ [(m', a.data.toList)]) (hSt : Stays sid σ σ') :
+    {m' : Hash.Msg} (hh' : M.hist σ'.c = M.hist σ.c ++ [(m', a.data.toList)]) (hSt : Stays sid σ σ') :
     M.L.fed M.x M.ρ (M.hist σ'.c) = true ∧
       ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q₀ + 1)).1 = 2 * i + r → RepJ M sid spec sts i r σ') := by
   have hlen : (M.hist σ.c).length - 2 = q₀ := by

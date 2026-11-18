@@ -71,7 +71,8 @@ def test_the_sessions_requests_refuse_a_run_it_cannot_follow() -> None:
 
 def test_no_block_is_declared_and_the_requirement_says_where_the_opening_unit_is() -> None:
     for scheme in (poub.BANDWIDTH, poub.POUB):
-        assert scheme.blocks == () and "BlockOpeningCheck_v2" in scheme.requires["one-design"]
+        assert isinstance(scheme.blocks, S.Lacks) and "BlockOpeningCheck_v2" in scheme.blocks.why
+        assert "BlockOpeningCheck_v2" in scheme.requires["one-design"]
         assert S.credited([scheme], [("Dither_v1", [(0, 4)])]) == frozenset()
 
 

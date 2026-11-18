@@ -17,6 +17,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from verity.commitments import domains as DM
 from verity.commitments import hm96
 from verity_flock import circuit as FC
 from verity_flock import inner_registered as IR
@@ -132,7 +133,7 @@ def test_register_with_the_statements_partition_binds_the_circuit_registration(s
     meta = IR.meta(d)
     assert meta[IR.REGISTRATION_KEY] == R.digest(rec) and {k: v for k, v in meta.items() if k != IR.REGISTRATION_KEY} == \
         json.loads(text.split("\n", 2)[1][5:])
-    assert rec == IR.registration_record(program, part, rec["registered"]) and rec["format"] == R.FORMAT_V2
+    assert rec == IR.registration_record(program, part, rec["registered"]) and rec["format"] == DM.REGISTRATION
     assert [(e["value"], e["root"]) for e in rec["registered"]] == [(IR.VALUE, got["cs"]["root"])]
     h = head(d)
     assert h == dict(head(d, "inst"), rows=False) and h["frame_v3"] == before["frame_v3"]

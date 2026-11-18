@@ -78,7 +78,7 @@ noncomputable section
 
 /-- **A decision of the last step at SHA-512**: `decR`'s reading `d` of the messages, the setup `(spec, sts)` the
 statement's read gives at SHA-512, and the session `sess` the record value the verdict reads decodes to. -/
-structure DecAt (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (ms : List Claims.Msg) (cs : List Coin) where
+structure DecAt (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (ms : List Hash.Msg) (cs : List Coin) where
   d : DecR
   dec : decR rd x ms cs = some d
   spec : SessionSpec
@@ -90,7 +90,7 @@ structure DecAt (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (ms : List 
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass)
 
 /-! ## A table's files -/
@@ -155,7 +155,7 @@ def consOf (sh : Shape) (sch : Flock.Schedule) (p : Proof) (rounds : Array (Arra
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass)
 
 /-- **Rep `r` of table `i`'s values in V\*'s layers**, with rep `k`'s accumulators `acc k`: `w` (`DecAt.w`), the

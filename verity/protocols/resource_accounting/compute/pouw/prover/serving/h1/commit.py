@@ -46,13 +46,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import names as NM
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import names as NM
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.words import ids_words
 
@@ -250,7 +251,7 @@ class CommitTap:
 
     def record(self, served: Any) -> dict[str, Any]:
         """The Commit's ``verity/registration/v2`` record of its values, under the window's Program."""
-        return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": served.program_digest,
+        return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "program": served.program_digest,
                 "window": {"kind": "served", "refused": list(self.refused)},
                 "registered": [self.values[n] for n in sorted(self.values)]}
 
@@ -310,7 +311,7 @@ def registration(run: Any, previous: str | None = None, day: Mapping[str, Any] |
     window also names the day's declaration (``day``, ``declaration``). It is the one-stage log's record whose tables a
     named Commit record reuses (`reused`)."""
     served = run.served
-    return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": served.program_digest,
+    return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "program": served.program_digest,
             "window": {"kind": "served", "entry": run.entry, "open_root": served.root, "refused": list(served.refused),
                        **dict(day or {})},
             "registered": served.entries(), "previous": previous}

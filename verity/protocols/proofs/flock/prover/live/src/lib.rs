@@ -37,7 +37,6 @@ pub mod zk_server;
 pub mod glue;
 pub mod huge_pages;
 pub mod proved_scope;
-pub mod pure_block;
 pub mod record_text;
 pub mod run_record;
 #[cfg(any(test, feature = "seed-injection"))]

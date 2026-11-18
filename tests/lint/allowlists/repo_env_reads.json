@@ -172,7 +172,6 @@
     {"file": "benchmarks/proof_throughput/gemm_hill.py", "count": 11},
     {"file": "benchmarks/proof_throughput/gemm_slowdown.py", "count": 3},
     {"file": "verity/protocols/proofs/flock/prover/pod/rec_reprice.py", "count": 3},
-    {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py", "count": 4},
     {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py", "count": 4},
     {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/class_statement.py", "count": 23},
     {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/ir_bench.py", "count": 4},

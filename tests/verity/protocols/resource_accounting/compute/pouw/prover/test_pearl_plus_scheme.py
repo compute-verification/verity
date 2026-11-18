@@ -13,7 +13,7 @@ from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.compute.pouw import scheme as PS
 from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as T
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as Wn
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as Wn
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PSALT
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_tile import PearlCTileRead
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile import PearlPlusTile
@@ -24,6 +24,34 @@ def test_found_by_name() -> None:
     assert S.SCHEMES["pearl-plus"] is PS.PEARL_PLUS
     assert {b.definition for b in PS.PEARL_PLUS.blocks} == {PearlPlusTile.id, PearlCTileRead.id}
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
+
+
+def test_its_window_record_values_are_named_in_the_tables_it_declares() -> None:
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+
+    assert S.declared(PS.PEARL_PLUS, "tables") == PWR.tables() == ("pearl-a", "pearl-y", "pearl-b")
+    assert (PWR.a_value(2, 3), PWR.y_value(2, 3), PWR.b_value(5)) == ("pearl-a/2/3", "pearl-y/2/3", "pearl-b/5")
+
+
+def test_it_hands_the_model_a_committed_bf16_y_and_opens_its_salt_after_the_epoch_root() -> None:
+    assert (S.declared(PS.PEARL_PLUS, "output_format"), S.declared(PS.PEARL_PLUS, "y_committed")) == ("bf16", True)
+    assert S.declared(PS.PEARL_PLUS, "salt_open_root") is PSALT.epoch_open_root
+    assert PSALT.epoch_open_root(bytes(64), 3) != PSALT.epoch_open_root(bytes(64), 4)
+
+
+def test_its_useful_products_are_rowwise_scaled_e4m3_whatever_format_y_leaves_in() -> None:
+    """The forming casts each operand row to E4M3 under its own scale (`pearl_c`'s ``atom``), and the products chain on
+    the E4M3 atom into FP32; y is the unscaled sum, written as BF16."""
+    assert S.declared(PS.PEARL_PLUS, "product_family") == "fp8-e4m3-rowwise"
+    assert S.declared(PS.PEARL_PLUS, "output_format") == "bf16"
+
+
+def test_its_record_row_is_verified_compute_in_the_macs_its_verifier_credits() -> None:
+    """The run verdict's ``credited`` (`Credit.lean`'s `creditAtAssumption`) is MACs, the unit its costs are in."""
+    assert (S.declared(PS.PEARL_PLUS, "record"), S.declared(PS.PEARL_PLUS, "symbol")) == ("work", "V")
+    assert S.declared(PS.PEARL_PLUS, "published") == (PS.PEARL_PLUS.unit, Fraction(1)) == ("MACs", Fraction(1))
+    with pytest.raises(LookupError, match="pearl-plus declares no channel_schemas: no Schema is declared for PearlSalt"):
+        S.declared(PS.PEARL_PLUS, "channel_schemas")
 
 
 def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:

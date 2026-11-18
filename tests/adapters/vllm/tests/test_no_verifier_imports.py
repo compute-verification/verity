@@ -74,10 +74,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/protocols/pouw/h1_ranks.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
         "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
     },
-    "network-accounting": {},
-    "compute-accounting": {
-        # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`).
-        "verity_vllm/protocols/pouw/pouw_circuit.py": ("resource_accounting.compute.pouw.verifier.protocol.DomainError",),
+    "network-accounting": {
     },
     "memory-accounting": {
         # `protocols/pous.py` reads the schemes for its refusals, setup's salt draw, and the period's certificate and gaps

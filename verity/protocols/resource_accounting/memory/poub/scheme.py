@@ -99,6 +99,19 @@ def _refresh(values: Mapping[str, Any]) -> str | None:
         if values["refresh"] else None
 
 
+def _bandwidth_reading(row: Mapping[str, Any]) -> S.Reading:
+    q = row["quantity"]
+    return S.Reading(int(q["q_bytes"]), Fraction(str(q["eps"])), "quantity.eps")
+
+
+#: why neither read audit has a check of a record: its Lean verifier answers the session as it runs, one event a line
+_LIVE = ("its Lean verifier ({}) checks the session live, an event a line, and no entry checks a finished record "
+         "against the verifier's registration")
+
+
+#: the route's named premise, unproved: the incorrect receipts are counted (`Remote.Run.Counted`)
+_COUNTED = "ResourceAccounting.Remote.Run.Counted"
+
 _REQUIRES = {
     "log-order": "the verifier party's own log of the session",
     "log-times": "the verifier party's clock on the auditor's host",
@@ -110,7 +123,7 @@ BANDWIDTH = S.register(S.Scheme(
     name="bandwidth",
     protocol=domains.POUB_P2,
     resource="read",
-    blocks=(),
+    blocks=S.Lacks(_OUTSIDE + "no block of the workload's circuit carries its cost"),
     assumptions=(*_SKETCH, "ResourceAccounting.Assumptions.WorkHardnessP2",
                  "ResourceAccounting.Remote.Held.Assumptions.SquaringCeilingP2"),
     log=(
@@ -142,14 +155,18 @@ BANDWIDTH = S.register(S.Scheme(
     record="bandwidth",
     symbol="Q_cert",
     published=("bytes", Fraction(1, 8)),
-    record_owner="memory-accounting",
+    check=S.Lacks(_LIVE.format("p2_lean, as p2_parties.drive runs it")),
+    reader=_bandwidth_reading,
+    premises=(_COUNTED,),
+    **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
+                    S.Lacks("not a kernel scheme")),
 ))
 
 POUB = S.register(S.Scheme(
     name="poub",
     protocol=domains.POUB_PROTOCOL,
     resource="read",
-    blocks=(),
+    blocks=S.Lacks(_OUTSIDE + "no block of the workload's circuit carries its cost"),
     assumptions=(*_SKETCH, "ResourceAccounting.Assumptions.WorkHardness",
                  "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling"),
     log=(S.Order("registration", "challenge"), S.Order("roots", "openings")),
@@ -181,7 +198,12 @@ POUB = S.register(S.Scheme(
                    "(benchmarks/poub_session)"),
     symbol=S.Lacks("the remote session publishes no certified quantity in a combined record"),
     published=S.Lacks("the remote session publishes no certified quantity in a combined record"),
-    record_owner=S.Lacks("no combined record has a row for the remote session"),
+    check=S.Lacks(_LIVE.format("session.lean_verifier, as session.verifier runs it")),
+    reader=S.Lacks("no combined record has a row for the remote session"),
+    premises=("ResourceAccounting.Assumptions.WorkHardness",
+              "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling", _COUNTED),
+    **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
+                    S.Lacks("not a kernel scheme")),
 ))
 
 #: a freed range is reused as late as the workload allows, so one freed inside a window is not written again in it
