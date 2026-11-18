@@ -350,6 +350,37 @@ def test_a_links_file_left_empty_by_a_failed_write_is_no_links(repo, tmp_path, c
     assert f"dependencies copied ({k[:12]})" in capsys.readouterr().out
 
 
+def test_unread_facts_goes_to_every_check_py_of_the_run_and_runs_the_packages_it_would_reuse(reuse, tmp_path):
+    """`--unread-facts` asks each check.py for `Unread.lean`'s facts; a package whose records pass on the same inputs
+    (`reused`) is audited anyway, since only an audit leaves them."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
+    (deps / LC.LA.deps_key(reuse / "a") / "dep").mkdir(parents=True)
+    assert LC.audit_records("p", deps, tree) == 0 and _calls(tmp_path)
+    assert LC.audit_records("p", deps, tree) == 0 and not _calls(tmp_path), "reused"
+    said = []
+    assert LC.audit_records("p", deps, tree, unread=True, log=said.append) == 0
+    calls = _calls(tmp_path)
+    assert calls and all("--unread-facts" in c["argv"] for c in calls)
+    assert any("no audit of security, security/Proofs left `Unread.lean`'s facts" in s for s in said)
+
+
+def test_unread_line_names_the_facts_both_audits_left_and_otherwise_which_left_none(tmp_path):
+    out = tmp_path / "out"
+    for tag, pkg in (("audit-security", "/slot/security"), ("audit-Proofs", "/slot/security/Proofs")):
+        (out / tag).mkdir(parents=True)
+        (out / tag / "report.json").write_text(json.dumps({"package": pkg}))
+    (out / "audit-security" / "unread-facts.jsonl.gz").write_bytes(b"")
+    said = []
+    LC.unread_line(out, said.append)
+    assert said == ["lean-records: no audit of security/Proofs left `Unread.lean`'s facts, so `unread.py` would build"]
+    (out / "audit-Proofs" / "unread-facts.jsonl.gz").write_bytes(b"")
+    said.clear()
+    LC.unread_line(out, said.append)
+    assert said[0].endswith(f"unread.py --out {out / 'unread'} --facts {out / 'audit-Proofs' / 'unread-facts.jsonl.gz'} "
+                            f"--facts {out / 'audit-security' / 'unread-facts.jsonl.gz'}")
+
+
 def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tmp_path, monkeypatch, capsys):
     """`--records Security` left `security/Properties`' records, which read `security`'s build, unchecked, and an unintended
     change to three of them surfaced only at a train's check. `a` requires `p` by path and lists a guarantee, so

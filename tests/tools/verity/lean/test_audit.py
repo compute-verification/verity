@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import threading
+from concurrent import futures
 from pathlib import Path
 
 import pytest
@@ -2669,6 +2670,23 @@ def test_facts_says_which_audits_keep_their_facts_document(tmp_path, monkeypatch
     assert got == kept
 
 
+@pytest.mark.parametrize("flags,asked", [([], False), (["--unread-facts"], True)])
+def test_unread_facts_asks_every_audit_of_the_run_for_unread_lean_s_facts(tmp_path, monkeypatch, flags, asked):
+    a = tmp_path / "a"
+    a.mkdir()
+    (a / A.POLICY).write_text("{}")
+    got = []
+
+    def fake(pkg, out, *args, built=lambda: None, write_unread=False, **_):
+        built()
+        got.append(write_unread)
+        return {"package": str(pkg), "seconds": {}, "failures": []}
+
+    monkeypatch.setattr(A, "audit", fake)
+    assert A.main([str(a), "--no-replay", *flags, "--out", str(tmp_path / "out"), "--repo", str(tmp_path)]) == 0
+    assert got == [asked]
+
+
 @pytest.mark.parametrize("kept_facts,keeps", [("all", [True, True]), ("own", [True, False]), ("none", [False, False])])
 def test_an_audit_keeps_the_package_s_and_its_provers_facts_as_kept_facts_says(tmp_path, monkeypatch, kept_facts, keeps):
     pkg = tmp_path / "s"
@@ -2689,6 +2707,48 @@ def test_an_audit_keeps_the_package_s_and_its_provers_facts_as_kept_facts_says(t
     monkeypatch.setattr(A, "proved", proved)
     rep = A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, kept_facts=kept_facts)
     assert seen == keeps and rep["failures"] == ["lean: stop after the provers' facts"]
+
+
+def stop(*_a, **_k):
+    raise RuntimeError("stop")
+
+
+class Now:
+    """An executor that runs each task as it is submitted, so a test sees what an audit submitted before it stopped."""
+
+    def __init__(self, *_a, **_k):
+        pass
+
+    def submit(self, fn, *args):
+        f = futures.Future()
+        f.set_result(fn(*args))
+        return f
+
+    def shutdown(self, *_a, **_k):
+        pass
+
+
+@pytest.mark.parametrize("unread,where,writes", [(True, "tree", True), (True, "root", True), (False, "tree", False),
+                                                 (True, "elsewhere", False)],
+                         ids=["unread-facts-in-tree", "unread-facts-in-checkout", "records-run", "outside-both"])
+def test_with_no_replay_security_writes_unread_lean_s_facts_only_under_unread_facts(tmp_path, monkeypatch, unread, where,
+                                                                                    writes):
+    """A records run (`--no-replay`) of `security` in a slot tree (`--tree`) writes `Unread.lean`'s facts only under
+    `--unread-facts`; a package of no tree check.py knows writes none."""
+    tree, root = tmp_path / "tree", tmp_path / "root"
+    pkg = {"tree": tree, "root": root, "elsewhere": tmp_path / "other"}[where] / "security"
+    pkg.mkdir(parents=True)
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["S"], "proved_in": ["Proofs"]}))
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    monkeypatch.setattr(A, "TREE", tree)
+    monkeypatch.setattr(A, "ROOT", root)
+    monkeypatch.setattr(A, "ThreadPoolExecutor", Now)
+    monkeypatch.setattr(A, "facts_of", lambda *a, **k: {"modules": ["S"], "oleans": [], "pins": {}})
+    monkeypatch.setattr(A, "proved", stop)
+    wrote = []
+    monkeypatch.setattr(A, "unread_facts", lambda q, modules, *_: wrote.append((q, modules)) or {})
+    rep = A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, write_unread=unread)
+    assert wrote == ([(pkg, ["S"])] if writes else []), rep["failures"]
 
 
 SHAPE_SPEC = """namespace Control
