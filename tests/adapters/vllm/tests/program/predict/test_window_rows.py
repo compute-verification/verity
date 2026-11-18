@@ -547,6 +547,9 @@ class _Index:
     def describe(self, r):
         return {k: v for k, v in self.served[r["i"]].items() if k != "spec"}
 
+    def value_families(self, i):
+        return {m[0]: "instance_outputs" for m in self.served[i]["members"]}
+
 
 def _record(store, rid: str, arrive: int, spell) -> CommittedStore:
     """``store``'s values (`_served`'s) as a record's `CommittedStore`: request ``rid``'s at engine step ``arrive`` plus its
