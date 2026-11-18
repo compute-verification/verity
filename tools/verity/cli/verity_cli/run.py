@@ -73,8 +73,9 @@ sender's, or the workload's when this host stands for both, unless the table's l
 memory attesters, whose bindings say where they ran).
 
 onsite's ``block`` is its execution phase's seal digest, the one the served window publishes (`served_table.PHASE`).
-onsite's line reads a record the serving node composed, so its accepts, each row's and the combined one, read
-``undecided`` (`served_table.AS_WRITTEN` in the reason); ``answer_from`` names each row's stated source and decides nothing.
+onsite's line reads a record the workload's node composed, its verdicts as the record has them; ``answer_from`` names
+each row's stated source and decides nothing. Under ``VERITY_HOLD_PLACEMENT=1`` its accepts, each row's and the combined
+one, read ``undecided`` (`served_table.AS_WRITTEN` in the reason).
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
 developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here, and the
 network attester's, from its piece's placement (where it ran, its key and its ``coins_on``).
@@ -83,6 +84,8 @@ binding is given, else the workload's, a development run's, which makes ``coins`
 remote's has ``coins_on``, over the placement's: the machine each component whose challenger gate is optional had its
 coins flipped on, the challenger's where its gate is bound, else the workload's, which makes ``coins`` ``simulated``;
 onsite's has Pearl+'s by the same rule.
+remote's has ``answer_from`` only for a component whose declaration says what of its run no auditor-side entry checks
+(`Scheme.unchecked`), which ends that row's ``answer_from`` on onsite's line too, whatever the verdict.
 
 ``coins`` is ``simulated`` when the challenger's host is one a prover's party is on (its machine, or two machines this
 host stands for), else ``development`` (the keys are made for the run). ``simulated`` names each premise the placement

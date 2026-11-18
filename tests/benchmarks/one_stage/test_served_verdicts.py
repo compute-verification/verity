@@ -629,7 +629,8 @@ def test_the_hand_off_of_a_record_whose_v3c_audit_was_refused_its_coin_trees_is_
 def _integrity_entry(size: int, sampled: int) -> dict:
     """The block record's sampled-proofs entry of an accepted uniform sample of ``sampled`` of ``size`` proof blocks."""
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
-         "public": {"bound": 0, "drawn": list(range(sampled)), "per_template": None, "proved": list(range(sampled))},
+         "public": {"bound": 0, "complete": True, "drawn": list(range(sampled)), "per_template": None,
+                    "proved": list(range(sampled))},
          "profile": {"levels": [{"name": "unit", "size": size}], "drawn": {"unit": sampled}, "delta": "1/2"}}
     return BR.subprotocol("integrity", S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent")), server="n", runs=[])
 
@@ -859,7 +860,7 @@ MAIN = f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}"
 
 def _accepted() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
-         "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
+         "public": {"bound": 2, "complete": True, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
          "profile": {"levels": [{"name": "unit", "size": 4}], "drawn": {"unit": 2}, "delta": "1/100"}}
     return S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent"))
 
@@ -1043,6 +1044,29 @@ def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
 
 
+def test_a_one_stage_accept_that_is_not_complete_rows_not_complete_and_never_composes_to_accept(tmp_path):
+    """An accept whose audit record left an entry without a verdict says so in its public ``complete``: its row is
+    `verdict_record.NOT_COMPLETE`, naming the entry, so the composed verdict is no accept and carries no block record."""
+    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import NOT_COMPLETE
+
+    (tmp_path / "window").mkdir()
+    (tmp_path / "window" / "audit.json").write_text(json.dumps(
+        {"accepted": True, "complete": False, "verdicts": {"lean": {"accepted": True}, "upstream": {"accepted": None}}}))
+    a = _accepted()["answer"]
+    row = S.row_of(S.INTEGRITY_OWNER, {**a, "public": {**a["public"], "complete": False}}, tmp_path)
+    assert (row["verdict"], row["reason"]) == (
+        NOT_COMPLETE, "its accept is not complete: its audit record has no verdict of upstream")
+    _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
+    assert rec is None and line["composed"] != "accept" and line["by"] == ["sampled proofs"]
+    assert f"sampled proofs: {NOT_COMPLETE}: its accept is not complete: its audit record has no verdict of upstream" \
+        in line["reason"]
+    bare = {**a, "public": {k: v for k, v in a["public"].items() if k != "complete"}}
+    assert S.row_of(S.INTEGRITY_OWNER, bare, tmp_path / "none")["verdict"] == NOT_COMPLETE
+    (tmp_path / "window" / "audit.json").write_text("{not json")
+    row = S.row_of(S.INTEGRITY_OWNER, bare, tmp_path)
+    assert row["verdict"] == NOT_COMPLETE and "its audit record does not parse: " in row["reason"]
+
+
 WIPE_ACCEPT = {"protocol": W.PROTOCOL, "verdict": "accept", "reason": None, "commitment": "cd" * 64,
                "public": {"certified": True, "egress_mib": 0, "eps": str(W.EPS), "foreign_bits": 4096, "k": 5500,
                           "memory_bits": 1 << 40, "r": "1/2"},
@@ -1209,8 +1233,9 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         beside = {"the bandwidth audit": f"; its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')}"}
         late = {n: f" (its quantity is not established at δ = 1/100 or 1/1000000: {why}{beside.get(n, '')})"
                 for n, why in refused.items()} | {"sampled proofs": SPOT_ACCEPT.removeprefix("sampled proofs: accept")}
+        said = {n: f", {u}" for n, c in comp.items() if (u := S.declared_unchecked(ACCEPTS.get(c, {}).get("protocol")))}
         assert line["reason"] == "; ".join(
-            f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
+            f"{n}: accept{late.get(n, '')}{said.get(n, '')}" for n in S.NAMES.values())
         return
     assert line["composed"] == "pending" and line["record_missing"] == [subprotocol]
     if case == "missing":
@@ -2748,11 +2773,58 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert (line["composed"], line["verdicts"]["PoUW"], line["check"]) == ("pending", "accept", {})
     assert (line["record_missing"], rec["composed"]["verdict"], rec["composed"]["answer"]) == ([], "undecided", None)
-    assert line["answers"]["PoUW"] == S.PEARLPLUS_FROM
+    assert line["answers"]["PoUW"].startswith(S.PEARLPLUS_FROM)
     reason = line["reason"]
     assert reason.count(S.PEARLPLUS_SAID) == 1 and reason.index(S.PEARLPLUS_SAID) > reason.index("PoUW: accept"), reason
     assert rec["legs"]["pouw"]["protocol"] == S.PEARLPLUS_PROTOCOL
     assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
+
+
+@pytest.mark.parametrize("product", ["remote", "onsite"])
+def test_a_rows_declared_unchecked_ends_its_stated_source_and_its_accept_in_the_record_on_both_paths(
+        tmp_path, monkeypatch, capsys, live, product):
+    """What a row's protocol's declaration says no auditor-side entry checks (`declared_unchecked`), Pearl+'s coins'
+    signatures here, ends the row's stated source in the report and the RECORD line's ``answers``, and follows its
+    accept in the composed reason, on both products' paths; the row keeps Pearl+'s reason of record."""
+    unchecked = "coins' signatures checked on the served node only; not checked by the auditor"
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "declared_unchecked", lambda p, said="": unchecked if p == S.PEARLPLUS_PROTOCOL else "")
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
+    (tmp_path / "serve").mkdir()
+    S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs", str(audit),
+            "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200", "--product", product,
+            "--key-sha512", pin, "--lane", lane])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    row = json.loads((tmp_path / "record" / "verdicts.json").read_text())["protocols"]["work"]
+    assert line["verdicts"]["PoUW"] == "accept"
+    assert row["answer_from"] == line["answers"]["PoUW"] == f"{S.PEARLPLUS_FROM}; {unchecked}"
+    reason = line["reason"]
+    assert reason.index("PoUW: accept (") < reason.index(f"), {unchecked}, {S.PEARLPLUS_SAID}; PoUS:"), reason
+
+
+def test_a_protocol_no_declaration_names_has_nothing_unchecked():
+    """`declared_unchecked` reads the declarations by protocol id: an id none declares says nothing."""
+    assert S.declared_unchecked("verity/no-such-protocol/v0") == "" and S.declared_unchecked(None) == ""
+
+
+def test_a_declared_mapping_says_its_sentences_alone_nothing_when_empty_and_refuses_an_entry_not_a_sentence(monkeypatch):
+    """`declared_unchecked` prints each sentence alone, never its name; an empty mapping says nothing; an entry that is
+    not a sentence is refused by the scheme's and its name, never printed raw."""
+    import dataclasses
+
+    from verity.protocols.compose import schemes
+
+    pearl, get = schemes.get("pearl-plus"), schemes.get
+    assert S.declared_unchecked(pearl.protocol) == "coins' signatures checked on the served node only; not checked by the auditor"
+    stand_in = dataclasses.replace(pearl, unchecked={})
+    monkeypatch.setattr(schemes, "get", lambda n: stand_in if n == "pearl-plus" else get(n))
+    assert S.declared_unchecked(pearl.protocol) == ""
+    object.__setattr__(stand_in, "unchecked", {"coins-signatures-checked-by-the-auditor": {"not": "a sentence"}})
+    with pytest.raises(ValueError, match="pearl-plus: unchecked entry 'coins-signatures-checked-by-the-auditor' is not a "
+                                         "sentence"):
+        S.declared_unchecked(pearl.protocol)
 
 
 @pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", "work-rate:1/977"])
@@ -8412,3 +8484,30 @@ def test_every_piece_the_launcher_names_to_pieces_is_one_the_parser_takes(tmp_pa
             S.main(["pieces", "--serve-run", str(tmp_path), "--window", "0", "--out", str(tmp_path / "out"),
                     f"--{flag}", word])
         assert got.value.args[0 if flag == "only" else 1] == [word], (flag, word)
+
+
+@pytest.mark.parametrize("value", [None, "", "0", "1", "yes", " 1", "1 "])
+def test_the_shells_hold_and_the_one_python_reader_agree_on_every_value(value):
+    """placement.sh's `hold_placement`, which served_verdicts.sh and served_composite.sh source, run as the shell runs it,
+    holds exactly where `verity_cli.settings.hold_placement` does, the hold's one Python reader."""
+    spec = importlib.util.spec_from_file_location(
+        "verity_cli_settings", HERE.parents[2] / "tools" / "verity" / "cli" / "verity_cli" / "settings.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    env = {"PATH": os.defpath, **({} if value is None else {"VERITY_HOLD_PLACEMENT": value})}
+    shell = subprocess.run(["bash", "-c", '. "$1" && hold_placement', "_",
+                            str(HERE.parents[2] / "benchmarks" / "one_stage" / "placement.sh")], env=env, check=False)
+    assert shell.returncode in (0, 1)
+    assert (shell.returncode == 0) is cli.hold_placement(env) is (value == "1")
+
+
+def test_the_launcher_and_the_composite_read_the_hold_only_through_placement_sh():
+    """Neither script defines a hold of its own or reads VERITY_HOLD_PLACEMENT inline: each sources placement.sh, and the
+    launcher's preflight only checks the value's form."""
+    for name in ("served_verdicts.sh", "served_composite.sh"):
+        script = (HERE.parents[2] / "benchmarks" / "one_stage" / name).read_text()
+        code = [x for x in script.splitlines() if not x.lstrip().startswith("#")]
+        assert any("/placement.sh\"" in x for x in code), name
+        assert not [x for x in code if "hold_placement()" in x], name
+        reads = [x for x in code if "${VERITY_HOLD_PLACEMENT" in x and not x.startswith("case ${VERITY_HOLD_PLACEMENT:-} in")]
+        assert not reads, (name, reads)

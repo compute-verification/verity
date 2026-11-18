@@ -272,16 +272,20 @@ def command(device: str | Path) -> tuple[str, ...]:
 def placement(node: str, host: str, key_sha512: str | None = None, *, pins: Sequence[Mapping[str, str]] = (),
               configuration: str | None = None, committed: Collection[str] = frozenset(),
               verifier: str | None = None) -> dict[str, Any]:
-    """Which host ran each party, what those names say (`kind`: ``own-host``, a challenger host other than the node, or
-    ``prover-node``), and `trusted-device`'s premise, `memory_attester.trusted_device`'s for the session's key: the
+    """Which machine ran each party, by the party on it (`memory_attester.machines`: `node` and `host`, the names the
+    run gave the prover's and the challenger's machines, are compared and never written; a `verifier` named other than
+    `node` is `memory_attester.UNNAMED`), what that says (`kind`: ``own-host``, a challenger host other than the node,
+    or ``prover-node``), and `trusted-device`'s premise, `memory_attester.trusted_device`'s for the session's key: the
     names are the run's own, so they bound nothing, and the premise never holds here: for `key_sha512`, the SHA-512 of
     the key the session was signed under, when the configuration whose hash is `configuration`, one of `committed`,
     pins it for the challenger's PoUS sessions (`pins`, its `[[pin]]` entries), it reads `memory_attester.MATCHED`;
     `SETUP` under ``setup``; and `memory_attester.UNCHECKED` under ``unchecked``."""
-    kind = "own-host" if host != node else "prover-node"
-    names = (f"the memory attester ran on {host}, not the prover's {node}" if kind == "own-host" else
-             f"the memory attester ran on the prover's node {node}")
-    return {"parties": {"memory_attester": host, "prover": node, "verifier": verifier or node}, "kind": kind,
+    prover, attester = mc.machines(node, host)
+    kind = "own-host" if attester != prover else "prover-node"
+    names = (f"the memory attester ran on {attester}, not on {prover}" if kind == "own-host" else
+             f"the memory attester ran on {prover}")
+    seen = prover if verifier in (None, node) else mc.UNNAMED
+    return {"parties": {"memory_attester": attester, "prover": prover, "verifier": seen}, "kind": kind,
             PREMISE: mc.trusted_device(pins, CHALLENGER, "pous", key_sha512, names, configuration=configuration,
                                        committed=committed), "setup": SETUP, **mc.unchecked()}
 
