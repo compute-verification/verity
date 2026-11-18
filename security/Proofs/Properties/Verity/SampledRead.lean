@@ -433,7 +433,7 @@ def NoCommitS (pre : List (String × Nat))
     (st : Array (String × Nat) × List (String × Nat) × Array Entry × Option Entry) : Prop :=
   NoCommit (pre.map (·.1)) st.2.2.1 st.2.2.2
 
-theorem lines_init : NoCommit [] #[] none := ⟨rfl, fun _ h => by cases h, fun _ h => by cases h⟩
+theorem lines_init : NoCommit [] #[] none := ⟨rfl, fun _ h => (by cases h), fun _ h => (by cases h)⟩
 
 theorem lines_snoc {P : List String} {a : String} {r : Json} (hP : ∀ x ∈ P, ∃ j, event x = .ok j)
     (he : event a = .ok r) : ∀ x ∈ P ++ [a], ∃ j, event x = .ok j := by
@@ -446,13 +446,13 @@ theorem lines_snoc {P : List String} {a : String} {r : Json} (hP : ∀ x ∈ P, 
 theorem lines_root {P : List String} {out : Array Entry} {q : Option Entry} {a label : String} {r : Json}
     {bytes : ByteArray} {index t i : Nat} (hI : NoCommit P out q) (he : event a = .ok r) :
     NoCommit (P ++ [a]) out (some ⟨.recorded, label, index, bytes, t, i⟩) :=
-  ⟨hI.1, fun _ h => by cases h; rfl, lines_snoc hI.2.2 he⟩
+  ⟨hI.1, fun _ h => (by cases h; rfl), lines_snoc hI.2.2 he⟩
 
 theorem lines_release {P : List String} {out : Array Entry} {q : Option Entry} {p : Entry} {b : String} {r : Json}
     {t i : Nat} (hI : NoCommit P out q) (hq : q = some p) (he : event b = .ok r) :
     NoCommit (P ++ [b]) ((out.push p).push ⟨.released, p.label, p.index, p.root, t, i⟩) none := by
   subst hq
-  refine ⟨?_, fun _ h => by cases h, lines_snoc hI.2.2 he⟩
+  refine ⟨?_, fun _ h => (by cases h), lines_snoc hI.2.2 he⟩
   simp [Array.toList_push, List.any_append, hI.1, hI.2.1 _ rfl]
 
 theorem mem_rest {log : List String} {pre suf : List (String × Nat)} {cur : String × Nat}
