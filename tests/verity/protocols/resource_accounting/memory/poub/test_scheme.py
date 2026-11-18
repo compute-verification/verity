@@ -91,7 +91,7 @@ def test_every_event_on_its_hooks_passes_the_binder_and_its_own_are_still_handle
             H.InputArrived("a", 3, 0), H.StepBegan(0, ("a",), 1), H.MemoryChanged("allocated", (0,), input="a"),
             H.MemoryChanged("written", (0,), offset=0, count=3),
             H.PhaseOpened(0, 0), H.ValueProduced("b", "x", 0, None), H.BlockDue("b", 1, {"n": 1}, "int8", {}),
-            H.StepComputed(0), H.StepEnded(0), H.OutputsComplete("a", 0), H.MemoryChanged("freed", (0,)), H.PhaseClosed(0, 0, b""),
+            H.StepComputed(0), H.StepEnded(0), H.OutputLeft("a", 0), H.MemoryChanged("freed", (0,)), H.PhaseClosed(0, 0, b""),
             H.PhaseCommitted(0, bytes(64)))
     assert {type(e) for e in sent} == set(H.EVENTS)
     for e in sent:
