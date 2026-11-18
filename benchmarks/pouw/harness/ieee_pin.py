@@ -35,12 +35,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 #: what `jobs/pin_target.sh` and the tests read
 __all__ = [
     "CASES", "FLOAT", "NORMAL", "PINNED", "PinFailed", "SG", "UNITS_CASES", "arch_of", "build_toolkit", "homes",
-    "judge_run", "nvcc_args",
+    "judge_run", "nvcc_args", "sm_of",
 ]
 
 HERE = Path(__file__).resolve().parent
@@ -62,18 +63,40 @@ SG = _gate()
 #: the pinned builds' source: the tree's, beside the pins, or the copy beside this file where the two were copied out
 _TREE_SOURCE = HERE.parent.parent.parent / "verity/protocols/resource_accounting/compute/pouw/prover/ieee_pin.cu"
 SOURCE = _TREE_SOURCE if _TREE_SOURCE.is_file() else HERE / "ieee_pin.cu"
-ARCHS = {"sm_120a": 120, "sm_90a": 90}
+#: the architecture files (calibration/hardware/architectures): the tree's, or the copy beside this file where it was
+#: copied out; read with the standard library, as `verity.device.load_architecture` reads them
+_TREE_ARCHITECTURES = HERE.parent.parent.parent / "calibration/hardware/architectures"
+ARCHITECTURES = _TREE_ARCHITECTURES if _TREE_ARCHITECTURES.is_dir() else HERE / "architectures"
+#: the target of a toolkit whose name has no suffix, as sass_pins.json names them
+DEFAULT_TARGET = "sm_120a"
+#: the compute capability (major and minor digits) ieee_pin.cu builds and runs `units_checks` for
+UNITS_SM = 90
+
+
+def architecture(arch: str) -> dict:
+    path = ARCHITECTURES / f"{arch}.toml"
+    if not path.is_file():
+        raise PinFailed(f"no target {arch}: no architecture file {path} (the targets are "
+                        f"{sorted(f.stem for f in ARCHITECTURES.glob('*.toml'))})")
+    return tomllib.loads(path.read_text())
+
+
+def sm_of(arch: str) -> int:
+    """The compute capability's digits, as a run's device line gives them (``"12.0"`` is 120)."""
+    return int(architecture(arch)["capability"].replace(".", ""))
 
 
 def arch_of(toolkit: str) -> str:
-    arch = toolkit.rsplit("-", 1)[1] if "-sm_" in toolkit else "sm_120a"
-    if arch not in ARCHS:
-        raise PinFailed(f"toolkit {toolkit}: no target {arch} (one of {sorted(ARCHS)})")
+    arch = toolkit.rsplit("-", 1)[1] if "-sm_" in toolkit else DEFAULT_TARGET
+    try:
+        architecture(arch)
+    except PinFailed as e:
+        raise PinFailed(f"toolkit {toolkit}: {e}") from None
     return arch
 
 
 def nvcc_args(arch: str) -> list[str]:
-    return ["-O3", "-std=c++17", "-gencode", f"arch=compute_{arch[3:]},code={arch}", "--no-compress"]
+    return ["-O3", "-std=c++17", "-gencode", f"arch={architecture(arch)['virtual']},code={arch}", "--no-compress"]
 
 
 PINNED = [[], ["-fmad=false"]]
@@ -189,9 +212,10 @@ def run_binaries(work: Path) -> None:
     (work / "runs.json").write_text(json.dumps(runs, indent=1))
 
 
-def judge_run(run: dict, control: bool, sm: int = ARCHS["sm_120a"]) -> list[str]:
-    """What's wrong with one binary's run: [] when a pinned build is exact everywhere on an sm_`sm` card, or a control
-    differs somewhere."""
+def judge_run(run: dict, control: bool, sm: int | None = None) -> list[str]:
+    """What's wrong with one binary's run: [] when a pinned build is exact everywhere on an sm_`sm` card (by default
+    `DEFAULT_TARGET`'s), or a control differs somewhere."""
+    sm = sm_of(DEFAULT_TARGET) if sm is None else sm
     lines = run.get("lines", [])
     dev = next((ln for ln in lines if "device" in ln), None)
     if dev is None:
@@ -208,7 +232,7 @@ def judge_run(run: dict, control: bool, sm: int = ARCHS["sm_120a"]) -> list[str]
         return problems
     if run.get("exit") != 0:
         problems.append(f"exit {run.get('exit')}: {run.get('stderr', '')[-300:]}")
-    cases = {**CASES, **(UNITS_CASES if sm == ARCHS["sm_90a"] else {})}
+    cases = {**CASES, **(UNITS_CASES if sm == UNITS_SM else {})}
     for name, n in cases.items():
         c = checks.get(name)
         if c is None:
@@ -263,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
         for tk, t in result["toolkits"].items():
             for b in t["builds"]:
                 b["run"] = runs.get(b["binary"], {"exit": None, "lines": []})
-                b["problems"] = judge_run(b["run"], b["control"], ARCHS[arch_of(tk)])
+                b["problems"] = judge_run(b["run"], b["control"], sm_of(arch_of(tk)))
                 b["binary"] = Path(b["binary"]).name
             t["ok"] = not t["problems"] and not any(b["problems"] for b in t["builds"])
     result["ok"] = result["lease_exit"] == 0 and bool(result["toolkits"]) and all(t["ok"] for t in result["toolkits"].values())
