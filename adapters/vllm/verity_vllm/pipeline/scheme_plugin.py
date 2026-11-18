@@ -18,7 +18,7 @@ import asyncio
 import queue
 import sys
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from verity import hooks as H
@@ -46,17 +46,12 @@ def config(environ: Mapping[str, str] | None = None) -> tuple[list[str], dict[st
     return names, cfg
 
 
-def context(process: str, name: str, cfg: Mapping[str, Any]) -> dict[str, Any]:
-    """Scheme ``name``'s ``ctx`` in ``process`` (`hooks.FRONT`)."""
-    return {"process": process, "feed": cfg["feed"], "settings": dict(cfg.get(name) or {})}
-
-
-def declared(vllm_config: Any, names: Sequence[str] = (), cfg: Mapping[str, Any] | None = None) -> H.Declared:
+def declared(vllm_config: Any, attached: Mapping[str, Mapping[str, Any]] | None = None) -> H.Declared:
     """What vLLM's configuration declares, the properties `engine.build.build_engine` declares of its own engine, with
-    the schemes ``names`` and their settings in ``cfg``."""
+    the schemes ``attached`` (`messages.Exchange.attached`) and their settings."""
     from verity_vllm.engine import served
 
-    cfg = cfg or {}
+    attached = attached or {}
     mc, pc = vllm_config.model_config, vllm_config.parallel_config
     return H.Declared("", {
         "model": mc.model, "execution": None, "eager": bool(mc.enforce_eager),
@@ -65,7 +60,7 @@ def declared(vllm_config: Any, names: Sequence[str] = (), cfg: Mapping[str, Any]
         "prefix_cache": bool(vllm_config.cache_config.enable_prefix_caching),
         "kernels": served.kernels({"quantization": mc.quantization}),
         "async_steps": bool(getattr(vllm_config.scheduler_config, "async_scheduling", False))},
-        tuple(names), {n: dict(cfg.get(n) or {}) for n in names})
+        tuple(attached), {n: dict(v) for n, v in attached.items()})
 
 
 def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg: Mapping[str, Any]) -> list[Any]:
@@ -77,12 +72,12 @@ def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg:
     if pc.tensor_parallel_size * pc.pipeline_parallel_size != 1:
         raise NotImplementedError(f"{GOAL}: schemes inside vLLM's server on one GPU, not tensor_parallel_size "
                                   f"{pc.tensor_parallel_size} × pipeline_parallel_size {pc.pipeline_parallel_size}")
-    got = [schemes.get(n).attach(exchange, context(H.ENGINE, n, cfg)) for n in names]
+    got = [exchange.attach(schemes.get(n), cfg.get(n) or {}, process=H.ENGINE, feed=cfg["feed"]) for n in names]
     if fixed := sorted({r.ranges for _, r in exchange.requests if isinstance(r, H.FixRanges)}):
         if len(fixed) > 1:
             raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks: one size")
         vllm_config.cache_config.num_gpu_blocks_override = fixed[0]
-    exchange.answer(declared(vllm_config, names, cfg))
+    exchange.answer(declared(vllm_config, exchange.attached))
     return got
 
 
@@ -171,7 +166,7 @@ class Front:
             self.ex = messages.current()
             self.ex.refuse = self.refuse
             for n in names:
-                schemes.get(n).attach(self.ex, context(H.FRONT, n, cfg))
+                self.ex.attach(schemes.get(n), cfg.get(n) or {}, process=H.FRONT, feed=cfg["feed"])
         self.inside: dict[str, Any] = {}           # input -> done once a scheme refuses it, while the server has it
 
     def refuse(self, input: str, why: str) -> None:

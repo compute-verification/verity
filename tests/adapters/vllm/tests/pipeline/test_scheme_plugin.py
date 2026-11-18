@@ -45,7 +45,8 @@ def stand_in(monkeypatch):
         got.append((exchange, ctx))
         exchange.request("stand-in", H.FixRanges(64))
         return held
-    monkeypatch.setitem(S.SCHEMES, "stand-in", SimpleNamespace(attach=attach))
+    monkeypatch.setitem(S.SCHEMES, "stand-in", SimpleNamespace(name="stand-in", settings={"k": 0}, check_settings=lambda s: None, attach=attach,
+                                                               requests=lambda ctx: ()))
     yield got, held
     messages.close()
 
@@ -61,7 +62,7 @@ def test_the_engine_attaches_each_scheme_with_its_context_and_answers_what_vllms
     got, held = stand_in
     ex, cfg = messages.Exchange(), vllm_config()
     assert SP.attach(ex, cfg, *SP.config(ENV)) == [held]
-    assert got == [(ex, {"process": H.ENGINE, "feed": FEED, "settings": {"k": 1}})]
+    assert got == [(ex, {"settings": {"k": 1}, "build": ex.key, "process": H.ENGINE, "feed": FEED})]
     assert cfg.cache_config.num_gpu_blocks_override == 64
     assert ex.declared.properties == {"model": "m", "execution": None, "eager": True, "world": 1, "dtype": "bfloat16",
                                       "quantization": None, "prefix_cache": False, "kernels": "profile",
@@ -127,7 +128,8 @@ def front_scheme(monkeypatch):
             if isinstance(e, H.InputArrived) and "x-bad" in e.headers:
                 exchange.request("stand-in", H.RefuseInput(e.input, "bad"))
         exchange.subscribe("stand-in", "steps", on)
-    monkeypatch.setitem(S.SCHEMES, "stand-in", SimpleNamespace(attach=attach))
+    monkeypatch.setitem(S.SCHEMES, "stand-in", SimpleNamespace(name="stand-in", settings={"k": 0}, check_settings=lambda s: None, attach=attach,
+                                                               requests=lambda ctx: ()))
     yield seen
     messages.close()
 
@@ -169,7 +171,7 @@ def test_the_front_answers_a_schemes_route_with_the_body_as_it_streams_in(front_
                                                           {"type": "http.request", "body": b"1 2\n"}])
     assert answer(sent) == (200, "fed") and not app_calls
     assert front_scheme["bodies"] == [("POST /feed HTTP/1.1", "ab", [b"0 1\n", b"1 2\n"])]
-    assert front_scheme["ctx"] == [{"process": H.FRONT, "feed": FEED, "settings": {}}]
+    assert front_scheme["ctx"] == [{"settings": {"k": 0}, "build": front.ex.key, "process": H.FRONT, "feed": FEED}]
 
 
 def test_an_input_a_scheme_refuses_on_arrival_is_answered_400_and_never_reaches_the_server(front_scheme):

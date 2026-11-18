@@ -538,13 +538,12 @@ def test_readers_of_live_weights_see_the_plaintext_an_option_released(monkeypatc
 
 
 def test_with_pous_on_an_option_keeping_a_resident_weight_copy_is_refused(monkeypatch):
-    pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
-    pouw.keeps_weight_copy = lambda scheme, ctx: ctx.settings_of("pouw").get("weight_operands", "resident") == "resident"
+    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1", "ncp-v2"))
     _fake_adapter(monkeypatch, "pous", _pous([]), schemes=("band-chain/d12/v1",))
-    assert PO.refusals(_serve("pouw:ncp-v1")) == ()
-    got = PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1"))
-    assert len(got) == 1 and got[0].startswith("pouw:ncp-v1: keeps a weight-derived copy resident across forwards")
-    assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1", settings={"pouw": {"weight_operands": "per-forward"}})) == ()
+    assert PO.refusals(_serve("pouw:ncp-v2")) == ()
+    got = PO.refusals(_serve("pouw:ncp-v2", "pous:band-chain/d12/v1"))
+    assert len(got) == 1 and got[0].startswith("pouw:ncp-v2: keeps a weight-derived copy resident across forwards")
+    assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == ()
 
 
 @pytest.mark.parametrize("knob,target,world,match", [
@@ -675,23 +674,22 @@ def test_beside_spot_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
     its linears and reads the tables its calls commit (`window_class.PearlTables`), which the SPOT setting
     ``cut`` names. Without it, or naming another entry, or under ncp-v2 (which has a circuit and commits no tables), the
     composition refuses by name; a row's Commit refuses any cut, since its request Programs are never cut."""
-    from verity_vllm.protocols import pouw
 
-    assert pouw.cuts("pearl-c-h100-v1-h3") and not pouw.cuts("ncp-v2") and not pouw.cuts("ncp-v1")
+    assert PO.cuts("pouw", "pearl-c-h100-v1-h3") and not PO.cuts("pouw", "ncp-v2") and not PO.cuts("pouw", "ncp-v1")
     assert PO.refusals(_cut_window(PEARL)) == ()
     uncut = (f"{PEARL}: executes {APPLY}, and no Definition computes what it does there: SPOT takes it only in a "
              f"window whose circuit is cut at its sites and reads the tables its calls commit (window_class.PearlTables), "
              f"which the sampled-proofs setting 'cut' names ({{\"sampled-proofs\": {{\"cut\": \"{PEARL}\"}}}})")
     assert PO.refusals(_cut_window()) == (uncut,)
     other = PO.refusals(_cut_window("pouw:ncp-v2"))
-    assert other[0] == uncut and "not 'pouw:ncp-v2'" in other[1] and "an adapter's cuts" in other[2]
+    assert other[0] == uncut and "not 'pouw:ncp-v2'" in other[1] and other[2].endswith("the tables the cut reads (cuts)")
     assert PO.refusals(_cut_window(PEARL, x=1)) == (("sampled-proofs:rows-sha512: the sampled-proofs settings ['x'] are none "
                                                      "of its (cut)"),)
     ncp = PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"),
                      settings={"sampled-proofs": {PO.CUT: "pouw:ncp-v2"}})
     assert PO.refusals(ncp) == (("the sampled-proofs setting 'cut' names 'pouw:ncp-v2', and a window's circuit is cut only at "
                                  "the sites of an enabled executor with no circuit of its own whose calls commit the tables "
-                                 "the cut reads (an adapter's cuts)"),)
+                                 "the cut reads (cuts)"),)
     assert PO.refusals(PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"))) == ()
     assert PO.refusals(_serve(PEARL, settings={"pouw": PEARL_SETTINGS})) == ()
     row = f"{PEARL},sampled-proofs:rows-sha512"

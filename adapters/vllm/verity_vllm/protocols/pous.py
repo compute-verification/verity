@@ -30,7 +30,7 @@ vLLM's model, attaches the decode to its layers and holds the option.
   point no certificate covers).  In `PousOption.subprotocol` the memory attester runs at ``period.json``'s ``challenger_host``
   (`side_of`, which the caller that starts the run hands in) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
-  keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
+  keeps a weight-derived copy resident across forwards is the selector's to refuse (`verity_vllm.protocols.keeps_weight_copy`); POUS keeps
   only ``C*``.
 * **Weights of record:** `Installed.weights` (``decoded``) returns the released plaintext by ``named_parameters`` name,
   tied names mapped to one tensor, which the Commit's replay reads (`protocols.weights_view`).
