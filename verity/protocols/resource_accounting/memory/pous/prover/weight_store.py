@@ -296,6 +296,23 @@ def answer(store: Store | None, index: int) -> bytes:
     return store.block(index)
 
 
+def details(store: Store) -> dict[str, Any]:
+    """What ``store``'s setup holds, for a run's summary: its tensors and their bytes, the blocks they use and ``C*``'s, where
+    it is held and how it was encoded and is decoded, and what its point certifies."""
+    from verity.protocols.resource_accounting.memory.pous.verifier import period
+    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
+
+    q, tensors = store.params, store.layout.tensors
+    device = store.rows.device
+    cert, gaps = period.gaps(store.point)
+    return {"salt_source": store.salt_source, "tensors": len(tensors), "tensor_bytes": sum(p.size for p in tensors),
+            "used_blocks": sum(-(-p.size // q.payload_bytes) for p in tensors), "blocks": q.blocks,
+            "c_star_bytes": q.blocks * q.block_bytes, "device": str(device), "encode": store.encode,
+            "decode": "p2_store.load (libp2v1.so)" if device.type == "cuda" else "schemes.p2, CPU",
+            "certifies": period.certify(store.point), "certificate": None if cert is None else cert.theorem,
+            "gaps": gaps, "experimental": P2.EXPERIMENTAL}
+
+
 def audit(store: Store, node: str, coins: bytes, **kw: Any) -> Any:
     """`period_prover.audit` of what ``store``'s setup published, on ``node`` under the auditor's ``coins``; ``kw`` as
     `period_prover.audit`'s."""

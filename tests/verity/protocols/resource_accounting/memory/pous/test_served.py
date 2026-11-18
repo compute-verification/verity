@@ -65,6 +65,14 @@ def test_the_weights_are_committed_before_the_salt_released_and_restored_from_c_
         assert torch.equal(r.restore(), plain[r.value])
 
 
+def test_what_the_setup_holds_and_its_prover_are_the_stores(run):
+    s, _, plain = run
+    d = s.details()
+    assert d["tensors"] == 2 and d["tensor_bytes"] == sum(t.numel() for t in plain.values())
+    assert d["blocks"] == s.store.params.blocks and d["salt_source"] == "settings" and d["device"] == "cpu"
+    assert s.prover(())(0) == s.store.block(0) and s.answered == 1
+
+
 def test_the_kernel_hands_inward_the_weight_decoded_from_c_star_and_leaves_other_blocks_alone(run):
     s, ex, plain = run
     [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]

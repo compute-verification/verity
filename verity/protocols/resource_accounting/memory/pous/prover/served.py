@@ -171,6 +171,18 @@ class Served:
         if self.store is not None:
             self.store.free()
 
+    def details(self) -> dict[str, Any]:
+        """What the setup holds (`weight_store.details`)."""
+        from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+
+        if self.store is None:
+            raise RuntimeError(f"{self.entry}: no weights were registered, so nothing is held")
+        return ws.details(self.store)
+
+    def prover(self, blocks: Any = ()) -> Any:
+        """`period_prover.Prover`: each index answered from ``C*`` where it is held."""
+        return self.answer
+
     def answer(self, index: int) -> bytes:
         """The prover's reply to challenge ``index``: block ``index`` of ``C*``."""
         from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
