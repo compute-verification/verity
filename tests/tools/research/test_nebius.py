@@ -923,6 +923,32 @@ def test_the_first_boot_writes_and_applies_the_user_namespace_setting_on_the_nod
     assert "sysctl -q -e -p /etc/sysctl.d/61-vy-userns.conf" in (NEBIUS / "vm_setup.sh").read_text()
 
 
+def test_the_first_boot_keeps_bash_logout_from_setting_a_login_shells_exit_status(tmp_path):
+    """Ubuntu's stock ~/.bash_logout ends in `[ -x /usr/bin/clear_console ] && ...`, which fails with no console, so a job run as
+    `bash -lc` under set -e exited 1 whatever it did. vm_setup.sh's loop over skel's and every user's file, run here on copies,
+    appends `|| true` to that line once and leaves any other file as it is."""
+    loop = re.search(r"^for f in [^\n]*\.bash_logout; do\n.*?^done\n", (NEBIUS / "vm_setup.sh").read_text(), re.S | re.M)
+    assert loop and "/etc/skel/.bash_logout" in loop[0] and "/home/*/.bash_logout" in loop[0]
+    stock = ("# ~/.bash_logout: executed by bash(1) when login shell exits.\n\n"
+             "if [ \"$SHLVL\" = 1 ]; then\n    [ -x /usr/bin/clear_console ] && /usr/bin/clear_console -q\nfi\n")
+    files = {"stock": stock, "other": "echo bye\n", "mended": stock.replace(" -q\n", " -q || true\n")}
+    for name, text in files.items():
+        (tmp_path / name).write_text(text)
+    script = re.sub(r"^for f in [^;]*;", 'for f in "$@";', loop[0], flags=re.M)
+
+    def run() -> dict[str, str]:
+        r = subprocess.run(["bash", "-euc", script, "_", *(str(tmp_path / n) for n in files), str(tmp_path / "absent")],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        return {n: (tmp_path / n).read_text() for n in files}
+
+    first = run()
+    assert first == {**files, "stock": files["mended"]}
+    assert run() == first
+    r = subprocess.run(["bash", "-c", f"set -e; SHLVL=1; . {tmp_path / 'stock'}"], capture_output=True, stdin=subprocess.DEVNULL)
+    assert r.returncode == 0, "with no console the mended file's last status is 0"
+
+
 def test_a_vm_can_boot_on_another_ones_kept_data_disk():
     """n1's replacement may boot on vy-nebius-1-data: launch.sh and teardown.sh look the data disk up by this name."""
     r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME="vy-nebius-cpu-4", NEBIUS_PLATFORM_PREFIX="cpu-d3",
