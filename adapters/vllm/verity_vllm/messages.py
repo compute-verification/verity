@@ -58,6 +58,8 @@ class Exchange:
         self.refuse: Callable[[str, str], None] | None = None
         #: the schemes `attach` attached, by name, each with its settings: `Declared.schemes` and `Declared.settings`
         self.attached: dict[str, Mapping[str, Any]] = {}
+        #: the schemes `attach` attached, by name: what `weight_copy_refusals` reads of the next one's
+        self.schemes: dict[str, schemes.Scheme] = {}
         #: what each attached scheme's ``attach`` returned, by its name, read by `scheme_plugin.write_reports`
         self.reports: dict[str, Any] = {}
         #: this build's key, unique in the process: a scheme's ``ctx["build"]``
@@ -79,6 +81,8 @@ class Exchange:
         else as it was given them (``VERITY_PINS``), ``()`` for an application that pins nothing and None where neither
         is given; ``ctx["configuration"]`` the committed configuration's hash likewise (``configuration``,
         ``VERITY_CONFIGURATION``); a keyword and a setting that differ are refused (`ValueError`).
+        A scheme that `weight_copy_refusals` refuses beside those already attached, in either order, is refused by
+        name (`Refused`) before its attach runs, and the exchange is left as it was.
         Attached before the build is answered, it is declared (`H.Declared`); after, its requests are refused as
         `request` refuses them.
 
@@ -91,6 +95,8 @@ class Exchange:
         if self.registered and launcher.get("process") == H.ENGINE:
             raise RuntimeError(f"{scheme.name} attached after the model's weights were registered: an attach in the "
                                "engine runs before the load")
+        if bad := weight_copy_refusals([*self.schemes.values(), scheme]):
+            raise Refused(scheme.name, "; ".join(bad))
         for key, name, read in (("pins", "VERITY_PINS", _pins), ("configuration", "VERITY_CONFIGURATION", str)):
             handed, held = launcher.get(key), settings.get(name)
             if handed is not None and held is not None and read(handed) != read(held):
@@ -108,6 +114,7 @@ class Exchange:
             if (scheme.name, r) not in self.requests:
                 self.request(scheme.name, r)
         self.attached[scheme.name] = ctx["settings"]
+        self.schemes[scheme.name] = scheme
         if got is not None:
             self.reports[scheme.name] = got
         return got
@@ -258,8 +265,8 @@ def providing(role: str) -> schemes.Scheme:
 
 
 def option(entry: str | None) -> schemes.Scheme | None:
-    """The declared scheme whose option is ``entry`` (``name:scheme``, `Scheme.option`), which a launcher attaches by
-    name; None when none is."""
+    """The declared scheme whose option is ``entry`` (``name:scheme``, `Scheme.option`), which every launcher refuses,
+    naming the scheme's name to list instead; None when none is."""
     return next((s for s in declarations.load().values() if entry and s.option == entry), None)
 
 
@@ -269,9 +276,9 @@ def declaring(port: str) -> schemes.Scheme:
 
 
 def named(entry: str) -> schemes.Scheme | None:
-    """The declared scheme ``entry`` names, by its option (`option`) or by its name; None when it names none."""
-    found = option(entry)
-    return found if found is not None else declarations.load().get(entry)
+    """The declared scheme named ``entry``; None when none is (a declared scheme's option names it only to refuse it,
+    `option`)."""
+    return declarations.load().get(entry)
 
 
 #: what a storage scheme declares: its resource (`Scheme.resource`) and the workload's store among its needs (`Scheme.needs`)
@@ -284,15 +291,17 @@ def storage(s: Any) -> bool:
 
 
 def weight_copy_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
-    """A storage scheme (`storage`) listed beside one that keeps a weight-derived copy resident (``keeps_weight_copy``),
-    or beside one that has not declared whether it does, in any order; sorted by name, so the order listed changes none."""
+    """A storage scheme (`storage`) beside one that keeps a weight-derived copy (``keeps_weight_copy``), or beside one
+    that has not declared whether it does, in any order; sorted by name, so the order listed or attached changes none.
+    A scheme keeps a weight-derived copy when, across forwards, it holds or keeps alive resident bytes from which the
+    weights can be had without decoding storage's store; whether a product reads them does not enter."""
     out = []
     for st in sorted({s.name: s for s in listed if storage(s)}.values(), key=lambda s: s.name):
         for o in sorted({s.name: s for s in listed if s.name != st.name}.values(), key=lambda s: s.name):
             keeps = getattr(o, "keeps_weight_copy", schemes.UNDECLARED)
             if keeps is True:
-                out.append(f"{st.name} is storage (it needs the workload's store) and {o.name} keeps a weight-derived copy resident for the "
-                           f"serve's life (keeps_weight_copy), so {o.name}'s GEMMs would not read the weights {st.name} holds: "
+                out.append(f"{st.name} is storage (it needs the workload's store) and {o.name} keeps a weight-derived copy "
+                           f"(keeps_weight_copy), so the weights would be resident outside {st.name}'s store: "
                            "the two are not attached in one process while the pairing awaits a decision")
             elif isinstance(keeps, schemes.Lacks):
                 out.append(f"{st.name} is storage (it needs the workload's store) and {o.name}'s declaration does not say whether it keeps a "
