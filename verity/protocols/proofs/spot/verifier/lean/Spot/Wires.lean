@@ -382,7 +382,10 @@ def kahn (c : Wiring) : Except Refusal (List UnitRange) :=
   let indeg := es.foldl (fun a (_, _, r) => a.modify r (· + 1)) (Array.replicate ids.size 0)
   let outs := es.foldr (fun (_, wr, r) a => a.modify wr (r :: ·)) (Array.replicate ids.size [])
   let ins := es.foldr (fun (j, wr, r) a => a.modify r ((j, wr) :: ·)) (Array.replicate ids.size [])
-  kahnLoop ids (fun t => selfRanges c.wires t (((c.templates.lookup t).map (·.units)).getD 0)) outs ins ids.size
+  let selfWs : Std.HashMap String (List Wire) :=
+    c.wires.foldr (fun w m => if w.reader == w.writer then m.insert w.reader (w :: m.getD w.reader []) else m) {}
+  let units : Std.HashMap String Nat := c.templates.foldr (fun (t, tt) m => m.insert t tt.units) {}
+  kahnLoop ids (fun t => selfRanges (selfWs.getD t []) t (units.getD t 0)) outs ins ids.size
     (Array.replicate ids.size false) indeg []
 
 /-- The order the circuit states, else `kahn`'s. -/
