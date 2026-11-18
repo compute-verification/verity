@@ -85,5 +85,3 @@ def sha512_row_prefix(n_words: int) -> bytes:
     from verity.commitments.rowleaf import sha512_row_prefix as core
 
     return core(ROLE_X, 16, n_words)
-
-

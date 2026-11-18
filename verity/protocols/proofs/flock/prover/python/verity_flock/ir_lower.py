@@ -1447,5 +1447,3 @@ def write_tables(out_dir) -> dict:
 def flat_ports(input_set, ports, lo: int, hi: int) -> np.ndarray:
     """``(hi - lo, leaves)``: each instance's words of ``ports`` (in order), concatenated."""
     return np.concatenate([np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint64).reshape(hi - lo, -1) for p in ports], axis=1)
-
-
