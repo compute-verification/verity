@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 from fractions import Fraction
 from pathlib import Path
 
@@ -27,13 +30,22 @@ def _empty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(S, "SCHEMES", {})
 
 
-def test_picked_by_name() -> None:
-    a, b = S.register(_toy("pearl-plus")), S.register(_toy("dither"))
-    assert S.get("pearl-plus") is a and S.get("dither") is b
-    with pytest.raises(KeyError, match="registered: dither, pearl-plus"):
-        S.get("pouw")
+def test_picked_by_name_its_module_imported_on_first_use(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from verity.protocols.compose import schemes
+
+    (tmp_path / "toy_declaration.py").write_text(
+        "from verity.protocols.resource_accounting import scheme as S\n"
+        "S.register(S.Scheme('toy', 'toy', 'memory', (), (), (), ()))\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(schemes, "DECLARATIONS", {"toy": "toy_declaration", "absent": "toy_declaration"})
+    assert "toy" not in S.SCHEMES
+    assert schemes.get("toy") is S.SCHEMES["toy"]
+    with pytest.raises(KeyError, match="declared: absent, toy"):
+        schemes.get("pouw")
+    with pytest.raises(KeyError, match="registers no scheme 'absent'"):
+        schemes.get("absent")
     with pytest.raises(KeyError, match="registered already"):
-        S.register(_toy("dither"))
+        S.register(_toy("toy"))
 
 
 def test_settings_toggle() -> None:
@@ -110,7 +122,7 @@ def test_scheme_term_carried() -> None:
 
 def test_scheme_term_not_said_refuses_a_bound() -> None:
     s = _toy("silent", delta_scheme=None)
-    assert S.register(s) is S.get("silent")
+    assert S.register(s) is S.SCHEMES["silent"]
     with pytest.raises(ValueError, match=r"silent: its delta_scheme \(Verity.Scheme.δscheme\) is not said"):
         S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0})
 
@@ -153,7 +165,8 @@ def test_ports() -> None:
         _toy(ports=(S.Port("scan state", "input", "IngressScanBucket_v1", "state"),))
 
 
-def test_every_declaration_is_on_the_one_list() -> None:
+def test_every_scheme_is_a_line_of_the_one_table() -> None:
+    """Each name maps to the module that registers it, and every module that registers one is in the table."""
     from verity.protocols.compose import schemes
 
     root = Path(__file__).resolve().parents[4]
@@ -161,7 +174,16 @@ def test_every_declaration_is_on_the_one_list() -> None:
                  for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental")
                  for p in (root / d).rglob("scheme.py") if "register(" in p.read_text()}
     declaring.discard("verity.protocols.resource_accounting.scheme")
-    assert declaring == set(schemes.DECLARATIONS), "add each declaration module to compose.schemes.DECLARATIONS"
+    assert declaring == set(schemes.DECLARATIONS.values()), "add each declaring module's names to compose.schemes"
+    probe = ("import importlib, json, sys\n"
+             "from verity.protocols.resource_accounting import scheme as S\n"
+             "by = {}\n"
+             "for m in sys.argv[1:]:\n"
+             "    before = set(S.SCHEMES); importlib.import_module(m)\n"
+             "    by.update({n: m for n in set(S.SCHEMES) - before})\n"
+             "print(json.dumps(by))\n")
+    out = subprocess.run([sys.executable, "-c", probe, *sorted(declaring)], capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout) == dict(schemes.DECLARATIONS), "each name maps to the module that registers it"
 
 
 def test_a_scheme_attaches_nothing_by_default_and_registers_its_processes(monkeypatch) -> None:
