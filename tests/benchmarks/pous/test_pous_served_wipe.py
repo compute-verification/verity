@@ -106,8 +106,9 @@ def ran(*args, **kw):
     return wipes[-1]
 
 
-def judged(exe, cases):
+def judged(exe, cases, *args):
     assert Path(exe).name == "wipe-protocol" and list(cases) == [wipes[-1].case]
+    assert len(args) == 2 and args[0] == "--server"
     return [wipes[-1].answer]
 
 
