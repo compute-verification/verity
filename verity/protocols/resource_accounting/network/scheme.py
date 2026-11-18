@@ -17,7 +17,7 @@ from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Po
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay, workload
 from verity.protocols.resource_accounting.network.prover.ids_protocol import IdsProtocol
-from verity.protocols.resource_accounting.network.prover.admission import Admitter
+from verity.protocols.resource_accounting.network.prover.admission import Admitter, FrontFeed, engine
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,
                ResponseTieStop, ResponseTieNoStop, LengthsRow)
@@ -26,7 +26,13 @@ DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, Io
 def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     """The scheme on a served run's ``exchange``. With ``admit`` in ``ctx``, its admission (`prover.admission.Admitter`,
     the configuration ``admit`` with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``, ``pull``, ``log``,
-    ``clock`` and ``schedule``), installed and returned; without, the id relay beside the workload (`START_ID_RELAY`)."""
+    ``clock`` and ``schedule``), installed and returned; without, the id relay beside the workload (`START_ID_RELAY`).
+    Where the front and the engine run in two processes (``ctx["process"]``), each process's side of the certified
+    tick, on the server's feed directory (`prover.admission.FrontFeed`, `prover.admission.engine`)."""
+    if ctx.get("process") == H.FRONT:
+        return FrontFeed(ctx["feed"]).attach(exchange, NETWORK_ATTESTER.name)
+    if ctx.get("process") == H.ENGINE:
+        return engine(ctx.get("settings") or {}, ctx["feed"]).install(exchange, NETWORK_ATTESTER.name)
     if "admit" not in ctx:
         for r in requests(ctx):
             exchange.request(NETWORK_ATTESTER.name, r)
