@@ -236,6 +236,6 @@ async def run(upstream: tuple[str, int], listen: tuple[str, int], payload: int =
 
 
 def process(server_request: RequestOf, stream_token_ids: StreamIds) -> Callable[..., Coroutine[Any, Any, None]]:
-    """The relay as the process `verity.hooks.StartBeside` starts: called with the serving system's readers in `READERS`'
-    order, it is `run` with them given."""
+    """The relay as the process the network scheme starts beside the workload (`scheme.ID_RELAY`): called with the
+    serving system's readers in `READERS`' order, it is `run` with them given."""
     return functools.partial(run, server_request=server_request, stream_token_ids=stream_token_ids)

@@ -16,12 +16,13 @@ RUN = "ab"
 
 
 class Exchange:
-    """The adapter's exchange as a scheme sees it: ``request(name, request)``, ``serve(name, path, route)`` and
-    ``subscribe(name, hook, fn)`` returning the removal."""
+    """The adapter's exchange as a scheme sees it: ``request(name, request)``, ``serve(name, path, route)``,
+    ``start_beside(name, process, readers)`` and ``subscribe(name, hook, fn)`` returning the removal."""
 
     def __init__(self) -> None:
         self.requests: list[tuple[str, Any]] = []
         self.routes: list[tuple[str, str, Any]] = []
+        self.besides: list[tuple[str, str, tuple[str, ...]]] = []
         self.subscribers: list[tuple[str, str, Callable[[Any], None]]] = []
 
     def request(self, name: str, request: Any) -> None:
@@ -29,6 +30,9 @@ class Exchange:
 
     def serve(self, name: str, path: str, route: Any) -> None:
         self.routes.append((name, path, route))
+
+    def start_beside(self, name: str, process: str, readers: tuple[str, ...] = ()) -> None:
+        self.besides.append((name, process, readers))
 
     def subscribe(self, name: str, hook: str, fn: Callable[[Any], None]) -> Callable[[], None]:
         entry = (name, hook, fn)
@@ -126,7 +130,8 @@ def test_a_step_that_computes_nothing_leaves_the_tick_where_it_was():
 
 
 def test_the_schemes_attach_installs_the_admission_its_context_configures_else_starts_the_id_relay():
-    from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER, START_ID_RELAY
+    from verity.protocols.resource_accounting.network.prover.id_relay import READERS
+    from verity.protocols.resource_accounting.network.scheme import ID_RELAY, NETWORK_ATTESTER
     q: list[Any] = []
     ex = Exchange()
     a = NETWORK_ATTESTER.attach(ex, {"settings": {"order": "tick", "hold_ms": 1000, **TICK}, "submit": q.append,
@@ -134,4 +139,5 @@ def test_the_schemes_attach_installs_the_admission_its_context_configures_else_s
     assert type(a) is NA.Admitter and a.installed and a.front.take == q.append
     assert ex.requests[0] == (NETWORK_ATTESTER.name, H.AdmitInput("hold", a.gate))
     ex = Exchange()
-    assert NETWORK_ATTESTER.attach(ex, {}) is None and ex.requests == [(NETWORK_ATTESTER.name, START_ID_RELAY)]
+    assert NETWORK_ATTESTER.attach(ex, {}) is None and not ex.requests
+    assert ex.besides == [(NETWORK_ATTESTER.name, ID_RELAY, READERS)]

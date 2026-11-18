@@ -105,17 +105,19 @@ class _Exchange:
     def serve(self, name: str, path: str, route: object) -> None:
         self.filed.append((name, path))
 
+    def start_beside(self, name: str, process: str, readers: tuple[str, ...] = ()) -> None:
+        self.filed.append((name, (process, readers)))
+
     def subscribe(self, name: str, hook: str, fn: object):
         self.filed.append((name, hook))
         return lambda: None
 
 
-def test_requests_are_the_id_relay_unless_admission_is_configured() -> None:
+def test_attach_under_arrival_order_starts_the_id_relay_beside_the_workload_and_requests_nothing() -> None:
     ex = _Exchange()
     NS.NETWORK_ATTESTER.attach(ex, {})
-    assert ex.filed == [("network-attester", NS.START_ID_RELAY)]
-    assert NS.NETWORK_ATTESTER.requests({}) == (NS.START_ID_RELAY,) and NS.NETWORK_ATTESTER.requests({"settings": {"order": "release-order"}}) == ()
-    assert set(NS.NETWORK_ATTESTER.processes) == {"id-relay"}
+    assert ex.filed == [("network-attester", (NS.ID_RELAY, NS.id_relay.READERS))]
+    assert NS.NETWORK_ATTESTER.requests({}) == () and set(NS.NETWORK_ATTESTER.processes) == {NS.ID_RELAY}
 
 
 def test_settings_are_the_admissions_with_their_defaults_and_refuse_what_admission_would() -> None:

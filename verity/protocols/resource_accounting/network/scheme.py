@@ -61,8 +61,9 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     """The scheme on a served run's ``exchange`` under ``ctx["settings"]`` (`settings`). Under an ``order`` other than
     ``arrival``, its admission (`prover.admission.Admitter`, with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``,
     ``pull``, ``log``, ``clock`` and ``schedule``), installed and returned; else the id relay beside the workload
-    (`START_ID_RELAY`). Where the front and the engine run in two processes (``ctx["process"]``), each process's side of
-    the certified tick, on the server's feed directory (`prover.admission.FrontFeed`, `prover.admission.engine`)."""
+    (`ID_RELAY`, ``exchange.start_beside``). Where the front and the engine run in two processes (``ctx["process"]``),
+    each process's side of the certified tick, on the server's feed directory (`prover.admission.FrontFeed`,
+    `prover.admission.engine`)."""
     s = settings(ctx.get("settings", {}))
     if ctx.get("process") in (H.FRONT, H.ENGINE) and "feed" not in ctx:
         raise ValueError(f"{NETWORK_ATTESTER.name}: its {ctx['process']} process was given no feed, the server's directory "
@@ -72,8 +73,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     if ctx.get("process") == H.ENGINE:
         return engine(s, ctx["feed"]).install(exchange, NETWORK_ATTESTER.name)
     if s["order"] == "arrival":
-        for r in requests(ctx):
-            exchange.request(NETWORK_ATTESTER.name, r)
+        exchange.start_beside(NETWORK_ATTESTER.name, ID_RELAY, id_relay.READERS)
         return None
     kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock", "schedule") if k in ctx}
     return Admitter(s, **kw).install(exchange, NETWORK_ATTESTER.name)
@@ -84,13 +84,8 @@ def output_bits(definition: Any) -> Callable[[Mapping[str, int]], int]:
     return lambda shape: sum(bind(definition, **shape).signature()[1].leaf_widths())
 
 
-#: the scheme's request that starts the id relay beside the workload
-START_ID_RELAY = H.StartBeside("id-relay", id_relay.READERS)
-
-
-def requests(ctx: Mapping[str, Any]) -> tuple[Any, ...]:
-    """The id relay beside the workload under ``order`` ``arrival`` (`attach`), else nothing."""
-    return (START_ID_RELAY,) if settings(ctx.get("settings", {}))["order"] == "arrival" else ()
+#: the process the scheme starts beside the workload under ``order`` ``arrival``: the id relay (`id_relay.process`)
+ID_RELAY = "id-relay"
 
 
 def _scan_state_layout(shape: Mapping[str, int]) -> Layout:
@@ -138,9 +133,8 @@ NETWORK_ATTESTER = register(Scheme(
     requires={"one-labelling": "the network attester's rows (`verifier.network_attester_rows`)",
               "one-design": "each scan's own sample at its δ (`prover.scan_zk`)"},
     ports=(Port("scan-state", "input", IngressScanStart.id, "sin", layout=_scan_state_layout, value=SCAN_STATE), Port("released", "output", EgressBucket.id, "o1")),
-    requests=requests,
     attach=attach,
-    processes={"id-relay": id_relay.process},
+    processes={ID_RELAY: id_relay.process},
     parties=(Role("network-attester", "auditor", per="link", needs=("clock", "coins", "signing-key")),
              Role("workers", "developer", needs=("serve",)),
              Role("verifier", "auditor", needs=("audit", "component", "product"))),
@@ -164,5 +158,4 @@ NETWORK_ATTESTER = register(Scheme(
                     S.Lacks("not a kernel scheme")),
 ))
 
-__all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "SETTINGS", "START_ID_RELAY", "attach", "output_bits", "requests",
-           "settings"]
+__all__ = ["DEFINITIONS", "ID_RELAY", "NETWORK_ATTESTER", "SETTINGS", "attach", "output_bits", "settings"]

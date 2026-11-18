@@ -187,9 +187,9 @@ def test_the_process_serves_the_relay_until_stopped():
     assert asyncio.run(go()) == b"".join(id_event(t, P) for t in (7, 8, 9)) + TRAILER
 
 
-def test_the_network_scheme_registers_the_relay_and_its_request():
+def test_the_network_scheme_registers_the_relay_by_the_name_it_starts_it_by():
     from verity.protocols.resource_accounting import scheme
     from verity.protocols.resource_accounting.network import scheme as network
 
     assert scheme.PROCESSES["id-relay"] is R.process
-    assert (network.START_ID_RELAY.process, network.START_ID_RELAY.readers) == ("id-relay", R.READERS)
+    assert network.ID_RELAY == "id-relay" and network.NETWORK_ATTESTER.processes[network.ID_RELAY] is R.process
