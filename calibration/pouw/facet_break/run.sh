@@ -18,7 +18,8 @@ NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13
 [ -x "$NVCC" ] || { echo "run.sh: no nvcc at $NVCC" >&2; exit 2; }
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
 ARCH=$(python3 "$PROBE" arch) || exit 2
-[ "$ARCH" = sm_120a ] || { echo "facet_break: the card's target is $ARCH, and its forms are sm_120a's only: nothing built" >&2; exit 2; }
+WANT=$(python3 "$PROBE" arch --sku rtx-pro-6000-server) || exit 2
+[ "$ARCH" = "$WANT" ] || { echo "facet_break: the card's target is $ARCH, and its forms are $WANT's only: nothing built" >&2; exit 2; }
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$OUT/sass" "$OUT/chunks"

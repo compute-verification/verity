@@ -20,7 +20,8 @@ NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13
 "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
 PROBE="$HERE/../opcode_probe/probe.py"
 ARCH=$(python3 "$PROBE" arch) || exit 2
-[ "$ARCH" = sm_120a ] || { echo "cpw_routes.sh: the card's target is $ARCH, and cpw_routes.cu has forms for sm_120a only: nothing built" >&2; exit 2; }
+WANT=$(python3 "$PROBE" arch --sku rtx-pro-6000-server) || exit 2
+[ "$ARCH" = "$WANT" ] || { echo "cpw_routes.sh: the card's target is $ARCH, and cpw_routes.cu has forms for $WANT only: nothing built" >&2; exit 2; }
 GENCODE=$(python3 "$PROBE" gencode) || exit 2
 BIN="$OUT/bin/cpw_routes"
 "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v "$HERE/cpw_routes.cu" -o "$BIN" \
