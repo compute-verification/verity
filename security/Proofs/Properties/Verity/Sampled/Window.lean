@@ -519,12 +519,12 @@ finders' terms; `ExecutionPhase.ks` (`JointShareV5`, under the roots guard) boun
 members' terms summed and their roots terms, each roots finder's premise its own term, the strict birthday bound
 each two-continuation finder, `FinderCR` the read finder and `LmsUnforgeable` the forger. -/
 theorem spotSound_of_executionPhase {K : ExecutionPhaseConstructions V} {S : ByteArray → Array ByteArray → Option ExecutionPhase}
-    (hD : ExecutionPhaseDeployed V K S) (hCov : ExecutionPhaseCovers V k S)
+    (hD : ExecutionPhaseDeployed V K S) (hCov : ExecutionPhaseCovers V k S) (hTwo : TwoStageBound V k)
     (hC : ∀ θ F W, S θ F = some W → ExecutionPhaseCouplingTarget V k K W θ F) : V.SpotSound k := by
   intro θ F c σ
   by_cases hP : ∃ p, ParamsAt θ p
   swap
-  · exact recursiveForm_refused V k θ hP F c σ
+  · exact recursiveForm_bound V k hTwo θ hP F c σ
   unfold Vocab.error ResourceAccounting.condError
   beta_reduce
   split_ifs with hE

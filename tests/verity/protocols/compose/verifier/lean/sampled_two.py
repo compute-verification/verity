@@ -13,8 +13,7 @@ on two windows, `INTERIOR_SHOWN`, or a coin tree's line there, `FIRST_TREE`, of 
 text does not read back, `RECORD_READ`, of a boundary record so read without the commitment's digest, `RECORD_DIGEST`,
 of an interior record, as given or so read, without the interior commitment's digest, `INTERIOR_DIGEST`, and of a second
 session's log that does not open a coin tree's rounds stream by stream, `REP_STREAM_ORDER`, included; the form's
-`#guard`s pin those) is outside the mirror: while `Spot.SecondStage.FORM` is false the form accepts nothing, which its
-Lean proves at every input (`checkBlobs_refuses`). The check's statement-and-session refusal is the one of those
+`#guard`s pin those) is outside the mirror: the form accepts where every step passes, `Spot.SecondStage.FORM` being on. The check's statement-and-session refusal is the one of those
 mirrored here: `stmts_sessions` is the difftest's reference for `STMT_COUNT` and `STMT_SESSION`, which the difftest holds
 the Lean to by mutating a kept honest play; it decides no verdict."""
 
