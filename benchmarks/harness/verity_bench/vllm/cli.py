@@ -47,6 +47,7 @@ def run(a: Any) -> int:
     sweep = spec.sweep if a.sweep is None else a.sweep
     if reps < 1:
         raise ValueError("--reps must be positive")
+    cpus = kit.machine_cpus()
     preset = resolve_spec(a.preset).preset
     preset, eager = served(preset, a.eager or spec.eager)
     modules = spec.arm_modules if a.arm_module is None else tuple(a.arm_module)
@@ -68,6 +69,7 @@ def run(a: Any) -> int:
         warmups=warmups,
         max_warmups=max_warmups,
         factory=ProcessEngineFactory(eager=eager),
+        cpus=cpus,
         config_identity={"resolved_spec_sha256": sha256(replace(
             spec,
             arms=tuple(arm.id for arm in arms),

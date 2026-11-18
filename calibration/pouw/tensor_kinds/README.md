@@ -28,6 +28,6 @@ The readers are plain Python and need no GPU:
 
 ~~~text
 python3 tensor_kinds.py OUT                             # the fit of a run.sh run; exits 3 when a gate fails
-python3 tensor_kinds.py search OUT                      # a search.sh run: every schedule's program, the control, the gates
+python3 tensor_kinds.py search OUT                      # a stored M1c search: every schedule's program, the control, the gates
 python3 tensor_kinds.py refit OUT... [--search OUT...]  # the ACCEL model's joint issue rows from these runs, as JSON
 ~~~
