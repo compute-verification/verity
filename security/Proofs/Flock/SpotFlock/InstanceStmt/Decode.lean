@@ -320,6 +320,38 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
       Bool.true_eq_false, EStateM.run_bind] <;>
     rfl
 
+/-- The same body records no input node read at another width (`Body.recut`): node 0, an input node or not, is read
+at its own width 16. -/
+theorem recutOf_one (defs : Array Defn) (B : Body)
+    (hn : B.nodes.size = 1) (ha : (B.nodes[0]!).args.size = 0)
+    (ho : (B.nodes[0]!).out = .array 2 (.value 16)) (ht : B.retType = .array 2 (.value 16))
+    (hr : B.ret.parts = #[.affine false 0 0 2]) (hs : B.ret.starts = #[0]) :
+    Widths.recutOf defs B = #[] := by
+  obtain ⟨params, retType, nodes, ret, offsets, recut⟩ := B
+  obtain ⟨parts, starts, count⟩ := ret
+  simp only at hn ha ho ht hr hs
+  subst ht hr hs
+  obtain ⟨l⟩ := nodes
+  match l, hn, ha, ho with
+  | [⟨form, fn, args, out, axes, n, nxs⟩], _, ha, ho =>
+    change args.size = 0 at ha
+    change out = _ at ho
+    subst ho
+    rw [Array.eq_empty_of_size_eq_zero ha]
+    obtain ⟨s', hs'⟩ : ∃ s', Std.Stream.next? (Std.toStream (#[0] : Array ℕ)) = some (0, s') := ⟨_, rfl⟩
+    have hi : Widths.inputWidths defs ⟨params, .array 2 (.value 16), ⟨[⟨form, fn, #[], .array 2 (.value 16), axes, n,
+        nxs⟩]⟩, ⟨#[.affine false 0 0 2], #[0], count⟩, offsets, recut⟩ = #[none] ∨
+        Widths.inputWidths defs ⟨params, .array 2 (.value 16), ⟨[⟨form, fn, #[], .array 2 (.value 16), axes, n,
+        nxs⟩]⟩, ⟨#[.affine false 0 0 2], #[0], count⟩, offsets, recut⟩ = #[some 16] := by
+      simp only [Widths.inputWidths, List.map_toArray, List.map_cons, List.map_nil]
+      split
+      · split
+        · exact .inr (by rw [homo_A])
+        · exact .inl rfl
+      · exact .inl rfl
+    unfold Widths.recutOf
+    rcases hi with hi | hi <;> simp [hi, Widths.firstReads, Widths.wAt, hs', leaves_V]
+
 /-! ## The canonical JSON domain, with fuel
 
 `domainError` is well founded; `domainErrorFuel f` is it unfolded `f` times, `domainError` itself past that, so the two
@@ -382,7 +414,7 @@ theorem dup_empty {α β : Type} [BEq α] [Hashable α] (f : Std.HashSet α → 
 fwd_def progX decode_prog : Program.decode progBytes by [fromUTF8?_toUTF8, parse_prog, domainError_fuel 12,
     hm_get_insert, hm_get_empty, hs_contains_insert, hs_contains_erase, hs_contains_empty, hm_get_foldl,
     hm_contains_foldl, mapM_nil, mapM_one, mapM_pair, ofJson_V, ofJson_A, beq_of_A, beq_of_V, leaves_of_A,
-    leaves_of_V, bodyBad_one, recordFunctionIds_plain, splitOn_of, all_of, toNat_of, st_bind, st_get, st_set,
+    leaves_of_V, bodyBad_one, recutOf_one, recordFunctionIds_plain, splitOn_of, all_of, toNat_of, st_bind, st_get, st_set,
     st_modify, st_pure, st_throw, st_ite, st_dite, st_forIn_empty, st_forIn_range1, prod_fst, prod_snd, ds_defs,
     ds_index, ds_busy, ds_walked, mapM_empty, st_mapM_empty, st_run, qsort_fuel, canon_bare, canon_fuel 12,
     dup_empty]
