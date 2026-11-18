@@ -29,6 +29,8 @@ research run --on auto --project verity --source . --cwd clone -- \
   bash benchmarks/verifier_cost/job.sh measure --config llama32-1b --ir boolean   # the dashboard's proofs/verifier-seconds-served-description
 verity bench verifier_cost store RUN                     # its results.json or partition.json to the store; prints the art: id
 verity bench verifier_cost plot ART --to PNG             # from the store
+research run --on auto --project verity --source . --cwd clone [--mem-gb 32] -- \
+  uv run verity bench verifier_cost scaling NAME [ARG ...]   # a script below at its small sizes (scaling --list)
 ~~~
 
 `inference_only_glm.sh` runs `inference-only-check --policy` on GLM-5.3's registered Programs: the eight per-rank workload Programs of the B1
@@ -41,8 +43,7 @@ one Definition the node's root calls once, each collective reading the other ran
 `peers_*` inputs, one inference block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
 α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
 per layer, per Call) aren't checked here: their root would be the request's body, whose reads `InferenceOnlyCheck.Desc` holds as
-segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`); `inference_only_cost.py glm` counts and times
-them. Three of rank 0's Definitions (the router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in
+segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`). Three of rank 0's Definitions (the router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in
 all through `--policy`, `--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json`
 (`verity/nci-glm/v1`) has a row per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict
 summarised, wall seconds and peak RSS; `$OUT/ius/` has each verdict's inference blocks.
@@ -54,16 +55,6 @@ research data fetch "$B1_BUILD" --to B1 \
 research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
   --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
   -- bash benchmarks/verifier_cost/inference_only_glm.sh --jobs 10 [--case registered|rank|slice|node ...]
-~~~
-
-`inference_only_cost.sh` times `InferenceOnlyCheck.Desc` step by step (`inference-only-phases`, `inference_only_phases/Main.lean`: decode, summaries, root reads,
-the verdict, the slowest Definitions' summaries and their return pieces) beside `inference-only-check --policy`, on the `inference_only` suite's
-vectors (`suite`), Serve_v1 word-level and on bits (`serve`), and GLM-5.3's rank 0 word-level and lifted to bits (`glm`);
-`inference_only_cost.py`'s docstring has the cases.
-
-~~~sh
-research run --project verity --on vy-nebius-cpu-2 --pool network --source . --cwd clone --mem-gb 320 --timeout 12h \
-  --send glm53-b1-rank0.descriptor.json.gz -- bash benchmarks/verifier_cost/inference_only_cost.sh [suite|serve|glm ...]
 ~~~
 
 `--case registered-node` checks the node Program that `verity-vllm predict node` registered, as registered.
@@ -94,18 +85,6 @@ research run --project verity --on vy-nebius-cpu-2 --pool network --source . --c
 research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-gb 120 --timeout 16h \
   $(for f in descriptor.json.gz trusted.json provenance.json registration.json; do echo --send glm53-b1-node.$f; done) \
   -- bash benchmarks/verifier_cost/inference_only_glm.sh --case registered-node --node-digest HEX --jobs 2
-~~~
-
-`flock_read.sh K...` measures Flock's Lean verifier (`verity-verify-proof verify --zk`) on the H1 tile proof block, step by step:
-`flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
-file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
-`Sparse.ofRows` and row checks), the class digest, `HmOut.parse`, `Stmt.setupHiddenOf` and one lincheck fold. Per K,
-`$OUT` gets build-K.json (the proof block's ANDs, matrix entries, text bytes and its Program descriptor's size) and
-phases-K.jsonl (one row per step: milliseconds, RSS and peak RSS in MB).
-
-~~~sh
-research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
-  bash benchmarks/verifier_cost/flock_read.sh 256 1024
 ~~~
 
 `registration.sh N...` times the one-stage verifier's R3 against the window's ports: `registration.py` writes, per N, a
@@ -202,8 +181,8 @@ research run --as proofs --project verity --on auto --source . --cwd clone --mem
   bash benchmarks/verifier_cost/members_files.sh 1 16 150
 ~~~
 
-`flock_tmpl.sh K...` is the same proof block in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
-builds the circuit, `python -m verity_flock.tmpl` writes its proof block's templated form (Definitions read off the flat proof block's
+`flock_tmpl.sh K...` is the H1 tile proof block in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py`
+builds the 4×8 tile's statement circuit at each contraction K (`h1unit.Shape`), `python -m verity_flock.tmpl` writes its proof block's templated form (Definitions read off the flat proof block's
 repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
 against the circuit's flat proof block byte for byte. Per K, `$OUT` gets emit-K.json (the levels, Definitions, rows and bytes),
 unit-K.tmpl, read-K.jsonl and diff-K.jsonl (the PHASE lines) and each step's `/usr/bin/time -v`.
@@ -217,31 +196,6 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
 `MODE` (default `iv/hybrid/4`) whole and a stage at a time (`rows`, `posMap`, `Net.ofRows`, `invOf`, `posOk`, `placed`,
 `Sparse.ofRows`), the logical `Tmpl.unroll`, and `Net.parse` on the circuit's flat proof block. Per K, `$OUT` gets unit-K.tmpl,
 unroll-K.jsonl (every PHASE line, with its step) and each step's `/usr/bin/time -v`.
-
-`flock_served.sh KIND [N]` measures the Lean verifier on a served statement: one kind of a saved served step
-(`one_stage/a11.py --save-values`, sent as a `.tar.gz`) staged as a11 stages it, flat, or with `--layout MODE` as a
-templated statement (with `--structural`, `struct_lower`'s template, the flat proof block never built). With a recorded a11
-session of that kind sent (a `.tar` of its session directory), it times `archive-put` and `verify --zk --partition
---program` as `a0.lean_verify` runs them, under `perf record` where the node has it, so the verify's own phase lines
-(`inputs:`, `setup (drawn):`, the session) split the profile, a templated statement's as well as a flat one's. With
-`--phases`, and at every templated statement, `flock_served/Main.lean` times verify's work before the session a step
-at a time: the read, SHA-512, `Zk.maskLogOf`, `ProvedScope.circuitOf`, `ProvedScope.checkOf`, `PortRoots.checkOf`,
-`KsScope.checkOf` and `Stmt.setupTablesOf` with the sample, each with its RSS. `build.json` has the proof block's ANDs and matrix
-entries, k_log, the circuit file's bytes and lines, and its Program descriptor's bytes, the size a description-cost
-verifier would read.
-
-~~~sh
-research run --as proofs --project verity --on auto --mem-gb 128 --timeout 7200 --source . --cwd clone \
-  --send values.tar.gz [--send session.tar] -- bash benchmarks/verifier_cost/flock_served.sh KIND [N] [--phases] \
-  [--layout iv/hybrid/4 [--structural] [--stmt [--base REV]]]
-~~~
-
-`flock_served/Main.lean` parses the circuit as `verify` does (`circuitOfKnowing`: the file's SHA-512 already known). On a
-templated statement, `--stmt` times that parse instead with `flock-tmpl stmt` (`flock_tmpl/Main.lean`): whole, then a
-stage at a time (`tmplOf`, `Tmpl.parse`, each of `TmplUnit.read`'s checks, `HmRow.parseWith`'s decode, split, class
-digest and sections), with the template's size against the unrolled proof block's (rows and entries, the copies multiplied
-through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmpl` built against REV's verifier on the
-same staged statement (stmt-base.jsonl).
 
 `flock_members.sh` measures what a member of a run waits before its first check when one process verifies the run's
 members in turn (`verify-members`, which reads the run's program once and hands each member the circuit file the member
@@ -274,7 +228,7 @@ together. `verify` reads the statement once a call
 (its `inputs:` line) and then sets up and checks each session it was handed, so `summary.json`
 (`verity/flock-sessions/v1`) splits a call into the read, paid once a circuit, and each session's seconds, with their
 median at each block count and the line through them: the seconds a session pays whatever its blocks, and the seconds
-a block. `phases.jsonl` is `flock_read/Main.lean`'s phases of the read, and `perf-symbols.txt` one call's profile. A
+a block. `perf-symbols.txt` is one call's profile. A
 census statement binds no Program, so every session here is refused for want of `--program` once every check has
 passed.
 
@@ -282,18 +236,6 @@ passed.
 research run --as proofs --project verity --on auto --mem-gb 48 --source . --cwd source --declared-output 'out/*' \
   [--send sessions.tar] -- env FS_MEM_GB=48 bash benchmarks/verifier_cost/flock_sessions.sh \
   'census:ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}' 1 16 256
-~~~
-
-`table_root/table_root.sh` measures the Lean verifier's SHA-512 rate and what a history table's root costs it at the
-pinned capacity (`Spot.HistoryTable.CAPACITY`, `2^17` ranks): `table_root/Main.lean`, built in a scratch Lake package
-against the checkout's verifier, times `Flock.Sha512.hash` at the message lengths the verifier hashes and at 1 MiB, the
-frame-v3 node, leaf and tree leaf, `FV3.root` over `2^17` leaves, and whole table roots (`Spot.HistoryTable.rootAt`)
-at the lengths given, each over `--tables` distinct tables. `$OUT` gets table_root.jsonl (one row per phase: calls, ns a
-call, calls a second, milliseconds, peak RSS), cpu.txt and the build's log.
-
-~~~sh
-research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
-  bash benchmarks/verifier_cost/table_root/table_root.sh [--tables T] [--lengths 4096,40960,131072]
 ~~~
 
 `ledger_replay/ledger_replay.sh S...` times one replay of the auditor's ledger against its sessions:
@@ -340,11 +282,11 @@ seconds, peak RSS and the population (null where the verifier refuses the query)
 an `evidence/v1` record naming the run and its commit; it runs where the store's keys are (a VM), since a node's shell
 has none.
 
-Apart from `inference_only_glm`'s inputs and `flock_served`'s saved step, nothing here is a served Program: `on_bits`'s output and `inference_only_glm`'s derived Programs are
+Apart from `inference_only_glm`'s inputs, nothing here is a served Program: `on_bits`'s output and `inference_only_glm`'s derived Programs are
 this benchmark's constructions, and nothing outside this directory reads them.
 
 The suite (`tests/test_mains.py`, which `check` runs after its Lean steps) holds every `<name>/Main.lean` here to the
 verifier it times: each must still elaborate in the checkout's package, `whole_run.py DIR toy 146 --check` must still
 accept the run it writes, and the ledger replay's generators must still write a ledger the challenger accepts and a
-period PoUW's period check accepts. It builds no executable and runs no benchmark; a main in a new directory is held
-without being listed.
+period PoUW's period check accepts. It builds no executable and runs no benchmark. Each main is also one of `scaling`'s
+(`run.py`'s `SCALING`): a main whose script no registered command runs is deleted.

@@ -483,24 +483,23 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 #: counts only where it runs, and the security analysis's proofs only where the run's change meets a Lean input, since
 #: elsewhere every audit's verdict is reused and nothing replays), each the most such a shard's check scope held (its
 #: memory.peak) plus 15%, up to the next 10 GiB, or where a row says so the memory its suites' workers need or the slice it
-#: must fit. Every other row is at most 230, so that three shards fit a 755 GB machine's check slice and its third slot opens:
-#: only a Lean step's floor (`tools/verity/lean/reserve.json`) books more, and only where that step runs. ci.toml's plans
-#: place the parts; slot.py books the larger of this and the slot line's book= (`booked`), and no grant passes the booking
-#: (`slot_mem_gb`)
+#: must fit. Every other row is at most 230, so that three shards fit a 755 GB machine's check slice and its third slot opens,
+#: except `lean-suites:verity-flock:3/6`, measured at twice its 140 GiB peak plus 15% once verity-vllm's third sits on that
+#: shard, and the Lean floors (`tools/verity/lean/reserve.json`): the agreement at its peak plus 15%, and security/Proofs.
+#: ci.toml's plans place the parts; slot.py books the larger of this and the slot line's book= (`booked`), and no grant
+#: passes the booking (`slot_mem_gb`)
 SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
-    # the agreement beside lean-build, Flock suite: 406 + 13%, not 15%, so that it fits vy-nebius-cpu-8's 468 GiB user slice,
-    # whose train line takes such shards and, placed there by the train minimum, a larger ask would never start
-    (("lean-agreement",), 460),
+    (("lean-agreement",), 470),                                  # the agreement beside lean-build, Flock suite: 406 + 15%
     # security/Proofs replayed beside pytest, suites: 282 + 15%, over the replay's floor (`reserve.json`'s REPLAY_ARKLIB_GIB)
     (("lean-audit:security/Proofs",), 330),
     # circuit-check, off the merge gate, runs in what `cc_mem_gb` leaves beside the rest and is granted the slot once alone
     # (`grant_when_alone`), so it books no more than 230
     (("circuit-check",), 230),
-    # ci.toml's groups of lean-suites where no row above holds them, at 230: their workers fit what `groups` gives
-    # lean-suites at their worker_gb
+    # the groups main left at their earlier asks, capped at 230: their workers fit what `groups` gives lean-suites
     (("lean-suites:verity-flock:1/6",), 230),                    # beside pytest, Flock's first two sixths, vLLM's first third
-    (("lean-suites:verity-flock:3/6",), 230),                    # beside lean-build, Flock's other four sixths
-    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 230),   # beside the Rust build, vLLM's other two thirds
+    # beside lean-build, Flock's other four sixths and vLLM's third: 140, twice that plus 15%. Measured, not capped
+    (("lean-suites:verity-flock:3/6",), 330),
+    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 230),   # beside the Rust build, vLLM's second third
     (("pytest", "lean-suites"), 230),                            # pytest whole beside the parallel suites
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
     (("lean-build",), 130),                                      # lean-build and the Flock suite alone: 110 + 15%
@@ -2881,11 +2880,13 @@ STEPS_LOG = "steps.jsonl"
 
 def preflight() -> list[tuple[str, list[str] | str, Path]]:
     """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
-    pytest's cache, so they leave nothing in the tree), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
+    pytest's cache, so they leave nothing in the tree) under this interpreter when it has pytest, else under `uv run --locked`
+    (a shipped tree's system python3 has none), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
     uv = SETTINGS.UV or shutil.which("uv")
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
+    python = [sys.executable] if uv is None or importlib.util.find_spec("pytest") else [uv, "run", "--locked", "python"]
     return [("preflight-lock", lock, ROOT),
-            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
+            ("preflight-lints", [*python, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
             ("preflight-fixtures", [sys.executable, "-B", str(Path(__file__).resolve()), "--fixtures"], ROOT)]
 
 
