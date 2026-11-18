@@ -17,8 +17,8 @@ uv run pytest tests/benchmarks/pouw/test_floored_gemm_scripts.py tests/benchmark
 
 It prints `10 passed`.
 
-On a leased RTX PRO 6000 with the CUDA 13.0 toolkit, `ncu` and `cuobjdump`, `run.sh` builds, gates and times the
-arms, from the clone's root:
+On a leased RTX PRO 6000 with the CUDA 13.0 toolkit, `ncu` and `cuobjdump`, `benchmarks/pouw/floored_gemm/run.sh`
+builds, gates and times the arms, from the clone's root:
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \

@@ -146,6 +146,7 @@ def main() -> int:
     a = ap.parse_args()
     from verity.circuits.codec import canonical_json, encode_program
     from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P
+    from verity.commitments import randomness as RND
 
     rng = random.Random(a.seed)
     out = a.out or Path(tempfile.mkdtemp(prefix="stratified-agree-"))
@@ -171,7 +172,7 @@ def main() -> int:
         n = P.units(prog, q)
         flags = ["--program", str(desc), "--partition", str(part)]
         for k in ks:
-            sampling_design = D.derive(prog, q, D.parse_design(f"stratified:{k}"))
+            sampling_design = D.derive(prog, q, RND.parse_design(f"stratified:{k}"))
             need = sum(2 * s["k"] * width(sum(h - l for l, h in s["units"])) + 64 for s in sampling_design["strata"])
             src = os.urandom(need)
             (out / "stream.bin").write_bytes(src)
@@ -245,7 +246,7 @@ def main() -> int:
     # the frequency check: each unit's inclusion over samples on fresh streams against k_s / n_s
     prog = P.mixed_population_program([(T[0], 3), (T[1], 5), (T[0], 2)])
     q = P.template_instances_query([P.template_id(T[0]), P.template_id(T[1])])
-    sampling_design = D.derive(prog, q, D.parse_design("stratified:4"))
+    sampling_design = D.derive(prog, q, RND.parse_design("stratified:4"))
     (out / "freq.desc").write_bytes(canonical_json(encode_program(prog)))
     (out / "freq.partition.json").write_text(json.dumps(P.partition(prog, q)))
     need = sum(2 * s["k"] * width(sum(h - l for l, h in s["units"])) + 64 for s in sampling_design["strata"])

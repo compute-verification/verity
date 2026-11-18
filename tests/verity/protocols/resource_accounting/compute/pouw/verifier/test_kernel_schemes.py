@@ -26,7 +26,8 @@ def test_pearl_plus_on_the_h100_or_h200_is_its_option(card):
 
 @pytest.mark.parametrize(("scheme", "card"), [("pearl-plus", "rtx-pro-6000"), ("pearl-plus", "b200"), ("nope", "h100")])
 def test_a_resource_scheme_on_a_card_without_an_entry_is_refused(scheme, card):
-    with pytest.raises(KeyError, match="0 kernel schemes run"):
+    """Pearl+ never had a kernel on the RTX PRO 6000: its verifier checks pearl-c-h100-v1-h3 alone."""
+    with pytest.raises(KeyError, match=f"^\"0 kernel schemes run {scheme!r} on {card!r} with B pinned: none;"):
         K.resolve(scheme, card, True)
 
 
