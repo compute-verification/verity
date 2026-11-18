@@ -89,9 +89,8 @@
 #      no GPU visible (STAGES, default
 #      build,commit, in a config run, CONFIG_RUN default 1: the Build, the word check and one instrumented Commit,
 #      the run the session audits; BUILD_GPU=1 leaves the Build to the lease) in SWEEP_DIR (default: scratch removed
-#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; the Commit's three public records are kept in
-#      out/row: commit/verdict.json, commit/steps.jsonl and commit/remote_session.json; nothing else of the sweep, which
-#      holds committed values, salts, token digests and the run's logs). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
+#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; never inside the run's directory: the row's
+#      public records, keep.py's ROW, are kept in out/row, and nothing else of it). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
 #      holds no vLLM), CUDA_HOME/bin (--cuda-bin) and ROW_ARGS (such as --norm-tap-so PATH);
 #   3. ROLE=both: builds the Lean verifier (LEAN_EXE: that executable instead), starts the verifier on VERIFIER_CPUS
 #      and goes on once it listens;
@@ -161,7 +160,7 @@
 # make the sessions paced; ROLE=both SERVE=node, the node's session on this machine with its verifier and a local
 # challenger beside it, defaults them to 1:1000:2773:7 (seven stretches of a second, a live coin a pass) and 0 (the
 # pass its calibration measured), builds the Lean verifier before the lease, as a served line does, and ends by the
-# verdict line. VERIFIER_ARGS='--node FILE --hbm-bytes N' states the node the share is of (default: the figures').
+# verdict line. VERIFIER_ARGS='--hbm-bytes N' states the share of the node the store is on (default: the figures').
 # The verifier reads the audited node's figures from FIGURES, by default out/figures.json, which `sheets.py NODE_KIND`
 # writes, NODE_KIND a node file's name (ROLE=both on a GPU: the node file of this machine's card). The north-star run,
 # the verifier on a second node's CPUs:
@@ -337,6 +336,18 @@ if [ "$ROLE" != prover ] && [ -z "${CLOSE:-}" ]; then
   fi
   VERIFY+=(--figures "$FIGURES")
 fi
+eval "KEYARGS=(${VERIFIER_ARGS:-})"
+for ((k = 0; k < ${#KEYARGS[@]}; k++)); do
+  case ${KEYARGS[k]} in
+    --challenger-key=*) KEYDIR=${KEYARGS[k]#*=} ;;
+    --challenger-key) KEYDIR=${KEYARGS[k + 1]:-} ;;
+    *) continue ;;
+  esac
+  case $(realpath -m "$KEYDIR")/ in
+    "$(realpath -m "$RESEARCH_RUN_DIR")"/*) refuse "--challenger-key $KEYDIR is inside the run's directory, which custody" \
+      "uploads: the challenger's key directory holds its seed; give one outside it" ;;
+  esac
+done
 if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
@@ -431,20 +442,19 @@ card_free() { # NOWAIT=1 with GPU: 75 where a compute process is on those cards,
 }
 if [ -n "$SERVED" ]; then
   card_free || exit 75
-  keep_row() { # the Commit's public records, by path, into out/row: the rest of the sweep is private
+  keep_row() { # the row's public records (keep.py's ROW), into out/row
     [ -d "$SWEEP/$ROW" ] || return 0
-    local f
-    mkdir -p "$O/row"
-    for f in commit/verdict.json commit/steps.jsonl commit/remote_session.json; do
-      [ -f "$SWEEP/$ROW/$f" ] && (cd "$SWEEP/$ROW" && cp --parents "$f" "$O/row/")
-    done
-    return 0
+    "$PY" $RS/keep.py row "$SWEEP/$ROW" "$O/row"
   }
   drop_connection() { # a verifier still waiting for its prover ends at a connection opened and dropped
     (exec 3<> "/dev/tcp/127.0.0.1/$PORT") 2> /dev/null
   }
   if [ "$SERVED" = row ]; then
     SWEEP=${SWEEP_DIR:-$B/sweep}
+    case $(realpath -m "$SWEEP")/ in
+      "$(realpath -m "$RESEARCH_RUN_DIR")"/*) refuse "SWEEP_DIR=$SWEEP is inside the run's directory, which custody uploads:" \
+        "the row's Commit directory holds private files (its tokens, replays and timelines); give a scratch directory" ;;
+    esac
     mkdir -p "$SWEEP" || refuse "SWEEP_DIR=$SWEEP can't be made"
     export NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-$B/nc_build} CONFIG_RUN=${CONFIG_RUN:-1}
     read -r CK REPO REV _ < <("$VV" epoch resolve "$ROW")
