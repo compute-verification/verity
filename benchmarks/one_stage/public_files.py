@@ -58,7 +58,7 @@ PUBLIC = {
     "OUT/pieces/*/answer.json": "a piece's answer",
     "OUT/pieces/*/case.json": "a piece's case",
     "OUT/pieces/*/development.json": "a development piece's marker",
-    "OUT/pieces/*/piece.json": "a piece's statement",
+    "OUT/pieces/*/piece.json": "a piece's exit and limit, without the node it ran on (`WITHOUT`)",
     "OUT/pieces/*/served.json": "a piece's served counts by kind",
     "OUT/pieces/*/runs.json": "a piece's run ids",
     "OUT/pieces/*/coin.json": "a piece's coins",
@@ -116,6 +116,16 @@ def _match(pat: tuple[str, ...], parts: tuple[str, ...]) -> bool:
     if pat[0] == "**":
         return any(_match(pat[1:], parts[i:]) for i in range(len(parts) + 1))
     return bool(parts) and fnmatch.fnmatchcase(parts[0], pat[0]) and _match(pat[1:], parts[1:])
+
+
+#: the fields of a listed JSON file that stay in the private directory: `publish` leaves the file without them
+WITHOUT = {"OUT/pieces/*/piece.json": ("server",)}
+
+
+def without(path: str) -> tuple[str, ...]:
+    """The fields `WITHOUT` keeps out of ``path``'s public copy."""
+    parts = Path(path).parts
+    return next((f for p, f in WITHOUT.items() if _match(Path(p).parts, parts)), ())
 
 
 def listed(path: str) -> str | None:

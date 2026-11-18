@@ -43,8 +43,9 @@
 * **Rows** are ``hm96-sha512/row/v2`` bit rows of 16-bit words (`V2`, `row_words`, `record_words`), committed as
   `registered_value.Registered.commit` commits them, from their NumPy words (`pouw_h1_registered.commit`), under the
   registered-value domain of the Program's digest, the value, its words and rows, and for a call's tables the window's
-  open root (`registered_value.domain`'s ``window``, `Served.root`), row j's salt `audit.hm96_salt` of the run's key at
-  the value's nonce (`nonce`). A window keeps its trees, not its rows, which the prover rebuilds from its own.
+  open root (`registered_value.domain`'s ``window``, `Served.root`), row j's salt the run's fresh salt j at the value's
+  nonce (`nonce`, `pouw_h1_prover.RunSalts`), kept in the prover's directory; only the period's ``b/<K>`` is salted
+  from the registration's model key (`register_weights`). A window keeps its trees, not its rows, which the prover rebuilds from its own.
 * **Chunk rows** (SPLITK). Past K = 4096 an A or B row of K is n = `weights.chunks` (K) leaves (6144 → 2, 14336 → 4):
   row r's leaf n·r + c is its codes [c·K/n, (c + 1)·K/n) then its scale (`chunk_words`, `h1zy.ROW` (K/n)), so
   ``a/<K>@<s>`` is n·M leaves a call and ``b/<K>`` n·Σn, leaf j salted at j, as `h1window.program`'s chunked
@@ -97,6 +98,7 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.codec import canonical_json
+from verity.commitments.crypto import chacha20
 from verity.circuits.program import Program
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
@@ -241,13 +243,20 @@ class Weights:
         return ok
 
 
+def model_salts(key: bytes, nonce: int, n: int) -> bytes:
+    """Rows 0 .. n - 1's salts of the period's ``b/<K>`` at ``nonce``, concatenated: row j's `audit.hm96_salt(key, nonce, j)`
+    under the registration's model key, which the auditor's `weights.weights_roots` rebuilds."""
+    return chacha20.keystream(key, nonce, 0, 3 * n)
+
+
 def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: Mapping[int, tuple[Any, Any]], key: bytes,
                      prefix: str = PREFIX) -> Weights:
     """The period's `Weights`: for each K, ascending, ``<prefix>b/<K>`` over K's linears' rows (``shapes`` each linear's
     ``(n, K)``, in the window's order; ``weights`` each linear's int8 codes ``(n, K)`` and f32 s_w ``(n,)``), each row
     `weights.chunks` (K) leaves (`chunk_words`), committed by
     `pouw_h1_registered.commit` under the declared Program's digest ``circuit`` with no window, leaf j's salt
-    `audit.hm96_salt` of the period's key ``key`` at ``B_NONCE`` plus K's place, its rows kept (`Weights.matches`).
+    `audit.hm96_salt` of the period's key ``key`` at ``B_NONCE`` plus K's place (`model_salts`, what `weights.weights_roots`
+    rebuilds from that key), its rows kept (`Weights.matches`).
     Committed once, before the period's first window's salt. ValueError on an odd K, a K `weights.chunks` refuses, or a
     weight that isn't its linear's n × K int8 codes and n scales."""
     ks, reg, at, held = sorted({int(k) for _n, k in shapes}), {}, {}, {}
@@ -266,7 +275,7 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
             if not (codes.flags.writeable or scales.flags.writeable) and scales.dtype == np.dtype("<f4") and scales.ndim == 1:
                 held[w] = (codes, scales)
         words = np.concatenate(rows)
-        reg[k] = NR.commit(circuit, f"{prefix}b/{k}", words, key, B_NONCE + i, keep_rows=True)
+        reg[k] = NR.commit(circuit, f"{prefix}b/{k}", words, model_salts(key, B_NONCE + i, len(words)), keep_rows=True)
     return Weights(circuit, reg, at, held)
 
 
@@ -398,10 +407,11 @@ class Served:
 
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
               session: str | None = None, row_salts: bytes | NR.PublicSalts | None = None, later: bool = False,
-              rows: Sequence | None = None, also: tuple[bytes, int] | None = None) -> RV.Registered | NR.Later:
+              rows: Sequence | None = None, also: tuple[bytes, bytes] | None = None) -> RV.Registered | NR.Later:
         # the digest as the window holds it, None until `declare`: `registered.commit` names it in the tree's domain
-        return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
-                         later=later, rows=rows, also=also, window=window, session=session)
+        salts = run._salts.at(first, int(words.shape[0])) if row_salts is None else row_salts
+        return NR.commit(self.program_digest, value, words, salts, row_salts is not None, later=later, rows=rows,
+                         also=also, window=window, session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
                   row_salts: bytes | None = None) -> str:
@@ -411,7 +421,7 @@ class Served:
 
     def _register_later(self, run: Any, value: str, words: Any, first: int, out: dict[str, str | None],
                         row_salts: NR.PublicSalts | None = None, rows: Sequence | None = None,
-                        also: tuple[bytes, int] | None = None, into: dict[str, Any] | None = None) -> None:
+                        also: tuple[bytes, bytes] | None = None, into: dict[str, Any] | None = None) -> None:
         """`_register` of a call's z or public table into ``out``, its hash left running on the GPU where it hashes there
         (`pouw_h1_registered.commit`'s ``later``): it takes its place in `registered` now, and `settle` puts its tree there
         and its root in ``out``. ``also``: a call's z table over the same records (`pouw_h1_tables_device.take_z`),
@@ -789,5 +799,5 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "PublicRows", "Served",
            "unit_of",
            "V2", "Weights", "WindowCommitmentEntries", "card_arch", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "host_weight", "ids_words", "layout",
-           "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
+           "model_key", "model_salts", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
            "weights_of", "write_program"]
