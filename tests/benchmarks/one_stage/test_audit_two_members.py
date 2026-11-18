@@ -72,6 +72,15 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger_session 
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 import records_audit as RA  # noqa: E402
 
+
+def fixed(w, seed: int = 0) -> dict[str, bytes]:
+    """Salts a test hands in for every port a commit takes in full (`rows.full_ports`), so two commits of one period are
+    one commitment."""
+    from verity.commitments.periods import rows
+
+    w = getattr(w, "window", w)
+    return {p: hashlib.shake_256(f"{seed} {p}".encode()).digest(n * rows.SALT_BYTES) for p, n in rows.full_ports(w).items()}
+
 STATE = next(iter(RA.PHASE_OWN))
 
 LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
@@ -123,7 +132,7 @@ def _window(d: Path, flipped: bool = False, own: str | None = None) -> Path:
         if flipped and k == KS[-1]:
             out.reshape(-1)[0] ^= 1
         win.record(t, ins, [out])
-    win.write(win.close(salt_key=bytes(32)), d, {"label": "test"}, registrar=R)
+    win.write(win.close(salts_of=fixed(win)), d, {"label": "test"}, registrar=R)
     return d
 
 

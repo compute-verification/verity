@@ -37,10 +37,6 @@ open scoped ENNReal
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
-/-- A per-unit quantity at the unit a rule picks, and zero when it picks none or an unsampled one. -/
-noncomputable def atTgt (S : Finset (Fin n)) (t : Option (Fin n)) (f : Fin n → ℝ≥0∞) : ℝ≥0∞ :=
-  t.elim 0 fun u => if u ∈ S then f u else 0
-
 theorem atTgt_le {S : Finset (Fin n)} {f : Fin n → ℝ≥0∞} {c : ℝ≥0∞} (h : ∀ u ∈ S, f u ≤ c)
     (t : Option (Fin n)) : atTgt S t f ≤ c := by
   cases t with
@@ -50,44 +46,6 @@ theorem atTgt_le {S : Finset (Fin n)} {f : Fin n → ℝ≥0∞} {c : ℝ≥0∞
     split_ifs with hu
     · exact h u hu
     · exact zero_le
-
-/-- What the analysis of an audit fixes when extraction is randomized: the committed transcript,
-and for each sampled proof block the joint probabilities of the two ways its table can accept while it is
-incorrect. -/
-structure ExtractionAnalysis (L : SamplingDesign n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool)
-    where
-  Tr : Type
-  incorrect : Tr → Finset (Fin n)
-  committed : (R : Reg) → Cont L Reg session R → Tr
-  /-- `Pr[the session accepts ∧ extraction of u fails]` -/
-  ks : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → ℝ≥0∞
-  /-- `Pr[it accepts ∧ extraction of u succeeds but differs from X on u's wires]` -/
-  link : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Tr → ℝ≥0∞
-  cover : ∀ S R (τ : Strategy (session S R)) u X, u ∈ S → u ∈ incorrect X →
-    prob (· = true) (session S R) τ ≤ ks S R τ u + link S R τ u X
-
-namespace ExtractionAnalysis
-
-variable (A : ExtractionAnalysis L Reg session)
-
-/-- The committed transcript of an audit strategy. -/
-def committedOf (σ : Strategy (audit L Reg session)) : A.Tr := A.committed (reg σ) (cont σ)
-
-/-- **Knowledge soundness, per unit** (named hypothesis `ε_ks`, which may depend on the prover's
-state): for every prover and every rule that picks a sampled proof block before the session's first coin,
-the average over the sample of `Pr[accept ∧ extraction of the picked unit fails]`. -/
-def KnowledgeSound (εks : (R : Reg) → Cont L Reg session R → ℝ≥0∞) : Prop :=
-  ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
-    avg (fun ω => atTgt (L.draw ω) (tgt ω) (A.ks (L.draw ω) R (τ ω))) ≤ εks R τ
-
-/-- **The binding error** (named hypothesis `ε_bind`, which may depend on the prover's state):
-likewise, with `Pr[accept ∧ extraction succeeds but disagrees with the committed transcript]`. -/
-def BindSound (εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞) : Prop :=
-  ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
-    avg (fun ω => atTgt (L.draw ω) (tgt ω) fun u => A.link (L.draw ω) R (τ ω) u (A.committed R τ)) ≤
-      εbind R τ
-
-end ExtractionAnalysis
 
 namespace Analysis
 

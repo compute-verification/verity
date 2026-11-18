@@ -23,7 +23,6 @@ every log."""
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import shutil
 import subprocess
@@ -92,7 +91,6 @@ def main() -> int:
     a = ap.parse_args()
     work, fx = Path(a.work), Path(a.fixture)
     TG.load_registries()
-    salt_key = hashlib.sha256(b"verity/flock/form-refusals/salts").digest()
     cases: dict[str, dict] = {}
     for name, (fn, in_rows, out_rows, rows, kw, statement) in forms(np.random.default_rng(20261019)).items():
         program = P.mixed_population_program([(fn, FP.N)])
@@ -104,7 +102,7 @@ def main() -> int:
         (stage / "program.json").write_bytes(canonical_json(encode_program(program)))
         st = CS.UnitStager(fn, f"unit/form-refusals-{name}", in_rows, out_rows, circuit=stage / "circuit.txt",
                            bind={"partition": P.digest(part), "program": part["program"]}, **kw)
-        FP.stage_case(st, rows, (), d, salt_key, f"{st.iset.name}-{name}")
+        FP.stage_case(st, rows, (), d, f"{st.iset.name}-{name}")
         (d / "tables").mkdir(exist_ok=True)
         if st.meta.get("lookups"):
             IL.write_tables(d / "tables")
