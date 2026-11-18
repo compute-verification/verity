@@ -20,7 +20,7 @@ import pytest
 import test_pearl_c_hash_host as HH  # hash_h3.cuh's host test: the host `Dev` (`Host`), its build, the pinned row
 from conftest import load
 
-from verity.commitments.merkle import tree_levels
+from verity.commitments import MerkleTree
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import ROW_SCHEMA, rows_domain
@@ -141,18 +141,18 @@ def test_a_tree_of_wide_rows_is_the_verifiers(host):
     """A tree over 129 rows of 128,256 words (501 segments a row), its rows hashed 50 at a time into one buffer of digests
     through one chunk's scratch, as a caller with more rows than it holds at once hashes them: the row digests by
     `row_digests` from the pipeline's header states, then `hm_level0` and the levels.  Every level is the frame-v3-sha512
-    tree `audit.commit_rows` builds over the rows under their hm96 salts, its root the `MerkleTree`'s."""
-    n, count, chunk, nonce = 128256, 129, 50, (1 << 61) + 5
+    tree over the rows under their hm96 salts (the pipeline's `salts_b`), its root the `MerkleTree`'s."""
+    n, count, chunk = 128256, 129, 50
     segs = n // 256
     rng = np.random.default_rng(n)
     rows = [rng.integers(0, 256, 4 * n, dtype=np.uint8).tobytes() for _ in range(count)]
-    salt_key, binding = bytes(range(64, 96)), hashlib.sha256(b"wide rows").digest()
+    salts, binding = HH.salts_of("wide rows", count), hashlib.sha256(b"wide rows").digest()
     dom = rows_domain(binding, 3, count, audit.HM96)
     width = R.pow2(count)
-    keys = {"dom_b": host.put(dom.domain_id), "salt_key": host.put(salt_key), "hm": host.put(audit.hm96_kernel_constants())}
+    keys = {"dom_b": host.put(dom.domain_id), "hm": host.put(audit.hm96_kernel_constants())}
     HH.fast_heads(host)
     p = SimpleNamespace(dev=host, k=n, sha="fast", keys=keys,
-                        b={"tree_b": poisoned(host, 64 * (2 * width - 1)), "rs_heads_w": states(host, n)})
+                        b={"tree_b": poisoned(host, 64 * (2 * width - 1)), "rs_heads_w": states(host, n), "salts_b": host.put(salts)})
     dig, seg = poisoned(host, 64 * count), poisoned(host, 64 * segs * chunk)
     for _, f in R.Pipeline.tree_setup(p, "b", count, "dom_b"):
         f()
@@ -162,9 +162,8 @@ def test_a_tree_of_wide_rows_is_the_verifiers(host):
         R.Pipeline.row_digests(p, x, dig + 64 * r, seg, len(part))
         host.free(x)
     assert host.read(dig, 64 * count) == b"".join(C.row_digest(r) for r in rows)
-    R.Pipeline.hm_level0(p, "b", dig, count, "dom_b", nonce=R.nonce_args(nonce))
+    R.Pipeline.hm_level0(p, "b", dig, count, "dom_b")
     R.Pipeline.levels(p, "b", count, "dom_b")
-    salted = [v + audit.hm96_salt(salt_key, nonce, i) for i, v in enumerate(rows)]
-    want = b"".join(b"".join(level) for level in tree_levels(dom, [dom.leaf(i, i, ROW_SCHEMA, v) for i, v in enumerate(salted)]))
+    want = HH.tree_of(dom, rows, salts)
     assert host.read(p.b["tree_b"], 64 * (2 * width - 1)) == want
-    assert want[-64:] == audit.commit_rows(binding, 3, rows, audit.HM96, salt_key, nonce).commitment.root
+    assert want[-64:] == MerkleTree(dom, dict(enumerate(HH.salted(rows, salts))), lambda _: ROW_SCHEMA).commitment.root

@@ -207,6 +207,11 @@ PUBLIC = {
     "verity_vllm.pipeline.advice_code.derived": "I1: advice v1's derived rules (the walk, the prefixes, the tie), which the "
                                                 "network attester's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
+    "verity_vllm.pipeline.advice_code.format": "I1: advice v0, what serving decided as one canonical bit string, its "
+                                               "records, encode and decode, and its bits by window, which "
+                                               "benchmarks/network_e2e, compile_cost and one_stage's rehearsal measure",
+    "verity_vllm.pipeline.window_chain": "I1: a served endpoint's Commit windows' advice joined as one advice v0 (join), "
+                                         "which benchmarks/network_e2e's chain charges",
     "verity_vllm.compiler.replay_step": "I1: one scheduler step of the compiler's replay (its statics, inputs, state, "
                                         "outputs and reference), which benchmarks/network_e2e's replay vectors are held to",
     "verity_vllm.compiler.replay_chain": "I1: the replay chain's rows, windows and units (load, advance, close), which "
@@ -305,7 +310,7 @@ PUBLIC = {
     "verity_vllm.protocols.linear.vllm_site": "I1: the linear sites of a vLLM model, each called through the exchange (discover, "
                                               "attach), which benchmarks/pouw's Pearl-C arms attach",
     "verity_vllm.protocols.poub.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
-                                                     "pipeline.poub_session reaches through protocols.driver and "
+                                                     "stands in for the process memory-accounting registers as poub-session and "
                                                      "benchmarks/poub_session serves under",
     "verity_vllm.query.manifest.format": "I7: the required-value manifest's format, the vocabulary every manifest producer and "
                                          "consumer shares (load_program), which benchmarks/prove_path reads",
@@ -416,7 +421,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.commit",
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
-    "verity_vllm.pipeline.serve_admit",
     "verity_vllm.pipeline.serve_openai",
     "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",

@@ -104,7 +104,7 @@ from verity.circuits.codec import canonical_json
 from verity.circuits.defs import Body, CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.intervals import norm, ref_intervals
 from verity.circuits.program import RUN, input_id, is_input
-from verity.circuits.refs import Affine, Concat, Explicit, Refs, Strided
+from verity.circuits.refs import Affine, Concat, Explicit, Grid, Refs, Strided
 from verity.circuits.types import Array, Tuple, Type
 
 TAG = "verity/stacking-property"
@@ -492,6 +492,8 @@ def _colls(refs: Refs, cache: dict | None = None) -> frozenset[tuple[str, int]]:
         out = frozenset().union(*(_colls(p) for p in refs.parts))
     elif isinstance(refs, Explicit):
         out = frozenset((s, i) for s, i, _leaf in refs.items)
+    elif isinstance(refs, Grid):
+        out = frozenset((s, i) for s, i, *_x in refs.lanes)
     else:
         out = frozenset((s, i) for s, i, _leaf in refs)
     if cache is not None:

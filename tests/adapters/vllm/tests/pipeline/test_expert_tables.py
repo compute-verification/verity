@@ -1,30 +1,34 @@
 """`expert_tables`: a TP rank's registration of the per-expert cut's tables, on a synthetic block-FP8 MoE checkpoint (E = 8 experts,
 two MoE layers, TP2).  Each registered entry is the one a window's committer commits for the same served weights
-(`expert_rows.commit_tables` under `expert_rows.committer`'s key, program and nonces); a table served with another byte has another
-root; the two ranks are distinct values; a registration's file is the record a window's committer reads
-(`records.expert_tables`, `expert_rows.of_request`); and a key not minted for these nonces refuses (`key_of`)."""
+(`expert_rows.commit_tables` under `expert_rows.committer`'s salts and program); a table served with another byte has another
+root; the two ranks are distinct values under fresh salts; and a registration's file and the salt file beside it are what a
+window's committer reads (`records.expert_tables`, `expert_rows.of_request`)."""
 from __future__ import annotations
 
+import ast
 import gzip
 import hashlib
 import json
+import re
+import shutil
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from tests.check.test_weights_of_record import write_safetensors
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.config import UsageError
 from verity_vllm.pipeline import expert_rows as ER
 from verity_vllm.pipeline import expert_tables as ET
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.records import expert_tables as XT
 
+from verity.commitments import salt_file as SF
+
 G, INTER, H, E, WORLD = 128, 256, 256, 8, 2
 LAYERS = (1, 2)
 BLOCKS = {"w13": 1, "w2": 32}
 REPO, REV = "test/fp8-moe-tables", "abc"
-KEY = bytes(range(32))
 WRAP = "model."
 VS = 64
 EMBED = WRAP + "model.embed_tokens.weight"
@@ -85,8 +89,27 @@ def ckpt(tmp_path_factory):
 
 
 @pytest.fixture(scope="module")
-def regs(ckpt):
-    return [ET.register(ckpt["progs"][r], ckpt["dir"], KEY, BLOCKS, checkpoints_manifest=ckpt["man"]) for r in range(WORLD)]
+def registered(ckpt, tmp_path_factory):
+    """Each rank's registration and the salt file it wrote."""
+    at = tmp_path_factory.mktemp("expert_tables_salts")
+    salts = [at / f"rank{r}.salts" for r in range(WORLD)]
+    return [ET.register(ckpt["progs"][r], ckpt["dir"], BLOCKS, salts_to=salts[r], checkpoints_manifest=ckpt["man"])
+            for r in range(WORLD)], salts
+
+
+@pytest.fixture(scope="module")
+def regs(registered):
+    return registered[0]
+
+
+@pytest.fixture(scope="module")
+def salts(registered):
+    return registered[1]
+
+
+def _shape(e: dict) -> dict:
+    """An entry but its root, which fresh salts make another at each registration."""
+    return {k: v for k, v in e.items() if k != "root"}
 
 
 def _served(ckpt, rank: int) -> dict[str, np.ndarray]:
@@ -119,13 +142,13 @@ class _Plan:
         return self._tables[t]
 
 
-def _commit(served: dict[str, np.ndarray], doc, key=KEY, wrap=WRAP):
+def _commit(served: dict[str, np.ndarray], doc, salts: Path, wrap=WRAP):
     """`commit_tables` over ``served``, the plan's tables named under ``wrap`` and ``served`` keyed by the same names."""
     return ER.commit_tables(_Plan(BLOCKS, wrap), None, None, None, lambda _pi, _s, _w, _rid, _a, label: [served[label]],
-                            ER.committer(XT.ExpertTables.of(doc, "registration"), key))
+                            ER.committer(XT.ExpertTables.of(doc, "registration"), salts))
 
 
-def test_registered_entries_are_the_committers(ckpt, regs):
+def test_registered_entries_are_the_committers(ckpt, regs, salts):
     """Every table the windows read (weights in blocks of `BLOCKS` rows, scales a G-block a table) is registered, at the root the
     committer commits for the rank's served weights, and nothing else is."""
     I_r = INTER // WORLD
@@ -135,49 +158,64 @@ def test_registered_entries_are_the_committers(ckpt, regs):
         assert doc["program"] == ET.program(REPO, REV, WORLD, rank, doc["prefix"])
         assert XT.ExpertTables.of(doc, "registration").dump() == doc
         assert len(doc["values"]) == per_layer * len(LAYERS)
-        got = _commit(_served(ckpt, rank), doc)
+        got = _commit(_served(ckpt, rank), doc, salts[rank])
         assert {p: r.entry() for p, r in got.items()} == doc["values"]
 
 
-def test_a_table_served_otherwise_has_another_root(ckpt, regs):
-    """One byte of one expert's row changed changes exactly that row's table root."""
+def _refused(e) -> list[str]:
+    """The tables a refusal names, held to name no root."""
+    msg = str(e.value)
+    assert msg.startswith("tables refused, nothing of them published: ") and not re.search(r"[0-9a-f]{128}", msg)
+    return ast.literal_eval(msg.split("published: ", 1)[1].split("]", 1)[0] + "]")
+
+
+def test_a_window_serving_a_table_otherwise_is_refused_by_its_name_publishing_nothing(ckpt, regs, salts):
+    """One byte of one expert's row changed changes exactly that row's table root, so the window's tables are refused, naming
+    that table alone and no root."""
     served = _served(ckpt, 1)
     f = WRAP + "model.layers.2.mlp.experts.w13_weight"
     served[f] = served[f].copy()
     served[f][5, 7, 3] ^= 1
-    got = {p: r.entry()["root"] for p, r in _commit(served, regs[1]).items()}
-    changed = sorted(p for p, root in got.items() if root != regs[1]["values"][p]["root"])
-    assert changed == [ER.table_param(f, BLOCKS["w13"] * H // 2, 7 // BLOCKS["w13"])]
+    with pytest.raises(ValueError) as e:
+        _commit(served, regs[1], salts[1])
+    assert _refused(e) == [ER.table_param(f, BLOCKS["w13"] * H // 2, 7 // BLOCKS["w13"])]
 
 
-def test_ranks_and_keys_are_distinct_values(ckpt, regs):
-    """The two ranks' tables are registered under distinct programs at disjoint nonces, and another key samples other salts."""
+def test_ranks_are_distinct_values_under_their_own_fresh_salts(ckpt, regs, salts):
+    """The two ranks' tables are registered under distinct programs, each table under salts of its own, 192 bytes a row, and
+    committed under another registration's salts each takes another root, so every one is refused."""
     assert regs[0]["program"] != regs[1]["program"]
-    n0, n1 = (set(d["nonces"].values()) for d in regs)
-    assert len(n0) == len(regs[0]["values"]) and not n0 & n1 and min(n0 | n1) >= ET.TABLES_NONCE
-    other = bytes(31) + b"\x01"
-    got = _commit(_served(ckpt, 0), regs[0], key=other)
-    assert all(r.entry()["root"] != regs[0]["values"][p]["root"] for p, r in got.items())
+    assert SF.params(salts[0]) == {p: e["leaves"] for p, e in regs[0]["values"].items()}
+    rows = [SF.read(s, p)[i:i + SF.SALT_BYTES] for s in salts for p in SF.params(s)
+            for i in range(0, len(SF.read(s, p)), SF.SALT_BYTES)]
+    assert len(set(rows)) == len(rows)
+    with pytest.raises(ValueError) as e:
+        _commit(_served(ckpt, 0), regs[0], salts[1])
+    assert _refused(e) == sorted(regs[0]["values"])
 
 
-def test_stacks_and_refusals(ckpt, regs):
-    """``stacks`` registers those stacks' tables exactly as the whole registration does, nonces included (a table's nonce is its
-    own), so one key serves both; a block that does not divide N, a projection or stack no expert weight has, a short key and a
-    registration whose nonces are not its tables' refuse."""
+def test_stacks_and_refusals(ckpt, regs, tmp_path):
+    """``stacks`` registers those stacks' tables as the whole registration does, under fresh salts of their own; a block that
+    does not divide N, a projection or stack no expert weight has, a salt file without the registration's tables and a
+    registration that still names nonces refuse."""
     stack = f"{WRAP}model.layers.2.mlp.experts"
-    one = ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, stacks=[stack], checkpoints_manifest=ckpt["man"])
+    one = ET.register(ckpt["progs"][0], ckpt["dir"], BLOCKS, salts_to=tmp_path / "one.salts", stacks=[stack],
+                      checkpoints_manifest=ckpt["man"])
     mine = {p for p in regs[0]["values"] if p.startswith(f"weights/{stack}.")}
-    assert mine and one["values"] == {p: regs[0]["values"][p] for p in mine} and one["nonces"] == {p: regs[0]["nonces"][p] for p in mine}
+    assert mine and {p: _shape(e) for p, e in one["values"].items()} == {p: _shape(regs[0]["values"][p]) for p in mine}
+    assert set(SF.params(tmp_path / "one.salts")) == mine
     with pytest.raises(ValueError, match="power of two"):
-        ET.register(ckpt["progs"][0], ckpt["dir"], KEY, {"w13": 3, "w2": 32}, checkpoints_manifest=ckpt["man"])
+        ET.register(ckpt["progs"][0], ckpt["dir"], {"w13": 3, "w2": 32}, salts_to=tmp_path / "x.salts", checkpoints_manifest=ckpt["man"])
     with pytest.raises(ValueError, match="no expert stack has that projection"):
-        ET.register(ckpt["progs"][0], ckpt["dir"], KEY, {**BLOCKS, "w4": 1}, checkpoints_manifest=ckpt["man"])
+        ET.register(ckpt["progs"][0], ckpt["dir"], {**BLOCKS, "w4": 1}, salts_to=tmp_path / "x.salts", checkpoints_manifest=ckpt["man"])
     with pytest.raises(ValueError, match="no expert stack"):
-        ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, stacks=[f"{WRAP}model.layers.7.mlp.experts"], checkpoints_manifest=ckpt["man"])
-    with pytest.raises(ValueError, match="32-byte key"):
-        ER.committer(XT.ExpertTables.of(regs[0], "registration"), KEY[:16])
-    with pytest.raises(ValueError, match="one salt nonce for each table"):
-        XT.ExpertTables.of({**regs[0], "nonces": dict(list(regs[0]["nonces"].items())[1:])}, "registration")
+        ET.register(ckpt["progs"][0], ckpt["dir"], BLOCKS, salts_to=tmp_path / "x.salts", stacks=[f"{WRAP}model.layers.7.mlp.experts"],
+                    checkpoints_manifest=ckpt["man"])
+    assert not (tmp_path / "x.salts").exists()
+    with pytest.raises(ValueError, match="it is not this registration's"):
+        ER.committer(XT.ExpertTables.of(regs[0], "registration"), tmp_path / "one.salts")
+    with pytest.raises(ValueError, match="nonces"):
+        XT.ExpertTables.of({**regs[0], "nonces": {}}, "registration")
 
 
 def test_a_shard_the_manifest_does_not_pin_refuses(ckpt, tmp_path):
@@ -186,7 +224,8 @@ def test_a_shard_the_manifest_does_not_pin_refuses(ckpt, tmp_path):
     man["checkpoints"][0]["files"]["model.safetensors"]["sha256"] = "00" * 32
     (tmp_path / "checkpoints.json").write_text(json.dumps(man))
     with pytest.raises(ValueError, match="shards not pinned"):
-        ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, checkpoints_manifest=str(tmp_path / "checkpoints.json"))
+        ET.register(ckpt["progs"][0], ckpt["dir"], BLOCKS, salts_to=tmp_path / "x.salts", checkpoints_manifest=str(tmp_path / "checkpoints.json"))
+    assert not (tmp_path / "x.salts").exists()
 
 
 def test_without_a_build_the_served_parameters_name_the_tables_and_pin_the_bytes(ckpt, tmp_path):
@@ -198,74 +237,56 @@ def test_without_a_build_the_served_parameters_name_the_tables_and_pin_the_bytes
     params = {n: {"shape": list(a.shape), "dtype": dtype[a.dtype.itemsize], "sha512": hashlib.sha512(a.tobytes()).hexdigest()}
               for n, a in served.items()} | {"model.norm.weight": {"shape": [H], "dtype": "torch.bfloat16", "sha512": "00" * 64}}
     (tmp_path / "params.json").write_text(json.dumps(params))
-    doc = ET.register(None, ckpt["dir"], KEY, BLOCKS, served=str(tmp_path / "params.json"), world=WORLD, rank=1,
-                      checkpoints_manifest=ckpt["man"])
+    doc = ET.register(None, ckpt["dir"], BLOCKS, salts_to=tmp_path / "s.salts", served=str(tmp_path / "params.json"), world=WORLD,
+                      rank=1, checkpoints_manifest=ckpt["man"])
     assert (doc["prefix"], doc["rank"]) == ("", 1) and all(p.startswith("weights/model.layers.") for p in doc["values"])
-    assert {p: r.entry() for p, r in _commit(served, doc, wrap="").items()} == doc["values"]
+    assert {p: r.entry() for p, r in _commit(served, doc, tmp_path / "s.salts", wrap="").items()} == doc["values"]
     n = "model.layers.2.mlp.experts.w2_weight_scale_inv"
     (tmp_path / "params.json").write_text(json.dumps(params | {n: {**params[n], "sha512": "ab" * 64}}))
     with pytest.raises(ValueError, match="not the served tensor"):
-        ET.register(None, ckpt["dir"], KEY, BLOCKS, served=str(tmp_path / "params.json"), world=WORLD, rank=1,
-                    checkpoints_manifest=ckpt["man"])
+        ET.register(None, ckpt["dir"], BLOCKS, salts_to=tmp_path / "x.salts", served=str(tmp_path / "params.json"), world=WORLD,
+                    rank=1, checkpoints_manifest=ckpt["man"])
     with pytest.raises(ValueError, match="TP world and rank"):
-        ET.register(None, ckpt["dir"], KEY, BLOCKS, served=str(tmp_path / "params.json"), checkpoints_manifest=ckpt["man"])
+        ET.register(None, ckpt["dir"], BLOCKS, salts_to=tmp_path / "x.salts", served=str(tmp_path / "params.json"),
+                    checkpoints_manifest=ckpt["man"])
 
 
-def test_a_key_not_minted_for_these_nonces_refuses_with_its_fix(tmp_path):
-    """A key without its sidecar naming this nonce scheme (32 bytes written by hand, as the tables committed at the older
-    layer-and-kind nonces were) refuses, saying to run with --new-key; so does one beside another key's sidecar.  A minted key
-    reads back, both files mode 0600, and is minted once."""
-    old = tmp_path / "old.key"
-    old.write_bytes(KEY)
-    with pytest.raises(UsageError, match="run with --new-key"):
-        ET.key_of(str(old))
-    new = tmp_path / "new.key"
-    key = ET.mint_key(str(new))
-    side = tmp_path / "new.key.nonces"
-    assert ET.key_of(str(new)) == key and len(key) == 32 and json.loads(side.read_text())["nonces"] == ET.NONCES
-    assert {p.stat().st_mode & 0o777 for p in (new, side)} == {0o600}
-    with pytest.raises(UsageError, match="minted once"):
-        ET.mint_key(str(new))
-    (tmp_path / "old.key.nonces").write_bytes(side.read_bytes())
-    with pytest.raises(UsageError, match="run with --new-key"):
-        ET.key_of(str(old))
+def test_the_command_writes_its_salts_beside_the_registration_and_draws_them_fresh(ckpt, regs, tmp_path):
+    """``tp-register-tables`` writes the registration to ``--out`` and its salts to the salt file beside it (``F.salts/``, mode
+    0700, each file 0600), which the registration names nowhere; a second run draws other salts, so other roots."""
+    out = tmp_path / "tables.json"
 
+    def run() -> dict:
+        assert ET.main(ET.Options(program_dir=ckpt["progs"][0], checkpoint_dir=ckpt["dir"], block=["w13=1", "w2=32"],
+                                  out=str(out), checkpoints_manifest=ckpt["man"])) == 0
+        return json.loads(out.read_text())
 
-def test_the_command_registers_only_under_a_key_minted_for_its_nonces(ckpt, regs, tmp_path):
-    """``tp-register-tables --key`` refuses a key not minted for its nonces before it reads the checkpoint, and writes nothing;
-    ``--new-key`` mints one and registers under it, and the minted key then serves another run."""
-    old, out = tmp_path / "old.key", tmp_path / "tables.json"
-    old.write_bytes(KEY)
-
-    def run(key: str, new_key: bool = False) -> int:
-        return ET.main(ET.Options(program_dir=ckpt["progs"][0], checkpoint_dir=ckpt["dir"], key=key, block=["w13=1", "w2=32"],
-                                  out=str(out), checkpoints_manifest=ckpt["man"], new_key=new_key))
-
-    with pytest.raises(UsageError, match="run with --new-key"):
-        run(str(old))
-    assert not out.exists()
-    assert run(str(tmp_path / "new.key"), new_key=True) == 0
-    doc = json.loads(out.read_text())
+    doc, beside = run(), SF.beside(out)
     assert XT.ExpertTables.of(doc, "registration").program == regs[0]["program"] and set(doc["values"]) == set(regs[0]["values"])
-    assert doc["values"] != regs[0]["values"]
-    out.unlink()
-    assert run(str(tmp_path / "new.key")) == 0 and json.loads(out.read_text()) == doc
+    assert beside.stat().st_mode & 0o777 == 0o700 and {f.stat().st_mode & 0o777 for f in beside.iterdir()} == {0o600}
+    assert set(SF.params(beside)) == set(doc["values"])
+    text = out.read_text()
+    assert not any(SF.read(beside, p)[:SF.SALT_BYTES].hex() in text for p in doc["values"])
+    again = run()
+    assert {p: _shape(e) for p, e in again["values"].items()} == {p: _shape(e) for p, e in doc["values"].items()}
+    assert all(again["values"][p]["root"] != e["root"] for p, e in doc["values"].items())
 
 
-def test_of_request_reads_the_ranks_file(tmp_path, regs):
-    key = tmp_path / "key"
-    key.write_bytes(KEY)
+def test_of_request_reads_the_ranks_file_and_the_salts_beside_it(tmp_path, regs, salts):
     for doc in regs:
         (tmp_path / f"tables{doc['rank']}.json").write_text(json.dumps(doc))
-    spec = {"key": str(key), "registration": str(tmp_path / "tables{rank}.json")}
-    assert ER.of_request(spec, rank=1) == {"key": KEY, "program": regs[1]["program"], "nonces": regs[1]["nonces"]}
+        shutil.copytree(salts[doc["rank"]], tmp_path / f"tables{doc['rank']}.salts")
+    spec = {"registration": str(tmp_path / "tables{rank}.json")}
+    assert ER.of_request(spec, rank=1) == {"salts": tmp_path / "tables1.salts", "program": regs[1]["program"],
+                                           "roots": {p: e["root"] for p, e in regs[1]["values"].items()}}
     (tmp_path / "tables0.json").write_text(json.dumps(regs[1]))
     with pytest.raises(ValueError, match="of rank 1, not of rank 0"):
         ER.of_request(spec, rank=0)
 
 
-def test_an_embedding_shards_tables_are_registered_at_one_width_and_committed_once_a_process(ckpt, regs, monkeypatch):
-    """``shards`` registers the rank's embedding shard's tables beside the stacks', whose entries and nonces stay theirs: one a
+def test_an_embedding_shards_tables_are_registered_at_one_width_and_committed_once_a_process(ckpt, regs, salts, monkeypatch,
+                                                                                               tmp_path):
+    """``shards`` registers the rank's embedding shard's tables beside the stacks', whose entries stay theirs: one a
     column block at the shard's one width (`serving_templates.shard_block`), each the whole vocabulary's rows, the rank's own at
     its tokens and zeros at the other rank's, and a token's row opens the registered root (`gates.embedding.reference`).  A
     window's committer commits them once a process (`expert_rows.commit_shard`): a second window's call hands back the tables
@@ -279,12 +300,13 @@ def test_an_embedding_shards_tables_are_registered_at_one_width_and_committed_on
     mine = [ER.shard_param(EMBED, W, b) for b in range(H // W)]
     ck = WR.CheckpointIndex(ckpt["dir"], checkpoints_manifest=ckpt["man"])
     for rank in range(WORLD):
-        doc = ET.register(ckpt["progs"][rank], ckpt["dir"], KEY, BLOCKS, shards=[EMBED], checkpoints_manifest=ckpt["man"])
+        at = tmp_path / f"shard{rank}.salts"
+        doc = ET.register(ckpt["progs"][rank], ckpt["dir"], BLOCKS, salts_to=at, shards=[EMBED], checkpoints_manifest=ckpt["man"])
         assert set(doc["values"]) - set(regs[rank]["values"]) == set(mine) and len(mine) == 4
-        assert all(doc[k][p] == regs[rank][k][p] for k in ("values", "nonces") for p in regs[rank]["values"])
+        assert all(_shape(doc["values"][p]) == _shape(regs[rank]["values"][p]) for p in regs[rank]["values"])
         assert all((doc["values"][p]["leaves"], doc["values"][p]["words"]) == (V, W) for p in mine)
         shard = WR.compose(EMBED.removeprefix(WRAP), [VS, H], 16, ck, world=WORLD, rank=rank)[0]
-        com = ER.committer(XT.ExpertTables.of(doc, "registration"), KEY)
+        com = ER.committer(XT.ExpertTables.of(doc, "registration"), at)
         reads: list[int] = []
 
         def served(shard=shard, reads=reads):
@@ -303,52 +325,59 @@ def test_an_embedding_shards_tables_are_registered_at_one_width_and_committed_on
                 assert np.array_equal(row, want)
                 assert EB.reference(V, tok, t.root, t.domain.domain_id, [int(w) for w in row], t.salts[tok],
                                     [path[k:k + 64] for k in range(0, len(path), 64)]) == ([int(w) for w in want], 1)
-    with pytest.raises(ValueError, match="names no nonce for the table"):
-        ER.commit_shard(ER.committer(XT.ExpertTables.of(regs[0], "registration"), KEY), EMBED, H, served)
+    with pytest.raises(ValueError, match="holds no salts for the table"):
+        ER.commit_shard(ER.committer(XT.ExpertTables.of(regs[0], "registration"), salts[0]), EMBED, H, served)
     monkeypatch.setattr(ST, "SHARD_ROW", 32)
-    with pytest.raises(ValueError, match=r"@32/b0/vocab: the committer's registration names no nonce for the table"):
+    with pytest.raises(ValueError, match=r"@32/b0/vocab: the committer's registration holds no salts for the table"):
         ER.commit_shard(com, EMBED, H, served)
     assert len(reads) == 1
     with pytest.raises(ValueError, match="an embedding shard is"):
-        ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, shards=[f"{WRAP}model.layers.1.mlp.experts.w2_weight"],
-                    checkpoints_manifest=ckpt["man"])
+        ET.register(ckpt["progs"][0], ckpt["dir"], BLOCKS, salts_to=tmp_path / "x.salts",
+                    shards=[f"{WRAP}model.layers.1.mlp.experts.w2_weight"], checkpoints_manifest=ckpt["man"])
     with pytest.raises(ValueError, match="no weight of that name"):
-        ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, shards=["model.embed"], checkpoints_manifest=ckpt["man"])
+        ET.register(ckpt["progs"][0], ckpt["dir"], BLOCKS, salts_to=tmp_path / "x.salts", shards=["model.embed"],
+                    checkpoints_manifest=ckpt["man"])
 
 
 def test_a_shards_one_width_is_its_columns_alone():
-    """`shard_block`: the widest H / 2^k of at most `SHARD_ROW` words, and no H that has none.  `SHARD_ROW` is held beside
-    the nonce scheme's name: tables under a key in use are at these widths, so the two change together."""
-    assert (ST.SHARD_ROW, ET.NONCES) == (256, "field-order")
+    """`shard_block`: the widest H / 2^k of at most `SHARD_ROW` words, and no H that has none."""
+    assert ST.SHARD_ROW == 256
     assert [ST.shard_block(H) for H in (6144, 4096, 2048, 5120, 256, 192, 7)] == [192, 256, 256, 160, 256, 192, 7]
     with pytest.raises(ValueError, match="no H / 2\\^k of at most 256 words"):
         ST.shard_block(771)
 
 
-def test_a_weight_in_bnk_order_is_one_value_at_its_fields_nonce_committed_once_a_process(ckpt, regs, monkeypatch):
-    """``bnk`` registers a ``(B, K, N)`` weight in (B, N, K) order beside the stacks' tables, whose entries and nonces stay
-    theirs (a nonce is its field's place, so a value added moves none): one ``row/v2`` value of B N rows of K words, row
+def test_a_weight_in_bnk_order_is_one_value_committed_once_a_process(ckpt, regs, salts, monkeypatch, tmp_path):
+    """``bnk`` registers a ``(B, K, N)`` weight in (B, N, K) order beside the stacks' tables, whose entries stay theirs: one
+    ``row/v2`` value of B N rows of K words, row
     b N + n the weight's words [b, :, n].  A window's committer commits it once a process (`expert_rows.commit_bnk`) at the
-    registered root; a registration without it and a weight that is not three dimensions refuse."""
+    registered root, and refuses another value's without holding it; a registration without it and a weight that is not three
+    dimensions refuse."""
     monkeypatch.setattr(ER, "_BNK", {})
     B, K, N = BKN
     param = ER.bnk_param(ABSORB, K)
-    doc = ET.register(ckpt["progs"][1], ckpt["dir"], KEY, BLOCKS, bnk=[ABSORB], checkpoints_manifest=ckpt["man"])
+    at = tmp_path / "bnk.salts"
+    doc = ET.register(ckpt["progs"][1], ckpt["dir"], BLOCKS, salts_to=at, bnk=[ABSORB], checkpoints_manifest=ckpt["man"])
     assert set(doc["values"]) - set(regs[1]["values"]) == {param}
-    assert all(doc[k][p] == regs[1][k][p] for k in ("values", "nonces") for p in regs[1]["values"])
+    assert all(_shape(doc["values"][p]) == _shape(regs[1]["values"][p]) for p in regs[1]["values"])
     assert (doc["values"][param]["leaves"], doc["values"][param]["words"]) == (B * N, K)
     field = WR.compose(ABSORB.removeprefix(WRAP), BKN, 16, WR.CheckpointIndex(ckpt["dir"], checkpoints_manifest=ckpt["man"]),
                        world=WORLD, rank=1)[0]
-    com, reads = ER.committer(XT.ExpertTables.of(doc, "registration"), KEY), []
+    com, reads = ER.committer(XT.ExpertTables.of(doc, "registration"), at), []
 
     def served():
         reads.append(1)
         return field
 
+    forged = field.copy()
+    forged[0, 0, 0] ^= 1
+    with pytest.raises(ValueError) as e:
+        ER.commit_bnk(com, ABSORB, K, lambda: forged)
+    assert _refused(e) == [param] and not ER._BNK
     got = ER.commit_bnk(com, ABSORB, K, served)
     assert got.entry() == doc["values"][param] and ER.commit_bnk(com, ABSORB, K, served) is got and len(reads) == 1
     assert all(np.array_equal(got.rows.at([b * N + n])[0], field[b, :, n]) for b in range(B) for n in range(N))
-    with pytest.raises(ValueError, match="names no nonce for the value"):
-        ER.commit_bnk(ER.committer(XT.ExpertTables.of(regs[1], "registration"), KEY), ABSORB, K, served)
+    with pytest.raises(ValueError, match="holds no salts for the table"):
+        ER.commit_bnk(ER.committer(XT.ExpertTables.of(regs[1], "registration"), salts[1]), ABSORB, K, served)
     with pytest.raises(ValueError, match=r"is \(B, K, N\) 16-bit words"):
-        ET.register(ckpt["progs"][1], ckpt["dir"], KEY, BLOCKS, bnk=[EMBED], checkpoints_manifest=ckpt["man"])
+        ET.register(ckpt["progs"][1], ckpt["dir"], BLOCKS, salts_to=tmp_path / "x.salts", bnk=[EMBED], checkpoints_manifest=ckpt["man"])

@@ -19,6 +19,7 @@
 # logs under 8 MB, the stamps, binaries.sha256 and the command line; never a circuit, a proof or an archive.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 STAGE=${COLD_STAGE:?probe, build or run}
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || exit 1
@@ -161,7 +162,7 @@ est() { local v="COLD_EST_$1_$2" w="COLD_EST_$1"; echo "${!v:-${!w:-1800}}"; }
 end_of() { local v="COLD_END_$1"; echo "${!v:-$END}"; }
 keep() {
   (cd "$S" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst*.bin' ! -name 'pub*.bin' ! -path '*/archive/*' \
-    \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | xargs -0 -r -I{} cp --parents {} "$O/sessions/")
+    \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/sessions/")
   cp "$STAMPED/stamps.txt" "$O/" 2>/dev/null
 }
 mkdir -p "$O/sessions"

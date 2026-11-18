@@ -91,6 +91,15 @@ if TYPE_CHECKING:
 TL = Timeline.from_env("commit_delta", hot=False)
 
 
+def run_bound(run: str, began: bool) -> None:
+    """The instrumented run ``run``'s bound on the exchange: `RunBegan` at the step it begins at, `RunEnded` at its last."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.RunBegan(run, ex.next_step) if began else H.RunEnded(run, ex.step))
+
+
 def _rid_of(order: dict, rid) -> str:
     """The engine's per-step row id -> the workload's `r<i>`: vLLM may suffix the id we passed to add_request with `-<8 hex>`
     (verity_vllm.engine.engine_driver.external_id strips it); an id the workload does not name is returned raw (named downstream)."""
@@ -1292,7 +1301,10 @@ def main(args: Options) -> None:
                 if served is not None:
                     served.src.begin_run()
                 com.install()
+            run = None if arm == "control" else f"pair{pair}.{arm}"
+            run is not None and run_bound(run, began=True)
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
+            run is not None and run_bound(run, began=False)
             if _lock is not None:
                 r["remote_session"] = RS.end_run(_rs, pair, arm)
             if arm != "control":

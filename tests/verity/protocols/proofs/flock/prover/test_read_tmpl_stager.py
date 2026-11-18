@@ -127,7 +127,7 @@ def test_a_structural_unit_the_verifier_has_a_template_for_is_staged_on_it(tmp_p
     assert st.low.template is given and FC.template_of(st.text) == T.write(given)
     rng = np.random.default_rng(7)
     rows = {r: rng.integers(0, 1 << 16, (6, bits // 16), dtype=np.uint16) for r, _s, bits, _ps in PAIR_ROWS}
-    got = st.stage(rows, tmp_path / "round", b"k" * 32)
+    got = st.stage(rows, tmp_path / "round")
     a, b, w = rows["a"][:, 0].astype(int), rows["b"][:, 0].astype(int), rows["w"].astype(int)
     assert [int(o[0]) | int(o[1]) << 16 for o in got["outs"]["o0"]] == list(a + b | (w[:, 0] & w[:, 127] >> 15 & 1) << 17)
     with pytest.raises(ValueError, match="give each parameter a row of its own, in order"):
@@ -179,7 +179,7 @@ def test_a_read_unit_is_the_verifiers_template_and_stages_a_round_of_reads(verif
     cases = _reads(V, H)
     rows = {r: np.stack([np.packbits(np.array(E.arguments(V, *c)[g], np.uint8), bitorder="little").view("<u2") for c in cases])
             for g, (r, *_rest) in enumerate(in_rows)}
-    got = st.stage(rows, tmp_path / "round", b"k" * 32)
+    got = st.stage(rows, tmp_path / "round")
     want = [E.reference(V, *c) for c in cases]
     assert [list(map(int, w)) for w in got["outs"]["o0"]] == [h for h, _ok in want]
     assert [int(w[0]) for w in got["outs"]["o1"]] == [ok for _h, ok in want] == [1] * V + [0, 1]

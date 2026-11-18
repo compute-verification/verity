@@ -32,7 +32,7 @@ from verity.hooks import RangeAllocated, RangeFreed, RangeWritten, StepBegan, St
 from tests import fake_vllm
 from tests.engine.test_kv_blocks import kv_classes
 from verity_vllm import messages
-from verity_vllm.engine import kv_blocks
+from verity_vllm.engine import admission, kv_blocks
 from verity_vllm.engine.hooks import live
 from verity_vllm.engine.kv_blocks import KERNEL_BLOCK_SIZES
 from verity.protocols.resource_accounting.memory.poub.prover.binder import (
@@ -284,7 +284,7 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
     r.kv_caches[0][:, 1] = 1.5
     b.on_event(StepEnded(0))
     b.on_event(RangeFreed((1,), step=0))
-    b.on_event(StepBegan(1))
+    b.on_event(StepBegan(1, slots=1))
     b.on_event(StepEnded(1))
     assert m.last == 1 and memory_map_lines(m) == [] and b.step == 2
     with pytest.raises(RuntimeError, match="no KV pool"):
@@ -329,7 +329,7 @@ def test_steps_append_their_writes_and_free_the_freed_pages():
     assert not s.in_pass and b.step == 1
     b.on_event(RangeWritten(2, 4, 1, 1))
     b.on_event(StepBegan(1, ("a",), 1))
-    b.on_event(StepBegan(2))
+    b.on_event(StepBegan(2, slots=1))
     assert s.counters.calls["end_pass"] == 2 and b.step == 3
     b.on_event(RangeFreed((1, 2), step=2))
     assert not s.pool.allocated[[1, 2]].any() and s.pool.allocated[3]
@@ -340,7 +340,7 @@ def test_steps_append_their_writes_and_free_the_freed_pages():
 def steps(b: Binder, n: int) -> None:
     """``n`` empty steps after the binder's last."""
     for _ in range(n):
-        b.on_event(StepBegan(b.step))
+        b.on_event(StepBegan(b.step, slots=1))
 
 
 def test_steps_run_in_chained_windows_with_the_readers_roots():
@@ -418,7 +418,7 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     b.on_event(StepEnded(0))
     b.on_event(RangeFreed((2,), step=0))
     assert m.text().count("\n") == 1
-    b.on_event(StepBegan(1))
+    b.on_event(StepBegan(1, slots=1))
     assert open_step() == (1 if passes else None)
     (step,) = memory_map.parse(m.text().splitlines())[1]
     kv = s.region("kv/0")
@@ -426,6 +426,55 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     assert step.step == 0 and [w.slot for w in step.written] == [kv.first + 2, kv.first + 3]
     assert step.freed == () and {4, 5} <= set(s.idle_blocks("kv/0").tolist())
     assert [w.digest for w in step.written] == [codec.digest(want)] * 2 and want != bytes(4096)
+
+
+@pytest.mark.parametrize("passes", [True, False])
+def test_under_the_admission_hooks_steps_the_memory_map_is_the_one_steps_ending_before_their_frees_make(passes):
+    """The admission hook emits a step's `StepEnded` after vLLM's ``update_from_output``, so a finished request's free
+    comes before it, and a ``schedule`` that schedules no token begins no step and ends the last one again, with no
+    allocation or write between.  The memory map's lines and the passes are those of the step's end coming first and
+    no empty step."""
+    def run(admitted: bool):
+        s = NodeMemory()
+        b = Binder(s, passes=passes)
+        r = runner()
+        r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)]
+        load(b, r)
+        declare(b, r)
+        m = s.record_memory_map(registration=bytes(range(64)))
+        b.on_event(RangeAllocated((1, 2), "a", step=0))
+        b.on_event(RangeWritten(1, 0, SLOTS, 0))
+        b.on_event(StepBegan(0, ("a",), SLOTS))
+        r.kv_caches[0][:, 1] = 1.5
+        ends = [RangeFreed((2,), step=0), StepEnded(0), StepEnded(0)] if admitted else [StepEnded(0), RangeFreed((2,), step=0)]
+        for e in ends:
+            b.on_event(e)
+        b.on_event(RangeAllocated((3,), "c", step=1))
+        b.on_event(RangeWritten(3, 0, SLOTS, 1))
+        b.on_event(StepBegan(1, ("c",), SLOTS))
+        r.kv_caches[0][:, 3] = 2.5
+        b.on_event(RangeFreed((1, 3), step=1))
+        b.on_event(StepEnded(1))
+        b.on_event(StepBegan(2, ("c",), 1))
+        return m.text(), s.counters.calls.get("begin_pass"), s.counters.calls.get("end_pass"), b.step
+
+    got = run(True)
+    assert got == run(False) and got[0].count("\n") == 3
+
+
+def test_every_step_opens_its_memory_map_line_an_empty_one_too():
+    """Every call of the scheduler is a step, and the remote session's backend (`StoreBackend.advance`) finds one line a
+    step: steps of 1, 0 and 1 slots leave the map's last line at 0, 1 and 2."""
+    s = NodeMemory()
+    b = Binder(s, passes=False, kv=False)
+    load(b, runner())
+    m = s.record_memory_map(registration=bytes(range(64)))
+    last = []
+    for step, slots in [(0, 1), (1, 0), (2, 1)]:
+        b.on_event(StepBegan(step, slots=slots))
+        b.on_event(StepEnded(step))
+        last.append(m.last)
+    assert last == [0, 1, 2] and b.step == 3
 
 
 def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_its_z():
@@ -505,7 +554,7 @@ def test_installed_the_runners_load_registers_the_weights_and_uninstall_leaves_v
         b.install(ex)
     off = kv_blocks.attach()
     sites = v.sites
-    assert len(sites) == (10 if first_runner else 8) and {(e.owner, e.name) for e in live(kv_blocks.TAG)} == set(sites)
+    assert len(sites) == (9 if first_runner else 7) and {(e.owner, e.name) for e in live(kv_blocks.TAG)} == set(sites)
     for i, cls in enumerate(v.runners):
         r = cls()
         r.loads = torch.nn.Sequential(*[torch.nn.Identity()] * i, torch.nn.Linear(64, 32, bias=False))
@@ -556,17 +605,21 @@ def test_installed_the_pools_pages_are_the_stores_and_a_freed_page_is_not_touche
     assert v.calls[-1] == ("free_blocks", "list")
 
 
-def test_installed_a_steps_pass_opens_after_vllm_schedules_and_ends_before_vllm_reads_the_output(monkeypatch, binder):
-    """`Scheduler.schedule` runs vLLM's own first, with its arguments, and then opens the step's pass;
-    `Scheduler.update_from_output` ends the pass before vLLM's own runs, so the pages vLLM frees there are freed after
-    the step's digests are taken."""
+def test_installed_a_steps_pass_opens_after_vllm_schedules_and_ends_after_vllm_reads_the_output(monkeypatch, binder):
+    """Under the admission hook, the steps' one emitter: `Scheduler.schedule` runs vLLM's own first, with its arguments,
+    and then opens the step's pass; the pass ends after vLLM's own `Scheduler.update_from_output`, and a ``schedule``
+    that schedules no token is a step too, its pass over nothing new."""
     s = NodeMemory()
     v = vllms_classes(monkeypatch, s)
     b = binder(s, install=True, block_bytes=1024)
     v.runners[0]().initialize_kv_cache(SimpleNamespace(num_blocks=PAGES))
     sched = v.scheduler()
+    admission.install(sched)
+    sched.output = SimpleNamespace(num_scheduled_tokens={}, total_num_scheduled_tokens=1)
     assert sched.schedule("a", k=1) is sched.output and v.calls[-1] == ("schedule", ("a",), {"k": 1}, False)
     assert s.in_pass and b.step == 1
-    assert sched.update_from_output(sched.output, "out") == "outputs"
-    assert v.calls[-1] == ("update_from_output", True, "out", False) and not s.in_pass
-    assert s.counters.calls["end_pass"] == 1
+    assert sched.update_from_output(sched.output, "out") is sched.outputs
+    assert v.calls[-1] == ("update_from_output", True, "out", True) and not s.in_pass
+    sched.output = SimpleNamespace(num_scheduled_tokens={}, total_num_scheduled_tokens=0)
+    sched.update_from_output(sched.schedule(), "out")
+    assert not s.in_pass and b.step == 2 and s.counters.calls["end_pass"] == 2

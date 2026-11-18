@@ -62,7 +62,7 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
         "vllm", "--preset", "llama31-8b-fp8-1gpu", "--arms", "stock,stock-fp8", "--out", str(tmp_path),
     ])
     assert args.command == "vllm"
-    preset = load_spec(args.preset).preset
+    preset = resolve_spec(args.preset).preset
     assert preset.gpu_id == "rtx-pro-6000"
     assert preset.engine_settings["resident_gpu_memory_utilization"] == 0.40
     assert preset.engine_settings["block_gpu_memory_utilization"] == 0.80
@@ -184,13 +184,14 @@ def test_the_served_commits_width_sweep_on_a_dc_vms_one_gpu_is_the_rtxs():
     another GPU, and a run of it runs the point it names."""
 
     root = Path(__file__).resolve().parents[3]
-    name = "llama31-8b-fp8-1gpu-commit-served-width-h200"
-    spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
+    name = "llama31-8b-fp8-1gpu-commit-served-width@h200"
+    spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width@rtx-pro-6000")
     assert (spec.arms, spec.arm_modules, spec.arm_settings, spec.sweep, spec.reps, spec.eager) == (
         rtx.arms, rtx.arm_modules, rtx.arm_settings, rtx.sweep, rtx.reps, rtx.eager)
     assert (spec.preset.gpu_id, spec.preset.model, spec.preset.revision, spec.preset.precision) == (
         "h200", rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
     assert dict(spec.preset.engine_settings) == dict(rtx.preset.engine_settings)
+    assert (rtx.admission.max_minutes, spec.admission.max_minutes) == (40, 120)
     assert [point.id for point in expand_sweep(spec.sweep.id)] == ["b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
     plan = jobs.make_plan(name, root=root, commit="a" * 40, lookup=lambda identity, commit: None)
     assert [jobs.to_run(plan, point.id).point.id for point in expand_sweep(spec.sweep.id)] == [
@@ -321,7 +322,7 @@ def test_a_point_refuses_a_local_checkpoint_whose_files_differ_from_the_spec_dig
     checkpoint = tmp_path / "model"
     checkpoint.mkdir()
     (checkpoint / "config.json").write_text("{}")
-    digest = local_checkpoint(load_spec("llama31-8b-fp8-1gpu").preset, checkpoint).model_digest
+    digest = local_checkpoint(resolve_spec("llama31-8b-fp8-1gpu").preset, checkpoint).model_digest
     path = _spec_with(tmp_path, "")
     text = path.read_text().replace('model = "unsloth/Llama-3.1-8B"', f'model = "{checkpoint}"\nmodel_digest = "{digest}"')
     path.write_text(re.sub(r'(?m)^(revision|case) = .*\n', "", text))
@@ -336,7 +337,7 @@ def test_a_point_refuses_a_local_checkpoint_whose_files_differ_from_the_spec_dig
 @pytest.mark.parametrize("card", ["NVIDIA H100 80GB HBM3", "NVIDIA H200"])
 def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(tmp_path, monkeypatch, capsys, card):
     path = _spec_with(tmp_path, "")
-    path.write_text(path.read_text().replace('gpu_id = "rtx-pro-6000"', 'gpu_id = "h200"'))
+    path.write_text(path.read_text().replace('cards = ["rtx-pro-6000"]', 'cards = ["h200"]'))
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
     item = jobs.make_plan(path, lookup=lambda identity, commit: None).points[0]
@@ -349,11 +350,11 @@ def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(t
     else:
         assert stop.value.code == 2 and (
             f"the card is a {card}, not the h200 of spec 'llama31-8b-fp8-1gpu' (NVIDIA H200): run it on a node whose "
-            "card is a NVIDIA H200, or use the spec for this card") in capsys.readouterr().err
+            "card is a NVIDIA H200, or name this card where the spec lists it (`SPEC@CARD`)") in capsys.readouterr().err
 
 
 def test_a_local_checkpoint_is_bound_by_the_files_a_loader_reads_not_the_hub_snapshots_metadata(tmp_path):
-    preset = load_spec("llama31-8b-fp8-1gpu").preset
+    preset = resolve_spec("llama31-8b-fp8-1gpu").preset
     checkpoint = tmp_path / "model"
     checkpoint.mkdir()
     (checkpoint / "config.json").write_text("{}")
@@ -481,7 +482,7 @@ def test_graphs_are_refused_for_arms_bound_to_the_build():
     assert build_bound(bound_arm) == ("sampled-proofs:hm96",)
     assert build_bound(resolve_arms("stock")[0]) == ()
     with pytest.raises(ValueError, match="Build"):
-        ProcessEngineFactory(eager=False).create(bound_arm, load_spec("llama31-8b-fp8-1gpu").preset, resident=True)
+        ProcessEngineFactory(eager=False).create(bound_arm, resolve_spec("llama31-8b-fp8-1gpu").preset, resident=True)
 
 
 def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):

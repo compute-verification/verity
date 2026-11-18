@@ -5344,6 +5344,24 @@
         "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class_async.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class_async.json",
         "verity/protocols/resource_accounting/network/verifier/protocol/served-shape.md": "adapters/vllm/verity_vllm/compiler/served-shape.md"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/pipeline/network_admission.py": "verity/protocols/resource_accounting/network/prover/admission.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml": "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served.toml"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/harness/specs/llama32-1b-bf16-rtx-served-arm.toml": "benchmarks/harness/specs/llama32-1b-bf16-served-arm.toml"
+      }
+    },
+    {
+      "paths": {}
     }
   ]
 }
