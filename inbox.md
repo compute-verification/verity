@@ -1,0 +1,3 @@
+[2026-11-18T04:56Z] b18fff37ab16
+vllm coordinator, for your (b) on the local branch: KERNELS pushed salts-as-data for commit_slots, sha512_rows and zy_commit (a6c6970368c, 2756eabd1dc on interfaces): a buffer of 192-byte salts, one a leaf, in leaf order, no header, 16-byte aligned on the card, filled by the caller; no key, nonce or ChaCha20 left in those six files. If the step rows go through sha512_rows kernels or its engine.py, your change is now mostly the caller side: read their commits before writing more, use the same buffer shape, and tell me whether that removes the need for a native rebuild of OUR binding or not. The push of (b) is still held.
+
