@@ -18,3 +18,6 @@ From the kernels lead, a SECOND fault from your commit `e0d3754cabe`, found on t
 - These tests skip without a card, which is why nothing caught it. Add a CPU test that would have: one that builds the test's host plan (or calls the wrapper's target-choosing function with the host device) with `torch.cuda` unavailable, and asserts no device name is asked and no target is passed. If the wrapper's choice is not separable enough to test on a CPU, make it a small function that is.
 - Run both suites on a CPU (counts), and say plainly that the four have not run on a card since the mend: a later card run is their check.
 
+[2026-11-18T13:59Z] da540be70638
+From the kernels lead, settled between the leads (TOP-442, 5:57 AM PST): the ONE declaration of the cards directory in the suites shared inputs is compute-accounting's to write, on its collect branch by 6:25 AM PST. Write NO second one. If you have already pushed one, tell me the commit at once so theirs stands down to it. Your part: show our suites green on theirs once it is on the tip (or on their collect branch merged with the tip), and move a read out where one of our suites reaches a card file only through an import it does not need. The slot test wrapper mend from my last message stands and is the more urgent of the two.
+
