@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# The SASS opcode census of a node's binaries: every file with device code under the given roots, disassembled once with
-# `cuobjdump -sass` (one pass dumps every embedded architecture), its opcodes counted by `sass_count.py`, and the
-# opcodes the machine model doesn't price counted by `diff_menu.py record`. CPU only; no GPU. Writes under $OUT:
+# The SASS opcode census of a node's binaries: every file with device code under the given roots, disassembled with
+# `cuobjdump -sass`, one process an architecture of a binary (`-arch`) and $JOBS at once, its opcodes counted by
+# `sass_count.py` and its architectures' counts joined into the binary's, and the opcodes the machine model doesn't price
+# counted by `diff_menu.py record`. CPU only; no GPU. Writes under $OUT:
 #   toolkit.txt    cuobjdump and nvcc --version
 #   corpus.tsv     a line a binary kept: sha256, bytes, the architectures it holds, its path
 #   counts/*.json  `sass_count.py count` for each binary (every architecture it holds)
+#   cached.tsv     the binaries whose count was read from the cache, when any was
 #   failed.txt     the binaries whose disassembly or count failed, when any did
 #   census.json    `sass_count.py merge` of them all, a device family each; summary.txt its totals
 #
@@ -12,8 +14,10 @@
 #
 # ROOT: a directory searched for *.so, *.so.*, *.cubin and *.fatbin over 100 kB. Default: the CUDA toolkit of the nvcc
 # it runs, /usr/lib/x86_64-linux-gnu (the driver's and NCCL's libraries) and this checkout. MAXBYTES skips binaries
-# larger than it: a fast first pass that leaves out cuBLASLt (whose one cuobjdump pass is serial and holds the merge
-# until it ends). NVCC (default: the newest /usr/local/cuda-13*), CUOBJDUMP and JOBS (default: nproc) are read too.
+# larger than it. A binary's count is kept in SASS_CENSUS_CACHE (default ~/.cache/verity/sass-census; empty: no cache)
+# under the dump's version (`sass_count.py version`: this script, sass_count.py and cuobjdump's version) and the
+# binary's SHA-256, and read back from there on a later run, which the log and cached.tsv name. NVCC (default: the newest
+# /usr/local/cuda-13*), CUOBJDUMP and JOBS (default: nproc) are read too.
 set -uo pipefail
 case "${1:-}" in -h|--help) sed -n '2,/^set /p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;; esac
 OUT=${OUT:?run under research run}
@@ -23,10 +27,13 @@ NVCC=${NVCC:-$(ls -d /usr/local/cuda-13*/bin/nvcc 2>/dev/null | sort -V | tail -
 BIN=$(dirname "$NVCC")
 CUOBJDUMP=${CUOBJDUMP:-$BIN/cuobjdump}
 JOBS=${JOBS:-$(nproc)}
+CACHE=${SASS_CENSUS_CACHE-${HOME:+$HOME/.cache/verity/sass-census}}
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-mkdir -p "$OUT/counts"
+mkdir -p "$OUT/counts" "$WORK/lelf" "$WORK/sha256" "$WORK/parts"
 { "$CUOBJDUMP" --version; "$NVCC" --version; } >"$OUT/toolkit.txt" 2>&1
+VERSION=$(python3 "$HERE/sass_count.py" version --tool "$("$CUOBJDUMP" --version 2>&1)" "$HERE/dump.sh" "$HERE/sass_count.py")
+"$CUOBJDUMP" --help 2>&1 | grep -o "'sm_[0-9]*[a-z]\?'" | tr -d "'" | sort -u >"$WORK/allowed"
 
 roots=("$@")
 [ ${#roots[@]} -gt 0 ] || roots=("$(dirname "$BIN")" /usr/lib/x86_64-linux-gnu "$HERE/../../../")
@@ -40,27 +47,77 @@ done | sort -u >"$WORK/candidates"
 : >"$OUT/corpus.tsv"
 while read -r f; do
   [ -z "${MAXBYTES:-}" ] || [ "$(stat -L -c %s "$f")" -le "$MAXBYTES" ] || continue
-  archs=$("$CUOBJDUMP" -lelf "$f" 2>/dev/null | grep -o 'sm_[0-9]*[a-z]\?' | sort -u | tr '\n' ' ')
+  lelf=$("$CUOBJDUMP" -lelf "$f" 2>/dev/null)
+  archs=$(grep -o 'sm_[0-9]*[a-z]\?' <<<"$lelf" | sort -u | tr '\n' ' ')
   [ -n "$archs" ] || archs=$("$CUOBJDUMP" -sass "$f" 2>/dev/null | grep -m1 -o 'sm_[0-9]*[a-z]\?')
   [ -n "$archs" ] || continue
-  printf '%s\t%s\t%s\t%s\n' "$(sha256sum "$f" | cut -c1-16)" "$(stat -L -c %s "$f")" "$archs" "$f"
+  sha=$(sha256sum "$f" | cut -d' ' -f1)
+  printf '%s\n' "$lelf" >"$WORK/lelf/${sha:0:16}"
+  echo "$sha" >"$WORK/sha256/${sha:0:16}"
+  printf '%s\t%s\t%s\t%s\n' "${sha:0:16}" "$(stat -L -c %s "$f")" "$archs" "$f"
 done <"$WORK/candidates" | sort -t$'\t' -k1,1 -u >"$OUT/corpus.tsv"
 wc -l <"$OUT/corpus.tsv" >"$OUT/corpus.count"
+echo "dump: $(cat "$OUT/corpus.count") binaries with device code, found in ${SECONDS}s"
 
-export CUOBJDUMP HERE OUT
-work() {
+# A binary whose count the cache holds is read from it; the rest are split into units, one an architecture.
+: >"$WORK/fresh"
+: >"$WORK/units"
+while IFS=$'\t' read -r sha bytes archs f; do
+  src="$(basename "$f")@$sha"
+  entry=
+  if [ -n "$CACHE" ]; then
+    entry=$CACHE/$(python3 "$HERE/sass_count.py" key "$VERSION" "$(cat "$WORK/sha256/$sha")" "$src")
+    if [ -f "$entry" ]; then
+      cp "$entry" "$OUT/counts/$sha.json"
+      printf '%s\t%s\n' "$sha" "$f" >>"$OUT/cached.tsv"
+      echo "dump: $src read from the cache: $entry"
+      continue
+    fi
+  fi
+  printf '%s\t%s\t%s\n' "$sha" "$f" "$entry" >>"$WORK/fresh"
+  mkdir -p "$WORK/parts/$sha"
+  python3 "$HERE/sass_count.py" units --size "$bytes" --allowed "$WORK/allowed" <"$WORK/lelf/$sha" \
+    | while IFS=$'\t' read -r w arch; do printf '%s\t%s\t%s\t%s\n' "$w" "$sha" "$arch" "$f"; done >>"$WORK/units"
+done <"$OUT/corpus.tsv"
+echo "dump: $(wc -l <"$WORK/units") units of $(wc -l <"$WORK/fresh") binaries to disassemble, $JOBS at once"
+
+export CUOBJDUMP HERE WORK
+unit() {
   set -o pipefail
-  IFS=$'\t' read -r sha bytes archs f <<<"$1"
-  "$CUOBJDUMP" -sass "$f" 2>/dev/null \
-    | python3 "$HERE/sass_count.py" count --source "$(basename "$f")@$sha" >"$OUT/counts/${sha}.json" \
-    || printf '%s\t%s\n' "$sha" "$f" >>"$OUT/failed.txt"
+  IFS=$'\t' read -r _ sha arch f <<<"$1"
+  src="$(basename "$f")@$sha"
+  if [ "$arch" = - ]; then
+    "$CUOBJDUMP" -sass "$f" 2>/dev/null | python3 "$HERE/sass_count.py" count --source "$src" >"$WORK/parts/$sha/-.json"
+  else
+    "$CUOBJDUMP" -sass -arch "$arch" "$f" 2>/dev/null \
+      | python3 "$HERE/sass_count.py" count --source "$src" --arch "$arch" >"$WORK/parts/$sha/$arch.json"
+  fi || printf '%s\n' "$sha" >>"$WORK/failed"
 }
-export -f work
-# the largest binaries first, so the long ones start early; one cuobjdump pass a binary
-sort -t$'\t' -k2,2nr "$OUT/corpus.tsv" | tr '\n' '\0' | xargs -0 -P "$JOBS" -I{} bash -c 'work "$@"' _ {}
+export -f unit
+# the largest units first, so the long ones start early
+sort -t$'\t' -k1,1nr "$WORK/units" | tr '\n' '\0' | xargs -0 -r -P "$JOBS" -I{} bash -c 'unit "$@"' _ {}
+echo "dump: disassembled by ${SECONDS}s"
+
+touch "$WORK/failed"
+while IFS=$'\t' read -r sha f entry; do
+  if grep -qx "$sha" "$WORK/failed"; then
+    printf '%s\t%s\n' "$sha" "$f" >>"$OUT/failed.txt"
+    continue
+  fi
+  if [ -f "$WORK/parts/$sha/-.json" ]; then
+    mv "$WORK/parts/$sha/-.json" "$OUT/counts/$sha.json"
+  else
+    python3 "$HERE/sass_count.py" join --source "$(basename "$f")@$sha" --lelf "$WORK/lelf/$sha" \
+      "$WORK/parts/$sha"/*.json >"$OUT/counts/$sha.json" || { printf '%s\t%s\n' "$sha" "$f" >>"$OUT/failed.txt"; continue; }
+  fi
+  if [ -n "$entry" ]; then
+    mkdir -p "$(dirname "$entry")" && cp "$OUT/counts/$sha.json" "$entry.$$" && mv "$entry.$$" "$entry"
+  fi
+done <"$WORK/fresh"
 
 python3 "$HERE/sass_count.py" merge "$OUT"/counts/*.json >"$OUT/census.json"
 python3 "$HERE/sass_count.py" summary "$OUT/census.json" | tee "$OUT/summary.txt"
 ROOT=$HERE/../../..
 PYTHONPATH="$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" \
   python3 "$HERE/diff_menu.py" record "$OUT"
+echo "dump: done in ${SECONDS}s"

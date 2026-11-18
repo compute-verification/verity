@@ -4,6 +4,8 @@
 section names (`arch = sm_90a`, `code for sm_100a`), its functions, its instructions, and each dotted opcode's count
 with its first instruction as an example (`IMMA.16832.S8.S8`: `R4, R8, R6, R4`). `merge` folds those objects into one
 census an architecture: every dotted opcode, its count, the sources it appears in, an example, and its base opcode.
+`units`, `join`, `version` and `key` are dump.sh's: a binary split into one disassembly an architecture, its parts
+joined into the whole binary's count, and where that count is kept between runs.
 
     cuobjdump -sass lib.so | python sass_count.py count --source libcublasLt > lt.json
     python sass_count.py merge counts/*.json > census.json
@@ -14,6 +16,7 @@ Stdlib only, so it runs on a node's system Python beside the toolkit.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -63,6 +66,57 @@ def count(lines: Iterable[str], source: str, only: str | None = None) -> dict:
     return {"source": source, "archs": archs}
 
 
+def elfs(lelf: Iterable[str]) -> list[tuple[str, int]]:
+    """The architectures a `cuobjdump -lelf` listing names, in the order of their first ELF, each with its ELF count."""
+    n: dict[str, int] = {}
+    for line in lelf:
+        for arch in re.findall(r"sm_[0-9]*[a-z]?", line):
+            n[arch] = n.get(arch, 0) + 1
+    return list(n.items())
+
+
+def units(size: int, lelf: Iterable[str], allowed: set[str]) -> list[tuple[int, str | None]]:
+    """How dump.sh disassembles one binary of `size` bytes: one `cuobjdump -sass -arch A` a listed architecture, each
+    weighed by its share of the ELFs, or the whole binary at once (None) when it lists one architecture or one that
+    `cuobjdump -arch` doesn't take (`allowed`)."""
+    archs = elfs(lelf)
+    if len(archs) < 2 or any(a not in allowed for a, _ in archs):
+        return [(size, None)]
+    total = sum(k for _, k in archs)
+    return [(size * k // total, a) for a, k in archs]
+
+
+def join(parts: list[dict], source: str, order: list[str]) -> dict:
+    """One binary's `count` from its architectures' (each `count --arch A` of `cuobjdump -sass -arch A`), the
+    architectures in `order`, the order a whole-binary dump meets them, so it equals the whole binary's `count`."""
+    archs: dict[str, dict] = {}
+    for p in parts:
+        for arch, a in p["archs"].items():
+            if arch in archs:
+                raise ValueError(f"{source}: {arch} is in two parts")
+            archs[arch] = a
+    rank = {a: i for i, a in enumerate(order)}
+    return {"source": source, "archs": dict(sorted(archs.items(), key=lambda kv: (rank.get(kv[0], len(rank)), kv[0])))}
+
+
+def version(files: list[Path], tool: str) -> str:
+    """The dump's version: SHA-256 over the counting code's files and the disassembler's `--version` text, so a count
+    made by other code or another cuobjdump is never read back from the cache."""
+    h = hashlib.sha256()
+    for f in files:
+        h.update(f.name.encode() + b"\0" + f.read_bytes() + b"\0")
+    h.update(tool.encode())
+    return h.hexdigest()
+
+
+def key(ver: str, sha256: str, source: str) -> str:
+    """A binary's count's path in the cache: the dump's version, the binary's SHA-256 and the source name its count
+    carries."""
+    if not re.fullmatch(r"[0-9a-f]{64}", ver) or not re.fullmatch(r"[0-9a-f]{64}", sha256):
+        raise ValueError("version and sha256 are 64 hex digits each")
+    return f"{ver}/{sha256}/{source.replace('/', '_')}.json"
+
+
 def merge(objs: list[dict]) -> dict:
     """One census a device family: every dotted opcode's count, its sources and an example, and each base opcode's."""
     out: dict[str, dict] = {}
@@ -104,6 +158,20 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("count")
     c.add_argument("--source", required=True)
     c.add_argument("--arch", help="count only this architecture's sections")
+    u = sub.add_parser("units", help="a binary's units of disassembly from its `cuobjdump -lelf` listing on stdin")
+    u.add_argument("--size", type=int, required=True)
+    u.add_argument("--allowed", type=Path, required=True, help="the architectures `cuobjdump -arch` takes, one a line")
+    j = sub.add_parser("join", help="one binary's count from its architectures' counts")
+    j.add_argument("--source", required=True)
+    j.add_argument("--lelf", type=Path, required=True, help="the binary's `cuobjdump -lelf` listing")
+    j.add_argument("files", type=Path, nargs="+")
+    v = sub.add_parser("version", help="the dump's version")
+    v.add_argument("--tool", required=True, help="cuobjdump --version's text")
+    v.add_argument("files", type=Path, nargs="+")
+    k = sub.add_parser("key", help="a count's path in the cache")
+    k.add_argument("version")
+    k.add_argument("sha256")
+    k.add_argument("source")
     m = sub.add_parser("merge")
     m.add_argument("files", type=Path, nargs="+")
     s = sub.add_parser("summary")
@@ -111,6 +179,17 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     if a.cmd == "count":
         json.dump(count(sys.stdin, a.source, a.arch), sys.stdout)
+    elif a.cmd == "units":
+        allowed = set(a.allowed.read_text().split())
+        for w, arch in units(a.size, sys.stdin, allowed):
+            print(f"{w}\t{arch or '-'}")
+    elif a.cmd == "join":
+        order = [arch for arch, _ in elfs(a.lelf.read_text().splitlines())]
+        json.dump(join([json.loads(f.read_text()) for f in a.files], a.source, order), sys.stdout)
+    elif a.cmd == "version":
+        print(version(a.files, a.tool))
+    elif a.cmd == "key":
+        print(key(a.version, a.sha256, a.source))
     elif a.cmd == "merge":
         objs = []
         for f in a.files:

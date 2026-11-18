@@ -46,6 +46,49 @@ def test_count_reads_each_architectures_opcodes():
     assert "BRA" in a90["ops"] and a90["ops"]["BRA"][0] == 1
 
 
+def test_join_of_each_architectures_count_is_the_whole_binarys():
+    whole = FIX.read_text()
+    lelf = ["ELF file    1: lib.1.sm_90a.cubin", "ELF file    2: lib.2.sm_100a.cubin"]
+    order = [a for a, _ in sass_count.elfs(lelf)]
+    parts = [json.loads(json.dumps(sass_count.count(whole.splitlines(), "lib@ab", arch))) for arch in reversed(order)]
+    assert json.dumps(sass_count.join(parts, "lib@ab", order)) == json.dumps(sass_count.count(whole.splitlines(), "lib@ab"))
+    try:
+        sass_count.join(parts + parts[:1], "lib@ab", order)
+    except ValueError as e:
+        assert "sm_100a is in two parts" in str(e)
+    else:
+        raise AssertionError("join took one architecture from two parts")
+
+
+def test_units_split_a_binary_by_architecture_unless_cuobjdump_cannot():
+    lelf = [f"ELF file {i}: lib.{i}.{a}.cubin" for i, a in enumerate(["sm_90", "sm_100", "sm_90", "sm_90"], 1)]
+    assert sass_count.elfs(lelf) == [("sm_90", 3), ("sm_100", 1)]
+    assert sass_count.units(800, lelf, {"sm_90", "sm_100"}) == [(600, "sm_90"), (200, "sm_100")]
+    # an architecture `-arch` doesn't take, or a single one, is dumped whole, as one unit
+    assert sass_count.units(800, lelf, {"sm_90"}) == [(800, None)]
+    assert sass_count.units(800, lelf[:1], {"sm_90"}) == [(800, None)] == sass_count.units(800, [], set())
+
+
+def test_cache_key_reads_the_version_the_binary_and_its_source(tmp_path):
+    a, b = tmp_path / "a.py", tmp_path / "b.sh"
+    a.write_text("x")
+    b.write_text("y")
+    v = sass_count.version([a, b], "cuobjdump 13.0")
+    assert v != sass_count.version([a, b], "cuobjdump 13.1")
+    b.write_text("z")
+    assert v != sass_count.version([a, b], "cuobjdump 13.0")
+    sha = "ab" * 32
+    k = sass_count.key(v, sha, "libx.so@abababababababab")
+    assert k == f"{v}/{sha}/libx.so@abababababababab.json"
+    assert len({k, sass_count.key(v, "cd" * 32, "libx.so@abababababababab"), sass_count.key(v, sha, "liby.so@ab")}) == 3
+    try:
+        sass_count.key(v, sha[:16], "libx.so")
+    except ValueError as e:
+        assert "64 hex digits" in str(e)
+    else:
+        raise AssertionError("key took a truncated sha256")
+
+
 def test_merge_folds_to_families_and_bases():
     c = census()
     assert set(c) == {"sm_90", "sm_100"}
@@ -220,6 +263,12 @@ def test_record_counts_each_censused_familys_unpriced_opcodes_and_a_failed_binar
     assert doc["validation"]["status"] == "passed" and want["sm_90"] and want["sm_100"]
     assert {f: sum(c.values()) for f, c in m["by_family"].items()} == want and m["value"] == sum(want.values())
     assert (m["name"], m["unit"], m["mark"], m["host"]["card"]) == (diff_menu.METRIC, "opcodes", "measured", "none")
+    assert m["from_cache"] == []
+    (tmp_path / "result.json").unlink()
+    (tmp_path / "cached.tsv").write_text("abc\t/lib/libtest.so\n")
+    assert diff_menu.main(["record", str(tmp_path)]) == 0
+    [m] = json.loads((tmp_path / "result.json").read_text())["measurements"]
+    assert m["from_cache"] == ["libtest.so@abc"]
     (tmp_path / "result.json").unlink()
     (tmp_path / "failed.txt").write_text("abc\tlibtest.so\n")
     assert diff_menu.main(["record", str(tmp_path)]) == 1

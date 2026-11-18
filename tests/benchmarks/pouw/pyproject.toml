@@ -35,6 +35,7 @@ untraced = [
     "test_pearl_c_vllm.py",
     "test_receipts_adopters.py",
     "test_salt_bind.py",
+    "test_sass_census_dump.py",
     "test_served_zk.py",
     "test_theory_duo_kernel.py",
     "test_theory_fold_kernel.py",
