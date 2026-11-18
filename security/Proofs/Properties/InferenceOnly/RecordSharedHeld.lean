@@ -629,7 +629,8 @@ theorem unit_defn {j tr : Lean.Json} {c : Case} (h : read j tr = .ok c) {rs : Ar
   rw [← htid]
   exact find_tid (Properties.Record.SecurityProofs.tmpls_named hts).1 ht
 
-/-- The parts `rowRuns` reads: every part of an argument of a root node that is no input node, but an edge's. -/
+/-- The parts `rowRuns` reads as runs (`runsOf`): every part of an argument of a root node that is no input node, but
+an edge's and a strided part whose rows lie apart (`gatherRuns`). -/
 def rowParts (P : Prog) : List Part :=
   let nodes := (P.defs[P.root]!).body.nodes
   let units := nodes.toList.filter fun n => !InferenceOnlyVerifier.Desc.isInputNode P n
@@ -641,13 +642,33 @@ def rowParts (P : Prog) : List Part :=
     | .grid _ lanes => lanes.all fun l => !l.p &&
       (nodes[l.i]?.map fun n => !InferenceOnlyVerifier.Desc.isInputNode P n).getD false
     | _ => false
-  units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
+  (units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)).filter fun q =>
+    !gathered P q
 
 theorem rowRuns_runsOf {P : Prog} {R : Runs} (h : rowRuns P = some R) : runsOf P (rowParts P) = some R := by
   unfold rowRuns at h
   dsimp only at h
   split at h
-  · exact h
+  · split at h
+    · unfold gatherRows at h
+      dsimp only at h
+      change Option.bind (runsOf P (rowParts P)) _ = some R at h
+      cases hr : runsOf P (rowParts P) with
+      | none => rw [hr] at h; cases h
+      | some R0 =>
+        rw [hr] at h
+        dsimp only [Option.bind] at h
+        split at h
+        · cases h; rfl
+        · cases h
+    · rename_i hg
+      have hg' : _ = false := Bool.eq_false_iff.2 hg
+      have e := List.filter_eq_self.2 fun q hq => by
+        have hq' := List.any_eq_false.1 hg' q hq
+        show (!gathered P q) = true
+        revert hq'
+        cases gathered P q <;> simp
+      exact (congrArg (runsOf P) e).trans h
   · cases h
 
 /-- **A shared run is a run of some leaf of a part `runsOf` reads.** -/

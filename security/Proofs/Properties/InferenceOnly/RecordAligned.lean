@@ -2,11 +2,13 @@ module
 
 public import Proofs.Properties.InferenceOnly.LeafWidthsResolve
 public import Proofs.Properties.InferenceOnly.RecordFields
+public import Proofs.Properties.InferenceOnly.RecordInputs
 public import Proofs.Properties.InferenceOnly.RecordLanding
 public import Proofs.Properties.InferenceOnly.RecordLeafWide
 public import Proofs.Properties.InferenceOnly.RecordPrim
 public import Proofs.Properties.InferenceOnly.RecordRead
 public import Proofs.Properties.InferenceOnly.RecordRows
+public import Proofs.Properties.InferenceOnly.RecordShared
 public import Proofs.Properties.InferenceOnly.RecordTemplates
 public import Proofs.Properties.InferenceOnly.RecordWhole
 public import Proofs.Properties.InferenceOnly.RecordWide
@@ -21,6 +23,8 @@ rows do not line up, and this module states what a record it accepts has, in the
 * `aligned` (`Aligned`): a leaf of the writer's row lies inside one leaf of the reader's row, or the reader's unit
   returns no leaf of the row.
 * `filled` (`Filled`): every bit of a leaf of a wired row is a bit of a leaf of the writer's row.
+* `sharedUnwired_of_read` (`SharedUnwired`, which `aligned` takes): no row on a leaf of a shared run has a writer,
+  from `SharedHeld` and `held_unwired`.
 
 Both read `wired_row`, what the check has tested of a row with a writer: the row and the writer's output row have
 the same bits, and either the reader's parameter has leaves of one bit and is none of what its Definition passes on,
@@ -441,5 +445,16 @@ theorem filled (hP : ReadProg P)
   obtain ⟨l', hl', h1, h2⟩ := leaf_of_bit _ _ (Nat.le_refl _) b hb
   obtain ⟨g', hg'⟩ := outLeaf_intro hP hrs hsc' hf hl'
   exact ⟨l', g', _, _, ⟨wt, wu, _, sc', hw, h0, hsc', hg'⟩, h1, h2⟩
+
+/-- **No row on a leaf of a shared run has a writer** (`SharedUnwired`), on a record `read` accepts, given that every
+such row is held (`SharedHeld`): the check holds no row that has a writer (`held_unwired`). -/
+theorem sharedUnwired_of_read (hSH : InferenceOnlyVerifier.Record.SecurityProofs.SharedHeld) {j tr : Json}
+    {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P) (c.W.templates.map (·.1)).toArray =
+      .ok rs) :
+    SharedUnwired c.f.P rs c.W c.wired := by
+  intro r l g lo hi hs hrl
+  obtain ⟨p, hp⟩ := hSH j tr c rs h hrs g hs
+  exact held_unwired h r (by rw [hp r l lo hi hrl]; rfl)
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

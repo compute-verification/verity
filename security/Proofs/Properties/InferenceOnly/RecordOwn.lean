@@ -5,10 +5,11 @@ public import InferenceOnlyVerifier.Record
 /-!
 # What the record proofs read off the root
 
-`OwnRuns` is the reading of the root the record proofs cover: `Record.ownRows` admits it and it has no edge
-(`EdgeFree`). `Record.ownRows` admits a root whose argument reads another unit's outputs (an edge, `edgeOf`), and
-`EdgeFreeReads` is the hypothesis that every record `read` accepts is of a root with none, false of any root with an
-edge. On a root with none, `Record.rowRuns` reads every part of every argument of a root node that is no input node
+`OwnRuns` is the reading of the root the record proofs cover: `Record.ownRows` admits it and it has no edge and no
+strided part's rows (`EdgeFree`). `Record.ownRows` admits a root whose argument reads another unit's outputs (an edge,
+`edgeOf`) or a strided part whose rows lie apart, each member's own (`Record.gathered`), and `EdgeFreeReads` is the
+hypothesis that every record `read` accepts is of a root with neither, false of any root with one. On a root with
+neither, `Record.rowRuns` reads every part of every argument of a root node that is no input node
 (`rowRuns_own`). This module states what `OwnRuns` gives, by position: every such part is a run of leaves of one input
 node (`part_run`), an affine part or a strided part whose reference k is the run's leaf k mod the run (`runOf_some`); a
 batch node of those has `dims` on every argument (`batch_dims`); a strided part that reads its run more than once reads
@@ -157,11 +158,14 @@ def edgeOf (P : Prog) : Part → Bool
     lanes.all fun l => !l.p && ((P.defs[P.root]!).body.nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
   | _ => false
 
-/-- **The root has no edge**: no part of an argument of a root node that is no input node reads another such node. -/
-def EdgeFree (P : Prog) : Prop := ∀ n ∈ unitsOf P, ∀ q ∈ partsIn n, edgeOf P q = false
+/-- **The root has no edge and no strided part's rows**: no part of an argument of a root node that is no input node
+reads another such node, or is a strided part whose rows lie apart (`Record.gathered`). -/
+def EdgeFree (P : Prog) : Prop :=
+  ∀ n ∈ unitsOf P, ∀ q ∈ partsIn n, edgeOf P q = false ∧ gathered P q = false
 
-/-- **Every record `read` accepts is of a root with no edge.** False of any root with an edge; the record proofs that
-take it cover the roots with none, and restating them over `OwnRowsEdges` replaces it. -/
+/-- **Every record `read` accepts is of a root with no edge and no strided part's rows.** False of any root with
+either; the record proofs that take it cover the roots with neither, and restating them over `OwnRowsEdges` and a
+member's own row of a strided part replaces it. -/
 def EdgeFreeReads : Prop := ∀ (j tr : Lean.Json) (c : Case), read j tr = .ok c → EdgeFree c.f.P
 
 /-- **The reading of the root the record proofs cover**: `own-rows` admits the root, which has no edge. -/
@@ -187,11 +191,20 @@ theorem rowRuns_own {P : Prog} (h : OwnRuns P) :
       (unitsOf P).flatMap partsIn := by
     refine flatMap_congr' fun n hn => ?_
     rw [← List.filter_flatMap]
-    exact List.filter_eq_self.2 fun q hq => by simpa using hE n hn q hq
+    exact List.filter_eq_self.2 fun q hq => by simpa using (hE n hn q hq).1
   have e : rowRuns P = if (unitsOf P).all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) then
-      runsOf P ((unitsOf P).flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edgeOf P ·))
+      (if ((unitsOf P).flatMap fun n => n.args.toList.flatMap fun a =>
+          a.seq.parts.toList.filter (!edgeOf P ·)).any (gathered P) then
+        gatherRows P ((unitsOf P).flatMap fun n => n.args.toList.flatMap fun a =>
+          a.seq.parts.toList.filter (!edgeOf P ·))
+      else runsOf P ((unitsOf P).flatMap fun n => n.args.toList.flatMap fun a =>
+          a.seq.parts.toList.filter (!edgeOf P ·)))
     else none := rfl
-  rw [hp] at e
+  have hg : ((unitsOf P).flatMap partsIn).any (gathered P) = false := by
+    refine List.any_eq_false.2 fun q hq => ?_
+    obtain ⟨n, hn, hq'⟩ := List.mem_flatMap.1 hq
+    simp [(hE n hn q hq').2]
+  rw [hp, hg, if_neg Bool.false_ne_true] at e
   unfold ownRows at ho
   rw [e] at ho ⊢
   by_cases hb : (unitsOf P).all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) = true
