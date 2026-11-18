@@ -205,12 +205,11 @@ def Params.slotAt (p : Params) (N k : Nat) : Option (Nat × Slot) := Id.run do
 /-- The window slot `k` joins (`Params.slotAt`), used or empty. -/
 def State.slotWindow (s : State) (k : Nat) : Option Nat := (s.params.slotAt s.reg.blocks k).map (·.1)
 
-/-- `_stale_below(t)`: the store index below which every appended block joined a window `lifetime` or more before t;
-with refresh, the window each append's slot joins (`slotWindow`), which `receive` holds it to. -/
+/-- `_stale_below(t)`: the store index below which every appended block joined a window `lifetime` or more before t.
+With refresh, `receive` refuses an append joining a window other than its slot's (`joinsAnother`), so this is the
+schedule's bound over each append's slot window. -/
 def State.staleBelow (s : State) (t : Nat) : Nat :=
-  let k := if s.params.refresh then
-      (s.appends.toList.takeWhile fun a => ((s.slotWindow a.slot).getD t : Int) ≤ (t : Int) - s.params.lifetime).length
-    else (s.joined.toList.takeWhile fun (x : Nat) => (x : Int) ≤ (t : Int) - s.params.lifetime).length
+  let k := (s.joined.toList.takeWhile fun (x : Nat) => (x : Int) ≤ (t : Int) - s.params.lifetime).length
   match s.appends[k]? with
   | some a => a.first
   | none => s.extent
@@ -240,6 +239,24 @@ def State.probationHeld (s : State) (t : Nat) : Nat :=
   (Array.range s.appends.size).foldl (fun n a =>
     let x := s.appends[a]!
     if (s.born a).any (t < · + s.params.lifetime) then n + (x.count - s.releasedIn x.first x.count) else n) 0
+
+/-- With refresh, whether an append not joined yet would join window `t`, another than its slot's. -/
+def State.joinsAnother (s : State) (t : Nat) : Bool :=
+  s.params.refresh && (List.range' s.joined.size (s.appends.size - s.joined.size)).any fun a =>
+    s.slotWindow s.appends[a]!.slot != some t
+
+/-- With refresh, what `receive` refuses of a plan in window `t` past the lifetime check: `lifetime` if it holds a
+registered block at `t ≥ lifetime`, `probation` if it holds a block of an append in probation (`State.probation`). -/
+def State.refreshRefusal (s : State) (t : Nat) (plan : Plan) : Option Failure :=
+  let N := s.reg.blocks
+  if !s.params.refresh then none
+  else if s.params.lifetime ≤ t && plan.runs.any fun (f, _) => f < N then some .lifetime
+  else if plan.runs.any fun (f, c) => f + c > N && s.probation t (max f N) (f + c - max f N) then some .probation
+  else none
+
+/-- A pass's probation entry pushed onto `ps`, with refresh (`probationHeld`); `ps` as it is without. -/
+def State.probationPush (s : State) (t : Nat) (ps : Array Nat) : Array Nat :=
+  if s.params.refresh then ps.push (s.probationHeld t) else ps
 
 /-- `append`'s check of a slot, with refresh: above the last append's slot, in the schedule, and the append its kind
 names: a fresh append of at most `REKEY_MAX` blocks, the re-key of the whole class run, or the whole re-key of the
@@ -356,15 +373,11 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
   let some plan := plan? | return s.fail t .plan
   if !s.gone.isEmpty && plan.runs.any fun (f, c) => s.isReleased f c then return s.fail t .plan
   if RECEIPT_LIMIT ≤ s.windows[t]!.receipts + plan.length then return s.fail t .plan
-  let joining := List.range' s.joined.size (s.appends.size - s.joined.size)
+  if s.joinsAnother t then return s.fail t .origin
   s := { s with joined := s.joined ++ Array.replicate (s.appends.size - s.joined.size) t }
-  if s.params.refresh && joining.any fun a => s.slotWindow s.appends[a]!.slot != some t then return s.fail t .origin
   let below := s.staleBelow t
   if below > N && plan.runs.any fun (f, c) => f < below && f + c > N then return s.fail t .lifetime
-  if s.params.refresh then
-    if s.params.lifetime ≤ t && plan.runs.any fun (f, _) => f < N then return s.fail t .lifetime
-    if plan.runs.any fun (f, c) => f + c > N && s.probation t (max f N) (f + c - max f N) then
-      return s.fail t .probation
+  if let some f := s.refreshRefusal t plan then return s.fail t f
   let post := if extent == N then 0 else plan.runs.foldl (fun n (f, c) => n + (f + c - max f N)) 0
   let head := s.head
   let add := fun (w : Win) =>
@@ -376,7 +389,7 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
       heads := w.heads.push head
       stale := w.stale.push below
       arrived := w.arrived.push now
-      probation := if s.params.refresh then w.probation.push (s.probationHeld t) else w.probation }
+      probation := s.probationPush t w.probation }
   s := { s with windows := s.windows.modify t add, plan, step := st,
                 planned := cover (s.planned ++ plan.runs.filterMap fun (f, c) =>
                   if f + c > N then some (max f N, f + c) else none) }

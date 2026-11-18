@@ -7,16 +7,25 @@ audit's (`Store`, `Pass`, `audit.Opening`).
 from __future__ import annotations
 
 import bisect
+import hashlib
 import os
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from verity.commitments import MerkleTree
-from verity.protocols.resource_accounting.memory.poub.prover.rota import REGISTRATION, REKEY_MAX, Fresh, Origin, Rota
+from verity.protocols.resource_accounting.memory.poub.verifier.rota import REKEY_MAX, Origin, Schedule
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
-from verity.protocols.resource_accounting.memory.poub.verifier.audit import (Registration, append_head, append_tree,
-                                                                             payload_tree, rekey_root)
+from verity.protocols.resource_accounting.memory.poub.verifier.audit import (REKEY_DOMAIN, Registration, append_head,
+                                                                             append_tree, payload_tree)
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import SALT_BYTES, Plan
+
+
+def rekey_root(registration: bytes, first: int, count: int, origin: Origin) -> bytes:
+    """`rekeyRoot` of `Poub/Session.lean`: SHA512(REKEY_DOMAIN ‖ registration ‖ u64be first ‖ u64be count ‖ u8 0 ‖
+    u64be lo) for `("registered", lo)`, or ‖ u8 1 ‖ u64be k for `("append", k)`, k a slot."""
+    tag = {"registered": b"\0", "append": b"\1"}[origin[0]]
+    return hashlib.sha512(REKEY_DOMAIN + registration + first.to_bytes(8, "big") + count.to_bytes(8, "big") + tag
+                          + origin[1].to_bytes(8, "big")).digest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +41,7 @@ class Append:
     tree: MerkleTree | None
     origin: Origin | None = None
     declaration: bytes | None = None
+    slot: int | None = None
 
     @property
     def count(self) -> int:
@@ -77,42 +87,50 @@ class Store:
             out = append_head(out, a.first, a.count, a.root)
         return out
 
-    def append(self, payloads: Sequence[bytes], salts: Sequence[bytes]) -> Append:
+    def append(self, payloads: Sequence[bytes], salts: Sequence[bytes], slot: int | None = None) -> Append:
         """Payload blocks written after the codec seed, at the next fresh store indices, committed in one `append_tree`
-        by their digests, kept beside them; their encodings wait on the append's coin (`encode`)."""
+        by their digests, kept beside them; their encodings wait on the append's coin (`encode`).  Under refresh it
+        fills `slot`, a fresh slot of the session's `Schedule`."""
         reg, first = self.registration, self.extent
         if first + len(payloads) > reg.codec.max_blocks:
             raise ValueError(f"a store under {reg.codec.name} is at most {reg.codec.max_blocks} blocks")
         digests = tuple(codec.digest(m) for m in payloads)
-        a = Append(first, digests, tuple(salts), append_tree(reg.digest, first, digests, salts))
+        a = Append(first, digests, tuple(salts), append_tree(reg.digest, first, digests, salts), slot=slot)
         self.blocks.extend([None] * a.count)
         self.pending[first] = tuple(payloads)
         self.appends.append(a)
         return a
 
-    def rekey(self, origin: Origin, count: int) -> Append:
-        """A refresh re-key of `count` blocks of `origin` (the registration's from block a, or fresh append k's from
-        its offset o), at the next fresh store indices: the same payloads, encoded under the re-key's own coin once it
-        is sent (`encode`), committed by no tree of their own."""
+    def slotted(self, first: int, slot: int) -> Append:
+        """The append of pages from block `first`, filling `slot` once it is sent."""
+        i = next(i for i, a in enumerate(self.appends) if a.first == first)
+        self.appends[i] = replace(self.appends[i], slot=slot)
+        return self.appends[i]
+
+    def in_slot(self, k: int) -> Append | None:
+        """The append filling slot k, if any."""
+        return next((a for a in self.appends if a.slot == k), None)
+
+    def rekey(self, origin: Origin, count: int, slot: int | None = None) -> Append:
+        """A refresh re-key, in `slot`, of `origin` whole: registered run [lo, lo + count), or the fresh append in
+        slot k, of its count; at the next fresh store indices, the same payloads, encoded under the re-key's own coin
+        once it is sent (`encode`), committed by no tree of their own."""
         reg, first, n = self.registration, self.extent, self.registration.blocks
-        if type(count) is not int or not 1 <= count <= REKEY_MAX:
-            raise ValueError(f"a re-key is of 1 … {REKEY_MAX} blocks, not {count!r}")
-        if origin[0] == "registered" and len(origin) == 2 and 0 <= origin[1] and origin[1] + count <= n:
+        src = self.in_slot(origin[1]) if origin[0] == "append" and len(origin) == 2 else None
+        if (origin[0] == "registered" and len(origin) == 2 and type(count) is int and count >= 1
+                and 0 <= origin[1] and origin[1] + count <= n):
             at = origin[1]
             payloads = self.payloads[at:at + count]
             digests, salts = tuple(codec.digest(m) for m in payloads), self.salts[at:at + count]
-        elif (origin[0] == "append" and len(origin) == 3 and 0 <= origin[1] < len(self.appends)
-              and self.appends[origin[1]].origin is None and 0 <= origin[2]
-              and origin[2] + count <= self.appends[origin[1]].count):
-            src, o = self.appends[origin[1]], origin[2]
-            payloads = tuple(self.payload(src.first + o + u) for u in range(count))
-            digests, salts = src.digests[o:o + count], src.salts[o:o + count]
+        elif src is not None and src.origin is None and count == src.count:
+            payloads = tuple(self.payload(src.first + u) for u in range(count))
+            digests, salts = src.digests, src.salts
         else:
             raise ValueError(f"no re-key of {count} blocks of {origin!r}: a registered run inside the store's {n} "
-                             "blocks, or a run of a fresh append, never of a re-key")
+                             "blocks, or a fresh append's slot of that count, never of a re-key")
         if first + count > reg.codec.max_blocks:
             raise ValueError(f"a store under {reg.codec.name} is at most {reg.codec.max_blocks} blocks")
-        a = Append(first, digests, tuple(salts), None, origin, rekey_root(reg.digest, first, count, origin))
+        a = Append(first, digests, tuple(salts), None, origin, rekey_root(reg.digest, first, count, origin), slot)
         self.blocks.extend([None] * count)
         self.pending[first] = tuple(payloads)
         self.appends.append(a)
@@ -125,7 +143,7 @@ class Store:
         a = self._append_of(j)
         if a.origin is None:
             return None
-        start = a.origin[1] if a.origin[0] == "registered" else self.appends[a.origin[1]].first + a.origin[2]
+        start = a.origin[1] if a.origin[0] == "registered" else self.in_slot(a.origin[1]).first
         return start + j - a.first
 
     def encode(self, first: int, coin: bytes) -> None:
@@ -171,85 +189,119 @@ class Store:
 
 
 class Refresh:
-    """The honest prover's refresh on the session's rota: the re-keys it sends before a window's first root (`due`),
-    the indices each one's encode releases (`appended`), and the plan of a window (`plan`).  A chunk is named by the
-    store index its payload was first committed at; of each due piece only the runs of chunks not `freed` are sent,
-    and a chunk is planned only under the key `Rota.key` gives, once that key's encode has landed."""
+    """The honest prover's refresh on the session's `Schedule`: the re-keys of window t's slots it makes before the
+    window's first root (`due`), the fresh slot each append of pages takes when it is sent (`sent`), the indices each
+    re-key's encode moves or withdraws (`appended`), and the plan of a window (`plan`).  A chunk is named by the store
+    index its payload was first committed at.  A re-key slot is filled when a chunk of its origin is still kept, and
+    re-keys its origin whole: the blocks of chunks no longer kept are withdrawn."""
 
-    def __init__(self, store: Store, rota: Rota) -> None:
-        if rota.blocks != store.registration.blocks:
-            raise ValueError(f"the rota is of {rota.blocks} registered blocks, the store of {store.registration.blocks}")
-        self.store, self.rota = store, rota
-        self.fresh: list[Fresh] = []
-        self.held: dict[int, int] = {j: j for j in range(rota.blocks)}
-        self._joined: dict[int, int] = {}
-        self._ordinal: dict[int, int] = {}
+    def __init__(self, store: Store, schedule: Schedule) -> None:
+        if schedule.blocks != store.registration.blocks:
+            raise ValueError(f"the schedule is of {schedule.blocks} registered blocks, the store of "
+                             f"{store.registration.blocks}")
+        self.store, self.schedule = store, schedule
+        self.held: dict[int, int] = {j: j for j in range(schedule.blocks)}
+        self.last = -1
+        self.unsent = 0
+        self.filled: dict[int, int] = {}
+        self._plan: tuple[tuple, Plan] | None = None
 
-    def appended(self, a: Append, window: int) -> tuple[int, ...]:
-        """`a`, sent so it joins `window`: a fresh append's blocks become chunks; a re-key's encode moves each of its
-        chunks to its index.  The indices that no longer hold a chunk, which the prover releases."""
-        self._joined[a.first] = window
+    def appended(self, a: Append) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        """`a`, made: a fresh append's blocks become chunks; a re-key's encode moves each kept chunk of its origin to
+        its index.  The indices that no longer hold a chunk, which the prover releases, and those of `a` that hold
+        none, withdrawn."""
         if a.origin is None:
-            self._ordinal[a.first] = len(self.fresh)
-            self.fresh.append(([x.first for x in self.store.appends].index(a.first), window, a.count))
+            if a.count > REKEY_MAX:
+                raise ValueError(f"an append of pages under refresh is at most {REKEY_MAX} blocks, not {a.count}")
+            self.unsent += 1
             self.held.update((j, j) for j in range(a.first, a.first + a.count))
-            return ()
-        out = []
+            return (), ()
+        released, withdrawn = [], []
         for j in range(a.first, a.first + a.count):
             p = self.store.origin_position(j)
-            out.append(self.held[p])
-            self.held[p] = j
-        return tuple(sorted(out))
+            if p in self.held:
+                released.append(self.held[p])
+                self.held[p] = j
+            else:
+                withdrawn.append(j)
+        return tuple(sorted(released)), tuple(withdrawn)
+
+    def fresh_left(self, t: int) -> bool:
+        """Whether pages made now in window t still find a fresh slot of t, beside the appends of pages unsent."""
+        return self.filled.get(t, 0) + self.unsent < self.schedule.fresh_slots
+
+    def sent(self, a: Append, t: int) -> Append:
+        """`a`, sent in window t: an append of pages takes t's next fresh slot (`Store.slotted`); refused once t's F
+        are used, or for a re-key whose slot is not t's."""
+        s = self.schedule
+        if a.origin is None:
+            k = next((k for i in range(s.fresh_slots) if (k := s.fresh_slot(t, i)) > self.last), None)
+            if k is None:
+                raise ValueError(f"window {t}'s {s.fresh_slots} fresh slots are filled: pages wait for the next window")
+            self.unsent -= 1
+            self.filled[t] = self.filled.get(t, 0) + 1
+            a = self.store.slotted(a.first, k)
+        elif a.slot <= self.last or s.slot_at(a.slot)[0] != t:
+            raise ValueError(f"the re-key in slot {a.slot} is sent in window {t}, after slot {self.last}")
+        self.last = a.slot
+        return a
 
     def freed(self, p: int) -> int:
         """Chunk p is no longer kept: the index it is held at, which the prover releases."""
         return self.held.pop(p)
 
-    def due(self, t: int) -> tuple[tuple[Origin, int], ...]:
-        """The re-keys to send before window t's first root: each of the rota's (`Rota.due`), cut to its runs of
-        chunks still kept, in order."""
-        out: list[tuple[Origin, int]] = []
-        for origin, count in self.rota.due(t, self.fresh):
-            start = origin[1] if origin[0] == "registered" else self.store.appends[origin[1]].first + origin[2]
-            m = 0
-            while m < count:
-                if start + m not in self.held:
-                    m += 1
-                    continue
-                e = m
-                while e < count and start + e in self.held:
-                    e += 1
-                out.append(((origin[0], origin[1] + m) if origin[0] == "registered"
-                            else (origin[0], origin[1], origin[2] + m), e - m))
-                m = e
+    def due(self, t: int) -> tuple[tuple[int, Origin, int], ...]:
+        """The re-keys to make before window t's first root, as (slot, origin, count): each re-key slot of t whose
+        origin has a chunk still kept, in slot order."""
+        s, out = self.schedule, []
+        for m, k in enumerate(s.slots(t)):
+            kind = s.slot_in(t, m)
+            if kind[0] == "registered":
+                origin, first, count = ("registered", kind[1]), kind[1], kind[2]
+            elif kind[0] == "rekey" and (src := self.store.in_slot(kind[1])) is not None:
+                origin, first, count = ("append", kind[1]), src.first, src.count
+            else:
+                continue
+            if any(p in self.held for p in range(first, first + count)):
+                out.append((k, origin, count))
         return tuple(out)
 
-    def _key(self, p: int, t: int) -> int | None:
-        rota = self.rota
-        if p < rota.blocks:
-            return rota.key(0, rota.registered_class(p), t, registered=True)
-        first = self.store._append_of(p).first
-        return rota.key(self._joined[first], rota.append_class(self._ordinal[first]), t, registered=False)
+    def _valid(self, j: int, t: int) -> bool:
+        s = self.schedule
+        if j < s.blocks:
+            return t < s.lifetime
+        a = self.store._append_of(j)
+        joined = s.slot_at(a.slot)[0]
+        born = (joined if a.origin is None else None if a.origin[0] == "registered" else s.slot_at(a.origin[1])[0])
+        return joined <= t < joined + s.lifetime and (born is None or born + s.lifetime <= t)
 
     def plan(self, t: int, *, pending: bool = False) -> Plan:
-        """The plan of window t: every kept chunk at the index it is held at, where that index's key is the one a plan
-        of t may hold it under and is encoded, or, with `pending`, is a re-key's still awaiting the coin it is encoded
-        under before the pass reads it."""
+        """The plan of window t: every kept chunk at the index it is held at, where a plan of t may hold that index and
+        it is encoded, or, with `pending`, is a re-key's still awaiting the coin it is encoded under before the pass
+        reads it.  An append of pages is never planned: its blocks' first encode is their first re-key's."""
+        # Appends only grow, and between two appends the kept chunks and the appends awaiting coins only shrink.
+        key = (t, pending, len(self.store.appends), len(self.store.pending), len(self.held))
+        if self._plan is not None and self._plan[0] == key:
+            return self._plan[1]
         out = []
-        for p, j in self.held.items():
-            key = self._key(p, t)
-            if key is None or (self.store.blocks[j] is None
-                               and not (pending and j != p and self.store._append_of(j).first in self.store.pending)):
+        for j in self.held.values():
+            if j >= self.schedule.blocks and self.store._append_of(j).slot is None:
                 continue
-            if (REGISTRATION if j < self.rota.blocks else self._joined[self.store._append_of(j).first]) == key:
-                out.append(j)
+            if not self._valid(j, t) or (self.store.blocks[j] is None
+                                         and not (pending and self.store._append_of(j).first in self.store.pending)):
+                continue
+            out.append(j)
         runs: list[list[int]] = []
         for j in sorted(out):
             if runs and runs[-1][0] + runs[-1][1] == j:
                 runs[-1][1] += 1
             else:
                 runs.append([j, 1])
-        return Plan(tuple((f, c) for f, c in runs), self.store.extent)
+        if not runs:
+            raise ValueError(f"window {t} holds no block a plan may read: no kept chunk is valid in it")
+        plan = Plan(tuple((f, c) for f, c in runs), self.store.extent)
+        self._plan = (key, plan)
+        return plan
 
 
 @dataclass(frozen=True, slots=True)

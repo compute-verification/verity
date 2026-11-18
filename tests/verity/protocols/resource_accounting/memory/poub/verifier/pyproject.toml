@@ -38,7 +38,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/protocols/resource_accounting/memory/poub/prover/__init__.py", "verity/protocols/resource_accounting/memory/poub/prover/session_prover.py",
           # the honest provers and the period's prover side, which the tests run against the verifier's
           "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_prover.py",
-          "verity/protocols/resource_accounting/memory/poub/prover/rota.py",
+          "verity/protocols/resource_accounting/memory/poub/verifier/rota.py",
           "verity/protocols/resource_accounting/memory/poub/prover/period_prover.py",
           "verity/protocols/resource_accounting/memory/poub/prover/opening_prover.py",
           "verity/protocols/resource_accounting/memory/poub/prover/p2_party_prover.py",

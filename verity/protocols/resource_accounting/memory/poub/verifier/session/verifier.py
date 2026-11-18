@@ -124,7 +124,7 @@ from collections.abc import Sequence
 from fractions import Fraction
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, timing
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, rota, timing
 from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore
 from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers, wire
 from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
@@ -881,10 +881,11 @@ class Pair:
             raise audit.SessionError(f"the verifiers disagree on window {t}'s boundary")
         return out
 
-    def append(self, root: bytes, count: int, origin: audit.Origin | None = None):
-        named = {} if origin is None else {"origin": wire.origin_json(origin)}
+    def append(self, root: bytes, count: int, origin: audit.Origin | None = None, slot: int | None = None):
+        named = ({} if origin is None else {"origin": wire.origin_json(origin)}) | ({} if slot is None else {"slot": slot})
         return self._step(self.s.filling, lambda: {"kind": "append", "root": root.hex(), "count": count} | named,
-                          lambda: self.s.append(root, count, *(() if origin is None else (origin,))),
+                          lambda: self.s.append(root, count, *(() if origin is None else (origin,)),
+                                                **({} if slot is None else {"slot": slot})),
                           lv.appended_json, coin=lambda out: out[1] if isinstance(out, tuple) else None)[0]
 
     def release(self, runs, withdrawn=()):
@@ -1193,12 +1194,17 @@ class Verifier:
             self.T if pace is None else round(pace["t_ms"] * 1e6) // pace["groups"], self.deferred)
         # the one setting, named only when on: the parameters, the session's message and its result are today's without it
         refresh = {"refresh": True} if k < len(self.refresh) and self.refresh[k] else {}
-        if refresh and "refresh" not in {f.name for f in dataclasses.fields(audit.Params)}:
+        fields = {f.name for f in dataclasses.fields(audit.Params)}
+        if refresh and "refresh" not in fields:
             raise ValueError(f"session {k} is set to refresh, and this tree's audit.Params has no `refresh`")
+        # F, the fresh slots a window, goes wherever the setting goes and is no setting of its own
+        slots = {"fresh_slots": rota.FRESH_SLOTS} if refresh else {}
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows, lifetime=life, deferred=self.deferred,
                               pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)),
-                              groups_per_coin=self.groups_per_coin, **refresh)
+                              groups_per_coin=self.groups_per_coin, **refresh,
+                              **(slots if "fresh_slots" in fields else {}))
+        refresh |= slots
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         one = {} if pace is None or pace.get("in_flight", 2) == 2 else {"in_flight": pace["in_flight"]}
         if one:
@@ -1483,10 +1489,11 @@ class Verifier:
     @staticmethod
     def append(session: audit.AuditRun, head: dict) -> dict | audit.Verdict:
         """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`, and
-        under refresh a re-key's `"origin"` (`origin_of`): the reply `{"type": "appended", "first": j, "coin": hex}`,
-        its first index and its coin `c_a`, sampled now, or the rejection."""
+        under refresh its `"slot"` and a re-key's `"origin"` (`origin_of`): the reply `{"type": "appended", "first": j,
+        "coin": hex}`, its first index and its coin `c_a`, sampled now, or the rejection."""
         origin = wire.origin_of(head.get("origin"))
-        got = session.append(bytes.fromhex(head["root"]), head["count"], *(() if origin is None else (origin,)))
+        got = session.append(bytes.fromhex(head["root"]), head["count"], *(() if origin is None else (origin,)),
+                             **({"slot": head["slot"]} if "slot" in head else {}))
         if isinstance(got, audit.Verdict):
             return got
         first, coin = got

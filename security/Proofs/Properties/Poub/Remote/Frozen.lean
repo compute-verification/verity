@@ -204,8 +204,8 @@ theorem frz_boundary {s : State} {now : Nat} {r : Result} {s' : State} (he : bou
          | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
              first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
 
-theorem frz_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s' : State}
-    (he : append s root count = .ok (r, s')) : Frz s s' := by
+theorem frz_append {s : State} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat} {r : Result} {s' : State}
+    (he : append s root count origin slot = .ok (r, s')) : Frz s s' := by
   unfold append at he
   repeat' split at he
   all_goals (try dsimp only at he)
@@ -364,7 +364,7 @@ theorem frz_step {s : State} {e : Event} {r : Result} {s' : State} (h : Inv s) (
   cases e with
   | start now => injection he with he; exact frz_start he
   | boundary now => injection he with he; exact frz_boundary he
-  | append root count => exact frz_append he
+  | append root count origin slot => exact frz_append he
   | release runs withdrawn => injection he with he; exact frz_release he
   | receive t i root runs change st now => injection he with he; exact frz_receive h hdf hm he
   | close t now => exact frz_close he

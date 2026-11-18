@@ -68,6 +68,7 @@ def test_with_refresh_unset_no_message_and_no_result_holds_the_word(sent):
     assert [r["accepted"] for r in rs] == [True, True]
     assert [h["type"] for h in sent].count("session") == 2
     assert "refresh" not in json.dumps(sent) and "refresh" not in json.dumps(rs)
+    assert "fresh_slots" not in json.dumps(sent) and "fresh_slots" not in json.dumps(rs)
     assert [set(h) for h in sent if h["type"] == "session"] == [{"type", "k", "windows", "lifetime", "pace"}] * 2
 
 
@@ -84,26 +85,41 @@ def test_a_session_set_to_refresh_on_a_tree_whose_parameters_hold_none_is_refuse
 
 
 def test_the_session_set_to_refresh_is_told_so_and_the_one_before_it_is_not(params_with_refresh, sent):
-    rs, _ = H.run("honest,honest", sessions=2, refresh=(False, True))
+    rs, _ = H.run("kv:2,kv:2", sessions=2, refresh=(False, True), kv_every=4, kv_pool=8, lifetime=2)
     first, second = [h for h in sent if h["type"] == "session"]
     assert "refresh" not in first and second["refresh"] is True
-    assert rs[0]["accepted"] and "refresh" not in rs[0] and rs[1]["refresh"] is True
+    assert "fresh_slots" not in first and type(second["fresh_slots"]) is int and second["fresh_slots"] >= 1
+    assert rs[0]["accepted"] and "refresh" not in rs[0] and "fresh_slots" not in rs[0]
+    assert rs[1]["refresh"] is True and rs[1]["fresh_slots"] == second["fresh_slots"]
 
 
 def test_the_lean_verifiers_parameters_name_refresh_only_when_it_is_on(params_with_refresh):
     off, on = params_with_refresh(8, 1, 2, lifetime=2), params_with_refresh(8, 1, 2, lifetime=2, refresh=True)
     assert "refresh" not in lv.params_json(off) and lv.params_json(on)["refresh"] is True
-    assert {k: v for k, v in lv.params_json(on).items() if k != "refresh"} == lv.params_json(off)
+    assert {k: v for k, v in lv.params_json(on).items() if k not in ("refresh", "fresh_slots")} == lv.params_json(off)
+    assert "fresh_slots" not in lv.params_json(off)
+    if "fresh_slots" in {f.name for f in dataclasses.fields(params_with_refresh)}:
+        slotted = params_with_refresh(8, 1, 2, lifetime=2, refresh=True, fresh_slots=4)
+        assert lv.params_json(slotted)["fresh_slots"] == 4
 
 
-def test_a_refresh_session_the_lean_verifier_ran_without_reading_the_setting_is_a_disagreement(params_with_refresh):
+def test_a_refresh_session_the_lean_verifier_ran_without_reading_the_setting_is_never_accepted(params_with_refresh):
     """A Lean verifier that accepts a refresh session and whose record doesn't say refresh ran it under today's rule:
-    the session is refused `disagreement`, never accepted."""
-    rs, _ = H.run("honest,honest", sessions=2, refresh=(False, True))
+    the session is refused (`disagreement` where the Lean accepted it), never accepted."""
+    rs, _ = H.run("kv:2,kv:2", sessions=2, refresh=(False, True), kv_every=4, kv_pool=8, lifetime=2)
     lean_reads_it = (rs[1].get("lean_record") or {}).get("refresh") is True
     if not lean_reads_it:
-        assert not rs[1]["accepted"] and rs[1]["failure"]["failure"] == "disagreement"
-        assert rs[1]["disagreement"]["event"] in ("refresh", "record")
+        assert not rs[1]["accepted"]
+
+
+def test_a_refresh_session_is_accepted_on_the_lean_verifiers_verdict_and_its_record_is_the_books(params_with_refresh):
+    """The setting reaches both verifiers whole: the Lean's record of the session, each window's probation in it,
+    is the books' field for field (`Pair.end`), or the session would end `disagreement`."""
+    (r,), _ = H.run("kv:2", refresh=(True,), kv_every=4, kv_pool=8, lifetime=2, windows=6, samples=16)
+    assert r["accepted"] and r["verdict"] == "lean" and r["refresh"] is True and r.get("disagreement") is None
+    assert r["lean_record"]["refresh"] is True
+    assert all(len(w["probation"]) == len(w["lengths"]) for w in r["lean_record"]["windows"])
+    assert r["ledger"]["spec"]["probation"] > 0
 
 
 # ------------------------------------------------------------------------------------------------ refresh_result.py
@@ -124,7 +140,7 @@ def a_session(k: int, *, refresh: bool = False, accepted: bool = True, gamma: fl
         s["ledger"] = {"inputs": {"passes": 7, "receipts": receipts, "post_seed_receipts": post,
                                   "post_seed_credited": credited},
                        "spec": {"gamma": gamma, "gamma_decided_by": "lean", "certified_bytes": 5.0,
-                                "terms": {"probation": 0.5} if probation is not None else {}},
+                                "terms": {}, **({"probation": 0.5} if probation is not None else {})},
                        "declared": {"gamma": {"spec": {"error": {"windows": 1e-9}}}}}
     return s
 
@@ -197,3 +213,36 @@ def test_the_result_is_a_trial_that_names_the_document_and_holds_each_rules_shar
 def test_a_directory_with_no_record_is_said_and_nothing_is_written(tmp_path, capsys):
     assert R.main([str(tmp_path)]) == 2
     assert "refresh_result:" in capsys.readouterr().err and list(tmp_path.iterdir()) == []
+
+
+
+def test_a_session_on_a_card_adds_its_card_object_and_the_reference_size_says_it_is_not_a_rate(tmp_path):
+    out = a_run(tmp_path, "cpu", [a_session(0)])
+    doc = R.document([out])
+    assert doc["rules"][0]["card"] is None and "on a processor" in doc["size"] and "not a rate" in doc["size"]
+    on = a_session(1, refresh=True, probation=[5, 25])
+    on["record"]["public"]["span_ns"] = 4_000_000_000
+    on["record"]["profile"]["windows"].append({"post_seed": [10], "probation": [30]})
+    carded = a_run(tmp_path, "card", [a_session(0), on],
+                   [{"k": 1, "mode": "kv", "fraction": 4.0,
+                     "refresh": {"appends": 3, "blocks": 500, "encoded": 600, "encode_ns": 1_000_000_000}}])
+    v = json.loads((carded / "verifier.json").read_text())
+    v["calibration"] = {"pass_ns": {"p50": 52_900_000}, "encode_bytes_per_s": 2.5e9,
+                        "read_tiers": {"hbm": {"bytes_per_s": 1.5e12}}}
+    (carded / "verifier.json").write_text(json.dumps(v))
+    doc = R.document([carded])
+    off, on = doc["rules"]
+    assert doc["size"] is None
+    assert off["card"] == {"pass_ms_p50": 52.9, "bare_read_TBps": 1.5, "encode_Bps": 2.5e9, "rekey_Bps": None,
+                           "rekey_share": None, "probation_share": None, "store_bytes": 64 * BLOCK}
+    assert on["card"] | {"pass_ms_p50": 0} == {
+        "pass_ms_p50": 0, "bare_read_TBps": 1.5, "encode_Bps": 2.5e9, "rekey_Bps": 500 * BLOCK / 1.0,
+        "rekey_share": 0.25, "probation_share": 0.75, "store_bytes": 64 * BLOCK}
+
+
+def test_a_row_says_what_the_verifiers_disagreed_on(tmp_path):
+    s = a_session(0, refresh=True, accepted=False) | {
+        "disagreement": {"t": 0, "event": "receive", "lean": {"ok": True}, "python": {"failure": "probation"}, "x": 1}}
+    row = R.document([a_run(tmp_path, "a", [a_session(1), s])])["rules"][1]
+    assert row["disagreement"] == {"t": 0, "event": "receive", "lean": {"ok": True}, "python": {"failure": "probation"}}
+

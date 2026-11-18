@@ -10,7 +10,9 @@ the same plan from the same prover seed, each drawing its own live coins, which 
 (`OUT/refresh.json`, `SCHEMA`) says which sessions those are, the commit, the codec and the store's depth, and for each rule
 (`row`) the verifier's verdict with its failure's name, γ and its error, the receipts and bytes credited under that
 rule, the share of what was written that was held but not yet creditable (`probation`), and the re-key work with its
-share of the session's encodes (`rekeys`).  With `REFRESH` unset every row is today's rule.
+share of the session's encodes (`rekeys`).  With `REFRESH` unset every row is today's rule.  A session on a card
+adds its `card` object (`card`); the CPU reference's has none, and the document then says so (`size`): its codec ran
+on a processor, and nothing in it is a rate.
 
 The result is a trial, always: these are a branch's or a loopback's sessions and reach no metric's line, so each row's
 γ is a kit measurement in `out/trial-measurements.json` (member `refresh-off` or `refresh-on`, the row beside it), and
@@ -31,6 +33,10 @@ from verity_bench import kit
 SCHEMA = "verity/poub-refresh-rules/v0"
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
 COINS = "each session drew its own live coins from the {challenger} challenger: none is seeded, none shared"
+PROCESSOR = ("the reference size runs {codec} on a processor (the driver's CPU reference prover) and is not a rate: "
+             "kernels measured on an H200 re-key the deployed codec at 0.52 GB/s and p512/k2 at 2.08 GB/s (the "
+             "lane's measurements of 18 Nov 2026), and no session runs at 512 bits on a card today, where there is "
+             "no receipt-sketch path")
 NO_BOUND = ("γ is above 1 at this size ({blocks:,} blocks of {block_bytes:,} bytes): the rows show each rule's "
             "verdict and its ledger's lines, not a bound")
 
@@ -52,7 +58,7 @@ def probation(session: dict, block_bytes: int) -> dict | None:
     read = sum(sum(w.get("post_seed") or ()) for w in windows) * block_bytes
     return {"waiting_bytes": waiting, "written_bytes": waiting + read,
             "share": waiting / (waiting + read) if waiting + read else None,
-            "term": _at(session, "ledger", "spec", "terms", "probation")}
+            "term": _at(session, "ledger", "spec", "probation")}
 
 
 def rekeys(proved: dict | None, block_bytes: int) -> dict | None:
@@ -71,9 +77,42 @@ def rekeys(proved: dict | None, block_bytes: int) -> dict | None:
             "share_of_encodes": blocks / encoded if isinstance(encoded, int) and encoded else None}
 
 
-def row(session: dict, proved: dict | None, registration: dict, block_bytes: int, run: int) -> dict:
+def number(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+def card(calibration: dict, session: dict, proved: dict | None, store_bytes: int, block_bytes: int) -> dict | None:
+    """What a session on a card adds to its row, each from the records and None where they hold none: the median
+    pass (`calibration.pass_ns.p50`), the card's bare read rate (`read_tiers.hbm.bytes_per_s`), the registration's
+    encode rate, the re-keys' rate (their bytes over their encode time, the prover's `refresh.encode_ns`) and that
+    time over the session's span, the worst window's probation over written blocks, and the store's bytes. None, the
+    whole object, for a session the CPU reference proved: its calibration times no pass (`pass_ns`)."""
+    if not isinstance(calibration.get("pass_ns"), dict):
+        return None
+    work = (proved or {}).get("refresh") or {}
+    blocks, encode_ns = work.get("blocks"), work.get("encode_ns")
+    span = _at(session, "record", "public", "span_ns")
+    timed = number(blocks) and number(encode_ns) and encode_ns > 0
+    shares = []
+    for w in _at(session, "record", "profile", "windows") or ():
+        waiting, read = sum(w.get("probation") or ()), sum(w.get("post_seed") or ())
+        if "probation" in w and waiting + read:
+            shares.append(waiting / (waiting + read))
+    p50, bare = calibration["pass_ns"].get("p50"), _at(calibration, "read_tiers", "hbm", "bytes_per_s")
+    return {"pass_ms_p50": p50 / 1e6 if number(p50) else None,
+            "bare_read_TBps": bare / 1e12 if number(bare) else None,
+            "encode_Bps": calibration.get("encode_bytes_per_s"),
+            "rekey_Bps": blocks * block_bytes / (encode_ns / 1e9) if timed else None,
+            "rekey_share": encode_ns / span if timed and number(span) and span else None,
+            "probation_share": max(shares) if shares else None,
+            "store_bytes": store_bytes}
+
+
+def row(session: dict, proved: dict | None, registration: dict, block_bytes: int, run: int,
+        calibration: dict | None = None) -> dict:
     """One session as its rule's row. Its verdict is the verifier's: `accepted`, by which verifier (`verdict`), and a
-    refused session's failure by name with its window, and then no γ."""
+    refused session's failure by name with its window, and then no γ; where the two verifiers disagreed, on what and
+    what each said (`disagreement`). `card` is `card`'s object, None off a card."""
     accepted = session.get("accepted") is True
     inputs, spec = _at(session, "ledger", "inputs") or {}, _at(session, "ledger", "spec") or {}
     receipts, post = inputs.get("receipts"), inputs.get("post_seed_receipts")
@@ -83,10 +122,12 @@ def row(session: dict, proved: dict | None, registration: dict, block_bytes: int
     failure = session.get("failure") or {}
     lean_ns = [v for v in (session.get("lean_check_ns") or {}).values() if isinstance(v, int)]
     blocks = registration["blocks"]
+    differ = session.get("disagreement") or None
     return {
         "refresh": session.get("refresh") is True, "run": run, "session": session["k"],
         "accepted": accepted, "verdict": session.get("verdict"),
         "failure": failure.get("failure"), "failure_window": failure.get("t"),
+        "disagreement": differ and {k: differ.get(k) for k in ("t", "event", "lean", "python")},
         "codec": registration.get("codec"), "store_depth": max(blocks - 1, 0).bit_length(),
         "windows": session.get("windows"), "lifetime": session.get("lifetime"), "samples": session.get("samples"),
         "gamma": spec.get("gamma") if accepted else None,
@@ -100,6 +141,7 @@ def row(session: dict, proved: dict | None, registration: dict, block_bytes: int
         "probation": probation(session, block_bytes) if accepted else None,
         "rekeys": rekeys(proved, block_bytes),
         "lean_check_ms": [min(lean_ns) / 1e6, max(lean_ns) / 1e6] if lean_ns else None,
+        "card": card(calibration or {}, session, proved, blocks * block_bytes, block_bytes),
     }
 
 
@@ -126,12 +168,12 @@ def document(outs: list[Path]) -> dict:
             challengers.add(_at(s, "challenger", "challenger"))
             ps = proved.get(s["k"])
             plans.append(None if ps is None else f"{ps.get('mode')}:{ps.get('fraction')}")
-            rows.append((s, ps, reg, n))
+            rows.append((s, ps, reg, n, v.get("calibration") or {}))
     if len({(r["blocks"], r.get("codec")) for r in registrations}) != 1:
         raise ValueError("the runs' stores differ in blocks or codec: their sessions are not one comparison")
     if block_bytes is None:
         raise ValueError("no session of these runs was accepted, so none states its record's block size")
-    rules = [row(s, ps, reg, block_bytes, n) for s, ps, reg, n in rows]
+    rules = [row(s, ps, reg, block_bytes, n, cal) for s, ps, reg, n, cal in rows]
     reg = registrations[0]
     digests = sorted({r["digest"] for r in registrations})
     gammas = [r["gamma"] for r in rules if r["gamma"] is not None]
@@ -145,6 +187,7 @@ def document(outs: list[Path]) -> dict:
         "plans": plans,
         "reference": NO_BOUND.format(blocks=reg["blocks"], block_bytes=block_bytes)
         if gammas and min(gammas) >= 1 else None,
+        "size": PROCESSOR.format(codec=reg.get("codec")) if all(r["card"] is None for r in rules) else None,
         "rules": rules,
     }
 

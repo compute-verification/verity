@@ -121,6 +121,7 @@ from . import pooled as _pooled
 from . import schedule as _schedule
 from .codec import BLOCK_BYTES, P2_LAYOUT, SEED_BYTES, Codec, P2Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
+from .rota import FRESH_SLOTS, REKEY_MAX, Origin, Schedule
 
 PROTOCOL_ID = "verity/remote-bandwidth/v0"
 CODEC_DOMAIN = "verity/remote-bandwidth/codec/v0"
@@ -152,9 +153,6 @@ of the audit's error of 2^-100.  SPOT's `WINDOW_DELTA` is another constant, and 
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt", "probation", "origin-path", "origin")
-REKEY_MAX = 512
-"""The most blocks a re-key append holds (`Params.refresh`): the opening unit checks the origin's path in the same one
-proof block as the receipts' and the payload's, which leaves room for about 9 more tree levels under the deployed codec."""
 RECEIPT_LIMIT = 1 << 64
 """A window's receipts, its passes' lengths summed, stay below this: `AuditRun.receive` rejects with `plan` a pass that
 would take them to it, so each sample's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at
@@ -256,14 +254,20 @@ class Params:
     refresh: bool = False
     """Refresh (off by default): every credited key is fresh, a registered block's too, so no plan of window L or later
     holds a registered block, and a plan holds an appended block only once its payload is a period old (`probation`).
-    Appends may re-key a fresh append's or the registration's payloads (`AuditRun.append`'s `origin`) on the public
-    rota (`origin`).  Off, the session is as it was, byte for byte."""
+    Appends fill the slots of a public schedule (`schedule`, `rota.Schedule`), fresh or re-keys of the registration's
+    or a fresh slot's payloads (`AuditRun.append`'s `origin` and `slot`).  Off, the session is as it was, byte for
+    byte."""
+    fresh_slots: int = 0
+    """F, with refresh, the fresh slots each window has (`rota.Schedule`; a deployment's default is `FRESH_SLOTS`);
+    0 and unused without."""
 
     def __post_init__(self) -> None:
         if type(self.deferred) is not bool:
             raise ValueError("deferred is a bool")
         if type(self.refresh) is not bool:
             raise ValueError("refresh is a bool")
+        if type(self.fresh_slots) is not int or self.fresh_slots < 0 or (self.fresh_slots and not self.refresh):
+            raise ValueError("fresh_slots is a nonnegative integer, and a parameter of a session with refresh")
         if self.refresh and type(self.codec) is P2Codec:
             raise ValueError("a P2 store appends nothing, so it has no refresh")
         if self.schedule_cap is not None and (type(self.schedule_cap) is not int or self.schedule_cap < 0):
@@ -295,6 +299,11 @@ class Params:
         receipts.sketch_rows(self.receipt, self.rows)
         if type(self.groups_per_coin) is not int or self.groups_per_coin < 1:
             raise ValueError("groups_per_coin is a positive integer")
+
+    @property
+    def schedule(self) -> Schedule | None:
+        """With refresh, the session's slots (`rota.Schedule` of N, L, W and F); None without."""
+        return Schedule(self.blocks, self.lifetime, self.windows, self.fresh_slots) if self.refresh else None
 
     @property
     def coins(self) -> int:
@@ -373,29 +382,19 @@ def append_head(head: bytes | None, first: int, count: int, root: bytes) -> byte
                           + count.to_bytes(8, "big") + root).digest()
 
 
-Origin = tuple
-"""A re-key's origin (`AuditRun.append`): ("registered", a), registered blocks a …, or ("append", k, o), the session's
-append k (in the order received) from its o-th block."""
-
-
 def rekey_root(registration: bytes, first: int, count: int, origin: Origin) -> bytes:
     """What a re-key append sends as its root, having no payload tree of its own: SHA512(REKEY_DOMAIN ‖ registration
-    digest ‖ u64be first ‖ u64be count ‖ origin), origin `u8 0 ‖ u64be a` or `u8 1 ‖ u64be k ‖ u64be o`."""
-    if origin[0] == "registered":
-        tail = b"\0" + origin[1].to_bytes(8, "big")
-    else:
-        tail = b"\1" + origin[1].to_bytes(8, "big") + origin[2].to_bytes(8, "big")
+    digest ‖ u64be first ‖ u64be count ‖ origin), origin `u8 0 ‖ u64be a` for ("registered", a) or `u8 1 ‖ u64be k`
+    for ("append", k) (`Poub.rekeyRoot`)."""
+    tail = (b"\0" if origin[0] == "registered" else b"\1") + origin[1].to_bytes(8, "big")
     return hashlib.sha512(REKEY_DOMAIN + registration + first.to_bytes(8, "big") + count.to_bytes(8, "big")
                           + tail).digest()
 
 
 def _origin(origin: object) -> Origin | None:
     """`origin` if it is one in form, else None."""
-    def u64(x: object) -> bool:
-        return type(x) is int and 0 <= x < 1 << 64
-    if type(origin) is tuple and len(origin) == 2 and origin[0] == "registered" and u64(origin[1]):
-        return origin
-    if type(origin) is tuple and len(origin) == 3 and origin[0] == "append" and u64(origin[1]) and u64(origin[2]):
+    if (type(origin) is tuple and len(origin) == 2 and origin[0] in ("registered", "append") and type(origin[1]) is int
+            and 0 <= origin[1] < 1 << 64):
         return origin
     return None
 
@@ -890,7 +889,9 @@ class AuditRun:
         self._head: bytes | None = None
         self._joined: list[int] = []
         self._origins: list[Origin | None] = []
-        self._fresh: list[int] = []
+        self._slots: list[int] = []
+        self._slotted: dict[int, int] = {}
+        self._schedule = params.schedule
         self._gone: list[tuple[int, int]] = []
         self._planned: list[tuple[int, int]] = []
         self._plan = Plan.whole(registration.blocks)
@@ -1013,7 +1014,8 @@ class AuditRun:
     def _one_in_flight(self) -> bool:
         return self.params.pace is not None and self.params.pace.in_flight == 1
 
-    def append(self, root: bytes, count: int, origin: Origin | None = None) -> tuple[int, bytes] | Verdict:
+    def append(self, root: bytes, count: int, origin: Origin | None = None,
+               slot: int | None = None) -> tuple[int, bytes] | Verdict:
         """The root of an append's payload tree (`append_tree`), `count` blocks written after the codec seed: they take
         the store's next fresh indices, from the first returned, and a plan received after this may hold them, until
         the lifetime cap: they join the window of the next root received, and no plan of a window `Params.lifetime` or
@@ -1025,35 +1027,39 @@ class AuditRun:
         append coins are all released (or it reserved none: `coins.families`).  Over a P2 store, always `append`: the
         store is fixed at PoUS's setup.
 
-        Under refresh (`Params.refresh`) an append may name an `origin` (`Origin`), and is then a re-key: its blocks
-        re-encode the origin's payloads under its own coin, at most `REKEY_MAX` of them.  It has no payload tree of its
-        own: its root is `rekey_root`, and its payloads are leaves of its origin's root.  An origin is registered
-        blocks inside the store, or a run inside a fresh append received before it; any other origin, an origin with
-        refresh off, or another root is `append`.  Whether the origin is the rota's is decided when the re-key joins a
-        window (`receive`, `origin`).
+        Under refresh (`Params.refresh`) every append names its `slot` of the session's schedule (`Params.schedule`),
+        above the last append's, and holds what that slot names: a fresh append of at most `REKEY_MAX` blocks
+        (`origin` None), the re-key of the slot's whole registered class run (`("registered", lo)`), or the whole
+        re-key of the fresh append in slot k (`("append", k)`, an empty slot k having none); else `origin`.  A slot
+        no append names is empty.  A re-key re-encodes its origin's payloads under its own coin and has no payload tree
+        of its own: its root is `rekey_root`, and its payloads are leaves of its origin's root.  An origin or a slot
+        with refresh off, an origin not in form, or a re-key's root not its `rekey_root`, is `append`
+        (`Session.append`).
 
         The coin leaves only here, after its own append's root has been received and checked, so no coin is ever
         revealed before its append is committed."""
         self._live()
         if self._p2:
             return self._fail(self.filling, "append")
+        o = None if origin is None else _origin(origin)
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
-                or self.extent + count > self.params.codec.max_blocks):
+                or self.extent + count > self.params.codec.max_blocks
+                or (not self.params.refresh and (origin is not None or slot is not None))
+                or (origin is not None and (o is None or root != rekey_root(self.registration.digest, self.extent,
+                                                                            count, o)))
+                or (slot is not None and (type(slot) is not int or slot < 0))):
             return self._fail(self.filling, "append")
-        if origin is not None:
-            o = _origin(origin)
-            if (not self.params.refresh or o is None or count > REKEY_MAX or not self._origin_holds(o, count)
-                    or root != rekey_root(self.registration.digest, self.extent, count, o)):
-                return self._fail(self.filling, "append")
+        if self.params.refresh and (slot is None or not self._slot_ok(slot, count, o)):
+            return self._fail(self.filling, "origin")
         if (root in self._roots or (len(self.windows) == self.params.windows and self.windows[-1].final)
                 or self.coins.appends == (self.coins.commitment.family(coins.APPEND) or 0)):
             return self._fail(self.filling, "coin")
-        first, coin = self.extent, coins.coin(self.coins.append(root))
+        first, coin = self.extent, self._append_coin(root, slot)
         self._appends.append((first, append_domain(self.registration.digest, first, count), Commitment(root, count),
                               coin))
-        self._origins.append(origin)
-        if origin is None:
-            self._fresh.append(len(self._appends) - 1)
+        self._origins.append(o)
+        self._slots.append(len(self._slots) if slot is None else slot)
+        self._slotted[self._slots[-1]] = len(self._appends) - 1
         self._roots.add(root)
         self._head = append_head(self._head, first, count, root)
         self.extent += count
@@ -1085,37 +1091,49 @@ class AuditRun:
 
     def _stale_below(self, t: int) -> int:
         """The store index below which every appended block joined a window `Params.lifetime` or more before `t`:
-        appends join windows in index order, so the stale ones are a prefix of them."""
-        k = bisect.bisect_right(self._joined, t - self.params.lifetime)
+        appends join windows in index order, so the stale ones are a prefix of them; with refresh, the window each
+        append's slot joins (`_slot_window`), which `receive` holds it to (`State.staleBelow`)."""
+        if self.params.refresh:
+            k = sum(1 for _ in itertools.takewhile(
+                lambda s: self._slot_window(s, t) <= t - self.params.lifetime, self._slots))
+        else:
+            k = bisect.bisect_right(self._joined, t - self.params.lifetime)
         return self._appends[k][0] if k < len(self._appends) else self.extent
 
-    def _origin_holds(self, o: Origin, count: int) -> bool:
-        """Whether a re-key of `count` blocks from origin `o` names blocks that exist: registered ones inside the store,
-        or a run inside a fresh append received before it."""
-        if o[0] == "registered":
-            return o[1] + count <= self.params.blocks
-        _, k, at = o
-        return k < len(self._appends) and self._origins[k] is None and at + count <= self._appends[k][2].count
+    def _append_coin(self, root: bytes, slot: int | None) -> bytes:
+        """The coin `c_a` of the append whose root is `root`, in `slot`: the session's next append coin, in the order
+        the appends are received, so an empty slot takes none."""
+        return coins.coin(self.coins.append(root))
 
-    def _on_rota(self, n: int, r: int) -> bool:
-        """Whether re-key append n, joining window r, is the public rota's (`prover/rota.py`'s `Rota`): a registered
-        block j is of class j·L // N, a fresh append of class its fresh ordinal mod L, and a chunk of base window b
-        (0 registered, else the window its fresh append joined) is re-keyed in the windows above b congruent to its
-        class mod L."""
-        o, N, L = self._origins[n], self.params.blocks, self.params.lifetime
-        if o[0] == "registered":
-            c = r % L
-            return r >= 1 and -(-c * N // L) <= o[1] and o[1] + self._appends[n][2].count <= -(-(c + 1) * N // L)
-        k = o[1]
-        return r > self._joined[k] and r % L == bisect.bisect_left(self._fresh, k) % L
+    def _slot_window(self, slot: int, default: int | None = None) -> int | None:
+        """The window slot `slot` of the schedule joins, used or empty, `default` past it (`State.slotWindow`)."""
+        w = self._schedule.window_of(slot)
+        return default if w is None else w
+
+    def _slot_ok(self, slot: int, count: int, origin: Origin | None) -> bool:
+        """`State.slotOk`: the slot is above the last append's and in the schedule, and the append is what it names: a
+        fresh append of at most `REKEY_MAX` blocks, the re-key of the whole class run, or the whole re-key of the fresh
+        append in slot k (an empty slot k has none to re-key)."""
+        if self._slots and self._slots[-1] >= slot:
+            return False
+        at = self._schedule.slot_at(slot)
+        kind = None if at is None else at[1]
+        if kind is None:
+            return False
+        if kind[0] == "fresh":
+            return origin is None and count <= REKEY_MAX
+        if kind[0] == "registered":
+            return origin == ("registered", kind[1]) and count == kind[2]
+        n = self._slotted.get(kind[1])
+        return origin == ("append", kind[1]) and n is not None and self._appends[n][2].count == count
 
     def _born(self, n: int) -> int | None:
-        """The window append n's payloads joined: its own for a fresh append, its origin's for a re-key of one, None
-        for a re-key of registered blocks."""
+        """With refresh, the window append n's payloads were first committed in: the window of the slot of the fresh
+        append holding them (its own, or a re-key's origin k); None for a re-key of registered blocks (`State.born`)."""
         o = self._origins[n]
         if o is None:
-            return self._joined[n]
-        return None if o[0] == "registered" else self._joined[o[1]]
+            return self._slot_window(self._slots[n])
+        return None if o[0] == "registered" else self._slot_window(o[1])
 
     def _seasoning(self, t: int) -> list[int]:
         """The appends whose payloads joined fewer than L windows before t: no plan of t holds their blocks."""
@@ -1141,9 +1159,9 @@ class AuditRun:
         registered store).  A plan is over the store's blocks so far, registered and appended, holds none released,
         and keeps its window's receipts below `RECEIPT_LIMIT`; its rejection, `lifetime`, if it holds an appended block
         that joined a window `Params.lifetime` or more before `t`.  Under refresh (`Params.refresh`) a root first
-        fixes the window of the re-keys received before it, `origin` if one is not the rota's there (`_on_rota`); then
+        fixes the window of the appends received before it, `origin` if one's slot is not of that window; then
         `lifetime` also if the plan holds a registered block at t ≥ L, and `probation` if it holds a block of an
-        append whose payload joined fewer than L windows before t (`_born`).  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
+        append whose payload was born fewer than L windows before t (`_born`).  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
         is to hold every complete block the circuit reads at it, filler beside them allowed (`PlanMatches`), which the
         plan's proof block checks against the prover's memory map (`PROTOCOL.md` §8); its rejection, `step`, if it is
         missing or not above.  A paced session's window holds at
@@ -1187,7 +1205,7 @@ class AuditRun:
             return self._fail(t, "plan")
         joining = range(len(self._joined), len(self._appends))
         self._joined.extend([t] * len(joining))
-        if self.params.refresh and any(self._origins[n] is not None and not self._on_rota(n, t) for n in joining):
+        if self.params.refresh and any(self._slot_window(self._slots[n]) != t for n in joining):
             return self._fail(t, "origin")
         if (below := self._stale_below(t)) > N and any(f < below and f + c > N for f, c in plan.runs):
             return self._fail(t, "lifetime")
@@ -1197,7 +1215,6 @@ class AuditRun:
             held, probation = self._probation(t, plan.runs)
             if held:
                 return self._fail(t, "probation")
-            self.windows[t].probation.append(probation)
         if self._one_in_flight and self.windows[t].boundary_ns is not None:
             return self._fail(t, "order")
         if extent > N:
@@ -1211,6 +1228,8 @@ class AuditRun:
         self.windows[t].heads.append(self._head)
         self.windows[t].stale.append(below)
         self.windows[t].arrived.append(now)
+        if self.params.refresh:
+            self.windows[t].probation.append(probation)
         self._plan, self._step, self._latest = plan, step, root
         return None
 
@@ -1371,8 +1390,8 @@ class AuditRun:
             return domain, commitment, coin, None
         if o[0] == "registered":
             return self._payload_domain, Commitment(self.registration.payload_root, N), coin, o[1] + j - first
-        k_first, k_domain, k_commitment, _ = self._appends[o[1]]
-        return k_domain, k_commitment, coin, k_first + o[2] + j - first
+        k_first, k_domain, k_commitment, _ = self._appends[self._slotted[o[1]]]
+        return k_domain, k_commitment, coin, k_first + j - first
 
     def decide(self, t: int, failures: Sequence[str | None]) -> Verdict:
         """Window t's verdict from check 3's outcome on each of its samples (`drawn`), in the order sampled, in place of
@@ -2030,8 +2049,8 @@ def probation_share(record: Record) -> float | None:
     return max((a / (a + n) for w in record.windows for a, n in zip(w.probation, w.lengths) if a + n), default=0.0)
 
 
-__all__ = ["AuditRun", "Closed", "DELTA", "LEDGER_SOURCES", "NODE_BYTES", "NoiseTiles", "Opening",
-           "PAYLOAD_SCHEMA", "PROTOCOL_ID", "Pace", "Params", "REGISTRY_SCHEMA", "REKEY_MAX", "Rebuild", "Record",
+__all__ = ["AuditRun", "Closed", "DELTA", "FRESH_SLOTS", "LEDGER_SOURCES", "NODE_BYTES", "NoiseTiles", "Opening",
+           "Origin", "PAYLOAD_SCHEMA", "PROTOCOL_ID", "Pace", "Params", "REGISTRY_SCHEMA", "REKEY_MAX", "Rebuild", "Record",
            "Registration", "Registry", "RegistryError", "SLACK_LOG2", "STEP_LIMIT", "Scheduled", "SessionError",
            "Tiles", "UNENDED", "Verdict", "WINDOW_NS", "append_domain", "append_head", "append_tree",
            "chained", "floors", "ledger", "lifetime_windows", "linked_bits", "payload_domain", "payload_tree", "pooled",

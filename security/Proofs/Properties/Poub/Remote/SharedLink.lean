@@ -117,8 +117,8 @@ theorem vk_boundary {s : State} {now : Nat} {r : Result} {s' : State} (he : boun
         | (refine vk_modify _ _ _ ?_; exact fun _ h => h)
         | (refine vk_modify _ _ _ ?_; exact fun _ h => by first | cases h | simp at h))
 
-theorem vk_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s' : State}
-    (he : append s root count = .ok (r, s')) : VK s.windows s'.windows := by
+theorem vk_append {s : State} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat} {r : Result} {s' : State}
+    (he : append s root count origin slot = .ok (r, s')) : VK s.windows s'.windows := by
   unfold append at he
   repeat' split at he
   all_goals (try dsimp only at he)
@@ -303,7 +303,7 @@ theorem acc_sstep {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} 
   · cases e with
     | start now => injection hs with hs; exact Or.inl (vk_start hs u h)
     | boundary now => injection hs with hs; exact Or.inl (vk_boundary hs u h)
-    | append root count => exact Or.inl (vk_append hs u h)
+    | append root count origin slot => exact Or.inl (vk_append hs u h)
     | release runs withdrawn => injection hs with hs; exact Or.inl (vk_release hs u h)
     | receive t i root runs change st now => injection hs with hs; exact Or.inl (vk_receive hs u h)
     | close t now => exact (hn t now rfl).elim
@@ -331,7 +331,7 @@ theorem acc_step1 {s : State} {e : Event} {r : Result} {s' : State} (he : Sessio
   cases e with
   | start now => injection he with he; exact Or.inl (vk_start he u h)
   | boundary now => injection he with he; exact Or.inl (vk_boundary he u h)
-  | append root count => exact Or.inl (vk_append he u h)
+  | append root count origin slot => exact Or.inl (vk_append he u h)
   | release runs withdrawn => injection he with he; exact Or.inl (vk_release he u h)
   | receive t i root runs change st now => injection he with he; exact Or.inl (vk_receive he u h)
   | close t now => exact Or.inl (vk_close he u h)
@@ -499,7 +499,7 @@ theorem samplesIn_step {s : State} {e : Event} {r : Result} {s' : State} (h : FI
   cases e with
   | start now => injection he with he; exact keep (keep_start he)
   | boundary now => injection he with he; exact keep (keep_boundary he)
-  | append root count => exact keep (keep_append he)
+  | append root count origin slot => exact keep (keep_append he)
   | release runs withdrawn => injection he with he; exact keep (keep_release he)
   | receive t i root runs change st now => injection he with he; exact keep (keep_receive he)
   | close t now => exact close_samplesIn he hin
@@ -914,7 +914,7 @@ theorem dl1_step {s : State} {e : Event} {r : Result} {s' : State} (h : FInv s)
   cases e with
   | start now => injection he with he; exact keep (keep_start he)
   | boundary now => injection he with he; exact keep (keep_boundary he)
-  | append root count => exact keep (keep_append he)
+  | append root count origin slot => exact keep (keep_append he)
   | release runs withdrawn => injection he with he; exact keep (keep_release he)
   | receive t i root runs change st now => injection he with he; exact keep (keep_receive he)
   | close t now => exact close_dl1 he hL

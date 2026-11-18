@@ -69,7 +69,7 @@ At L = 1 that is the window it was appended in, before it may be resident, so a 
 L ≥ 2 (`audit.Params.deferred`).
 
 Refresh.  Under refresh (the session's `params.refresh`) every credited block, registered and filler included, is
-re-keyed on the public rota (`Rota`, `poub/prover/rota.py`), whose re-key appends carry their origin and no payload root of their own.  A re-key whose
+re-keyed on the public slot schedule (`rota.Schedule`), whose re-key appends carry their origin and no payload root of their own.  A re-key whose
 encode lands is recorded in that line's `rekeyed` as [slot, j]: the slot's block, live and neither freed nor written
 at the step, is released and the slot holds j, the same payload under the re-key's fresh coin.  Its origin
 (`Change.rekeyed`) is the store index of the registered or written block that payload was first committed at, never

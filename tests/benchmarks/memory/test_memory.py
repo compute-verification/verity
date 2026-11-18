@@ -1598,3 +1598,6 @@ def test_a_sessions_parameters_say_refresh_only_where_its_record_does():
     off, on = a_session(), a_session() | {"refresh": True}
     assert "refresh" not in M.parameters(a_record(off), off)
     assert M.parameters(a_record(on), on) == M.parameters(a_record(off), off) | {"refresh": True}
+    slotted, stray = on | {"fresh_slots": 4}, off | {"fresh_slots": 4}
+    assert M.parameters(a_record(slotted), slotted) == M.parameters(a_record(on), on) | {"fresh_slots": 4}
+    assert "fresh_slots" not in M.parameters(a_record(stray), stray)

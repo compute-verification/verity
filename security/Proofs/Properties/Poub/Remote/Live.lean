@@ -89,8 +89,8 @@ theorem boundary_W {s : State} {c a : Array ByteArray} {now : Nat} {r : Result} 
   all_goals (try simp only [*, ↓reduceIte])
   all_goals first | rfl | (rw [h _ rfl]; rfl)
 
-theorem append_W {s : State} {c a : Array ByteArray} {root : ByteArray} {count : Int} {r : Result} {s' : State}
-    (he : append s root count = .ok (r, s'))
+theorem append_W {s : State} {c a : Array ByteArray} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat} {r : Result} {s' : State}
+    (he : append s root count origin slot = .ok (r, s'))
     (h : ∀ x, s.appendCoins[s.appendSampled]? = some x → a[s.appendSampled]? = some x) :
     append (W c a s) root count = .ok (r, W c a s') := by
   unfold append State.fail at he ⊢
@@ -176,7 +176,7 @@ theorem step_W {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array 
     injection he with he; show pure _ = _; rw [start_W he (fun k => hs k ⟨now, Or.inl rfl⟩)]; rfl
   | boundary now =>
     injection he with he; show pure _ = _; rw [boundary_W he (fun k => hs k ⟨now, Or.inr rfl⟩)]; rfl
-  | append root count => exact append_W he ha
+  | append root count origin slot => exact append_W he ha
   | release runs withdrawn => injection he with he; show pure _ = _; rw [release_W, he]; rfl
   | receive t i root runs change st now =>
     injection he with he
