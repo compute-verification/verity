@@ -155,7 +155,7 @@ the window being filled for one not joined yet), `none` for a re-key of register
 def State.born (s : State) (a : Nat) : Option Nat :=
   match (s.appends[a]?.map (·.origin) : Option Origin) with
   | some Origin.fresh => some (s.joined.getD a s.filling)
-  | some (Origin.rekey k) => some (s.joined.getD k s.filling)
+  | some (Origin.rekey k _) => some (s.joined.getD k s.filling)
   | _ => none
 
 /-- Whether `first … first + count − 1` holds a block of an append whose payloads were born less than `lifetime`
@@ -165,12 +165,39 @@ def State.probation (s : State) (t first count : Nat) : Bool :=
     let x := s.appends[a]!
     x.first < first + count && first < x.first + x.count && (s.born a).any (t < · + s.params.lifetime)
 
-/-- `append`'s check of an origin: `fresh`, or with refresh a re-key of registered blocks or of an earlier fresh
-append. -/
-def State.originOk (s : State) : Origin → Bool
+/-- What `append` holds of an origin, without an opening: `fresh`; or, with refresh, a re-key of at most `REKEY_MAX`
+blocks declaring itself (`rekeyRoot` at `first`, `count`) whose origin's blocks exist: registered blocks
+`a … a + count − 1` below `N`, or blocks `o … o + count − 1` of an earlier append `k` that is fresh. -/
+def State.originOk (s : State) (root : ByteArray) (first count : Nat) : Origin → Bool
   | .fresh => true
-  | .registered => s.params.refresh
-  | .rekey k => s.params.refresh && (s.appends[k]?.any (·.origin == .fresh))
+  | o@(.registered a) => s.params.refresh && count ≤ REKEY_MAX && a + count ≤ s.reg.blocks
+      && root == rekeyRoot s.digest first count o
+  | o@(.rekey k off) => s.params.refresh && count ≤ REKEY_MAX
+      && s.appends[k]?.any (fun x => x.origin == .fresh && off + count ≤ x.count)
+      && root == rekeyRoot s.digest first count o
+
+/-- The number of fresh appends before append `k`: the fresh ordinal of a fresh append `k`. -/
+def State.freshOrdinal (s : State) (k : Nat) : Nat := ((s.appends.toList.take k).filter (·.origin == .fresh)).length
+
+/-- Whether append `a`, joining window `r`, re-keys what the public rota re-keys at `r`. A registered block `j` is in
+class `j · L / N`, class `c` being blocks `⌈c·N/L⌉ … ⌈(c+1)·N/L⌉ − 1`, and a fresh append in class its fresh ordinal mod
+`L`; a chunk of base window `b` (0 registered, `joined` otherwise) and class `c` is re-keyed at the windows
+`b + 1 + (c − b − 1) mod L + n·L`. A fresh append is always in it. -/
+def State.inRota (s : State) (a r : Nat) : Bool :=
+  let L := s.params.lifetime
+  let N := s.reg.blocks
+  match s.appends[a]? with
+  | none => false
+  | some x => match x.origin with
+    | .fresh => true
+    | .registered j =>
+      let c := r % L
+      1 ≤ r && (c * N + L - 1) / L ≤ j && j + x.count ≤ ((c + 1) * N + L - 1) / L
+    | .rekey k _ =>
+      let b := s.joined.getD k r
+      let c : Int := (s.freshOrdinal k % L : Nat)
+      let first := b + 1 + (Int.emod (c - b - 1) L).toNat
+      b < r && first ≤ r && (r - first) % L == 0
 
 def State.record (s : State) (t : Nat) : WindowRecord :=
   let w := s.windows[t]!
@@ -198,7 +225,8 @@ def boundary (s : State) (now : Nat) : Result × State := Id.run do
 def append (s : State) (root : ByteArray) (count : Int) (origin : Origin := .fresh) :
     Except String (Result × State) := do
   if let some r := live s then return (r, s)
-  if root.size ≠ DIGEST_BYTES || count < 1 || s.extent + count.toNat > s.reg.codec.maxBlocks || !s.originOk origin then
+  if root.size ≠ DIGEST_BYTES || count < 1 || s.extent + count.toNat > s.reg.codec.maxBlocks
+      || !s.originOk root s.extent count.toNat origin then
     return s.fail s.filling .append
   if s.appends.any (·.root == root) || (s.windows.size == s.params.windows && (s.windows.back?.map (·.final)).getD false)
   then return s.fail s.filling .coin
@@ -265,6 +293,8 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
   if !(s.step < st && st < STEP_LIMIT) then return s.fail t .step
   let N := s.reg.blocks
   let extent := s.extent
+  if s.params.refresh && (List.range' s.joined.size (s.appends.size - s.joined.size)).any (!s.inRota · t) then
+    return s.fail t .origin
   let plan? := match change, runs with
     | some _, some _ => none
     | some (added, removed), none => s.plan.changed added removed extent

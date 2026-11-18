@@ -22,7 +22,8 @@ prover's openings of them, in the order sampled. Each opening, in `_check`'s ord
    of its append's tree, under that root;
 5. `receipt`: the receipt recomputed from the block under the registration's kind and the pass's seed not the opened one.
 
-A session with refresh also rejects a plan with `probation` (`Session.receive`) and an opening with `origin-path`.
+A session with refresh also rejects a re-key off the rota with `origin` and a plan with `probation`
+(`Session.receive`), and an opening with `origin-path`.
 
 A window with another number of openings than samples is `malformed`. `tile` is never reached: a registration that binds
 PoUW's tiles is refused (`Registration.make?`), a form no proof here covers.
@@ -41,14 +42,14 @@ def LAYOUT : String := "store-order/v0"
 /-- `audit.FAILURES`. -/
 inductive Failure
   | late | order | step | plan | lifetime | append | coin | release | few | malformed
-  | receiptPath | codec | payloadPath | tile | receipt | probation | originPath
+  | receiptPath | codec | payloadPath | tile | receipt | probation | originPath | origin
 deriving BEq, Repr, DecidableEq
 
 def Failure.name : Failure → String
   | .late => "late" | .order => "order" | .step => "step" | .plan => "plan" | .lifetime => "lifetime"
   | .append => "append" | .coin => "coin" | .release => "release" | .few => "few" | .malformed => "malformed"
   | .receiptPath => "receipt-path" | .codec => "codec" | .payloadPath => "payload-path" | .tile => "tile"
-  | .receipt => "receipt" | .probation => "probation" | .originPath => "origin-path"
+  | .receipt => "receipt" | .probation => "probation" | .originPath => "origin-path" | .origin => "origin"
 
 /-- What the store is (`audit.Registration`), with its codec key. -/
 structure Registration where
@@ -103,17 +104,35 @@ def payloadDomain (node : ByteArray) (blocks : Nat) : Flock.FV3.Sha512.Domain :=
 
 def Registration.payloadDomain (r : Registration) : Flock.FV3.Sha512.Domain := Poub.payloadDomain r.node r.blocks
 
-/-- Where an append's payloads were first committed: by the append itself (`fresh`), by the registration (`registered`,
-a re-key of registered blocks), or by append `k` (`rekey k`, a re-key of that append's blocks, which is itself fresh).
-A re-key encodes those payloads again under its own coin. -/
+/-- Where an append's payloads were first committed: by the append itself (`fresh`); by the registration
+(`registered a`: its block `first + m` re-keys registered block `a + m`); or by the session's append `k`, counted over
+all appends in order received, which is fresh (`rekey k o`: block `first + m` re-keys append k's block
+`first_k + o + m`). A re-key encodes those payloads again under its own coin and commits none of its own. -/
 inductive Origin
   | fresh
-  | registered
-  | rekey (k : Nat)
+  | registered (a : Nat)
+  | rekey (k o : Nat)
 deriving BEq, Repr, DecidableEq, Inhabited
 
-/-- An append the verifier received: store indices `first … first + count − 1`, its payload tree's root, the coin
-`c_a` it answered with, and where its payloads were first committed (`fresh` in a session without refresh). -/
+/-- A re-key holds at most this many blocks, so an opening of one stays one proof block. -/
+def REKEY_MAX : Nat := 512
+
+def REKEY_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/rekey/v0"
+
+/-- `u8 0 ‖ u64be a` for `registered a`, `u8 1 ‖ u64be k ‖ u64be o` for `rekey k o`. -/
+def Origin.bytes : Origin → ByteArray
+  | .fresh => ByteArray.empty
+  | .registered a => be 1 0 ++ be 8 a
+  | .rekey k o => be 1 1 ++ be 8 k ++ be 8 o
+
+/-- A re-key's declaration, the root it sends in place of a payload root: SHA512(REKEY_DOMAIN ‖ registration digest ‖
+u64be first ‖ u64be count ‖ origin bytes). -/
+def rekeyRoot (registration : ByteArray) (first count : Nat) (origin : Origin) : ByteArray :=
+  sha512 (REKEY_DOMAIN ++ registration ++ be 8 first ++ be 8 count ++ origin.bytes)
+
+/-- An append the verifier received: store indices `first … first + count − 1`, its payload tree's root (a re-key's
+declaration, `rekeyRoot`), the coin `c_a` it answered with, and where its payloads were first committed (`fresh` in a
+session without refresh). -/
 structure Append where
   first : Nat
   count : Nat
