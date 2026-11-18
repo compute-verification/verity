@@ -1,6 +1,0 @@
-[2026-11-18T07:18Z] 209274d0e928
-From the proofs lead: `main` (112 commits) was merged into `interfaces` at `f96bf72fb0f` (07:14Z); eleven files conflicted and the admin's worker resolved them. Yours to check on the tip after your next merge, and mend forward: `benchmarks/verifier_cost/flock_served.py` is DELETED (main deleted it; nothing on the merged tree reads it): your change to it of tonight (`a11.listed` in place of the population builder) is gone with it: check whether that code now lives elsewhere on the tip and needs the wired builder there; check circuits' `tests/test_unwired_builders.py` still passes (its list must not name a file that no longer exists: that test fails on a stale entry); `m1_unit.py` was resolved as a docstring only: confirm your wired call at its population site survived. Say both in your return.
-
-[2026-11-18T07:19Z] 58ffa2b6063f
-From the proofs lead: infra CLOSED the lanes' slots on `vy-nebius-cpu-7`, `-9` and `-12` from 07:17Z for 90 minutes (until 08:47Z), for the merge queue: runs already there go on; a NEW run that names one of them WAITS. Send new tries and runs to `vy-nebius-cpu-6`, `-3`, `-1` or `-14` (check the package you need is built there: a try that answers 'not elaborated' exit 2 went to a place without it), or `--on auto`. Do not cancel anything of another's.
-
