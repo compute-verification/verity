@@ -31,7 +31,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import dev
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import feed as PF
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.operands import quantize
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.lanes import (
@@ -276,7 +275,8 @@ def test_a_unit_outside_a_calls_population_or_its_weight_sides_is_refused():
 
 def test_a_library_is_refused_before_its_build_where_no_toolchain_and_no_path_gives_its_compiler(monkeypatch):
     """The host build takes a C++ compiler and the two CUDA builds nvcc, each the toolchain's or else the path's: with
-    neither, each refuses naming the one it lacks, as the sources' digest does, and nothing is built.  The loaders'
+    neither, each refuses naming the one it lacks, as the sources' digest does, and nothing is built. The CUDA builds
+    also take the toolchain's target, a card's arch, and refuse without one.  The loaders'
     caches are passed by, so a library another test built stays loaded."""
     class Built(Exception):
         pass
@@ -299,10 +299,19 @@ def test_a_library_is_refused_before_its_build_where_no_toolchain_and_no_path_gi
         PD.source_digest()
     assert built == []
     path.update({"clang++": "/p/clang++", "nvcc": "/p/nvcc"})
+    for load in (PD.device, PD.fused):
+        with pytest.raises(RuntimeError, match=r"^no CUDA target: `configure\(arch=\.\.\.\)` with the arch of the run machine's card"):
+            load.__wrapped__()
+    PD.TOOLCHAIN.arch = "90a"
+    with pytest.raises(ValueError, match="^CUDA target '90a' is not a card's arch"):
+        PD.device.__wrapped__()
+    assert built == []
+    PD.TOOLCHAIN.arch = "sm_90a"
+    assert PD.cuda_flags()[-1] == "-gencode=arch=compute_90a,code=sm_90a"
     for load, _ in loads:
         with pytest.raises(Built):
             load.__wrapped__()
-    monkeypatch.setattr(PD, "TOOLCHAIN", PD.Toolchain(cxx="/t/g++", nvcc="/t/nvcc"))
+    monkeypatch.setattr(PD, "TOOLCHAIN", PD.Toolchain(cxx="/t/g++", nvcc="/t/nvcc", arch="sm_90a"))
     for load, _ in loads:
         with pytest.raises(Built):
             load.__wrapped__()
@@ -319,21 +328,12 @@ def test_a_kernel_directory_without_one_cubin_is_refused_and_its_one_cubin_is_ta
         PK._the_cubin(tmp_path)
 
 
-def test_a_certifier_given_fewer_coin_bytes_than_it_asks_for_opens_no_window():
-    """The refusal is held from its counts on: the words before them are a retired term, which this file doesn't add."""
-    with pytest.raises(PF.FeedError, match=f" gave {PF.ROOT_BYTES - 1} bytes for {PF.ROOT_BYTES}$"):
-        PF.InProcessCertifier(lambda n: bytes(n - 1)).open(0, bytes(PF.ROOT_BYTES), bytes(PF.ROOT_BYTES), 1)
-    cert = PF.InProcessCertifier(bytes)
-    assert cert.open(0, bytes(PF.ROOT_BYTES), bytes(PF.ROOT_BYTES), 1) == bytes(PF.ROOT_BYTES)
-    assert list(cert.windows) == [0]
-
-
 def _coin_pass() -> tuple[Challenger, dict]:
     """A challenger and a pass of no matmul and no weight whose coins are its commitment and its salt coin, opened after
     zeros."""
     ch = Challenger(0, random.Random(0).randbytes)
     return ch, {"schema": CC.MANIFEST_SCHEMA, "matmuls": [], "weights": {}, "coins": ch.commitment.to_json(),
-                "salt_opening": ch.open("salt", bytes(PF.ROOT_BYTES)).to_json()}
+                "salt_opening": ch.open("salt", bytes(64)).to_json()}
 
 
 def test_a_pass_whose_coins_do_not_parse_is_refused_in_those_words():

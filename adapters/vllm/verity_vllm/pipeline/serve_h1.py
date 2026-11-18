@@ -142,22 +142,9 @@ def worker(name: str) -> ThreadPoolExecutor:
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class GateOptions:
-    """serve-openai's ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` (its ``gate`` group,
-    `sessions_of`, `serve_openai.scheme_settings`)."""
-    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
-                                         help="with --protocols: the auditor device's challenger gate, its command as one string "
-                                              "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
-                                              "session of its own there and draws its coins from it (serve_h1.GateSessions), "
-                                              "each Pearl+ epoch a salt session (serve_openai.scheme_settings); "
-                                              "without it they are in-process and credit nothing")
-    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
-                                         help="with --challenger-gate: this machine's name in the auditor device's peers, where its "
-                                              "challenger reaches the server (ssh -R)")
-    challenger_lane: str | None = option("--challenger-lane", default=None, metavar="LANE",
-                                         help="with --challenger-gate under Pearl+: the lane whose gate key the gate's "
-                                              "command holds, whose open period in the auditor's ledger each epoch's "
-                                              "salt session joins (serving.reserve_salt); PoUW H1's take none")
+class H1Options:
+    """serve-openai's ``--h1-*`` options (its ``h1`` group): PoUW H1's window's prover state, receipts, model key and
+    window commit."""
     h1_prover: str | None = option("--h1-prover", default=None, metavar="DIR",
                                    help="with --protocols: keep each H1 window's prover state (its salt key and each call's "
                                         "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
@@ -242,11 +229,11 @@ def refusal(opts: Any) -> str | None:
         return "--challenger-lane is Pearl+'s (serve_openai.scheme_settings): PoUW H1's windows take none"
     if gate and not opts.protocols:
         return f"--challenger-gate flips PoUW H1's coins: it needs --protocols {ENTRY}"
-    if (opts.gate.h1_prover or opts.gate.h1_receipts or opts.gate.h1_window_commit) and not opts.protocols:
+    if (opts.h1.h1_prover or opts.h1.h1_receipts or opts.h1.h1_window_commit) and not opts.protocols:
         return f"--h1-prover, --h1-receipts and --h1-window-commit are PoUW H1's window's: they need --protocols {ENTRY}"
-    if opts.gate.h1_window_commit and not (getattr(opts, "seal", False) and opts.gate.h1_prover):
+    if opts.h1.h1_window_commit and not (getattr(opts, "seal", False) and opts.h1.h1_prover):
         return "--h1-window-commit commits the sealed window from H1's prover state: it needs --seal and --h1-prover"
-    if opts.gate.h1_window_commit and DRAWER in (p.strip() for p in after.split(",")):
+    if opts.h1.h1_window_commit and DRAWER in (p.strip() for p in after.split(",")):
         return (f"--h1-window-commit waits for the window's seal before its sample coin, and --release-after {DRAWER} holds "
                 "the seal until that coin's flip: give one of them")
     if opts.protocols_config and not opts.protocols:
@@ -718,19 +705,19 @@ def arm_of(opts: Any, llm: Any, com: Any, out: Path, flush: Callable[[], Any] | 
 
     if not opts.protocols:
         return None
-    tie = WindowTie(opts.gate.h1_window_commit, out, flush=flush, day=day) if opts.gate.h1_window_commit else None
+    tie = WindowTie(opts.h1.h1_window_commit, out, flush=flush, day=day) if opts.h1.h1_window_commit else None
     sessions = sessions_of(opts)
     if sessions is not None:
         sessions.ahead_of(0)
     model_key = None
-    if sessions is not None and opts.gate.h1_model:
-        model_key = model_key_of(sessions.gate, opts.gate.h1_model, opts.gate.h1_weights_root)
+    if sessions is not None and opts.h1.h1_model:
+        model_key = model_key_of(sessions.gate, opts.h1.h1_model, opts.h1.h1_weights_root)
     arm = H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                    config=config_of(opts.protocols_config), sessions=sessions, prover=opts.gate.h1_prover,
-                    closer=worker("h1-release"), model_key=model_key, receipts=opts.gate.h1_receipts, tie=tie)
+                    config=config_of(opts.protocols_config), sessions=sessions, prover=opts.h1.h1_prover,
+                    closer=worker("h1-release"), model_key=model_key, receipts=opts.h1.h1_receipts, tie=tie)
     arm.ready()
     return arm
 
 
-__all__ = ["AT", "ENTRY", "GateOptions", "H1Windows", "OWN", "SESSIONED", "arm_of", "config_of", "model_key_of", "refusal",
+__all__ = ["AT", "ENTRY", "H1Options", "H1Windows", "OWN", "SESSIONED", "arm_of", "config_of", "model_key_of", "refusal",
            "sessions_of", "worker"]
