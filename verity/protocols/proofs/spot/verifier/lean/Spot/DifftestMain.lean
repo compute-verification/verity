@@ -14,4 +14,5 @@ def main : IO Unit :=
   Difftest.serve (Difftest.table (Spot.Pieces.table ++ [("second_wires", Spot.SecondWires.piece),
     ("boundary_written", Spot.BoundaryWritten.piece), ("boundary_written_unrolled", Spot.BoundaryWritten.pieceRef),
     ("certified_rows", Spot.CertifiedRows.piece), ("second_window", Spot.SecondWindow.piece),
-    ("block_front", Spot.BlockFront.piece)]))
+    ("block_front", Spot.BlockFront.piece), ("block_program", Spot.BlockFront.programPiece),
+    ("definition", Spot.BlockFront.definitionPiece)]))
