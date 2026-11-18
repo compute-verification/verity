@@ -6,8 +6,8 @@ hold has no measurement; and a comparison refuses two results whose identities d
 
 No scan runs here and the evidence store is not reached: `kept` writes files in the form a scan keeps them (the keys
 of its summary and answers, the lines of its sessions' logs) with stand-in figures chosen so every expected sum is
-exact, `store` stands in for the `research data` commands, and `run.sh` runs against a stand-in for `scan_zk.sh` in a
-copy of the benchmark under `tmp_path`."""
+exact, its sessions' logs in the scan's keep beside them (`keep_of`), `store` stands in for the `research data`
+commands, and `run.sh` runs against a stand-in for `scan_zk.sh` in a copy of the benchmark under `tmp_path`."""
 from __future__ import annotations
 
 import hashlib
@@ -39,17 +39,26 @@ def members(ticks: int) -> list[tuple[str, int]]:
     return [("start", 1), ("ingress-0", ticks - 1), ("last", 1), ("egress-0", ticks)]
 
 
+def keep_of(out: Path) -> Path:
+    """The scan's keep (scan_zk.sh's SC_KEEP) beside the kept files `out`: its sessions' logs."""
+    return out.parent / f"{out.name}-keep"
+
+
+def document(out: Path, *a, **kw) -> dict:
+    return R.document(out, keep_of(out), *a, **kw)
+
+
 def kept(out: Path, cls: str = "test", group: int = 1, cores: int = 21, pin: bool = True, public: dict | None = None) -> Path:
     """A scan's kept files under `out`, an honest round an execution phase. Session i, counted over the rounds in
     order, takes 12 + i s of its prover process: 2 s to Register, 4 s from there to the repetitions, 2 s of level 0,
     3 + i s of repetitions and a 1 s tail; its staging takes 0.5 s; its Lean verifier takes 4 + i s of wall, of which
     1 s reading inputs, 2 s of setup and 0.5 + i/10 s of checks, and 3 + i s of CPU. Another round's verifier process,
-    9 s, is in `lean.jsonl` beside the honest rounds'."""
+    9 s, is in `lean.jsonl` beside the honest rounds'. The sessions' logs are in `keep_of(out)`."""
     ticks, names = TICKS[cls], members(TICKS[cls])
     sessions = [(f"honest-{w}", name, n) for w in range(group) for name, n in names]
     timing, rnd = {}, {}
     for i, (rname, name, n) in enumerate(sessions):
-        logs = out / "sczk" / rname / f"session-{name}"
+        logs = keep_of(out) / "sczk" / rname / f"session-{name}"
         logs.mkdir(parents=True)
         live = {"e2e_s": 10 + i, "tp_s": 6 + i, "prove_total_s": 5 + i, "prove_s": [1 + i, 2], "witness_s": 0.25,
                 "wait_e2e_s": 0.5, "k_log": 20, "dense_m": 22,
@@ -71,6 +80,7 @@ def kept(out: Path, cls: str = "test", group: int = 1, cores: int = 21, pin: boo
                "rounds": {r: {**rnd[r], "audit": {"timing": dict(reversed(timing[r].items()))}} for r in rnd},
                "answers": {str(w): {"verdict": "accept", "reason": None, "commitment": "c0",
                                     "public": public or R.pinned(cls)} for w in range(group)}}
+    (out / "sczk").mkdir(parents=True, exist_ok=True)
     (out / "sczk" / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
     (out / "host.txt").write_text(f"CPU(s): 64\nthreads {cores}\n", encoding="utf-8")
     (out / "rss.jsonl").write_text("".join(json.dumps({"command": ["prove"], "rc": 0, "wall_s": 12, "peak_gb": gb}) + "\n"
@@ -102,7 +112,7 @@ def store(docs: dict):
 
 
 def doc_of(tmp_path: Path, name: str, run: str = RUN, **kw) -> dict:
-    return R.document(kept(tmp_path / name, **kw), 0, run, "d" * 40)
+    return document(kept(tmp_path / name, **kw), 0, run, "d" * 40)
 
 
 def test_the_two_numbers_are_the_round_over_its_execution_phases(tmp_path):
@@ -134,9 +144,10 @@ def test_a_session_is_read_in_the_rounds_order_and_its_stages_sum_to_its_process
 
 def test_a_log_without_its_lines_gives_no_stage_and_the_number_stands(tmp_path):
     out = kept(tmp_path / "a")
-    (out / "sczk" / R.ROUND / "session-last" / "prove.log").write_text("$ prove\n# rc 0 in 14 s\n", encoding="utf-8")
-    (out / "sczk" / R.ROUND / "session-last" / "lean-verify.log").unlink()
-    doc = R.document(out, 0, RUN)
+    (keep_of(out) / "sczk" / R.ROUND / "session-last" / "prove.log").write_text("$ prove\n# rc 0 in 14 s\n",
+                                                                               encoding="utf-8")
+    (keep_of(out) / "sczk" / R.ROUND / "session-last" / "lean-verify.log").write_text("$ verify\n", encoding="utf-8")
+    doc = document(out, 0, RUN)
     assert doc["sessions"][2]["prover"] == {"process_s": 14.0}
     assert doc["sessions"][2]["lean"] == {"process_s": None, "inputs_s": None, "setup_s": None, "check_s": None}
     assert doc["numbers"] == {"proving": 35.0, "proving_s_a_tick": 3.5, "verifier": 11.25, "verifier_wall": 13.75}
@@ -153,7 +164,7 @@ def test_a_group_is_its_execution_phases_each_a_round_and_every_blocks_answer(tm
     assert doc["numbers"]["proving"] == 40.0          # eight sessions of 12 to 19 s and 8 × 0.5 s of staging over 3.2 s
     assert R.pinned("test")["proved"] == list(range(33)) and doc["identity"]["sample"] == "every unit"
     old = {**R.pinned("test"), "drawn": list(range(32)), "proved": list(range(32))}
-    one = R.document(kept(tmp_path / "b", group=2, public=old), 0, RUN)
+    one = document(kept(tmp_path / "b", group=2, public=old), 0, RUN)
     assert one["guard"]["why"] == [f"execution phase {i}'s public part is not public.json's for test in drawn, proved"
                                    for i in (0, 1)]
     assert one["identity"]["sample"] == "32 of 33 units"
@@ -172,7 +183,7 @@ def test_a_pinned_verifier_with_no_line_for_a_session_has_no_number(tmp_path):
     out = kept(tmp_path / "a")
     lines = (out / "lean.jsonl").read_text(encoding="utf-8").splitlines()
     (out / "lean.jsonl").write_text("".join(x + "\n" for x in lines if "session-last/" not in x), encoding="utf-8")
-    doc = R.document(out, 0, RUN)
+    doc = document(out, 0, RUN)
     assert (doc["identity"]["verifier_cores"], doc["round"]["lean_cpu_s"], doc["numbers"]["verifier"]) == (1, None, None)
     m = next(m for m in R.measurements(doc) if m["name"] == R.VERIFIER)
     assert (m["value"], m["why"]) == (None, R.NO_LINE)
@@ -185,7 +196,7 @@ def test_a_pinned_verifier_with_no_line_for_a_session_has_no_number(tmp_path):
     ({"complete": False}, "execution phase 0's public part is not public.json's for test in complete"),
 ])
 def test_the_guard_refuses_another_public_part(tmp_path, change, why):
-    doc = R.document(kept(tmp_path / "a", public={**R.pinned("test"), **change}), 0, RUN)
+    doc = document(kept(tmp_path / "a", public={**R.pinned("test"), **change}), 0, RUN)
     assert doc["guard"] == {"holds": False, "scan_exit": 0, "why": [why]}
 
 
@@ -194,25 +205,25 @@ def test_the_guard_refuses_an_answer_that_does_not_say_every_verdict_ran(tmp_pat
     field, as a scan answered before it had one, does not stand as a measurement."""
     assert R.pinned("test")["complete"] is True
     before = {k: v for k, v in R.pinned("test").items() if k != "complete"}
-    doc = R.document(kept(tmp_path / "a", public=before), 0, RUN)
+    doc = document(kept(tmp_path / "a", public=before), 0, RUN)
     assert doc["guard"] == {"holds": False, "scan_exit": 0,
                             "why": ["execution phase 0's public part is not public.json's for test in complete"]}
 
 
 def test_the_guard_refuses_a_failed_scan_a_reject_and_a_missing_answer(tmp_path):
     out = kept(tmp_path / "a")
-    assert R.document(out, 3, RUN)["guard"] == {"holds": False, "scan_exit": 3, "why": ["the scan exited 3"]}
+    assert document(out, 3, RUN)["guard"] == {"holds": False, "scan_exit": 3, "why": ["the scan exited 3"]}
     path = out / "sczk" / "summary.json"
     summary = json.loads(path.read_text(encoding="utf-8"))
 
     def answers(doc) -> None:
         path.write_text(json.dumps({**summary, "answers": doc}), encoding="utf-8")
     answers({"0": {"verdict": "reject", "reason": "a block failed", "public": None}})
-    assert R.document(out, 0, RUN)["guard"]["why"] == ["execution phase 0's answer is 'reject': a block failed"]
+    assert document(out, 0, RUN)["guard"]["why"] == ["execution phase 0's answer is 'reject': a block failed"]
     answers({})
-    assert R.document(out, 0, RUN)["guard"]["why"] == ["the summary holds 0 execution phases' answers, and the group is 1"]
+    assert document(out, 0, RUN)["guard"]["why"] == ["the summary holds 0 execution phases' answers, and the group is 1"]
     answers(None)
-    [why] = R.document(out, 0, RUN)["guard"]["why"]
+    [why] = document(out, 0, RUN)["guard"]["why"]
     assert "the scan's summary holds no answers" in why
     assert not (out / "sczk" / "answers.json").exists()
     assert R.guard(out, {"setup": "w0", "group": 1}, 0)["why"][0].startswith("public.json pins no public part for the class w0")
@@ -227,7 +238,7 @@ def run_dir(tmp_path, monkeypatch):
 
 def test_write_is_the_document_and_the_runs_result(run_dir, capsys):
     kept(run_dir / "out")
-    assert R.main(["write", str(run_dir), "--scan-exit", "0"]) == 0
+    assert R.main(["write", str(run_dir), "--scan-exit", "0", "--keep", str(keep_of(run_dir / "out"))]) == 0
     doc = json.loads((run_dir / "out" / R.DOC).read_text(encoding="utf-8"))
     assert (doc["schema"], doc["run"], doc["commit"]) == (R.SCHEMA, RUN, "d" * 40)
     result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
@@ -257,7 +268,7 @@ def test_write_is_the_document_and_the_runs_result(run_dir, capsys):
 
 def test_a_result_whose_guard_does_not_hold_has_no_measurement(run_dir, capsys):
     kept(run_dir / "out", public={**R.pinned("test"), "bound": 2})
-    assert R.main(["write", str(run_dir), "--scan-exit", "0"]) == 1
+    assert R.main(["write", str(run_dir), "--scan-exit", "0", "--keep", str(keep_of(run_dir / "out"))]) == 1
     result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
     assert result["measurements"] == [] and result["validation"]["status"] == "failed"
     assert result["validation"]["detail"] == ("the guard does not hold: execution phase 0's public part is not "
@@ -271,14 +282,14 @@ def test_a_round_without_a_sessions_seconds_has_no_result(run_dir, capsys):
     summary = json.loads((out / "sczk" / "summary.json").read_text(encoding="utf-8"))
     del summary["rounds"][R.ROUND]["last"]["stage_s"]
     (out / "sczk" / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
-    assert R.main(["write", str(run_dir), "--scan-exit", "0"]) == 1
+    assert R.main(["write", str(run_dir), "--scan-exit", "0", "--keep", str(keep_of(run_dir / "out"))]) == 1
     result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
     assert (result["validation"]["status"], result["measurements"]) == ("failed", [])
     assert result["validation"]["detail"] == "the guard holds, and the summary lacks a session's seconds or staging: no number"
     del summary["rounds"][R.ROUND]["audit"]["timing"]["last"]["session_s"]
     (out / "sczk" / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
     with pytest.raises(R.Refused, match="lack what the honest rounds are read by \\(KeyError: 'session_s'\\)"):
-        R.document(out, 0, RUN)
+        document(out, 0, RUN)
     assert "the summary lacks" in capsys.readouterr().out
 
 
@@ -287,12 +298,12 @@ def test_a_kept_file_that_does_not_parse_is_refused_not_passed_over(tmp_path):
     with (out / "lean.jsonl").open("a", encoding="utf-8") as f:
         f.write("{half a line\n")
     with pytest.raises(R.Refused, match="lack what the honest rounds are read by \\(JSONDecodeError: "):
-        R.document(out, 0, RUN)
+        document(out, 0, RUN)
 
 
 def test_a_scan_that_left_no_round_fails_with_no_document(run_dir, capsys):
     (run_dir / "out").mkdir(parents=True)
-    assert R.main(["write", str(run_dir), "--scan-exit", "4"]) == 1
+    assert R.main(["write", str(run_dir), "--scan-exit", "4", "--keep", str(keep_of(run_dir / "out"))]) == 1
     result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
     assert (result["validation"]["status"], result["measurements"], result["measurement_files"]) == ("failed", [], [])
     assert result["validation"]["detail"].startswith("no round to measure: ") and not (run_dir / "out" / R.DOC).exists()
@@ -305,7 +316,7 @@ def test_a_comparison_refuses_two_results_whose_identities_differ(tmp_path):
     for field, kw in (("cores", {"cores": 23}), ("verifier_cores", {"pin": False}), ("class", {"cls": "w63k4"})):
         with pytest.raises(R.Refused, match=f"identities differ.*{field}: "):
             R.compare(base, doc_of(tmp_path, f"b-{field}", OTHER, **kw))
-    bad = R.document(kept(tmp_path / "c"), 2, OTHER)
+    bad = document(kept(tmp_path / "c"), 2, OTHER)
     with pytest.raises(R.Refused, match="the candidate's guard does not hold \\(the scan exited 2\\)"):
         R.compare(base, bad)
     with pytest.raises(R.Refused, match="the baseline's guard does not hold"):
@@ -339,7 +350,7 @@ def test_the_baseline_names_a_run_and_holds_no_number(tmp_path, monkeypatch, cap
     assert R.main(["compare", OTHER], call=store({OTHER: other})) == 2
     err = capsys.readouterr().err
     assert "identities differ" in err and "cores: 21 and 48" in err
-    for bad in (R.document(kept(tmp_path / "d"), 1, RUN), doc_of(tmp_path, "e", "local")):
+    for bad in (document(kept(tmp_path / "d"), 1, RUN), doc_of(tmp_path, "e", "local")):
         with pytest.raises(R.Refused, match="a baseline is a run whose guard holds"):
             R.lock(bad)
 
@@ -399,9 +410,10 @@ def test_the_metrics_are_written_under_their_ids():
 
 
 SCAN = """#!/usr/bin/env bash
-# a stand-in for the scan: the kept files, the threads it would size its provers by (nproc, as the scan's job
-# does) and the settings it was started with
+# a stand-in for the scan: the kept files, its sessions' logs in SC_KEEP alone (as the scan keeps them), the threads
+# it would size its provers by (nproc, as the scan's job does) and the settings it was started with
 mkdir -p "$RESEARCH_RUN_DIR/out" && cp -r "$KEPT"/. "$RESEARCH_RUN_DIR/out"/
+[ -z "${SC_KEEP:-}" ] || cp -r "$KEPT-keep"/. "$SC_KEEP"/
 printf 'threads %s\\n' "$(nproc)" > "$RESEARCH_RUN_DIR/out/host.txt"
 printf '%s\\n' "class=${SC_CLASS-} mem=${SC_MEM_GB-} rss=${SC_RSS-} one=${SC_LEAN_ONE-} dry=${SC_DRY-unset} other=${SC_OTHER-unset} group=${SC_GROUP-unset}" \\
   > "$RESEARCH_RUN_DIR/out/seen.txt"
@@ -425,9 +437,11 @@ def tree(tmp_path):
 
 
 def run_sh(tree: Path, run_dir: Path, **env: str) -> subprocess.CompletedProcess:
+    """run.sh as a research run, its private scratch (the scan's keep) under ``tree``'s sibling ``tmp``."""
     keep = {k: v for k, v in os.environ.items() if not k.startswith(("SC_", "RESEARCH_"))}
+    (tmp := tree.parent / "tmp").mkdir(exist_ok=True)
     return subprocess.run(["bash", str(tree / "benchmarks" / "scan_cost" / "run.sh")], capture_output=True, text=True,
-                          env={**keep, "RESEARCH_RUN_DIR": str(run_dir), "RESEARCH_RUN_ID": RUN,
+                          env={**keep, "TMPDIR": str(tmp), "RESEARCH_RUN_DIR": str(run_dir), "RESEARCH_RUN_ID": RUN,
                                "RESEARCH_SOURCE_SHA": "d" * 40, **env}, check=False)
 
 
@@ -447,14 +461,40 @@ def test_run_sh_pins_the_job_runs_the_scan_at_the_identity_and_writes_the_result
     got = {m["name"]: m["value"] for m in result["measurements"]}
     assert (got[R.PROVING], got[R.VERIFIER], got["execution phases"]) == (17.5, 5.625, 3.2)
     assert "scan_cost: pinned to 1 cores" in r.stdout and "guard: holds" in r.stdout
+    # the stages, read from each session's logs in the scan's keep, which never reach $OUT and go when run.sh ends
+    assert (got["the repetitions"], got["the tail"], got["Lean verifier wall: setup"]) == (18, 4, 8.0)
+    assert not [p for p in (tmp_path / "run").rglob("*.log") if p.name in ("prove.log", "lean-verify.log")]
+    assert not list((tmp_path / "tmp").iterdir())
+
+
+def test_run_sh_refuses_a_session_whose_log_the_keep_lacks_and_writes_no_result(tree, tmp_path):
+    files = kept(tmp_path / "kept", cls="w63k4")
+    (keep_of(files) / "sczk" / R.ROUND / "session-last" / "lean-verify.log").unlink()
+    r = run_sh(tree, tmp_path / "run", KEPT=str(files), SC_CORES="1")
+    assert r.returncode == 1, r.stdout + r.stderr
+    result = json.loads((tmp_path / "run" / "result.json").read_text(encoding="utf-8"))
+    assert (result["validation"]["status"], result["measurements"]) == ("failed", [])
+    assert result["validation"]["detail"].startswith("no round to measure: no ")
+    assert "lean-verify.log: the summary lists session last of honest-0" in result["validation"]["detail"]
+    assert not (tmp_path / "run" / "out" / R.DOC).exists()
+
+
+def test_a_write_without_the_scans_keep_is_refused_by_name(run_dir, capsys):
+    kept(run_dir / "out")
+    (empty := run_dir.parent / "no-keep").mkdir()
+    assert R.main(["write", str(run_dir), "--scan-exit", "0", "--keep", str(empty)]) == 1
+    result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
+    assert (result["validation"]["status"], result["measurements"]) == ("failed", [])
+    assert "prove.log: the summary lists session " in result["validation"]["detail"]
+    assert "SC_KEEP" in capsys.readouterr().out and not (run_dir / "out" / R.DOC).exists()
 
 
 def test_run_sh_removes_the_verifiers_copies_a_kept_log_names_and_nothing_else(tree, tmp_path):
     """The scan keeps the verifier's copies of a round's circuits and program with its other files, and those are most
     of a run's bytes. The runner removes each once the scan has ended, whatever the scan's exit, only where a kept
     `lean-verify.log` of its own round names its SHA-512, so what it removes can still be checked against the run. A
-    copy no log of its round names stays, with a line saying so, and so does every other kept file: the session's logs,
-    the verifier's other files, the lowered Definitions' program, and a circuit's text outside a verifier's directory."""
+    copy no log of its round names stays, with a line saying so, and so does every other kept file: the verifier's
+    other files, the lowered Definitions' program, and a circuit's text outside a verifier's directory."""
     files = kept(tmp_path / "kept", cls="w63k4")
     named = {f"sczk/{R.ROUND}/verifier/start-circuit.txt": "start", f"sczk/{R.ROUND}/verifier/ingress-0-circuit.txt": "ingress-0",
              f"sczk/{R.ROUND}/verifier/program.json": "last"}
@@ -465,7 +505,7 @@ def test_run_sh_removes_the_verifiers_copies_a_kept_log_names_and_nothing_else(t
         (files / rel).parent.mkdir(parents=True, exist_ok=True)
         (files / rel).write_text(f"the bytes of {rel}", encoding="utf-8")
     for rel, session in named.items():   # the verifier's command names what it reads by digest, as the scan's does
-        log = files / "sczk" / R.ROUND / f"session-{session}" / "lean-verify.log"
+        log = keep_of(files) / "sczk" / R.ROUND / f"session-{session}" / "lean-verify.log"
         digest = hashlib.sha512((files / rel).read_bytes()).hexdigest()
         log.write_text(log.read_text(encoding="utf-8").replace("$ verifier verify", f"$ verifier verify --reads {digest}"),
                        encoding="utf-8")
@@ -478,8 +518,9 @@ def test_run_sh_removes_the_verifiers_copies_a_kept_log_names_and_nothing_else(t
         out = tmp_path / name / "out"
         after = {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()}
         assert before - after == set(named) and all((out / rel).is_file() for rel in [*unnamed, *stays])
-        for rel in unnamed:
-            assert f"scan_cost: kept out/{rel}: no lean-verify.log of its round names its SHA-512" in r.stdout
+        assert f"scan_cost: kept out/{unnamed[0]}: no lean-verify.log of its round names its SHA-512" in r.stdout
+        assert f"scan_cost: kept out/{unnamed[1]}: the scan's keep (" in r.stdout   # no log of the chain round's
+        assert ") holds no lean-verify.log of its round" in r.stdout
         assert "of the scan's files kept, without the verifier's copies a kept log names" in r.stdout
     assert json.loads((tmp_path / "held" / "result.json").read_text(encoding="utf-8"))["validation"]["status"] == "passed"
 

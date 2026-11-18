@@ -32,9 +32,10 @@
 # What the gate publishes of a rehearsal goes in $OUT/warden (`auditor.py publish`, the job failing when it does); its
 # records, heads and salts (the prover's) and its request values (traffic.json's requests, client.json's responses)
 # nowhere.
-# With SC_KEEP=DIR (outside the run dir; scan_period.sh's), what scan_period.py reads goes to DIR, 0700 with 0600
-# files: the network attester run's certified.jsonl and deployment.json (DIR/warden) and the driver's answers.json,
-# summary.json, joint/program.json and each round's registration.json (DIR/sczk). Its owner removes it.
+# With SC_KEEP=DIR (outside the run dir; scan_period.sh's and benchmarks/scan_cost/run.sh's), what they read goes to
+# DIR, 0700 with 0600 files: the network attester run's certified.jsonl and deployment.json (DIR/warden) and the
+# driver's answers.json, summary.json, joint/program.json, each round's registration.json and each session's prove.log
+# and lean-verify.log (DIR/sczk), a child's logs, witness like the rest. Its owner removes it.
 set -uo pipefail
 export HZ_CONFIGS=sczk HZ_MEM_GB=${SC_MEM_GB:?}
 SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -130,7 +131,7 @@ if [ -n "${SC_KEEP:-}" ]; then
      done
    fi
    cd "$W/sczk" && find . -type f \( -path ./answers.json -o -path ./summary.json -o -path ./joint/program.json \
-     -o -regex '\./[^/]*/registration\.json' \) -print0 | xargs -0 -r -I{} cp --parents {} "$SC_KEEP/sczk/") \
+     -o -regex '\./[^/]*/registration\.json' -o -regex '\./[^/]*/session-[^/]*/\(prove\|lean-verify\)\.log' \) -print0 | xargs -0 -r -I{} cp --parents {} "$SC_KEEP/sczk/") \
     || { log "sczk: keeping what a later step reads in $SC_KEEP failed"; [ "$rc" = 0 ] && rc=5; }
 fi
 log "sczk: done, rc $rc"

@@ -8,7 +8,7 @@ parameters alone, what changes what the wipe proves: `period.json`'s ``wipe`` ke
 
 What says only where and how this node runs it is a launcher's fact (`FACTS`), handed in ``ctx`` by name, each one
 there or refused by name, of its default's type: ``device``, ``streamer``, ``threads``, ``links``, ``disk``, ``dram``,
-``egress_bits`` (the network certifier's count over the session, evidence and not a parameter), ``idle_mib`` (the most
+``egress_bits`` (the network attester's count over the session, evidence and not a parameter), ``idle_mib`` (the most
 of a ``cuda`` store's card in use that counts as idle), and:
 
 - ``host``, ``address`` and ``command``: the memory attester on a host of its own, all three or none (`period.json`'s
@@ -58,12 +58,13 @@ from verity.protocols.resource_accounting.memory.pous.verifier.wipe_parties impo
 
 NAME = "wipe"
 SMI = "nvidia-smi"
-#: the settings and facts that stand for CONFIG's None, by the value that does
+#: the value of each setting or fact that stands for CONFIG's None, which the declaration's and FACTS' defaults read
 UNSET = {"segments": 0, "tier": "", "threads": 0, "egress_bits": -1, "reads": 0, "disk": {}, "dram": {}}
 #: the launcher's facts, at the values its launcher hands by default: never in an application
-FACTS = {"device": 0, "streamer": "native", "threads": 0, "links": [], "disk": {}, "dram": {}, "egress_bits": -1,
-         "idle_mib": 1024, "host": "", "address": "", "command": [], "run_keys": False, "simulated": False,
-         "foreign_bytes": 0, "foreign_past_bound": False}
+FACTS = {k: wipe_run.CONFIG[k] for k in ("device", "links", "foreign_bytes")} | {
+    k: UNSET[k] for k in ("threads", "egress_bits", "disk", "dram")} | {
+    "streamer": "native", "idle_mib": 1024, "host": "", "address": "", "command": [], "run_keys": False,
+    "simulated": False, "foreign_past_bound": False}
 #: the facts that make a run a development run, named in its record's ``served.development``
 DEVELOPMENT = ("run_keys", "simulated", "foreign_bytes", "foreign_past_bound")
 BINDING = ("host", "address", "command")
