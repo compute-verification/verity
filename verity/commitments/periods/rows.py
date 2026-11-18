@@ -588,11 +588,14 @@ class Committed:
         """The circuit prover's header ``frame_v3`` entry for member ``k``: its bare port names, as its statement reads them,
         each at the tree over its own rows (its table's, in a shared-row member) that Flock holds its public file to. A port
         that is not its own tree (`Binding.held`) gets that tree here from its public strings alone: a header root anyone
-        makes again from the public body, which the record never names."""
+        makes again from the public body, which the record never names, bound as the (template, field) tree holding it
+        (its binding the one `SecondStage.atRun` gives it from the record) over its own rows."""
         m, w = self.window.members[k], self.window
         names = [p for p, _ in m.all_rows]
         rows = {p: dict(m.tables).get(p, m.n) if p not in dict(m.outs) else m.n for p in names}
-        local = {p: w.domain(m.port(p), m.schema(p), rows[p]) for p in names if not w.held(m, p)}
+        local = {p: CommitmentDomain(w.binding(w.tree(m, p), m.schema(p), w.trees[w.tree(m, p)][1]), OWNER,
+                                     RangeIndexedDomain(0, rows[p]), hash="sha512") if w.tree(m, p) in w.trees
+                 else w.domain(m.port(p), m.schema(p), rows[p]) for p in names if not w.held(m, p)}
         made, _ = commit_ports({p: d for p, d in local.items()}, {}, {}, {}, schemas={p: m.schema(p) for p in local},
                                strings={p: bytes(self.bc[m.port(p)]) for p in local})
         doms = {p: local.get(p) or self.domains[m.port(p)] for p in names}
@@ -1277,7 +1280,8 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
                  outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Core's ``verity/registration/v1`` record of the period, made by ``registrar`` (core's ``one_stage.docket``: its
     ``record``, ``KINDS``): its program, query and sampling design, the scheme, every port's root, leaves and window domain, the leaf layer,
-    and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
+    ``fields`` (one ``{"template", "field", "domain", "leaves", "root"}`` each (template, output field) tree), and
+    ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
     the prover's last record; None for its first).  ``entries``: those of the values its program takes as parameters
     (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``outputs``: the registered values the period
     outputs for a later record to take (``{"port", "root", "leaves", "domain"}`` each), named among the roots after its ports.
@@ -1290,9 +1294,12 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
     if {o["port"] for o in outputs} & set(c.roots):
         raise ValueError(f"output values {sorted({o['port'] for o in outputs} & set(c.roots))} are named like the period's ports")
     roots += [{k: o[k] for k in ("port", "root", "leaves", "domain")} for o in outputs]
+    fields = [{"template": t, "field": f, "domain": c.domains[x].domain_id.hex(), "leaves": c.domains[x].count,
+               "root": c.roots[x].hex()} for t, f, x in dict.fromkeys((m.template, o, WI.tree(m.template, o))
+                                                                     for m in w.members for o, _w in m.outs)]
     return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
                             leaf_layer=c.leaf_layer, previous=previous, work_table=w.work_table,
-                            registered=list(entries))
+                            registered=list(entries), fields=fields)
 
 
 def units_doc(m: Member) -> dict[str, Any]:
@@ -1502,10 +1509,12 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
             if port == m.port(p) and int(e["leaves"]) != m.n:
                 continue
             wire = w.wire(m, p)
-            ports[p] = {"value": own_value(port), "root": e["root"], "leaves": int(e["leaves"]), "words": words[p],
-                        "word_bits": registered.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
-                        **({"reads": w.reads(m, p).tolist(), registered.READS_FROM: m.base} if wire is None else
-                           {"tree": {"template": wire.writer, "field": wire.out}, "reads": []})}
+            field = (m.template, p) if p in dict(m.outs) else None if wire is None else (wire.writer, wire.out)
+            ports[p] = {"value": own_value(port) if field is None else port, "root": e["root"], "leaves": int(e["leaves"]),
+                        "words": words[p], "word_bits": registered.WORD_BITS, "domain": e["domain"],
+                        registered.SCHEMA_KEY: m.schema(p),
+                        **({"reads": w.reads(m, p).tolist(), registered.READS_FROM: m.base} if field is None else
+                           {"tree": {"template": field[0], "field": field[1]}, "reads": []})}
         out[m.key] = {**f, "ports": dict(sorted(ports.items()))}
     return out
 

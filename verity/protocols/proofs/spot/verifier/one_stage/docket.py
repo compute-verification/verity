@@ -19,7 +19,9 @@
   - R2: the program, query and partition digests and the population are the verifier's own (an explicit partition
     object must be over the verifier's program);
   - R3: the scheme is the verifier's, and the roots are exactly the ports its layout derives, each exactly
-    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain;
+    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain; a record's `fields`, where it
+    has them, one `{template, field, domain, leaves, root}` each (template, output field) tree, each its roots' entry
+    for the port `<template>/<field>` (`R3-fields`);
   - R4: the leaf layer is the digest of the verifier's copy, so a null one is refused when the verifier holds one;
   - R5: the anchors are the verifier's;
   - R6: `previous` is the digest of this prover's last record (null for the first), and no earlier record has the same
@@ -176,6 +178,7 @@ SHARED_WHY = ("a run Input node whose leaves two proof blocks read, or a batch b
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
 _ROOT_KEYS = {"port", "root", "leaves", "domain"}
+_FIELD_KEYS = {"template", "field", "domain", "leaves", "root"}
 _HEX = re.compile(r"[0-9a-f]+")
 
 
@@ -186,11 +189,12 @@ def query_digest(query: Mapping[str, Any]) -> str:
 def record(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
            window: Mapping[str, Any], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
            previous: str | None = None, partition: Mapping[str, Any] | None = None,
-           work_table: Mapping[str, Any] | None = None, registered: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+           work_table: Mapping[str, Any] | None = None, registered: Sequence[Mapping[str, Any]] = (),
+           fields: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`).
     `sampling_design` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
     `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`Registered.entry`),
-    which make the record v2."""
+    which make the record v2. `fields`: each (template, output field) tree's `{template, field, domain, leaves, root}`."""
     part = dict(partition) if partition is not None else P.partition(program, query)
     rec = {"format": FORMAT_V2 if registered else FORMAT, "protocol": PROTOCOL, "program": part["program"],
            "query": query_digest(part["query"]), "partition": P.digest(part), "population": P.units(program, query),
@@ -200,6 +204,9 @@ def record(program: Program, query: Mapping[str, Any], sampling_design: Mapping[
     if registered:
         rec["registered"] = [{**{k: (int(e[k]) if k in ("leaves", "words") else e[k]) for k in G.ENTRY_KEYS},
                               **G.width_entry(int(e.get(G.WIDTH_KEY, G.WORD_BITS)))} for e in registered]
+    if fields:
+        rec["fields"] = [{"template": f["template"], "field": f["field"], "domain": f["domain"], "leaves": int(f["leaves"]),
+                          "root": f["root"]} for f in fields]
     return rec
 
 
@@ -365,7 +372,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     _registered_compiler(compiler)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
     fan, shared, through, bad = _readers(program, query, registered or {}, held or (), tied or ())
-    keys = _KEYS | {"registered"} if v2 else _KEYS
+    keys = (_KEYS | {"registered"} if v2 else _KEYS) | ({"fields"} if isinstance(rec, Mapping) and "fields" in rec else set())
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
         return c.verdict(fanout=fan, rests_on_period_check=through)
@@ -420,6 +427,12 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
                 c.fail("R3-leaves", {"port": p, "registered": r["leaves"], "verifier": want["leaves"]})
             if r["domain"] != want["domain"]:
                 c.fail("R3-domain", {"port": p, "registered": r["domain"], "verifier": want["domain"]})
+        fields = rec.get("fields", [])
+        named = [f"{f['template']}/{f['field']}" for f in fields if isinstance(f, Mapping) and set(f) == _FIELD_KEYS]
+        if (not isinstance(fields, list) or len(named) != len(fields) or len(set(named)) != len(named)
+                or any({k: got.get(x, {}).get(k) for k in ("root", "leaves", "domain")} != {k: f[k] for k in ("root", "leaves", "domain")}
+                       for x, f in zip(named, fields))):
+            c.fail("R3-fields", fields)
     # R4: when the verifier holds the leaf layer, the record must name it (a null leaf layer is refused)
     if rec["leaf_layer"] != leaf_layer:
         c.fail("R4-leaf-layer", {"registered": rec["leaf_layer"], "verifier": leaf_layer})
