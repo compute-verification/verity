@@ -74,6 +74,9 @@ PUBLIC = {
                                           "replay and rebuild take",
     "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
                                     "input loop and edges that act between two steps once nothing is in flight",
+    "verity_vllm.engine.kv_events": "I1: the kv hook of one in-process vLLM engine, which names no scheme: the weights it "
+                                    "loaded and its KV pool, pages and step writes as typed events (KvEvents, loaded), "
+                                    "which benchmarks/poub_session and benchmarks/vllm_encoded subscribe PoUB's binder to",
     "verity_vllm.engine.hooks": "I2: the one owner of runtime patches: the patches one component installs on an engine and puts "
                                 "back (Hooks, Patch, patch, wrap, patched, triton_launch), a hook run at a module's import "
                                 "(OnImport) and the patches installed now (live), which the harness's arms and engine install "
@@ -297,9 +300,6 @@ PUBLIC = {
                                         "LinearSite), which benchmarks/pouw's Pearl-C arms build",
     "verity_vllm.protocols.linear.vllm_site": "I1: the linear sites of a vLLM model, and a Stack attached to them (discover, "
                                               "attach), which benchmarks/pouw's Pearl-C arms attach",
-    "verity_vllm.protocols.poub.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
-                                                     "weights it binds (model_weights, WeightRegion, Every), which "
-                                                     "benchmarks/poub_session and benchmarks/vllm_encoded serve under",
     "verity_vllm.protocols.poub.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
                                                      "pipeline.poub_session reaches through protocols.driver and "
                                                      "benchmarks/poub_session serves under",

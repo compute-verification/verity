@@ -27,7 +27,7 @@ import time
 from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import (
@@ -45,9 +45,6 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     PoubReceipt,
 )
 from verity.protocols.resource_accounting.scheme import Handle, KvBlocks, KvPool, Loaded, Step
-
-if TYPE_CHECKING:
-    from verity.protocols.resource_accounting.memory.poub.verifier.audit import Tiles
 
 __all__ = ["Binder", "Every", "WeightRegion", "weight_regions"]
 
@@ -235,7 +232,7 @@ class Binder:
                  weights: Callable[[Sequence[tuple[str, Handle]]], Sequence[WeightRegion]] = weight_regions,
                  reader: Callable[[Sequence[Segment]], dict[int, bytes] | bytes | None] | None = None, fifo: bool = True,
                  messages: Callable[[], Sequence[bytes | None]] | None = None, registration: bytes | None = None,
-                 on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None,
+                 on_window: Callable[[WindowRecord], None] | None = None, tiles: Any | None = None,
                  passes: bool = True, weight_blocks: int | None = None, kv: bool = True) -> None:
         self.store, self.block_bytes, self.kv_codec, self.kv = store, block_bytes, kv_codec, kv
         self.receipt = receipt or (PoubReceipt() if tiles is not None else KindReceipt())

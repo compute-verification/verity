@@ -29,7 +29,7 @@ pass          before each pass `Serving.advance` runs the engine's next step s a
 openings      as the driver's reference: the block, its receipt leaf, and its payload's salt, path and d_j
 ~~~
 
-``engine(s)`` runs engine step s against the store as the vLLM adapter's binder does: a request's pages
+``engine(s)`` runs engine step s against the store as the store's binder does under vLLM's kv hook: a request's pages
 freed after the step before (a finished request's) or in this step's schedule (a preempted one's), allocs, then
 `kv_append` (or `kv_write_reference`, which writes the KV first) and `end_step` once the step's KV is in place.  A
 CPU test passes a scripted engine; with vLLM, the binder on the engine, with ``passes=False``, numbers the steps.  The

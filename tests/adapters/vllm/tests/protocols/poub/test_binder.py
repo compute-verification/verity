@@ -33,7 +33,7 @@ from verity.protocols.resource_accounting.scheme import KvWrite
 from tests import fake_vllm
 from verity_vllm.engine.hooks import Hooks, Patch
 from verity_vllm.engine.kv_events import KERNEL_BLOCK_SIZES, KvEvents, loaded
-from verity_vllm.protocols.poub.binder import (
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.binder import (
     Binder,
     Every,
     Inbox,

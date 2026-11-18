@@ -142,7 +142,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/compiler/served_tie.py": (
             "resource_accounting.network.verifier.head_check", "resource_accounting.network.verifier.io_tie",
         ),
-        "verity_vllm/protocols/poub/binder.py": ("resource_accounting.memory.poub.verifier.audit.Tiles",),
         "verity_vllm/protocols/poub/remote.py": (
             "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",
         ),

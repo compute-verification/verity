@@ -1,6 +1,6 @@
 """The node's store: one registry of everything the prover registers for PoUB, the small interface a protocol driver
-talks to, and the session that serves it. A serving system's adapter keeps it current (vLLM's:
-`verity_vllm.protocols.poub`).
+talks to, and the session that serves it. A serving system's ``kv`` hook keeps it current through `binder` (vLLM's:
+`verity_vllm.engine.kv_events`).
 
 Terms are the design's (store, block, tier, registration, receipt, pass, window, commitment, opening):
 
@@ -13,6 +13,8 @@ Terms are the design's (store, block, tier, registration, receipt, pass, window,
   tensor read back for an opening).  Tests drive it with a fake codec and receipt.
 - `plan`: a pass's plan and its tree as functions of their arguments (the chained seed, canonical runs, the plan's
   digest, the tree's nodes), which `registry` reads and hands on under their names.
+- `binder`: `Binder`, the store's subscriber to a served run's ``kv`` hook
+  (`verity.protocols.resource_accounting.scheme`): the regions it registers, its passes and its counters.
 - `memory_map`: the store's KV events as memory-map/v1, the prover's record of the blocks each step wrote and freed.
 - `serving`: the session over a `NodeMemory` inside the prover's process (`StoreBackend`, `prove`, `Lockstep`).
 - `verify`: `verify_opening`, the verifier's side of one opening, the reference the store's openings are tested

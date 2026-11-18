@@ -5254,6 +5254,11 @@
         "tests/benchmarks/two_stage/test_guard.py": "tests/benchmarks/one_stage/test_guard.py",
         "tests/benchmarks/two_stage/test_toy.py": "tests/benchmarks/one_stage/test_toy.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/poub/binder.py": "verity/protocols/resource_accounting/memory/poub/prover/node_store/binder.py"
+      }
     }
   ]
 }

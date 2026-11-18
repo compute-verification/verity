@@ -335,7 +335,7 @@ class DeviceWords:
 
 def store_weights(loaded, install: Install, args) -> list:
     """The store's weight regions: every parameter left after the install (identity), and each encoded linear's words."""
-    from verity_vllm.protocols.poub.binder import WeightRegion, weight_regions
+    from verity.protocols.resource_accounting.memory.poub.prover.node_store.binder import WeightRegion, weight_regions
     out = weight_regions(loaded)
     for name, lin in install.linears:
         nbytes = lin.store.numel() * lin.store.element_size()
@@ -619,7 +619,7 @@ def main() -> None:
     binder = events = None
     if args.store:
         from verity_vllm.engine.kv_events import KvEvents
-        from verity_vllm.protocols.poub.binder import Binder, Every
+        from verity.protocols.resource_accounting.memory.poub.prover.node_store.binder import Binder, Every
         from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
         window = {}
         if args.store_window:
