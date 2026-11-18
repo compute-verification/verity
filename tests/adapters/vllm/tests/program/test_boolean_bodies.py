@@ -1,14 +1,15 @@
 """Every word primitive registered once every module of `verity`, both adapters and Flock's prover is imported has one
 Boolean body (`versions.boolean_version`), since a Program over one without is refused at build (`E_NO_BODY`). `BODYLESS` is
 the list of those that have none yet, each with why. It is held exactly: a new primitive without a body fails, and so does
-one listed that has gained one, until its entry is removed, so the list only shrinks. A module is left out only when it
-needs a package outside the workspace that this environment lacks (a GPU runtime)."""
+one listed that has gained one, until its entry is removed, so the list only shrinks. A primitive made on demand is seen at the
+binding `ON_DEMAND` names. A module is left out only when it needs a package outside the workspace that this environment lacks
+(a GPU runtime)."""
 from __future__ import annotations
 
 import importlib
 import pkgutil
 
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id, lookup_primitive
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.ops.boolean import versions as V
 from verity.circuits.program import is_word_primitive
@@ -18,13 +19,10 @@ ROOTS = ("verity", "verity_vllm", "verity_torch", "verity_flock")
 _ADAPTER = "the adapter's registry: no Boolean body written yet"
 #: the word primitives without a Boolean body: id -> why; only shrinks
 BODYLESS: dict[str, str] = {
-    **{f"{n}_v1": _ADAPTER + f" ({m})" for n, m in (
-        ("DsaButterflySet", "dsa_topk_mask"), ("DsaMaskCount", "dsa_topk_mask"), ("DsaMaskTag", "dsa_topk_mask"),
-        ("DsaTopKAtLeastBelow", "dsa_topk_mask"), ("DsaTopKAtLeast", "dsa_topk_mask"), ("E2m1ToBf16", "marlin_moe"),
-        ("E2m1x2Hi", "marlin_moe"), ("E2m1x2Lo", "marlin_moe"), ("E8m0DequantBf16", "marlin_moe"), ("F32ErfRn", "ref_prims"),
-        ("F32TanhRn", "ref_prims"), ("GeluErfBf16", "act"), ("I32Mul", "marlin_moe"), ("NcpAbsMax", "pouw_rows"),
-        ("NcpDot16I7", "pouw_rows"), ("NcpRneClampI7", "pouw_rows"))},
+    **{f"{n}_v1": _ADAPTER + f" ({m})" for n, m in (("F32ErfRn", "ref_prims"),)},
 }
+#: word primitives made on demand, one per binding, so that no import registers one: each at a served binding
+ON_DEMAND = ("TopPMaskWordx154880_v1",)
 
 
 def _word_primitives() -> dict[str, PrimitiveDefinition]:
@@ -37,6 +35,8 @@ def _word_primitives() -> dict[str, PrimitiveDefinition]:
                 if (e.name or "").split(".")[0] in ROOTS:
                     raise
     assert not V.load(), "a catalog module failed to import"
+    for fid in ON_DEMAND:
+        lookup_primitive(REGISTRY, fid)
     return {descriptor_id(d): d for d in list(REGISTRY.defs.values())
             if isinstance(d, PrimitiveDefinition) and is_word_primitive(d)}
 
