@@ -1480,7 +1480,7 @@ def spot_of(c: Circuit, text: str, doc: dict) -> dict | None:
     if isinstance(wires, Exception):
         return None
     return {"templates": {t: {"units": n, "rows": {p: [w, o] for (p, w), o in zip(lay.rows, lay.outer, strict=True)},
-                              "outs": dict(lay.outs)} for t, (lay, n) in lays.items()},
+                              "outs": IF._out_rows(lay)} for t, (lay, n) in lays.items()},
             "cuts": doc.get("cuts", {}), "wires": wires,
             "order": [list(b) for b in ref.root_order(json.loads(text), lays)]}
 
