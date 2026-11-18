@@ -21,12 +21,13 @@ set -uo pipefail
 export O=${OUT:?}
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2
 export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
+GENCODE=$(python3 benchmarks/kernels/machine.py gencode sm_120a) || exit 2
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm
 export BIN=$(mktemp -d /tmp/egemm.XXXXXX)
 trap 'rm -rf "$BIN"' EXIT
 PY=${EG_PYTHON:-python3}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
-nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$BIN/egemm" $D/egemm.cu -lcuda -lcublasLt -lnvidia-ml \
+nvcc -O3 -std=c++17 --no-compress -gencode "$GENCODE" -Xptxas -v -o "$BIN/egemm" $D/egemm.cu -lcuda -lcublasLt -lnvidia-ml \
   > "$O/build.log" 2>&1
 rc=$?
 echo "build rc $rc" | tee -a "$O/rc.txt"
