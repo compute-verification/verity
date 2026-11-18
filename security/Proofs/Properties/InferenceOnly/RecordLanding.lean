@@ -21,7 +21,7 @@ lands on the whole of it. It holds for a row, and for a leaf of a unit's output 
 
 * a gate no wire covers lands on itself alone (`lands_unwired`), one gate of `D`, no wider than its leaf;
 * a leaf of a row with a writer lands where the writer's leaves that meet it land (`lands_wired_row`), and those
-  are leaves of one output row of one unit (`writerLeaf_data`);
+  are leaves of one field of one unit's return (`writerLeaf_data`);
 * `outLeaf_land_le`, by induction on the rank of the unit: a leaf of a unit's output row lands on gates no wider
   than the leaf. Where the leaf is a leaf of a row of the unit with a writer, the writer's leaves that meet it lie
   inside it (`Aligned`: the unit passes this leaf on), they are apart, each is an output leaf of a unit of
@@ -118,31 +118,34 @@ theorem rowLeaf_fun (hN : PortsNamed P rs) {r : Row} {l g lo hi g' lo' hi' : ℕ
   refine ⟨Except.ok.inj (d.2.1.symm.trans d'.2.1), d.2.2.1.trans d'.2.2.1.symm, ?_⟩
   rw [d.2.2.2, d'.2.2.2, d.2.2.1, d'.2.2.1]
 
-/-- A leaf of the output row named `"o" ++ toString f` is a leaf of the row `outRow` gives for field `f`. -/
-theorem outLeaf_data {sc : Scope} {f l g lo hi : ℕ} (h : OutLeaf P sc ("o" ++ toString f) l g lo hi) :
+/-- A leaf of the return at the first word of field `f`, a field of a word or more, is a leaf of the row `outRow`
+gives for field `f`. -/
+theorem outLeaf_data {sc : Scope} {f l g lo hi : ℕ} (hf : f < (fieldsOf (P.defs[sc.d]!).ret).length)
+    (hb : 0 < Spot.Edges.wordsOf (fieldsOf (P.defs[sc.d]!).ret)[f]!)
+    (h : OutLeaf P sc (Spot.Edges.fieldWord (P.defs[sc.d]!).ret f) l g lo hi) :
     l < (outRow (P.defs[sc.d]!) f).2.size ∧
       Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get ((outRow (P.defs[sc.d]!) f).1 + l)) = .ok g ∧
       lo = bitAt (outRow (P.defs[sc.d]!) f).2 l ∧ hi = lo + (outRow (P.defs[sc.d]!) f).2[l]! := by
-  obtain ⟨f', hf', _, hl, hres, hlo, hhi⟩ := h
-  have e := outName_inj f f' hf'
+  obtain ⟨f', hf'w, hf', hb', hl, hres, hlo, hhi⟩ := h
+  have e := fieldWord_inj _ hf' hf hb' hb hf'w
   subst e
   exact ⟨hl, hres, hlo, hhi⟩
 
-/-- The writer's leaves of a row are leaves of one output row of one unit. -/
+/-- The writer's leaves of a row are leaves of one field, of a word or more, of one unit's return. -/
 theorem writerLeaf_data {r : Row} {l₀ g₀ lo₀ hi₀ : ℕ} (h₀ : WriterLeaf P rs S r l₀ g₀ lo₀ hi₀) :
-    ∃ wt wu sc' f, S.writerOf r.tid r.unit r.port r.row = some (wt, wu, "o" ++ toString f) ∧ 0 ≤ wu ∧
+    ∃ wt wu o sc' f, S.writerOf r.tid r.unit r.port r.row =
+        some (wt, wu, o, Spot.Edges.fieldWord (P.defs[sc'.d]!).ret f) ∧ 0 ≤ wu ∧
       UnitAt P rs wt wu.toNat sc' ∧ f < (fieldsOf (P.defs[sc'.d]!).ret).length ∧
-      ∀ l g lo hi, WriterLeaf P rs S r l g lo hi → OutLeaf P sc' ("o" ++ toString f) l g lo hi := by
-  obtain ⟨wt, wu, out, sc', hw, h0, hu, f, hout, hf, _⟩ := h₀
-  subst hout
-  refine ⟨wt, wu, sc', f, hw, h0, hu, hf, ?_⟩
-  rintro l g lo hi ⟨wt₁, wu₁, out₁, sc₁, hw₁, _, hu₁, ho⟩
+      0 < Spot.Edges.wordsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]! ∧
+      ∀ l g lo hi, WriterLeaf P rs S r l g lo hi →
+        OutLeaf P sc' (Spot.Edges.fieldWord (P.defs[sc'.d]!).ret f) l g lo hi := by
+  obtain ⟨wt, wu, o, off, sc', hw, h0, hu, f, hoff, hf, hb, _⟩ := h₀
+  subst hoff
+  refine ⟨wt, wu, o, sc', f, hw, h0, hu, hf, hb, ?_⟩
+  rintro l g lo hi ⟨wt₁, wu₁, o₁, off₁, sc₁, hw₁, _, hu₁, ho⟩
   rw [hw] at hw₁
-  have e := Option.some.inj hw₁
-  have e1 := (Prod.mk.inj e).1
-  have e2 := (Prod.mk.inj (Prod.mk.inj e).2).1
-  have e3 := (Prod.mk.inj (Prod.mk.inj e).2).2
-  subst e1 e2 e3
+  simp only [Option.some.injEq, Prod.mk.injEq] at hw₁
+  obtain ⟨rfl, rfl, rfl, rfl⟩ := hw₁
   have e4 := unitAt_fun P rs wt wu.toNat sc₁ sc' hu₁ hu
   subst e4
   exact ho
@@ -154,7 +157,7 @@ theorem lands_unwired {o a : ℕ} (hw : ¬ Wired P rs W S o) (h : Lands P rs W S
   cases h with
   | here _ _ => rfl
   | wire _ g _ hf _ =>
-    obtain ⟨r, l, l', lo, hi, lo', hi', hrl, ⟨wt, wu, out, sc', hwr, _⟩, _⟩ := hf
+    obtain ⟨r, l, l', lo, hi, lo', hi', hrl, ⟨wt, wu, o, out, sc', hwr, _⟩, _⟩ := hf
     exact absurd ⟨r, l, lo, hi, Option.isSome_iff_exists.2 ⟨_, hwr⟩, hrl⟩ hw
 
 /-- A read of a leaf of a row with a writer lands where a leaf of the writer that meets it lands. -/
@@ -302,17 +305,19 @@ theorem width_of_gate (hL : LaysOut P rs W S D at_) {a : Fin D.N} {p : ℕ} {ops
   exact (Ty.value.inj hret').symm
 
 /-- A leaf of a row's writer lands on gates no wider than the leaf, where each of the writer's leaves does. -/
-theorem writerLand_le {r : Row} {sc' : Scope} {f : ℕ}
-    (hall : ∀ l g lo hi, WriterLeaf P rs S r l g lo hi → OutLeaf P sc' ("o" ++ toString f) l g lo hi)
+theorem writerLand_le {r : Row} {sc' : Scope} {f : ℕ} (hf : f < (fieldsOf (P.defs[sc'.d]!).ret).length)
+    (hb : 0 < Spot.Edges.wordsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]!)
+    (hall : ∀ l g lo hi, WriterLeaf P rs S r l g lo hi →
+      OutLeaf P sc' (Spot.Edges.fieldWord (P.defs[sc'.d]!).ret f) l g lo hi)
     (hstep : ∀ l g lo hi, WriterLeaf P rs S r l g lo hi → D.width (landOf P rs W S at_ g) ≤ hi - lo) (l : ℕ) :
     D.width (writerLand P rs W S at_ r l) ≤ (outRow (P.defs[sc'.d]!) f).2[l]! := by
   by_cases hne : ∃ g lo hi, WriterLeaf P rs S r l g lo hi
   · obtain ⟨g₀, lo₀, hi₀, h₀⟩ := hne
-    have d₀ := outLeaf_data (hall l g₀ lo₀ hi₀ h₀)
+    have d₀ := outLeaf_data hf hb (hall l g₀ lo₀ hi₀ h₀)
     have hsub : writerLand P rs W S at_ r l ⊆ landOf P rs W S at_ g₀ := by
       intro a ha
       obtain ⟨g, lo, hi, hwl, hl⟩ := mem_writerLand.1 ha
-      have d := outLeaf_data (hall l g lo hi hwl)
+      have d := outLeaf_data hf hb (hall l g lo hi hwl)
       have e : g = g₀ := Except.ok.inj (d.2.1.symm.trans d₀.2.1)
       subst e
       exact mem_landOf.2 hl
@@ -333,7 +338,7 @@ theorem outLeaf_land_le (hO : OwnRows P rs W)
     (hA : Aligned P rs W S) (hL : LaysOut P rs W S D at_)
     (hH : LeafHolds P rs W S) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs) (hN : PortsNamed P rs)
     (ρ : String × ℤ → ℕ) (hρ : Ranked S ρ) :
-    ∀ (n : ℕ) (tid : String) (u : ℕ) (sc : Scope) (out : String) (l g lo hi : ℕ), ρ (tid, (u : ℤ)) = n →
+    ∀ (n : ℕ) (tid : String) (u : ℕ) (sc : Scope) (out : ℕ) (l g lo hi : ℕ), ρ (tid, (u : ℤ)) = n →
       UnitAt P rs tid u sc → OutLeaf P sc out l g lo hi → D.width (landOf P rs W S at_ g) ≤ hi - lo := by
   intro n
   induction n using Nat.strong_induction_on with
@@ -360,22 +365,22 @@ theorem outLeaf_land_le (hO : OwnRows P rs W)
       · refine Nat.le_trans ?_ (hH.2.2 r' l'' g lo'' hi'' sc out l lo hi hwr hrl hsc hout)
         by_cases hne : ∃ l' g' lo' hi', WriterLeaf P rs S r' l' g' lo' hi'
         · obtain ⟨l₀, g₀, lo₀, hi₀, h₀⟩ := hne
-          obtain ⟨wt, wu, sc', f, hw, h0, hu, _, hall⟩ := writerLeaf_data h₀
+          obtain ⟨wt, wu, o, sc', f, hw, h0, hu, hf, hb, hall⟩ := writerLeaf_data h₀
           obtain ⟨scr, hscr, i, hi₁, hp, _⟩ := id hrl
           have hd := rowLeaf_data hN hscr hi₁ hp hrl
           have hstep : ∀ l g lo hi, WriterLeaf P rs S r' l g lo hi →
               D.width (landOf P rs W S at_ g) ≤ hi - lo := by
             intro l₁ g₁ lo₁ hi₁ h₁
-            have hrank := hρ r' wt wu _ hw
+            have hrank := hρ r' wt wu _ _ hw
             have hwu : ((wu.toNat : ℕ) : ℤ) = wu := Int.toNat_of_nonneg h0
             refine ih (ρ (wt, ((wu.toNat : ℕ) : ℤ))) ?_ wt wu.toNat sc' _ l₁ g₁ lo₁ hi₁ rfl hu
               (hall l₁ g₁ lo₁ hi₁ h₁)
             rw [hwu, ← hn]
             exact hrank
           refine width_charge D (outRow (P.defs[sc'.d]!) f).2 lo'' hi'' (writerLand P rs W S at_ r')
-            (fun l' _ => writerLand_le hall hstep l') _ fun a ha => ?_
+            (fun l' _ => writerLand_le hf hb hall hstep l') _ fun a ha => ?_
           obtain ⟨l', g', lo', hi', hwl, hm1, hm2, hl'⟩ := lands_wired_row hO hSh hN hrl hwr (mem_landOf.1 ha)
-          have hod := outLeaf_data (hall l' g' lo' hi' hwl)
+          have hod := outLeaf_data hf hb (hall l' g' lo' hi' hwl)
           rcases hA r' l' g' lo' hi' hwl with ⟨l₂, g₂, lo₂, hi₂, hrl₂, hle1, hle2⟩ | hsec
           · -- the writer's leaf lies inside one leaf of the row, which is this one
             have hd₂ := rowLeaf_data hN hscr hi₁ hp hrl₂
@@ -426,7 +431,7 @@ theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
   · -- the row has a writer: its reads land where the writer's leaves land
     by_cases hne : ∃ l' g' lo' hi', WriterLeaf P rs S r l' g' lo' hi'
     · obtain ⟨l₀, g₀, lo₀, hi₀, h₀⟩ := hne
-      obtain ⟨wt, wu, sc', f, hw, h0, hu, hf, hall⟩ := writerLeaf_data h₀
+      obtain ⟨wt, wu, o, sc', f, hw, h0, hu, hf, hb, hall⟩ := writerLeaf_data h₀
       have hstep : ∀ l g lo hi, WriterLeaf P rs S r l g lo hi →
           D.width (landOf P rs W S at_ g) ≤ hi - lo := fun l₁ g₁ lo₁ hi₁ h₁ =>
         outLeaf_land_le hO hSh hA hL hH hR hU hN ρ hρ _ wt wu.toNat sc' _ l₁ g₁ lo₁ hi₁ rfl hu
@@ -434,12 +439,12 @@ theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
       have h1 : D.width (landing P rs W S at_ r) ≤
           bitAt (outRow (P.defs[sc'.d]!) f).2 (outRow (P.defs[sc'.d]!) f).2.size - 0 := by
         refine width_charge D (outRow (P.defs[sc'.d]!) f).2 0 _ (writerLand P rs W S at_ r)
-          (fun l' _ => writerLand_le hall hstep l') _ fun a ha => ?_
+          (fun l' _ => writerLand_le hf hb hall hstep l') _ fun a ha => ?_
         obtain ⟨l, o, lo, hi', hrl, hla⟩ := mem_landing.1 ha
         obtain ⟨l', g', lo', hi'', hwl, _, _, hl'⟩ := lands_wired_row hO hSh hN hrl hwr hla
-        have hod := outLeaf_data (hall l' g' lo' hi'' hwl)
+        have hod := outLeaf_data hf hb (hall l' g' lo' hi'' hwl)
         exact ⟨l', hod.1, Nat.zero_le _, bitAt_leaf_le _ l' hod.1, mem_writerLand.2 ⟨g', lo', hi'', hwl, hl'⟩⟩
-      have h2 := hF r wt wu _ sc sc' i f hw h0 hsc hu hi hp rfl hf
+      have h2 := hF r wt wu _ _ sc sc' i f hw h0 hsc hu hi hp rfl hf hb
       rw [Nat.sub_zero, bitAt_size] at h1
       exact h1.trans h2
     · refine width_none_le D _ _ fun a ha => ?_

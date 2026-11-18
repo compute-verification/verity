@@ -74,8 +74,8 @@ theorem reads_land (hO : OwnRows P rs W)
     (hslot : ∀ tid u sc, UnitAt P rs tid u sc → ∃ s, slot tid u = some s)
     {held : Row → Bool} {θ : Finset (Fin D.N)} (hNm : Names P rs W held at_ θ)
     (hheld : ∀ r, held r = true → S.writerOf r.tid r.unit r.port r.row = none) (inside : Row → Prop)
-    (hin : ∀ r, inside r → (S.writerOf r.tid r.unit r.port r.row).isSome ∧ ∀ wt wu out s s',
-      S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out) → slot r.tid r.unit = some s →
+    (hin : ∀ r, inside r → (S.writerOf r.tid r.unit r.port r.row).isSome ∧ ∀ wt wu out off s s',
+      S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out, off) → slot r.tid r.unit = some s →
       slot wt wu.toNat = some s' → s' = s)
     (u : Fin n) (a : Fin D.N) (ha : a ∈ D.into (U.gates u)) (hθ : a ∉ θ) :
     ∃ r, slot r.tid r.unit = some u.val ∧ ¬ inside r ∧ held r = false ∧ a ∈ landing P rs W S at_ r := by
@@ -129,9 +129,9 @@ theorem reads_land (hO : OwnRows P rs W)
       · -- a row inside the block: the read lands where a leaf of its writer's output row lands
         obtain ⟨hsome, hsame⟩ := hin r hins
         obtain ⟨l', g', lo', hi', hwl, -, -, hla'⟩ := lands_wired_row hO hSh hN hrl hsome hla
-        obtain ⟨wt, wu, out, sc', hw, h0, hu', hol⟩ := hwl
+        obtain ⟨wt, wu, o, out, sc', hw, h0, hu', hol⟩ := hwl
         obtain ⟨s', hs'⟩ := hslot wt wu.toNat sc' hu'
-        have hss : s' = u.val := hsame wt wu out _ _ hw hs hs'
+        have hss : s' = u.val := hsame wt wu o out _ _ hw hs hs'
         rw [hss] at hs'
         rcases hR wt wu.toNat sc' out l' g' lo' hi' hu' hol with ⟨h1, h2⟩ | ⟨r', l'', lo'', hi'', ht, hun, hrl'⟩
         · exfalso
@@ -139,7 +139,7 @@ theorem reads_land (hO : OwnRows P rs W)
           exact hnot (hmem a (hblock wt wu.toNat sc' hu' u.val hs' a (by omega) (by omega)))
         · have hlt : ρ (r'.tid, (r'.unit : ℤ)) < k := by
             rw [← hk, ht, hun, Int.toNat_of_nonneg h0]
-            exact hρ r wt wu out hw
+            exact hρ r wt wu o out hw
           exact ih _ hlt r' l'' g' lo'' hi'' rfl hrl' (by rw [ht, hun]; exact hs') hla'
       · by_cases hh : held r = true
         · -- a held row: the read lands on the leaf itself, which θ holds

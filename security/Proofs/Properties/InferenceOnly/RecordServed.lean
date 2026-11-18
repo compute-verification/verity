@@ -62,7 +62,7 @@ open InferenceOnlyVerifier.Record.SecurityProofs (form read_front finish_text fr
 leaves the Program gives each. -/
 theorem unwhole_of_read {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c) :
     Spot.RecordText.templatesOf c.f.P c.f.doc = .ok c.f.ts ∧
-      unwhole c.f.ts (c.f.ts.map (InferenceOnlyVerifier.Record.leavesOf c.f.P (passedOn c.f.P))) c.wired.wires = none := by
+      unwhole c.f.P c.f.ts (c.f.ts.map (InferenceOnlyVerifier.Record.leavesOf c.f.P (passedOn c.f.P))) c.wired = none := by
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   obtain ⟨rfl, -⟩ := finish_text hc
   refine ⟨front_text hf, ?_⟩
@@ -81,7 +81,7 @@ theorem ownOrEdgeRows_iff {P : Flock.Program.Prog} {rs : Array Flock.TemplateQue
     OwnOrEdgeRows P rs W S ↔ OwnRows P rs W := by
   refine ⟨fun h => ⟨fun r l g lo hi hl => ?_, fun r l lo hi r' l' lo' hi' g h1 h2 => h.2 r l lo hi r' l' lo' hi' g h1 h2
     (hS _ _ _ _) (hS _ _ _ _)⟩, ownOrEdgeRows_of_ownRows⟩
-  rcases h.1 r l g lo hi hl with hi' | ⟨l', lo', hi'', wt, wu, out, sc', hw, -⟩
+  rcases h.1 r l g lo hi hl with hi' | ⟨l', lo', hi'', wt, wu, o, out, sc', hw, -⟩
   · exact hi'
   · rw [hS] at hw
     cases hw
