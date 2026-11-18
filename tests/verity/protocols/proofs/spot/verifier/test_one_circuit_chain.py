@@ -64,13 +64,13 @@ def circuit() -> I.Circuit:
 
 @functools.cache
 def registered() -> dict[str, Any]:
-    """C's bytes (the wired Program's descriptor), theta, the partition with its proof blocks (the window's members,
+    """C's bytes (the wired Program's descriptor), theta, the registered partition (its proof blocks the window's members,
     `interface.partition_blocks`), and the window binding."""
     win = I.Window(circuit(), TI.RUN, TI.SAMPLING_DESIGN, 2)
     program, _query = circuit().program()
     c = b"".join(descriptor_chunks(program))
-    blocks = [[m.base, m.base + m.n] for m in win.window.members]
-    return {"window": win, "C": c, "theta": theta().doc(), "partition": {**win.window.partition, "blocks": blocks}}
+    assert win.window.partition["blocks"] == I.partition_blocks(circuit(), 2)
+    return {"window": win, "C": c, "theta": theta().doc(), "partition": win.window.partition}
 
 
 def committed(x=None) -> Any:
@@ -236,7 +236,7 @@ def prove_block(member: Any) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as d:
         d = Path(d)
         (d / "circuit.txt").write_text(text)
-        iset = SimpleNamespace(name=f"block-{member.base}", subcircuit=SimpleNamespace(id=meta["subcircuit"], inputs=[], outputs=[]))
+        iset = SimpleNamespace(name=f"block-{member.base}", subcircuit=SimpleNamespace(id=meta["unit"], inputs=[], outputs=[]))
         FC.write(text, iset, 0, n, d / f"inst-{n}.bin", d / f"pub-{n}.bin", indices=list(range(member.base, member.base + n)),
                  rows=rows, outs=outs)
         with socket.socket() as s:
