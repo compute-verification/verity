@@ -50,6 +50,7 @@ def test_the_lean_verifiers_runner_records_each_run_of_the_verifier_on_a_kept_pr
                              "--circuit", "key-circuit.txt", "--public", "key-pub-256.bin", "--program", "key-program-word.json",
                              "--zk", "--session", str(tree / "session")]]
     assert doc["schema"] == L.SCHEMA and doc["accepted"] is True and doc["host"] == LEAN_HOST
+    assert doc["checked_by"] == "lean"
     assert doc["block"] == {"word": RMSNORM, "definition": "Staged_v2{N=1}", "k_log": 27, "blocks": 256, "full": 256}
     assert doc["proof"] == {"files": [{"name": "circuit.rep0.bin", "bytes": 300}, {"name": "circuit.rep1.bin", "bytes": 200}],
                             "bytes": 500, "record_bytes": 2}
