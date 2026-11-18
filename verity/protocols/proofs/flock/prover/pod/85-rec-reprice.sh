@@ -63,7 +63,7 @@
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
 # env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (GemmCoordinate_v2's contraction)  N=2048 (instances: the
 #      population program's every unit, rec_reprice.py)
-#      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
+#      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM (GPU=1: the target's compute capability)  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
 #      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage)  INNER_LOOPBACK=1 (inner)
@@ -125,6 +125,7 @@ unset CARGO_TARGET_DIR
 # redistributable CUDA_REDIST archives (sha256-checked) are unpacked once under $FW, and their runtime is the prover's
 CUDA_REDIST=${CUDA_REDIST:-13.3.1}; export CUDA_TK=${CUDA_TK:-$FW/cuda-$CUDA_REDIST}
 GPU=${GPU:-1}; GPUF=; [ $GPU = 1 ] && GPUF=--gpu
+[ $GPU = 0 ] || [ -n "${SM:-}" ] || { echo "REFUSED: GPU=1 builds for SM, the compute capability of the target (120 for sm_120): give it"; exit 2; }
 if [ $GPU = 1 ] && [ ! -x $CUDA_TK/bin/nvcc ]; then
   exec 7>$FW/cuda.lock; flock 7
   [ -x $CUDA_TK/bin/nvcc ] || python3 - $CUDA_REDIST $CUDA_TK > $O/cuda-redist.log 2>&1 <<'EOF' || { cat $O/cuda-redist.log; exit 1; }
@@ -157,7 +158,7 @@ EOF
   exec 7>&-
 fi
 export PATH=$CUDA_TK/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
-SM=${SM:-120}; N=${N:-2048}; K=${K:-4096}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS))
+SM=${SM:-}; N=${N:-2048}; K=${K:-4096}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS))
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
 NC=$(echo $CPUS | tr ',' '\n' | wc -l); PC=${PCPUS:-16}; [ $PC -ge $NC ] && PC=$(( NC / 2 ))
 PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-)

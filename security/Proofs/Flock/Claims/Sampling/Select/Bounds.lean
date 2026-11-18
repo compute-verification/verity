@@ -49,7 +49,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The sample `sampleUnits` makes misses a set of units no more often than its sampling design's `P_a`
 
 `sampleUnits` runs its sampling design's stages on the coins in order (`sampleUnits_seq`), and each stage is bounded by its sampler's
-missProb on a stream of any length (`SamplingDesign.subset_exec_escape_le`, `SamplingDesign.bernoulli_exec_escape_le`), so the stopping-time
+missProb on a stream of any length (`SamplingDesign.subset_exec_missProb_le`, `SamplingDesign.bernoulli_exec_missProb_le`), so the stopping-time
 bound (`seqMiss_le`) multiplies them.
 
 * `subset_none_of_lt`: `subset k n` samples nothing when `k > n`, so such a stratum's stage misses with probability `0`.
@@ -109,7 +109,7 @@ theorem subset_stage_bounded (n k : ℕ) (hk : k ≤ n) (N : ℕ) (hN : 0 < N) (
     Stage.Bounded ⟨N, Flock.Draw.subset k n, fun D => ∀ u ∈ U, u ∉ D⟩ ((Verity.SamplingDesign.subset n k hk).missProb (finOf n U)) := by
   refine ⟨hN, fun a b D h => SamplingDesign.subset_append k n a b D h, fun L => ?_⟩
   refine le_trans (prCoin_mono fun f ⟨D, hD, hm⟩ => ⟨D, hD, fun u hu => hm u.val ?_⟩)
-    (SamplingDesign.subset_exec_escape_le n k L hk (finOf n U))
+    (SamplingDesign.subset_exec_missProb_le n k L hk (finOf n U))
   simpa [finOf] using hu
 
 /-- A Bernoulli stage missing `U`, bounded by `bernoulli`'s missProb. -/
@@ -118,7 +118,7 @@ theorem bernoulli_stage_bounded (n num den : ℕ) [NeZero den] (h : num ≤ den)
       ((Verity.SamplingDesign.bernoulli n num den).missProb (finOf n U)) := by
   refine ⟨hN, fun a b D h => SamplingDesign.bernoulli_append num den n a b D h, fun L => ?_⟩
   refine le_trans (prCoin_mono fun f ⟨D, hD, hm⟩ => ⟨D, hD, fun u hu => hm u.val ?_⟩)
-    (SamplingDesign.bernoulli_exec_escape_le n num den L h (finOf n U))
+    (SamplingDesign.bernoulli_exec_missProb_le n num den L h (finOf n U))
   simpa [finOf] using hu
 
 theorem escape_ne_top {n : ℕ} (L : SamplingDesign n) (B : Finset (Fin n)) : L.missProb B ≠ ⊤ :=
@@ -149,7 +149,7 @@ theorem one_bound (n : ℕ) (U : Finset ℕ) (hU : U ⊆ range n) (L : ℕ) :
     · obtain ⟨units, read, hd, hm⟩ := hf
       refine seqMiss_imp _ _ ?_ _ _ (sampleUnits_seq _ n _ units read hd)
       exact .cons ⟨rfl, rfl, fun D hD u hu huD => hm u hu (hD u huD)⟩ .nil
-    · rw [Verity.SamplingDesign.subset_escape, card_finOf hU, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
+    · rw [Verity.SamplingDesign.subset_missProb, card_finOf hU, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
   · have : NeZero den := ⟨by omega⟩
     have hle := seqMiss_le [(⟨2 * n * Flock.Draw.width den + 64, Flock.Draw.bernoulli num den n,
       fun D => ∀ u ∈ U, u ∉ D⟩, (Verity.SamplingDesign.bernoulli n num den).missProb (finOf n U))] (fun p hp => by
@@ -160,7 +160,7 @@ theorem one_bound (n : ℕ) (U : Finset ℕ) (hU : U ⊆ range n) (L : ℕ) :
     · obtain ⟨units, read, hd, hm⟩ := hf
       refine seqMiss_imp _ _ ?_ _ _ (sampleUnits_seq _ n _ units read hd)
       exact .cons ⟨rfl, rfl, fun D hD u hu huD => hm u hu (hD u huD)⟩ .nil
-    · rw [SamplingDesign.bernoulli_escape h, card_finOf hU, ENNReal.toReal_pow, bernFactor_zero num den]
+    · rw [SamplingDesign.bernoulli_missProb h, card_finOf hU, ENNReal.toReal_pow, bernFactor_zero num den]
 
 /-- A stratum's units, in order: `Stratum.unit` over its ranges. -/
 theorem stratum_unit (s : Flock.Draw.Stratum) (j : ℕ) : s.unit j = (expand s.units.toList).getD j 0 := by
@@ -214,7 +214,7 @@ theorem stratumQ_toReal (W : Finset ℕ) (s : Flock.Draw.Stratum) (o : ℕ) :
     (stratumQ W s o).toReal = ((s.size - (window o s.size W).card).choose s.k : ℝ) / (s.size.choose s.k : ℝ) := by
   unfold stratumQ
   split
-  · rw [Verity.SamplingDesign.subset_escape, card_finOf (window_subset _ _ _), ENNReal.toReal_div, ENNReal.toReal_natCast,
+  · rw [Verity.SamplingDesign.subset_missProb, card_finOf (window_subset _ _ _), ENNReal.toReal_div, ENNReal.toReal_natCast,
       ENNReal.toReal_natCast]
   · rw [Nat.choose_eq_zero_of_lt (n := s.size) (k := s.k) (by omega), Nat.cast_zero, div_zero, ENNReal.toReal_zero]
 

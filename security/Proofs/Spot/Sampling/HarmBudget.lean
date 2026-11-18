@@ -60,7 +60,7 @@ def Design (L : SamplingDesign n) (π : Fin n → ℝ) : Prop :=
   ∀ B : Finset (Fin n), L.missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, π u))
 
 /-- The design condition pays for `exp(λ h(B))` when `λ h ≤ π`. -/
-theorem Design.escape_mul_le {L : SamplingDesign n} {π h : Fin n → ℝ} {lam : ℝ} (hL : L.Design π)
+theorem Design.missProb_mul_le {L : SamplingDesign n} {π h : Fin n → ℝ} {lam : ℝ} (hL : L.Design π)
     (hlam : ∀ u, lam * h u ≤ π u) (B : Finset (Fin n)) :
     L.missProb B * ENNReal.ofReal (Real.exp (lam * ∑ u ∈ B, h u)) ≤ 1 := by
   have hsum : lam * ∑ u ∈ B, h u ≤ ∑ u ∈ B, π u := by
@@ -93,7 +93,7 @@ theorem bernoulli_design {num den : ℕ} [NeZero den] (h : num ≤ den) :
   have hden : 0 < den := Nat.pos_of_ne_zero (NeZero.ne den)
   show (Verity.SamplingDesign.bernoulli n num den).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (num : ℝ) / den))
   calc (Verity.SamplingDesign.bernoulli n num den).missProb B = (((den - num : ℕ) : ℝ≥0∞) / den) ^ B.card := by
-        rw [bernoulli_escape h, bernFactor_zero_div]
+        rw [bernoulli_missProb h, bernFactor_zero_div]
     _ ≤ ENNReal.ofReal (Real.exp (-((num : ℝ) / den))) ^ B.card :=
         pow_le_pow_left₀ zero_le (natFrac_le_exp h hden) _
     _ = ENNReal.ofReal (Real.exp (-∑ u ∈ B, (num : ℝ) / den)) := by
@@ -104,7 +104,7 @@ theorem bernoulli_design {num den : ℕ} [NeZero den] (h : num ≤ den) :
 theorem subset_design {k : ℕ} (hk : k ≤ n) (hn : 0 < n) : Design (Verity.SamplingDesign.subset n k hk) fun _ => (k : ℝ) / n := by
   intro B
   show (Verity.SamplingDesign.subset n k hk).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (k : ℝ) / n))
-  calc (Verity.SamplingDesign.subset n k hk).missProb B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := Verity.SamplingDesign.subset_escape hk B
+  calc (Verity.SamplingDesign.subset n k hk).missProb B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := Verity.SamplingDesign.subset_missProb hk B
     _ ≤ (((n - B.card : ℕ) : ℝ≥0∞) / (n : ℝ≥0∞)) ^ k := choose_div_le_pow' hk hn
     _ ≤ ENNReal.ofReal (Real.exp (-((B.card : ℝ) / n))) ^ k :=
         pow_le_pow_left₀ zero_le (natFrac_le_exp (by simpa using Finset.card_le_univ B) hn) _
@@ -140,7 +140,7 @@ theorem stratified_design {m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (
     rw [← Finset.sum_fiberwise' B σ (fun s => (k s : ℝ) / (stratum σ s).card)]
     refine Finset.sum_congr rfl fun s _ => ?_
     rw [Finset.sum_const, nsmul_eq_mul]
-  rw [stratified_escape, hsum, ← Finset.sum_neg_distrib, Real.exp_sum, ENNReal.ofReal_prod_of_nonneg]
+  rw [stratified_missProb, hsum, ← Finset.sum_neg_distrib, Real.exp_sum, ENNReal.ofReal_prod_of_nonneg]
   · exact Finset.prod_le_prod fun s _ => hfac s
   · exact fun s _ => (Real.exp_pos _).le
 
@@ -155,7 +155,7 @@ theorem work_design {m : ℕ} (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : 
     exact Finset.sum_congr rfl fun u _ => mul_div_assoc _ _ _
   calc (work σ w f K).missProb B
       ≤ (((totalWork σ w - workOf σ w B : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K :=
-        work_escape_le σ w f K hf hW B
+        work_missProb_le σ w f K hf hW B
     _ ≤ ENNReal.ofReal (Real.exp (-((workOf σ w B : ℝ) / totalWork σ w))) ^ K :=
         pow_le_pow_left₀ zero_le (natFrac_le_exp hB hW) _
     _ = _ := by rw [← ENNReal.ofReal_pow (Real.exp_pos _).le, ← Real.exp_nat_mul, hsum, mul_neg]
@@ -190,7 +190,7 @@ theorem bernoulli_design_exact {num den : ℕ} [NeZero den] (h : num < den) :
   intro B
   show (Verity.SamplingDesign.bernoulli n num den).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, bernRate num den))
   refine le_of_eq ?_
-  rw [bernoulli_escape h.le, Finset.sum_const, nsmul_eq_mul, ofReal_exp_bernRate h]
+  rw [bernoulli_missProb h.le, Finset.sum_const, nsmul_eq_mul, ofReal_exp_bernRate h]
 
 end SamplingDesign
 
@@ -347,7 +347,7 @@ theorem prEv_le_exp {π h : Fin n → ℝ} {lam : ℝ} {err : ℕ → ℝ≥0∞
         _ ≤ ENNReal.ofReal (Real.exp (lam * (a - H))) + err N + ∑ m ∈ range N, err m := by
             refine add_le_add (add_le_add ?_ hDd) le_rfl
             rw [mul_left_comm]
-            exact mul_le_of_le_one_right' (SamplingDesign.Design.escape_mul_le hLd hlam B)
+            exact mul_le_of_le_one_right' (SamplingDesign.Design.missProb_mul_le hLd hlam B)
         _ = ENNReal.ofReal (Real.exp (lam * (a - H))) + (∑ m ∈ range N, err m + err N) := by
             rw [add_assoc, add_comm (err N)]
 
@@ -464,7 +464,7 @@ theorem harm_count_tight {num den : ℕ} [NeZero den] (h : num ≤ den) (B : Fin
     (oneShot (Verity.SamplingDesign.bernoulli n num den) B).prEv (fun _ => 1)
         (fun acc x => acc = true ∧ (B.card : ℝ) ≤ x) 0 =
       SamplingDesign.bernFactor num den 0 ^ B.card := by
-  rw [oneShot_prEv, SamplingDesign.bernoulli_escape h]
+  rw [oneShot_prEv, SamplingDesign.bernoulli_missProb h]
 
 end Adaptive
 
