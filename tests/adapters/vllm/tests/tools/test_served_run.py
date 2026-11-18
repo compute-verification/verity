@@ -24,6 +24,7 @@ ADDRESS = "192.0.2.21"
 ROW_OF_CARDS = {"CARD": "5", "CORES": "0-11", "END": "2026-11-17T03:00Z"}
 PLACEMENT = tomllib.loads((HERE / "placement.toml").read_text())
 NODE_A = PLACEMENT["node"]["vy-spot-glm53"]
+H100 = PLACEMENT["node"]["vy-h100-1"]
 GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com"]
 TAP = Path("adapters/vllm/verity_vllm/ops/pod_norm_tap.sh")
 
@@ -44,7 +45,7 @@ def make_tree(tmp_path: Path, tied_build: bool = True) -> Path:
     rows = tree / "adapters" / "vllm" / "workloads"
     rows.mkdir(parents=True)
     sums = ""
-    for row in (PLACEMENT["row"], PLACEMENT["tied_row"]):
+    for row in (PLACEMENT["row"], PLACEMENT["tied_row"], *(r for n in PLACEMENT["node"].values() for r in n.get("rows", {}).values())):
         workload = json.dumps({"model": f"some/{row[:14]}", "case": "SERVED", "engine": {"revision": "ab12"}}).encode()
         (rows / f"{row}.json").write_bytes(workload)
         sums += f"{hashlib.sha256(workload).hexdigest()}  {row}.json\n"
@@ -63,7 +64,7 @@ def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
     if not tree.exists():
         make_tree(tmp_path)
     held = {k: v for k, v in os.environ.items()
-            if k not in {"VY_CHALLENGER_1_HOST", "HANDOFF", "VERITY_HOLD_PLACEMENT", "COMPOSE_OFF_NODE", "PRODUCT", *ROW_OF_CARDS}}
+            if k not in {"VY_CHALLENGER_1_HOST", "HANDOFF", "NODE", "VERITY_HOLD_PLACEMENT", "COMPOSE_OFF_NODE", "PRODUCT", *ROW_OF_CARDS}}
     return subprocess.run(["bash", str(tree / SERVED_RUN / "run.sh"), *args], capture_output=True, text=True, check=False,
                           env={**held, "HOME": str(tmp_path), **env})
 
@@ -238,6 +239,81 @@ def test_every_run_carries_its_nodes_name_in_the_cluster_as_pp_peer_and_a_window
     words, env = shlex.split(got.stdout), env_of(got)
     assert env["PP_PEER"] == words[words.index("--on") + 1]
     assert env.get("H1_PEER") == (env["PP_PEER"] if args[0] == "window" else None)
+
+
+NODE_A_RUNS = [("window",), ("window", "--development"), ("window", "--tie"), ("window", "--tie", "--development"), ("setup",),
+               ("setup", "--tie"), ("copy",), ("audit",), ("device-pin",)]
+
+
+def test_node_as_dry_runs_are_those_of_a_placement_that_names_only_node_a(tmp_path):
+    """`${NODE:-vy-spot-glm53}` and the other nodes' sections change no byte of a run node A takes."""
+    tree = make_tree(tmp_path)
+    at = {**ROW_OF_CARDS, "SERVED_RUN": "r-window", "AUDIT_NODE": "vy-nebius-cpu-16"}
+    placed = [run(tmp_path, *args, "--dry-run", **at) for args in NODE_A_RUNS]
+    assert all(g.returncode == 0 for g in placed), [g.stderr for g in placed]
+    f = tree / SERVED_RUN / "placement.toml"
+    text = f.read_text().replace('"${NODE:-vy-spot-glm53}"', '"vy-spot-glm53"')
+    f.write_text(re.sub(r"\[node\.vy-h100-1[^\n]*\]\n(?:(?!\[node\.vy-nebius)[^\n]*\n)*", "", text))
+    assert "vy-h100-1" not in f.read_text() and "${NODE" not in f.read_text()
+    def text(got):
+        return re.sub(r"\S*/served-run-\w+/main\.txt", "MAIN", got.stdout)
+    assert [text(g) for g in placed] == [text(run(tmp_path, *args, "--dry-run", **at)) for args in NODE_A_RUNS]
+
+
+@pytest.mark.parametrize("args", [("setup", "--tie"), ("device-pin",)])
+def test_a_run_node_names_goes_there_with_its_nodes_paths(tmp_path, args):
+    got = run(tmp_path, *args, "--dry-run", "--env", "NODE=vy-h100-1", **ROW_OF_CARDS)
+    assert got.returncode == 0, got.stderr
+    words, env = shlex.split(got.stdout), env_of(got)
+    assert words[words.index("--on") + 1] == "vy-h100-1" == env["PP_PEER"]
+    assert {k: env[k] for k in ("VENV", "CUDA_HOME", "LLAMA_ROOT")} == {k: H100[k] for k in ("VENV", "CUDA_HOME", "LLAMA_ROOT")}
+    assert words[words.index("--") + 1:] == ["taskset", "-c", "0-11", "bash", f"adapters/vllm/tools/served_run/{args[0]}.sh"]
+    assert "tied_row" not in env and "rows" not in env
+
+
+def test_the_h100_node_sets_up_its_own_tied_row_and_serves_none_before_its_build(tmp_path):
+    row = H100["rows"]["tied_row"]
+    assert "__h100__" in row and row.replace("__h100__", "__h200__") == PLACEMENT["tied_row"]
+    got = run(tmp_path, "setup", "--tie", "--dry-run", "--env", "NODE=vy-h100-1", **ROW_OF_CARDS)
+    assert env_of(got)["ROW_ID"] == row and f"adapters/vllm/workloads/{row}.json" in flags(got, "--send")
+    got = run(tmp_path, "window", "--tie", "--dry-run", "--env", "NODE=vy-h100-1", **ROW_OF_CARDS)
+    assert got.returncode != 0 and f"builds name no traced Build of {row} on vy-h100-1" in got.stderr
+
+
+SETUP_PIN = re.search(r"\npin=\$\(python3 - [^\n]*<<'EOF'\n(.*?)\nEOF\n", (HERE / "setup.sh").read_text(), re.S)[1]
+VERDICTS = HERE.parents[3] / "benchmarks" / "one_stage" / "served_verdicts.sh"
+
+
+def build_of_record(row: str) -> subprocess.CompletedProcess:
+    """What `served_verdicts.sh`'s tied form sets BUILD_OF_RECORD to for `row`, given none."""
+    case = re.search(r"\n  case \$\{ROW_ID:-\$\{ROW##\*/\}\} in\n.*?\n  esac\n", VERDICTS.read_text(), re.S)[0]
+    return subprocess.run(["bash", "-c", case + 'echo "$BUILD_OF_RECORD"'], capture_output=True, text=True, check=False,
+                          env={"PATH": os.environ["PATH"], "ROW_ID": row})
+
+
+def setup_pin(tmp_path: Path, row: str, program: str, manifest: str) -> subprocess.CompletedProcess:
+    (got := tmp_path / "predicted.json").write_text(json.dumps({"program_digest": program, "manifest_digest": manifest}))
+    return subprocess.run([sys.executable, "-c", SETUP_PIN, str(HERE.parents[3]), row, "unsloth/Llama-3.2-1B", str(got)],
+                          capture_output=True, text=True, check=False)
+
+
+def test_setup_holds_the_h200_tied_rows_predicted_build_to_the_verdicts_build_of_record_for_its_row(tmp_path):
+    row = PLACEMENT["tied_row"]
+    got = build_of_record(row)
+    assert got.returncode == 0, got.stderr
+    program, manifest = got.stdout.strip().split(":")
+    assert len(program) == len(manifest) == 128
+    assert setup_pin(tmp_path, row, program, manifest).returncode == 0
+    refused = setup_pin(tmp_path, row, program, "0" * 128)
+    assert refused.returncode == 1 and f"are not served_verdicts.sh's BUILD_OF_RECORD, {program}:{manifest}" in refused.stdout
+
+
+def test_a_tied_row_with_no_build_of_record_is_set_up_with_none(tmp_path):
+    row = H100["rows"]["tied_row"]
+    got = build_of_record(row)
+    assert (got.returncode, got.stdout) == (0, "\n")
+    told = setup_pin(tmp_path, row, "a" * 128, "b" * 128)
+    assert told.returncode == 0 and f"{row} has no served_verdicts.sh's BUILD_OF_RECORD: its predicted {'a' * 128}:{'b' * 128}" in told.stdout
 
 
 def test_no_file_of_the_served_run_names_the_retired_node():
@@ -421,7 +497,7 @@ def test_the_bindings_bind_every_party_of_the_demo_by_the_env_files_names(tmp_pa
 
 
 @pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "workload_env.sh", "copy.sh", "audit.sh", "handoff.sh",
-                                    "pin_card.sh"])
+                                    "device-pin.sh", "pin_card.sh"])
 def test_the_runs_scripts_parse(script):
     assert subprocess.run(["bash", "-n", str(HERE / script)], capture_output=True, check=False).returncode == 0
 

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from research import asker, auto, cores, remote
+from research import asker, auto, cli, cores, remote
 from research.cli import main
 from research.pods.nebius import slot_only
 
@@ -867,7 +867,12 @@ def test_on_auto_spills_to_the_pool_as_a_pool_run_with_the_kinds_time(tmp_path, 
     assert remote.flag_value(kw["harness_args"], "--cwd") == "source"
     err = capsys.readouterr().err
     assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in err and "a slot is free there now" in err
+    limit = "research run --on auto: it is stopped 60 min after it starts, the default time limit: `research run --timeout 2h` (any length) raises it"
+    assert limit in err.splitlines(), "a run under the default time limit is told the flag that raises it"
     assert kw["env"]["CHECK_RUN_MEM_GB"] == "16", "the slot reserves the larger of its mem= and the sized run's"
+    assert main([*runs, "--timeout", "2h", "--", "pytest", "-q"]) == 3
+    assert launched[-1]["command"][launched[-1]["command"].index("--run-max") + 1] == "7200"
+    assert "default time limit" not in capsys.readouterr().err, "a run that names its time is not told of the default"
 
 
 def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, monkeypatch, capsys):
@@ -888,7 +893,7 @@ def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, mon
         printed = capsys.readouterr().err.splitlines()
         assert all(f"research run --on auto: {line}" in printed for line in launched[-1]["auto"]["said"]), "the words it printed"
     free, last, queued = (kw["auto"] for kw in launched)
-    assert (free["machine"], free["pool"]) == (CPU1, "research") and len(free["said"]) == 2
+    assert (free["machine"], free["pool"]) == (CPU1, "research") and len(free["said"]) == 3
     assert free["said"][0].startswith(f"spilled to {CPU1}'s research pool, from ")
     assert f"({N2}'s share: 0 of 48 CPUs free, 2 claim(s), 56 waiting; " in free["said"][0], "what the queue's node answered"
     assert f"; {CPU5}'s research pool: slots r0 held; 2 waiting: " in free["said"][0], "and each pool"
@@ -903,6 +908,7 @@ def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, mon
     assert last["said"][1].startswith(f"warning: it isn't expected to start within 10 min: no estimate of when it starts on {CPU1}'s")
     assert (queued["machine"], queued["pool"]) == (N2, None) and queued["said"][0].startswith(f"queued onto {N2} as agent-test, from ")
     assert queued["said"][0].endswith(f"; {CPU1}'s research pool: slots r0 held; 9 waiting: no pool slot is free, and it starts on {N2} now)")
+    assert queued["said"][-1].startswith("it is stopped 60 min after it starts, the default time limit: "), "the queue's time limit is said too"
     assert [kw["machine_name"] for kw in launched] == [CPU1, CPU1, N2]
 
 
@@ -1402,7 +1408,7 @@ def test_on_auto_says_when_the_run_should_start_and_warns_or_refuses_a_late_one(
         read["docs"] = lines[line]
         rc = main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", *flags, "--", "pytest", "-q"])
         err = capsys.readouterr().err.splitlines()
-        return rc, [e[len(head):] for e in err if e.startswith(head) and not e.startswith(head + "spilled to ")]
+        return rc, [e[len(head):] for e in err if e.startswith(head) and not e.startswith((head + "spilled to ", head + "it is stopped "))]
 
     late = (f"it isn't expected to start within 10 min: it should start in about 40 min on {at}: 7 waiting ahead (the oldest "
             f"for 29 min) for the 5 slots that run there")
@@ -1511,13 +1517,14 @@ def test_a_launch_the_first_choice_refuses_as_one_that_can_start_no_run_lands_on
     assert launched[0]["run_id"] != launched[1]["run_id"] and refused == started, "the same job, each run with its own pair"
     why = refusal[1]
     said = [line for line in capsys.readouterr().err.splitlines() if "--on auto: " in line or " launched on " in line]
+    limit = "research run --on auto: it is stopped 60 min after it starts, the default time limit: `research run --timeout 2h`"
     assert [line.split(", from ")[0].split(" (")[0] for line in said] == [
         f"research run --on auto: spilled to {CPU1}'s research pool", f"research run --on auto: it starts now on {CPU1}'s research pool",
-        f"research run --on auto: passed over {CPU1}, which can start no run",
+        limit, f"research run --on auto: passed over {CPU1}, which can start no run",
         f"research run --on auto: spilled to {CPU5}'s research pool", f"research run --on auto: it starts now on {CPU5}'s research pool",
-        f"research: run {launched[1]['run_id']} launched on {CPU5}"]
-    assert said[2] == f"research run --on auto: passed over {CPU1}, which can start no run ({why}); placing the job again without it"
-    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said[3], "the second placement says why the first is out"
+        limit, f"research: run {launched[1]['run_id']} launched on {CPU5}"]
+    assert said[3] == f"research run --on auto: passed over {CPU1}, which can start no run ({why}); placing the job again without it"
+    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said[4], "the second placement says why the first is out"
     assert docs[CPU1] == pool(slot("r0"), slot("r1")), "what was read is not rewritten"
 
 
@@ -1781,3 +1788,55 @@ def test_a_description_that_does_not_parse_gives_no_share_and_says_so(tmp_path, 
     assert auto.share_cpus(tmp_path) is None
     assert f"research run: {tmp_path / auto.DESCRIPTION} unread, so verity has no share on vy-nebius-2 (TOMLDecodeError" in \
         capsys.readouterr().err
+
+
+def _lean_tree(tmp_path: Path) -> Path:
+    """A tree with the Lean tool's figures and check.py, a package `security` pinning Mathlib and one pinning nothing."""
+    repo = _auto_repo(tmp_path)
+    for f in (auto.LEAN_RESERVE_PY, auto.LEAN_RESERVE_PY.with_suffix(".json"), auto.LEAN_CHECK_PY):
+        (repo / f).parent.mkdir(parents=True, exist_ok=True)
+        (repo / f).write_bytes((REPO / f).read_bytes())
+    for pkg, deps in (("security", ["batteries", "mathlib"]), ("verity/circuits/base", [])):
+        (repo / pkg).mkdir(parents=True)
+        (repo / pkg / "lean-audit.json").write_text("{}")
+        (repo / pkg / "lakefile.toml").write_text(f'name = "{pkg.rsplit("/", 1)[-1]}"\n')
+        (repo / pkg / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": d} for d in deps]}))
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    return repo
+
+
+def _reserve():
+    spec = importlib.util.spec_from_file_location("test_lean_reserve", REPO / auto.LEAN_RESERVE_PY)
+    reserve = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reserve)
+    return reserve
+
+
+RECORDS = ["python3", "tools/verity/lean/lean_changed.py", "--records"]
+
+
+def test_a_records_run_below_its_packages_floor_is_refused_at_launch_with_the_nodes_line(tmp_path, monkeypatch, capsys):
+    """A records run below its floor waited its turn for a Lean slot and was then refused in seconds; the launch refuses it
+    instead, naming the run the node would have named (`check.py`'s BELOW_FLOOR_RUN at the package's ask)."""
+    launched = []
+    monkeypatch.setattr(cli, "_auto_launch", lambda ns, harness, command, clones: launched.append((command, ns.mem_gb)) or 0)
+    repo, R = _lean_tree(tmp_path), _reserve()
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--source", str(repo)]
+    for mem in ([], ["--mem-gb", "40"]):
+        assert main([*runs, *mem, "--", *RECORDS, "security", "--update"]) == 2
+        err = capsys.readouterr().err
+        assert f"research run --on auto: refused: the build of security needs at least {R.ONE_JOB_GIB} GiB" in err
+        assert (f"\n  research run --on auto --mem-gb {R.gb(R.BUILD_HEAVY_GIB)} --max-min 120 --project verity --source . "
+                "--cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records security "
+                "--update\n") in err
+    floor_gb = str(math.ceil(R.ONE_JOB_GIB * 2**30 / 1e9))
+    assert main([*runs, "--mem-gb", floor_gb, "--", *RECORDS, "security"]) == 0
+    assert main([*runs, "--env", "VERITY_LEAN_MEM_FLOOR_GIB=0", "--", *RECORDS, "security"]) == 0
+    assert main([*runs, "--", "bash", "-lc", " ".join([*RECORDS, "Security"])]) == 0, "a name matching no package is the node's"
+    assert main([*runs, "--", *RECORDS, "base"]) == 0, "a package pinning neither Mathlib nor ArkLib has no floor"
+    assert main([*runs, "--env", "VERITY_LEAN_MEM_FLOOR_GIB=lots", "--", *RECORDS, "security"]) == 2
+    assert "VERITY_LEAN_MEM_FLOOR_GIB='lots' is no number of GiB" in capsys.readouterr().err
+    for light in (["verity", "lean", "try", "security/Definitions/Core.lean"],
+                  ["python3", "tools/verity/lean/lean_changed.py", "--try", "security/Definitions/Core.lean"]):
+        assert main([*runs, "--", *light]) == 0, "an edit loop's node refuses nothing for memory"
+    assert len(launched) == 6 and launched[0] == ([*RECORDS, "security"], float(floor_gb))

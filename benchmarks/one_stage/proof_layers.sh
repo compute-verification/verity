@@ -11,8 +11,10 @@
 # from the tree's root. Settings:
 #   A5_CARD        the H200's index, as nvidia-smi numbers the cards (gpu-lease's --on)
 #   A5_CORES       the CPUs every step runs on (taskset -c, gpu-lease's --cores), e.g. 40-59
-#   WORK           a new or empty directory for the bootstrap's environment, the partition files and the three runs,
-#                  removed when the script ends, success or failure, after their records are copied to --out
+#   WORK           a new or empty directory for the partition files and the three runs, removed when the script ends,
+#                  success or failure, after their records are copied to --out; the bootstrap's environment is kept on
+#                  the node by kept_bootstrap.sh, built before the card's lease where it needs no card, and reused while
+#                  its key matches
 #   GPU_LEASE_WHO  who every lease is recorded for, where gpu-lease is installed
 #   A5_STEPS       optional, the prover's batch: the request steps [LO, HI) whose proof blocks the window holds (the
 #                  partition file's scope.steps; unset, the file's own), so the proof blocks each layer's Flock statement
@@ -107,7 +109,7 @@ run() {  # SETTINGS NAME: one run of a5_llama1b_h200.sh on NAME's partition file
 }
 STEPS=(bootstrap partition-flock partition-zk partition-sampling flock zk sampling layers)
 declare -A CMD=(
-  [bootstrap]="cd adapters/vllm && $ON bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B_INT8 --out $(q "$WORK/bootstrap")"
+  [bootstrap]="taskset -c $(q "$A5_CORES") bash benchmarks/one_stage/kept_bootstrap.sh $A5_CARD LLAMA32_1B_INT8 $(q "$WORK/bootstrap") $ON"
   [partition-flock]=$(part stratified-rate:880/880 flock)
   [partition-zk]=$(part $ZK_DESIGN zk)
   [partition-sampling]=$(part subset:256 sampling)
@@ -171,5 +173,9 @@ for n in "${STEPS[@]}"; do
   sample
   log "STEP $i/${#STEPS[@]} $n: rc $rc in $((SECONDS - t0)) s; peak memory: this job's $(peak 1), the machine's in use $(peak 2); largest process ${rss:-not measured}; WORK's peak $(peak 3), $(du -sh "$WORK" | cut -f1) after"
   [ "$rc" = 0 ] || { log "stopped at $n (rc $rc): its output is $RESULTS/$n.log"; exit "$rc"; }
+  if [ "$n" = bootstrap ]; then
+    boot=$(tail -1 "$RESULTS/$n.log"); exec 9< "$boot.lock" && flock -s 9 || { log "can't lock $boot.lock"; exit 3; }
+    export VENV=$boot/venv312 HF_HOME=$boot/hf A5_TAPS=$boot/cp
+  fi
 done
 log "all ${#STEPS[@]} steps passed: the table is $RESULTS/proof-layers.txt"

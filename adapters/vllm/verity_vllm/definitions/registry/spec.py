@@ -7,6 +7,8 @@ and the *state transition* of one speculative step as represented computations, 
   verdicts (prefix of agreements), the accepted length, and the `K+1` appended-token slots with dead slots
   holding `-1`.  Liveness of slot `j` is *derived* from the verdicts (`live[0] = 1`, `live[j] = verdict[j-1]`):
   the bounded-slot answer to "a variable number of live positions" in a static-shape circuit.
+* `GreedyAccept_v1{K, V}`: `Accept_v1` from the `K+1` verify rows' logits, each row's argmax by `TokenSelect_v4`: the
+  greedy accept of a step that drafts by the model's own MTP module, under the premises its docstring states.
 * `Advance_v1{K}`: the per-request state transition — next committed length, per-slot KV liveness (which of
   the `K+1` slot rows are committed, which discarded), and their counts.
 * `VerifyBranch_v1{C, LP, K}`: the target model's half of one step as a standalone program: prefill of the
@@ -53,6 +55,7 @@ from verity_vllm.definitions.registry.b1 import (
     scale_log2_bits,
     weights_type,
 )
+from verity_vllm.definitions.registry.dead_free import TokenSelectV4
 from verity_vllm.definitions.registry.prims import A16, BF16, F32, I32
 
 # Qwen/Qwen2.5-0.5B as the draft model: the same registered functions as B1 with a different static configuration.
@@ -113,6 +116,27 @@ def Accept(B, S, cand, argmax):
         live = B.call(P.I32Eq, verdict[j - 1], one)
         appended.append(B.call(P.SelectI32, live, argmax[j], minus_one))
     return tuple_of(array_of(verdict), acc, array_of(appended))
+
+
+@composite("GreedyAccept", 1, ["K", "V"],
+           lambda S: ((("cand", Array(S.K, I32)), ("logits", Array(S.K + 1, Array(S.V, BF16)))),
+                      Tuple(Array(S.K, I32), I32, Array(S.K + 1, I32))),
+           conformance="model-untested")
+def GreedyAccept(B, S, cand, logits):
+    """The greedy accept of one drafted request's step from its K + 1 verify rows' bf16 logits: `TokenSelect_v4{V}` a row (the
+    first index of the maximum), then `Accept_v1{K}` of the K drafts against those argmaxes, in `Accept_v1`'s outputs.
+
+    vLLM d9105ea80's V2 rejection sampler computes each draft row's argmax over tiles of 8,192 and the bonus row's over tiles of
+    1,024, each tile's maximum and then the tiles', NaN maxima mapped to -inf (`numerics.greedy_accept_twin`, which states the
+    kernels' lines). This is that function on a row with no NaN under two stated premises: Triton 3.7.1's `tl.max(...,
+    return_indices=True)` and `tl.argmax` keep the lowest index of equal values, and they compare -0 equal to +0, as its
+    `_argmax_combine` reads (python/triton/language/standard.py:147-155). A capture of the served greedy rows or a one-card
+    probe on crafted ties and zeros settles both; until then no kernel match is claimed. A row with a NaN is outside it: there
+    the kernel's tile maximum depends on the order its reduction combines lanes in. The logits are the rows the LM head and
+    its gather wrote, which the sampler copies to f32 unchanged for a request with no logit processing."""
+    sel = bind(TokenSelectV4, V=S.V)
+    argmax = array_of([B.call(sel, logits[j]) for j in range(S.K + 1)])
+    return B.call(bind(Accept, K=S.K), cand, argmax)
 
 
 @composite("Advance", 1, ["K"],
@@ -399,4 +423,4 @@ def _draft_generate(B, CD: dict, dw: Coll, bonus_fin, caches, T_bonus: int, K: i
     return array_of(cands)
 
 
-ALL_COMPOSITES = [Accept, Advance, AttnBlockN, AttentionHeadN, AttentionN, VerifyBranch, ServeDraft, ServeSpec]
+ALL_COMPOSITES = [Accept, GreedyAccept, Advance, AttnBlockN, AttentionHeadN, AttentionN, VerifyBranch, ServeDraft, ServeSpec]
