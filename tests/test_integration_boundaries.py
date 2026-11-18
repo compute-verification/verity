@@ -37,9 +37,6 @@ KNOWN = {
     ("tests/verity/protocols/proofs/flock/verifier/sigma/test_sigma_difftest.py", "verity_vllm.definitions.registry"),
     ("tests/verity/protocols/proofs/flock/verifier/sigma/test_sigma_difftest.py", "verity_vllm.definitions.registry.catalog"),
     ("tests/verity/protocols/proofs/flock/verifier/sigma/test_sigma_difftest.py", "verity_vllm.definitions.replay"),
-    # SiluMul_v2's unit is the registry's Boolean SiluMulBf16_v4, which only this import registers; core has no SiluMulBf16_v2
-    ("verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py", "verity.circuits.ops.topp_keep_builder"),
-    ("verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py", "verity.circuits.ops.topp_word_gates"),
     # Listed ahead of the served circuits' move into the vLLM adapter, which makes each of these an integration's import;
     # each group says whose it is to remove.  circuits': core's tests take what they check from `verity`.
     ("tests/verity/circuits/test_codec.py", "verity_vllm.definitions.registry.io_shell"),
@@ -50,6 +47,7 @@ KNOWN = {
     ("verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py", "verity_vllm.definitions.numerics"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py", "verity_vllm.definitions.numerics.rows"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py", "verity_vllm.definitions.registry"),
+    # SiluMul_v2's unit is the registry's Boolean SiluMulBf16_v4, which only this import registers; core has no SiluMulBf16_v2
     ("verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py", "verity_vllm.definitions.registry.act"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py", "verity_vllm.definitions.registry.attention_vocab"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py", "verity_vllm.definitions.registry.b1"),

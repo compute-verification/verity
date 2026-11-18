@@ -12,9 +12,9 @@ from collections import Counter
 from contextlib import contextmanager
 
 import numpy as np
-from verity.circuits.ops.scalar import BitAnd, BitOr, SelectF32, SelectI32
 
-from verity_vllm.definitions.registry.topp_geometry import spt_for, z_group
+from verity.circuits.ops.scalar import BitAnd, BitOr, SelectF32, SelectI32
+from verity.circuits.ops.topp_geometry import spt_for, z_group
 from verity.circuits.ops.topp_word_gates import (
     CW,
     GATES,
@@ -87,8 +87,13 @@ def _folds(name, a):
     0 and OR's 1 absorb, and AND's 1, OR's 0 and XOR's 0 pass the other operand."""
     fn, extra = GATES[name]
     a = [*a, *(v for v, _w in extra)]
-    one = lambda v: v.k & (v.kv == 1)
-    zero = lambda v: v.k & (v.kv == 0)
+
+    def one(v):
+        return v.k & (v.kv == 1)
+
+    def zero(v):
+        return v.k & (v.kv == 0)
+
     if fn in (SelectF32, SelectI32, SelectBit):
         return [(one(a[0]), a[1]), (zero(a[0]), a[2])]
     if fn is BitAnd:
@@ -389,7 +394,9 @@ def step_kernel(E, pr, piv, h2, blk, S):
 
 
 def _state(E, lo, hi):
-    z = lambda v, w=32: E.const([v, v], w)
+    def z(v, w=32):
+        return E.const([v, v], w)
+
     return {"lo": lo, "hi": hi, "best": z(NEG_ONE), "best_mass": z(0), "best_minl": z(ONE_F), "best_nmin": z(0, CW),
             "done": z(0, 1), "nomask": z(0, 1), "pivot": z(0), "dup": z(ONE_F), "numdup": z(1, CW), "numkeep": z(1, CW),
             "fin": E.const([0] * 2 * R * F, 1), "best_fin": E.const([0] * 2 * R * F, 1)}

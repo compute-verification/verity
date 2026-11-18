@@ -15,9 +15,12 @@ import struct
 from functools import cache
 
 import numpy as np
+
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.ops.fp32 import F32Add, F32Fma, F32Mul
+from verity.circuits.ops.libdevice import nv_logf, nv_logf_gpu
 from verity.circuits.ops.mufu import DivFullRcp, DivFullScaleA, MufuEx2Ftz, MufuSqrtFtz
+from verity.circuits.ops.ref_scalar import F32GtStrict, F32Sub
 from verity.circuits.ops.scalar import (
     BIT,
     F32,
@@ -33,8 +36,6 @@ from verity.circuits.ops.scalar import (
     SelectF32,
     SelectI32,
 )
-
-from verity_vllm.definitions.registry.ref_prims import F32GtStrict, F32Sub
 
 #: bits of a count word inside the builder (a lane count; V < 2^(CW - 1)); a count gate reads it as an i32
 CW = 20
@@ -91,12 +92,10 @@ def _numkeep(nd: int, q: int) -> int:
 
 
 def _logf(a: int) -> int:
-    from verity_vllm.definitions.registry.sampling import nv_logf
     return nv_logf(a)
 
 
 def _logf_gpu(a: int) -> int:
-    from verity_vllm.definitions.registry.sampling import nv_logf_gpu
     return nv_logf_gpu(a)
 
 
@@ -107,9 +106,9 @@ SelectBit = PrimitiveDefinition("SelectBit", 1, (("c", BIT), ("a", BIT), ("b", B
                                 conformance="exact-model-tested")
 I32ToF32 = PrimitiveDefinition("I32ToF32", 1, (("a", I32),), F32, _i2f, doc=_i2f.__doc__, conformance="exact-model-tested")
 NvLogf = PrimitiveDefinition("NvLogf", 1, (("a", F32),), F32, _logf, doc="libdevice `__nv_logf` on an fp32 word (FTZ): "
-                             "`sampling.nv_logf`, `tl.log` in the top-p pipeline.", conformance="exact-model-tested")
+                             "`libdevice.nv_logf`, `tl.log` in the top-p pipeline.", conformance="exact-model-tested")
 NvLogfV2 = PrimitiveDefinition("NvLogf", 2, (("a", F32),), F32, _logf_gpu, doc="`NvLogf_v1` with every NaN result the GPU's "
-                               "0x7FFFFFFF (`sampling.nv_logf_gpu`), for the re-baseline.", conformance="exact-model-tested")
+                               "0x7FFFFFFF (`libdevice.nv_logf_gpu`), for the re-baseline.", conformance="exact-model-tested")
 TopPNumkeep = PrimitiveDefinition("TopPNumkeep", 1, (("numdup", I32), ("q", F32)), I32, _numkeep, doc=_numkeep.__doc__,
                                   conformance="exact-model-tested")
 

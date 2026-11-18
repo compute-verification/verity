@@ -66,6 +66,8 @@ from verity.circuits.defs import (
     composite,
     primitive,
 )
+from verity.circuits.ops.ref_scalar import REF_CONF as _REF_CONF
+from verity.circuits.ops.ref_scalar import F32GtStrict, F32Sub
 from verity.circuits.refs import Coll as _Coll
 from verity.circuits.refs import Explicit, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple, Value
@@ -75,7 +77,6 @@ from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import (
     BF16,
-    BIT,
     F32,
     F32_NAN,
     I32,
@@ -221,16 +222,6 @@ def f32_tanh_rn_bits(u: int) -> int:
 # new scalar primitives
 # ---------------------------------------------------------------------------------------------------------
 
-_REF_CONF = ("reference-defined; the evaluator is the definition; conformance vs torch CPU over the tested domain only: "
-             "docs/data/ref-prims/ (tests/program/test_ref_prims.py)")
-
-
-@primitive("F32Sub", 1, [("a", F32), ("b", F32)], F32, conformance=_REF_CONF)
-def F32Sub(a: int, b: int) -> int:
-    """FSUB: RN(a - b), IEEE RN-even, no ftz; NaN -> 0x7FC00000 (canonical, host-independent)."""
-    return _canon_nan(bits_of(np.float32(f32_of(a)) - np.float32(f32_of(b))))
-
-
 @primitive("F32Sqrt", 1, [("x", F32)], F32, conformance=_REF_CONF)
 def F32Sqrt(x: int) -> int:
     """IEEE `sqrt.rn.f32`: RN(sqrt(x)); negative (other than -0) and NaN -> 0x7FC00000; -0 -> -0; +inf -> +inf."""
@@ -247,12 +238,6 @@ def F32MaxRef(a: int, b: int) -> int:
     if f32_is_nan(a) or f32_is_nan(b):
         return F32_NAN
     return (a & 0xFFFFFFFF) if f32_of(a) >= f32_of(b) else (b & 0xFFFFFFFF)
-
-
-@primitive("F32GtStrict", 1, [("a", F32), ("b", F32)], BIT, conformance=_REF_CONF)
-def F32GtStrict(a: int, b: int) -> int:
-    """`a > b` on f32 values (NaN compares false) — the f32 twin of `Bf16GtStrict_v1` for greedy argmax."""
-    return 1 if f32_of(a) > f32_of(b) else 0
 
 
 @primitive("F32ExpRn", 1, [("x", F32)], F32, conformance=_REF_CONF)
