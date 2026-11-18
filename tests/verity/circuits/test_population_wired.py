@@ -107,15 +107,11 @@ def test_a_regular_run_of_edges_is_one_strided_part_whatever_the_units(nb):
     assert evaluate(prog.fn, w, x, k) == tuple(v for out in a + b for v in out)
 
 
-@pytest.mark.parametrize("one_writer", [False, True])
-def test_a_reader_range_is_one_batch_or_with_one_writer_a_batch_for_each_writer_batch_it_reads(one_writer):
+def test_a_reader_range_is_one_batch_whatever_writer_batches_it_reads():
     order = [[IA, 0, 4], [IA, 4, 4], [IB, 0, 4]]
-    prog = wired_population_program([(A, 8), (B, 4)], _every_other(4, order), one_writer=one_writer)[0]
+    prog = wired_population_program([(A, 8), (B, 4)], _every_other(4, order))[0]
     nodes, parts = _root(prog)
-    if one_writer:
-        assert [(n.fn.id, n.n) for n in nodes] == [(A.id, 4), (A.id, 4), (B.id, 2), (B.id, 2)] and parts == [1] * 8
-    else:
-        assert [(n.fn.id, n.n) for n in nodes] == [(A.id, 4), (A.id, 4), (B.id, 4)] and parts == [1, 1, 1, 1, 2, 1]
+    assert [(n.fn.id, n.n) for n in nodes] == [(A.id, 4), (A.id, 4), (B.id, 4)] and parts == [1, 1, 1, 1, 2, 1]
     w, x, k = list(range(8)), list(range(1, 17)), list(range(100, 116))
     a = [evaluate(A, x[2 * u:2 * u + 2], k[2 * u:2 * u + 2]) for u in range(8)]
     b = [evaluate(B, a[2 * u], w[2 * u:2 * u + 2]) for u in range(4)]
