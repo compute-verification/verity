@@ -286,9 +286,7 @@ theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.Secur
       (Nat.lt_of_lt_of_eq hip hargs.symm) ht ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn
       (P.child P.rootScope rs[j]!.node m).off
     have hgx := hg g hres
-    obtain ⟨q, base, count, -, hrun, -, -, -⟩ := hleaf
-    obtain ⟨-, -, hinp, -⟩ := InferenceOnlyVerifier.Record.SecurityProofs.runOf_some hrun
-    have hinp' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := hinp
+    have hinp' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := Resolve.leafAt_input hleaf
     have hmono := Resolve.offsets_mono P P.root (hL P.root hr) hrp (n + 1) (P.defs[P.root]!).body.nodes.size
       (by omega) (Nat.le_refl _)
     have hend : (P.defs[P.root]!).body.offsets[(P.defs[P.root]!).body.nodes.size]! = (P.defs[P.root]!).gates :=

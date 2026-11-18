@@ -159,15 +159,23 @@ def RowAt (P : Prog) (k i x n j : ℕ) : Prop :=
       ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!).count ∧
     ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!).get
       (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) = ⟨false, n, j⟩ ∧
-    ∀ x', ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! ≤ x' →
+    (∀ x', ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! ≤ x' →
       x' < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! +
         ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!).count →
       ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!).get
-        (x' - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) = ⟨false, n, j⟩ → x' = x
+        (x' - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) = ⟨false, n, j⟩ → x' = x) ∧
+    Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true
 
 /-- Reference `x` of argument `i` of root node `k` is leaf `j` of the root's node `n`, through a run or a strided
 part's rows. -/
 def LeafAt (P : Prog) (k i x n j : ℕ) : Prop := RunAt P k i x n j ∨ RowAt P k i x n j
+
+/-- The node a reference is a leaf of is an input node. -/
+theorem leafAt_input {P : Prog} {k i x n j : ℕ} (h : LeafAt P k i x n j) :
+    Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := by
+  rcases h with ⟨q, base, count, -, hr, -⟩ | ⟨q, a, -, -, -, -, -, -, -, -, -, -, -, -, hin⟩
+  · exact (runOf_some hr).2.2.1
+  · exact hin
 
 /-- A run some reference of its part lies in is of some leaf. -/
 theorem run_pos {P : Prog} {q : Part} {s x n base count : ℕ} (hr : runOf P q = some (n, base, count))
@@ -291,7 +299,7 @@ theorem leafAt_inj {P : Prog} (hown : InferenceOnlyVerifier.Record.SecurityProof
   · exact runAt_inj hown hk hu hi hk' hu' hi' h h'
   · exact (run_row_apart hown hk hu hi hk' hu' hi' h h').elim
   · exact (run_row_apart hown hk' hu' hi' hk hu hi h' h).elim
-  · obtain ⟨q, a, hq, -, ha, ha1, ha2, hapos, hlo, hhi, -, -, -, hinj⟩ := h
+  · obtain ⟨q, a, hq, -, ha, ha1, ha2, hapos, hlo, hhi, -, -, -, hinj, -⟩ := h
     obtain ⟨q', a', hq', -, ha', ha1', -, hapos', hlo', hhi', h1', h2', hgx', -⟩ := h'
     by_cases hsame : k = k' ∧ i = i' ∧ q = q'
     · obtain ⟨rfl, rfl, rfl⟩ := hsame
@@ -522,7 +530,7 @@ theorem arg_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
       refine List.mem_map.2 ⟨_, List.mem_range.2 (Nat.div_lt_div_of_lt_of_dvd (Nat.dvd_of_mod_eq_zero hmod) hd), rfl⟩
     obtain ⟨hjlt, hoff, hstep⟩ := tail n _ hn' hin' hform' hget'
     refine ⟨n, F (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!),
-      Or.inr ⟨q, _, hq, hpn, hmem, rfl, rfl, hpos, ?_, ?_, h1, h2, hF _ hd, ?_⟩, hn', hjlt, hoff, hstep⟩
+      Or.inr ⟨q, _, hq, hpn, hmem, rfl, rfl, hpos, ?_, ?_, h1, h2, hF _ hd, ?_, hin'⟩, hn', hjlt, hoff, hstep⟩
     · rw [hFdef]
       exact Nat.le_add_right _ _
     · rw [hFdef]
