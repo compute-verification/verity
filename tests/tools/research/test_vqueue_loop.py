@@ -444,7 +444,7 @@ def test_a_rebuild_on_a_candidate_the_same_tick_rebuilt_goes_on_what_that_rebuil
                 Build((3, 5), on[1, 2], 4, replaces=on[3,])]
 
     loop = env.loop(policy)
-    low, up = loop.tick()[-1], loop.tick()[-1]
+    low, up = (next(r for r in reversed(loop.tick()) if r["action"] == "build") for _ in range(2))
     logged = loop.tick()
     again, top = [r for r in logged if r["action"] == "build"]
     on = again["sha"] if merges else main
@@ -466,7 +466,7 @@ def test_a_member_that_conflicts_with_a_candidate_below_names_its_member_and_one
     three = env.o.change({"c.txt": "3\n"}, base=base)
     env.o.gh.put(3, three)
     loop = env.loop(lambda s: [Build((2, 3), s.candidates[0].sha, 5)] if s.candidates else [Build((1,), s.main, 5)])
-    told, low = loop.tick()                                         # #3 doesn't merge onto `main`: its owner is told so
+    low, told = loop.tick()                         # #3 doesn't merge onto `main`: its owner is told so, after the build
     assert (told["action"], told["number"], low["members"]) == ("conflict", 3, [1]), (told, low)
     skip2, skip3, none = loop.tick()
     assert (skip2["number"], skip2["by"], none["action"], none["base"]) == (2, [1], "build", low["sha"]), (skip2, none)
@@ -608,7 +608,7 @@ def test_a_head_below_a_move_main_landed_is_taken_unless_its_change_names_what_t
         env.o.gh.put(n, head)
     crossed = env.put(4, {"d.txt": "crossed\n"})
     loop = env.loop(policy, shadow=shadow)
-    *told, built = loop.tick()
+    built, *told = loop.tick()
     assert (built["action"], built["members"], built["heads"]) == ("build", [1, 4], [below[1], crossed]), built
     assert [(r["action"], r["number"], r["heads"], r["base"], r["done"]) for r in told] == [
         ("lacks", n, [below[n]], move, not shadow) for n in (2, 3)], told
@@ -650,7 +650,7 @@ def test_a_ready_pr_that_doesnt_merge_onto_main_is_told_its_files_once_a_head_ke
     env.put(2, {"b.txt": "2\n"})
     three = _move(env, 3, {"c.txt": None, "moved/c.txt": "c\n", "a.txt": "moved/c\n"}, base=base)
     loop = env.loop(policy, shadow=shadow)
-    *told, built = loop.tick()
+    built, *told = loop.tick()
     assert [(r["action"], r["number"], r["heads"], r["files"], r["done"], r["shadow"]) for r in told] == [
         ("conflict", 1, [one], ["a.txt"], not shadow, shadow), ("conflict", 3, [three], ["a.txt"], not shadow, shadow)], told
     assert (built["action"], built["members"]) == ("build", [2]), built
@@ -3258,6 +3258,156 @@ def test_a_failed_candidate_s_run_beside_and_those_of_the_candidates_above_it_ar
     assert _acts(rebuilt) == ["build", "slim"] and rebuilt[0]["members"] == [2] and rebuilt[1]["record"]["ids"] == ["run-3"]
 
 
+def _two_with_runs(env) -> tuple[Loop, Slim, dict, dict]:
+    """Two candidates on `main`'s chain, #1's below #2's, each with the run beside its check registered and pending."""
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    slim = Slim()
+    loop = env.loop(vqueue.decide, slim=slim, batch=1)
+    loop.world.slim_driver = lambda: "drive"
+    _, one, _ = loop.tick()
+    two, _ = loop.tick()
+    return loop, slim, one, two
+
+
+def _off_main_thread(what: str) -> None:
+    assert threading.current_thread() is not threading.main_thread(), f"{what} on the tick's own thread"
+
+
+@pytest.mark.parametrize("refused", [False, True])
+def test_a_tick_s_drops_cancel_their_runs_at_once_and_are_logged_in_order_and_a_refused_delete_stops_none_of_the_others(
+        env, refused):
+    """The drops of one tick cancel their runs together, each off the tick's thread (the first's cancel waits for the
+    second's), and are logged in the order decided; with their one push of deletes refused, each drop deletes its own
+    branch before it cancels anything (`Loop._stop_drops`), a delete origin refuses is logged as that drop's failure with
+    its runs left running, the other drop is still made, and the tick stops after them."""
+    loop, _, one, two = _two_with_runs(env)
+    second, cancels, push = threading.Event(), [], loop.world.push
+
+    def cancel_runs(ids, why):
+        if not refused:
+            _off_main_thread("a drop's cancel")
+        if ids == ["run-1"]:
+            second.wait()
+        cancels.append(ids)
+        second.set()
+        return {}
+
+    def pushing(sha, ref, lease=None):
+        if refused and not sha and ref == branch(one["sha"]):
+            raise Q.QueueError(f"push :{ref}: refused")
+        push(sha, ref, lease)
+
+    def delete(refs):
+        raise Q.QueueError("git push --atomic: refused")
+
+    loop.world.cancel_runs, loop.world.push = cancel_runs, pushing
+    if refused:
+        loop.world.delete = delete
+    keys = env.listed(one["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "fail")
+    eject, drop1, drop2, *rest = loop.tick()
+    assert (eject["action"], cancels) == ("eject", [["run-2"]] if refused else [["run-2"], ["run-1"]])
+    assert [(d["action"], d["sha"], d.get("error", "")[-7:]) for d in (drop1, drop2)] == [
+        ("drop", one["sha"], "refused" if refused else ""), ("drop", two["sha"], "")]
+    assert "beside_cancelled" not in drop1 if refused else drop1["beside_cancelled"] == ["run-1"]
+    assert drop2["beside_cancelled"] == ["run-2"] and _acts(rest) == ([] if refused else ["build", "slim"])
+    assert [sha for sha in (one["sha"], two["sha"]) if branch(sha) in env.queued()] == ([one["sha"]] if refused else [])
+
+
+@pytest.mark.parametrize("refused", [False, True])
+def test_a_tick_s_builds_each_push_while_the_next_merges_logged_in_order_and_a_refused_push_pushes_none_after_it(env, refused):
+    """Of the builds of one tick, each is pushed and its run started off the tick's thread while the next merges (the first's
+    push waits for the second's merge), and each is logged in order; a push origin refuses is logged as its build's failure,
+    and no build after it is pushed."""
+    main = env.main()
+    for n in range(1, 5):
+        env.put(n, {f"{n}.txt": f"{n}\n"})
+    slim = Slim()
+    loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=3, fill=3)
+    loop.world.slim_driver = lambda: "drive"
+    merged, second, build, push = [], threading.Event(), loop.world.build, loop.world.push
+
+    def merging(prs, base, main=None, staged=None):
+        got = build(prs, base, main, staged)
+        merged.append(got[0])
+        if len(merged) == 2:
+            second.set()
+        return got
+
+    def pushing(sha, ref, lease=None):
+        _off_main_thread("a build's push")
+        if sha == merged[0]:
+            second.wait()
+        if refused and sha == merged[1]:
+            raise Q.QueueError(f"push {sha}:{ref}: refused")
+        push(sha, ref, lease)
+
+    loop.world.build, loop.world.push = merging, pushing
+    logged = loop.tick()
+    built = [r for r in logged if r["action"] == "build"]
+    assert [(b["members"], b.get("error", "")[-7:]) for b in built] == [
+        ([1], ""), ([2], "refused" if refused else ""), *([] if refused else [([3], "")])]
+    assert [b["base"] for b in built if "error" not in b] == ([main] if refused else [main, *merged[:2]])
+    assert slim.started == [("drive", b["sha"], b["base"]) for b in built if "error" not in b]
+    assert _acts([r for r in logged if r["sha"] != main]) == ["build", "slim", "build", *([] if refused else ["slim", "build", "slim"])]
+    assert sorted(env.queued()) == sorted(branch(b["sha"]) for b in built if "error" not in b)
+
+
+def test_a_tick_s_notices_are_told_while_its_actions_are_made_and_logged_after_them(env):
+    """The notices that read nothing a tick's actions change are told off the tick's thread while those are made (the post
+    waits for the build's push), and logged after them, each post's `posting` line, logged before it posts, before its own."""
+    base = env.main()
+    _main_to(env, {"c.txt": "main\n"})
+    env.put(1, {"a.txt": "1\n"})
+    env.o.gh.put(3, three := env.o.change({"c.txt": "3\n"}, base=base))
+    loop = env.loop(lambda s: [] if s.candidates else [Build((1,), s.main, 5)])
+    pushed, push, post = threading.Event(), loop.world.push, loop.world.post
+
+    def pushing(sha, ref, lease=None):
+        push(sha, ref, lease)
+        pushed.set()
+
+    def posting(text, to=()):
+        _off_main_thread("a notice's post")
+        pushed.wait()
+        return post(text, to)
+
+    loop.world.push, loop.world.post = pushing, posting
+    built, told = loop.tick()
+    assert (built["action"], built["members"], told["action"], told["number"], told["heads"]) == (
+        "build", [1], "conflict", 3, [three])
+    lines = [(r["action"], r.get("posting")) for r in env.lines()]
+    assert lines[-1] == ("conflict", None) and {*lines[-3:-1]} == {("build", None), ("posting", "conflict")}, lines
+    assert len(env.posts) == 1 and loop.tick() == []
+
+
+def test_a_tick_judges_the_runs_beside_its_candidates_checks_at_once_each_once(env):
+    """The runs beside the checks of a tick's candidates are judged together off the tick's thread before its judging reads
+    them (#1's waits for #2's), and each once: its judging takes what that judge said, a verdict it kept logged."""
+    loop, slim, one, two = _two_with_runs(env)
+    second, judge, judged = threading.Event(), slim.judge, []
+
+    def judging(driver, rec):
+        if rec is not None and rec.get("ids") in (["run-1"], ["run-2"]):
+            _off_main_thread("a candidate's run judged")
+            if rec["ids"] == ["run-1"]:
+                second.wait()
+            judged.append(rec["ids"][0])
+            second.set()
+        return judge(driver, rec)
+
+    slim.judge = judging
+    assert loop.tick() == [] and judged == ["run-2", "run-1"]
+    slim.end("run-2", "pytest")
+    judged.clear()
+    failed, dropped = loop.tick()
+    assert (dropped["action"], dropped["sha"]) == ("drop", two["sha"]), dropped
+    assert sorted(judged) == ["run-1", "run-2"] and (failed["action"], failed["sha"], failed["why"]) == (
+        "slim", two["sha"], "judged fail"), failed
+    assert failed["record"]["verdict"]["state"] == FAIL
+
+
 @pytest.mark.parametrize("registered", [["run-9"], []])
 def test_a_run_beside_still_launching_when_its_candidate_is_dropped_is_cancelled_once_it_printed_its_run_ids(env, registered):
     """train.sh takes many minutes to register a run, so a candidate dropped soon after its build has a run beside it with no
@@ -4486,10 +4636,10 @@ def test_the_loops_landings_post_through_it_on_its_clock_and_the_one_beside_each
 
 #: the steps each of the three shards of a check that gates holds beside the preflights, in these tests: pytest's suites are
 #: split over the last two
-PLAN = (("flock-circuit-build", "lean-build", "lean-unit-cut", "lean-audit", "lean-suites"),
+PLAN = (("flock-circuit-build", "lean-build", "lean-unit-cut", "lean-audit", "landing-gates", "lean-suites"),
         ("pytest", "flock-rust-tests"), ("pytest", "circuit-check", "ratchet-gate"))
 #: an auto plan's six shards of the same steps, pytest's suites split over three of them
-PLAN6 = (("flock-circuit-build", "lean-build"), ("lean-unit-cut", "lean-audit", "lean-suites"),
+PLAN6 = (("flock-circuit-build", "lean-build"), ("lean-unit-cut", "lean-audit", "landing-gates", "lean-suites"),
          ("pytest", "flock-rust-tests"), ("pytest",), ("pytest", "circuit-check"), ("ratchet-gate",))
 OLD, NEW = "tests/test_x.py::test_old", "tests/test_x.py::test_new"
 
@@ -5469,7 +5619,7 @@ def test_under_gate_check_a_run_started_while_graph2_gated_is_started_again_as_t
     before = env.loop(vqueue.decide, slim=vqueue_slim)
     runs = Runs(env, before, monkeypatch)
     _, built, _ = before.tick()
-    assert [steps for _, _, steps, _ in runs.launches] == ["ratchet-gate"] * 2 and "shard" not in runs.launches[0][3]
+    assert [steps for _, _, steps, _ in runs.launches] == ["landing-gates,ratchet-gate"] * 2 and "shard" not in runs.launches[0][3]
     loop, runs = _check(env, monkeypatch)
     below, started = loop.tick()
     assert (below["why"], started["why"]) == ("started again beside `main`", "started")

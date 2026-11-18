@@ -211,6 +211,12 @@ doesn't name:
                     else origin/main): whether the change from BASE adds a retired term, an issue id or a run id to a file.
                     Off the gate (policy.toml's `off_gate`), so a red holds nothing; a ready mark's preflight and the
                     sync run `main`'s copy as a warn gate (drive.toml's `warn_gates`)
+    landing-gates   after lean-audit of the packages whose facts unread_gate reads, which a run holding the step audits too
+                    (`gate_audits`), their facts handed to the gate: `tools/check/landing_gates.py BASE OUT`, every gate
+                    drive.toml lists in `landing_gates` at BASE (as for added-lines), each as BASE has it, on a commit of
+                    HEAD's tree with the locks lean-audit regenerated written in, whose one parent is HEAD's merge base with
+                    BASE: the candidate's whole change, whatever merges or dates its commits carry.  A gate that fails or
+                    can't judge fails it, naming the gate and its lines; skipped when BASE lists none
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run, whose every step also runs with Lake's
 local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical inputs:
@@ -480,21 +486,27 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 
 #: what a train check's shard books in its slot (`shard_ask_gib`), in GiB as a slot's mem= and book= are: the first row all of
 #: whose names the shard's parts hold (a name with a colon is that part, one without any part of that job; lean-agreement
-#: counts only where it runs), each the most such a shard's check scope held (its memory.peak) plus 15%, up to the next 10
-#: GiB, or where a row says so the memory its suites' workers need or the slice it must fit. ci.toml's plans place the
-#: parts; slot.py books the larger of this and the slot line's book= (`booked`), and no grant passes the booking (`slot_mem_gb`)
+#: counts only where it runs, and the security analysis's proofs only where the run's change meets a Lean input, since
+#: elsewhere every audit's verdict is reused and nothing replays), each the most such a shard's check scope held (its
+#: memory.peak) plus 15%, up to the next 10 GiB, or where a row says so the memory its suites' workers need or the slice it
+#: must fit. Every other row is at most 230, so that three shards fit a 755 GB machine's check slice and its third slot opens,
+#: except `lean-suites:verity-flock:3/6`, measured at twice its 140 GiB peak plus 15% once verity-vllm's third sits on that
+#: shard, and the Lean floors (`tools/verity/lean/reserve.json`): the agreement at its peak plus 15%, and security/Proofs.
+#: ci.toml's plans place the parts; slot.py books the larger of this and the slot line's book= (`booked`), and no grant
+#: passes the booking (`slot_mem_gb`)
 SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
     (("lean-agreement",), 470),                                  # the agreement beside lean-build, Flock suite: 406 + 15%
-    (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
-    # circuit-check granted the slot once alone: 292 + 15%; beside it, what `cc_mem_gb` leaves lean-suites holds vLLM's second
-    # third and the rest of lean-suites
-    (("circuit-check",), 340),
-    # ci.toml's groups of lean-suites where no row above holds them: twice (`groups` gives lean-suites half the slot) what the
-    # group's parts held running alone, + 15%, which their workers fit at their worker_gb
-    (("lean-suites:verity-flock:1/6",), 290),                    # beside pytest, Flock's first two sixths, vLLM's first third: 124
-    (("lean-suites:verity-flock:3/6",), 330),                    # beside lean-build, Flock's other four sixths, vLLM's last third: 140
-    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's second third: under 105
-    (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
+    # security/Proofs replayed beside pytest, suites: 282 + 15%, over the replay's floor (`reserve.json`'s REPLAY_ARKLIB_GIB)
+    (("lean-audit:security/Proofs",), 330),
+    # circuit-check, off the merge gate, runs in what `cc_mem_gb` leaves beside the rest and is granted the slot once alone
+    # (`grant_when_alone`), so it books no more than 230
+    (("circuit-check",), 230),
+    # the groups main left at their earlier asks, capped at 230: their workers fit what `groups` gives lean-suites
+    (("lean-suites:verity-flock:1/6",), 230),                    # beside pytest, Flock's first two sixths, vLLM's first third
+    # beside lean-build, Flock's other four sixths and vLLM's third: 140, twice that plus 15%. Measured, not capped
+    (("lean-suites:verity-flock:3/6",), 330),
+    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 230),   # beside the Rust build, vLLM's second third
+    (("pytest", "lean-suites"), 230),                            # pytest whole beside the parallel suites
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
     (("lean-build",), 130),                                      # lean-build and the Flock suite alone: 110 + 15%
     (("pytest",), 160),                                          # pytest's other suites alone: 134 + 15%
@@ -502,13 +514,13 @@ SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
 )
 
 
-def shard_ask_gib(parts: list[str] | None, need: list[str]) -> int | None:
+def shard_ask_gib(parts: list[str] | None, need: list[str], lean: bool = True) -> int | None:
     """The GiB a train check's shard of ``parts`` books (`SHARD_ASKS_GIB`), lean-agreement counting only when ``need`` (the
-    steps the run is sent what they need for) holds it; None for a whole check or a shard no row covers, where the slot
-    line's book= stands."""
+    steps the run is sent what they need for) holds it, and security/Proofs' audit only with ``lean`` (the run's change meets
+    a Lean input); None for a whole check or a shard no row covers, where the slot line's book= stands."""
     if parts is None:
         return None
-    held = {p for p in parts if p != "lean-agreement" or p in need}
+    held = {p for p in parts if (p != "lean-agreement" or p in need) and (p != "lean-audit:security/Proofs" or lean)}
     held |= {p.partition(":")[0] for p in held}
     return next((gib for names, gib in SHARD_ASKS_GIB if all(n in held for n in names)), None)
 
@@ -1495,7 +1507,14 @@ def record(argv: list[str]) -> int:
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
     min_mem = train_gb(priority, pool, parts, combining)
-    ask = shard_ask_gib(parts, need) if min_mem else None
+    lean = True
+    if min_mem and parts is not None and (files := tracked_files(ROOT)) is not None:
+        from research.queue import QueueError
+        from research.vqueue import meets
+        from research.vqueue_slim import lean_inputs
+        with contextlib.suppress(QueueError):
+            lean = meets(changed, lean_inputs([*files, *changed]))
+    ask = shard_ask_gib(parts, need, lean) if min_mem else None
     pair, both, after = None, [], 0
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
@@ -2168,6 +2187,36 @@ def added_lines(out: Path) -> list[str] | str:
     return ["bash", "-c", script, "added-lines", base, ADDED_LINES, sys.executable]
 
 
+#: unread_gate's cache under the check's (`unread_gate.gate`), where it reads a package's facts first and landing-gates puts
+#: those the run's audit wrote
+UNREAD_GATE_CACHE = "unread-gate"
+
+
+def landing_gates(out: Path) -> list[str] | str:
+    """landing-gates' command: `landing_gates.py BASE OUT FACTS_TO`, FACTS_TO unread_gate's cache (`UNREAD_GATE_CACHE`), BASE
+    being the commit in the run's `BASE_FILE` (`--record --on` sends
+    it), else origin/main; skipped where BASE names no commit here or its drive.toml lists no `landing_gates`."""
+    sent = out / "inputs" / BASE_FILE
+    named = sent.read_text().strip() if sent.is_file() else "origin/main"
+    if not (base := _rev(f"{named}^{{commit}}")):
+        return f"skipped: no base: {named} names no commit here"
+    try:
+        listed = _load("landing_gates").gates(base, ROOT)
+    except ValueError as e:
+        return f"failed: {e}"
+    if not listed:
+        return f"skipped: drive.toml at {named} lists no landing_gates"
+    return [sys.executable, str(ROOT / "tools" / "check" / "landing_gates.py"), base, str(out),
+            str(cache_dir() / UNREAD_GATE_CACHE)]
+
+
+def gate_audits() -> list[str]:
+    """The audits landing-gates runs after, in its own run: those whose facts unread_gate reads (`lean_audit.UNREAD_FACTS`).
+    A node keeps no facts it didn't audit, and a check node's store has no remote to fetch them from, so a run holding the
+    step audits them first (`groups`), and a plan puts the step in their shard (`shard_needs`)."""
+    return [f"lean-audit:{p}" for p in _lean_audit().UNREAD_FACTS]
+
+
 def suite_args(held: list[str], splits: dict[str, dict] | None, out: Path) -> list[str]:
     """`suites.py`'s arguments for a shard's suites of one step (``held``: `SUITE` or `SUITE:K/M`): each suite once, a split one
     as `SUITE:K1,K2/M` with the parts it holds, pinned to the partition ``splits`` names (`@` its digest) when it names one; and
@@ -2201,12 +2250,15 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
            circuit_cache: bool | None = None, splits: dict[str, dict] | None = None,
            bookkeeping: bool = False, agreement_urls: Path | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
-    shard's parts (`shard`), just the jobs those name, lean-audit on its packages there, and all the cores to pytest or to
+    shard's parts (`shard`), just the jobs those name, lean-audit on its packages there (and on `gate_audits`' beside
+    landing-gates, which its group runs after them), and all the cores to pytest or to
     circuit-check when the other isn't among them.  ``circuit_cache`` (default ``cache``) is whether circuit-check reuses its
     per-target passes.  A split suite's parts (`pytest:SUITE:K/M`) run as `suites.py SUITE:K/M` (`suite_args`, with ``splits``,
     an auto plan's or the task list's partitions).  ``urls`` and ``agreement_urls`` are the files of presigned URLs the run was
     sent (`take_lean_deps_urls`, `take_agreement_urls`)."""
     circuit_cache = cache if circuit_cache is None else circuit_cache
+    if only is not None and "landing-gates" in only:
+        only = [*only, *(g for g in gate_audits() if g not in only)]
     py = sys.executable
     a = max(1, n // 2)
     b = max(1, n - a)
@@ -2221,14 +2273,17 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     slot_gb = slot_mem_gb()
     with_cc = only is None or "circuit-check" in names
     # pytest and lean-suites run at once, each with this share: what circuit-check beside them both leaves, halved; beside
-    # circuit-check alone the other half is circuit-check's (`cc_mem_gb`), and alone in the slot pytest has all of it
+    # circuit-check alone the other half is circuit-check's (`cc_mem_gb`), and alone in the slot pytest has all of it, as
+    # lean-suites has all that circuit-check leaves in a shard without pytest, the audit or the agreement
+    alone = only is not None and "lean-suites" in names and not names & {"pytest", "lean-audit", "lean-agreement"}
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // (
-        2 if with_lean or with_cc else 1)
+        2 if (with_lean or with_cc) and not alone else 1)
     # the commit the run was sent as its suites' lender (`LEND_FILE`): each suite step leaves out what its check answers for
     lend = out / "inputs" / LEND_FILE
     # the run's base (`BASE_FILE`), where the verified queue reads the allowances: the tests they name run as expected failures
     base = out / "inputs" / BASE_FILE
-    tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
+    tail = ["--timeouts", "--jobs", str(a), *(["--why-serial", "the step's share of the cores is one"] if a == 1 else []),
+            *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else []),
             *(["--lend-from", lend.read_text().strip()] if cache and lend.is_file() else []),
             *(["--allowances", base.read_text().strip()] if base.is_file() else [])]
@@ -2268,7 +2323,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
              "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT),
              "ratchet-gate": ("ratchet-gate", ratchet_gate(out, cache), ROOT),
-             "added-lines": ("added-lines", added_lines(out), ROOT)}
+             "added-lines": ("added-lines", added_lines(out), ROOT),
+             "landing-gates": ("landing-gates", landing_gates(out), ROOT)}
     if len(lean) > 1:
         built |= {s[0]: s for s in lean}
     else:
@@ -2386,8 +2442,10 @@ def audit_provers(packages: list[str]) -> dict[str, list[str]]:
 
 def shard_needs() -> dict[str, list[str]]:
     """What a shard runs beside a part (`shards.builds`): each job's `needs` and `after`, and each audited package's provers
-    (`audit_provers`), which `shards.units` holds on its shard."""
-    return {**{j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS}, **audit_provers(_parts_of()["lean-audit"])}
+    (`audit_provers`), which `shards.units` holds on its shard, and landing-gates' audits (`gate_audits`)."""
+    needs = {j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS}
+    needs["landing-gates"] = [*needs.get("landing-gates", []), *gate_audits()]
+    return {**needs, **audit_provers(_parts_of()["lean-audit"])}
 
 
 def given_suites(suites: dict[str, float], given: dict[str, float] | None) -> dict[str, float]:

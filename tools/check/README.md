@@ -105,7 +105,7 @@ Builds and tests run on the cluster's nodes, not on an agent VM. Ship the checko
 ~~~sh
 R="research run --on auto --cwd source -- bash -lc"
 $R "uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py verity-flock"     # one suite
-$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"
+$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD)"   # under --quick unless --slow
 $R "uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check"               # the whole check
 uv run tools/check/suites.py --list                # each suite's inputs and whether a pass is cached (reads only)
 uv run tools/check/suites.py --explain SUITE       # why a suite would run
@@ -207,7 +207,9 @@ over recent recorded checks, and its reds so far. What isn't recorded shows as u
 
 PRs land through the verified queue (`research queue vqueue`): its flags are `drive.toml` and its admission rules are
 `queue.toml`. A PR's ready mark runs the landing gates `drive.toml` names on its head, and its warn gates
-(`gates/markdown_caps.py`, `added_lines.py`) too, whose failure only warns. The loop merges the marked PRs that are reviewed or low-risk onto
+(`gates/markdown_caps.py`, `added_lines.py`) too, whose failure only warns, and each candidate's check runs the landing gates
+again on its whole change from its merge base with `main` (`landing-gates`).
+The loop merges the marked PRs that are reviewed or low-risk onto
 `main` as a candidate, checks it (by default graph2's tasks, with `lean-agreement` and `ratchet-gate` run beside them; under
 `--gate check`, every job, those off the gate too, in shards: `train.sh --deferred`), and
 moves `main` only to a candidate with no new failure, each gating task passed or failing on its base too (under `--gate

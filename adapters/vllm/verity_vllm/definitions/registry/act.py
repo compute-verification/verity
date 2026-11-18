@@ -6,8 +6,13 @@
 PROMOTED from the vLLM adapter's quarantine: each Definition below is the quarantined body VERBATIM — same name, same
 version, same gates — so its specialization ids are the ones the quarantine admitted. Bound as the `silu_mul` kind
 of the `b1-eager-v3` vocabulary (`frontend/rules/vocab.py`), asked for by `SiluAndMulRule`; `SiluMul_v1` (b1) stays registered,
-the kind of the older vocabularies and of the bodies that call it directly. The Boolean form is `boolean_silu.SiluMulExpf`
-(`SiluMul_v4{I}`, word view `SiluMul_v2{I}`).
+the kind of the older vocabularies and of the bodies that call it directly.
+
+The Boolean form of `SiluMul_v2{I}` is here, so that whatever binds it registers its builder: `SiluMulExpf` (`SiluMul_v4{I}`)
+over `SiluMulBf16Expf` (`SiluMulBf16_v4`), computed as `boolean_silu`'s `SiluMul_v3` computes `SiluMul_v1` (vLLM `_C.silu_and_mul` on the
+measured sm_120 edge words: ``f / (1 + expf(-f))`` with expf's overflow): `silu_bf16_expf` sends NaN and -inf to 0x7FFF, keeps
+-0, and reads `expf_band_table`, where the gates whose ``expf(-g)`` overflows (g <= -89) are -0; the up word passes ``+ 0.0f``
+(-0 to +0), and every NaN result is 0x7FFF.  No sub-Call is a word Definition.
 
 `SiluMulBf16_v2` is one output word of `act_and_mul_kernel<bf16, silu_kernel, true>`, the vec and scalar paths alike:
 
@@ -43,12 +48,18 @@ checks the table's sanity facts: gelu(+0) = +0, gelu(-0) = -0, gelu(x) = x for x
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 
-from verity.circuits.defs import composite, primitive
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, or_reduce, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind, composite, primitive
+from verity.circuits.silicon import fp
 from verity.circuits.types import Array
 
 from verity_vllm.definitions.evidence import EVIDENCE
+from verity_vllm.definitions.registry import boolean_silu as BSL
 from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.boolean_activation import band
 from verity_vllm.definitions.registry.gelu_erf_table import TABLE_WORDS
 
 #: `SEMANTIC_ID`s of the promoted Definitions (their quarantine identities)
@@ -116,5 +127,56 @@ def GeluErf(B, S, x):
     return B.batch(GeluErfBf16, x, axes=(0,))
 
 
-# Last: boolean_silu reads this module's Definitions; loading act registers SiluMul_v2's Boolean form (SiluMulBf16_v4).
-from verity_vllm.definitions.registry import boolean_silu as _boolean_silu  # noqa: E402,F401
+@lru_cache(maxsize=None)
+def expf_band_table() -> tuple[int, ...]:
+    """`band_table` of `SiluMulBf16_v2`: on the band only the gates whose ``expf(-g)`` overflows differ, each 0 (``g / inf``)."""
+    out = [0] * (1 << 12)
+    for sign in (0, 1):
+        for e in range(BSL.BAND_LO, BSL.BAND_HI[sign] + 1):
+            for m in range(128):
+                out[m | (e & 0xF) << 7 | sign << 11] = SiluMulBf16.evaluate(sign << 15 | e << 7 | m, BSL.ONE_BF16) & 0x7FFF
+    return tuple(out)
+
+
+def silu_bf16_expf(C, g):
+    """``bf16_rn(silu_f32(f32(g)))``, the silu half of `SiluMulBf16_v2`: `silu_bf16` with -inf and NaN to 0x7FFF, -0 kept, and
+    `expf_band_table` on the band."""
+    m, e, s = list(g[:7]), list(g[7:15]), g[15]
+    nan = C.AND(and_reduce(C, e), OR(C, or_reduce(C, m), s))               # NaN, and -inf / (1 + inf)
+    _, below = sub(C, e, const_bits(BSL.BAND_LO, 8), 8)
+    _, under = sub(C, e, const_bits(BSL.BAND_HI[0] + 1, 8), 8)
+    keep = C.AND(C.AND(NOT(s), NOT(under)), NOT(nan))
+    e01 = NOT(or_reduce(C, e[1:]))
+    low = C.AND(below, e01)
+    high = below ^ low
+    half_low = add(C, m[1:] + [e[0]], [C.AND(m[0], m[1])], width=8)
+    half_high = m + sub(C, e, [ONE], 8)[0]
+    on_band = band(C, g, expf_band_table(), [(sign, e0) for sign in (0, 1) for e0 in range(BSL.BAND_LO, BSL.BAND_HI[sign] + 1, 2)])
+    mag = [x ^ C.AND(low, y) ^ C.AND(high, z) ^ C.AND(keep, w)
+           for x, y, z, w in zip(on_band, half_low + [ZERO] * 7, half_high, g[:15])]
+    mag = [x ^ nan if P.BF16_NAN_F2FP >> j & 1 else x for j, x in enumerate(mag)]
+    return mag + [C.AND(s, NOT(nan))]
+
+
+def silu_mul_expf(C, g, u):
+    """`SiluMulBf16_v2`: ``bf16_rn(f32(silu_bf16_expf(g)) * (f32(u) + 0.0f))``, every NaN 0x7FFF; ``+ 0.0f`` sends -0 to +0."""
+    s = silu_bf16_expf(C, g)
+    up = list(u[:15]) + [C.AND(u[15], or_reduce(C, u[:15]))]
+    return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(s), fp.bf16_to_f32(up)), P.BF16_NAN_F2FP)
+
+
+
+
+SiluMulBf16Expf = definition("SiluMulBf16", 4, silu_mul_expf, (("g", BSL.BF16), ("u", BSL.BF16)), BSL.BF16, word=SiluMulBf16,
+                             doc="vLLM _C.silu_and_mul's element on bits: SiluMulBf16_v2, "
+                                 "bf16(f32(bf16(silu_f32(g))) * (f32(u) + 0.0f)), NaN 0x7FFF")
+
+
+def _silu_mul_expf_rows(B, S, gu):
+    """vLLM `_C.silu_and_mul` on bits: `out[i] = SiluMulBf16_v4(gu[i], gu[I + i])`."""
+    return B.batch(SiluMulBf16Expf, gu[0:S.I], gu[S.I:2 * S.I], axes=(0, 0))
+
+
+SiluMulExpf = CompositeDefinition("SiluMul", 4, ("I",), lambda S: ((("gu", Array(2 * S.I, BSL.BF16)),), Array(S.I, BSL.BF16)),
+                                  _silu_mul_expf_rows, doc=_silu_mul_expf_rows.__doc__, conformance="exact-model-tested")
+SiluMulExpf.word = lambda b: bind(SiluMul, I=b["I"])  # type: ignore[attr-defined]

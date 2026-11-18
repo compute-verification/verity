@@ -171,7 +171,7 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
     `node` with none pinned is refused (ValueError) before its session.
     `schemes` are the signature schemes it accepts and `protocol` the id it answers under."""
     if party is not None and party.host != node and trusted_sha512 is None:
-        raise ValueError(f"no key is pinned (trusted_sha512) with the memory attester on {party.host}: the verifier "
+        raise ValueError(f"no key is pinned (trusted_sha512) with the memory attester on {mc.ATTESTER_MACHINE}: the verifier "
                          "trusts a challenger on its own host only under its pinned key (the SHA-512 of its public "
                          "key, as its host gives it)")
     params = params_for() if params is None else params
@@ -432,7 +432,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
                     "the wipe")
     egress = None if c["egress_bits"] is None else sw.egress_units(c["egress_bits"])
     if party.host != node and c["trusted_sha512"] is None:
-        raise ValueError(f"period.json's wipe.trusted_sha512 is unset with the memory attester on {party.host}: the "
+        raise ValueError(f"period.json's wipe.trusted_sha512 is unset with the memory attester on {mc.ATTESTER_MACHINE}: the "
                          "verifier trusts a challenger on its own host only under its pinned key (the SHA-512 of its "
                          "public key, as its host gives it)")
     memory, store = store_of(c), None
@@ -463,7 +463,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
             memory.close()
     k = json.loads(bytes.fromhex(wipe.case["commitment"]))["k"]
     if c["reads"] is not None and k != c["reads"]:
-        raise RuntimeError(f"the memory attester on {party.host} ran {k} reads, not period.json's wipe.reads "
+        raise RuntimeError(f"the memory attester on {mc.ATTESTER_MACHINE} ran {k} reads, not period.json's wipe.reads "
                            f"{c['reads']}: its command chooses them (wipe_party --reads)")
     prover_machine, attester_machine = mc.machines(node, party.host)
     links = [wipe_party.link(e["name"], prover_machine, e["to"], e["via"], mbps=e.get("mbps"), counted_by=e.get("counted_by"))

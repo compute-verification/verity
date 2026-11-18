@@ -520,6 +520,8 @@ def cmd_custody(argv: list[str]) -> int:
         print(json.dumps(rep, indent=2, sort_keys=True, default=str))
     elif rep["preserved"]:
         print(f"{rep['run_id']}: custody on {rep.get('remote')}: attempt + run record {rep['run_record']} ({len(rep['files'])} file(s)); .custody written")
+        if warn := CU.refusal_warning(rep.get("refused") or [], where=f"{d} (never evicted)"):
+            print(f"{rep['run_id']}: {warn}")
         if (ev := rep.get("evicted")) and ev["files"]:
             print(f"{rep['run_id']}: removed {len(ev['files'])} local file(s), {ev['evicted_bytes'] / 1e6:.1f} MB, preserved in {ev['artifact']} "
                   f"(`research data fetch {ev['artifact']} --to {d}` restores them; --keep-local keeps them)")

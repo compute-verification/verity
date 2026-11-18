@@ -310,18 +310,22 @@ def arm_of(mode: str, run, args):
                                                       run_id=settings.RESEARCH_RUN_ID))
 
 
+def tile_digests(run, ended: dict) -> bytes:
+    """An ended pass's tiles' unsalted digests, the leaves the tree salts (`run.leaves`, read before the next pass poisons
+    them; a pass ended without `lag`).  A pass without hashing has no tiles and no leaves: empty."""
+    return run.leaves[:run.nb * ended["tiles"]].cpu().numpy().tobytes() if ended["tiles"] else b""
+
+
 def under_salt(run, ended: dict) -> dict:
-    """An ended pass as the call check compares it: its transcript root and its tiles' unsalted digests, the leaves the
-    tree salts (`run.leaves`, read before the next pass poisons them; a pass ended without `lag`)."""
-    return {"transcript_root": ended["transcript_root"],
-            "digests": run.leaves[:run.nb * ended["tiles"]].cpu().numpy().tobytes()}
+    """An ended pass as the call check compares it: its transcript root and its tiles' unsalted digests (`tile_digests`).
+    A pass with hashing only: without it a pass has no root."""
+    return {"transcript_root": ended["transcript_root"], "digests": tile_digests(run, ended)}
 
 
 def unsalted(run, ended: dict) -> dict:
     """What two passes of the same calls must share although each draws fresh salts: the SHA-512 of their tiles' unsalted
-    digests (`under_salt`), their units and their tiles; never a root."""
-    return {"digests": hashlib.sha512(under_salt(run, ended)["digests"]).hexdigest(), "units": ended["units"],
-            "tiles": ended["tiles"]}
+    digests (`tile_digests`), their units and their tiles; never a root, so a pass without hashing has it too."""
+    return {"digests": hashlib.sha512(tile_digests(run, ended)).hexdigest(), "units": ended["units"], "tiles": ended["tiles"]}
 
 
 def call_verdict(commits: list[dict], err: float) -> dict:
@@ -460,20 +464,21 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
 
 def whole_retained_check(run, forward, side) -> dict:
     """A retained pass of `forward` made eagerly, and one replayed from a whole capture of a retained pass's kind: the same
-    records, call files (each call's rows and A tree) and commitment, byte for byte (`retained_differences`).  Each pass
-    drops its retain directory before it ends, so neither writes the weights' files, which the two would share."""
+    records, call files (each call's A and y rows, less what its fresh salts make differ: `RETAINED_SALTED`) and tile digests
+    (`unsalted`), byte for byte (`retained_differences`).  Each pass drops its retain directory before it ends, so neither
+    writes the weights' files, which the two would share."""
     import shutil
     import tempfile
 
     import torch
-    keep, dirs = ("transcript_root", "activation_roots", "units", "tiles"), [Path(tempfile.mkdtemp(prefix="whole-kept-")) for _ in "ab"]
+    dirs = [Path(tempfile.mkdtemp(prefix="whole-kept-")) for _ in "ab"]
 
     try:
         run.graphs = False
         run.begin(retain=str(dirs[0]))
         at = run.cur.base
         forward()
-        want = retained_end(run, keep)
+        want = retained_end(run)
         run.graphs = True
         run.begin()
         graph = torch.cuda.CUDAGraph()
@@ -490,35 +495,57 @@ def whole_retained_check(run, forward, side) -> dict:
         run.whole_replay(calls)
         graph.replay()
         run.whole_replayed(calls)
-        got = retained_end(run, keep)
+        got = retained_end(run)
         return retained_differences(want, got, dirs)
     finally:
         for d in dirs:
             shutil.rmtree(d, ignore_errors=True)
 
 
-def retained_end(run, keep: tuple) -> tuple:
-    """End `run`'s retained pass without its manifest: its records, call files, the commitment's `keep` and its matmuls.
-    Read after `end`, which joins the pass's writes: on the device a call's record is filled in behind it."""
+def retained_end(run, commitment=None) -> tuple:
+    """End `run`'s retained pass without its manifest: its records, call files, `commitment` of the ended pass (`unsalted`
+    by default) and its matmuls.  Read after `end`, which joins the pass's writes: on the device a call's record is filled
+    in behind it."""
     cur = run.cur
     cur.retain = None
-    commitment = {k: v for k, v in run.end().items() if k in keep}
-    return list(cur.records), list(cur.files), commitment, list(cur.matmuls)
+    ended = (commitment or unsalted)(run, run.end())
+    return list(cur.records), list(cur.files), ended, list(cur.matmuls)
+
+
+#: a retained call's file entries that differ between two passes of the same calls, each drawing its own salts: A's tree
+#: and salts, and y's root, tree and salts (`grouped_check.SALTED`'s calls)
+RETAINED_SALTED = {"call": ("tree", "salts"), "y": ("root", "tree", "salts")}
+
+
+def _unsalted_files(f: dict) -> dict:
+    """A call's file entries less `RETAINED_SALTED`."""
+    y = {"y": {k: v for k, v in f["y"].items() if k not in RETAINED_SALTED["y"]}} if "y" in f else {}
+    return {k: v for k, v in f.items() if k not in RETAINED_SALTED["call"] and k != "y"} | y
+
+
+def _salted_paths(files: list) -> set[str]:
+    """The paths of `files`' salted entries (`RETAINED_SALTED`), which no two passes share the bytes of."""
+    def paths(f: dict, keys: tuple) -> list[str]:
+        return [f[k]["path"] for k in keys if isinstance(f.get(k), dict) and "path" in f[k]]
+    return {p for f in files for p in paths(f, RETAINED_SALTED["call"]) + (paths(f["y"], RETAINED_SALTED["y"]) if "y" in f else [])}
 
 
 def retained_differences(want: tuple, got: tuple, dirs: list[Path]) -> dict:
     """`whole_retained_check`'s verdict on an eager retained pass `want` and a replayed one `got`, each (records, call
     files, commitment, matmuls), retained under ``dirs[0]`` and ``dirs[1]``: ``ok``, and for each part that differs (the
-    records, the call files' entries, the files on disk, the commitment) the first call it differs at, by its index in the
-    pass, its matmul (index, m₁₆ x k x n, weight) and its differing fields."""
+    records, the call files' entries and the files on disk less what fresh salts make differ, `RETAINED_SALTED`; the
+    commitment) the first call it differs at, by its index in the pass, its matmul (index, m₁₆ x k x n, weight) and its
+    differing fields."""
     out: dict = {}
-    for part, a, b in (("records", want[0], got[0]), ("call_files", want[1], got[1])):
+    salted = _salted_paths(want[1]) | _salted_paths(got[1])
+    for part, a, b in (("records", want[0], got[0]),
+                       ("call_files", [_unsalted_files(f) for f in want[1]], [_unsalted_files(f) for f in got[1]])):
         if a != b:
             at = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
             out[part] = {"calls": [len(a), len(b)], "first": at,
                          "matmul": _matmul(want[3][at]) if at < len(want[3]) else None,
                          "fields": _differing(a[at], b[at]) if at < min(len(a), len(b)) else ["count"]}
-    names = [sorted(str(p.relative_to(d)) for p in d.rglob("*") if p.is_file()) for d in dirs]
+    names = [sorted(f for p in d.rglob("*") if p.is_file() and (f := str(p.relative_to(d))) not in salted) for d in dirs]
     if names[0] != names[1]:
         out["disk"] = {"only_eager": sorted(set(names[0]) - set(names[1]))[:8],
                        "only_replayed": sorted(set(names[1]) - set(names[0]))[:8]}
@@ -1009,11 +1036,12 @@ def memory_mib() -> int | None:
         return None
 
 
-def smoke(args) -> None:
+def smoke(args) -> bool:
     """Untimed: both engines resident on the GPU, and each one's first sampling calls.  The stock FP8 engine starts and
     samples; then the Pearl-C engine starts beside it (its install and gates) and samples as stock BF16 and as ``pearlc``.
     Writes each step's time and the GPU's memory use after it, the gates, and the greedy tokens' agreement with BF16.  With
-    ``--retain``, the arm then serves `SERVED`'s requests, each a retained ``pearlc`` pass under its own name."""
+    ``--retain``, the arm then serves `SERVED`'s requests, each a retained ``pearlc`` pass under its own name.
+    Returns whether it passed (no error recorded and every gate ok); `main` exits nonzero when it didn't."""
     ctx, coins = mp.get_context("spawn"), epoch_coins(args, 0)
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "coins": coins.commitment.to_json(), "scheme": getattr(args, "scheme", SCHEME),
                  "schedule": getattr(args, "schedule", "serial"),
@@ -1057,6 +1085,7 @@ def smoke(args) -> None:
     ok = "error" not in out and out.get("gate_ok", False)
     run_result.write(args.out, ok, "pearl-c vLLM e2e smoke: both engines resident, the arm gated, each one's first sampling calls",
                      json.dumps({k: v for k, v in out.items() if k != "gate"}), [(s["step"], s["s"], "s") for s in out["steps"]])
+    return ok
 
 
 def wikitext_windows(model: str, limit: int | None) -> list[list[int]]:
@@ -1217,8 +1246,7 @@ def main() -> None:
     if args.statement and not args.whole_step:
         ap.error("--statement commits the forwards vLLM replays whole: it needs --whole-step")
     if args.smoke:
-        smoke(args)
-        return
+        sys.exit(0 if smoke(args) else 1)
     if args.perplexity:
         sys.exit(perplexity(args))
     ctx, coins, p = mp.get_context("spawn"), epoch_coins(args, 0), prompts(args.reps)

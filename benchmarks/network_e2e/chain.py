@@ -626,21 +626,6 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         pending = sorted(k for k, x in n["rows"].items() if not x.get("ran") or x.get("ok") is None)
         if pending:
             out.append(f"Negatives pending or not run here: {', '.join(pending)} (each row says what it waits on).")
-        ties = [x["tie"] for x in n["rows"].values() if "tie" in x]
-        if not ties:
-            out.append("I/O tie: no sampled ids given (--ids), so no negative has the tie's verdict.")
-        elif not all(t["ran"] for t in ties):
-            out.append(f"I/O tie: {next(t['why'] for t in ties if not t['ran'])}.")
-        else:
-            out.append("I/O tie: `io_tie`'s reference in the clear on a fake upstream's cells and Commit port of the "
-                       "advice and the given ids, not the network attester's cells under its root and the endpoint's Commit "
-                       "proved in an IoTieWindow unit.")
-    t = c.get("tie")
-    if t is not None and t["ran"]:
-        out.append("I/O tie: `io_tie`'s reference in the clear on the negatives' stand-ins (each window's certified "
-                   "frames held to their head and committed under fake salts in place of the network attester's cells, the "
-                   f"sampled ids from {t['from']} under fake salts in place of the Commit's port), not the endpoint's "
-                   "Commit and the network attester's cells in an IoTieWindow unit.")
     where = str(r.get("where") or "")
     if where.startswith("off the developer's node"):
         out.append("Auditor device: the attester ran on another node than the endpoint's, through an ssh forward, not on "

@@ -101,7 +101,6 @@ is 0x7FFF.
 """
 from __future__ import annotations
 
-from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
@@ -168,7 +167,9 @@ NCCL_TREE_CARD = "rtx-pro-6000-server"
 
 
 def _rtx_pro_6000() -> tuple[str, int]:
-    card = load_card(NCCL_TREE_CARD, directory=Path(__file__).resolve().parents[5] / "calibration/hardware/cards")
+    from verity_torch.pouw.row_table_device import CARD_FILES
+
+    card = load_card(NCCL_TREE_CARD, directory=CARD_FILES)
     return "%d.%d" % compute_capability(card), int(number(card["sm"]["count"]))
 #: the records of three runs on an RTX PRO 6000 node: Llama-3.1-70B int8's TP4 capture (GPUs 2, 3, 6, 7, NCCL 2.29.7), the replay
 #: of its every all-reduce through `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py replay`: 5152 calls,

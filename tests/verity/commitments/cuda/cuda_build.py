@@ -1,5 +1,5 @@
-"""How the kernels tests build a test source: by the host's C++ compiler (`host_lib`), and by nvcc for the first GPU's compute
-capability (`device_lib`), the device build cached by the source, the headers it includes, the flags and nvcc's version under
+"""How the kernels tests build a test source: by the host's C++ compiler (`host_lib`), and by nvcc for the target of the first GPU's
+card file (`device_lib`), the device build cached by the source, the headers it includes, the flags and nvcc's version under
 ``~/.cache/verity/kernels``, so a GPU job builds before it leases a GPU and the leased test only runs what it built."""
 from __future__ import annotations
 
@@ -10,6 +10,10 @@ import subprocess
 from functools import cache
 from pathlib import Path
 
+from verity.device import compute_capability, gpu_card_reporting
+
+#: the GPU card files (`verity.device`), whose ``arch`` is the target the device library is built for
+CARD_FILES = Path(__file__).resolve().parents[4] / "calibration/hardware/cards"
 CACHE = Path.home() / ".cache" / "verity" / "kernels"
 HOST_FLAGS = ("-x", "c++", "-O1", "-std=c++17", "-fPIC", "-shared", "-Wall", "-Werror")
 CUDA_FLAGS = ("-x", "cu", "-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared")
@@ -29,21 +33,30 @@ def host_lib(source: Path, flags: tuple[str, ...], out: Path) -> Path:
 
 
 @cache
-def gpu_arch() -> str | None:
-    """The first GPU's compute capability as nvcc's sm number (``"90"``), or None without nvcc or a GPU."""
+def gpu_name() -> str | None:
+    """The name the first GPU reports to nvidia-smi (the card files' ``driver`` values), or None without nvcc or a GPU."""
     if shutil.which("nvcc") is None or shutil.which("nvidia-smi") is None:
         return None
-    r = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"], capture_output=True, text=True,
+    r = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], capture_output=True, text=True,
                        check=False)
-    caps = r.stdout.split() if r.returncode == 0 else []
-    return caps[0].replace(".", "") if caps else None
+    names = r.stdout.splitlines() if r.returncode == 0 else []
+    return names[0].strip() if names else None
+
+
+def arch(name: str) -> str:
+    """The target a library is built for on the device reporting ``name``: its card file's ``arch``
+    (`verity.device.gpu_card_reporting`) without ``sm_``, such as ``90a``; a device no card file names is refused."""
+    card = gpu_card_reporting(name, directory=CARD_FILES)
+    compute_capability(card)
+    return card["arch"].removeprefix("sm_")
 
 
 def device_lib(source: Path, headers: tuple[Path, ...], flags: tuple[str, ...] = ()) -> Path:
     """source built by nvcc with CUDA_FLAGS and flags for the first GPU, from the cache where it is there."""
-    arch = gpu_arch()
-    assert arch is not None, "no nvcc or no GPU"
-    full = (*CUDA_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}", *flags)
+    name = gpu_name()
+    assert name is not None, "no nvcc or no GPU"
+    target = arch(name)
+    full = (*CUDA_FLAGS, f"-gencode=arch=compute_{target},code=sm_{target}", *flags)
     version = subprocess.run(["nvcc", "--version"], capture_output=True, text=True, check=True).stdout
     key = hashlib.sha256(b"\0".join([source.read_bytes(), *(h.read_bytes() for h in headers), " ".join(full).encode(),
                                      version.encode()]))

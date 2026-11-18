@@ -208,6 +208,7 @@ import multiprocessing
 import multiprocessing.connection
 import os
 import re
+import resource
 import shutil
 import signal
 import subprocess
@@ -653,8 +654,10 @@ def own_composed(a: argparse.Namespace, compose: Callable, defn: object, templat
                  program: str) -> tuple[dict, bool | None]:
     """A caller's composer ``compose`` (``(out, partition digest, program digest) -> line``) for ``template``'s circuit at
     ``out``, bound to ``pd`` and ``program``: through ``a.compose_cache`` (`compose_circuit.cached`, keyed by `compose_key`)
-    when given and the composer says what it composes from, else composed at ``out``. -> (compose's line with the circuit's
-    META, whether the cache held it already: None off the cache)."""
+    when given and the composer says what it composes from, else composed at ``out``. Through the cache without
+    ``a.keep_circuits``, only the compose's record is kept and ``out`` is not written (its line's ``"text": False``): `stage`
+    composes it for a sampled member. -> (compose's line with the circuit's META, whether the cache held it already: None
+    off the cache)."""
     import compose_circuit as CM
 
     cache = getattr(a, "compose_cache", None)
@@ -663,8 +666,9 @@ def own_composed(a: argparse.Namespace, compose: Callable, defn: object, templat
         out.unlink(missing_ok=True)
         made = compose(out, pd, program)
         return {**made, "meta": made.get("meta") or CM.head(out)}, None
-    kept = (Path(cache) / key / "made.json").exists()
-    return CM.cached(Path(cache), key, out, {"partition": pd, "program": program}, lambda p: compose(p, pd, program)), kept
+    bind, keep = {"partition": pd, "program": program}, bool(getattr(a, "keep_circuits", False))
+    kept = (CM.entry_of(Path(cache), key, bind, keep) / "made.json").exists()
+    return CM.cached(Path(cache), key, out, bind, lambda p: compose(p, pd, program), keep), kept
 
 
 def circuit_of(path: Path, made: dict, read: set[Path]) -> FI.FlockCircuit:
@@ -695,31 +699,129 @@ def _warm_one(t: str) -> dict:
     w, t0 = _WARM, time.time()
     compose, defn = w["sets"][t]
     made, kept = own_composed(w["a"], compose, defn, t, None, w["pd"], w["program"])
-    return {"template": t, "seconds": round(time.time() - t0, 1), "kept": kept, "pin": made["pin"], "k_log": made.get("k_log")}
+    return {"template": t, "seconds": round(time.time() - t0, 1), "kept": kept, "pin": made["pin"], "k_log": made.get("k_log"),
+            "peak_gib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1), "bytes": made.get("bytes"),
+            "text": made.get("text", True)}
 
 
-def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1) -> list[dict]:
-    """Every template of window ``mine`` that a caller's composer in ``sets`` makes, and says what it makes it from
-    (`compose_key`), composed into ``a.compose_cache`` bound to the window's partition and program, ``jobs`` at a time, each in
-    a process forked for it: a window's templates and binding are public, so this runs before its timed audit, whose staging
-    then links each kept circuit and reads none (`own_composed`). A 4,32,4 window's Int8RowQuant_v3 holds its text, past 100 GB,
-    while it composes, so ``jobs`` is what the machine's memory takes. -> each template's seconds, pin and whether the cache
-    held it already."""
+def _warm_child(t: str, conn: multiprocessing.connection.Connection) -> None:
+    try:
+        conn.send(("row", _warm_one(t)))
+    except BaseException as e:  # noqa: BLE001 - the parent names it
+        conn.send(("error", f"{type(e).__name__}: {e}"))
+    finally:
+        conn.close()
+
+
+#: what a compose's earlier warm measured, by template, kept in the compose cache: the next warm's order and memory bound
+WARM_SECONDS = "warm-seconds.json"
+#: the memory a compose with no earlier measurement is taken to need, in GiB: a 4,27,2 window's composing peaked at 27.5
+WARM_UNKNOWN_GIB = 32.0
+#: GiB a warm leaves free on its cache's file system, by default: it starts nothing, and stops, where the free space is under it
+WARM_MIN_FREE_GIB = 100.0
+#: seconds between a running warm's looks at its cache's free space, each a ``DISK`` line
+WARM_DISK_EVERY_S = 30
+
+
+def warm_todo(sets: dict, mine: CS.Window) -> list[str]:
+    """The templates of window ``mine`` that `warm` composes: those whose composer in ``sets`` says what it composes from."""
+    return [t for t in dict.fromkeys(m.template for m in mine.members)
+            if callable(sets.get(t, (None,))[0]) and getattr(sets[t][0], "inputs", None) is not None]
+
+
+def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1, mem_gib: float | None = None,
+         done: Callable[[dict], None] | None = None, min_free_gib: float = WARM_MIN_FREE_GIB) -> list[dict]:
+    """Every template of `warm_todo`, composed into ``a.compose_cache`` bound to the window's partition and program, up to
+    ``jobs`` at a time, each in a process forked for it alone: a window's templates and binding are public, so this runs
+    before its timed audit, whose staging then reads each kept record (`own_composed`). Without ``a.keep_circuits`` a
+    compose keeps its record alone (`compose_circuit.recorded`). The longest an earlier warm measured start first
+    (`WARM_SECONDS` in the cache; an unmeasured one before them), and one starts only while the peaks measured for those
+    running (`WARM_UNKNOWN_GIB` unmeasured) and its own stay within ``mem_gib``, else alone. None starts, and the warm
+    stops, where the cache's file system has less than ``min_free_gib`` free, or would, by what earlier warms measured
+    the kept circuits to take; a ``DISK`` line every `WARM_DISK_EVERY_S` says how much it has taken. ``done`` gets each
+    template's row as it finishes, with ``n`` of ``of``. -> each template's seconds, pin, peak resident GiB (its
+    process's, the forked parent's pages included), circuit bytes, whether its text is kept and whether the cache held
+    it already."""
     if not getattr(a, "compose_cache", None):
         raise ValueError("warm makes a5's compose cache: give --compose-cache")
-    todo = [t for t in dict.fromkeys(m.template for m in mine.members)
-            if callable(sets.get(t, (None,))[0]) and getattr(sets[t][0], "inputs", None) is not None]
+    cache = Path(a.compose_cache)
+    cache.mkdir(parents=True, exist_ok=True)
+    before = json.loads((cache / WARM_SECONDS).read_text()) if (cache / WARM_SECONDS).exists() else {}
+    todo = sorted(warm_todo(sets, mine), key=lambda t: -(before.get(t) or {}).get("seconds", float("inf")))
+    need = {t: (before.get(t) or {}).get("peak_gib") or WARM_UNKNOWN_GIB for t in todo}
+    keep = bool(getattr(a, "keep_circuits", False))
     _WARM.update(a=a, sets=sets, pd=mine.partition_digest, program=mine.partition["program"])
-    if jobs <= 1:
-        return [_warm_one(t) for t in todo]
-    with ProcessPoolExecutor(jobs, mp_context=multiprocessing.get_context("fork")) as ex:
-        return [f.result() for f in [ex.submit(_warm_one, t) for t in todo]]
+    got: list[dict] = []
+    of, free0 = len(todo), shutil.disk_usage(cache).free
+
+    def floor() -> None:
+        free, taken = shutil.disk_usage(cache).free / 2**30, max(0, free0 - shutil.disk_usage(cache).free) / 2**30
+        measured = [(before.get(t) or {}).get("bytes") for t in todo + [t for _p, t in running.values()]] if keep else []
+        ahead = sum(b or 0 for b in measured) / 2**30
+        if free >= min_free_gib + ahead:
+            return
+        done_n = sum(1 for g in got if not g["kept"])
+        guess = taken / done_n * (of - len(got)) if done_n and None in measured else 0
+        raise RuntimeError(
+            f"warm: stopped with {of - len(got)} of {of} templates to go: {cache}'s file system has "
+            f"{free:.1f} GiB free and the floor is {min_free_gib:g} GiB (--min-free-gb); this warm has taken {taken:.1f} GiB "
+            f"for {len(got)} templates, and the kept circuits still to come take {ahead + guess:.1f} GiB more "
+            f"({'by earlier warms' if not guess else 'extrapolated from this one'}), "
+            f"{taken + ahead + guess:.1f} GiB in all{'' if keep else ' (records alone: nothing past them is kept)'}")
+
+    def finished(row: dict) -> None:
+        got.append(row := {**row, "n": len(got) + 1, "of": of})
+        if not row["kept"]:
+            before[row["template"]] = {"seconds": row["seconds"], "peak_gib": row["peak_gib"], "bytes": row.get("bytes")}
+        if done:
+            done(row)
+
+    ctx, running, looked = multiprocessing.get_context("fork"), {}, time.time()
+    try:
+        floor()
+        while todo or running:
+            held_gib = sum(need[t] for _p, t in running.values())
+            while todo and len(running) < max(1, jobs) and (not running or mem_gib is None
+                                                            or held_gib + need[todo[0]] <= mem_gib):
+                floor()
+                held_gib += need[t := todo.pop(0)]
+                r, w = ctx.Pipe(duplex=False)
+                (proc := ctx.Process(target=_warm_child, args=(t, w))).start()
+                w.close()
+                running[r] = (proc, t)
+            ready = multiprocessing.connection.wait(list(running), timeout=WARM_DISK_EVERY_S)
+            if time.time() - looked >= WARM_DISK_EVERY_S:
+                looked, free = time.time(), shutil.disk_usage(cache).free
+                print("DISK " + json.dumps({"free_gib": round(free / 2**30, 1), "taken_gib": round(max(0, free0 - free) / 2**30, 1),
+                                            "running": sorted(t for _p, t in running.values()), "done": len(got), "of": of}),
+                      flush=True)
+                floor()
+            for r in ready:
+                proc, t = running.pop(r)
+                try:
+                    kind, row = r.recv()
+                except EOFError:
+                    kind, row = "error", f"its process ended with no row (exit {proc.join() or proc.exitcode})"
+                proc.join()
+                if kind != "row":
+                    raise RuntimeError(f"warm: {t}'s compose failed: {row}")
+                finished(row)
+        return got
+    finally:
+        for proc, _t in running.values():
+            proc.kill()
+            proc.join()
+        (cache / WARM_SECONDS).write_text(json.dumps(before, sort_keys=True, indent=1) + "\n")
 
 
 def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
     """A sampled member's prover's file and its circuit, under the header its public file was held to before the sample, the
     circuit held to its compose's line first (`held`)."""
     m, st_dir = mm["m"], mm["st"]["dir"]
+    if not mm["circuit"].exists() and mm.get("make"):
+        if (pin := mm["make"]()[0]["pin"]) != mm["pin"]:
+            raise RuntimeError(f"member {mm['k']}'s template {m.template}, composed after the sample: its circuit's SHA-512 is "
+                               f"{pin}, not {mm['pin']}, the one its record names and its public file was held to")
     held(mm["circuit"], mm["circ"], mm["read"])
     if mm["circuit"] != st_dir / "circuit.txt":
         link(mm["circuit"], st_dir / "circuit.txt")
@@ -816,7 +918,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
     form = member_form(mine, rec)
-    members, publics, checks, composed, programs_ok, kept, read = [], {}, {}, {}, {}, {}, set()
+    members, publics, checks, composed, programs_ok, kept, read, makes = [], {}, {}, {}, {}, {}, set(), {}
     t_stage = time.time()
     for k, m in enumerate(mine.members):
         own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
@@ -835,6 +937,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         elif own:
             circuit = st_dir / "circuit.txt"
             made, kept[m.template] = own_composed(a, sets[m.template][0], defn, m.template, circuit, pd, part["program"])
+            if made.get("text") is False:   # a record alone: its circuit is composed in full only if a member of it is sampled
+                makes[m.template] = functools.partial(own_composed, argparse.Namespace(), sets[m.template][0], defn, m.template,
+                                                      circuit, pd, part["program"])
             circ = circuit_of(circuit, made, read)
             composed[m.template] = (circuit, made, circ)
         else:
@@ -870,6 +975,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                            "detail": {} if why is None else {"header": why}}
         publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
         members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
+                        "make": makes.get(m.template),
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
                                "program_file": out / "program.json",
                                "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin")},
