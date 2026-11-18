@@ -1,7 +1,7 @@
 """`whole_run.sh`'s inputs: per SHAPE and N, DIR/run-SHAPE-N.json, the `run` piece's input (`Run.run`, the whole run of one
 registration) for a valid v1 audit under the stratified rate of two in the population (`stratified-rate:2/P` over its P
 units), on challenger coins with their evidence (`test_difftest._from_challenger`), which the run accepts. Its program is a
-template population of about N units (`mixed_population_program`), with N/8 more ports (`test_difftest._many_ports`, a MoE
+template population of about N units (`wired_population_program`), with N/8 more ports (`test_difftest._many_ports`, a MoE
 window's shape) and every template a stratum, so the sample is one unit of each template, and two of one that holds
 more than half the units, however large N is:
 
@@ -27,8 +27,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests/verity/protocols/proofs/spot/verifier/lean"))
 
 import test_difftest as T  # noqa: E402
-from verity.circuits import codec, partition_object as PO  # noqa: E402
-from verity.circuits.population import mixed_population_program  # noqa: E402
+from verity.circuits import codec  # noqa: E402
+from verity.circuits.population import wired_population_program  # noqa: E402
 
 L5 = [
     ('MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}', 32),
@@ -52,9 +52,12 @@ def members(shape: str, n: int) -> list:
     raise ValueError(f"shape {shape!r}: toy or l5")
 
 
+def wired(ms: list) -> tuple:
+    return wired_population_program(ms, {"templates": [[codec.descriptor_id(t), c] for t, c in ms]})
+
+
 def case(shape: str, n: int) -> dict:
-    ms = members(shape, n)
-    s = T.Setup(mixed_population_program(ms), PO.template_instances_query([t for t, _ in ms]))
+    s = T.Setup(*wired(members(shape, n)))
     T.PROGRAMS[s.sha512] = s.program
     T.PROGRAMS_TEMPLATES = s.templates
     sampling_design = f"stratified-rate:2/{s.population}"
@@ -75,8 +78,8 @@ def case(shape: str, n: int) -> dict:
 
 def desc(shape: str, n: int) -> dict:
     ms = members(shape, n)
-    return T._json({"program": codec.encode_program(mixed_population_program(ms)),
-                    "query": PO.template_instances_query([t for t, _ in ms]), "counts": [c for _, c in ms]})
+    program, query = wired(ms)
+    return T._json({"program": codec.encode_program(program), "query": query, "counts": [c for _, c in ms]})
 
 
 def main(out: Path, shape: str, ns: list[int], check: bool, only_desc: bool) -> None:
