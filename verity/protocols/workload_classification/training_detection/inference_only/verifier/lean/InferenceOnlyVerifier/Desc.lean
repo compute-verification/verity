@@ -55,7 +55,8 @@ followed back through the step's return (`carry`, `carriesRead`: a run returned 
 other leaf a chain of positions to where it leaves the carry or to its cycle, `Chain`), never iteration by iteration.
 What has no closed form here is walked one by one up to `WALK` and refused past it (`unwalked`, with what it would have
 walked): the members of a batch whose returns are none of those, strided reads of a call's, scan's or batch's output
-that aren't, a scan's ys read iteration by iteration, and chains longer than `WALK`. Still walked unbounded: the leaves
+that aren't, a scan's ys read iteration by iteration, chains longer than `WALK`, and a grid part's pieces, one a lane a
+period (`ofPart`, `gridWalk`). Still walked unbounded: the leaves
 of a strided piece taken through a parameter (`throughArg`), and segments of copies that overlap other reads of the
 same inference block (expanded copy by copy, `freshWidth`). Serve_v1 meets none of the walks, at word level or on bits.
 
@@ -68,8 +69,8 @@ root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, w
 (a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; a scan of no
 iterations with output leaves, read or not; or a body calling a Definition decoded after it, a Definition not as the
 decoder gives it, or a root with parameters, which the decoder never gives: `walkable`), `program` (a reference the
-layout can't resolve), `unwalked` (what `analyze` would walk one by one past `WALK`; its `message` says what and how
-many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
+layout can't resolve), `unwalked` (a grid part of more than `WALK` pieces, `gridWalk`, or what `analyze` would walk
+one by one past `WALK`; its `message` says what and how many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
 `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
 node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `InferenceOnlyCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
@@ -1100,6 +1101,17 @@ def intoOf (offs : Array Nat) (own : Array (Option Nat)) (theta : Array Bool) (r
         if s.count == 0 || own[k']! == some u || theta[k']! then into else into.modify u (·.push s)) into)
     (Array.replicate n #[])
 
+/-- The most pieces `ofPart` makes of one grid part of `P`'s bodies, one a lane a period. -/
+def gridPieces (P : Prog) : Nat :=
+  P.defs.foldl (init := 0) fun m defn => if defn.prim then m else
+    let parts := defn.body.nodes.foldl (fun acc n => n.args.foldl (fun acc a => acc ++ a.seq.parts) acc) defn.body.ret.parts
+    parts.foldl (init := m) fun m q => match q with
+      | .grid _ lanes => max m (lanes.size * (lanes[0]?.map Lane.periods).getD 0)
+      | _ => m
+
+/-- A grid part is summarized one piece a lane a period (`ofPart`), so one of more than `WALK` pieces is refused. -/
+def gridWalk (P : Prog) : Except String Unit := walkAtMost "pieces of a grid part, one a lane a period" (gridPieces P)
+
 /-- `analyze`'s refusal as `evaluate` gives it: a walk past `WALK` as itself (`unwalked: ` and the reason), any other as
 `program`. -/
 def analyzeCode (e : String) : String := if e.startsWith UNWALKED then e else "program"
@@ -1110,6 +1122,7 @@ def evaluate (j : Json) : Except String Json := do
   if P.orderViolation.isSome then throw "not-topological"
   if !(rootLaidOut P && inputsAtRoot P) then throw "program"
   if !walkable P then throw "program"
+  gridWalk P
   let reads ← match analyze P with
     | .ok r => pure r
     | .error e => throw (analyzeCode e)

@@ -42,7 +42,11 @@ ALLOWED: dict[str, str] = {
         "verifier imports it",
     "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/Desc.lean":
         "InferenceOnlyVerifier.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
-        "which refuses past its limit",
+        "which refuses past its limit; and a grid part's pieces, one a lane a period (ofPart): bounded by gridWalk at WALK, "
+        "2^20 pieces a part, and refused by name past it (unwalked). The bound admits a grid of up to 2^20 lanes times "
+        "periods; the served classes' grids are 128 and 768 pieces at the class 4,27,2, a period count that grows with the "
+        "class's batch and steps, so it is a limit on class size. An exception granted until one piece a lane replaces "
+        "the walk (LEAN-335, due Fri 20 Nov), which deletes it and these words",
     "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/DescFuzz.lean":
         "InferenceOnlyVerifier.DescFuzz, the desc fuzzer the Lean audit runs (InferenceOnlyVerifier.DescFuzzMain): it visits every member of every "
         "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
