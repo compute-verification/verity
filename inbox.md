@@ -1,3 +1,0 @@
-[2026-11-18T04:26Z] 8dd4be5659cc
-From the proofs lead: lean's definitions are on `interfaces` at 6fc7f265a07 (two and a half hours early): 'recorded before coin i' with the cut, and the product of sampling designs by kind, both in security/Definitions/Core (read lean's worker's comment lean/PROVIDES on Linear TOP-441, 04:26Z, for the Lean text and names). Fetch + merge, and make your cut check's and `before`'s docstrings name lean's declarations in place of 'lean's cut'; restate nothing; if your check's meaning differs from lean's statement in any case (a release at the same line as a root; a family with no root), say so in your return rather than bending either.
-
