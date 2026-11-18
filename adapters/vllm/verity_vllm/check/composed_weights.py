@@ -77,6 +77,19 @@ def to_served(arr: np.ndarray, src_dtype: str, bits: int) -> tuple[np.ndarray, s
     raise ValueError(f"no served-width rule for checkpoint dtype {src_dtype} -> Value<{bits}>")
 
 
+_WORD_BYTES = {"I8": 1, "F32": 4}
+
+
+def _registered_words(ck: CheckpointIndex, src: str, shape: list[int], bits: int,
+                      rows: tuple[int, int] | None) -> tuple[np.ndarray, str] | None:
+    """An int8 linear's weight or scale read as the u16 words it is registered as (a 16-bit field whose last axis is the tensor's
+    last axis in words): the tensor's bytes, low first. None for any other field."""
+    dt = ck.dtype(src)
+    if bits != 16 or dt not in _WORD_BYTES or not shape or ck.tensors[src][2][-1] * _WORD_BYTES[dt] != 2 * shape[-1]:
+        return None
+    return np.ascontiguousarray(ck.array(src, rows=rows)).view("<u2"), f"{dt} bytes as u16 words"
+
+
 def _rank_rows(srcs: list[str], served, ck: CheckpointIndex, world: int, rank: int) -> list[np.ndarray]:
     """The rank's dim-0 slice of each whole checkpoint tensor `srcs`, read as its row range.  A source whose rows do not split by the
     world is refused after the whole read of every source, the order in which composing from whole tensors meets the two faults."""
@@ -136,7 +149,8 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
     tied = bool(ck.config.get("tie_word_embeddings", False))
 
     def served(src: str, rows: tuple[int, int] | None = None) -> np.ndarray:
-        a, cast = fp8_ue8m0.served_words(ck, src, bits, rows) or to_served(ck.array(src, rows=rows), ck.dtype(src), bits)
+        a, cast = (fp8_ue8m0.served_words(ck, src, bits, rows) or _registered_words(ck, src, shape, bits, rows)
+                   or to_served(ck.array(src, rows=rows), ck.dtype(src), bits))
         if cast:
             note["cast"] = cast
         note["sources"].append(src)

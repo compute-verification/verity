@@ -1,6 +1,6 @@
 """The exact-int8 profile's linear and attention (`TargetProfile.int8_exact`) as Definitions: what `verity_vllm.engine.int8_exact`
 (the plain int8 linear) and `verity_vllm.engine.int8_attention` (compute accounting's integer LUT softmax) compute in torch, on the
-CPU and the GPU alike.  The linear's product is `verity.circuits.ops.gemm.ScaledMmS8_v1` over the sm_120 s8 IMMA step; the
+CPU and the GPU alike.  The linear's product is `verity.circuits.ops.gemm.ScaledMmS8_v3` over the sm_120 s8 IMMA step; the
 attention's matmuls are the shared s8 family's plain arm (`verity.circuits.ops.s8.S8Matmul_v1`: NOISE "none", no tail, COMMIT
 "final"); every rounding is its own primitive, so the census counts each.
 
@@ -18,8 +18,9 @@ words of four codes each (`U8x4ToU32`, code 4i its low byte), then s, so its bit
 which no gate reads, is the round of the table: each round's quantizers are a template of their own, so a sample
 stratified by template has a reader of every round's table.
 
-The linear (`Int8Linear{K,N}` on one token row: `Int8RowQuant`, then `ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}`, two Calls
-in a served Program), weights W [N, K] s8 with per-row scales s_w; per output, `ScaledMmS8Coordinate_v1`:
+The linear (`Int8Linear_v3{K,N}` on one token row: `Int8RowQuant`, then `ScaledMmS8_v3{K,N,DOT=BlackwellS8ImmaDot32_v1}`, two
+Calls in a served Program), weights W [N, K] s8 with per-row scales s_w, read as the u16 words they are registered as (W's row
+K/2 words, a code's byte low first; s_w[n] 2 words, low first); per output, `ScaledMmS8Coordinate_v1`:
 
     Y_n  = sum_k X_k W_nk                                      K/32 satfinite IMMA steps from 0, exact: |Y_n| <= 127 * 128 * K < 2^31
     y_n  = bf16(RN32(RN32(RN32(Y_n) s_a) s_w[n]))              S32ToF32Rn, F32MulV2 twice (the activation scale first), F2fpBf16
@@ -75,7 +76,7 @@ from verity_vllm.definitions.registry.dsa import I32Sub
 from verity_vllm.definitions.registry.prims import BF16, F32, I32, bits_of, f32_of
 from verity_vllm.definitions.registry.topp_word_gates import I32ToF32
 
-V8, F64 = Value(8), Value(64)
+V8, U16, F64 = Value(8), Value(16), Value(64)
 TOP = 127
 SCALE_FLOOR = 1e-30
 LOG2E = 1.4426950408889634
@@ -304,22 +305,17 @@ def Int8RowQuantV5(B, S, x):
 
 
 def scaled_mm(K: int, N: int):
-    """`ScaledMmS8_v1{K, N, DOT=BlackwellS8ImmaDot32_v1}` (`verity.circuits.ops.gemm`): one quantized token row against the N
-    weight rows, `ScaledMmS8Coordinate_v1` per output, each a `Q_word` unit (`verity.circuits.cut.separable`)."""
-    return bind(GEMM.ScaledMmS8, K=K, N=N, **GEMM.GEMM_SM120_S8)
-
-
-def scaled_mm_words(K: int, N: int):
-    """`ScaledMmS8_v3{K, N, DOT=BlackwellS8ImmaDot32_v1}`: `scaled_mm` with W's rows and scales the u16 words a class circuit's
-    unit reads them as."""
+    """`ScaledMmS8_v3{K, N, DOT=BlackwellS8ImmaDot32_v1}` (`verity.circuits.ops.gemm`): one quantized token row against the N
+    weight rows as their registered u16 words, `ScaledMmS8Coordinate_v1` per output, each a `Q_word` unit
+    (`verity.circuits.cut.separable`)."""
     return bind(GEMM.ScaledMmS8V3, K=K, N=N, **GEMM.GEMM_SM120_S8)
 
 
-@composite("Int8Linear", 1, ["K", "N"],
-           lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, V8))), ("sw", Array(S.N, F32))),
+@composite("Int8Linear", 3, ["K", "N"],
+           lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K // 2, U16))), ("sw", Array(S.N, Array(2, U16)))),
                       Tuple(Array(S.K, V8), F32, Array(S.N, BF16))), conformance=_CONF)
-def Int8Linear(B, S, x, w, sw):
-    """The plain int8 linear on one token row: (X, s_a, y), `Int8RowQuant` then `ScaledMmS8_v1` (`scaled_mm`)."""
+def Int8LinearV3(B, S, x, w, sw):
+    """The plain int8 linear on one token row: (X, s_a, y), `Int8RowQuant` then `ScaledMmS8_v3` (`scaled_mm`)."""
     q = B.call(bind(Int8RowQuant, K=S.K), x)
     return tuple_of(q[0], q[1], B.call(scaled_mm(S.K, S.N), q[0], q[1], w, sw))
 
@@ -461,6 +457,6 @@ def Int8KvQuant(B, S, k, v, sk):
     return tuple_of(kq, vq, cq[1], v0)
 
 
-INT8_COMPOSITES = [Int8QuantElement, Int8RowScale, Int8StaticQuant, Int8RowQuant, Int8Linear, Int8AttnScale, Int8LutSoftmax,
+INT8_COMPOSITES = [Int8QuantElement, Int8RowScale, Int8StaticQuant, Int8RowQuant, Int8LinearV3, Int8AttnScale, Int8LutSoftmax,
                    Int8AttnOut, Int8LutAttentionRow, Int8ColumnQuant, Int8KvQuant, Exp2Lut127V2, Int8LutSoftmaxV2, Int8LutAttentionRowV2,
                    Int8RowQuantV3, Int8RowQuantV5]

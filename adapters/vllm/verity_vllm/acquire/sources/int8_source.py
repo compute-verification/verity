@@ -2,7 +2,7 @@
 inside one module body, committed as the ops computed them.
 
 - `verity_int8::row_quant` inside a linear module: its (x_q, s_a) are the `call_boundaries` identities `<linear>/<fx node>/0` and `/1`
-  (`Int8RowQuant_v1`, read only by the linear's `ScaledMmS8_v1`), claimed here (`claim`) so the call-boundary source never evaluates
+  (`Int8RowQuant_v1`, read only by the linear's `ScaledMmS8_v3`), claimed here (`claim`) so the call-boundary source never evaluates
   them on the host.  The fx node's name counts on through the run, so the names come from the manifest: per (engine step, module) its
   one Int8RowQuant_v1 site.
 - `verity_int8::kv_quant_batch` inside an attention module, or `verity_int8::kv_quant_window_batch` under a credited cache read:

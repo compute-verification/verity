@@ -6,7 +6,7 @@ from typing import Any, Callable
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """The linear at K = 64 over two output rows and its quantizer Call (its product is `ops.gemm`'s `ScaledMmS8_v1`, checked there);
+    """The linear at K = 64 over two output rows and its quantizer Call (its product is `ops.gemm`'s `ScaledMmS8_v3`, checked there);
     one KV head's 3-key window at d = 32; one row of 33 keys (P V' over two k steps, the second zero-padded); and the primitives no
     composite here reaches whole."""
     from verity.circuits.defs import bind
@@ -15,7 +15,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
     scale = 32 ** -0.5
     return [
-        ("Int8Linear_v1", lambda: bind(X.Int8Linear, K=64, N=2)),
+        ("Int8Linear_v3", lambda: bind(X.Int8LinearV3, K=64, N=2)),
         ("Int8RowQuant_v1", lambda: bind(X.Int8RowQuant, K=64)),
         # the same quantizer with x as 32 rows of 2
         ("Int8RowQuant_v3/r32", lambda: bind(X.Int8RowQuantV3, K=64, R=32)),
