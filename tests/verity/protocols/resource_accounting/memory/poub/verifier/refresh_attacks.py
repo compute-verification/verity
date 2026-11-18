@@ -376,6 +376,27 @@ def late_rekey(s: Session) -> Iterable:
     return ()
 
 
+def chosen_origin(second: str) -> Cheat:
+    """lean's `prefix_origin_reads_key` on the rota by fresh ordinal: fresh D and G after F in window 0 (ordinals 1
+    and 2, so F and G are both class 0); in window 2, after the control's re-key of F has its coin, a second re-key K
+    whose origin is `second`, G or F again, picked on that coin; K read in windows 2 and 3."""
+    def cheat(s: Session) -> Iterable:
+        if s.t == 0:
+            s.fresh("D", pages(3000, 1))
+            s.fresh("G", pages(3100, 2))
+        if s.t == 2:
+            s.rekey("K", ("append", s.index(second), 0), 2)
+        if s.t == 4:
+            s.release("K")
+        return ("K",) if s.t in (2, 3) else ()
+    return cheat
+
+
+def origin_choice() -> dict[str, Outcome]:
+    """Both of `chosen_origin`'s picks, with every rule of this mirror on."""
+    return {second: play(chosen_origin(second)) for second in ("G", "F")}
+
+
 @dataclass(frozen=True)
 class Attack:
     name: str
@@ -523,6 +544,9 @@ def table() -> str:
         off, on = pair(a)
         rows.append((a.name, a.rule, "rejected " + str(off.failure) if off.free is None else str(off.free),
                      "rejected" if on.free is None else str(on.free), on.failure or "accepted"))
+    for second, o in origin_choice().items():
+        rows.append((f"chosen origin, K of {second} (old rota)", "none in this mirror", "-",
+                     "rejected" if o.free is None else str(o.free), o.failure or "accepted"))
     return _grid(rows)
 
 
