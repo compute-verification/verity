@@ -680,8 +680,9 @@ def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_the
     assert "members" not in doc and doc["cap"] == 2 and tuple(I.Wire.of(w) for w in doc["wires"]) == chain().wires
     mine = I.window_of_record(doc, SAMPLING_DESIGN, by_id)
     assert mine.members == win.window.members and mine.partition_digest == win.window.partition_digest
-    with pytest.raises(ValueError, match=r"\['partition', 'program'\] are not the ones its templates make"):
-        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [0]}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
+    stepped = I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [0]}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
+    assert stepped.partition_digest == mine.partition_digest and (
+        [stepped.reads(m, "x").tolist() for m in stepped.members if m.wired] != [mine.reads(m, "x").tolist() for m in mine.members if m.wired])
     with pytest.raises(ValueError, match="order: wire 0"):
         I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 2}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
     for bad, why in [({k: v for k, v in doc.items() if k != "cap"}, "one or the other"), ({**doc, "members": []}, "one or the other"),
