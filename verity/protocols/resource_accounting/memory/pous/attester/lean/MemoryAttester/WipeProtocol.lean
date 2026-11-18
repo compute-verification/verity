@@ -277,6 +277,18 @@ def checkFloored (schemes : Schemes) (p : Params) (c : StreamedWipe.Commitment) 
   | some why => .reject (FLOOR ++ why)
   | none => check schemes p c e
 
+theorem checkFloored_accept {schemes : Schemes} {p : Params} {c : StreamedWipe.Commitment} {e : Evidence}
+    {pub : Public} {prof : StreamedWipe.Params × Int} (h : checkFloored schemes p c e = .accept pub prof) :
+    check schemes p c e = .accept pub prof := by
+  unfold checkFloored at h
+  split at h
+  · cases h
+  · exact h
+
+theorem checkFloored_unfloored {schemes : Schemes} {p : Params} {c : StreamedWipe.Commitment} {e : Evidence}
+    (h : p.floors = none) : checkFloored schemes p c e = check schemes p c e := by
+  simp [checkFloored, h]
+
 def mkProtocol (id : String) (schemes : Schemes) : Core.Protocol where
   id := id
   Params := Params
