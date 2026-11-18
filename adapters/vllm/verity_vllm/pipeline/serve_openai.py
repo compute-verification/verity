@@ -146,7 +146,8 @@ from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_
                                    serve_learn as SL, serve_release as RL, serve_day as SD, serve_poub as SR,
                                    serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.scheme_plugin import write_reports
-from verity_vllm.pipeline.serve_admit import Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
+from verity_vllm.pipeline.serve_admit import (Admission, Delta, admission_order, admission_settings, engine_id_of, keep_scheduler_rows,
+                                              new_http_id, protocols_doc)
 from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of, served_statics,
                                                user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop, advice_trace
@@ -575,24 +576,6 @@ class _Route:
                 pass
         assert self.answer is not None
         return self.answer
-
-
-def protocols_doc(opts: Any) -> dict[str, dict[str, Any]]:
-    """``--protocols-config``: a JSON object, or a JSON file, ``{name: {...}}``."""
-    from verity_vllm.protocols import load_settings
-
-    v = opts.protocols_config
-    return load_settings(json.loads(v) if v and v.lstrip().startswith("{") else v or None)
-
-
-def admission_settings(opts: Any) -> dict[str, Any]:
-    """The admission scheme's settings: ``--protocols-config``'s entry under its name."""
-    return protocols_doc(opts).get(M.providing("admission").name, {})
-
-
-def admission_order(opts: Any) -> str:
-    """The admission's order, its settings' ``order``: ``arrival`` where they name none."""
-    return admission_settings(opts).get("order", "arrival")
 
 
 def listed(opts: Any, out: Path) -> list[tuple[Any, dict[str, Any]]]:
