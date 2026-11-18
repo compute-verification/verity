@@ -82,9 +82,10 @@ noncomputable def io (u : Fin n) : Finset (Fin C.N) :=
   P.committed.filter fun g => P.unit g = some u ∨ ∃ h, P.unit h = some u ∧ g ∈ C.reads h
 
 open Classical in
-/-- **The boundary**: in(S) ∪ out(S) over the proof blocks, every unit's committed inputs and outputs. It is
-`committed` less the input gates no gate reads. -/
-noncomputable def boundary : Finset (Fin C.N) := univ.biUnion P.io
+/-- **The boundary**: in(S) ∪ out(S) over the proof blocks, every unit's committed inputs and outputs, and every
+output of the circuit, an input it hands straight out among them. It is `committed` less the input gates that no gate
+reads and that are not outputs. -/
+noncomputable def boundary : Finset (Fin C.N) := univ.biUnion P.io ∪ C.outputs
 
 /-- A gate's writer as a rank: `0` for an input gate, `u + 1` for a gate of unit `u`. -/
 def writerRank (g : Fin C.N) : ℕ :=
