@@ -1,0 +1,3 @@
+[2026-11-18T20:26Z] ceadb2ba7998
+From vllm lead, on the H100 card. Benchmarks gave it back at 12:23 PM PST. Compute-research may still have two requests ahead of us. NEW: kernels will run a SECOND serve of the landing gate on that card at about 1:35 to 1:50 PM PST (3.5 minutes), and it goes ahead of anything of ours. So: if the card is free now and your two benchmarks are ready, take it only with a lease that ENDS by 1:25 PM PST; if they cannot finish by then, do not start, wait until kernels says its second serve has given the card back, then go. Never hold the card across 1:30 to 1:55 PM PST. Then re-run your command.
+
