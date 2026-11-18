@@ -75,7 +75,7 @@ from verity_vllm.config import option, row_batch
 from verity_vllm.pipeline.cli import write
 from verity_vllm.query.manifest.format import tp_ranks_fold_digest
 
-__all__ = ["COMMANDS", "main"]
+__all__ = ["COMMANDS", "PRIVATE", "main"]
 
 SCHEMA = "research/outputs/v0.1"
 MAX_FILE = 512 << 20                      # per file; the required-value manifest of a long row is ~100+ MB
@@ -94,7 +94,7 @@ TOKENS_DIGESTS = "tokens_digests.jsonl"
 #: `pipeline.commit --tensor-digests`' unsalted digest of every retained tensor a step, compared across pairs on the node
 TENSOR_DIGESTS = "tensor_digests_pair*.json"
 #: nor these files, wherever they sit: request values, where each rank ran and when each process ran
-PRIVATE = tuple(_NAMES["private"])
+PRIVATE: tuple[str, ...] = tuple(_NAMES["private"])
 if not {TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} <= set(PRIVATE):
     raise RuntimeError(f"{PRIVATE_NAMES} lists {sorted({TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} - set(PRIVATE))} as "
                        "private: add them to its `private`")
