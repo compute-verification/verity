@@ -100,4 +100,4 @@ paths = ["tools/research/src/research/pods/nebius"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_top_watch.py", "test_nightly_check.py"]
-paths = ["tools/research/src/research"]
+paths = ["tools/research/src/research", "adapters/vllm/verity_vllm/pipeline/private_names.json"]
