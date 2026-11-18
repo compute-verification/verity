@@ -1,9 +1,9 @@
 """load_relay's streamed, multi-process commit of the weights' load against its references: the manifest and generator
 are the seeded weights' (`verity.protocols.resource_accounting.memory.pous.prover.served_weights`, interface 1: its fixture's TINY manifest, tensor digests and
-entries, and at H200 its stream's length, head and every tensor's first and last rows); the relayed roots are interface
-1's fixture roots under its salts, for its reader named by digest, whose domains are the verifier's (``tok`` (H, V) in
-row/v2, every tensor 16-bit leaves, an f32 scale two, at H200 a linear's row the 8,192 codes of a FAMILIES ``wrow``
-part), over one process and several, whatever the reads' sizes, and `Registered.commit`'s under the attester's own
+entries, and at H200 its stream's length, head and every tensor's first and last rows); the relayed roots are
+`Registered.commit`'s of the same bytes under the same explicit salts, for interface 1's reader named by digest, whose
+domains are the verifier's (``tok`` (H, V) in row/v2, every tensor 16-bit leaves, an f32 scale two, at H200 a linear's
+row the 8,192 codes of a FAMILIES ``wrow`` part), over one process and several, whatever the reads' sizes, and under the attester's own
 salts (the witness it writes) and the verifier's domain, pads, many chunks a value and both row formats included; a P2
 link (interface 2's layout over a small field, so that the test encodes its own store) decodes to the same roots, and a
 block that isn't a codeword, a nonzero byte past a store tensor's end and a short link are refused; at H200 the store's
@@ -24,6 +24,7 @@ import io
 import json
 import os
 import pickle
+import random
 import re
 import socket
 import stat
@@ -44,7 +45,7 @@ from verity.protocols.resource_accounting.network.attester.attester_key import s
 ROOT = Path(__file__).resolve().parents[6]
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "weights-v1-tiny.json").read_text())
 H200_DIGESTS = json.loads((Path(__file__).parent / "fixtures" / "weights-v1-h200-digests.json").read_text())
-SEED, SALT_KEY = bytes.fromhex(FIXTURE["seed"]), bytes.fromhex(FIXTURE["salt_key"])
+SEED = bytes.fromhex(FIXTURE["seed"])
 PROGRAM = hashlib.sha512(b"the reading program").hexdigest()
 #: a field small enough to encode in a test: p = 2^256 - 189, prime and 3 mod 4
 SMALL = (256, 189, 64)
@@ -68,6 +69,34 @@ def stream(values=TINY) -> bytes:
     buf = io.BytesIO()
     LR.write_stream(SEED, values, buf)
     return buf.getvalue()
+
+
+class drawn_salts:
+    """`relay`'s ``salts``: every row's of `values`, drawn once from a seeded generator, so that a direct commit can
+    take the same ones (`rows`)."""
+
+    def __init__(self, values=TINY, seed: int = 0) -> None:
+        self.at = [sum(v.leaves for v in values[:i]) for i in range(len(values))]
+        self.table = random.Random(seed).randbytes(TR.SALT_BYTES * sum(v.leaves for v in values))
+
+    def __call__(self, value: int, first: int, n: int) -> bytes:
+        lo = TR.SALT_BYTES * (self.at[value] + first)
+        return self.table[lo:lo + TR.SALT_BYTES * n]
+
+    def rows(self, value: int, n: int) -> list[bytes]:
+        return [self(value, r, 1) for r in range(n)]
+
+
+def direct_roots(values, data: bytes, program: str, salts: drawn_salts) -> dict[str, bytes]:
+    """Each value's root as `Registered.commit` makes it from `data`'s rows under `salts` and `program`'s domains."""
+    out = {}
+    for i, v in enumerate(values):
+        t = TR.Transfer.commit(LK.LINK, Direction.INGRESS, 0, "load", program, v.name,
+                               leaves(v, data[v.offset:v.offset + v.nbytes]), salts.rows(i, v.leaves), v.word_bits,
+                               v.schema)
+        assert t.head.domain == LR.verifier_domain(program)(v).domain_id, v.name
+        out[v.name] = t.root
+    return out
 
 
 def test_the_manifest_and_generator_are_interface_1s():
@@ -97,11 +126,11 @@ def test_the_manifest_and_generator_are_interface_1s():
 
 @pytest.mark.parametrize("workers,read", [(1, 1 << 23), (3, 1000), (2, 7)])
 def test_the_relayed_roots_are_interface_1s_registration(workers, read):
-    data = stream()
+    data, salts = stream(), drawn_salts()
     sink = io.BytesIO()
-    got = LR.relay(TINY, io.BytesIO(data), sink, interface_1_domain, salts=LR.keyed_salts(SALT_KEY), workers=workers,
-                   chunk_bytes=256, read_bytes=read)
-    assert {k: v.hex() for k, v in got.roots.items()} == {e["value"]: e["root"] for e in FIXTURE["tiny"]["values"]}
+    got = LR.relay(TINY, io.BytesIO(data), sink, interface_1_domain, salts=salts, workers=workers, chunk_bytes=256,
+                   read_bytes=read)
+    assert got.roots == direct_roots(TINY, data, FIXTURE["program"], salts)
     assert sink.getvalue() == data and got.link_bytes == len(data)
 
 
@@ -167,7 +196,7 @@ def store():
 def p2(link: bytes, store, **kw):
     params, salt, _c, _r = store
     return LR.relay(TINY, io.BytesIO(link), kw.pop("sink", None), interface_1_domain, fmt="p2", shape=LK.TINY,
-                    params=params, salt=salt, salts=LR.keyed_salts(SALT_KEY), chunk_bytes=256, **kw)
+                    params=params, salt=salt, salts=drawn_salts(), chunk_bytes=256, **kw)
 
 
 @pytest.mark.parametrize("workers,read", [(1, 1 << 23), (3, 1000)])
@@ -175,7 +204,7 @@ def test_a_p2_link_decodes_to_the_same_roots(store, workers, read):
     params, _s, cstar, rest = store
     sink = io.BytesIO()
     got = p2(cstar + rest, store, sink=sink, workers=workers, read_bytes=read)
-    assert {k: v.hex() for k, v in got.roots.items()} == {e["value"]: e["root"] for e in FIXTURE["tiny"]["values"]}
+    assert got.roots == direct_roots(TINY, stream(), FIXTURE["program"], drawn_salts())
     assert sink.getvalue() == cstar + rest and len(cstar) == params.blocks * params.block_bytes
 
 

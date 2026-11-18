@@ -113,7 +113,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   (`Member.population`), so every unit its session proves is its member's; the units the statements proved must be the
   evidence's `proved_units` (`membersRun_proved`). Then, where the parameters name a wiring, every wired row of every
   unit of `proved_units` is its writer's output row (`wiresHeld`, `membersRun_wires`): each template of the wiring is
-  one range of the verifier's partition holding exactly its units, and the row's `b ‖ c` in its member's public file
+  ranges of the verifier's partition holding exactly its units, and the row's `b ‖ c` in its member's public file
   is the writer's row's in the writer's member's (`wiresOn`). The registration is held to the members before any
   statement's session: the members' units are its population, each member one range of it (`laidHeld`), and each of its roots is
   exactly one member's, the member whose name, then `/`, the root's port begins with (`rootsOf`; a root that is no
@@ -519,11 +519,11 @@ def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) 
   laidHeld ms c.record
   classHeld ms
 
-/-- The refusal of a template of the wiring that is not one range of the verifier's partition holding exactly its
-units (`wiresHeld`). -/
+/-- The refusal of a template of the wiring whose ranges of the verifier's partition do not hold exactly its units
+(`wiresHeld`). -/
 def WIRES_TEMPLATE : String :=
-  "wiring: a template of the wiring is not one range of the verifier's partition holding exactly its units: a " ++
-    "template's unit u is the population's unit first + u"
+  "wiring: a template of the wiring is not ranges of the verifier's partition holding exactly its units: a " ++
+    "template's units are its ranges' units, in the partition's order"
 
 /-- The refusal of a wired row of a unit of the sample that is not its writer's output row (`wiresHeld`). -/
 def WIRES_SAMPLED : String :=
@@ -540,29 +540,74 @@ the member's first unit. -/
 def memberAt (ms : Array (String × Nat × Nat)) (g : Nat) : Option (String × Nat) :=
   (ms.find? fun (_, lo, n) => decide (lo ≤ g) && decide (g < lo + n)).map fun (name, lo, _) => (name, g - lo)
 
+/-- A template's ranges of the partition `rs` (each its template, first unit and count), each `(off, first, count)` in
+`rs`'s order: the template's unit `off + i`, `i < count`, is the population's unit `first + i`, `off` the counts of its
+ranges before it. -/
+def spansOf (rs : Array (String × Nat × Nat)) (tid : String) : Array (Nat × Nat × Nat) :=
+  ((rs.filter (·.1 == tid)).foldl (fun (acc, off) (_, first, count) => (acc.push (off, first, count), off + count))
+    (#[], 0)).1
+
+/-- The last of `xs`, ascending by `key`, whose key is at most `x`, with its index; by bisection. -/
+def lastAtMost {α : Type} (xs : Array α) (key : α → Nat) (x : Nat) : Option (Nat × α) :=
+  let i := go 0 xs.size (xs.size + 1)
+  if i == 0 then none else (xs[i - 1]?).map (i - 1, ·)
+where
+  go (lo hi : Nat) : Nat → Nat
+    | 0 => lo
+    | fuel + 1 =>
+      if lo < hi then
+        let mid := (lo + hi) / 2
+        if ((xs[mid]?).map fun a => decide (x < key a)).getD true then go lo mid fuel else go (mid + 1) hi fuel
+      else lo
+
+/-- The template's unit `u` in its ranges `s` (`spansOf`): the index in `s` of the range holding it and the
+population's unit it is. -/
+def spanUnit (s : Array (Nat × Nat × Nat)) (u : Nat) : Option (Nat × Nat) := do
+  let (i, off, first, count) ← lastAtMost s (·.1) u
+  if u < off + count then some (i, first + (u - off)) else none
+
+/-- The templates' ranges `spans` as `(first, count, template, off)`, sorted by first unit, the empty ones dropped. -/
+def byFirst (spans : Array (String × Array (Nat × Nat × Nat))) : Array (Nat × Nat × String × Nat) :=
+  (spans.flatMap fun (tid, s) => (s.filter (0 < ·.2.2)).map fun (off, first, count) => (first, count, tid, off)).qsort
+    (·.1 < ·.1)
+
+/-- The template's unit the population's unit `g` is, at the ranges `bf` (`byFirst`): its template, its unit, and
+its range's first unit and count. -/
+def templateUnit (bf : Array (Nat × Nat × String × Nat)) (g : Nat) : Option (String × Nat × Nat × Nat) := do
+  let (_, first, count, tid, off) ← lastAtMost bf (·.1) g
+  if g < first + count then some (tid, off + (g - first), first, count) else none
+
+#guard spanUnit (spansOf #[("G", 0, 3), ("A", 3, 2), ("G", 5, 3)] "G") 4 == some (1, 6)
+#guard spanUnit (spansOf #[("G", 0, 3), ("A", 3, 2), ("G", 5, 3)] "G") 6 == none
+#guard templateUnit (byFirst #[("G", spansOf #[("G", 0, 3), ("A", 3, 2), ("G", 5, 3)] "G"),
+  ("A", spansOf #[("G", 0, 3), ("A", 3, 2), ("G", 5, 3)] "A")]) 6 == some ("G", 4, 5, 3)
+
 /-- A member's rows as `wiresOn` reads them: its circuit's ports' names, in order, and the `b ‖ c` of slot `i`'s port
 `k` in its public file. -/
 abbrev Rows := Array String × (Nat → Nat → ByteArray)
 
 /-- **The wires of the sample's units held to the members' rows**, on the wiring `W` with SPOT's summary `S`, the
 partition's ranges `rs` (each its template, first unit and count), the members `ms` (each its name, first unit and
-count), the units of the sample `sample` and each member's rows (`load`, by name): each template of the wiring is one
-range of `rs` of exactly its units, so its unit `u` is the population's unit `first + u` (else `WIRES_TEMPLATE`); and
+count), the units of the sample `sample` and each member's rows (`load`, by name): each template of the wiring has
+ranges of `rs` whose counts sum to its units, so its unit `u` is a unit of one of them (`spansOf`, `spanUnit`; else
+`WIRES_TEMPLATE`), each found by bisection over ranges built once; and
 every wired row of every unit of the sample is its writer's output row (`Spot.Wires.Summary.drawnOk`, the reference's
 check on the sample's units by `Spot.Wires.sampledOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's
 slot and the port the row names (`rowName`), is the writer's output row's in the writer's member's, neither empty
 (else `WIRES_SAMPLED`). It loads the members a unit of the sample with a wired row, or one of its writers, is in. -/
 def wiresOn (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array (String × Nat × Nat))
     (ms : Array (String × Nat × Nat)) (sample : Array Nat) (load : String → V Rows) : V Unit := do
-  let spans ← W.templates.mapM fun (tid, t) =>
-    match (rs.filter (·.1 == tid)).toList with
-    | [(_, first, count)] => if count == t.units then pure (tid, first, count) else throw WIRES_TEMPLATE
-    | _ => throw WIRES_TEMPLATE
+  let spans ← W.templates.toArray.mapM fun (tid, t) =>
+    let s := spansOf rs tid
+    if !s.isEmpty && s.foldl (fun n x => n + x.2.2) 0 == t.units then pure (tid, s) else throw WIRES_TEMPLATE
+  let bf := byFirst spans
   let at? : String → Int → Option (String × Nat) := fun tid u => do
-    let (_, lo, n) ← spans.find? (·.1 == tid)
-    if decide (0 ≤ u) && decide (u < (n : Int)) then memberAt ms (lo + u.toNat) else none
-  let sampled := sample.toList.filterMap fun g =>
-    (spans.find? fun (_, lo, n) => decide (lo ≤ g) && decide (g < lo + n)).map fun (tid, lo, _) => (tid, g - lo)
+    let (_, s) ← spans.find? (·.1 == tid)
+    if u < 0 then none
+    else
+      let (_, g) ← spanUnit s u.toNat
+      memberAt ms g
+  let sampled := sample.toList.filterMap fun g => (templateUnit bf g).map fun (tid, u, _) => (tid, u)
   let need := sampled.flatMap fun (tid, u) => match S.rowsAt tid u with
     | [] => []
     | rws => ((at? tid u).toList ++ rws.filterMap fun (_, (wt, wu, _)) => at? wt wu).map (·.1)
@@ -634,41 +679,49 @@ def membersWiresPiece (j : Json) : V Json := do
       | none => throw "no such member"
   pure (Json.mkObj [("refusal", match out with | .ok () => Json.null | .error why => .str why)])
 
-/-- **A wired port's root at the member `m`** (its name, first unit and count), on the wiring `W`, the partition's
-ranges `rs` (each its template, first unit and count), the members `ms` and the roots `rootsOf` gives each member:
-for the wire `w` reading its whole port (one row, `cuts` 1) into the template whose range holds `m`'s units, and
-covering every one of them, the writers of `m`'s reader indices lie in `Wire.box`'s closed-form bounds, in the
-writer template's range; where both bounds are units of one member, the root that member's roots hold of the wire's
+/-- **A wired port's root at the member `m`** (its name, first unit and count), on the wiring `W`, its templates'
+ranges of the partition `spans` (`spansOf`) and the same sorted (`bf`, `byFirst`), the members `ms` and the roots
+`rootsOf` gives each member: for the wire `w` reading its whole port (one row, `cuts` 1) into the template one of
+whose ranges holds `m`'s units, and covering every one of them, the writers of `m`'s reader indices lie in
+`Wire.box`'s closed-form bounds, in one range of the writer template; where both bounds are units of one member, the
+root that member's roots hold of the wire's
 output port, the last of that port's as `Record.byPort` keeps it, under the reader's port name. None where any of
 that fails: the wiring names no one writer member of the port. It walks no unit. -/
-def wiredRoot (W : Spot.Wires.Wiring) (rs ms : Array (String × Nat × Nat)) (roots : Std.HashMap String (Array Json))
+def wiredRoot (W : Spot.Wires.Wiring) (spans : Array (String × Array (Nat × Nat × Nat)))
+    (bf : Array (Nat × Nat × String × Nat)) (ms : Array (String × Nat × Nat)) (roots : Std.HashMap String (Array Json))
     (m : String × Nat × Nat) (w : Spot.Wires.Wire) : Option Json := do
   let (_, f, n) := m
-  let (_, tf, _) ← rs.find? fun (t, a, c) => t == w.reader && decide (a ≤ f) && decide (f + n ≤ a + c)
+  let (t, lo, first, count) ← templateUnit bf f
+  guard (t == w.reader && decide (f + n ≤ first + count))
   guard (w.cuts == 1 && W.cutsOf w.reader w.port == 1 && decide (0 < n))
-  let lo := f - tf
   guard (decide (w.start ≤ lo) && decide (lo + n ≤ w.start + w.readerUnits))
   let (a, b) := w.box (lo - w.start) (lo - w.start + n - 1)
-  let (_, wf, wc) ← rs.find? (·.1 == w.writer)
-  guard (decide (0 ≤ a) && decide (b < (wc : Int)))
-  let (wa, _) ← memberAt ms (wf + a.toNat)
-  let (wb, _) ← memberAt ms (wf + b.toNat)
+  let (_, s) ← spans.find? (·.1 == w.writer)
+  guard (decide (0 ≤ a) && decide (0 ≤ b))
+  let (ia, ga) ← spanUnit s a.toNat
+  let (ib, gb) ← spanUnit s b.toNat
+  guard (ia == ib)
+  let (wa, _) ← memberAt ms ga
+  let (wb, _) ← memberAt ms gb
   guard (wa == wb)
   let e ← (roots.getD wa #[]).toList.reverse.find? fun r => getD r "port" == Json.str w.out
   pure (e.setObjVal! "port" (Json.str w.port))
 
 /-- **The members' roots with their wired ports'**: each member's roots `rootsOf` gives (`roots`), then, for each
 wire of the wiring `W` whose port the member has no root of, the writer's root `wiredRoot` gives, at the partition's
-ranges `rs`. A wired port with no tree of its own is its writer's output root: the member's public file names it at
+ranges `rs`, each template's built once (`spansOf`, `byFirst`). A wired port with no tree of its own is its writer's output root: the member's public file names it at
 that root and domain, and `headerHeld` holds it there; one whose writer the wiring does not name gets none, so its
 member's public file naming it is refused by name (`UNWIRED_WHY`). Its cost is the members' and the wires' numbers. -/
 def wiredRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms : Array Member)
     (roots : Std.HashMap String (Array Json)) : Std.HashMap String (Array Json) :=
-  let spans := ms.map fun m => (m.name, m.first, m.count)
+  let mspans := ms.map fun m => (m.name, m.first, m.count)
+  let spans := W.templates.toArray.map fun (tid, _) => (tid, spansOf rs tid)
+  let bf := byFirst spans
   ms.foldl (fun acc m =>
     let mine := roots.getD m.name #[]
     let extra := W.wires.filterMap fun w =>
-      if mine.any (getD · "port" == Json.str w.port) then none else wiredRoot W rs spans roots (m.name, m.first, m.count) w
+      if mine.any (getD · "port" == Json.str w.port) then none
+      else wiredRoot W spans bf mspans roots (m.name, m.first, m.count) w
     acc.insert m.name (mine ++ extra.toArray)) roots
 
 /-- **The registration's roots each member's statement reads**: `rootsOf`'s, and where the parameters name a wiring,
@@ -719,7 +772,7 @@ theorem membersRun_proved {p : Params} {ms : Array Member} {c : OneStage.Commitm
   exact runMembers_proved hrun hall
 
 /-- **Where the per-member form's run returns, the wires of the sample's units held** (`wiresHeld`): with a wiring,
-each of its templates is one range of the verifier's partition and every wired row of a unit of the sample is its
+each of its templates is ranges of the verifier's partition holding its units and every wired row of a unit of the sample is its
 writer's output row in the members' public files. -/
 theorem membersRun_wires {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
     {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :

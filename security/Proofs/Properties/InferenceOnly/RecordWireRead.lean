@@ -3,12 +3,12 @@ module
 public import Proofs.Properties.InferenceOnly.RecordJson
 
 /-!
-# The digits of a wire the record's text states
+# The digits of a wire
 
-A wire of the text's wiring is one SPOT's reader read (`Spot.Wires.Wire.ofJson`), which refuses a wire that has no
-digit, a digit with no step, or a digit of radix zero. So every wire of the text's wiring has a step for each digit
-and no digit of radix zero (`text_digits`), which is what the record check's test that a wire stays inside a slot
-(`Record.sameSlot`) is sound on.
+SPOT's reader (`Spot.Wires.Wire.ofJson`) refuses a wire that has no digit, a digit with no step, or a digit of radix
+zero (`wire_digits`). The record's wiring is `Spot.Edges.edgesOf`'s, and that each of its wires has a step for each
+digit and no digit of radix zero is the hypothesis `EdgeDigits`, which is what the record check's test that a wire
+stays inside a slot (`Record.sameSlot`) is sound on.
 -/
 
 @[expose] public section
@@ -78,11 +78,10 @@ theorem wiring_wires {j : Json} {W : Wiring} (h : Wiring.ofJson j = .ok W) :
   obtain ⟨x, -, hx⟩ := (mapM_ok _ _ _ hwires w).1 hw
   exact ⟨x, hx⟩
 
-/-- **Every wire of the text's wiring has a step for each digit, and no digit of radix zero.** -/
-theorem text_digits {doc : Json} {text : Wiring} (h : Spot.RecordText.wiring doc = .ok text) :
-    ∀ w ∈ text.wires, w.step.length = w.radix.length ∧ ∀ r ∈ w.radix, 1 ≤ r := by
-  intro w hw
-  obtain ⟨jw, hjw⟩ := wiring_wires h w hw
-  exact wire_digits hjw
+/-- **Every wire of the record's wiring has a step for each digit, and no digit of radix zero.** The wires are
+`Spot.Edges.edgesOf`'s, each of one digit; proving it of `edgesOf` replaces this hypothesis. -/
+def EdgeDigits : Prop :=
+  ∀ (P : Flock.Program.Prog) (doc : Json) (text : Wiring), Spot.RecordText.wiring P doc = .ok text →
+    ∀ w ∈ text.wires, w.step.length = w.radix.length ∧ ∀ r ∈ w.radix, 1 ≤ r
 
 end InferenceOnlyVerifier.Record.SecurityProofs
