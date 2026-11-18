@@ -15,8 +15,11 @@ fastest kernel at every m, each round's process, and the card's identity and tim
 `run` times the scheme's arm beside its family's stock finalists and the fastest one's twin (`--twins`) at the stored points,
 in one `bench.py` process under Nsight Systems, the arm loading the cubin the run was sent (`$VERITY_BENCH_CUBIN`, which
 the SASS gate must pass): the timed pass untraced, then at each shape a traced pass of the same
-entries that nsys captures alone (SMs Active at 10 kHz, each item an NVTX range; `--traced`). It then runs the arm's
-reference verifier on every row (`verify.py --every-row`), reads each traced item's busy SM-time from the reports
+entries that nsys captures alone (SMs Active at 10 kHz, each item an NVTX range; `--traced`). The arm's passes (each
+shape's transcript and no-write control, with their rows, salts and manifests) go to ``--scratch``'s ``passes/``
+(`bench.py --passes`), never under `$OUT`. It then runs the arm's reference verifier on every row (`verify.py
+--every-row`), whose verdicts, coin records and Lean checks go to `$OUT/verdicts/`, and reads each traced item's busy
+SM-time from the reports
 (`nsys.report`, the reports kept in `--scratch`, outside `$OUT`; a report that collected past its traced pass, or a traced
 item no report holds, refuses the run; with `--keep-reports`, a profiling pass, they and their exports are kept in
 `$OUT/nsys/` and the run is not of record), and writes `overhead.json`: per point, the layer's γ over
@@ -72,9 +75,10 @@ def _run(argv: list[str], log: Path) -> int:
 
 
 def bench_argv(card: O.Gpu, uuid: str, shapes: Sequence[str], families: Sequence[str], out: Path,
-               extra: Sequence[str] = ()) -> list[str]:
+               extra: Sequence[str] = (), passes: Path | None = None) -> list[str]:
     return [sys.executable, str(HARNESS / "bench.py"), "--gpu", "lease", "--expect-uuid", uuid, "--shapes", *shapes,
-            "--families", *families, *(["--bridge"] if card.bridge else []), *extra, "--out", str(out)]
+            "--families", *families, *(["--bridge"] if card.bridge else []), *extra, "--out", str(out),
+            *(["--passes", str(passes)] if passes is not None else [])]
 
 
 def model_shapes(model: str, ms: Sequence[int]) -> list[str]:
@@ -233,6 +237,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     if sch.arm and a.cubin:
         cubin = (a.cubin if a.cubin.is_file() else a.run_dir / "inputs" / a.cubin).absolute()
     out, scratch = a.out, a.scratch
+    passes = a.scratch / "passes"
     fingerprint = {"door": "run", "card": card.gpu, "scheme": sch.id, "point": a.point, "points_art": a.points_art,
                    "points_sha256": _sha256(sent), "cubin_art": a.cubin_art if cubin else None}
     doc: dict = {"schema": O.RUN_SCHEMA, "scheme": sch.id, "family": sch.family, "card": card.gpu,
@@ -261,7 +266,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     bench_json = out / "bench.json"
     rc = run([*(["env", f"{CUBIN_ENV}={cubin}"] if cubin else []), a.nsys, *NSYS_PROFILE, "-o", str(prof),
               *bench_argv(card, a.uuid, model_shapes(model, list(at.values())), [sch.family], bench_json,
-                          [*RUN_BENCH, *arm_args])], out / "bench.log")
+                          [*RUN_BENCH, *arm_args], passes if sch.arm else None)], out / "bench.log")
     result = json.loads(bench_json.read_text()) if bench_json.is_file() else {}
     doc |= {"bench_exit": rc, "identity": result.get("identity"), "clocks": result.get("clocks"),
             "bridge": result.get("bridge"), "sass_gate_ok": (result.get("sass_gate") or {}).get("ok")}
@@ -371,7 +376,8 @@ def parse(argv: Sequence[str] | None) -> argparse.Namespace:
             s.add_argument("--cubin-art", help="the art it was fetched from")
             s.add_argument("--point", choices=[*O.POINTS, "all"], default="all")
             s.add_argument("--commit", help="the run's source commit (the arm's verifier runs it)")
-            s.add_argument("--scratch", type=Path, required=True, help="where the nsys report goes, outside --out")
+            s.add_argument("--scratch", type=Path, required=True,
+                           help="a private directory outside --out: the nsys report and the arm's passes (passes/)")
             s.add_argument("--nsys", default="nsys")
             s.add_argument("--keep-reports", action="store_true",
                            help="keep the Nsight reports in --out's nsys/ instead of --scratch: a profiling pass, never of record")

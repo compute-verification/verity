@@ -55,6 +55,15 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.commitments.periods import interface as IF, rows as CS
 
+
+def fixed(w, seed: int = 0) -> dict[str, bytes]:
+    """Salts a test hands in for every port a commit takes in full (`rows.full_ports`), so two commits of one period are
+    one commitment."""
+    from verity.commitments.periods import rows
+
+    w = getattr(w, "window", w)
+    return {p: hashlib.shake_256(f"{seed} {p}".encode()).digest(n * rows.SALT_BYTES) for p, n in rows.full_ports(w).items()}
+
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "prove_path"))
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
@@ -114,7 +123,7 @@ def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dic
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)], {"unit": 0})
-    win.write(win.close(salt_key=bytes(32)), d, {"label": "test"}, registrar=R)
+    win.write(win.close(salts_of=fixed(win)), d, {"label": "test"}, registrar=R)
     doc = json.loads((d / "circuit.json").read_text())
     return SimpleNamespace(dir=d, doc=doc, rec=json.loads((d / "registration.json").read_text()),
                            opening=IF.advice_opening(ADVICE, reg), bound=bound)
@@ -604,10 +613,10 @@ def test_an_expert_tables_registration_is_a_pin_as_written():
     words = {label: rng.integers(0, 256, (E, N, K), dtype=np.uint8), label + "_scale_inv": rng.random((E, 1, 1), dtype=np.float32)}
 
     def registration(rank: int) -> dict:
-        prog, nonce = ET.program("test/model", "abc", 2, rank, "model."), ET.nonces(tables, [f for f, _s, _b in fields], rank)
-        values = {p: e for f, shape, _b in fields for p, e in ET.entries(prog, words[f], shape, tables[f], bytes(32), nonce).items()}
+        prog = ET.program("test/model", "abc", 2, rank, "model.")
+        values = {p: e for f, shape, _b in fields for p, e in ET.entries(prog, words[f], shape, tables[f])[0].items()}
         return json.loads(json.dumps({"schema": ET.SCHEMA, "program": prog, "repo": "test/model", "revision": "abc", "world": 2,
-                                      "rank": rank, "prefix": "model.", "blocks": {"w13": 2}, "values": values, "nonces": nonce}))
+                                      "rank": rank, "prefix": "model.", "blocks": {"w13": 2}, "values": values}))
 
     one, zero = registration(1), registration(0)
     assert set(RA.pinned(one)) == set(one["values"]) and len(one["values"]) == N // 2 + 1
@@ -1763,6 +1772,7 @@ assert all(x["refused"] for x in RA.negatives(rec["window"], held, doc, t / "n")
 receipt = {{"registration": R.digest(rec), "verifier": A5.CHALLENGER}}
 assert RA.fixed_before_draw(receipt, rec, bound)["ok"] and RA.after_draw(receipt, rec, held)["refused"]
 from verity.circuits.defs import CATALOG_PACKAGES
+
 print(json.dumps([sorted(m for m in sys.modules if m.split(".")[0] == "verity_vllm"), sorted(CATALOG_PACKAGES)]))
 """
     p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)

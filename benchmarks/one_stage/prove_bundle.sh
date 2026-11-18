@@ -16,6 +16,7 @@
 # Kept in $OUT: the summary, the logs and the session records; never a window's private file or the bundle's payload.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
@@ -80,6 +81,6 @@ grep '^PROVEBUNDLE' "$O/prove_bundle.log" | tee -a "$O/job.log"
 [ $rc = 0 ] || tail -30 "$O/prove_bundle.err"
 cp "$W/pb/summary.json" "$O/" 2>/dev/null
 (cd "$W/pb" && { find honest tampered -type f \( -name 'session.json' -o -name '*.log' -o -name 'draw.json' \) -size -8M -print0
-  find flipped -maxdepth 2 -name zk_mutants.json -print0; } | xargs -0 -r -I{} cp --parents {} "$O/")
+  find flipped -maxdepth 2 -name zk_mutants.json -print0; } | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/")
 log "prove-bundle: done, rc $rc"
 exit $rc

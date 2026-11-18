@@ -24,6 +24,15 @@ import verity_difftest as D
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.commitments import history as H
 
+
+def fixed(w, seed: int = 0) -> dict[str, bytes]:
+    """Salts a test hands in for every port a commit takes in full (`rows.full_ports`), so two commits of one period are
+    one commitment."""
+    from verity.commitments.periods import rows
+
+    w = getattr(w, "window", w)
+    return {p: hashlib.shake_256(f"{seed} {p}".encode()).digest(n * rows.SALT_BYTES) for p, n in rows.full_ports(w).items()}
+
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 PIECES = next(e["name"] for e in tomllib.loads((PACKAGE / "lakefile.toml").read_text())["lean_exe"]
               if e["root"] == "Spot.DifftestMain")
@@ -561,7 +570,7 @@ def _window(table: H.HistoryTable, seed: int = 0, n: int = 4) -> tuple:
     win = I.Window(I.Circuit("history", ((g8, n),), registered=I.Registered({}, histories=(history,))), "ab" * 64,
                    {"law": "stratified", "k": 2}, 2, registered={"latent": table})
     win.record(g8, [x, w], [y])
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     return doc, win.window, {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}
 

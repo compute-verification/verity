@@ -382,7 +382,7 @@ def test_a_whole_block_s_boolean_body_is_staged_in_the_form_verify_zk_takes(tmp_
                                        ("part", part, part_rows, range(2), {})):
         st = composed(t, tmp_path / name)
         assert (st.meta["lookups"], st.meta.get("out_net", "unit")) == ({}, "unit"), name
-        got = st.stage(rows, tmp_path / name, bytes(32), indices=units)
+        got = st.stage(rows, tmp_path / name, indices=units)
         assert all(np.array_equal(got["outs"][q], a) for q, a in want.items()), name
         assert PF.ks_form_why(tmp_path / name / "circuit.txt", tmp_path / name / "pub.bin") is None, name
     word = composed(block(None, NARROW), tmp_path / "word")

@@ -13,6 +13,7 @@ import json
 import re
 import socket
 import threading
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -428,3 +429,46 @@ def test_the_command_is_registered_with_the_scans_payload_as_its_default():
     for bad in ("18745", "host:", ":18745", "host:port"):
         with pytest.raises(UsageError):
             F.address(bad)
+
+
+def test_the_launcher_starts_each_process_a_named_scheme_files_with_this_servers_readers(monkeypatch, capsys):
+    """A stand-in registry: scheme ``stand-in`` files a `StartBeside` of its registered process with both readers; the
+    launcher calls it with the server's own readers and its options, and refuses a name the registry lacks."""
+    from verity import hooks as H
+    from verity.protocols.resource_accounting import scheme as schemes
+    from verity_vllm import messages
+
+    called: list = []
+
+    async def run(upstream, listen, payload, *, log, stop, announce):
+        called.append((upstream, listen, payload, log))
+        announce(listen)
+
+    def process(request_of, stream_ids):
+        called.append((request_of, stream_ids))
+        return run
+
+    stand_in = SimpleNamespace(attach=lambda ex, ctx: ex.request("stand-in", H.StartBeside("relay", tuple(F.READERS))))
+    monkeypatch.setattr(schemes, "SCHEMES", {"stand-in": stand_in})
+    monkeypatch.setattr(schemes, "PROCESSES", {"relay": process})
+    try:
+        opts = cli.parse("ids-front", ["--upstream", "127.0.0.1:18745", "--protocols", "stand-in"], environ={})
+        assert F.main(opts) == 0
+        assert called == [(F.server_request, F.token_ids), (("127.0.0.1", 18745), ("127.0.0.1", 18746), 503, None)]
+        assert json.loads(capsys.readouterr().out) == {"listening": ["127.0.0.1", 18746]}
+    finally:
+        messages.close()
+    with pytest.raises(UsageError, match="no scheme 'other'"):
+        F.launch(messages.Exchange(), ["other"])
+    with pytest.raises(UsageError, match="no scheme starts a process"):
+        F.launch(messages.Exchange(), [])
+    with pytest.raises(NotImplementedError, match="vllm/adapter-names-no-scheme"):
+        monkeypatch.setattr(schemes, "SCHEMES", {"bare": SimpleNamespace()})
+        F.launch(messages.Exchange(), ["bare"])
+
+
+def test_a_broken_stream_is_the_hooks_broken():
+    from verity import hooks as H
+    with pytest.raises(H.Broken, match="error event"):
+        F.chunk_ids(b'{"error": "x"}')
+    assert R.Broken is H.Broken

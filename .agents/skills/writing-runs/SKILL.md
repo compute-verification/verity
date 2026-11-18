@@ -76,3 +76,8 @@ pool's line, `--on auto` or sent by name with `--pool research` (no GPUs, no `--
 machine's research pool where a place has stood 2 minutes, whatever it waits on, only while the VM that launched it is up
 and holds its asker, one of at most eight alive there: its launch and `research status RUN` say whether it has one. Say
 `--stay` for a run that fills or reads its machine's own caches, or whose output you read there by its run id.
+
+A booked period's run names what it booked: `--pool NAME --slot SLOT` (that slot alone), `--card N,...` (exactly those
+GPUs), `--end UTC` (refused unless `--timeout` fits before it; it waits no later than that) and `--timed` for a measurement
+whose time is the result (a pool run is otherwise niced to 19, and its lease isn't timed). `research run --help` has the
+refusals.
