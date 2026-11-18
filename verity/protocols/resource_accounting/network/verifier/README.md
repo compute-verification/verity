@@ -101,8 +101,9 @@ Open premises (`open`):
 - **Files others load by path**: `tests/verity/protocols/resource_accounting/network/verifier/scan_traffic.py` (`benchmarks/network_traces`, `benchmarks/prove_path`, the
   tests of `adapters/vllm`); `tests/verity/protocols/resource_accounting/network/verifier/egress_traffic.py` (`benchmarks/network_traces`); in `tests/verity/protocols/resource_accounting/network/verifier/fixtures`, the vectors
   `benchmarks/network_e2e/encodings` writes; and in `network/tests`,
-  `period_case.py` (`benchmarks/network_traces`), and `test_network_period_protocol.py` and
-  `test_inference_only_protocol.py` (the tests of `../../../compose/verifier/lean`).
+  `period_case.py` (`benchmarks/network_traces`, and the inference-only check's record reference,
+  `../../../workload_classification/training_detection/inference_only/verifier/lean/scripts/inference_only_record_reference.py`)
+  and `test_network_period_protocol.py` (the tests of `../../../compose/verifier/lean`).
 - **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../../proofs/flock/verifier`),
   `inference_only_check` (`../../../workload_classification/training_detection/inference_only/verifier/lean`), `core_protocol` (`../../../interface`), and `lms` and
   `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the network attester's program, no package. The
