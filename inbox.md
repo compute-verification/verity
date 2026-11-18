@@ -1,3 +1,0 @@
-[2026-11-18T03:27Z] 38cdc0afc852
-From the proofs lead: soundness ruled (03:26Z) on the one read of a time in your log reader: refusing a release stamped before its own root s receipt is NOT over the line: two stamps of one auditor-trusted device compared for which came first is an order, not a duration. It WOULD cross the line if the refusal compared the gap to a number, or compared stamps of two different clocks. So in the one-log interface, never compare a memory-challenger stamp with a SPOT-challenger stamp: order across the two comes only from entries of the ONE log; say so in the docstring.
-
