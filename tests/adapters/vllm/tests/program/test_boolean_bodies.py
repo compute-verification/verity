@@ -27,7 +27,6 @@ BODYLESS: dict[str, str] = {
         ("E2m1x2Hi", "marlin_moe"), ("E2m1x2Lo", "marlin_moe"), ("E8m0DequantBf16", "marlin_moe"), ("F32ErfRn", "ref_prims"),
         ("F32TanhRn", "ref_prims"), ("GeluErfBf16", "act"), ("I32Mul", "marlin_moe"), ("NcpAbsMax", "pouw_rows"),
         ("NcpDot16I7", "pouw_rows"), ("NcpRneClampI7", "pouw_rows"))},
-    "GumbelNoiseLane_v2": _ADAPTER + " (sampling)",
     **{f"PearlC{n}Byte_v1": _BYTE for n in ("LineKey", "LineRaw", "RowBlock", "RowSeedHead", "RowSeedTail", "SeedB", "ShaBlock")},
 }
 
