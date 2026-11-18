@@ -5,7 +5,7 @@ public import Evaluate.Prims
 /-!
 # The gate walk: a Program evaluated gate by gate in canonical order
 
-`evaluate bytes inputs` decodes a descriptor v1 Program (`Flock.Program.decode`, PROTOCOL.md §1–§5), binds `inputs` to its
+`evaluate bytes inputs` decodes a descriptor v2 Program (`Flock.Program.decode`, PROTOCOL.md §1–§5), binds `inputs` to its
 Input gates (run and registered alike), evaluates every other gate in canonical order (§6) and returns the words of the
 root's `ret`. It is `verity.circuits.evaluation.reference.evaluate_region` over the root's nodes that are not input
 nodes, which `reference.evaluate` runs on a target's one-call Program:

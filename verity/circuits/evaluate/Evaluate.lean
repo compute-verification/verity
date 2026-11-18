@@ -12,7 +12,7 @@ public import Evaluate.Walk
 public import Evaluate.Serve
 
 /-!
-# `verity_evaluate`: the descriptor v1 evaluator in Lean
+# `verity_evaluate`: the descriptor v2 evaluator in Lean
 
 The Lean form of `verity.circuits.evaluation.reference.evaluate` on a Program (`verity/circuits/PROTOCOL.md`): decode,
 bind the run inputs, evaluate gate by gate in canonical order, return the root's outputs or refuse. The Program is read
