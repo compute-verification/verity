@@ -76,7 +76,7 @@ def PlainTablesOk (r : Readable.Read) (sts : Array Stmt) : Prop :=
 
 /-- **Every table of `22 ≤ m` is `TableOk`**, with at most 2,048 extra claims at any link points, at an untyped
 statement that sets up without the verifier's own public input words. -/
-theorem tablesOk_of_read {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem tablesOk_of_read {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hx : setupOf false x = some (s, spec, sts)) (hty : s.read.tags.typed = false)
     (hpi : s.read.publicInputs = none) (h22 : ∀ st ∈ sts, 22 ≤ st.m) :
     ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
@@ -109,7 +109,7 @@ theorem tablesOk_of_read {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : 
 
 /-- **Every table `verify --plain-tables` admits is `TableOk`**, with at most 2,048 extra claims at any link points:
 `checkP` refuses a typed statement and the verifier's own public input words, and `sizesOk` refuses `m < 22`. -/
-theorem tablesOk_of_plainTables {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem tablesOk_of_plainTables {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hx : setupOf false x = some (s, spec, sts)) (hP : PlainTablesOk s.read sts) :
     ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ c e, sts[i].extraClaims (pointsOf spec c) = .ok e → e.size ≤ 2048 := by
@@ -125,12 +125,12 @@ theorem tablesOk_of_plainTables {x : Claims.Msg} {s : Ins} {spec : SessionSpec} 
 
 /-- **The honest run decides at every statement `verify --plain-tables` admits**: `sessionRun_decides_coins` with
 `PlainTablesOk` in place of the per-table premise, at coins numbering the deployed verifier's `(V false).k x`. -/
-theorem sessionRun_decides_tables {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H)
-    {rd : Claims.Msg → Option FinalP} {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128}
+theorem sessionRun_decides_tables {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H)
+    {rd : Hash.Msg → Option FinalP} {x last : Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {c₁ : Coin} {resp : ℕ → Hash.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128}
     {fl : FinalP} (hx : setupOf false x = some (s, spec, sts)) (hP : PlainTablesOk s.read sts)
     (hcs : cs.head? = some c₁) (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes)
-    (hk : cs.length = (V false).k x) {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    (hk : cs.length = (V false).k x) {rec : String} {pfs : Array ByteArray} {bs : Array Hash.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs)) (hrd : rd last = some fl)
     (hps : fl.ps = filePs spec sts c₁ pfs) (hst : fl.stmt = x) :
     ∃ d, decR rd x (honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>

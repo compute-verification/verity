@@ -2447,7 +2447,7 @@ theorem RoundsSlice.prob_le {Ω : Type} [Fintype Ω] {R : ℕ} {p F₀ sl Vmax :
 
 /-- A finder's collision probability is at most its `ecr/sha-512` bound at any budget: the bound is `⊤` unless the
 finder meets the assumption within the budget. -/
-theorem ofReal_finderPr_le_ecrBound (H : Claims.Msg → Claims.Msg) (F : Claims.Finder) (q : ℝ) :
+theorem ofReal_finderPr_le_ecrBound (H : Hash.Msg → Hash.Msg) (F : Claims.Finder) (q : ℝ) :
     ENNReal.ofReal (F.Pr H) ≤ Claims.ecrBound H F q := by
   unfold Claims.ecrBound
   split_ifs with h
@@ -2462,7 +2462,7 @@ value `r` of its coins, a slice of the window's rounds whose round-`w` breaks ar
 `ε + R (δb + δz)` plus its finder terms (`Claims.ecrBound` bounds each finder at every budget), and the slices
 average. -/
 theorem serviceFloorPerProver_of_slices {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ}
-    {p F₀ sl Vmax δb βb δz βz : ℝ} (e : S.Seed ≃ Paths Ω R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
+    {p F₀ sl Vmax δb βb δz βz : ℝ} (e : S.Seed ≃ Paths Ω R) (sha : Hash.Msg → Hash.Msg) (fb fz : Finders Mc S R)
     (h : ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
       (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
       ∃ Bind ZK : Fin R → Paths Ω R → Prop,
@@ -7904,7 +7904,7 @@ theorem relativelySecurePerProver_edited120θ_at_breakBound (kd : K120 → Kind)
         ω.1 ((gridMatMachine120θ kd G I).eval prove
           ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
             (E.edit ω.1 x))).2 = true)
-    {FB : ℝ} {R : ℕ} (sha : Claims.Msg → Claims.Msg) (fb fz : Finders (machine kd (.ofNat price120)) S.toService R)
+    {FB : ℝ} {R : ℕ} (sha : Hash.Msg → Hash.Msg) (fb fz : Finders (machine kd (.ofNat price120)) S.toService R)
     (cb db cz dz δb βb δz βz : ℝ)
     (hfloorB : ServiceFloorPerProver (machine kd (.ofNat price120)) S.toService FB
       (breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)) (hδ' : 0 < δ')

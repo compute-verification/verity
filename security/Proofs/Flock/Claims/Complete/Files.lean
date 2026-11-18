@@ -59,7 +59,7 @@ namespace FlockComplete.JsonRT
 open Flock Transcript FlockComplete FlockDeploy
 
 /-- **A rep's proof carries the commitment's cap and the table's PCS parameters.** -/
-theorem repP_fields (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_fields (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (tr₀ : Transcript) :
     Ret ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr t cm0 extras salt nonce).run tr₀)
@@ -74,7 +74,7 @@ theorem repP_fields (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (s
 
 /-- A proof file of a rep: it encodes, at the rep's shape, a proof the rep returned on the table's trace `tr`, its packed
 table, the level-0 commitment `cm` and the extra claims `e`. -/
-def RepFile (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace) (cm : Commit)
+def RepFile (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace) (cm : Commit)
     (e : Array Claim) (b : ByteArray) : Prop :=
   ∃ p salt nonce d l t' l', b = FlockVBridge.Family.encodeProof (shapeOf st sch e.size) p ∧
     ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr (packed tr st.m) cm e salt nonce).run
@@ -82,9 +82,9 @@ def RepFile (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setu
 
 /-- **The one-table session's proof files**: the table's schedule, its level-0 commitment `cm` and its extra claims `e`
 at the link's points; the first send is the link of `cm`'s cap; one proof file per rep stream, each a `RepFile`. -/
-theorem sessionP_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
+theorem sessionP_files (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) (hct : spec.coinTree = none) (st : Setup) (trs : Array Trace) (tape : Tape)
-    {r : String × Array ByteArray} {bodies : Array Claims.Msg}
+    {r : String × Array ByteArray} {bodies : Array Hash.Msg}
     (hrun : (sessionP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] trs tape).go #[] = (.ok r, bodies)) :
     ∃ sch cm e, fast100 st.m = some sch ∧
       commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (sch.levels.getD 0 default)
@@ -129,7 +129,7 @@ theorem sessionP_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
   obtain ⟨rfl, rfl⟩ := hL
   have hrs1 := repStreams_one ht
   obtain ⟨⟨ss, ps⟩, l₄, hF, hrun⟩ := go_bind_ok hrun
-  have hinv := forIn_array_inv _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
+  have hinv := forIn_array_inv _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Hash.Msg) =>
       b.2.size = k ∧ (0 < k → ∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧
         (∀ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e →
           ∀ q ∈ b.2, RepFile resp (Claims.hOf H) st sch trs[0]! cm e q) ∧
@@ -167,7 +167,7 @@ theorem sessionP_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
       exact ⟨pf, tape.salt 0 r, tape.nonce 0 r, (spec.domain spec.tables[0]! r).toUTF8, l, tr', l₂, by simp,
         by simpa using e2⟩
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **Each rep's decoded proof is the honest one**: at the run's one table, with schedule `sch` and level-0
 commitment `cm`, the record's `root_B` is `cm`'s cap, two proof files, each under `2^64` bytes, and each rep's file

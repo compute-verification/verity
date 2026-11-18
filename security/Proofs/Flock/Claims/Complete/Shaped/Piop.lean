@@ -50,7 +50,7 @@ namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete FlockDeploy FlockSoundness.Refine
 
-theorem zerocheckP_shape (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap : ByteArray) (tr : Trace) :
+theorem zerocheckP_shape (resp : ℕ → Hash.Msg) (m : ℕ) (digest cap : ByteArray) (tr : Trace) :
     totT.T (zerocheckP (asksS resp) m digest cap tr) fun p =>
       p.1.round1ab.size = 64 ∧ p.1.round1c.size = 64 ∧ p.1.rounds.size = m - 6 ∧ p.2.rho.size = m - 6 := by
   unfold zerocheckP
@@ -70,7 +70,7 @@ theorem zerocheckP_shape (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap : Byt
 
 theorem halve_size (t : F128) (a : Array F128) : (halve t a).size = a.size / 2 := by simp [halve]
 
-theorem lincheckP_shape (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut)
+theorem lincheckP_shape (resp : ℕ → Hash.Msg) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut)
     (hfold : ∀ α, ∃ v, c.fold α (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok v) (hk : 6 ≤ c.kLog) :
     totT.T (lincheckP (asksS resp) c m tr zc) fun p => p.1.rounds.size = c.kLog - 6 ∧ p.1.zPartial.size = 64 := by
   unfold lincheckP
@@ -98,7 +98,7 @@ theorem lincheckP_shape (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) 
   · exfalso
     exact fold_ne_error hfold ‹_›
 
-theorem ringSwitchP_shape (resp : ℕ → Claims.Msg) (tr : Trace) (claims : Array Claim) :
+theorem ringSwitchP_shape (resp : ℕ → Hash.Msg) (tr : Trace) (claims : Array Claim) :
     totT.T (ringSwitchP (asksS resp) tr claims) fun p => p.1.size = claims.size ∧ ∀ v ∈ p.1, v.size = 128 := by
   unfold ringSwitchP
   dsimp only

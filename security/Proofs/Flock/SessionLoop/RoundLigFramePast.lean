@@ -122,7 +122,7 @@ theorem sched_past {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : Byt
     p < sched.size ∧
       PastRound (alg.size + (xs.size + 2) + 1 + t.sch.k0 + 4) p (sched.getD p (.empty, 0)) := by
   have hA : alg.size ≤ cr.size := by omega
-  obtain ⟨l, hls⟩ : ∃ l : Array Claims.Msg, l.size = alg.size := ⟨Array.replicate alg.size [], Array.size_replicate⟩
+  obtain ⟨l, hls⟩ : ∃ l : Array Hash.Msg, l.size = alg.size := ⟨Array.replicate alg.size [], Array.size_replicate⟩
   obtain ⟨coin, hc⟩ : ∃ coin : ℕ → ℕ → F128, CoinAt coin l.size (cr.extract alg.size cr.size).toList :=
     ⟨fun j i => ((cr.extract alg.size cr.size).toList.getD (j - l.size) #[])[i]!, fun j hj => by
       funext i
