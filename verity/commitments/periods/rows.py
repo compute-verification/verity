@@ -473,9 +473,8 @@ class Binding:
     def reads(self, m: Member, port: str) -> np.ndarray:
         """The leaf of `tree` each of member ``m``'s units reads at port ``port``, in order."""
         lo = self.owns[m.key]
-        w = self.wire(m, port)
-        if w is not None:
-            return w.positions(lo, m.n)
+        if self.wire(m, port) is not None:
+            return WI.reads([w for w in m.wired if w.port == port], lo, m.n)
         return np.arange(lo if port in dict(m.outs) else 0, (lo if port in dict(m.outs) else 0) + m.n, dtype=np.int64)
 
     def leaves(self, m: Member, port: str) -> np.ndarray:
@@ -1389,9 +1388,11 @@ def shared_ports(win: Mapping[str, Any], k: int) -> dict[str, tuple[str, str, st
     if len(mine) > 1:
         for o, _w in mem["out_ports"]:
             out[o] = (mem["template"], o, WI.tree(mem["template"], o), np.arange(lo, lo + int(mem["n"]), dtype=np.int64))
-    for d in mem.get("wired") or ():
-        w = WI.Wired.of(d)
-        out[w.port] = (w.writer, w.out, WI.tree(w.writer, w.out), WI.table(w.positions(lo, int(mem["n"])))[0])
+    pieces = [WI.Wired.of(d) for d in mem.get("wired") or ()]
+    for w in pieces:
+        if w.port not in out:
+            at = WI.reads([x for x in pieces if x.port == w.port], lo, int(mem["n"]))
+            out[w.port] = (w.writer, w.out, WI.tree(w.writer, w.out), WI.table(at)[0])
     return out
 
 

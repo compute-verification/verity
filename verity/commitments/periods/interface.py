@@ -1910,7 +1910,7 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
                                        w.step, w.cut, r)
                               for w in live for r in range(w.cut[0], w.cut[0] + w.cut[1]))
                 got = _reads_of(tid, at, m, index, dict(rows + lay.outs))
-                held = {x.port: len(WI.table(x.positions(at, m))[0]) for x in wired}
+                held = {x.port: len(WI.table(WI.reads([y for y in wired if y.port == x.port], at, m))[0]) for x in wired}
                 tables = (tuple((p, len(got[p][1]) if p in got else held.get(p, m)) for p, _ in rows)
                           if got or held or m != lays[tid][1] else ())
                 if at != seen[tid]:
@@ -2770,7 +2770,7 @@ class Window:
                     d["rows"][row_name(p, j, k)] = (None if ports[g] is None else ports[g][lo:lo + m.n] if k == 1 else
                                                     np.ascontiguousarray(ports[g][lo:lo + m.n, j * w // k:(j + 1) * w // k]))
             if m.tables:
-                wires = {x.port: WI.table(x.positions(lo, m.n))[1] for x in m.wired}
+                wires = {x.port: self.window.refs(m, x.port) for x in m.wired}
                 d["refs"] = np.stack([reads[p][2] if p in reads else wires[p] if p in wires else np.arange(m.n)
                                       for p, _ in m.rows], axis=1)
                 for p, (param, positions, refs) in reads.items():
@@ -2867,13 +2867,13 @@ class Window:
                     at = np.asarray(positions, dtype=np.int64)[refs[s - mlo:e - mlo]]
                     a[s - lo:e - lo] = CS.value_rows(self.registered[param], at).reshape(e - s, w)
                     continue
-                wires = {x.port: x for x in m.wired}
                 for j in range(k):
                     r = row_name(p, j, k)
-                    if r not in wires:
+                    pieces = [x for x in m.wired if x.port == r]
+                    if not pieces:
                         raise ValueError(f"{m.key} {r}: recorded by reference, but no wire or registered read fills it")
-                    x = wires[r]
-                    a[s - lo:e - lo, j * w // k:(j + 1) * w // k] = out(x.writer, x.out)[x.positions(s, e - s)]
+                    x = pieces[0]
+                    a[s - lo:e - lo, j * w // k:(j + 1) * w // k] = out(x.writer, x.out)[WI.reads(pieces, s, e - s)]
             res.append(a)
         return res
 
