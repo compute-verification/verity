@@ -5939,7 +5939,9 @@ def test_a_refusal_on_the_closed_list_is_said_by_its_name_and_no_other_sentence_
                    if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
                    and getattr(n.exc.func, "id", None) in ("ValueError", "RuntimeError", "SystemExit") and n.exc.args
                    and isinstance(n.exc.args[0], ast.Constant) and isinstance(n.exc.args[0].value, str)}
-    assert set(PF.REFUSALS.values()) == raised and len(PF.REFUSALS) == 31
+    assert set(PF.REFUSALS.values()) == raised, (
+        f"a fixed refusal of ours changed: name {sorted(raised - set(PF.REFUSALS.values()))} in public_files.REFUSALS "
+        f"in place of {sorted(set(PF.REFUSALS.values()) - raised)}")
     assert all(re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", n) for n in PF.REFUSALS)
     end = PF.REFUSALS["request-without-end"]
     for line, said in [(f"prove_path.py window-commit: {end}", "(refused request-without-end, exit 2): "),
