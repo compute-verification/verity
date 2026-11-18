@@ -325,12 +325,20 @@ def _recorded(store: Any, run: str, arms: Sequence[str], record: str | None) -> 
     art = (attempt.get("outputs") or {}).get("result")
     tool = (attempt.get("tool") or {}).get("name")
     if tool != POINT_TOOL or status.get("validation") != "passed" or status.get("rc") != 0 or source.get("dirty"):
+        failed = _failed_gates(store, art) if tool == POINT_TOOL and art else []
         return spec, [], (f"not a passing {POINT_TOOL} run (tool {tool}, validation {status.get('validation')}, "
-                          f"rc {status.get('rc')}, dirty {bool(source.get('dirty'))})")
+                          f"rc {status.get('rc')}, dirty {bool(source.get('dirty'))})"
+                          + (f": its {', '.join(failed)} gate failed" if failed else ""))
     if not art:
         return spec, [], "no result output"
     found, why = _judge(store, run, art, str(source.get("commit") or ""), arms, None, record)
     return _on_card(spec, found[0].card if found else None), found, why
+
+
+def _failed_gates(store: Any, art: str) -> list[str]:
+    """The kinds of the gates a point's result records as failed, in its order."""
+
+    return list(dict.fromkeys(g["kind"] for g in _benchmark(store, art)["gates"] if not g["passed"]))
 
 
 def _arms(protocol: Protocol) -> list[str]:
