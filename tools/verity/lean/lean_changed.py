@@ -1583,14 +1583,15 @@ def overall(records: dict[str, dict]) -> str:
 
 def conclude(pkg: str, records: dict[str, dict], rc: int, out: Path, update: bool, path: str, log=print,
              passes: dict[str, str] | None = None, allow: frozenset[tuple[str, str]] = frozenset(),
-             audited: list[Path] | None = None, mismatched: dict[str, str] | None = None) -> int:
+             audited: list[Path] | None = None, mismatched: dict[str, str] | None = None, unread_over: bool = False) -> int:
     """End a run whose packages' ``records`` are judged (`finish`): its outcome their worst (`overall`), `FAILED` too when
-    an allowance of ``allow`` matched no failure in the reports this run left under ``audited`` (`unmatched`); its exit
+    an allowance of ``allow`` matched no failure in the reports this run left under ``audited`` (`unmatched`) or an area's
+    wholly unread modules are above its cap (``unread_over``, `unread_count`); its exit
     status 0 on `PASS` and `REGENERATED`, `ALLOWED_RC` on `ALLOWED`, and ``rc`` (check.py's first failing status), else 1,
     on `FAILED`. ``mismatched`` ({module: its package}) names each module a sampled recompile caught, which the run then
     compiled (`mismatched`): the outcome is the second audit's, and the result names them."""
     outcome = overall(records)
-    if stale := unmatched(allow, audited or [], log):
+    if (stale := unmatched(allow, audited or [], log)) or unread_over:
         outcome = max(outcome, FAILED, key=OUTCOMES.index)
     if outcome == ALLOWED:
         log(f"lean-records: every failure left is one --allow named, each still in its package's report: exit {ALLOWED_RC}, "
@@ -1606,7 +1607,7 @@ def conclude(pkg: str, records: dict[str, dict], rc: int, out: Path, update: boo
 
 def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool = False, moved: Path | None = None,
                   out: Path | None = None, log=print, dev_cache: bool = False, rebuild: bool = False,
-                  allow: list[str] | None = None, unread: bool = False) -> int:
+                  allow: list[str] | None = None, unread: bool = False, count: bool = True) -> int:
     """`--records`: `check.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree`` (default: the tree of the
     `build` slot it takes; any other must be under `RECORDS`), or `dev_records` where the node's Lean slots grant no `build`
     slot or ``dev_cache`` asks for it. Its outcome is its packages' worst (`settled`, `verdicts`), and `conclude` says it: it
@@ -1615,8 +1616,10 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     not under `RECORDS`, ``name`` matches no single package, an allowance of ``allow`` (`--allow CODE:ENTRY`) is one that may
     not be given (`allowances`), the memory refusal stops it or another run holds the tree past
     `TREE_WAIT_S`. A package whose records need no run (`reused`) is skipped, and with none left nothing runs and no slot is
-    taken; ``rebuild``, ``moved`` and ``unread`` run them all. With ``unread`` (`--unread-facts`) the audits of
-    `check.UNREAD_FACTS` leave `Unread.lean`'s facts, and the run ends with the `unread.py` line that reads them (`unread_line`). Before it takes a slot, one line names the packages it audits, in
+    taken; ``rebuild``, ``moved`` and ``unread`` (`--unread-facts`) run them all. With ``count`` (unless
+    `--no-unread-count`) or ``unread`` the audits of `check.UNREAD_FACTS` leave `Unread.lean`'s facts, a run that audits
+    one of them audits the other too, and the run ends with lean-audit's ratchet on those facts (`unread_count`), which
+    fails it when an area's wholly unread modules are above their cap; a run that audits neither counts nothing. Before it takes a slot, one line names the packages it audits, in
     order (`audits`). Each package whose records passed or were regenerated is kept (`passed`); one that ended `ALLOWED`,
     an allowed failure in its audit's reports, is not, so the next run audits it again.
     What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: its
@@ -1654,6 +1657,14 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     pkg = match[0]
     todo, rc = [pkg, *requirers(pkg, pkgs)], 0
     skip = {} if rebuild or moved or unread else reused(todo, files, log)
+    if count and any(p in AUDIT.UNREAD_FACTS and p not in skip for p in todo):
+        for p in [p for p in AUDIT.UNREAD_FACTS if p in skip]:
+            del skip[p]
+            log(f"lean-records: {p}: audited all the same: the unread count reads its facts beside "
+                f"{' and '.join(q for q in AUDIT.UNREAD_FACTS if q != p)}'s, and only an audit leaves them "
+                f"(--no-unread-count reuses it)")
+    facts_of = (lambda ps: True) if unread else (lambda ps: count and any(p in AUDIT.UNREAD_FACTS for p in ps))
+    unread = unread or count
     if not (todo := [p for p in todo if p not in skip]):
         log(f"lean-records: nothing to build: the records of {', '.join(skip)} need no run (--rebuild runs them anyway)")
         return conclude(pkg, verdicts({}, {}, None, ROOT, files, skip, log), 0, out, update, "reused", log, allow=allowed)
@@ -1663,12 +1674,14 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     log(f"lean-records: this run audits {audits(todo)}: a `--records` run for any of them beside this "
         f"one audits it again")
     if dev_cache:
-        return dev_records(pkg, todo, update, moved, out, "--dev-cache asks for it", log, files, skip, allowed, unread)
+        return dev_records(pkg, todo, update, moved, out, "--dev-cache asks for it", log, files, skip, allowed, unread,
+                           facts_of)
     os.environ.pop(LEAN_SLOT.HELD, None)
     try:
         slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
     except LEAN_SLOT.Refused as e:
-        return dev_records(pkg, todo, update, moved, out, str(e), log, files, skip, allowed, unread)
+        return dev_records(pkg, todo, update, moved, out, str(e), log, files, skip, allowed, unread,
+                           facts_of)
     artifacts = LA.LakeArtifacts((deps.parent / "lean-artifacts").resolve())
     if urls and sandboxed():
         try:
@@ -1722,7 +1735,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 def audit(ps: list[str], to: Path, with_update: bool) -> int:
                     nonlocal store, redone
                     got = subprocess.run(check_argv([tree / p for p in ps], to, with_update, moved, pkg in ps, artifacts=store,
-                                                    facts_cache=facts_dir(), tree=tree, unread=unread), cwd=tree, env=env,
+                                                    facts_cache=facts_dir(), tree=tree, unread=facts_of(ps)), cwd=tree, env=env,
                                          pass_fds=fds).returncode
                     if redone or not got or AUDIT.killed(got) or not (bad := mismatched(to, tree, log, allowed)):
                         return got
@@ -1778,10 +1791,9 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 except OSError as e:
                     log(f"lean-records: nothing bundled for other nodes: {e}")
             records = verdicts(outcomes, new, out, tree, files, skip, log, committed, allowed, pkg)
-            if unread:
-                unread_line(out, log)
+            over = unread and unread_count(out, files, log)
             return conclude(pkg, records, rc, out, update, "slot", log, passes, allowed, [reports(out, pkg, p) for p in todo],
-                            caught)
+                            caught, over)
     finally:
         if slot is not None:
             os.close(slot)
@@ -1805,7 +1817,7 @@ def sent_urls(run_dir: str | None, log=print) -> dict[str, str]:
 
 def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out: Path, why: str, log=print,
                 files: list[str] | None = None, skip: dict[str, tuple[str, dict | None]] | None = None,
-                allow: frozenset[tuple[str, str]] = frozenset(), unread: bool = False) -> int:
+                allow: frozenset[tuple[str, str]] = frozenset(), unread: bool = False, facts_of=None) -> int:
     """`--records` where the node's Lean slots grant no `build` slot (``why``): `check.py --dev-cache --build --no-replay
     --no-runs` on this checkout's ``todo`` (PKG, then its requirers; ``skip`` those `reused` left out), one check.py for
     the packages `batches` puts together, each build restored from the published cache, with the same reports, record
@@ -1826,7 +1838,8 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
         t0, who, all_out = time.monotonic(), "+".join(batch), reports(out, pkg, batch[0])
         (all_out / "audit.json").unlink(missing_ok=True)
         all_got = subprocess.run(check_argv([ROOT / p for p in batch], all_out, first, moved, pkg in batch, dev=True,
-                                            facts_cache=facts_dir(), unread=unread), cwd=ROOT).returncode
+                                            facts_cache=facts_dir(), unread=facts_of(batch) if facts_of else unread),
+                                 cwd=ROOT).returncode
         log(f"lean-records: {who}: check.py --dev-cache exit {all_got} in {time.monotonic() - t0:.0f} s on {ROOT}, without the "
             f"kernel replay or the tests: a {FAST_KIND} result, which check and the merge gate refuse; reports in {all_out}")
         own = own_reports(batch, pkg, out, ROOT, all_got, log) if len(batch) > 1 else {batch[0]: all_got}
@@ -1846,9 +1859,9 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
         passes |= dict.fromkeys(passed(p, files, committed if got == 0 else committed | new, new, log), p)
     records = verdicts(outcomes, new, out, ROOT, files, skip, log, committed, allow, pkg) if files is not None else \
         {p: {"outcome": o, "inputs_key": None} for p, o in outcomes.items()}
-    if unread:
-        unread_line(out, log)
-    return conclude(pkg, records, rc, out, update, "dev-cache", log, passes, allow, [reports(out, pkg, p) for p in todo])
+    over = unread and unread_count(out, files, log)
+    return conclude(pkg, records, rc, out, update, "dev-cache", log, passes, allow, [reports(out, pkg, p) for p in todo],
+                    unread_over=over)
 
 
 #: what lists a machine's Lean pools, which `--try` names when it is refused a `build` slot and no machine's could be read
@@ -2186,17 +2199,29 @@ def report(out: Path, at: Path) -> dict:
         if isinstance(reps, list) else {}
 
 
-def unread_line(out: Path, log=print) -> None:
-    """Say the `unread.py` that reads the `Unread.lean` facts the run's audits left under ``out``, and builds nothing, or
-    which of `check.UNREAD_FACTS` left none."""
-    got = sorted(out.rglob("unread-facts.jsonl.gz"))
-    whose = [str(json.loads((f.parent / "report.json").read_text()).get("package")) for f in got
-             if (f.parent / "report.json").is_file()]
-    if lack := [p for p in AUDIT.UNREAD_FACTS if not any(w.endswith(f"/{p}") for w in whose)]:
-        log(f"lean-records: no audit of {', '.join(lack)} left `Unread.lean`'s facts, so `unread.py` would build")
-        return
-    log("lean-records: the Lean nothing reads, from the facts this run left, with no build:\n"
-        f"  python3 tools/verity/lean/unread.py --out {out / 'unread'} " + " ".join(f"--facts {f}" for f in got))
+def unread_count(out: Path, files: list[str] | None, log=print) -> bool:
+    """lean-audit's ratchet on wholly unread modules (`lean_audit.unread_ratchet`, against `unread-caps.json`) on the
+    `Unread.lean` facts this run's audits of `check.UNREAD_FACTS` left under ``out``, with no build: True when an area is
+    above its cap, each such area said with its count, its cap, its modules and the fix. A run whose audits left facts of
+    only one says so, with the run that counts, and one that left none is silent; neither fails."""
+    facts: dict[str, Path] = {}
+    for f in sorted(out.rglob("unread-facts.jsonl.gz"), key=lambda f: f.stat().st_mtime):
+        rep = f.parent / "report.json"
+        at = str(json.loads(rep.read_text()).get("package")) if rep.is_file() else ""
+        facts |= {p: f for p in AUDIT.UNREAD_FACTS if at.endswith(f"/{p}")}
+    if not facts:
+        return False
+    if lack := [p for p in AUDIT.UNREAD_FACTS if p not in facts]:
+        log(f"lean-records: unread: not counted: no audit of {', '.join(lack)} in this run left `Unread.lean`'s facts; "
+            f"`lean_changed.py --records security --unread-facts` counts, and a change that adds a Lean module runs it "
+            f"before its ready mark")
+        return False
+    log("lean-records: unread: the facts this run left, read with no build:\n"
+        f"  python3 tools/verity/lean/unread.py --out {out / 'unread'} "
+        + " ".join(f"--facts {facts[p]}" for p in AUDIT.UNREAD_FACTS))
+    files = files if files is not None else LA.COMMON.tracked_files(ROOT) or []
+    r = LA.unread_ratchet(list(AUDIT.UNREAD_FACTS), [], facts, files, out, log)
+    return bool(r and r.get("failures"))
 
 
 def check_argv(ats: list[Path], out: Path, update: bool, moved: Path | None, own: bool, dev: bool = False,
@@ -2367,7 +2392,11 @@ def main(argv: list[str]) -> int:
                     "passed on the same Lean inputs or that a merge of main leaves a candidate of")
     ap.add_argument("--unread-facts", action="store_true", help="with --records: check.py --unread-facts, so the audits of "
                     f"{' and '.join(AUDIT.UNREAD_FACTS)} leave the facts `unread.py --facts` reads without a build; it runs "
-                    "every package, as --rebuild does, and ends with that unread.py line")
+                    "every package, as --rebuild does, and ends with the unread count")
+    ap.add_argument("--no-unread-count", action="store_true", help="with --records: skip the unread count, lean-audit's "
+                    "ratchet on wholly unread modules, which a records run otherwise runs on the facts its audits of "
+                    f"{' and '.join(AUDIT.UNREAD_FACTS)} leave, failing when an area is above its cap in unread-caps.json; "
+                    "for a run that regenerates records while another change's module holds an area above its cap")
     ap.add_argument("--allow", action="append", default=[], metavar="CODE:ENTRY",
                     help="with --records only, and repeatable: a failure this run takes as known, named by its code and the "
                     f"entry it is about as check.py's report lists them (the codes that may be: {', '.join(sorted(ALLOWABLE))}). "
@@ -2436,13 +2465,17 @@ def main(argv: list[str]) -> int:
     if a.siblings:
         ap.error("--siblings goes with --try")
     if not a.records:
-        if a.update or a.moved or a.out or a.dev_cache or a.rebuild or a.unread_facts:
-            ap.error("--update, --moved, --out, --dev-cache, --rebuild and --unread-facts go with --records")
+        if a.update or a.moved or a.out or a.dev_cache or a.rebuild or a.unread_facts or a.no_unread_count:
+            ap.error("--update, --moved, --out, --dev-cache, --rebuild, --unread-facts and --no-unread-count go with "
+                     "--records")
         ap.error("one of --records, --try, --build and --inputs-key is required")
     if a.dev_cache and a.tree:
         ap.error("--dev-cache builds in this checkout, not in a --tree")
+    if a.unread_facts and a.no_unread_count:
+        ap.error("--unread-facts runs every package for the unread count, which --no-unread-count skips: give one")
     return audit_records(a.records, a.deps, a.tree, a.update, a.moved, a.out, log=lambda s: print(s, flush=True),
-                         dev_cache=a.dev_cache, rebuild=a.rebuild, allow=a.allow, unread=a.unread_facts)
+                         dev_cache=a.dev_cache, rebuild=a.rebuild, allow=a.allow, unread=a.unread_facts,
+                         count=not a.no_unread_count)
 
 
 if __name__ == "__main__":
