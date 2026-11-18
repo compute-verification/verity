@@ -77,10 +77,14 @@ def inside (S : Array (Nat × Nat)) (g : Nat) : Bool := S.any fun (lo, hi) => lo
 def sortDedup (xs : Array Nat) : Array Nat :=
   (xs.qsort (· < ·)).foldl (fun acc x => if acc.back? == some x then acc else acc.push x) #[]
 
-/-- Gates with their widths as ports, in increasing index, each once. -/
-def portsOf (xs : Array (Nat × Nat)) : Array Port :=
-  (xs.qsort (·.1 < ·.1)).foldl (fun acc (g, w) =>
-    if acc.back?.map Port.gate == some g then acc else acc.push { gate := g, width := w }) #[]
+/-- Gates with their widths as ports, in increasing index, each once; refuses a gate met at two widths. -/
+def portsOf (xs : Array (Nat × Nat)) : V (Array Port) :=
+  (xs.qsort (·.1 < ·.1)).foldlM (fun acc (g, w) =>
+    match acc.back? with
+    | some p => if Port.gate p != g then pure (acc.push { gate := g, width := w })
+                else if p.width == w then pure acc
+                else throw s!"port-width: gate {g} is read or written at widths {p.width} and {w}"
+    | none => pure (acc.push { gate := g, width := w })) #[]
 
 /-- A unit's operands, each with its width: its callee's parameter leaves in order. -/
 def operandsW (P : Prog) (x : Node) (m : Nat) : V (Array (Nat × Nat)) := do
@@ -144,8 +148,9 @@ def front (P : Prog) (units : Array Nat) : V Front := do
     else
       for j in [0:callee.outLeaves] do
         let g ← resolve P sc (callee.body.ret.get j)
-        if inside S g then outs := outs.push (g, rw[j]!)
-  return { ranges := S.qsort (·.1 < ·.1), ins := portsOf ins, outs := portsOf outs,
+        let some w := rw[j]? | throw s!"root node {k}: return leaf {j} past its {rw.size} widths"
+        if inside S g then outs := outs.push (g, w)
+  return { ranges := S.qsort (·.1 < ·.1), ins := ← portsOf ins, outs := ← portsOf outs,
            lift := ← lift P (members.map fun (k, _, _) => (root.body.nodes[k]!).fn) }
 
 /-! ### The block's Program on bits -/
@@ -291,7 +296,7 @@ def program (P : Prog) (units : Array Nat) : V Prog := do
   for (k, m, _) in ms do
     for (g, w) in ← operandsW P root.body.nodes[k]! m do
       if !inside S g then read := read.push (g, w)
-  let ins := (portsOf read).map fun p => (Port.gate p, p.width)
+  let ins := (← portsOf read).map fun p => (Port.gate p, p.width)
   let mut inIdx : Std.HashMap Nat Nat := {}
   for (g, _) in ins do inIdx := inIdx.insert g inIdx.size
   let mut made : Std.HashMap Nat (Nat × Nat) := {}
@@ -323,12 +328,14 @@ def program (P : Prog) (units : Array Nat) : V Prog := do
       outs := outs.push (sc.off, c.ret.widths.foldl (· + ·) 0)
     else
       let ra := bitAt c.ret
+      if c.outLeaves != c.ret.widths.size then
+        throw s!"unit {units[t]!}: {c.outLeaves} return leaves for {c.ret.widths.size} widths"
       for j in [0:c.outLeaves] do
         let g ← resolve P sc (c.body.ret.get j)
         if inside S g then
           outs := outs.push (g, (ra j).2)
           if !made.contains g then made := made.insert g (t, (ra j).1)
-  let outPorts := (portsOf outs).map fun p => (Port.gate p, p.width)
+  let outPorts := (← portsOf outs).map fun p => (Port.gate p, p.width)
   let mut ret : Array Ref := #[]
   for (g, w) in outPorts do
     let (u, o) := made[g]!
@@ -384,5 +391,10 @@ def piece (j : Json) : Except String Json := do
   return Json.mkObj [("ranges", .arr (f.ranges.map fun (lo, hi) => Json.arr #[toJson lo, toJson hi])),
     ("ins", ports f.ins), ("outs", ports f.outs),
     ("lift", .arr (f.lift.map fun (k, b) => Json.arr #[.str k, .str b]))]
+
+#guard (portsOf #[(5, 16), (2, 8), (5, 16)]).toOption == some #[{ gate := 2, width := 8 }, { gate := 5, width := 16 }]
+#guard match portsOf #[(5, 16), (2, 8), (5, 8)] with
+  | .error e => e.startsWith "port-width: gate 5 is read or written at widths"
+  | .ok _ => false
 
 end Spot.BlockFront
