@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -68,8 +67,9 @@ def _make_plan(args: Any) -> jobs.Plan:
 
 
 def _where_reachable(lookup: Any, missing: Any) -> Any:
-    """`lookup`, until it finds no catalog here (a tree with no git that knows its commit, a store with no remote): then
-    no point's passing run is looked up, which it says once, and the point runs."""
+    """`lookup`, until it finds no catalog here (`jobs.NoCatalog`: a tree with no git that knows its commit, a store with
+    no remote): then no point's passing run is looked up, which it says once, and the point runs. Any other error of the
+    lookup fails the launch."""
 
     skipped: list[str] = []
 
@@ -77,7 +77,7 @@ def _where_reachable(lookup: Any, missing: Any) -> Any:
         if not skipped:
             try:
                 return lookup(*key)
-            except (ValueError, RuntimeError, OSError, subprocess.CalledProcessError) as error:
+            except jobs.NoCatalog as error:
                 skipped.append(str(error))
                 print(f"verity-bench: no catalog lookup here, so no passing run is reused: {error}", file=sys.stderr)
         return missing

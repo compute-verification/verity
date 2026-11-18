@@ -156,7 +156,7 @@ def test_without_a_remote_the_lookup_refuses_unless_told_to_read_the_catalog_alo
     config = tmp_path / "store.toml"
     config.write_text("")
     store = LocalStore(tmp_path / "local", config_path=config)
-    with pytest.raises(RuntimeError, match="--local-only"):
+    with pytest.raises(jobs.NoCatalog, match="--local-only"):
         jobs.StoreCompletion(store, root=repo)("1" * 64, commit)
     assert jobs.StoreCompletion(store, root=repo, local_only=True)("1" * 64, commit) is None
 
