@@ -5,7 +5,7 @@
   has at most K; `DsaPositionsMerge_v1` is `merge` on lists with words past their counts, counts past K and lists that fill K;
 * `DsaPositionsMerge_v1`, each block's list and count its own port, is gate for gate the merge over one port of the lists
   and one of the counts, at small statics and, with ``VERITY_ML_DEFINITIONS_SLOW`` set, at the served one (M 8, K 2,048);
-* `DsaPositionsChunk_v1` and then `DsaPositionsSlot_v1` over its chunk give the merge's element j for every j on the merge's
+* `DsaPositionsChunk_v1` and then `DsaPositionsSlot_v2` over its chunk give the merge's element j for every j on the merge's
   own outputs, 0 where it is N or more and at an index out of range, at small statics and the served ones on random rows;
 * the units composed over a row's blocks (each on the outputs before it) give the rows network's order over the whole row
   (`DsaTopKRow_v2`'s construction), then 0, on masks of at most K members;
@@ -159,9 +159,9 @@ def _chunk(K: int, W: int, slots: np.ndarray, cs: list[int]) -> list[list[int]]:
 
 
 def _slot(K: int, N: int, slots: np.ndarray, js: list[int]) -> list[int]:
-    """Each row of ``slots`` (rows, K) u32 words, with its j, through `DsaPositionsSlot_v1{K,N}`."""
-    got = BS.evaluate_bits(bind(R.DsaPositionsSlot, K=K, N=N), _bits(slots, 32).reshape(len(js), -1), _bits(js, 32))
-    return _words(np.asarray(got).reshape(len(js), -1), 32)
+    """Each row of ``slots`` (rows, K) u32 words, with its j, through `DsaPositionsSlot_v2{K,N}`."""
+    got = E.evaluate_batch(bind(R.DsaPositionsSlot, K=K, N=N), _bits(slots, 32).reshape(len(js), -1), _bits(js, 32))
+    return [int(x) for x in np.asarray(got).reshape(-1)]
 
 
 @pytest.mark.parametrize("M_,K,W,N", [(3, 4, 2, 20), (2, 5, 2, 12), (1, 1, 1, 4), (3, 8, 4, 40), (2, 6, 4, 30),
@@ -348,7 +348,7 @@ def test_the_cut_counts_its_units() -> None:
 #: the row classes the long row serves: N a multiple of TOPK from 4,096 to the table's capacity
 SERVED_CLASSES = range(4096, SERVED_V + 1, SERVED_TOPK)
 #: the units the long row's own Definitions add to its cut: the index's past the mask, and the read
-INDEX_UNITS = ("DsaPositionsMerge_v2", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1", "EmbeddingRead_v2")
+INDEX_UNITS = ("DsaPositionsMerge_v2", "DsaPositionsChunk_v1", "DsaPositionsSlot_v2", "EmbeddingRead_v2")
 
 
 def _served_units() -> dict[str, list]:
@@ -386,7 +386,7 @@ def test_the_index_and_read_units_pass_the_window_builders_proof_block_check() -
     and the composer packs proof blocks into a Flock block of that size), at most 2^26 for the merge of up to 8 blocks."""
     units = _served_units()
     k = {b: {IF.check_proof_block(u) for u in units[b]} for b in INDEX_UNITS}
-    assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v2"] == {23} and k["DsaPositionsSlot_v1"] == {IF.PACK_LOG} == {22}
+    assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v2"] == {23} and k["DsaPositionsSlot_v2"] == {IF.PACK_LOG} == {22}
     assert max(k["DsaPositionsMerge_v2"]) <= 26
 
 
