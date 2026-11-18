@@ -20,8 +20,9 @@ open Lean (Json)
 
 /-- A file's format: theta's registration, each port a registered value's root, domain, leaves and row width, and no
 position: every position a unit reads is derived from C and the partition (`OneCircuit.pos`). An object of the
-file holds only its keys (`FILE_KEYS`, `PORT_KEYS`). -/
-def FORMAT : String := "verity/registered-reads/v1"
+file holds only its keys (`FILE_KEYS`, `PORT_KEYS`); a file of the earlier format, which stated positions, is refused
+by its format's name. -/
+def FORMAT : String := "verity/registered-reads/v2"
 
 def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v1"
 /-- The default leaf width, which the domain and the entry name only by leaving `word_bits` out. -/
@@ -308,6 +309,8 @@ def pos (_P : Program.Prog) (_indices : Array Nat) (reg : Registered.Port) : V R
 end OneCircuit
 
 namespace Registered
+
+open Lean (Json)
 
 /-- The output field a link row reads in its writer template's tree: the writer's whole output row, as `HmLinks.checkUnit`
 requires of every link, which the class circuits name `out`. -/
