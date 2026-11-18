@@ -17,8 +17,8 @@
 # outlives them fails naming the kill. The
 # session's record is DIR/session, and its answer, held to the verifier's own record of it, is DIR/answer.json in the
 # core interface's form (`served_bandwidth.py answer`): the credited reads q_bytes at eps and δ, and γ against
-# BW_R_BYTES_PER_S (default an H200's specified 4.8 TB/s). The session runs after the window was served, beside it, and
-# is not interleaved with the engine's reads, since serving is not hooked: the answer says so (an accept in its profile,
+# the data sheet's memory bandwidth of BW_CARD, the sku of the card it runs on (or BW_R_BYTES_PER_S, R as a number).
+# The session runs after the window was served, beside it, and is not interleaved with the engine's reads, since serving is not hooked: the answer says so (an accept in its profile,
 # which has no reason), and DIR/served.json names the window, the session's times and its card. The session's core case
 # (PoUB-P2's, `p2_case`), the composite's bandwidth piece, and its answer go to SERVE_DIR/private/bandwidth (0700, its
 # files 0600, never DIR: the case holds the store's opened blocks and the verifier's coins), the answer the Lean's:
@@ -42,7 +42,8 @@ PARTY=${BW_PARTY:-ssh -i $HOME/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o Batc
 PARTY_HOST=${BW_PARTY_HOST:-10.96.0.36}
 WINDOWS=${BW_WINDOWS:-6} PASSES=${BW_PASSES:-4} SAMPLES=${BW_SAMPLES:-1024} WINDOW_S=${BW_WINDOW_S:-20}
 DEADLINE_S=${BW_DEADLINE_S:-1} DEVICE=${BW_DEVICE:-cuda} LEASE_MIN=${BW_LEASE_MIN:-40}
-R=${BW_R_BYTES_PER_S:-4800000000000}
+if [ -n "${BW_R_BYTES_PER_S:-}" ]; then RATE=(--r-bytes-per-s "$BW_R_BYTES_PER_S")
+else RATE=(--card "${BW_CARD:?BW_CARD is the sku of the card the session runs on, whose data sheet bandwidth is R}"); fi
 S=$O/scratch
 rm -rf "$S"; mkdir -p "$S"
 trap 'rm -rf "$S"' EXIT
@@ -110,8 +111,8 @@ else
   step session $?
 fi
 tail -n 1 "$O/session.log" 2>/dev/null
-"$PY" benchmarks/one_stage/served_bandwidth.py answer --session "$O/session/session.json" --serve-dir "$SERVE" \
-  --window "$K" --out "$O" --r-bytes-per-s "$R" --started "$(cat "$O/started.txt" 2>/dev/null)" \
+PYTHONPATH=$PYTHONPATH:$PWD/benchmarks/harness:$PWD/tools/config "$PY" benchmarks/one_stage/served_bandwidth.py answer --session "$O/session/session.json" --serve-dir "$SERVE" \
+  --window "$K" --out "$O" "${RATE[@]}" --started "$(cat "$O/started.txt" 2>/dev/null)" \
   --ended "$(cat "$O/ended.txt" 2>/dev/null)" --gpu "$O/gpu.txt"
 rc=$?
 step answer $rc

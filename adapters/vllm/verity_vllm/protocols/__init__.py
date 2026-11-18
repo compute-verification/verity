@@ -24,7 +24,7 @@ weights (`at_commit`), and after its warm-ups, so every ``apply`` an executor se
 **Refused** (`refusals`): an unknown protocol; a scheme its package does not register, or an adapter not on this tree;
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
 not wired); two executors at one site; beside SPOT, an executor whose protocol package has no circuit for its
-scheme (`circuit_registry`, `traced_as`: every PoUW scheme but ``ncp-v2``); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (`keeps_weight_copy`); and
+scheme (`circuit_registry`, `traced_as`: every PoUW scheme but ``ncp-v2``); and
 whatever an adapter refuses for its context (SPOT outside the Commit stage, for one).
 
 **Weights of record.**  An option that releases weights from the model (POUS) returns their plaintext from
@@ -244,16 +244,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
         if sites and sampled and not has_circuit(entry):
             out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
                        f"so SPOT would trace it as the stock computation (refused until the option names one: traced_as)")
-        if ctx.scheme("pous") is not None and _asks(mod, "keeps_weight_copy", scheme):
-            out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
-                       f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")
     return tuple(out)
-
-
-def _asks(mod: ModuleType, question: str, scheme: str) -> bool:
-    """A protocol adapter's answer for ``scheme`` (its ``keeps_weight_copy``); False where it has none."""
-    answer = getattr(mod, question, None)
-    return bool(answer(scheme)) if callable(answer) else False
 
 
 class Composition:
@@ -455,8 +446,8 @@ def capture_context(profile: Any, *, settings: Any = None) -> Context | None:
 
 
 def at_capture(profile: Any, model: Any, settings: Any = None) -> Composition | None:
-    """Install a Match capture's composition (`capture_context`) on its engine's model: PoUW's executor there serves each call
-    and records it as one op (`pouw.ncp_linear_op`), committing nothing. None when the target declares no such protocol."""
+    """Install a Match capture's composition (`capture_context`) on its engine's model: each protocol's executor there serves
+    its calls, committing nothing. None when the target declares no such protocol."""
     ctx = capture_context(profile, settings=settings)
     if ctx is None:
         return None

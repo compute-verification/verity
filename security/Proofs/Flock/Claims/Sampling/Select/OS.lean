@@ -17,8 +17,8 @@ tape.
   `none`.
 * `select_subset_runOS`: an accepted `Select.select` at a rule whose sampling design over the population Flock reads as
   `.subset k` proves every unit `runOS` samples.
-* `select_subset_escape_le`: so on bytes uniform by A3 (`Assumptions.UniformRandomBytes`) it misses `B` no more often
-  than the uniform `k`-subset does (`SamplingDesign.sampleOS_subset_escape_le`).
+* `select_subset_missProb_le`: so on bytes uniform by A3 (`Assumptions.UniformRandomBytes`) it misses `B` no more often
+  than the uniform `k`-subset does (`SamplingDesign.sampleOS_subset_missProb_le`).
 
 A stratified or work sample reads one stream per stratum, which the code serves from the one sequence of coins and `runOS`
 from a tape each, so the agreement here is the subset sampling design's, which a rate sampling design resolves to (`Select.Rule.over`).
@@ -251,8 +251,8 @@ theorem select_subset_runOS (rule : Select.Rule) (hne : rule ≠ .all) (d : Prog
       exact ⟨dr, rfl, fun x hx => hsub x (by rw [hud]; exact hx)⟩
 
 /-- **`Select.select`'s subset sample misses `B` no more often than the uniform `k`-subset**, on coins uniform by A3
-(`Assumptions.UniformRandomBytes`), through the live sample's bound (`SamplingDesign.sampleOS_subset_escape_le`). -/
-theorem select_subset_escape_le (rule : Select.Rule) (hne : rule ≠ .all) (d : Program) (query : Json)
+(`Assumptions.UniformRandomBytes`), through the live sample's bound (`SamplingDesign.sampleOS_subset_missProb_le`). -/
+theorem select_subset_missProb_le (rule : Select.Rule) (hne : rule ≠ .all) (d : Program) (query : Json)
     (table : Option Json) (n : ℕ) (named : Json) (k : ℕ) (hn : Partition.units d query = .ok n)
     (hnamed : rule.samplingDesignOver n = .ok named) (hk : Draw.flockSamplingDesign named n = .ok (.subset k)) (hkn : k ≤ n)
     {Ω : Type} [Fintype Ω] (L : Fin 1 → ℕ) (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256)
@@ -260,7 +260,7 @@ theorem select_subset_escape_le (rule : Select.Rule) (hne : rule ≠ .all) (d : 
     prCoin (fun ω => ∃ draw proved read,
       Select.select rule d query table none (SamplingDesign.streamOf (t ω 0)) = .ok (draw, proved, read) ∧
         ∀ u ∈ B, u.val ∉ proved) ≤ (Verity.SamplingDesign.subset n k hkn).missProb B := by
-  refine le_trans (prCoin_mono fun ω hω => ?_) (SamplingDesign.sampleOS_subset_escape_le n k hkn L t ht B)
+  refine le_trans (prCoin_mono fun ω hω => ?_) (SamplingDesign.sampleOS_subset_missProb_le n k hkn L t ht B)
   obtain ⟨draw, proved, read, hs, hm⟩ := hω
   obtain ⟨dr, hdr, hsub⟩ := select_subset_runOS rule hne d query table n named k hn hnamed hk (t ω) draw proved read hs
   exact ⟨dr, hdr, fun u hu hud => hm u hu (hsub _ hud)⟩

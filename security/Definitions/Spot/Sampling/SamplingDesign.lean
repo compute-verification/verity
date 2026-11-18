@@ -19,11 +19,11 @@ misses a set `B` of units.
 * `miss L K`: the largest escape over sets of at least `K` units, the sampling term of the count
   curve `δ(K) = miss K + ε`, zero for `K ≥ 1` at a sampling design that samples every unit (`miss_eq_zero_of_sample_univ`);
 * `incl L u`: the probability that `u` is sampled; a single unit escapes with `1 - incl L u`
-  (`escape_singleton`), and a set escapes with at most that for each of its members
-  (`escape_le_of_mem`).
+  (`missProb_singleton`), and a set escapes with at most that for each of its members
+  (`missProb_le_of_mem`).
 
 Core's uniform `k`-subset of `n` units, `Verity.SamplingDesign.subset n k`, has a hypergeometric escape:
-`C(n - |B|, k) / C(n, k)` (`Verity.SamplingDesign.subset_escape`), so its count curve is `C(n - K, k) / C(n, k)`
+`C(n - |B|, k) / C(n, k)` (`Verity.SamplingDesign.subset_missProb`), so its count curve is `C(n - K, k) / C(n, k)`
 (`subset_miss`).
 
 The lemmas named here are `Proofs/Spot/Sampling/SamplingDesign.lean`'s.
@@ -57,7 +57,7 @@ noncomputable def bernFactor (num den : ℕ) (a : ℝ≥0∞) : ℝ≥0∞ :=
 /-! ## The uniform subset is optimal
 
 Averaging `escape B` over a uniformly random `K`-set `B` gives `E[C(n - |S|, K)] / C(n, K)` for any
-sampling design (`avg_escape_subsets`). The map `s ↦ C(n - s, K)` is convex on `ℕ` (its drops fall,
+sampling design (`avg_missProb_subsets`). The map `s ↦ C(n - s, K)` is convex on `ℕ` (its drops fall,
 `drop_anti`), so it lies above its supporting line at `k` (`choose_support`), and Jensen's
 inequality at a mean of `k` gives `C(n - k, K)`, which is the uniform `k`-subset's value. -/
 

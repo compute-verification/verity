@@ -20,6 +20,7 @@ from verity_vllm.commit.served_record import served_rows
 from verity_vllm.config import UsageError
 from verity_vllm.engine import served_seed
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import seal_stages as st
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_guard as sg
@@ -125,7 +126,9 @@ def test_a_window_sealed_off_the_loop_writes_the_bytes_an_inline_seal_writes(tmp
     d = tmp_path / "windows" / "w5"
     on_loop, inline, off, errors = _sealed_after_the_next_window(d, ss.freeze)
     assert not errors and _files(d) == on_loop, "the same files, byte for byte: store, salts, levels, binding map, context, manifest"
-    assert off["manifest_sha256"] == inline["manifest_sha256"] and off["binding_map_digest"] == inline["binding_map_digest"]
+    manifest = (Path(off["bundle"]) / RB.MANIFEST).relative_to(d).as_posix()
+    assert RB.open_bundle(off["bundle"])["manifest_sha256"] == hashlib.sha256(on_loop[manifest]).hexdigest()
+    assert off["binding_map_digest"] == inline["binding_map_digest"]
     assert off["bytes"] == inline["bytes"] and "error" not in off
 
 

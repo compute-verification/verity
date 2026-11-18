@@ -124,6 +124,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import queue
 import shutil
 import signal
@@ -140,6 +141,7 @@ from verity_vllm import messages as M
 from verity_vllm import settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
+from verity_vllm.llm import option_settings
 from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_guard as SG, serve_h1 as SH,
                                    serve_learn as SL, serve_release as RL, serve_day as SD, serve_poub as SR,
                                    serve_row as RW, serve_seal as SS)
@@ -179,7 +181,7 @@ TOP_P_REFUSAL = ("serve-openai refuses top_p={top_p} < 1: vLLM's top-p sampler r
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the records' directory (default $RESEARCH_RUN_DIR, else .)")
+    out: str | None = option("--out", default=None, help="the records' directory, outside the run's directory (refused inside it)")
     host: str = option("--host", default="127.0.0.1")
     port: int = option("--port", type=int, default=18082)
     model: str = option("--model", help="the pinned model (the int8 pin: manifests/checkpoints-int8.json)")
@@ -595,13 +597,15 @@ def scheme_settings(opts: Any, out: Path) -> dict[str, Any]:
     """The settings of the scheme ``--protocols`` names (`messages.option`): ``--protocols-config``'s entry under the
     option's protocol (``pouw``, whose ``device`` is the GPU's, ``cuda``), its passes under ``out/pearl``, its salt a
     session an epoch reserved under ``--challenger-lane`` as ``--challenger-peer`` (the challenger at this node's
-    127.0.0.1, at the port the gate's open answers), else in-process."""
-    own = dict(protocols_doc(opts).get(opts.protocols.partition(":")[0], {}))
-    if own.pop("device", "cuda") != "cuda":
-        raise UsageError(f"--protocols-config: {opts.protocols} runs on cuda")
+    127.0.0.1, at the port the gate's open answers), else in-process; which of these go together is the scheme's
+    ``check_settings``."""
+    try:
+        own = option_settings(opts.protocols, protocols_doc(opts))
+    except ValueError as e:
+        raise UsageError(f"--protocols-config: {e}") from None
     g = opts.gate
-    coins = ({"challenger": "127.0.0.1:0", "lane": g.challenger_lane, "peer": g.challenger_peer} if g.challenger_gate
-             else {"coins": "in-process"})
+    coins = {"challenger": "127.0.0.1:0" if g.challenger_gate else "", "coins": "" if g.challenger_gate else "in-process",
+             "lane": g.challenger_lane or "", "peer": g.challenger_peer or ""}
     return {**own, **coins, "transcript_dir": str(out / "pearl")}
 
 
@@ -617,8 +621,6 @@ def scheme_refusal(opts: Any, scheme: Any) -> str | None:
     from verity.protocols.resource_accounting.scheme import settings as checked
 
     g, after = opts.gate, getattr(getattr(opts, "retention", None), "release_after", "") or ""
-    if len({bool(g.challenger_gate), bool(g.challenger_peer), bool(g.challenger_lane)}) > 1:
-        return f"--challenger-gate, --challenger-peer and --challenger-lane go together under {opts.protocols}"
     if h1 := [f"--{k.replace('_', '-')}" for k, v in vars(opts.h1).items() if v]:
         return f"{', '.join(h1)}: PoUW H1's, not {opts.protocols}'s"
     if g.challenger_gate and not private():
@@ -633,7 +635,7 @@ def scheme_refusal(opts: Any, scheme: Any) -> str | None:
     try:
         checked(scheme, scheme_settings(opts, Path(opts.out)))
     except ValueError as e:
-        return f"--protocols-config: {e}"
+        return f"--protocols-config, --challenger-gate, --challenger-lane, --challenger-peer: {e}"
     return None
 
 
@@ -733,7 +735,7 @@ def no_slice_record(windows: CommitWindows | None) -> dict[str, str]:
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
-              usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
+              usage: Callable[[Any], Any] = shutil.disk_usage, environ: Mapping[str, str] = os.environ) -> None:
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1:
         raise UsageError("--window-steps is at least 1")
@@ -753,8 +755,6 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
-    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
-        raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
     scheme = M.option(opts.protocols)
@@ -763,6 +763,10 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
     if opts.commit and which("ninja") is None:
         raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
                          "ninja is) on PATH, or pass --no-commit")
+    if why := SG.out_refusal(opts.out, environ):
+        raise UsageError(why)
+    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
+        raise UsageError(f"--seal: {why}")
 
 
 def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:
