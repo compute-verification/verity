@@ -10,10 +10,11 @@ resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 is ``pipeline``, ``check``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
 ``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
-sits in ``pipeline``.  ``OPTIONAL`` names the packages a
+sits in ``pipeline``; ``protocols.linear``, the linear site ``engine.kv_blocks`` attaches, sits in ``engine``.  ``OPTIONAL`` names the packages a
 tree may hold or not (a private protocol's driver, the commitment scheme's reference).  ``engine.hooks``, the one owner of
 runtime patches, ``engine.env``, the one writer of vLLM's env pins, ``settings``,
-the environment's registry, and ``log``, the logger, import nothing from the package and sit in ``core`` so every layer may call them.  Peers in one layer
+the environment's registry, ``messages``, the schemes' exchange, and ``log``, the logger, import nothing from the package
+but ``settings`` and sit in ``core`` so every layer may call them.  Peers in one layer
 (``observe|commit``, ``query|correspondence``) may import each other; no rule restricts a peer edge.
 """
 from __future__ import annotations
@@ -35,6 +36,7 @@ LAYER = {
     "verity_vllm.check": "check",
     "verity_vllm.acquire": "acquire",
     "verity_vllm.protocols": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
+    "verity_vllm.protocols.linear": "engine",                  # the linear site on vLLM's layers; imports only messages, engine.hooks, errors
     "verity_vllm.observe": "observe|commit",
     "verity_vllm.commit": "observe|commit",
     "verity_vllm.engine": "engine",
@@ -51,6 +53,7 @@ LAYER = {
     "verity_vllm.settings": "core",                            # the environment's registry; imports nothing from verity_vllm
     "verity_vllm.gc_tuning": "core",                           # the offline processes' GC thresholds; imports only settings
     "verity_vllm.log": "core",                                 # the logger; imports nothing from verity_vllm
+    "verity_vllm.messages": "core",                            # the schemes' exchange; imports only settings
     "verity_vllm.commit.challenge": "core",                    # -> verity.commitments.randomness; imports nothing from verity_vllm
     "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
     "verity_vllm.errors": "core",                              # the one Refused; imports nothing from verity_vllm

@@ -103,6 +103,7 @@
   "Properties.InferenceOnly.RecordForm",
   "Properties.Certifier.JointBridge.SpaceOfPeriodHeld",
   "Properties.Poub.Remote",
+  "Properties.Poub.Remote.Refresh",
   "Properties.Poub.Remote.Coins",
   "Properties.Poub.Remote.Shared",
   "Properties.Poub.Remote.Pooled",
@@ -1034,7 +1035,7 @@
    "Claims.StrictBirthday": "SHA-512 collision resistance: the strict birthday bound q^2 / 2^513 at one finder (cr/sha-512), as the spec states it",
    "FlockSoundness.Assumptions.SHA512CRExpected": "SHA-512 collision resistance: a finder of expected cost T finds a collision with probability at most T / 2^256 (ecr/sha-512)",
    "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
-   "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
+   "FlockSoundness.Assumptions.UniformRandomBytes": "the challenger's uniform randomness, on the verifier server: the bytes the challenger reads from its own host's operating system (`IO.getRandomBytes`), for the coins a unit sample reads and for the epoch salt, are independent and uniform (A3, uniform/io-getrandombytes); the deployed sampled audit's soundness (V3, V5) rests on it",
    "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
@@ -15080,7 +15081,13 @@
    "InferenceOnlyVerifier.Properties.Record.PinnedReadHonest": "unstated: PinnedReadBinds's witness that the check's own form has a pinned read, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
    "InferenceOnlyVerifier.Properties.Record.PinnedReadNontrivial": "unstated: PinnedReadBinds's witness that at the verdict bit 0 some pinned read does not return its table's row, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
    "InferenceOnlyVerifier.Properties.Record.OpenedRowReturned": "unstated: that an opening's declared row is the row its reader returns, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
-   "Properties.Site.RefusedAt": "unstated: a site entry's refusal, the first of its checks it fails, whose guarantee Properties.Site.refusedAt left the lock by name with its honest and nontrivial witnesses; it is listed again with them (owner @lean)."
+   "Properties.Site.RefusedAt": "unstated: a site entry's refusal, the first of its checks it fails, whose guarantee Properties.Site.refusedAt left the lock by name with its honest and nontrivial witnesses; it is listed again with them (owner @lean).",
+   "Properties.Poub.RegisteredCapped": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.registeredCapped; it gets a guarantee entry, with its shape and record, after tonight's landing",
+   "Properties.Poub.ProbationKept": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.probationKept; it gets a guarantee entry, with its shape and record, after tonight's landing",
+   "Properties.Poub.OriginsOnRota": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.originsOnRota; it gets a guarantee entry, with its shape and record, after tonight's landing",
+   "Properties.Poub.OpensOrigin": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.opensOrigin; it gets a guarantee entry, with its shape and record, after tonight's landing",
+   "Properties.Poub.CoinAfterAppend": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.coinAfterAppend; it gets a guarantee entry, with its shape and record, after tonight's landing",
+   "Properties.Poub.CoinBySlot": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.coinBySlot; it gets a guarantee entry, with its shape and record, after tonight's landing"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

@@ -453,6 +453,9 @@ for under in "$OUT" ${RESEARCH_RUN_DIR:+"$RESEARCH_RUN_DIR"}; do
 done
 # the run's tool logs, builds and the node's facts: paths, hosts and free text, which no run record or upload may carry
 LOGS=$D/private/logs
+# step 3's records audit, relative to D: whole in the path prover's keep (PP_KEEP), since it holds the window's
+# registration, its case, the advice's length and what is counted from it; never under OUT
+SERVED_ARM=private/logs/sampled-proofs/keep/served
 logs_dir() { (umask 077; mkdir -p "$LOGS/v3c-audit"); }
 [ ! -d "$D" ] || logs_dir  # the serve dir itself is made after the preflight
 export VERITY_PROTOCOLS_CONFIG=${VERITY_PROTOCOLS_CONFIG:-"{\"private\": \"$D/private\"}"}  # where a replay bundle's keys and salts go
@@ -588,7 +591,7 @@ SERVED_COMPARE=$D/served-compare/served_compare.json
 FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1
 export CUDA_HOME=${CUDA_HOME:-$(python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.0)}
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src:$TREE/benchmarks/harness
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
@@ -679,8 +682,10 @@ PEARLPLUS_CIRCUIT=$D/pearlplus/circuit-record.json
 if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-180m}
 elif [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-60m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}
 else V3C_TIMEOUT=${V3C_TIMEOUT:-15m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}; fi
-V3C_WARM_TIMEOUT=${V3C_WARM_TIMEOUT:-$V3C_AUDIT_TIMEOUT}
+V3C_WARM_TIMEOUT=${V3C_WARM_TIMEOUT:-90m}
+V3C_WARM_GIVEN=${V3C_WARM_JOBS+1} V3C_WARM_JOBS=${V3C_WARM_JOBS-$(($(nproc) < 8 ? $(nproc) : 8))}
 V3C_AUDIT_MEM_GIVEN=${V3C_AUDIT_MEM_GB:+1} V3C_AUDIT_MEM_GB=${V3C_AUDIT_MEM_GB:-290}
+V3C_MIN_FREE_GB=${V3C_MIN_FREE_GB:-100}
 NODE_MEM_GB=${NODE_MEM_GB:-$(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/meminfo)}
 short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, saying both
   [ "$NODE_MEM_GB" -lt "$V3C_AUDIT_MEM_GB" ] || return 1
@@ -727,7 +732,7 @@ coin_trees_held() {  # CHALLENGER SUMMARY STEP: an audit on the gate's coins (CH
   say "$3 refused: $(tail -1 <<< "$why" | cut -c1-1200)"
   return 20
 }
-sampled_coins() { coin_trees_held "$SP_CHALLENGER" "$D/sampled-proofs-served/summary.json" SAMPLED-PROOFS; }  # step 3's
+sampled_coins() { coin_trees_held "$SP_CHALLENGER" "$D/$SERVED_ARM/summary.json" SAMPLED-PROOFS; }  # step 3's
 v3c_trees() { coin_trees_held "$V3C_CHALLENGER" "$VW/audit/summary.json" V3C-AUDIT; }  # V3c's audit's, VW its directory
 v3c_gate() {  # V3C_CHALLENGER's gate as the command `served_verdicts.py gate` runs, the ssh records_audit's session reaches
   local g=(ssh -o BatchMode=yes)
@@ -891,8 +896,10 @@ piece_unread() {  # $1 as the split network attester's piece's refusal, which le
 # samples a stratum of each reader template, so a table W registers has a sampled reader where its readers are templates of its own
 # (Record.checks), and V3C_PORTS defaults to the size of R's sample, its strata's k summed: at most a session for each
 # sampled proof block. The preflight refuses H1_TIE on a tree whose records_audit.py takes no --tie, or at another rule.
-# With V3C_WARM_JOBS=N, `records_audit.py warm` first composes every template of the committed window into
-# $VW/compose-cache, N at a time, each in a process of its own, within V3C_WARM_TIMEOUT (default V3C_AUDIT_TIMEOUT): the
+# With V3C_WARM_JOBS=N (default the cores this run is given, at most 8; set empty, no warm, and the audit composes each
+# template itself, one at a time), `records_audit.py warm` first composes every template of the committed window into
+# $VW/compose-cache, N at a time, each in a process of its own, within V3C_WARM_TIMEOUT (default 90m), printing each
+# template's line as it finishes into warm.log and starting none past V3C_AUDIT_MEM_GB by earlier peaks: the
 # templates and their binding are public, so this precedes the audit's coins, and the audit, taking the cache, composes
 # none, its limit then its sessions'. A compose holds up to what the audit needs (V3C_AUDIT_MEM_GB, a 4,32,4 window's
 # Int8RowQuant at K 8,192), so N is what the run's memory takes. A warm that fails says so, and the audit composes what it
@@ -908,14 +915,23 @@ piece_unread() {  # $1 as the split network attester's piece's refusal, which le
 # bound to its own, the entry held to its pin as it is copied (`compose_circuit.cached`). A kept entry is trusted as the
 # tree is: staging takes a circuit's META, pin and class off the line its compose kept beside it, a sampled member's
 # circuit is held to that line before its prover reads it (`a5.held`), and nothing else says what a template's circuit is.
+# On a tree whose records_audit.py takes them, an entry is the compose's record alone (its META, pin, class and size, the
+# text hashed as it is rendered) unless V3C_KEEP_CIRCUITS=1, and the audit composes a sampled member's template after its
+# sample, held to the record's pin; the warm and the audit start no compose, and the warm stops, where the cache's file
+# system would have less than V3C_MIN_FREE_GB (default 100) free.
+v3c_compose_args() {  # the warm's and the audit's disk floor and text keeping, on a tree whose records_audit.py takes them
+  grep -q -- '--min-free-gb' "$TREE/benchmarks/prove_path/records_audit.py" || return 0
+  printf '%s\n' --min-free-gb "$V3C_MIN_FREE_GB" ${V3C_KEEP_CIRCUITS:+--keep-circuits}
+}
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
+  local ca; mapfile -t ca < <(v3c_compose_args)
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py warm --window "$VW/window" --sampling-design "$V3C_LAW" \
-    --compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}" --jobs "$V3C_WARM_JOBS") > "$LOGS/v3c-audit/warm.log" 2> "$LOGS/v3c-audit/warm.err"
+    --compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}" --jobs "$V3C_WARM_JOBS" --mem-gb "$V3C_AUDIT_MEM_GB" "${ca[@]}") > "$LOGS/v3c-audit/warm.log" 2> "$LOGS/v3c-audit/warm.err"
   local rc=$? why
-  if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM' "$LOGS/v3c-audit/warm.log" | cut -c1-600)
+  if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM {' "$LOGS/v3c-audit/warm.log" | cut -c1-600)
   else
-    if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then why="timed out after V3C_WARM_TIMEOUT=$V3C_WARM_TIMEOUT"
+    if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then why="timed out after V3C_WARM_TIMEOUT=$V3C_WARM_TIMEOUT with $(grep -c '^COMPOSED ' "$LOGS/v3c-audit/warm.log") of $(grep -m1 '^WARMING' "$LOGS/v3c-audit/warm.log" | cut -d' ' -f2) templates composed (each one's seconds in warm.log)"
     else why=$(failed "$rc" "$LOGS/v3c-audit/warm.err"); fi
     why+="; the audit composes the templates it didn't keep"
   fi
@@ -923,7 +939,7 @@ v3c_warm() {  # every template of the committed window composed into $VW/compose
 }
 v3c_cuda() { FLOCK_WORK=$FW . "$TREE/verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh" >&2 && { [ -n "${CUDA_TK:-}" ] && echo "$CUDA_TK" || python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.3; }; }
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
-  local run leanb m0 rc gl tk tie=() day=() cache=() ch=(--challenger "$V3C_CHALLENGER") ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
+  local run leanb m0 rc gl tk tie=() day=() cache=() ca=() ch=(--challenger "$V3C_CHALLENGER") ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
   [ -n "${DAY:-}" ] && day=(--day "$DAY" --day-log "$DAY_LOG" ${DAY_PARAMS:+--day-params "$DAY_PARAMS"})
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
@@ -966,9 +982,10 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     n=${V3C_GPUS//[^,]/}
     lease=(gpu-lease "$((${#n} + 1))" --wait --on "$V3C_GPUS" --mem-gb 0 -- env -u CUDA_VISIBLE_DEVICES)
   fi
+  mapfile -t ca < <(v3c_compose_args)
   (cd "$TREE" && "${lease[@]}" env -u PYTHONPATH "${ld[@]}" RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --sampling-design "$V3C_LAW" \
-    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" \
+    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" "${ca[@]}" \
     "${pool[@]}" "${gpus[@]}" \
     "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --ports "$ports" "${link[@]}" --out "$VW/audit") > "$LOGS/v3c-audit/audit.log" 2> "$LOGS/v3c-audit/audit.err"
@@ -1474,8 +1491,8 @@ deferred_inputs() {
   {
     printf '%s\n' weights_registration.json deployment-registration.json "$(v3c_record)" windows.jsonl seals.jsonl \
       requests.jsonl declaration.json \
-      h1/log.jsonl "h1/w$K/window-commit.json" sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
-      sampled-proofs-served/window/registration.json sampled-proofs-served/runs.json private/pouw/period/case.json \
+      h1/log.jsonl "h1/w$K/window-commit.json" "$SERVED_ARM/summary.json" "$SERVED_ARM/window/audit.json" \
+      "$SERVED_ARM/window/registration.json" "$SERVED_ARM/runs.json" private/pouw/period/case.json \
       private/pouw/period/answer.json private/deferred/inference-only.json "pearlplus/w$K/registration.json" \
       "pearlplus/w$K/window-commit.json" served-compare/served_compare.json
     [ ! -f "$D/h1/log.jsonl" ] || "$SAY_PY" -c 'import json, sys
@@ -1597,14 +1614,14 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
 # SPOT audit of record, on V3C_CHALLENGER's coins (step 3's are local while those are live) and, under a tie,
 # tied to H1's or Pearl+'s W; else step 3's records audit
 sampled_of_record() {
-  if [ -f "$D/v3c-w$K-$vtag/audit/summary.json" ]; then echo "v3c-w$K-$vtag/audit"; else echo sampled-proofs-served; fi
+  if [ -f "$D/v3c-w$K-$vtag/audit/summary.json" ]; then echo "v3c-w$K-$vtag/audit"; else echo "$SERVED_ARM"; fi
 }
 # The compose hand-off (COMPOSE_OFF_NODE=1, the default): what the final record and the composite read, relative to the
 # serve dir, and nothing else. The record's: its SPOT audit's (`sampled_of_record`) summary, audit record,
 # registration and runs, and of each piece the files `piece_row` and `piece_server` read (copied to
 # private/compose/pieces), Pearl+'s verdict of record's among them (`pearlplus_of_record`'s: the auditor's ledger, the
 # coin record, Pearl+'s answer, the Lean verdict and each challenger session's public key, out/key.json at its path, and
-# no other file of a session). The composite's: each records audit's cases (sampled-proofs-served's and V3c's
+# no other file of a session). The composite's: each records audit's cases ($SERVED_ARM's and V3c's
 # window/case.json, case-v2.json and their error files), the files a case names as its blobs (the circuit, the public
 # file, each session's record and proofs, the lookup tables), H1's log and each record it names, the serve's first
 # registration record where it wrote one, each window's Pearl+ record W and audit's record R that the serve dir holds
@@ -1619,7 +1636,7 @@ COMPOSE_PIECE_FILES="answer.json development.json piece.json refused.txt served.
 pearlplus-answer.json pearlplus-lean.json"
 handoff_inputs() {  # the hand-off's every input but its own sums, each existing file once, the record's audit $1's among them
   local a blobs cases=()
-  for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
+  for a in "$SERVED_ARM" "v3c-w$K-$vtag/audit"; do
     [ -f "$D/$a/window/case-v2.json" ] && cases+=("$D/$a/window/case-v2.json")
   done
   [ -f "$D/private/pouw/period/case.json" ] && cases+=("$D/private/pouw/period/case.json")
@@ -1640,7 +1657,7 @@ EOF
       private/pouw/period/case.json private/pouw/period/answer.json "pearlplus/w$K/tie/window/registration.json" \
       "pearlplus/w$K/tie/summary.json" "pearlplus/w$K/tie/circuit-record.json" served-compare/served_compare.json \
       private/front-window
-    for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
+    for a in "$SERVED_ARM" "v3c-w$K-$vtag/audit"; do
       printf "$a/window/%s\n" case.json case-v2.json case-error.txt case-v2-error.txt
     done
     [ ! -f "$D/h1/log.jsonl" ] || "$SAY_PY" -c 'import json, sys
@@ -1657,7 +1674,7 @@ for x in open(sys.argv[1]):
 handoff() {  # the compose hand-off in private/compose, from the pieces in $1 and the inference-only verdict $2
   local d f steps why rc sampled
   sampled=$(sampled_of_record)
-  [ "$sampled" = sampled-proofs-served ] || coin_trees_held "$V3C_CHALLENGER" "$D/$sampled/summary.json" HANDOFF || return 20
+  [ "$sampled" = "$SERVED_ARM" ] || coin_trees_held "$V3C_CHALLENGER" "$D/$sampled/summary.json" HANDOFF || return 20
   (umask 077; rm -rf "$COMPOSE_DIR" && mkdir -p "$COMPOSE_DIR/pieces") || return 1
   for d in "$1"/*/; do
     [ -d "$d" ] || continue
@@ -1694,7 +1711,7 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
   rc=$?
   say "COMPOSE on COMPOSE_NODE: $HANDED_WHAT of the served node, from its compose" \
       "hand-off (verifier-side files, no witness; $([ -n "${AUDITED_ON:-}" ] && echo "V3c's audit from its follow-on node" || echo "no V3c audit");" \
-      "the record's sampled proofs ${SAMPLED_AUDIT:-sampled-proofs-served}), each file as it" \
+      "the record's sampled proofs ${SAMPLED_AUDIT:-$SERVED_ARM}), each file as it" \
       "hashed it (the serve dir's private/compose/inputs.sha256):" \
       "$([ "$rc" = 0 ] && echo PASS || echo "FAIL (the serve dir's private/compose/check.log)")"
   [ "$rc" = 0 ] || return 3
@@ -1713,7 +1730,7 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
     lean=(--composite "$OUT/composite")
   fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" \
-    --sampled-proofs "$D/${SAMPLED_AUDIT:-sampled-proofs-served}" \
+    --sampled-proofs "$D/${SAMPLED_AUDIT:-$SERVED_ARM}" \
     --pieces "$COMPOSE_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" --steps "$STEPS" \
     ${PEARLPLUS_TIE:+--window-tie "$(pearl_dir)/tie" --served-compare "$SERVED_COMPARE"} \
     --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --off-node --sampled-lean \
@@ -1819,8 +1836,10 @@ say "PREDICT-COMPARE against the traced Build $ROW (exit $rc): $(grep -E '^(rank
 [ "$rc" = 0 ] || stop predict-compare 18
 }
 pearl_cubin() {
-  ( export RESEARCH_RUN_DIR=$D/private/pearlplus-cubin VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-$VENV}
-    mkdir -p "$RESEARCH_RUN_DIR" && cd "$TREE" || exit 1
+  ( machine=${RESEARCH_RUN_DIR:+$RESEARCH_RUN_DIR/inputs/${RESEARCH_MACHINE:-}.toml}
+    export RESEARCH_RUN_DIR=$D/private/pearlplus-cubin VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-$VENV}
+    mkdir -p "$RESEARCH_RUN_DIR/inputs" && cd "$TREE" || exit 1
+    [ ! -f "${machine:-}" ] || cp "$machine" "$RESEARCH_RUN_DIR/inputs/" || exit 1
     # shellcheck source=/dev/null
     . benchmarks/harness/env.sh && . benchmarks/harness/setup/pearl_c_sm90.sh \
       && printf '%s\n' "$PEARLC_KERNEL" "$PEARLC_CUBIN" > "$RESEARCH_RUN_DIR/setup.paths" ) > "$LOGS/pearlplus-cubin.log" 2>&1
@@ -2102,7 +2121,8 @@ esac
 if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
   [[ $V3C_WARM_JOBS =~ ^[1-9][0-9]*$ ]] \
     || { say "PREFLIGHT: V3C_WARM_JOBS is how many of the window's templates warm composes at once, a positive integer, not $V3C_WARM_JOBS"; exit 3; }
-  grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" \
+  grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" || [ -n "$V3C_WARM_GIVEN" ] || V3C_WARM_JOBS=
+  [ -z "$V3C_WARM_JOBS" ] || grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: V3C_WARM_JOBS composes the window's templates before its audit with records_audit.py warm, which this tree's records_audit.py doesn't have"; exit 3; }
 fi
 if [ -n "${V3C_NEGATIVE_WORKERS:-}" ]; then  # V3c's audit's negatives side by side
@@ -2370,14 +2390,16 @@ inference_only &  # beside SPOT, which it doesn't read; the record waits for it
 IOV=$!
 [ "$rc" = 0 ] || { echo "BUILD $(failed "$rc" "$LOGS/build.log")"; wait "$IOV"; stop build "$rc"; }
 export PP_PARTITION PP_SETS=${PP_SETS:-}
+SP=$D/$SERVED_ARM
+rm -rf "$SP"
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
   PP_CHALLENGER="$SP_CHALLENGER" PP_MAIN="${PP_MAIN:-${MAIN_FILE:-}}" PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" \
   PP_KEEP="$LOGS/sampled-proofs/keep" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
 rc=$?
 (cd "$OUT/sampled-proofs" 2>/dev/null && mkdir -p "$LOGS/sampled-proofs" \
   && find . -maxdepth 1 \( -name machine.txt -o -name '*.log' -o -name '*.err' -o -name m0-build \) -exec mv -t "$LOGS/sampled-proofs" {} +)
-SP=$D/sampled-proofs-served
-rm -rf "$SP"; [ ! -d "$OUT/sampled-proofs/served" ] || { mv "$OUT/sampled-proofs/served" "$SP" \
+# run.sh keeps the served arm in $SP; where it published it under OUT instead, it goes to $SP before anything reads it
+[ -d "$SP" ] || [ ! -d "$OUT/sampled-proofs/served" ] || { (umask 077; mkdir -p "${SP%/*}") && mv "$OUT/sampled-proofs/served" "$SP" \
   && (cd "$SP" && find . -name '*.json' | sed 's|^\./||') | "$SAY_PY" "$SV" rebase "$SP" "$OUT/sampled-proofs/served"; }
 # run.sh's records copy holds the window's request lists (windows.jsonl), its request count and prefill tokens
 # (serve.json) and the advice's length (registration.json): the published copy is the registration's public form alone

@@ -68,7 +68,7 @@ from verity_machine_model import eps as E
 from verity_machine_model import lean_headline as LH
 from verity_machine_model import sheet as S
 from verity_machine_model.lean_headline import Q, exact
-from verity_machine_model.model import device
+from verity_machine_model.model import device, vector
 
 #: What other files read of it: `verity_machine_model.lean_headline_dc`, which writes the readings as Lean and also
 #: takes the private `_Exact` and `_and`, and two tests in `tests/benchmarks/pouw/` (the data-centre exporter's and
@@ -144,8 +144,9 @@ SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-ldtm0-l32", "DS
 FAMILIES = (SM90, SM100)
 # A2's catch-all by device on its sheet (DS_issue alone) and by vector on its measured reading (the measured issue row,
 # with the joint-issue lines once a run times its instructions beside the tensor): NOROW is a class on the measured
-# vectors, at SHFL's joint issue rows, so UNLISTED carries the measured one
-CATCH_ALL = {"sm_90": "NOROW", "sm_100": "NOROW", "DC-90-ri": "UNLISTED", "DC-100-ri": "UNLISTED"}
+# vectors, at SHFL's joint issue rows, so UNLISTED carries the measured one. Each is its vector file's `catch_all`.
+CATCH_ALL = {at: c for fam in FAMILIES for at, v in ((fam.key, fam.sheet), (fam.measured, fam.measured))
+             if (c := vector(v, fam.data).catch_all)}
 # A6 counts a vector word's instructions in the vector classes, and an instruction no class names (IMAD.WIDE, whose low
 # word does li's multiply) counts in the reading's catch-all, so both catch-alls are vector classes, as
 # sm_120's 64-bit lane classes are (`VEC_64`). The vector classes are one list for a family's sheet and measured files.

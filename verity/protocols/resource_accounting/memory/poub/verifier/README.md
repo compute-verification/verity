@@ -42,4 +42,19 @@ the Lean verifier beside the books (below). Not all of it is zero knowledge yet:
   the seed only on the stacking property's (`audit.PostSeedVerdict`); without them it credits the node's reads of its
   registered store. Only `benchmarks/one_stage/a7.py` proves the units.
 
+## Refresh
+
+Refresh is one setting of the session (`refresh`, off by default; off, no message or record changes). On, appends
+fill the slots of a public schedule, a function of the registered blocks, the lifetime L, the windows and the fresh
+slots a window F (`fresh_slots`), fixed before any coin (`Poub.Session.Params.slotAt`). Window w's slots, in order, are
+the re-key of the whole registered run of class w mod L (from w = 1), the re-key of each fresh slot of windows
+w − L, w − 2L, …, and F fresh slots of at most 512 blocks. Each append names its slot and joins its slot's window.
+A plan holds a registered block only while t < L, and an appended block only L windows after the window its payload was
+first committed in. The ledger credits a refresh session's appended blocks on its schedule check alone, with no
+stacking verdict and no carrier, and reports the most any pass held in probation beside γ. An append's coin is taken by its slot: slots strictly
+increase, the append takes the append family's coin at its slot, so a coin answers at most one append, and an empty
+slot's coin never leaves (`audit.AuditRun.append`; `CoinBySlot`). A re-key's origin is always a first commitment (a
+registered run or a fresh append, never another re-key), and its payloads are leaves of that origin's root (`OriginsOnRota`, `checkOpening`). Off, an append's coin is the next
+one: the i-th append takes append coin i.
+
 Why the Lean verifier decides alone is in `session/verifier.py`, and replaying a recorded session in its `--transcript`.

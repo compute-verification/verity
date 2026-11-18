@@ -19,3 +19,6 @@ packages = ["verity_bench"]
 verity-config = { workspace = true }
 verity-flock = { workspace = true }
 verity-vllm = { workspace = true }
+
+[tool.verity.tests]
+exports = ["benchmarks/harness", "calibration/hardware"]
