@@ -530,7 +530,7 @@ def unwhole (P : Prog) (ts : List Tmpl) (ls : List Leaves) (s : Spot.Wires.Summa
   let field := fun (w : Spot.Wires.Wire) (off : Nat) => (ts.find? (·.tid == w.writer)).bind fun t =>
     let ret := (P.defs[t.defn]!).ret
     (List.range (fieldsOf ret).length).find? fun f =>
-      Spot.Edges.fieldWord ret f == off && 0 < Spot.Edges.wordsOf (fieldsOf ret)[f]!
+      Spot.Edges.fieldWord ret f == off && 0 < Spot.Bits.wordsOf (fieldsOf ret)[f]!
   let short := fun (w : Spot.Wires.Wire) (f n : Nat) =>
     match (leaves w.writer).bind fun l => l.bits.lookup ("o" ++ toString f) with
     | some b => if b == 16 * n then none else some (b, 16 * n)
