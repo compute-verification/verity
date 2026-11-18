@@ -102,12 +102,22 @@ def _http(url: str, data: bytes, headers: dict, timeout: float = 30) -> dict:
         return json.load(r)
 
 
+FULL = ("this issue is full (Linear takes 2,000 comments on one issue), so nothing was posted and nobody was rung: post on the "
+        "issue that continues it, and if there is none tell this issue's owner to open one")
+
+
+def _said(x: dict) -> str:
+    if ((x.get("extensions") or {}).get("meta") or {}).get("quota") == "max-comments-per-issue":
+        return FULL
+    return x.get("message", "?")
+
+
 def _why(e: urllib.error.HTTPError) -> str:
     try:
         body = json.loads(e.read() or b"{}")
     except ValueError:
         return f"HTTP {e.code}"
-    msgs = [x.get("message", "?") for x in body.get("errors", [])] or [body.get("error_description") or body.get("error") or ""]
+    msgs = [_said(x) for x in body.get("errors", [])] or [body.get("error_description") or body.get("error") or ""]
     return f"HTTP {e.code}: {'; '.join(m for m in msgs if m)}".rstrip(": ")
 
 
@@ -350,7 +360,7 @@ class Linear:
                     continue
                 raise LinearError(f"Linear: {_why(e)}") from None
         if r.get("errors"):
-            raise LinearError("Linear: " + "; ".join(x.get("message", "?") for x in r["errors"]))
+            raise LinearError("Linear: " + "; ".join(_said(x) for x in r["errors"]))
         return r["data"]
 
     def team(self, name: str) -> dict:
