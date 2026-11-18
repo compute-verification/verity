@@ -15,8 +15,8 @@ import random
 
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier import advice as A
-from verity.protocols.resource_accounting.network.verifier.advice import Advice, MalformedAdvice, RequestAdvice, Row, Source, StepAdvice
+from verity_vllm.pipeline.advice_code import format as A
+from verity_vllm.pipeline.advice_code.format import Advice, MalformedAdvice, RequestAdvice, Row, Source, StepAdvice
 
 
 def _kind(start: int, n: int, prompt_len: int) -> str:

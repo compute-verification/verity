@@ -1,4 +1,4 @@
-"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity.protocols.resource_accounting.network.verifier.advice`) for a served run, from its
+"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity_vllm.pipeline.advice_code.format`) for a served run, from its
 scheduler step trace and its Commit record.
 
 The precommitted compiler turns advice into each step's circuit; the advice says everything serving decided that nothing
@@ -70,7 +70,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-import verity.protocols.resource_accounting.network.verifier.advice as I1
+import verity_vllm.pipeline.advice_code.format as I1
 from verity.protocols.registration.verifier import registration as REG
 from verity.commitments.periods import interface as IF
 from verity_vllm import messages as M
