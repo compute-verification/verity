@@ -308,7 +308,7 @@ def test_the_definitions_compute_what_the_header_does(host: ctypes.CDLL) -> None
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(cuda_build.gpu_arch() is None, reason="no nvcc or no CUDA device")
+@pytest.mark.skipif(cuda_build.gpu_name() is None, reason="no nvcc or no CUDA device")
 def test_the_device_computes_every_case_as_the_host(host: ctypes.CDLL) -> None:
     """Slow for its nvcc build, where the cache has none: the device's loads, funnel shifts and vector stores, which the host
     build doesn't have."""
