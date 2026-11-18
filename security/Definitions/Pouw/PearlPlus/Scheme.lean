@@ -110,7 +110,7 @@ def charges : ℕ := 0
 def accepts (r : σ.Run) : Prop := AuditAccepts (σ.passed r) r.2
 
 /-- `over`: the claimed work times `D·(γd − γn)`, rounded down. -/
-noncomputable def over (r : σ.Run) : ℕ :=
+noncomputable def «over» (r : σ.Run) : ℕ :=
   ⌊((σ.D * (σ.γd - σ.γn) : ℕ) : ℝ) * PearlC.claimedDraw σ.TR σ.Wd σ.U (σ.trace r) (σ.dec r.1.1 r.1.2)⌋₊
 
 /-- `under`: the budget times `D·γd`, rounded up. -/
@@ -137,16 +137,16 @@ noncomputable def δscheme : ℝ≥0∞ := ENNReal.ofReal (σ.η σ.q σ.U.layou
 `γ = 1 − (1 − g₀)/ω`); it is proved nowhere. -/
 def ChargeHolds : Prop :=
   ∀ r : σ.Run, σ.accepts r → σ.logOK r → ¬ σ.breaks r →
-    σ.over r ≤ σ.under r + ∑ b ∈ σ.incorrect r, σ.cost b + σ.charges
+    σ.over r ≤ σ.under r + ∑ b ∈ σ.incorrect r, σ.cost b + charges
 
 /-- **Pearl+ as a scheme**, given its charge inequality. -/
 noncomputable def scheme (h : σ.ChargeHolds) : Verity.Scheme where
   Block := σ.Tile
   cost := σ.cost
-  charges := σ.charges
+  charges := Setting.charges
   Run := σ.Run
   accepts := σ.accepts
-  over := σ.over
+  «over» := σ.over
   under := σ.under
   logOK := σ.logOK
   incorrect := σ.incorrect
