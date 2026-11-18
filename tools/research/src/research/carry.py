@@ -14,6 +14,11 @@ and each commit of that line is one of:
   merge of its parents gives (`queue.merged_tree`: its first parent's merge drivers, each conflicted pin rebuilt) but in
   generated content;
 - a commit that changes only generated content;
+- a restack's commit across a move (`tools/move/restack.py`: one parent, a `Restack-move:` trailer naming a landed move)
+  that changes no file of either head's own change against `main` (`queue.own_files` at the first landed tip `trust` names),
+  as the commit that adds the map a move runs by does, which the merge above it then holds as the move has it: the crossing
+  changes no line of the PR's own change, so nothing reruns.  The merge above such a commit is the queue's merge of its
+  parents from their own merge base;
 - given a landed `tools/move/restack.py` (``restack``), a restack's commit across a move, whose `Restack-move:` trailer names
   a landed move, and whose tree is that move's script rerun on its parent (`moved_tree`) but in generated content; the merge
   above it is the queue's merge of its parents with the move for their merge base, as the restack's own merge is.  A move's
@@ -75,6 +80,8 @@ class Delta:
     generated: tuple[str, ...] = ()
     parents: tuple[str, ...] = ()
     moves: tuple[str, ...] = ()
+    #: the moves of the restack's commits that changed no file of either head's own change
+    crossed: tuple[str, ...] = ()
 
     @property
     def carries(self) -> bool:
@@ -82,7 +89,8 @@ class Delta:
 
     def as_dict(self) -> dict:
         return {"kind": self.kind, "carries": self.carries, "why": self.why, "commits": self.commits,
-                "generated": list(self.generated), "parents": list(self.parents), "moves": list(self.moves)}
+                "generated": list(self.generated), "parents": list(self.parents), "moves": list(self.moves),
+                "crossed": list(self.crossed)}
 
 
 def lock_policy(text: bytes | None) -> dict | None:
@@ -180,7 +188,8 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
     """`Delta` of ``new`` over ``old`` (the module's docstring).  ``trusted(commit, merge)``: whether ``commit`` may come in
     unreviewed, as a parent ``merge`` brings in, or with ``merge`` None as a commit of the PR's own line (landed only).
     ``restack``: a landed commit whose `tools/move/restack.py` reruns the move a restack's commit names; without it, such a
-    commit is the PR's own."""
+    commit is the PR's own unless it changes no file of either head's own change against the first landed tip ``trusted``
+    names (`Trusted.landed`)."""
     repo = Path(repo)
     for c in (old, new):
         if not _ok(repo, "cat-file", "-e", f"{c}^{{commit}}"):
@@ -189,7 +198,11 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
         return Delta("rebased", f"{old[:12]} isn't an ancestor of {new[:12]}")
     pins = set(Q.pins_at(repo, new))
     rows = [ln.split() for ln in Q._out(repo, "rev-list", "--first-parent", "--parents", f"{old}..{new}").splitlines() if ln]
-    reruns = _reruns(repo, old, new, trusted) if restack else {}
+    crossings = _reruns(repo, old, new, trusted)
+    main = next(iter(getattr(trusted, "landed", ())), None)
+    owned = Q.own_files(repo, main, old) | Q.own_files(repo, main, new) if main and crossings else frozenset()
+    crossed = {c: m for c, m in crossings.items() if main and not owned.intersection(_differ(repo, f"{c}^", c))}
+    reruns = {c: m for c, m in crossings.items() if c not in crossed} if restack else {}
     left: set[str] = set()
     merged: list[str] = []
     moved: list[tuple[str, str]] = []
@@ -206,6 +219,8 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
                          "verdict at it and no hold", len(rows))
         merged += off
         hand: list[str] = []
+        if len(ps) == 1 and c in crossed:
+            continue
         if len(ps) == 1 and c in reruns:
             moved.append((c, ps[0]))
             continue
@@ -244,29 +259,40 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
                 left.update(gen)
                 moves.append(reruns[c])
     parents = tuple(dict.fromkeys(merged))
-    done = dict(commits=len(rows), generated=tuple(sorted(left)), parents=parents, moves=tuple(moves))
+    across = tuple(dict.fromkeys(m for c, *_ in reversed(rows) if (m := crossed.get(c))))
+    done = dict(commits=len(rows), generated=tuple(sorted(left)), parents=parents, moves=tuple(moves), crossed=across)
     if kind := next((k for k in own if own[k]), None):
         return Delta(kind, first[kind], **done)
     did = ([f"merge {_some(p[:12] for p in parents)} as the queue would"] if parents else []) + \
-        ([f"rerun the move {_some(m[:12] for m in moves)} as a restack does"] if moves else [])
+        ([f"rerun the move {_some(m[:12] for m in moves)} as a restack does"] if moves else []) + \
+        ([f"cross the move {_some(m[:12] for m in across)} as a restack does, outside both heads' own change"]
+         if across else [])
     why = (f"its {len(rows)} commit(s) since only {' and '.join(did)}" if did else
            f"its {len(rows)} commit(s) since change only generated content")
     return Delta("merge-only", why + (f", leaving {_some(left)} to the checks" if left else ""), **done)
 
 
+@dataclass(frozen=True)
+class Trusted:
+    """``trusted`` for `delta` (`trust`), with the landed tips it trusts, `main`'s first, which a restack's commit's own-change
+    test reads."""
+    repo: Path
+    landed: tuple[str, ...]
+    heads: frozenset[str] = frozenset()
+    lands: Callable[[str], bool] | None = None
+
+    def __call__(self, c: str, merge: str | None = None) -> bool:
+        if any(c == t or _ok(self.repo, "merge-base", "--is-ancestor", c, t) for t in self.landed):
+            return True
+        return merge is not None and (c in self.heads or (self.lands is not None and self.lands(c)))
+
+
 def trust(repo: Path, landed: Iterable[str], heads: Iterable[str] = (),
-          lands: Callable[[str], bool] | None = None) -> Callable[[str, str | None], bool]:
+          lands: Callable[[str], bool] | None = None) -> Trusted:
     """``trusted`` for `delta`: a commit that is one of ``landed`` (`main`'s tip) or an ancestor of one, and,
     as a parent a merge brings in, also one of ``heads`` (other PRs' current marked heads with a land verdict and no hold) or
     one ``lands`` says has a land verdict at it and no hold, its own PR's (asked only of a parent nothing else trusts)."""
-    landed, heads = [t for t in landed if t], {h for h in heads if h}
-
-    def trusted(c: str, merge: str | None = None) -> bool:
-        if any(c == t or _ok(repo, "merge-base", "--is-ancestor", c, t) for t in landed):
-            return True
-        return merge is not None and (c in heads or (lands is not None and lands(c)))
-
-    return trusted
+    return Trusted(Path(repo), tuple(t for t in landed if t), frozenset(h for h in heads if h), lands)
 
 
 def main(argv: list[str] | None = None) -> int:
