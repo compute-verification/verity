@@ -386,6 +386,9 @@ def read_prove_path(d: Path, result: Result) -> None:
         raise Unreadable(f"{d} holds {len(honest)} honest arms ({', '.join(a.name for a, _, _ in honest)}): give one arm's "
                          "directory")
     arm, pp, rec = honest[0]
+    public = sorted(arm.glob("rank*/summary.json")) or [f for f in [arm / "window" / "summary.json"] if f.is_file()]
+    shown = any("draw_counts" in x for x in [*((pp or {}).get("ranks") or {}).values(), rec or {},
+                                             *(json.loads(f.read_text()) for f in public)])
     if kept := _kept(arm):
         text = _text(kept / "audit.log")
         pp, rec = (pp and next((x for x in reversed(_tagged(text, "PROVE-PATH", [])) if x.get("forged") is False), pp),
@@ -398,7 +401,7 @@ def read_prove_path(d: Path, result: Result) -> None:
     summary = json.loads(_text(arm / "summary.json") or "{}")
     files = sorted(src.glob("rank*/summary.json")) or [f for f in [src / "window" / "summary.json"] if f.is_file()]
     summaries = [json.loads(f.read_text()) for f in files]
-    held = not any("draw_counts" in x for x in [*((pp or {}).get("ranks") or {}).values(), rec or {}, *summaries])
+    no_counts = not any("draw_counts" in x for x in [*((pp or {}).get("ranks") or {}).values(), rec or {}, *summaries])
     counts: dict[str, int] = {}
     if pp is not None:
         ranks = pp.get("ranks") or {}
@@ -441,7 +444,7 @@ def read_prove_path(d: Path, result: Result) -> None:
     result.workload = ((f"the output disagrees on its values: ran-with.txt says served ({place}), the audit's source field "
                      f"says {', '.join(sorted(source))}: " if served and source - {"served"} else
                      f"served per ran-with.txt ({place}): " if served else "")
-                    + f"arm {arm.name}: " + (HELD_COUNT if held else _sampled(counts, population, n_ranks)))
+                    + f"arm {arm.name}: " + (HELD_COUNT if not shown else _sampled(counts, population, n_ranks)))
     for forged in sorted(arm.parent.glob(f"{arm.name}-forged")):
         if not (forged / "audit.log").is_file():
             err = next((x for x in reversed(_text(forged / "commit.log").splitlines()) if re.match(r"\w+(Error|Exception): ", x)),
@@ -454,11 +457,11 @@ def read_prove_path(d: Path, result: Result) -> None:
                        if isinstance(pb := ((t or {}).get("timing") or {}).get("proof_bytes"), list)})
         _per_block(result, [per_unit(x["timing"], x.get("draw_counts") or {}) for x in timed],
                    f"one rep's proof over its sampled proof blocks, of {' or '.join(map(str, reps)) or '?'} reps in summary.json's "
-                   "timing; prove_path's per_unit sums them", held)
+                   "timing; prove_path's per_unit sums them", no_counts)
     elif pp is not None:
         _per_block(result, [_totaled(r.get("per_unit") or {}) for r in (pp.get("ranks") or {}).values()],
                    "every rep's proof files over its sampled proof blocks, as prove_path's per_unit sums them: no summary.json "
-                   "states its reps", held)
+                   "states its reps", no_counts)
     m = re.fullmatch(r"ran with: coins (.+?); parameters (\S+) \((.*)\)", ran_with[0] if ran_with else "")
     if m and m.group(1) in COINS and m.group(2) in PARAMETERS:
         result.said(m.group(1), m.group(2), "ran-with.txt: " + m.group(3))
@@ -502,16 +505,16 @@ def read_a5(d: Path, result: Result) -> None:
     registered = next((x for x in text if x.startswith("REGISTERED ")), "")
     window = " ".join(w for w in registered.split() if w.startswith(("kind=", "commitment=")))
     counts = summary.get("draw_counts") or (a5 or {}).get("draw_counts") or {}
-    held = "draw_counts" not in summary and "draw_counts" not in (a5 or {})
+    no_counts = "draw_counts" not in summary and "draw_counts" not in (a5 or {})
     served = summary.get("source") == "served" and "kind=served" in window
     stand_in = summary.get("source") == "stand-in" and "kind=served" not in window
     result.workload = (("served values: " if served else "stand-in values (summary.json source stand-in): " if stand_in else
                      f"{VALUES_NOT_STATED}: ")
                     + (f"workload {Path(machine[len('row dir '):]).name}: " if machine else
                        f"source {summary['source']}: " if summary.get("source") else "")
-                    + (HELD_COUNT if held else _sampled(counts, summary.get("population"))) + (f" ({window})" if window else ""))
+                    + (HELD_COUNT if no_counts else _sampled(counts, summary.get("population"))) + (f" ({window})" if window else ""))
     if summary.get("timing"):
-        _per_block(result, [per_unit(summary["timing"], counts)], held=held)
+        _per_block(result, [per_unit(summary["timing"], counts)], held=no_counts)
     result.prover_batch = _statement_instances(d)
     if result.prover_batch is not None and result.prover_what:
         result.prover_what += f"; its Flock statement holds {result.prover_batch:,} proof blocks, the prover's batch"

@@ -112,7 +112,8 @@ def test_published_a_new_run_reads_its_draw_counts_from_the_keep_its_run_names(t
     keep = tmp_path / "keep"
     result = PL.read("zk", str(held_arm(tmp_path / "run" / "out", "llama", keep=keep)))
     assert result.accepted and (result.prover_s, result.lean_s, result.proof_bytes) == (3.0, 1.0, 850000.0)
-    assert result.workload == "arm llama: SiluMul_v2{I=8192} x 2 sampled of 8 proof blocks" and result.held is None
+    assert result.workload == f"arm llama: {PL.HELD_COUNT}" and result.held is None
+    assert not any("x 2 sampled" in x or "of 8" in x for x in PL.render([result]).splitlines())
     assert any(str(keep / "llama") in n for n in result.notes)
 
 
