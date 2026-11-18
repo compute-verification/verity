@@ -1703,7 +1703,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     class the check held the passes to with the requests and rounds its fixed load fixes (`pearlplus_class`), None
     without one."""
     import served_shares as SS
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+    from verity.commitments import docket_digest as DD
 
     out.mkdir(parents=True, exist_ok=True)
     reasons = []
@@ -1763,7 +1763,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                    **{k: served.get(k) for k in ("spec", "run", "served_tokens", "generate_s", "prompt_tokens", "output_tokens")})
     if tie is not None:
         try:
-            doc["tie"] = {"record": REG.digest(json.loads(tie.read_text()))}
+            doc["tie"] = {"record": DD.digest(json.loads(tie.read_text()))}
         except (OSError, ValueError, AttributeError) as e:
             doc["tie"] = {"record": None, "why": f"W can't be read: {type(e).__name__}: {e}"[:400]}
     if verified is not None:

@@ -608,11 +608,11 @@ def retain(args: argparse.Namespace) -> int:
     if not rounds:
         return 1
     if args.window_record:
-        from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+        from verity.commitments import docket_digest as DD
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
         try:
-            before = REG.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None
+            before = DD.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None
             day = json.loads(Path(args.day_declaration).read_text()) if args.day_declaration else None
             w = PWR.write(args.window_record, served["passes"], rounds, before,
                           None if day is None else {k: day[k] for k in PWR.NAMING})
@@ -620,7 +620,7 @@ def retain(args: argparse.Namespace) -> int:
             print(f"retain FAIL: W: {type(e).__name__}: {e}", flush=True)
             return 1
         print(f"retain W: {args.window_record}, rounds {rounds[0]}..{rounds[-1]} ({len(rounds)}), {len(w['registered'])} "
-              f"values, digest {REG.digest(w)[:16]}…, chained after "
+              f"values, digest {DD.digest(w)[:16]}…, chained after "
               f"{'nothing' if before is None else before[:16] + '…'}"
               + ("" if day is None else f", naming day {day['day']}'s declaration {day['declaration'][:16]}…"), flush=True)
     return 0
@@ -905,7 +905,7 @@ def case(args: argparse.Namespace) -> int:
         return refuse("the Lean verdict is not on the coin record's run and source")
     if any(k not in coin for k in CASE_RECORD):
         return refuse(f"the coin record lacks {', '.join(k for k in CASE_RECORD if k not in coin)}")
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+    from verity.commitments import docket_digest as DD
 
     try:
         if not doc.get("tie_record"):
@@ -914,7 +914,7 @@ def case(args: argparse.Namespace) -> int:
     except (OSError, ValueError):
         return refuse("the Python verdict held the passes to no window record W (verify --tie) this can read, and the "
                       "case's commitment names W")
-    if not isinstance(w, dict) or REG.digest(w) != (doc.get("tie") or {}).get("record"):
+    if not isinstance(w, dict) or DD.digest(w) != (doc.get("tie") or {}).get("record"):
         return refuse("the window record W is not the one the Python verdict held the passes to")
     coins = VR.epoch_coins(passes / "coins.json")
     loaded = [VR.load(p, coins) for p in paths]

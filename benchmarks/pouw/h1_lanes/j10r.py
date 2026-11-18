@@ -43,6 +43,7 @@ sys.path.insert(0, str(HERE))
 
 import leaf as RN  # noqa: E402
 from leaf import F, U  # noqa: E402
+from verity.commitments import docket_digest as DD
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H  # noqa: E402
@@ -172,7 +173,7 @@ def world(ctx: Ctx, name: str, leaf: RN.Leaf, regs: dict, roots: tuple, partials
     rec = R.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, RN.SCHEME, [],
                    {"kind": "stand-in", "harness": "h1_lanes/j10r", "leaf": leaf.position}, partition=ctx.reg.part,
                    registered=[regs[v].entry() for v in REGISTERED])
-    d = R.digest(rec)
+    d = DD.digest(rec)
     sample = RN.sample_digest(d, 1)
     rows = {LL.PARTIALS: [U.receipt_words(p).tolist() for p in partials],
             **{LL.carry(c): [U.receipt_words(Z.carry_words(x)).tolist() for x in carries[c]] for c in range(ctx.n - 1)},

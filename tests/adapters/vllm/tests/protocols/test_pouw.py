@@ -95,6 +95,13 @@ def test_schemes_are_the_protocol_packages_and_only_h1_is_executed():
         assert "executor runs" in pouw.refusals(scheme, _serve(f"pouw:{scheme}"))[0], scheme
 
 
+@pytest.mark.parametrize("scheme", ["ncp-v2", "ncp-v2-shift24"])
+def test_the_selector_refuses_an_arm_that_keeps_weight_sides_by_name(scheme):
+    """ncp-v2's executor reused each weight's side across forwards, so beside storage its GEMMs would read a copy made
+    from the plaintext; the selector refuses its entry by name, whatever else is enabled."""
+    assert PO.refusals(_serve(f"pouw:{scheme}")) == (f"pouw:{scheme}: {scheme}: this adapter's executor runs {H1} only",)
+
+
 def test_pearl_c_sm120_refuses_linears_outside_the_kernels():
     assert PPD.refusals("pearl-c-sm120-v1-h3", {0: (4096, 4096), 1: (6144, 4096), 2: (4096, 14336), 3: (28672, 4096)}) == []
     bad = PPD.refusals("pearl-c-sm120-v1-h3", {0: (3584, 3584), 1: (4096, 896), 2: (4160, 4096)})

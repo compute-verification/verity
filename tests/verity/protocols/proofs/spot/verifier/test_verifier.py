@@ -16,6 +16,7 @@ import pytest
 
 import verity_difftest
 from test_service import DELTA, OTHER, PAIR, QUERY, RUN, SCHEMA, SESSION, _lean, _ports, _record, _spec, _stream
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C, coins as T
@@ -267,7 +268,7 @@ def test_a_disagreement_is_refused_naming_both(monkeypatch):
     assert rec["checks"]["verifiers"]["codes"] == [V.DISAGREE] and rec["verifiers"]["agree"] is False
     detail = rec["checks"]["verifiers"]["detail"]
     assert detail["fields"] == ["registration_digest"] and detail["lean"] == {"registration_digest": "00" * 64}
-    assert detail["python"] == {"registration_digest": R.digest(reg.record)}
+    assert detail["python"] == {"registration_digest": DD.digest(reg.record)}
     stream.deliver(draw, [SESSION])
     out = stream.outcome(draw, _lean(), {"statement": "stub"})
     assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["verifiers"]
