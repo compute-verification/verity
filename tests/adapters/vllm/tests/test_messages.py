@@ -405,9 +405,9 @@ def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_firs
 def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():
     ex = M.Exchange()
     serve = lambda first_line, headers, body: (200, headers["run"] + b"".join(body).decode())  # noqa: E731
-    ex.request("network", H.ServeRoute("/watermark", serve))
+    ex.serve("network", "/watermark", serve)
     with pytest.raises(Refused, match="poub: serves route /watermark, which network serves"):
-        ex.request("poub", H.ServeRoute("/watermark", serve))
+        ex.serve("poub", "/watermark", serve)
     name, answer = ex.route("/watermark")
     assert answer("POST /watermark HTTP/1.1", {"run": "r"}, iter([b"7", b"3"])) == (200, "r73")
     assert name == "network" and ex.route("/other") is None

@@ -250,7 +250,7 @@ def front_scheme(monkeypatch):
 
     def attach(exchange, ctx):
         seen["ctx"].append(ctx)
-        exchange.request("stand-in", H.ServeRoute("/feed", serve))
+        exchange.serve("stand-in", "/feed", serve)
 
         def on(e):
             seen["events"].append(e)

@@ -17,11 +17,9 @@ HOOKS_REQUEST = frozenset({"Request", "requests"})
 
 #: each word kept today, by the name or literal that holds it: where it is, who reads it, and the neutral word for it
 KEPT = {
-    "ServeRoute": "a request that the server answer a path; network's Admitter files it for its watermark, the vLLM "
-                  "frontend serves it; neutral: the scheme names an external input port, the adapter maps it to a path",
-    "Route": "ServeRoute's handler (first line, headers, body -> status, text); neutral: a port's handler, bytes in, "
+    "Route": "a scheme's route handler (first line, headers, body -> status, text), filed with the adapter's "
+             "exchange.serve; network's Admitter serves its watermark through it; neutral: a port's handler, bytes in, "
              "a status and text out",
-    "path": "ServeRoute.path, the URL path; neutral: the port's name",
     "first_line": "InputArrived.first_line and Route's argument, the HTTP request line; network's Admitter reads it; "
                   "neutral: drop it, or an opaque byte string arriving with the input",
     "headers": "InputArrived.headers and Route's argument; network's Admitter reads the release headers (release_of); "

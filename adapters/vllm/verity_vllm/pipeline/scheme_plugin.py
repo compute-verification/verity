@@ -41,7 +41,7 @@ GOAL = "vllm/scheme-on-in-vllm-server"
 _PLUGIN: list[Any] = []
 #: the OpenAI server's routes whose request body carries sampling parameters, which `Front` reads (`unseeded`)
 SAMPLED_PATHS = frozenset({"/v1/completions", "/v1/chat/completions"})
-#: the routes `Front` passes unread besides `SAMPLED_PATHS` and the schemes' own (`hooks.ServeRoute`): none generates
+#: the routes `Front` passes unread besides `SAMPLED_PATHS` and the schemes' own (`Exchange.serve`): none generates
 OTHER_PATHS = frozenset({"/health", "/ping", "/version", "/v1/models", "/metrics", "/metrics/", "/tokenize", "/detokenize"})
 
 
@@ -302,7 +302,7 @@ async def _answer(send: Callable[[dict[str, Any]], Any], status: int, text: str)
 
 class Front:
     """vLLM's OpenAI server's ``--middleware`` with ``VERITY_PROTOCOLS`` set, the front's side: each scheme attached on
-    this process's exchange (``process`` `hooks.FRONT`), a `hooks.ServeRoute` answered by its scheme's route (on a thread
+    this process's exchange (``process`` `hooks.FRONT`), a route a scheme serves (`Exchange.serve`) answered by it (on a thread
     of its own, given the body as it streams in), and every other request handed to the schemes as an `hooks.InputArrived`
     (its X-Request-Id, set where the client sent none, its first line, headers, body's length and the user its body names) before the server sees
     it. Only `SAMPLED_PATHS` and `OTHER_PATHS` are served, and a sampled request only with its seed (`unseeded`): any

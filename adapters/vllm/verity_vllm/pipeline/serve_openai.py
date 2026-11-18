@@ -326,7 +326,7 @@ class Server:
 
     async def serve_route(self, serve: H.Route, first_line: str, headers: Mapping[str, str], reader: asyncio.StreamReader,
                           writer: asyncio.StreamWriter) -> None:
-        """A request on a route a scheme serves (`hooks.ServeRoute`): its body, chunked or of its stated length, streams to
+        """A request on a route a scheme serves (`Exchange.serve`): its body, chunked or of its stated length, streams to
         ``serve`` on a thread of its own, the event loop waiting while it takes each piece, so nothing ``serve`` calls
         overlaps the server's own work; its status and text are the answer. A body that breaks off reaches ``serve`` as
         `hooks.Broken`."""

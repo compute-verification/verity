@@ -15,8 +15,8 @@ from typing import Any, ClassVar, Protocol
 HOOKS = ("declared", "steps", "values", "blocks", "memory")
 
 #: ``ctx["process"]`` of a scheme's ``attach(exchange, ctx)`` where the workload's front and its engine run in two
-#: processes, each with its own exchange: FRONT takes the workload's inputs (`InputArrived`, `ServeRoute`, an
-#: `AdmitInput` that refuses), ENGINE steps it (the gates and every other hook). Without the key one process does both.
+#: processes, each with its own exchange: FRONT takes the workload's inputs (`InputArrived`, a scheme's `Route`,
+#: an `AdmitInput` that refuses), ENGINE steps it (the gates and every other hook). Without the key one process does both.
 #: ``ctx["feed"]`` is then a directory, one for the two, whose files a scheme's front appends to and its engine reads;
 #: ``ctx["settings"]`` are the scheme's settings (`Declared.settings`).
 FRONT, ENGINE = "front", "engine"
@@ -304,17 +304,10 @@ class AdmitInput:
 
 class Route(Protocol):
     """A scheme's answer to a request on its route: called, on a thread of its own, with the request's first line, its
-    headers (names lower-cased) and its body as it streams in, it returns the status and the text to answer with."""
+    headers (names lower-cased) and its body as it streams in, it returns the status and the text to answer with. A
+    capability the scheme files at attach (``exchange.serve(name, where, route)``), not an entry."""
 
     def __call__(self, first_line: str, headers: Mapping[str, str], body: Iterable[bytes]) -> tuple[int, str]: ...
-
-
-@dataclass(frozen=True)
-class ServeRoute:
-    """A scheme's request that the workload's server answer requests on ``path`` through ``serve``."""
-
-    path: str
-    serve: Route
 
 
 class Broken(Exception):
@@ -354,11 +347,11 @@ class StartBeside:
     readers: tuple[str, ...] = ()
 
 
-type Request = RequireProperty | AdmitInput | StartBeside | ReuseOldestFreed | ServeRoute | FixRanges | ReleaseValue
+type Request = RequireProperty | AdmitInput | StartBeside | ReuseOldestFreed | FixRanges | ReleaseValue
 
 
 __all__ = ["ADMITS", "CHANGES", "EVENTS", "HOOKS", "AdmitInput", "BlockDue", "BlockResult", "Declared",
            "Gate", "Handle", "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel",
            "MemoryChanged", "OutputLeft", "RangesDeclared", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
-           "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StepBegan", "StepComputed",
+           "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "StartBeside", "StepBegan", "StepComputed",
            "StepDue", "StepEnded", "unmet"]

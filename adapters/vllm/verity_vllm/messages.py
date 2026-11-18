@@ -64,6 +64,8 @@ class Exchange:
         self.requests: list[tuple[str, H.Request]] = []
         #: the kernels schemes compute due blocks with (`compute_with`), the one filed first outermost
         self.kernels: list[tuple[str, H.Kernel]] = []
+        #: the routes schemes answer on the workload's server (`serve`): path -> (scheme, route)
+        self.routes: dict[str, tuple[str, H.Route]] = {}
         self.declared: H.Declared | None = None
         self.fixed = False
         self._step: int | None = None
@@ -175,8 +177,6 @@ class Exchange:
             if self.refuse is not None:
                 self.refuse(request.input, request.why)
             return
-        if isinstance(request, H.ServeRoute) and (other := self.route(request.path)) is not None:
-            raise Refused(name, f"serves route {request.path}, which {other[0]} serves")
         if self.declared is not None and isinstance(request, (H.RequireProperty, H.StartBeside)):
             raise Refused(name, f"files {kind} after the build was answered; file it before the engine is built")
         if self._step is not None:
@@ -189,6 +189,16 @@ class Exchange:
         if self._step is not None:
             raise Refused(name, f"files a kernel after serving began (step {self._step}); file it before the first step")
         self.kernels.append((name, kernel))
+
+    def serve(self, name: str, path: str, route: H.Route) -> None:
+        """Scheme ``name`` answers requests on ``path`` of the workload's server through ``route``; filed before the
+        first step, one scheme a path."""
+        if (other := self.route(path)) is not None:
+            raise Refused(name, f"serves route {path}, which {other[0]} serves")
+        if self._step is not None:
+            raise Refused(name, f"serves route {path} after serving began (step {self._step}); file it before the first "
+                          "step")
+        self.routes[path] = (name, route)
 
     def _filed[R](self, kind: type[R]) -> list[tuple[str, R]]:
         return [(n, r) for n, r in self.requests if isinstance(r, kind)]
@@ -279,8 +289,8 @@ class Exchange:
             r.gate.open(why)
 
     def route(self, path: str) -> tuple[str, H.Route] | None:
-        """The scheme serving ``path`` (`ServeRoute`) and its answer, None when none does."""
-        return next(((n, r.serve) for n, r in self._filed(H.ServeRoute) if r.path == path), None)
+        """The scheme serving ``path`` (`serve`) and its answer, None when none does."""
+        return self.routes.get(path)
 
     def refused(self, input: str) -> list[tuple[str, str]]:
         """Each scheme that refused input ``input`` (`AdmitInput` refuse), with its reason."""
