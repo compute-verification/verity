@@ -20,7 +20,7 @@
 #
 # STAGES (default `base offset session`) picks which run. GIB, PLAN, REFRESH, LIFETIME, WINDOWS and WINDOW_MS are
 # run.sh's (defaults 8, honest,honest, 0,1, 8, 7 and 12000: a window holds a class's re-key, N / L blocks decoded and
-# encoded again); PROVER_CPUS and VERIFIER_CPUS default to the lease's cores less two, and those two. No stage starts
+# encoded again); REFRESH_GIB (default 7) holds the classes windows 1 … WINDOWS − 1 re-key, GIB / LIFETIME each; PROVER_CPUS and VERIFIER_CPUS default to the lease's cores less two, and those two. No stage starts
 # after NOT_AFTER (`date -d` syntax). The run is a trial (VERITY_BENCH_TRIAL=1) unless VERITY_BENCH_TRIAL is set
 # empty. out/stages.txt has each stage's verdict; exit 0 when every stage passed, else the failed stage's own code.
 set -uo pipefail
@@ -40,7 +40,7 @@ CORES=$(taskset -cp $$ | sed 's/.*: //')
 read -r PCORES VCORES < <("$PY" -c 'import os; c = sorted(os.sched_getaffinity(0))
 print(",".join(map(str, c[:-2] or c)), ",".join(map(str, c[-2:])))')
 export GIB=${GIB:-8} PLAN=${PLAN:-honest,honest} REFRESH=${REFRESH:-0,1} LIFETIME=${LIFETIME:-8}
-export WINDOWS=${WINDOWS:-7} WINDOW_MS=${WINDOW_MS:-12000} REFRESH_GIB=${REFRESH_GIB:-6}
+export WINDOWS=${WINDOWS:-7} WINDOW_MS=${WINDOW_MS:-12000} REFRESH_GIB=${REFRESH_GIB:-7}
 export PROVER_CPUS=${PROVER_CPUS:-$PCORES} VERIFIER_CPUS=${VERIFIER_CPUS:-$VCORES}
 B=$(mktemp -d /tmp/refresh-card.XXXXXX); trap 'rm -rf "$B"' EXIT
 { id -un; hostname; git -C "$TREE" rev-parse HEAD; echo "lease $GPU_LEASE_UUID cores $CORES: prover $PROVER_CPUS," \
