@@ -8,7 +8,7 @@ Its sampled sessions are SPOT[Flock]'s on its own, in its three roles: serving c
 each sampled session's prover runs `flock-circuit prove --zk` itself (the proof server: `a0.DIRECT`, `zk_cost.py`'s `dev` arm, which
 Figure 1 prices); and the challenger's live coins, its signed log and the Lean verifier decide (the verifier). There is no ZK
 server and no recursion on that path. The core protocols' path, every prover behind the Lean ZK server's send check, is
-`--zk-server` on SPOT's window audit (`a5.py`), its variants here and `prove_bundle.py`, and `ZK_SERVER=1` on their shell entry points. The network
+`--zk-server` on SPOT's window audit (`a5.py`), its variants here, and `ZK_SERVER=1` on their shell entry points. The network
 attester, where a run has one (`a5_network_attester.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
 input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/README.md`.
 

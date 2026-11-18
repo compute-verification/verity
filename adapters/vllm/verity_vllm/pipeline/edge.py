@@ -23,7 +23,7 @@ The Program's side, each field's type and the reads of it, is `program.workload.
   ports (`Slice`).
 - **The registration.** Each port's value is rows of its `row_words` leaves: one position of one layer of its history
   group, and one token of `edge.last`. Window w commits each out-port it returns as a registered value under its own
-  program and open root (`commit`, core's ``registered.Registered``) and names it among its roots (`roots`), with the
+  program and open root (`commit`, core's ``registered_value.Registered``) and names it among its roots (`roots`), with the
   domain its verifier derives from the Program alone (`out_ports`). Window w + 1 registers each in-port under that root and
   domain (`entries`), and its verifier's parameters give the value as a history port, ``{"port": name}`` (`history`): port
   P of the log's last record, the one R6 holds ``previous`` to, so w + 1's history is held to w's root, domain and leaf
@@ -39,7 +39,7 @@ from verity.circuits.codec import program_digest
 from verity.circuits.program import Program
 from verity.circuits.types import Array, RecordType, Type, field_types
 from verity.circuits.types import Tuple as TupleT
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.commitments import registered_value as RV
 
 from . import window_advice as WA
 
@@ -129,7 +129,7 @@ def _dims(t: Type) -> tuple[int, ...]:
 def _shape(name: str, t: Type, words: int) -> tuple[int, int]:
     """Port ``name`` of type ``t`` as rows of ``words`` leaves: (rows, word_bits); ValueError where it isn't."""
     w = t.homogeneous_width()
-    if w is None or not 0 < w <= max(REG.WIDTHS) or type(words) is not int or words < 1 or t.leaves % words:
+    if w is None or not 0 < w <= max(RV.WIDTHS) or type(words) is not int or words < 1 or t.leaves % words:
         raise ValueError(f"{name}: {t.leaves} leaves of widths {sorted(t.width_set())} are no rows of {words!r} leaves of one width")
     return t.leaves // words, 16 * -(-w // 16)
 
@@ -148,17 +148,17 @@ def _returned(program: Program, ports: Sequence[str]) -> dict[str, Type]:
 def out_ports(program: Program, ports: Sequence[str], words: Mapping[str, int], window: str) -> dict[str, dict[str, Any]]:
     """Window w's verifier's ports for the edge ``ports`` its Program returns (`fields`' ports some member holds), as R3 holds
     its record's roots to them: each one's rows of `row_words` leaves and the registered domain of its value under the
-    Program and the window's open root ``window`` (core's ``registered.domain``), which window w + 1's history takes."""
+    Program and the window's open root ``window`` (core's ``registered_value.domain``), which window w + 1's history takes."""
     prog = program_digest(program)
     out = {}
     for p, t in _returned(program, ports).items():
         n, bits = _shape(p, t, words[p])
-        out[p] = {"leaves": n, "domain": REG.domain(prog, p, words[p], n, bits, window).domain_id.hex()}
+        out[p] = {"leaves": n, "domain": RV.domain(prog, p, words[p], n, bits, window).domain_id.hex()}
     return out
 
 
 def commit(program: Program, values: Mapping[str, Sequence[int]], words: Mapping[str, int], window: str,
-           salts: Mapping[str, Sequence[bytes]] | None = None) -> dict[str, REG.Registered]:
+           salts: Mapping[str, Sequence[bytes]] | None = None) -> dict[str, RV.Registered]:
     """Window w's prover's commitment of each edge out-port it returns: ``values`` each port's leaves (its returned field's,
     in order), in rows of its ``words``, committed as a registered value under the Program and the open root ``window``
     (fresh salts unless ``salts`` gives each port's), so its root and domain are the ones `out_ports` derives."""
@@ -170,16 +170,16 @@ def commit(program: Program, values: Mapping[str, Sequence[int]], words: Mapping
         if len(leaves) != t.leaves:
             raise ValueError(f"{p}: {len(leaves)} leaves, not its type's {t.leaves}")
         rows = [leaves[i * words[p]:(i + 1) * words[p]] for i in range(n)]
-        out[p] = REG.Registered.commit(prog, p, rows, None if salts is None else salts[p], word_bits=bits, window=window)
+        out[p] = RV.Registered.commit(prog, p, rows, None if salts is None else salts[p], word_bits=bits, window=window)
     return out
 
 
-def roots(committed: Mapping[str, REG.Registered]) -> list[dict[str, Any]]:
+def roots(committed: Mapping[str, RV.Registered]) -> list[dict[str, Any]]:
     """Window w's record's roots for its edge out-ports (`commit`): each port's root, leaf count and domain."""
     return [{"port": p, "root": r.root.hex(), "leaves": r.leaves, "domain": r.domain.domain_id.hex()} for p, r in committed.items()]
 
 
-def entries(committed: Mapping[str, REG.Registered]) -> list[dict[str, Any]]:
+def entries(committed: Mapping[str, RV.Registered]) -> list[dict[str, Any]]:
     """Window w + 1's registered entries for the history it reads: each of window w's edge out-ports (`commit`) under its
     own name, root and domain, as R7 holds a history port to the previous record's port."""
     return [r.entry() for r in committed.values()]

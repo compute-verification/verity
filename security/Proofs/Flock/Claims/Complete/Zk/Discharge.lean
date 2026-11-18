@@ -65,7 +65,7 @@ namespace FlockComplete
 variable {wideLeaf : Bool}
 
 /-- **The masked scope at the case's setup**: one table, of `25 ≤ m ≤ 35`, and the session spec is its own. -/
-theorem CaseZk.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : CaseZk H rel) :
+theorem CaseZk.table {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (c : CaseZk H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ 25 ≤ st.m ∧ st.m ≤ 35 := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk rel) rel (readOf true) rfl
     (fun _ _ h => readOf_zk h) c.x).1 c.scope
@@ -119,7 +119,7 @@ theorem zkSchedule_ok {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) : ∃ v, Zk.sche
   | error e => simp [hs] at hk
 
 /-- **One statement per table** (§3): the goal `TablesZk`. -/
-theorem tablesZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : TablesZk H rel := by
+theorem tablesZk_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : TablesZk H rel := by
   intro o
   obtain ⟨st, hsts, hspec, -, -⟩ := o.table
   unfold RunZk.tabs tabsOf
@@ -127,7 +127,7 @@ theorem tablesZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed →
   simp [Stmt.spec]
 
 /-- **Each table has its `--zk` schedule**: the goal `SchedulesZk`. -/
-theorem schedulesZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem schedulesZk_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     SchedulesZk H rel := by
   intro o st hst
   obtain ⟨st0, hsts, -, h1, h2⟩ := o.table
@@ -138,7 +138,7 @@ theorem schedulesZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
   exact zkSchedule_ok h1 h2
 
 /-- **The masked session returns one proof file per rep stream.** -/
-theorem sessionPZk_proofs (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
+theorem sessionPZk_proofs (h : ByteArray → ByteArray) (resp : ℕ → Hash.Msg) (spec : SessionSpec)
     (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) :
     Ret (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec tabs words trs tape) fun r =>
       r.2.size = spec.repStreams.size := by
@@ -157,7 +157,7 @@ theorem sessionPZk_proofs (h : ByteArray → ByteArray) (resp : ℕ → Claims.M
     exact Ret.pure hk
 
 /-- **One proof file per rep stream**: the goal `ProofCountZk`. -/
-theorem proofCountZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem proofCountZk_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     ProofCountZk H rel := by
   intro o
   have := sessionPZk_proofs (Claims.hOf H) (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)

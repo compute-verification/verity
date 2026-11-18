@@ -97,7 +97,7 @@ theorem Ret.forIn_array {α β : Type} (xs : Array α) (b : β) (f : α → β �
   simpa using this
 
 /-- **The session returns one proof file per rep stream.** -/
-theorem sessionP_proofs (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
+theorem sessionP_proofs (h : ByteArray → ByteArray) (resp : ℕ → Hash.Msg) (spec : SessionSpec)
     (tabs : Array Setup) (trs : Array Trace) (tape : Tape) :
     Ret (sessionP (asksS resp) (Hashes.ofSha512 h) spec tabs trs tape) fun r => r.2.size = spec.repStreams.size := by
   unfold sessionP
@@ -114,7 +114,7 @@ theorem sessionP_proofs (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg
     exact Ret.pure hk
 
 /-- **One proof file per rep stream**: the goal `ProofCount`. -/
-theorem proofCount_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem proofCount_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     ProofCount H rel := by
   intro o
   have := sessionP_proofs (Claims.hOf H) (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)

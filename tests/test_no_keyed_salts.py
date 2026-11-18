@@ -109,8 +109,8 @@ WRITES = re.compile(r"\.(?:send|write|write_bytes|write_text|dump|dumps|save|sav
 #: its writer takes its directory from one function that names that store, outside every run's output, and the file's name
 #: is on the adapter's private list (`verity_vllm.pipeline.research_outputs.PRIVATE`), with a check here that reads both.
 WRITTEN: dict[str, str] = {
-    # `keys.bin` goes into the replay bundle, `<out>/replay_bundle_p<pair>/store/`, inside the commit's output, private by the
-    # bundle directory's name alone
+    # a replay bundle's `keys.bin` goes to its private part under `replay_bundle.private_root`, outside the run's directory, but
+    # `dump_files` without `keys_to` still writes it beside the store, and the name is on no private list
     "adapters/vllm/verity_vllm/commit/store_dump.py": "@vllm",
 }
 LANES = {"@compute-accounting", "@kernels", "@lean", "@memory-accounting", "@network-accounting", "@proofs", "@vllm"}

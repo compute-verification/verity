@@ -78,7 +78,7 @@ open Flock Transcript Replay
 /-- **A returned ring switch's target at its coins**: `T = Σ_k γ_k·dot (eq r''_k) (t(s_k))`, claim `k`'s `r''` at
 `l.size + k` and the batching `γ` at `l.size + |claims|`, whatever the switched vectors. -/
 theorem ringSwitchCut_T (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128) (claims : Array Claim)
-    (hc : claims.size ≠ 0) {t t' : Transcript} {l l' : Array Claims.Msg} {ss : Array (Array F128)} {T : F128}
+    (hc : claims.size ≠ 0) {t t' : Transcript} {l l' : Array Hash.Msg} {ss : Array (Array F128)} {T : F128}
     {sws : Array Switched}
     (h : ((ringSwitchCut (asksCut coin n) sv claims).run t).go l = (.ok ((ss, T, sws), t'), l')) :
     T = dot ((Array.range claims.size).map (coin (l.size + claims.size)))

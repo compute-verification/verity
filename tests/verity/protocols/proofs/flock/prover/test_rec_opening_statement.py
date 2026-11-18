@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+from verity.commitments import registered_value as RV
 from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 from verity_flock.rec_outer import CLAIM_VALUE
@@ -50,9 +50,9 @@ def test_a_rec_opening_unit_other_than_the_verifiers_is_refused(tmp_path):
     rows = RR.opening_rows(sh, [g.getrandbits(128) for _ in range(S["gf"]["nw"])])
     v = [g.getrandbits(128) for _ in range(S["gf"]["nv"])]
     program = "ab" * 64
-    regs = {f"m{i}": RG.Registered.commit(program, f"rec-opening-c{i}", [rows[f"m{i}"]]) for i in range(len(A.rounds(sh)))}
-    regs["claim"] = RG.Registered.commit(program, CLAIM_VALUE, [rows["claim0"], rows["claim1"]])
-    acc = RG.Registered.commit(program, "rec-acc", [rows["acc0"], rows["acc1"]])
+    regs = {f"m{i}": RV.Registered.commit(program, f"rec-opening-c{i}", [rows[f"m{i}"]]) for i in range(len(A.rounds(sh)))}
+    regs["claim"] = RV.Registered.commit(program, CLAIM_VALUE, [rows["claim0"], rows["claim1"]])
+    acc = RV.Registered.commit(program, "rec-acc", [rows["acc0"], rows["acc1"]])
     [_] = RR.stage_opening(sh, regs, (acc, 0, 1), v, tmp_path, evaluate=False)
     d = tmp_path / "p0"
     p = _statement(d, d / "circuit.txt")

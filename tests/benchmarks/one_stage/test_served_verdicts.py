@@ -2925,7 +2925,7 @@ def test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_
                 str(record), "--cubin", str(cubin)])
 
 
-@pytest.mark.parametrize("case", ["held", "stray", "unread", "unsalted", "unparsed"])
+@pytest.mark.parametrize("case", ["held", "stray", "unread", "unsalted", "unparsed", "front"])
 def test_the_tied_period_closes_holding_its_reserves_to_the_windows_salt_sessions(tmp_path, monkeypatch, capsys, case):
     """``pearlplus-period close --lane L --windows PEARL_DIR`` (PEARLPLUS_TIE's, in serve()): the ledger read before the
     close, the sessions lane L reserved (``for``, else ``by``) since the period's open held to the windows' salt sessions
@@ -2952,6 +2952,8 @@ def test_the_tied_period_closes_holding_its_reserves_to_the_windows_salt_session
     (tied := serve / "pearlplus").mkdir(parents=True)
     (tied / S.PERIOD).write_text(json.dumps({"name": "pp-r1", "cap": 1}))
     for k, reserved in ((0, {"session": "s-salt", "period": "pp-r1"}), (1, None)):
+        if case == "front":
+            k += 1
         (serve / "pearl" / f"w{k}").mkdir(parents=True)
         if case != "unsalted":
             (serve / "pearl" / f"w{k}" / "served.json").write_text(json.dumps({"coins": {"reserved": reserved}}))
@@ -2963,8 +2965,9 @@ def test_the_tied_period_closes_holding_its_reserves_to_the_windows_salt_session
     doc, out = json.loads((tied / S.PERIOD).read_text()), capsys.readouterr().out
     salt = [] if case in ("unsalted", "unparsed") else ["s-salt"]
     assert doc["close"]["verb"] == "period-close" and doc["reserves"]["salt_sessions"] == salt
-    assert doc["reserves"]["ok"] is (case == "held") and not any(f"s-{s}" in out for s in ("salt", "stray", "other"))
+    assert doc["reserves"]["ok"] is (case in ("held", "front")) and not any(f"s-{s}" in out for s in ("salt", "stray", "other"))
     said = {"held": "its reserves held (lane vllm's since its open the windows' salt sessions alone)",
+            "front": "its reserves held (lane vllm's since its open the windows' salt sessions alone)",
             "stray": "its reserves REFUSED (lane vllm reserved in it other sessions than the windows' salt sessions; "
                      "period.json's reserves), so no draw follows it",
             "unread": "its reserves REFUSED (the ledger or a window's served.json can't be read: RuntimeError: the gate "
@@ -4626,6 +4629,9 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
     assert {f: gated[gated.index(f) + 1] for f in ("--challenger-gate", "--challenger-peer", "--challenger-lane")} == {
         "--challenger-gate": GATE, "--challenger-peer": "vy-dc-h200", "--challenger-lane": "compute-accounting"}
     assert gated.count("--protocols") == 1 and "--h1-prover" not in gated
+    assert "--pearl-users" not in argv and "--pearl-users" not in gated
+    _rc, fronted = _serve_argv(tmp_path / "fronted", {**PEARL_TIES, **cubin, **live, "CERTIFIER_FRONT": "true"})
+    assert fronted[fronted.index("--pearl-users") + 1] == r"fixed\.[0-9]+" and fronted.count("--pearl-users") == 1
     calls, d = (tmp_path / "calls").read_text().splitlines(), tmp_path / "serve" / "pearlplus"
     assert [c.split("prove_path/prove_path.py ", 1)[-1] for c in calls[-4:-2]] == [
         f"serve-phi --model unsloth/Llama-3.2-1B --revision 9535bd9b1d1dea6acafbdc4813b728796aeb28da --out {d}/serve-phi.json",

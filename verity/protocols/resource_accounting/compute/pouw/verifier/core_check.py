@@ -87,7 +87,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import verifier 
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.profile import Work, WorkStratum
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import U64, fold_roots, tagged
@@ -786,13 +786,13 @@ def call_reads(u0: int, rows: list[int | None]) -> dict[str, Any]:
     rows = list(rows)
     while rows and rows[-1] is None:
         rows.pop()
-    return {G.READS_FROM: u0, "reads": rows}
+    return {RV.READS_FROM: u0, "reads": rows}
 
 
 def port_reads(entry: dict[str, Any]) -> list[int | None]:
     """The row every unit from unit 0 reads at a ``--registered`` port, of either format (Flock's
     `Registered.Port.reads`): none below its ``reads_from`` (absent: 0), then its ``reads``."""
-    return [None] * entry.get(G.READS_FROM, 0) + list(entry["reads"])
+    return [None] * entry.get(RV.READS_FROM, 0) + list(entry["reads"])
 
 
 def public_bc(context: str, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:
