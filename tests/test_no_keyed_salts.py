@@ -59,7 +59,6 @@ ALLOWED: dict[str, str] = {
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
     "verity/commitments/hm96/batch.py": "@proofs",
-    "verity/protocols/experimental/dither/prover/dither.py": "@compute-accounting",
     "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/zk_server.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/python/verity_flock/zk_server.py": "@proofs",
