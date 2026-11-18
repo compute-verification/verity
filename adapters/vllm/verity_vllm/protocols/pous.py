@@ -29,8 +29,8 @@ vLLM's model, attaches the decode to its layers and holds the option.
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
   point no certificate covers).  In `PousOption.subprotocol` the memory attester runs at ``period.json``'s ``challenger_host``
   (`side_of`, which the caller that starts the run hands in) and the Lean answers where the period's tools name it.
-* **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
-  keeps a weight-derived copy resident across forwards would not read it; POUS keeps only ``C*``.
+* **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  A scheme that
+  declares ``keeps_weight_copy`` (Pearl+) would not read it; POUS keeps only ``C*``.
 * **Weights of record:** `Installed.weights` (``decoded``) returns the released plaintext by ``named_parameters`` name,
   tied names mapped to one tensor, which the Commit's replay reads (`protocols.weights_view`).
 

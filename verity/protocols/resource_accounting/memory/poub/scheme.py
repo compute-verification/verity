@@ -23,7 +23,11 @@ bound's error `δSketch g b Q P N εrank` (`DELTA_SCHEME`) at its receipts' layo
 budget ``Q``, the session's passes ``P``, the store's blocks ``N`` and the sign blocks' rank tail ``rank_tail`` (the
 Lean's εrank, which is not the audit's error ε).
 The two sides are the route form's: `ResourceAccounting.Remote.Run.Paid` is `Verity.Scheme`'s charge exactly
-(`ResourceAccounting.Remote.Run.scheme`); the deployed forms are what its `GetsBack` gives.
+(`ResourceAccounting.Remote.Run.scheme`, security/Definitions/Poub/Remote/Scheme.lean:56); the deployed forms are what
+its `GetsBack` gives. The term and the sides are not yet one statement: `Run.scheme`'s own term is `Paid`'s δ
+(`δscheme := δ`, linked by `PaidBoundsBreaks`, stated and unproved), which the deployed route gives as
+`RemoteRunRoutes`' hash term (Guarantees/RateAuditDeployed.lean:164), while `δSketch` is the error of `SketchBound`
+(Assumptions/RemoteHeld.lean:108), a bound on the trace's correct receipts, and no statement takes it to `Paid`.
 """
 
 from __future__ import annotations

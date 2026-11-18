@@ -80,6 +80,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
+from verity.circuits import population as PN
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.prover import opening_prover  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
@@ -673,7 +674,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
         S = Ss[at[0]]
         specs.append({"template": f"opening{leaf}", "defn": bind(BC.BlockOpeningCheck, **vars(S)), "S": S,
                       "rows": BC.opening_rows(S), "args": [wits[u] for u in at], "draw": at})
-    program = P.mixed_population_program([(s["defn"], len(s["args"])) for s in specs])
+    program = PN.mixed_population_program([(s["defn"], len(s["args"])) for s in specs])
     query = P.template_instances_query([s["defn"] for s in specs])
     part = P.partition(program, query)
     n_all, ranges = P.units(program, query), P.ranges(program, query)
@@ -922,7 +923,7 @@ def main() -> int:
     salts = {j: canons["payload"]["salts"][u] for u, j in enumerate(written)}
 
     # the program, its partition and the sampling design
-    program = P.mixed_population_program([(plan_def, a.steps), (map_def, a.steps)])
+    program = PN.mixed_population_program([(plan_def, a.steps), (map_def, a.steps)])
     query = P.template_instances_query([plan_def, map_def])
     part = P.partition(program, query)
     pd = P.digest(part)

@@ -243,8 +243,8 @@ class LLM:
     :class:`~verity_vllm.protocols.Composition` (None without protocols); ``close()`` uninstalls it, and
     ``reinstall(protocols_config=None)`` installs the same set afresh (H1's next window).  An entry of ``protocols`` that
     names a declared scheme (`messages.option`: Pearl+'s ``pouw:pearl-c-h100-v1-h3``) is attached by name on the build
-    instead, with `option_settings`, its coins in-process unless they name a ``challenger``; ``scheme`` is what its attach
-    returned, and ``close()`` releases it.  The engine is always built
+    instead, every such entry in its order (`messages.attach_listed`), with `option_settings`, its coins in-process
+    unless they name a ``challenger``; ``schemes`` is what each attach returned, and ``close()`` releases them.  The engine is always built
     here; an engine built elsewhere is not accepted.  Each LLM's build has its own exchange (`messages.build`), on which
     its protocols' requests are filed before the build and which is the exchange in scope while it generates.
     """
@@ -258,14 +258,15 @@ class LLM:
         if opts["engine_class"] is not None:
             EC.check_model(opts["engine_class"], self.pin.model, self.pin.revision)
         enabled = config.parse_protocols(opts["protocols"])
-        named = next(((e, s) for e in enabled if (s := messages.option(e)) is not None), None)
-        if named is not None:
-            doc = PO.load_settings(opts["protocols_config"])
-            own = option_settings(named[0], doc)
-            if not own.get("challenger"):
+        named = {e: s for e in enabled if (s := messages.option(e)) is not None}
+        doc = PO.load_settings(opts["protocols_config"])
+        listed = [(s, option_settings(e, doc)) for e, s in named.items()]
+        for s, own in listed:
+            if "coins" in s.settings and not own.get("challenger"):
                 own.setdefault("coins", "in-process")
-            doc.pop(named[0].partition(":")[0], None)
-            opts = {**opts, "protocols": [e for e in enabled if e != named[0]], "protocols_config": doc or None}
+        if named:
+            rest = {k: v for k, v in doc.items() if k not in {e.partition(":")[0] for e in named}}
+            opts = {**opts, "protocols": [e for e in enabled if e not in named], "protocols_config": rest or None}
         self._served = opts
         ctx = protocol_context(opts, options)
         from verity_vllm.engine import vllm_adapter as va
@@ -275,7 +276,7 @@ class LLM:
             engine_args["tensor_parallel_size"] = self.pin.world
         env: dict[str, Any] = {} if opts["engine_class"] is None else {"env": EC.env(opts["engine_class"])}
         ex = messages.build()
-        self.scheme = None if named is None else ex.attach(named[1], own, process=H.ENGINE)
+        self.schemes = messages.attach_listed(ex, listed, process=H.ENGINE)
         for entry, request in PO.requests(ctx) if ctx is not None else ():
             ex.request(entry, request)
         self._engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=opts["max_num_seqs"], case=self.pin.case,
@@ -316,6 +317,13 @@ class LLM:
             self._install(ctx)
         return self.protocols
 
+    @property
+    def scheme(self) -> Any:
+        """What the one scheme attached by name returned, None with none; `ValueError` with several."""
+        if len(self.schemes) > 1:
+            raise ValueError(f"verity_vllm.LLM: {len(self.schemes)} schemes attached by name, not one")
+        return self.schemes[0] if self.schemes else None
+
     @classmethod
     def from_spec(cls, spec: Any) -> LLM:
         """The engine an engine spec describes (`pipeline.engine_spec`: a path to its TOML, or a loaded `EngineSpec`),
@@ -328,12 +336,12 @@ class LLM:
         return llm
 
     def close(self) -> None:
-        """Uninstall the protocol options and release the scheme attached by name.  Idempotent."""
+        """Uninstall the protocol options and release the schemes attached by name.  Idempotent."""
         with messages.using(self._engine.exchange):
             if self.protocols is not None:
                 self.protocols.close()
-            if self.scheme is not None:
-                scheme, self.scheme = self.scheme, None
+            schemes, self.schemes = self.schemes, []
+            for scheme in schemes:
                 if callable(getattr(scheme, "release", None)):
                     scheme.release()
 

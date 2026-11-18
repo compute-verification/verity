@@ -243,7 +243,7 @@ def smoke(a: argparse.Namespace) -> None:
     ZY = tree("h1/zy@3", recs)
 
     def entry(tr):
-        return {**tr.entry(), "word_bits": tr.word_bits, **G.schema_entry(V2)}
+        return {**tr.entry(), "word_bits": tr.word_bits, **RV.schema_entry(V2)}
 
     def port(tr, row):
         return {"entry": entry(tr), "opening": {"value": tr.value, "row": list(tr.rows[row]), "salt": tr.salts[row].hex(),
@@ -315,7 +315,7 @@ def statement(ctx: L.Ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dic
     st = ctx.stagers[LL.LANE]
     kr = L.known_rows(ctx, sw, LL.LANE, ln, ln)
     vk = {p: PR.known_port(ctx.prog, v, row, salt, sw.registration, schema=V2) for p, (v, row, salt) in kr.items()}
-    reads = {"format": G.READS, "ports": {**{p: PR.port(v, e, e["root"], [row], V2) for p, (v, e, row) in entries.items()},
+    reads = {"format": G.READS, "ports": {**{p: RV.port(v, e, e["root"], [row], V2) for p, (v, e, row) in entries.items()},
                                           **{p: kp for p, (kp, _) in vk.items()}}}
     want = expected(sw, ln, ins)
     v_ok, row_ok, salt_ok = kr[LL.OK]

@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from test_service import (DELTA, PAIR, QUERY, RUN, SESSION, Clock, _lean, _ports, _refused, _spec)
 
@@ -33,7 +34,7 @@ def _roots(row: int) -> dict[str, str]:
 def _record(row: int, previous: str | None) -> dict:
     ports = _ports(N)
     roots = [{"port": p, "root": _roots(row)[p], **ports[p]} for p in ("x", "out")]
-    return R.record(P.population_program(PAIR, N), QUERY, {"law": "subset", "k": 2}, S.SCHEME, roots,
+    return R.record(PN.population_program(PAIR, N), QUERY, {"law": "subset", "k": 2}, S.SCHEME, roots,
                     {"kind": "served", "run": RUN, "row": row}, previous=previous)
 
 
