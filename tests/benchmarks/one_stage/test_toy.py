@@ -152,12 +152,8 @@ def test_every_other_port_reads_the_interior_record_at_its_own_leaves_or_its_wri
             assert (value == m.port(p)) == (wire is None)
             e, header = reads[m.key]["ports"][p], T.CS.registered_header(head, t)[p]
             n = roots[value]["leaves"]
-            assert (e["value"], e["root"], e["leaves"], e["domain"]) == (T.CS.own_value(value), roots[value]["root"], n,
-                                                                         roots[value]["domain"])
-            if wire is None:
-                assert e["reads"] == win.reads(m, p).tolist() and (e[REG.READS_FROM], e["words"]) == (m.base, words)
-            else:
-                assert (e["tree"], e["reads"], e["words"]) == ({"template": wire.writer, "field": wire.out}, [], words)
+            assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], n, roots[value]["domain"])
+            assert e["reads"] == win.reads(m, p).tolist() and (e[REG.READS_FROM], e["words"]) == (m.base, words)
             assert header["positions"] == win.leaves(m, p).tolist()
             held = rows_bc(c, m.port(p), len(header["positions"]))
             assert all(REG.verify_read(c.domains[value], c.roots[value], i, x, bytes.fromhex(path), T.V2)

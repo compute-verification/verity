@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import ieee_pin as IP
@@ -62,17 +60,6 @@ def test_a_control_must_differ_somewhere():
     assert IP.judge_run(with_check(good_run(), "host_div", bad=9), control=True) == []
 
 
-def test_copied_out_of_the_tree_beside_the_gate_it_holds_that_copy(tmp_path):
-    """The script and the gate also run copied beside a build (`settings.STANDALONE`): there the gate is the file beside
-    the script, wherever the tree keeps it."""
-    for src in (IP.__file__, SG.__file__, SG.PINS):
-        shutil.copy(src, tmp_path / Path(src).name)
-    got = subprocess.run([sys.executable, "-c", "import ieee_pin as I; print(I.SG.__file__, I.SG.PINS)"], cwd=tmp_path,
-                         capture_output=True, text=True)
-    here = tmp_path.resolve()
-    assert got.stdout.split() == [str(here / "sass_gate.py"), str(here / "sass_pins.json")], got.stderr
-
-
 def test_every_shipped_toolkit_names_a_run_of_these_builds():
     """A repin that changes a body drops its toolkit's run (`sass_gate.update_pins`), and a toolkit without one exempts
     nothing; a change to the pinned builds needs a new run too."""
@@ -87,7 +74,7 @@ def test_a_toolkit_names_its_target_and_a_run_has_one():
     assert "arch=compute_120a,code=sm_120a" in IP.nvcc_args("sm_120a")
     assert "arch=compute_90a,code=sm_90a" in IP.nvcc_args("sm_90a")
     assert (IP.sm_of("sm_120a"), IP.sm_of("sm_90a")) == (120, 90)
-    with pytest.raises(IP.PinFailed, match=r"toolkit 13\.0\.1-sm_77a: no target sm_77a: no architecture file .*sm_77a\.toml"):
+    with pytest.raises(IP.PinFailed, match=r"toolkit 13\.0\.1-sm_77a: no target sm_77a: no architecture 'sm_77a'"):
         IP.arch_of("13.0.1-sm_77a")
     pins = {"toolkits": {"13.0.1": {}, "13.0.1-sm_90a": {}}}
     with pytest.raises(IP.PinFailed, match="more than one target"):

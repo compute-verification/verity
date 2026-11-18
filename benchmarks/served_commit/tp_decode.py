@@ -262,7 +262,9 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     batches = [int(b) for b in a.batches.split(",")]
     wl = va.load_workload(a.workload, None)
-    target = PO.commit_guard(va.target_of_workload(wl), world=a.tp, installs=False)
+    if (target := va.target_of_workload(wl)) is not None and target.protocols is not None:
+        print(f"[delta] REFUSE (fail-closed): {PO.refused(['this Commit (TP) installs no protocol options yet'])}", flush=True)
+        raise SystemExit(3)
     target_env, target_kw = TT.apply(target, wl["execution"])
     case = va.case_of(wl, a.case)
     env_flags = {**prof.apply_env(), **target_env}

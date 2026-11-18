@@ -9,7 +9,8 @@
 #   ncu takes TP_WS_NCU), TP_NCU (0: no ncu).
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
+export PATH=$CUDA_HOME/bin:$PATH
 D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/tprobe.XXXXXX); trap 'rm -rf "$B"' EXIT
 export TP_BUILDS=${TP_BUILDS:-"bits:-DPFILL_BITS bu:-DPFILL_BU,-Xcompiler,-mpopcnt li:-DPFILL_BU,-DPFILL_LI,-Xcompiler,-mpopcnt xin13:-DPFILL_BU,-DPFILL_XIN13,-Xcompiler,-mpopcnt"}

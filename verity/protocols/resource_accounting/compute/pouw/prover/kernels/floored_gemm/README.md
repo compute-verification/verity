@@ -22,7 +22,7 @@ arms, from the clone's root:
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
-  --send verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
+  --send benchmarks/pouw/floored_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
 ~~~
 
 It exits 4 when the build fails, 5 when the binary holds no IMMA and 6 when the gate fails.

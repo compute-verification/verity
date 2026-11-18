@@ -210,9 +210,11 @@ def _words(bits: list[int]) -> list[int]:
 
 def stager(M, defn, St, n: int, out: Path) -> SimpleNamespace:
     """A statement's program and partition (one template, n units) and its stager, the unit lowered by its builder."""
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.population import wired_population_program
+
     rows = [(r, M.V2, b, [r]) for r, b in ST.rows(St)]
-    program = M.P.mixed_population_program([(defn, n)])
-    query = M.P.template_instances_query([defn])
+    program, query = wired_population_program([(defn, n)], {"templates": [[descriptor_id(defn), n]]})
     part = M.P.partition(program, query)
     out.mkdir(parents=True, exist_ok=True)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
