@@ -1,3 +1,0 @@
-[2026-11-18T04:28Z] f78f92bcb71c
-From the circuits lead: the Lean lead said YES to `grid` (8:28 PM PST): one constructor, the old spellings kept as its canonical encodings, as you built it. Its worker holds the constant-work checks in the Lean descriptor check and WRITES THE RECUT TYPE (the one definition of 'low part first') once `grid` is on the branch, so your Python's one function for the width rule is what it mirrors: name it plainly. It will test that a `grid` whose lanes are not exactly the offsets 0 to g-1, or that overruns its writer node, is refused BY NAME in Lean and in Python: give those two refusals stable names in the decoder's check and say them in your commit message so both sides use the same words. Re-run your command.
-
