@@ -84,6 +84,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
 from verity.ports import free_port  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
@@ -291,7 +292,7 @@ def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, le
     opened after the docket (``coins == "lean"``, `a0.challenger_sample`), or the caller's."""
     if coins == "lean":
         p = a0.challenger_sample(lean, ["--program", str(program_file), "--partition", str(partition_file),
-                                      "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
+                                      "--stratified", str(k)], rec["law"], rec["population"], DD.digest(rec),
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
@@ -443,7 +444,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     for s in staged:
         checks[f"statement/{s['name']}"] = a7.statement_checks(s, rec, want)
     receipt = R.receipt(rec, "prove-leg verifier (prove_leg.py)")
-    subprotocol["registration"] = R.digest(rec)
+    subprotocol["registration"] = DD.digest(rec)
     subprotocol["checks_before_draw"] = {c: {"ok": v["ok"], "codes": v.get("codes")} for c, v in checks.items()}
     if not all(v["ok"] for v in checks.values()):
         subprotocol.update(accepted=False, refused="before the draw", seconds=round(time.time() - t0, 1))
@@ -721,7 +722,7 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     reg_o = RV.Registered.commit(prog, "dot", out_words(fn, x, weights[positions]).tolist(), None, RV.WORD_BITS, V2)
     own = G.reads_file(program, query, {xn: K, "weights": K}, {xn: reg_x.root.hex(), "weights": reg.root.hex()},
                        schemas={xn: V2, "weights": V2})
-    own["ports"]["o0"] = {**reg_o.entry(), **RV.width_entry(RV.WORD_BITS), **G.schema_entry(V2), "reads": list(range(n))}
+    own["ports"]["o0"] = {**reg_o.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(V2), "reads": list(range(n))}
     out.mkdir(parents=True, exist_ok=True)
     (out / "registered.json").write_text(json.dumps(own, sort_keys=True))
     table, refs = G.table(positions)

@@ -27,7 +27,7 @@ LEFT: list[tuple[str, str]] = [
      "installs step_trace's writer, which writes the trace"),
     ("CanonicalServing reader adapters/vllm/verity_vllm/settings.py", "environment variables: no body"),
     ("Circuit reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", FLAG),
-    ("Circuit writer adapters/vllm/verity_vllm/program/predict/aot.py", "the circuits lane's file"),
+    ("Circuit writer adapters/vllm/verity_vllm/program/predict/aot.py", "the ahead-of-time compiler's Build writer"),
     ("Circuit writer adapters/vllm/verity_vllm/records/predicted_row.py", "declares the record, which aot.py writes"),
     ("CommitmentScheme reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", "flags whose values are the scheme's "
      "settings, read by the parser"),
@@ -35,17 +35,13 @@ LEFT: list[tuple[str, str]] = [
     ("H1RunCommitment writer adapters/vllm/verity_vllm/pipeline/serve_tie.py", "runs the prover's command; the record it "
      "writes is read as H1Registration"),
     ("H1State reader adapters/vllm/verity_vllm/pipeline/serve_h1.py", FLAG),
-    ("PoUSSetup reader adapters/vllm/verity_vllm/protocols/__init__.py", IN_PROCESS),
-    ("PoUSSetup reader adapters/vllm/verity_vllm/protocols/pous.py", "the memory-accounting lane's file"),
-    ("PoUSStore writer adapters/vllm/verity_vllm/protocols/pous.py", "the memory-accounting lane's file"),
     ("PoUWScheme reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", FLAG),
-    ("PoUWValues writer adapters/vllm/verity_vllm/protocols/pouw/__init__.py", "the compute-accounting lane's file"),
     ("RegisteredCompiler reader adapters/vllm/verity_vllm/pipeline/advice.py", "flags whose values are the compiler's "
      "name and digest, which the advice binds"),
     ("RegisteredWeights writer adapters/vllm/verity_vllm/pipeline/serve_seal.py", "calls match_capture's writer"),
     ("ReportedAdvice writer adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py", IN_PROCESS),
-    ("ReportedAdvice writer adapters/vllm/verity_vllm/program/predict/scan_state.py", "the circuits lane's file"),
-    ("ReportedAdvice writer adapters/vllm/verity_vllm/program/predict/window_rows.py", "the circuits lane's file"),
+    ("ReportedAdvice writer adapters/vllm/verity_vllm/program/predict/scan_state.py", IN_PROCESS),
+    ("ReportedAdvice writer adapters/vllm/verity_vllm/program/predict/window_rows.py", IN_PROCESS),
     ("Values writer adapters/vllm/verity_vllm/pipeline/serving_rows.py", IN_PROCESS),
 ]
 

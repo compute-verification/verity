@@ -38,7 +38,7 @@ from pathlib import Path
 from verity.circuits.ops.boolean import scalar as SC
 from verity.circuits.ops.boolean import softmax as SM
 
-from . import fp, gf2, ir_lower as IL, tail_pieces as TP, topp_word as TW, unit as U
+from . import fp, gf2, ir_lower as IL, tail_pieces as TP, unit as U
 from . import circuit_types as CT
 from . import type_trace as TT
 from .gf2 import Circuit, const_bits
@@ -120,6 +120,7 @@ def _patch():
     if _PATCHED:
         return
     originals = {}
+    TW = IL.compositions()[IL.TOPP_WORD]
     for mod in (gf2, fp, SM, SC, U, TP, TW):
         for name in DISPLAY:
             f = getattr(mod, name, None)
@@ -382,19 +383,20 @@ class DefStore:
         return out
 
 
-def load_catalog(package: str) -> None:
-    """Import every module of catalog package ``package`` but its quarantine, so its Definitions are registered."""
+def load_catalog(*packages: str) -> None:
+    """Import every module of each catalog package but its quarantine, so its Definitions are registered."""
     import importlib
     import pkgutil
 
-    pkg = importlib.import_module(package)
-    for m in pkgutil.iter_modules(pkg.__path__):
-        if m.name.startswith("quarantine"):
-            continue
-        try:
-            importlib.import_module(f"{package}.{m.name}")
-        except Exception:  # noqa: BLE001  (a registry module that needs a GPU stack or data)
-            continue
+    for package in packages:
+        pkg = importlib.import_module(package)
+        for m in pkgutil.iter_modules(pkg.__path__):
+            if m.name.startswith("quarantine"):
+                continue
+            try:
+                importlib.import_module(f"{package}.{m.name}")
+            except Exception:  # noqa: BLE001  (a registry module that needs a GPU stack or data)
+                continue
 
 
 def _registered(pid: str):
@@ -577,6 +579,7 @@ class Walker:
         ck = ("tw", name, key)
         if ck not in self.cache:
             consts = ", ".join(f"operand {j} = 0x{c:x}" for j, c in enumerate(key) if c is not None)
+            TW = IL.compositions()[IL.TOPP_WORD]
             self.cache[ck] = self.reg.type_of(lambda: TW.build(name, key), TW.NAMES[name] + (f" ({consts})" if consts else ""), "piece")
             gc.collect()
         return self.cache[ck]
@@ -587,7 +590,7 @@ class Walker:
         ck = ("composed", pid, p, splits)
         if ck in self.cache:
             return self.cache[ck]
-        counts = TW.count(V, p, splits)
+        counts = IL.compositions()[IL.TOPP_WORD].count(V, p, splits)
         tree: dict = {}
         for (path, name, key), n in counts.items():
             node = tree
@@ -1369,7 +1372,7 @@ class _Encoded:
         self.ix: dict[str, dict] = {}
 
     def add(self, fn) -> str:
-        from verity_vllm.definitions.encoding import encode_specialization
+        from verity.circuits.codec import encode_specialization
 
         top, defs = encode_specialization(fn)
         self.ix.update(defs)
@@ -1460,7 +1463,7 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
     """The Call's cut under the no-recompute partition: its record id (``commitment``), or per T (``commitment_by_T``) for a group
     whose T varies, at the program graph's partition points (every T up to a few hundred, else the key-block boundaries), each
     checked against the program graph's own ``q_word_v1`` summary where it has one."""
-    from verity_vllm.definitions.encoding import word_values
+    from verity.circuits.codec import word_values
     from verity.circuits.word import specialization
 
     if g["template"].startswith(("Const32", "Const64")):
@@ -1566,8 +1569,7 @@ def main(argv=None) -> int:
     ap.add_argument("--gathers", choices=("mux", "opening"), default=GATHERS,
                     help="a gather from committed weights as a multiplexer (default) or as a commitment opening")
     a = ap.parse_args(argv)
-    for package in a.catalog:
-        load_catalog(package)
+    load_catalog(*a.catalog)
     GATHERS = a.gathers
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

@@ -55,7 +55,7 @@ sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/
 sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "adapters" / "vllm")]
 
 import paged as P  # noqa: E402
-from paged import K, KB  # noqa: E402
+from paged import KB, K  # noqa: E402
 from verity_vllm.engine import int8_attention as IA  # noqa: E402
 
 BLOCKS, BS = 96, 16
@@ -98,7 +98,7 @@ class Case:
                          vals[sl], sl, bj=self.bj if encd else None, plain=self.flags)
             self.kc, self.vc = self.plain.transpose(1, 2).split(D, dim=-1)
         else:
-            if self.W != G * lib.shape["hw"]:
+            if G * lib.shape["hw"] != self.W:
                 raise RuntimeError(f"a token-layer is {self.W} words, not its heads' {G * lib.shape['hw']}")
             enc = torch.empty_like(self.plain)
             lib.call("kv_encode_bound", self.plain.data_ptr(), enc.data_ptr(), self.nslots * self.W, self.store_base, k,

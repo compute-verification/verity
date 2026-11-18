@@ -67,7 +67,7 @@ from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.challenger.coins import DRAW_FORM
 
-from . import closing as CL, partition as P, proofs as PF, registered as REG
+from . import closing as CL, partition as P, proofs as PF
 from verity.commitments import registered_value as RV
 from .proofs import V2_EXE, LeanError, v2_executable
 
@@ -363,7 +363,7 @@ def _ports(name: str, registered: Mapping[str, Any]) -> list[dict[str, Any]]:
         e = ports[port]
         q = {"value": e.get("value"), "root": e.get("root"), "leaves": e.get("leaves"), "words": e.get("words"),
              "word_bits": e.get("word_bits", RV.WORD_BITS), "domain": e.get("domain"),
-             "row_schema": e.get(REG.SCHEMA_KEY, REG.SCHEMA)} if isinstance(e, dict) else None
+             "row_schema": e.get(RV.SCHEMA_KEY, RV.SCHEMA)} if isinstance(e, dict) else None
         if not (q is not None and type(q["value"]) is str
                 and all(type(q[k]) is str and len(q[k]) == 128 and set(q[k]) <= _HEX for k in ("root", "domain"))
                 and _nat(q["leaves"]) and q["leaves"] > 0 and (q["words"] is None or (_nat(q["words"]) and q["words"] > 0))

@@ -27,7 +27,7 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 import pytest
 
-from verity.circuits import partition_object as PO
+from verity.circuits import codec, partition_object as PO
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
 from verity.circuits.evaluation import evaluate_batch
@@ -1611,7 +1611,7 @@ class Bound(Held):
 
 
 #: core's ``one_stage.registered`` names `interface.registered_reads` reads, as the caller passes the module
-REG = type("REG", (), {"SCHEMA_KEY": "row_schema", "READS_V1": "verity/registered-reads/v1"})
+REG = type("REG", (), {"READS_V1": "verity/registered-reads/v1"})
 #: 12 units, unit u reading row u // 2 of six weight rows
 READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
 
@@ -2057,6 +2057,25 @@ def _long_chain(layers: int, d: Path) -> None:
     assert _miswired(mine.members, {m.key: c.public_body(k) for k, m in enumerate(mine.members)}) == set()
     pin = {"w": {"value": "w", "root": "cd" * 64, "leaves": layers, "words": 256, "domain": "ef" * 64}}
     assert len(I.registered_reads(doc, mine, pin, registered=REG)) == 2 * layers
+
+
+def test_a_records_templates_are_in_the_order_its_program_first_batches_them():
+    """The record form reads a record's templates in its wired Program's batch order: a circuit given its templates in
+    another order than its ``order`` first batches them records them, and rebuilds its Program from the record, in the
+    Program's."""
+    wires = [I.Wire(GID, "x", SID if j == 0 else GID, "o0", at=2 * j, radix=(2,), base=2 * max(j - 1, 0), step=(1,))
+             for j in range(2)]
+    reads = tuple(I.Read(GID, "w", "w", at=2 * j, radix=(2,), base=256 * j, step=(0,)) for j in range(2))
+    order = I.ordered({SID: 2, GID: 4}, wires, {GID: range(0, 4, 2)})
+    given = I.Circuit("given", ((GEMM, 4), (SRC, 2)), wires=tuple(wires), registered=I.Registered({"w": 512}, reads=reads),
+                      order=order)
+    assert [t for t, _, _ in order][:2] == [SID, GID] and given.ids == [SID, GID]
+    program, _ = given.program()
+    batched = list(dict.fromkeys(i for n in program.root.body.nodes if (i := descriptor_id(n.fn)) in (SID, GID)))
+    doc = I.descriptor_record(given, 4)
+    assert [t for t, _ in doc["templates"]] == batched == [SID, GID]
+    rebuilt, _ = I.program_of_record(doc, {SID: SRC, GID: GEMM}.__getitem__)
+    assert canonical_json(codec.encode_program(rebuilt)) == canonical_json(codec.encode_program(program))
 
 
 def test_a_periods_commit_is_linear_in_its_members(tmp_path):

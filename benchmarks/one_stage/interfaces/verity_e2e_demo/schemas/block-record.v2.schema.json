@@ -55,6 +55,7 @@
       "runs": {"type": "array", "items": {"type": "string"}, "minItems": 1},
       "named_terms": {"$ref": "#/$defs/named_terms"},
       "premises": {"oneOf": [{"type": "array", "items": {"type": "string", "minLength": 1}}, {"type": "string", "minLength": 1}]},
+      "refused": {"type": "string", "minLength": 1},
       "unbounded": {"type": "object", "required": ["why", "terms"], "additionalProperties": false, "properties": {
        "why": {"type": "string", "minLength": 1}, "terms": {"type": "array", "items": {"type": "string", "minLength": 1}}}}
      }}

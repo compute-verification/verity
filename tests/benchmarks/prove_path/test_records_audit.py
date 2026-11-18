@@ -17,8 +17,6 @@
   states them; one whose program takes values only tied to the earlier docket that registered them first
   (`tie_of`), its readers' reads registered at that record's roots, and the verifier's tie tests' own tie
   (`window_tie.py`) is that one on their toys;
-* the workload side's copy of the Lean verifier's ``--registered`` port (`spot/prover/registered_reads.py`) is the
-  verifier's own;
 * a window's audit is one compute audit of the network attester's period (`period`), its scan state's reads registered;
 * a declared day (``--day``, `declared_day`) hands R2 the registration log's declarations, so a program other than the
   day's is refused;
@@ -47,9 +45,9 @@ import numpy as np
 import pytest
 import settings
 
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
-from verity.protocols.proofs.spot.prover import registered_reads as RR
-from verity.protocols.proofs.spot.verifier.one_stage import caller as C, produced as PR, registered as REG, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import caller as C, registered as REG, docket as R
 from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
@@ -77,8 +75,9 @@ from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as 
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
 TID = descriptor_id(COORD)
-#: `COORD` on bits, whose rows read a registered value's 16-bit leaves one bit each
-BITS = bind(BG.ScaledMmS8Coordinate, K=K, **BG.GEMM_SM120_S8)
+#: `COORD` on bits, whose rows read a registered value's 16-bit leaves one bit each, at twice its K: a unit the proving
+#: path takes has a row past 111 bytes (`window_builder.check_provable`)
+BITS = bind(BG.ScaledMmS8Coordinate, K=2 * K, **BG.GEMM_SM120_S8)
 SAMPLING_DESIGN = "stratified:2"
 RUN = "ab" * 64
 #: the value a period ties to its scan's state tree, which `period` takes from its caller (the network attester's scan state)
@@ -338,14 +337,14 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
     ``records_audit.py count`` prints the same from the record's and the docket's files (core's, its window's
     ``registered_roots`` or its committed values' entries, or an integration's own, whose ``window`` is its index), and
     refuses a pin with no root."""
-    doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(COORD).rows)
+    doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(BITS).rows)
     assert RA.declared_count(doc, 1687, pins=PIN_A, roots=PIN_A) == {
         "units": 2, "inputs": inputs, "wired": 0, "registered": inputs, "ingress": 0, "free": 0, "other_inputs": 1687,
         "advice_bits": 1687, "bound": "within the charge"}
     unpinned = RA.declared_count(doc, 1687)
     assert (unpinned["registered"], unpinned["free"], unpinned["bound"]) == (0, inputs, "vacuous")
     assert RA.declared_count(doc, 1687, pins=PIN_A, roots={"a": "cd" * 64}) == unpinned == RA.declared_count(doc, 1687, pins=PIN_A)
-    x = 16 * dict(IF.layout(COORD).rows)["x"]
+    x = 16 * dict(IF.layout(BITS).rows)["x"]
     loose = RA.declared_count(_registered_circuit(free="x").description(), 1687, pins=PIN_A, roots=PIN_A)
     assert (loose["free"], loose["other_inputs"], loose["bound"]) == (2 * x, 2 * x + 1687, "vacuous")
     with pytest.raises(ValueError, match=r"\{param: root\}"):
@@ -473,6 +472,23 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
 
 
+def test_the_window_circuit_command_refuses_a_class_whose_units_no_proof_block_takes(tmp_path, monkeypatch, capsys):
+    """``prove_path.py window-circuit`` refuses, by the template's name, a lowered class whose unit Flock's composer
+    wouldn't prove (`window_builder.check_provable`): `COORD`'s rows are none past 111 bytes."""
+    import prove_path as PP
+    from test_prove_path import _served
+    from verity_vllm.program.predict import window_circuit as WC
+
+    s = _served(tmp_path, monkeypatch)
+    monkeypatch.setattr(WC, "window_circuit", lambda registered, compiled, cls, tables=None: IF.Circuit("test", ((COORD, 2),)))
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    assert PP.main(["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+                    str(tmp_path / "advice.bin"), "--cap", "4", "--out", str(tmp_path / "c.json")]) == RA.REFUSED
+    err = capsys.readouterr().err
+    assert "I2's window circuit refuses the advice: 1 templates Flock's composer wouldn't prove" in err and TID in err
+    assert not (tmp_path / "c.json").exists()
+
+
 def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_names_the_runs_compiler_before_it_serves(
         tmp_path, monkeypatch, capsys):
     """``prove_path.py class-circuit --serve F`` builds the class's circuit from φ alone, no advice, row dir or window, and
@@ -486,7 +502,7 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
 
     s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
 
-    def lower(registered, cls, programs=None, grain=None, provable=True, tables=None):
+    def lower(registered, cls, programs=None, grain=None, tables=None):
         seen.append((registered, cls, tables))
         return circuit
 
@@ -689,7 +705,7 @@ def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
     reg = {"params": {values[0]: 4 * K // 2, values[1]: 16}, "tables": [], "reads": [], "roots": [], "openings": []}
     doc = {"registered": {**reg, "values": values}}
     tied, pins = RA.tie_of(doc, w, "h1/")
-    d = R.digest(w)
+    d = DD.digest(w)
     assert tied == {"log": [w], "registered": {values[0]: K // 2, values[1]: 4},
                     "outputs": {values[0]: {"record": d, "value": f"h1/a/{K}@0"}, values[1]: {"record": d, "value": "h1/ids@0"}},
                     "schemas": {v: REG.SCHEMA_V2 for v in values}}
@@ -720,7 +736,7 @@ def test_a_value_w_registers_registered_afresh_by_the_window_is_held_to_w_and_re
     theirs = RV.Registered.commit("w/program", w_name, rows.tolist(), schema=REG.SCHEMA_V2).entry()
     w = {"format": DM.REGISTRATION, "registered": [theirs], "previous": None}
     tied, pins = RA.tie_of(doc, w, prefix, RA.phase_values(rec, [name]))
-    assert tied["outputs"] == {name: {"record": R.digest(w), "value": w_name}} and pins[name]["root"] == theirs["root"]
+    assert tied["outputs"] == {name: {"record": DD.digest(w), "value": w_name}} and pins[name]["root"] == theirs["root"]
     mine, _doc, _sets = RA.verifier_window(got.dir, RND.parse_design(SAMPLING_DESIGN), None)
     v = R.check(rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, CS.expected_ports(mine), None, log=tied["log"],
                 work_table=mine.work_table, registered=tied["registered"], outputs=tied["outputs"],
@@ -746,7 +762,7 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
     doc = {"registered": {"params": {v: 2 * r.size for v, r in rows.items()}, "tables": [], "reads": [], "roots": [],
                           "openings": [], "values": list(rows), "formats": {v: seg for v in rows}}}
     tied, pins = RA.tie_of(doc, w, None)
-    d = R.digest(w)
+    d = DD.digest(w)
     assert tied == {"log": [w], "registered": {"pearl-a/0/0": K, "pearl-y/0/0": 2 * K},
                     "outputs": {v: {"record": d, "value": v} for v in rows}, "schemas": {v: REG.SCHEMA_SEG for v in rows}}
     assert pins == {"pearl-a/0/0": a, "pearl-y/0/0": y} and a[RV.WIDTH_KEY] == y[RV.WIDTH_KEY] == 32
@@ -784,28 +800,11 @@ assert ids and all(descriptor_id(WT.catalog_resolve(t)) == descriptor_id(RA.cata
     assert p.returncode == 0, p.stderr[-3000:]
 
 
-def test_the_workload_sides_registered_port_is_the_verifiers():
-    """`registered_reads`, the port a served compiler writes for the Lean verifier's ``--registered``, is the verifier's
-    `produced.port`, key for key and in its order, on each row format (and the default), each leaf width, and rows a proof
-    block reads nothing at; a format the verifier's refuses it refuses; `READS_FROM`, `READS_V1` and the formats, their key and
-    the default width are the verifier's."""
-    assert ((RR.READS_FROM, RR.READS_V1, RR.SCHEMAS, RR.SCHEMA_KEY, RR.WORD_BITS)
-            == (RV.READS_FROM, REG.READS_V1, RV.SCHEMAS, REG.SCHEMA_KEY, RV.WORD_BITS))
-    e, root = {"leaves": 12, "words": 64, "domain": "ab" * 64}, "cd" * 64
-    for entry in (e, {**e, "word_bits": 32}):
-        for rows in ([0, None, 11], [None], []):
-            for schema in ((), *((s,) for s in RV.SCHEMAS)):
-                mine, theirs = RR.port("v", entry, root, rows, *schema), PR.port("v", entry, root, rows, *schema)
-                assert list(mine.items()) == list(theirs.items())
-    for port in (RR.port, PR.port):
-        with pytest.raises(ValueError, match="rows are"):
-            port("v", e, root, [0], "hm96-sha512/row/v9")
-
-
 def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
-    """The summary's ``tie`` names W's digest and the values tied to it. Tied to Pearl+'s W (its window names a Pearl-C
-    scheme) it also says what holds W's roots to the credited ones, Pearl+'s verdict, which reads the prover's salt key and
-    opens sampled rows in the clear; tied to H1's W, whose window names none, it doesn't."""
+    """The summary's ``tie`` names W's digest and the values tied to it. Tied to Pearl+'s W (its window's entry Pearl+'s
+    declared option, its scheme the one that entry names) it also says what holds W's roots to the credited ones, Pearl+'s
+    verdict, which reads the prover's salt key and opens sampled rows in the clear; tied to H1's W, to a W under another
+    Pearl-C kernel's option, or to one whose scheme isn't its entry's, it doesn't."""
     entry = {"value": "pearl-a/0/0", "root": "00" * 64, "leaves": 16, "words": K, "domain": "00" * 32, RV.WIDTH_KEY: 32}
     outputs = {"pearl-a/0/0": {"record": "", "value": "pearl-a/0/0"}}
     pearl = {"format": DM.REGISTRATION, "window": {"kind": "served", "entry": "pouw:pearl-c-h100-v1-h3",
@@ -813,9 +812,20 @@ def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
              "registered": [entry], "previous": None}
     h1 = {**pearl, "window": {"kind": "served", "entry": "toy-window", "open_root": "00" * 64, "refused": []}}
     got = RA.tie_row({"log": [pearl], "outputs": outputs})
-    assert got == {"record": R.digest(pearl), "values": ["pearl-a/0/0"], "credited_by": RA.PEARL_CREDIT}
+    assert got == {"record": DD.digest(pearl), "values": ["pearl-a/0/0"], "credited_by": RA.PEARL_CREDIT}
     assert "development verifier" in got["credited_by"] and "salt key" in got["credited_by"]
-    assert RA.tie_row({"log": [h1], "outputs": outputs}) == {"record": R.digest(h1), "values": ["pearl-a/0/0"]}
+    assert RA.tie_row({"log": [h1], "outputs": outputs}) == {"record": DD.digest(h1), "values": ["pearl-a/0/0"]}
+    c4 = {**pearl, "window": {**pearl["window"], "scheme": "pearl-c-nvfp4-v0"}}
+    assert "credited_by" not in RA.tie_row({"log": [c4], "outputs": outputs}), "pearl-c-nvfp4-v0 is not its entry's"
+    assert RA.why_not_pearl(c4) == "its scheme pearl-c-nvfp4-v0 is not the one its entry pouw:pearl-c-h100-v1-h3 names"
+    sm120 = {**pearl, "window": {**pearl["window"], "entry": "pouw:pearl-c-sm120-v1-h3", "scheme": "pearl-c-sm120-v1-h3"}}
+    assert "credited_by" not in RA.tie_row({"log": [sm120], "outputs": outputs})
+    assert RA.why_not_pearl(sm120) == ("its entry pouw:pearl-c-sm120-v1-h3 is not Pearl+'s declared option "
+                                       "pouw:pearl-c-h100-v1-h3")
+    other = {**pearl, "window": {**pearl["window"], "scheme": "pearl-c-sm120-v1-h3"}}
+    assert "credited_by" not in RA.tie_row({"log": [other], "outputs": outputs})
+    assert RA.why_not_pearl(other) == "its scheme pearl-c-sm120-v1-h3 is not the one its entry pouw:pearl-c-h100-v1-h3 names"
+    assert RA.why_not_pearl(pearl) is None
 
 
 @dataclass(frozen=True)
@@ -853,7 +863,7 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
-    win.write(win.close(), d, {"label": "test"}, registrar=R, previous=R.digest(w))
+    win.write(win.close(), d, {"label": "test"}, registrar=R, previous=DD.digest(w))
     (d.parent / "w.json").write_text(json.dumps(w))
     return SimpleNamespace(dir=d, w=w, w_file=d.parent / "w.json", name=name, entry=theirs.entry(),
                            rec=json.loads((d / "registration.json").read_text()))
@@ -903,7 +913,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     got = _tied(tmp_path / "w")
-    assert got.rec["previous"] == R.digest(got.w) and got.rec["registered"] == [{**got.entry, "value": got.name}]
+    assert got.rec["previous"] == DD.digest(got.w) and got.rec["registered"] == [{**got.entry, "value": got.name}]
     seen, owned = {}, []
 
     def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
@@ -934,13 +944,13 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     (rule, design), = ruled
     assert rule == _rate(got.dir) and design == RND.parse_design(SAMPLING_DESIGN), \
         "the stream's rule is the rate the audit was given, and the window's design the one that rate names"
-    assert tied["outputs"] == {got.name: {"record": R.digest(got.w), "value": f"h1/a/{K}@0"}} and owned == [{got.name}]
+    assert tied["outputs"] == {got.name: {"record": DD.digest(got.w), "value": f"h1/a/{K}@0"}} and owned == [{got.name}]
     assert len(seen["registered"]) == 2 and all(f["ports"]["wrow"]["root"] == got.entry["root"]
                                                  and f["ports"]["wrow"]["domain"] == got.entry["domain"]
                                                  for f in seen["registered"].values())
     summary = json.loads((tmp_path / "out" / "summary.json").read_text())
-    assert summary["tie"] == {"record": R.digest(got.w), "values": [got.name]}
-    named = {**summary["tie"], "previous": R.digest(got.w), "chained": True}
+    assert summary["tie"] == {"record": DD.digest(got.w), "values": [got.name]}
+    named = {**summary["tie"], "previous": DD.digest(got.w), "chained": True}
     assert json.loads((tmp_path / "out" / "tie.json").read_text()) == named, "named before any proof, as the TIE line"
     assert f"TIE {json.dumps(named, sort_keys=True)}" in capsys.readouterr().out
     assert not (tmp_path / "refused" / "tie.json").exists()
@@ -1280,7 +1290,7 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     assert p["free"] == 8 * per_unit - 8 * 8 * K and p["steps"] == 0
     assert p["registration"] == rec and p["answer"] == SI.answer(audit, rec) and p["answer"]["verdict"] == "accept"
-    assert program_digest(p["program"]) == rec["program"] and p["answer"]["commitment"] == R.digest(rec)
+    assert program_digest(p["program"]) == rec["program"] and p["answer"]["commitment"] == DD.digest(rec)
     ties, untied = RA.window_pins(rec["window"], doc, registration=rec)
     assert ties == {} and untied == {TIED: got.value.entry()} == RA.phase_values(rec, [TIED])
     assert RA.window_pins(rec["window"], doc) == ({}, {})
@@ -1290,9 +1300,9 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     assert RA.main(["period", "--window", str(got.dir), "--audit", str(audit), "--out", str(tmp_path / "p.json"), "--tied", TIED]) == 0
     assert json.loads((tmp_path / "p.json").read_text()) == p
     assert json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix("PERIOD ")) == {
-        "verdict": "accept", "reason": None, "free": p["free"], "commitment": R.digest(rec), "program": rec["program"]}
+        "verdict": "accept", "reason": None, "free": p["free"], "commitment": DD.digest(rec), "program": rec["program"]}
     refused = RA.period(got.dir, _audited(got.dir, tmp_path / "r", accepted=False), {}, TIED)["answer"]
-    assert refused["verdict"] == "reject" and refused["commitment"] == R.digest(rec)
+    assert refused["verdict"] == "reject" and refused["commitment"] == DD.digest(rec)
 
     other = _registered(tmp_path / "x")
     unbound = tmp_path / "u"
@@ -1461,7 +1471,7 @@ def test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it
 
     rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
                               "compiled": True}
-    receipt = {"registration": R.digest(rec), "verifier": A5.CHALLENGER, "received": 1}
+    receipt = {"registration": DD.digest(rec), "verifier": A5.CHALLENGER, "received": 1}
     assert RA.fixed_before_draw(receipt, rec, written.bound)["ok"]
     assert RA.fixed_before_draw({**receipt, "registration": "00" * 64}, rec, written.bound)["codes"] == ["after-the-draw"]
     assert RA.fixed_before_draw({**receipt, "verifier": "another stream"}, rec, written.bound)["codes"] == ["after-the-draw"]
@@ -1581,7 +1591,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
         verdicts = {"lean-verify/m0": {"accepted": False, "why": why, "of_record": True, "digest": "ab" * 64}}
         (out / "audit.json").write_text(json.dumps({"accepted": False, "verdicts": verdicts}))
         (out / "registration.json").write_text("{}")
-        (out / "receipt.json").write_text(json.dumps({"registration": RA.R.digest({}), "verifier": A5.CHALLENGER}))
+        (out / "receipt.json").write_text(json.dumps({"registration": DD.digest({}), "verifier": A5.CHALLENGER}))
         return {"draw": [0], "arm": "fw", "checks_before_draw": {"registration": True},
                 "audit": {"accepted": False, "why": {"lean-verify/m0": why}}}, False
 
@@ -1774,7 +1784,7 @@ from pathlib import Path
 sys.path.insert(0, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r})
 import records_audit as RA
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.commitments import docket_digest as DD
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, RND.parse_design({SAMPLING_DESIGN!r}), None)
@@ -1785,7 +1795,7 @@ held = {{"run": mine.run, "circuit": rec["window"]["circuit"], "compiled": v["ok
         "opening": opening, "output": json.loads((t / "c" / "compiled.json").read_text())}}
 assert v["ok"] and RA.source(rec["window"], held)["ok"]
 assert all(x["refused"] for x in RA.negatives(rec["window"], held, doc, t / "n").values())
-receipt = {{"registration": R.digest(rec), "verifier": A5.CHALLENGER}}
+receipt = {{"registration": DD.digest(rec), "verifier": A5.CHALLENGER}}
 assert RA.fixed_before_draw(receipt, rec, bound)["ok"] and RA.after_draw(receipt, rec, held)["refused"]
 from verity.circuits.defs import CATALOG_PACKAGES
 
@@ -1897,3 +1907,11 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
         theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None)), s.data, LAYER0)
         v, bound = RA.compile_check(theirs, s.bound, opening, compilers, tmp_path / "c")
         assert (v["codes"], bound is None, reads(their_rows) == reads(own_rows)) == (codes, bool(codes), same_reads), name
+
+
+@pytest.mark.parametrize("ports", [(), (SimpleNamespace(name="scan-state", value=""),),
+                                   (SimpleNamespace(name="scan-state", value="a"), SimpleNamespace(name="scan-state", value="b"))])
+def test_the_phase_own_value_is_refused_by_name_without_exactly_one_scan_state_port(ports):
+    with pytest.raises(ValueError, match="the network-attester declaration declares the port 'scan-state'"):
+        RA.port_value(SimpleNamespace(name="network-attester", ports=ports), "scan-state")
+    assert RA.PHASE_OWN == {"verity/certifier/scan-state/v1"}

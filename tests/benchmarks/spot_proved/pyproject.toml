@@ -25,4 +25,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "adapters/vllm/verity_vllm/pipeline/advice_code/format.py", "adapters/vllm/verity_vllm",
           "adapters/torch/verity_torch",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "benchmarks/spot_proved",
-          "calibration/hardware/cards"]
+          "calibration/hardware/cards",
+          "verity/device.py"]

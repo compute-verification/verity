@@ -10,9 +10,11 @@ from dataclasses import replace
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits import boolean as BL, codec
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
+from verity.protocols.resource_accounting.network.prover import n2_zk as N2
 from verity.protocols.resource_accounting.network.verifier import head_check as HC, service as SVC
 from verity.protocols.resource_accounting.network.verifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
@@ -89,7 +91,7 @@ class Run:
         return self.lw.commit(w, self.egress(egress_records()[w]), self.ingress(ingress_records()[w]), SALTS[w])
 
     def register(self, opening) -> S.WindowCommitmentRecord:
-        reg = self.lw.register(self.stream, self.lw.registration(opening, self.previous))
+        reg = self.lw.register(self.stream, N2.registration(self.lw, opening, self.previous))
         self.previous = reg.digest
         return reg
 
@@ -175,7 +177,7 @@ def test_a_gap_in_the_registration_order_rejects_the_link(tmp_path):
     run = Run(tmp_path)
     run.round(run.honest(0))
     skipped = run.honest(2)
-    reg = run.stream.register(run.lw.registration(skipped, run.previous), run.lw.ports(2))
+    reg = run.stream.register(N2.registration(run.lw, skipped, run.previous), run.lw.ports(2))
     sample = run.stream.select(reg)
     assert run.decide(sample, skipped).accepted
     verdict = run.lw.network_verdict(run.stream)
@@ -254,7 +256,7 @@ def test_the_unit_is_each_ends_head_check(tmp_path):
     public row is whole u16 words, as its witness row is."""
     lw = Run(tmp_path).lw
     assert lw.unit.id == "NetworkTransferBlocks_v5{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
-    defs = codec.encode_program(P.population_program(lw.unit, 1))["definitions"]
+    defs = codec.encode_program(PN.population_program(lw.unit, 1))["definitions"]
     pins = json.loads(HC.PINS.read_text())["digests"]
     fid = "NetworkHeadCheck_v2{L=9,T=4,COUNTS=0}"
     assert f"Gate[{fid}@{pins[fid]['sha512']}]_v2" in set(defs)
@@ -367,7 +369,7 @@ def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path)
 
     registered, query = lw._partition["program"], lw.query
     other = bind(SVC._unit(lambda *k: swapped if k == key else HC.gate(*k)), EGRESS=key, INGRESS=lw.head_key(1))
-    program = P.partition(P.population_program(other, 1), query)["program"]
+    program = P.partition(PN.population_program(other, 1), query)["program"]
     assert other.id == lw.unit.id and program != registered and lw._partition["program"] == registered
     assert lw.proved([_finding(registered)])
     assert not lw.proved([_finding(program)]) and not lw.proved([])
@@ -390,7 +392,7 @@ def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path)
 
 def test_the_domain_is_one_stages_window_domain(tmp_path):
     lw = Run(tmp_path).lw
-    part = P.partition(P.population_program(lw.unit, 1), lw.spec.check.query)
+    part = P.partition(PN.population_program(lw.unit, 1), lw.spec.check.query)
     for w in range(3):
         want = R.window_domain(part["program"], P.digest(part), VALUE, "hm96-sha512/row/v2", 4, f"r-network-test/{LINK}/{w}")
         assert lw.ports(w)[VALUE]["domain"] == want
@@ -418,7 +420,7 @@ def test_the_challenger_never_holds_a_attestation_or_a_violation_kind(tmp_path):
 
 def test_an_extra_public_field_is_refused(tmp_path):
     run = Run(tmp_path)
-    rec = run.lw.registration(run.honest(0))
+    rec = N2.registration(run.lw, run.honest(0))
     for extra in ({"deadline": 1}, {"verdict": 1}, {"charge": 7}):
         with pytest.raises(S.Refused) as e:
             run.lw.register(run.stream, {**rec, **extra})
@@ -432,7 +434,7 @@ def test_an_extra_public_field_is_refused(tmp_path):
 def test_a_attestation_in_the_clear_is_refused(tmp_path):
     run = Run(tmp_path)
     opening = run.honest(0)
-    rec = run.lw.registration(opening)
+    rec = N2.registration(run.lw, opening)
     cert = opening.records[0].certificate
     in_root = [dict(rec["roots"][0], signature=cert.signature.hex())]
     per_direction = [dict(rec["roots"][0], port=f"{VALUE}/egress"), dict(rec["roots"][0], port=f"{VALUE}/ingress")]
@@ -451,11 +453,11 @@ def test_a_attestation_in_the_clear_is_refused(tmp_path):
 def test_the_window_is_the_order(tmp_path):
     run = Run(tmp_path)
     with pytest.raises(S.Refused) as e:
-        run.lw.register(run.stream, run.lw.registration(run.honest(1)))
+        run.lw.register(run.stream, N2.registration(run.lw, run.honest(1)))
     assert e.value.verdict.codes == ("window",)
     assert run.round(run.honest(0)).accepted
     with pytest.raises(S.Refused):
-        run.lw.register(run.stream, run.lw.registration(run.honest(0), run.previous))
+        run.lw.register(run.stream, N2.registration(run.lw, run.honest(0), run.previous))
 
 
 def test_a_bad_signature_is_a_reject(tmp_path):
@@ -653,7 +655,7 @@ def test_a_head_leaf_that_isnt_its_records_head_is_a_reject(tmp_path):
     dom, key = run.lw.domain(0), hm96.SHA512.default_key
     bc = hm96.SHA512.commit_string(key, sha512_row_v2_digest(other, 8 * len(other)), opening.salts[HEADS])
     leaves[HEADS] = row_leaf(dom, HEADS, hm96.SHA512.tree_leaf(key, bc), SCHEMA)
-    rec = run.lw.registration(opening)
+    rec = N2.registration(run.lw, opening)
     rec = {**rec, "roots": [{**rec["roots"][0], "root": tree_levels(dom, leaves)[-1][0].hex()}]}
     reg = run.lw.register(run.stream, rec)
     sample = run.stream.select(reg)

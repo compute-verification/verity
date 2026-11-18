@@ -114,10 +114,10 @@ of one salt and, but under ``--test-instance`` (a test instance's passes, whose 
 alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at the scheme's named assumption (TT_OUT rev1) at ``--delta``) to ``--answer``
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
 and exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
-PouwCheck).  The document's ``check_cost`` is the check's own (`check_cost`): its wall seconds, from the sample through the
+PouwVerifier).  The document's ``check_cost`` is the check's own (`check_cost`): its wall seconds, from the sample through the
 last replayed tile, on the node it ran on and in how many processes.
 
-``lean`` is the Lean verdict of record on the run `verify` judged (`PouwCheck.PearlPlus`, ``--exe`` its ``pouw-pearlplus``,
+``lean`` is the Lean verdict of record on the run `verify` judged (`PouwVerifier.PearlPlus`, ``--exe`` its ``pouw-pearlplus``,
 or ``build``: built first in its package, `LEAN_PACKAGE`, where a build that fails answers nothing):
 the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them (``--manifest`` as it named them)
 and held to the names and SHA-256s
@@ -151,7 +151,7 @@ are its ``macs``, and their ``credited`` is at least its ``credited`` and at mos
 padding takes off past the totals' credit is the cause ``grid``.
 
 ``case`` writes, from the Lean verdict of record ``lean`` wrote (``--lean``), the parts of the run's case in the form
-remote's composite of record reads it (`PouwCheck.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
+remote's composite of record reads it (`PouwVerifier.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
 registration record, to ``--out`` (0700, its files 0600: the manifests carry the passes' salt key, and the files their
 values): ``parts.json`` (`CASE_SCHEMA`: the params, of the epoch's ``DIR/coins.json``, the document's samples and its coin
 record's four fields the protocol's params name (`CASE_RECORD`); the retained manifests, in order; the window, the
@@ -205,12 +205,12 @@ OVER_INERT_BOUND = ("reject", "uncredited")
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
 #: the verifier's record of its coin (`verify_run.verify_passes`' ``record``) and the prover's retention, in DIR
 COIN, RETENTION = "coin.json", "retention.json"
-#: the fields of the Lean `PouwCheck.PearlPlus` printout `lean` holds to the Python's verdict, as its difftest does
+#: the fields of the Lean `PouwVerifier.PearlPlus` printout `lean` holds to the Python's verdict, as its difftest does
 #: (`benchmarks/pouw/pearlplus_lean`'s ``answer``)
 LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "over_cap", "verdicts", "work", "exact_work")
 #: `lean`'s record of both verdicts, beside its answer
 LEAN_CHECK = "pearlplus-lean-check.json"
-#: ``lean --exe build``: PouwCheck.PearlPlus's Lake package, built there, and the executable the build makes
+#: ``lean --exe build``: the Lake package `pouw_pearlplus` (`PouwVerifier.PearlPlus`), built there, and the executable the build makes
 BUILD = "build"
 LEAN_PACKAGE = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
 LEAN_EXE = LEAN_PACKAGE / ".lake" / "build" / "bin" / "pouw-pearlplus"
@@ -219,7 +219,7 @@ LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
 LEAN_DISAGREES = "the Lean verdict and the Python's disagree, so no Lean answer is written"
 #: `case`'s parts of the run's case, and its directory of the files they name, each under the SHA-512 of its bytes
 CASE_SCHEMA = "verity-pouw/pearl-plus-case-parts/v1"
-#: the coin record's fields the protocol's params name (`PouwCheck.PearlPlus.Protocol.recordKeys`)
+#: the coin record's fields the protocol's params name (`PouwVerifier.PearlPlus.Protocol.recordKeys`)
 CASE_RECORD = ("commitment", "draw", "schema", "source")
 CASE_PARTS, CASE_BLOBS = "parts.json", "blobs"
 #: why `retain` and `volunteer` refuse once the verifier's coin is flipped
@@ -608,11 +608,11 @@ def retain(args: argparse.Namespace) -> int:
     if not rounds:
         return 1
     if args.window_record:
-        from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+        from verity.commitments import docket_digest as DD
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
         try:
-            before = REG.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None
+            before = DD.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None
             day = json.loads(Path(args.day_declaration).read_text()) if args.day_declaration else None
             w = PWR.write(args.window_record, served["passes"], rounds, before,
                           None if day is None else {k: day[k] for k in PWR.NAMING})
@@ -620,7 +620,7 @@ def retain(args: argparse.Namespace) -> int:
             print(f"retain FAIL: W: {type(e).__name__}: {e}", flush=True)
             return 1
         print(f"retain W: {args.window_record}, rounds {rounds[0]}..{rounds[-1]} ({len(rounds)}), {len(w['registered'])} "
-              f"values, digest {REG.digest(w)[:16]}…, chained after "
+              f"values, digest {DD.digest(w)[:16]}…, chained after "
               f"{'nothing' if before is None else before[:16] + '…'}"
               + ("" if day is None else f", naming day {day['day']}'s declaration {day['declaration'][:16]}…"), flush=True)
     return 0
@@ -768,15 +768,11 @@ def lean(args: argparse.Namespace) -> int:
     if named != doc.get("passes"):
         return done("the retained passes are not the ones the Python verdict read, by name and SHA-256", 2)
     if args.exe == BUILD:
+        from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
         try:
-            b = subprocess.run(["lake", "build", "pouw-pearlplus"], cwd=LEAN_PACKAGE, capture_output=True, text=True,
-                               check=False)
-        except OSError as e:
-            return done(f"pouw-pearlplus can't be built here: {type(e).__name__}: {e}", 2)
-        if b.returncode:
-            return done(f"pouw-pearlplus doesn't build (lake exited {b.returncode}): "
-                        f"{(b.stdout + b.stderr).strip()[-400:]}", 2)
-        exe = LEAN_EXE
+            exe = V.executable(LEAN_EXE.name, LEAN_PACKAGE)
+        except (OSError, V.LeanError) as e:
+            return done(f"pouw-pearlplus doesn't build: {type(e).__name__}: {e}", 2)
         rec["exe"] = str(exe)
     if not exe.is_file():
         return done(f"no Lean executable at {exe}", 2)
@@ -909,7 +905,7 @@ def case(args: argparse.Namespace) -> int:
         return refuse("the Lean verdict is not on the coin record's run and source")
     if any(k not in coin for k in CASE_RECORD):
         return refuse(f"the coin record lacks {', '.join(k for k in CASE_RECORD if k not in coin)}")
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+    from verity.commitments import docket_digest as DD
 
     try:
         if not doc.get("tie_record"):
@@ -918,7 +914,7 @@ def case(args: argparse.Namespace) -> int:
     except (OSError, ValueError):
         return refuse("the Python verdict held the passes to no window record W (verify --tie) this can read, and the "
                       "case's commitment names W")
-    if not isinstance(w, dict) or REG.digest(w) != (doc.get("tie") or {}).get("record"):
+    if not isinstance(w, dict) or DD.digest(w) != (doc.get("tie") or {}).get("record"):
         return refuse("the window record W is not the one the Python verdict held the passes to")
     coins = VR.epoch_coins(passes / "coins.json")
     loaded = [VR.load(p, coins) for p in paths]

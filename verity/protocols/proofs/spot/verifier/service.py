@@ -168,6 +168,8 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Callable, Iterable, Mapping, NoReturn, Sequence, TypeVar
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.partition import Level
@@ -1589,7 +1591,7 @@ class Stream:
     challenger builds each docket's population program from it and the docket's N. Or `unit` is a window's
     templates, a sequence of Definitions (a TP rank's served window: each provable family of the step): the check's
     `program` is their digests and its query `Q_template_instances` over them, both in the window's order, and each
-    docket's population program is their mixed population (`partition.mixed_population_program`) at the counts
+    docket's population program is their mixed population (`population.mixed_population_program`) at the counts
     `register` is given, under one sample by the Spec's sampling design (`stratified:K`: a stratum per template, each sampled at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
     verifier's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
@@ -1634,7 +1636,7 @@ class Stream:
     history (`_earlier`), with the verdicts the whole log gives.
 
     A window's stream may take `values`, the values its mixed population takes ahead of its templates' parameters
-    (`partition.mixed_population_program`'s, `(name, leaves, width)` each, `width` an integer or a leaf type's shape, a
+    (`population.mixed_population_program`'s, `(name, leaves, width)` each, `width` an integer or a leaf type's shape, a
     `Digest`'s `(8, 64, 1)`), which a registration registers as its program's (R7, which reads each by its type: a
     supplied value of `Digest`s in Digest order); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
     the window's Program where it is another form than the mixed population (the network attester's scan in its
@@ -1699,7 +1701,7 @@ class Stream:
             raise ValueError("a stream's per-span values are a two-stage window's interior values: give its unit as a "
                              "sequence of templates and its replay block")
         if values or span_values:
-            P.mixed_population_program([(u, 1) for u in units], values=values + span_values)
+            PN.mixed_population_program([(u, 1) for u in units], values=values + span_values)
         if program is not None:
             if isinstance(unit, SpecializedDefinition) or values or replay is not None:
                 raise ValueError("a stream's program is a window's, of its templates, given in place of their mixed "
@@ -1714,7 +1716,7 @@ class Stream:
                 raise ValueError(f"the window's program's proof blocks are not one range a template, in the window's "
                                  f"order: its ranges are {got}")
         try:
-            earlier = [(dict(r), R.digest(r)) for r in log]
+            earlier = [(dict(r), DD.digest(r)) for r in log]
             R.held_roots(r for r, _d in earlier)
         except (AttributeError, KeyError, TypeError, ValueError) as e:
             raise ValueError("a stream's earlier log is the prover's records, each a JSON object whose registered "
@@ -2075,7 +2077,7 @@ class Stream:
         `program` where its ranges are `counts`; None when `counts` don't fit the stream. A two-stage stream's is
         `replay`'s N instances, its replay blocks."""
         if self.templates is None or self.replay is not None:
-            return P.population_program(self.replay or self.unit, n) if counts is None else None
+            return PN.population_program(self.replay or self.unit, n) if counts is None else None
         ids = [P.template_id(t) for t in self.templates]
         if not (isinstance(counts, Mapping) and set(counts) == set(ids)
                 and all(type(counts[i]) is int and counts[i] >= 1 for i in ids) and sum(counts.values()) == n):
@@ -2083,7 +2085,7 @@ class Stream:
         if self.program is not None:
             ranges = {tid: m for tid, _lo, m in P.ranges(self.program, self.query)}
             return self.program if ranges == dict(counts) else None
-        return P.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values)
+        return PN.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values)
 
     def _public(self, record: Mapping[str, Any], interior: bool = False) -> Verdict:
         """`check_public` by the verifier (`verifier.check_public`): on a docket's values under its query, or on
@@ -2102,7 +2104,7 @@ class Stream:
                       received_at: float | None = None, fanout: int | None = None,
                       rests_on_period_check: tuple[str, ...] = (), returned: int | None = None) -> WindowCommitmentRecord:
         return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      R.digest(record), order, salted_at, received_at, fanout, rests_on_period_check,
+                                      DD.digest(record), order, salted_at, received_at, fanout, rests_on_period_check,
                                       returned)
 
     def _returned(self, program: Program) -> int | None:
@@ -2236,9 +2238,9 @@ class Stream:
         `span_values`, each at its leaves times Q."""
         assert self.n_rho is not None
         if self.templates is None:
-            return P.population_program(self.unit, q * self.n_rho)
+            return PN.population_program(self.unit, q * self.n_rho)
         spans = tuple((name, leaves * q, width) for name, leaves, width in self.span_values)
-        return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
+        return PN.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
                                           values=self.values + spans)
 
     def _sampled_op(self, draw: Draw) -> dict[str, Any]:
