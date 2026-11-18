@@ -254,6 +254,21 @@ def field(tmp_path_factory):
     return d, _stage(FIELD, d, True, TWO_FIELDS)
 
 
+@pytest.fixture(scope="module")
+def unchecked(tmp_path_factory):
+    """Stagings of a prover that skips its own field check (`CS._link_frame`): a reader of part of its writer's one return
+    field (``part``), and one of both of `TWO_FIELDS`' fields in one link (``fields``)."""
+    CS.cache_slot_circuits()
+    checked = CS._link_frame
+    CS._link_frame = lambda uc, starts, group, at: (sum(CS._words(w) for w in uc.out_widths[:at]),
+                                                    sum(CS._words(w) for w in uc.out_widths))
+    try:
+        return {k: (d, _stage(topo, d, True, unit)) for k, topo, unit in (("part", PART, U.UniversalUnit), ("fields", FIELDS, TWO_FIELDS))
+                for d in [tmp_path_factory.mktemp(k)]}
+    finally:
+        CS._link_frame = checked
+
+
 def _meta(d: Path) -> dict:
     return json.loads((d / "circuit.txt").read_text().split("\n", 2)[1][5:])
 
@@ -444,6 +459,31 @@ def test_lean_accepts_a_read_of_one_return_field_and_refuses_a_made_up_one(field
         assert ok is not None and f"Linking checked: {N} cut wire(s)" in ok["partition_check"]["note"], (name, out)
     bad, out = at("made_up", "readers.reads.json")
     assert bad is None and NOT_OPEN in out, out
+    # the right field at another offset: the writer's first field, of the same leaves, holds other values
+    _edit_meta(d / "honest", d / "wrong_at", lambda m: m["links"][0].pop(FC.LINK_AT))
+    bad, out = at("wrong_at", "readers.reads.json")
+    print("wrong_at", out.strip().splitlines()[-1])
+    assert bad is None and "are not unit 0's field [0, 1), in order" in out, out
+    # the right field of another writer unit than the program wires
+    bad, out = at("other_leaf", "readers.reads.json")
+    print("other_leaf", out.strip().splitlines()[-1])
+    assert bad is None and "and the verifier's program reads" in out, out
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+@pytest.mark.parametrize("name,why", [("part", "read unit 0's outputs [1, 2), which are not one whole return field"),
+                                      ("fields", "read unit 0's outputs [0, 2), which are not one whole return field")])
+def test_lean_refuses_a_link_of_part_of_a_field_or_of_two_its_prover_staged_unchecked(unchecked, name, why):
+    d, _st = unchecked[name]
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
+    bound = ["--partition", str(d / "partition.json"), "--program", str(d / "program.desc")]
+    ok, out = _lean("--circuit", str(d / "writers" / "circuit.txt"), "--public", str(d / "writers" / f"pub-{N}.bin"), *bound,
+                    "--registered", str(d / "writers.reads.json"))
+    assert ok is not None, out
+    bad, out = _lean("--circuit", str(d / "honest" / "circuit.txt"), "--public", str(d / "honest" / f"pub-{N}.bin"), *bound,
+                     "--registered", str(d / "readers.reads.json"))
+    print(name, out.strip().splitlines()[-1])
+    assert bad is None and why in out, out
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
