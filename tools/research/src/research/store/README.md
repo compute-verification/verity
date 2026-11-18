@@ -219,8 +219,8 @@ edges(src, name, dst)                refs.*, inputs.*, outputs.*, telemetry.*, a
 listings(prefix, listed_at, keys)    the last listing of each prefix: the index is complete as of listed_at
 ~~~
 
-`index(remote, db)` lists `manifests/`, `labels/` and the runs after the newest indexed one (a full `attempts/` listing
-hourly), reads only what it lacks, checks each record against its key (a failure is reported, left out, read again next pass)
+`index(remote, db)` lists `manifests/`, `labels/` and the runs from two days before the newest indexed one, since a run is
+stored when it ends (a full `attempts/` listing hourly, for one published by hand later), reads only what it lacks, checks each record against its key (a failure is reported, left out, read again next pass)
 and never touches `objects/`. One pass and pass by pass agree. `index(public, db, policy=PUBLIC,
 private=db)` rebuilds the public tables: the artifacts whose manifests are in the public bucket, their producing runs cut to
 `PUBLIC_RUN_FIELDS`, and the `verified` / `verifier` / `proof_class` labels on them without `ref`; every cut is a whitelist.
