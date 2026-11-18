@@ -84,6 +84,8 @@ TMPL_SECTION = "TEMPLATE"
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW_SCHEMA = HM96_SHA512_ROW_V1
 INST_FORMAT = "flock-circuit-inputs"
+#: META ``links``' key of a link's offset: the first of the writer's outputs its leaves read, written only where it is not 0
+LINK_AT = "at"
 #: Each row tree's frame domain: owner ``OWNER``, binding ``identity_digest_sha512(BINDING_TAG, {set, lo, hi, port, schema})``
 #: (64 bytes), so a root is bound to its input set, its range of instances, its port and the port's row schema.
 BINDING_TAG = FLOCK_CIRCUIT_BINDING
@@ -730,9 +732,10 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     regions (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_blocks`).
     The data guard counts a port whose derivation it does not list as data (``verity.circuits.operations.public_data``).
 
-    ``links`` (``[{"port", "leaves": [lo, hi]}]``, META ``links``, `HmOut`): input rows that hold template parameter
-    leaves ``[lo, hi)`` as an output row holds outputs (a word per leaf), so that a reader whose leaves are another unit's outputs
-    commits its writer's output row; the verifiers compare the two rows' ``b || c``. ``definition``: META ``definition``, the
+    ``links`` (``[{"port", "leaves": [lo, hi], "at"?}]``, META ``links``, `HmOut`): input rows that hold template parameter
+    leaves ``[lo, hi)`` as an output row holds outputs ``at``, ``at + 1``, … (a word per leaf; ``at`` 0 without the key), so
+    that a reader whose leaves are another unit's outputs commits its writer's whole output row; the verifiers compare the
+    two rows' ``b || c``. ``definition``: META ``definition``, the
     descriptor id of the Definition the unit lowers, which a template query may list (a size class's own template id is
     ``unit-class/...``). ``extra_meta``: keys a statement adds to META for its verifier (`rec_residuals.HOLO_KEY`), none of
     them one META already has.
@@ -801,9 +804,11 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         named = {p.name: p for p in ins}
         seen: list[tuple[int, int]] = []
         for x in links:
-            p, lohi = named.get(x.get("port")), x.get("leaves")
-            if set(x) != {"port", "leaves"} or p is None or not (isinstance(lohi, list) and len(lohi) == 2 and 0 <= lohi[0] < lohi[1]):
-                raise ValueError(f"link {x}: an input row and a leaf range [lo, hi)")
+            p, lohi, at = named.get(x.get("port")), x.get("leaves"), x.get(LINK_AT, 1)
+            if (not {"port", "leaves"} <= set(x) <= {"port", "leaves", LINK_AT} or p is None or type(at) is not int or at < 1
+                    or not (isinstance(lohi, list) and len(lohi) == 2 and 0 <= lohi[0] < lohi[1])):
+                raise ValueError(f"link {x}: an input row, a leaf range [lo, hi) and, where it is not 0, the offset of the "
+                                 "writer's outputs they read")
             if len(orows) != 1 or p.bits is not None or p.words != orows[0].words or any(a < lohi[1] and lohi[0] < b for a, b in seen):
                 raise ValueError(f"link {x}: a u16 row of the one output row's words, its leaves disjoint from every other link's")
             seen.append(tuple(lohi))
