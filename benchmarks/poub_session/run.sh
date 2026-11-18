@@ -89,8 +89,8 @@
 #      no GPU visible (STAGES, default
 #      build,commit, in a config run, CONFIG_RUN default 1: the Build, the word check and one instrumented Commit,
 #      the run the session audits; BUILD_GPU=1 leaves the Build to the lease) in SWEEP_DIR (default: scratch removed
-#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; the row's records under 1 MiB are kept in
-#      out/row). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
+#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; never inside the run's directory: the row's
+#      public records, keep.py's ROW, are kept in out/row, and nothing else of it). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
 #      holds no vLLM), CUDA_HOME/bin (--cuda-bin) and ROW_ARGS (such as --norm-tap-so PATH);
 #   3. ROLE=both: builds the Lean verifier (LEAN_EXE: that executable instead), starts the verifier on VERIFIER_CPUS
 #      and goes on once it listens;
@@ -319,6 +319,18 @@ if [ "${SERVE:-}" = node ] && [ "$ROLE" = both ]; then
   lean_exe
   VERIFY+=(--lean-exe "$LEAN_EXE")
 fi
+eval "KEYARGS=(${VERIFIER_ARGS:-})"
+for ((k = 0; k < ${#KEYARGS[@]}; k++)); do
+  case ${KEYARGS[k]} in
+    --challenger-key=*) KEYDIR=${KEYARGS[k]#*=} ;;
+    --challenger-key) KEYDIR=${KEYARGS[k + 1]:-} ;;
+    *) continue ;;
+  esac
+  case $(realpath -m "$KEYDIR")/ in
+    "$(realpath -m "$RESEARCH_RUN_DIR")"/*) refuse "--challenger-key $KEYDIR is inside the run's directory, which custody" \
+      "uploads: the challenger's key directory holds its seed; give one outside it" ;;
+  esac
+done
 if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
@@ -413,15 +425,19 @@ card_free() { # NOWAIT=1 with GPU: 75 where a compute process is on those cards,
 }
 if [ -n "$SERVED" ]; then
   card_free || exit 75
-  keep_row() { # the row's records under 1 MiB, into out/row
+  keep_row() { # the row's public records (keep.py's ROW), into out/row
     [ -d "$SWEEP/$ROW" ] || return 0
-    mkdir -p "$O/row" && (cd "$SWEEP/$ROW" && find . -type f -size -1024k -print0 | xargs -0 -r cp --parents -t "$O/row")
+    "$PY" $RS/keep.py row "$SWEEP/$ROW" "$O/row"
   }
   drop_connection() { # a verifier still waiting for its prover ends at a connection opened and dropped
     (exec 3<> "/dev/tcp/127.0.0.1/$PORT") 2> /dev/null
   }
   if [ "$SERVED" = row ]; then
     SWEEP=${SWEEP_DIR:-$B/sweep}
+    case $(realpath -m "$SWEEP")/ in
+      "$(realpath -m "$RESEARCH_RUN_DIR")"/*) refuse "SWEEP_DIR=$SWEEP is inside the run's directory, which custody uploads:" \
+        "the row's Commit directory holds private files (its tokens, replays and timelines); give a scratch directory" ;;
+    esac
     mkdir -p "$SWEEP" || refuse "SWEEP_DIR=$SWEEP can't be made"
     export NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-$B/nc_build} CONFIG_RUN=${CONFIG_RUN:-1}
     read -r CK REPO REV _ < <("$VV" epoch resolve "$ROW")
