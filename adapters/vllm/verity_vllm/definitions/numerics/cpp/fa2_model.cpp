@@ -103,7 +103,6 @@ struct Fa2Cfg {
     float scale_log2; // params.scale_softmax_log2 = float(float(softmax_scale) * M_LOG2E)
     const uint32_t* ex2_tab;
     const uint32_t* rcp_tab;
-    int variant;      // dataflow-hypothesis switches (0 = the kernel as read from the source; see fa2_rows)
     const Params* tc; // the tensor-core step: AMPERE_BF16 (mma.sync, FA2) or HOPPER_BF16_WGMMA (wgmma, FA3)
     float inv_degenerate; // inv_sum when sum == 0 or NaN: FA2 `? 1.f` (softmax.h normalize_softmax_lse), FA3 `? 0.f` (hopper/softmax.h finalize)
 };
@@ -111,12 +110,8 @@ struct Fa2Cfg {
 // One output row.  q: D words.  K/V: key rows for this row's KV head, row `col` at
 // K + col * kv_stride (words).  col_limit: number of visible keys (causal: pos + 1); seqlen_k: the
 // kernel's actual_seqlen_k (block range); n_block_max as the kernel computes it for this row's m_block.
-// dbg (optional, per row): dbg_s[n_block_max*kBlockN] S words, dbg_p[...] P (fp32 words before the
-// BF16 cast), dbg_m[n_block_max] running max after each block (in processing order), dbg_l[4] final
-// lane sums, dbg_o_pre[D] O before normalisation.
 void fa2_row(const Fa2Cfg& C, const uint16_t* q, const uint16_t* K, const uint16_t* V, long kv_stride,
-             int col_limit, int n_block_max, uint16_t* out, uint32_t* out_f32,
-             uint32_t* dbg_s, uint32_t* dbg_p, uint32_t* dbg_m, uint32_t* dbg_l, uint32_t* dbg_o_pre, uint8_t* flag) {
+             int col_limit, int n_block_max, uint16_t* out, uint32_t* out_f32, uint8_t* flag) {
     const int D = C.D, BN = C.kBlockN, ksteps = D / 16;
     // flag bit 0: a non-finite intermediate (S overflow / inf / NaN in S, P, the rescale factor, the row sums or
     // O) occurred.  The shared MMA model saturates instead of following IEEE inf/NaN rules and the kernel's
@@ -136,7 +131,7 @@ void fa2_row(const Fa2Cfg& C, const uint16_t* q, const uint16_t* K, const uint16
     float l_pending_sc[4] = {1.f, 1.f, 1.f, 1.f};
     bool first = true;
     for (int step = 0; step < n_block_max; ++step) {
-        int nb = (C.variant & 64) ? step : (n_block_max - 1 - step);
+        int nb = n_block_max - 1 - step;
         // S = Q K^T for this block (8 mma k-steps of 16 over the head dim, accumulator starts at 0)
         float bmax = -INFINITY;
         for (int c = 0; c < BN; ++c) {
@@ -144,17 +139,14 @@ void fa2_row(const Fa2Cfg& C, const uint16_t* q, const uint16_t* K, const uint16
             if (col < col_limit) {
                 Term acc{false, 0, 0};
                 const uint16_t* krow = K + (long)col * kv_stride;
-                for (int ii = 0; ii < ksteps; ++ii) {
-                    int i = (C.variant & 4) ? (ksteps - 1 - ii) : ii;
+                for (int i = 0; i < ksteps; ++i)
                     if (tc_step<true>(acc, q + 16 * i, krow + 16 * i, *C.tc)) break;
-                }
                 s[c] = f32(pack_fp32(acc));
                 chk(s[c]);
             } else {
                 s[c] = -INFINITY;
             }
             bmax = std::max(bmax, s[c]);  // MaxOp<float> = max(x, y); no NaNs expected
-            if (dbg_s) dbg_s[nb * BN + c] = u32(s[c]);
         }
         float m_new = first ? bmax : std::max(m, bmax);
         if (!first) {
@@ -164,41 +156,29 @@ void fa2_row(const Fa2Cfg& C, const uint16_t* q, const uint16_t* K, const uint16
             // The compiled kernel contracts `row_sum *= scores_scale; row_sum += p[first col]` into ONE FFMA per
             // lane (nvcc fmad contraction across the inlined statements; confirmed in the serving SASS:
             // `FFMA.FTZ R118, R100, R171, R118` = scores_scale * l_old + p_first).  So the rescaled partial sum
-            // is never rounded on its own.  Variant bit 128 restores the source-literal FMUL-then-FADD form.
-            if (C.variant & 128) { for (int i = 0; i < 4; ++i) l[i] = fmul_ftz(l[i], sc); }
-            else { for (int i = 0; i < 4; ++i) l_pending_sc[i] = sc; }
+            // is never rounded on its own.
+            for (int i = 0; i < 4; ++i) l_pending_sc[i] = sc;
             for (int d = 0; d < D; ++d) o[d] = u32(fmul_ftz(f32(o[d]), sc));
         }
         float max_scaled = (m_new == -INFINITY) ? 0.f : fmul_ftz(m_new, C.scale_log2);
         for (int c = 0; c < BN; ++c) {
-            if (C.variant & 32) p[c] = mufu_ex2(fsub_ftz(fmul_ftz(s[c], C.scale_log2), max_scaled), C.ex2_tab);
-            else p[c] = mufu_ex2(ffma_ftz(s[c], C.scale_log2, -max_scaled), C.ex2_tab);
-            if (dbg_p) dbg_p[nb * BN + c] = u32(p[c]);
+            p[c] = mufu_ex2(ffma_ftz(s[c], C.scale_log2, -max_scaled), C.ex2_tab);
             chk(p[c]);
         }
         for (int c = 0; c < BN; ++c) pb[c] = f32_to_bf16_rne(u32(p[c]), 0x7FFF);
         // per-lane partial sums: lane qd owns columns 8*nj + 2*qd + j (j fastest), sequential FADD
-        if (C.variant & 8) {
-            for (int c = 0; c < BN; ++c) l[0] = fadd_ftz(l[0], (C.variant & 16) ? bf16_f32(pb[c]) : p[c]);
-        } else if (C.variant & 1) {
-            for (int qd = 0; qd < 4; ++qd)
-                for (int j = 0; j < 2; ++j)
-                    for (int nj = 0; nj < BN / 8; ++nj) l[qd] = fadd_ftz(l[qd], (C.variant & 16) ? bf16_f32(pb[8 * nj + 2 * qd + j]) : p[8 * nj + 2 * qd + j]);
-        } else {
-            for (int qd = 0; qd < 4; ++qd)
-                for (int nj = 0; nj < BN / 8; ++nj)
-                    for (int j = 0; j < 2; ++j) {
-                        float pv = (C.variant & 16) ? bf16_f32(pb[8 * nj + 2 * qd + j]) : p[8 * nj + 2 * qd + j];
-                        if (!(C.variant & 128) && nj == 0 && j == 0 && !first) l[qd] = ffma_ftz(l[qd], l_pending_sc[qd], pv);
-                        else l[qd] = fadd_ftz(l[qd], pv);
-                    }
-        }
+        for (int qd = 0; qd < 4; ++qd)
+            for (int nj = 0; nj < BN / 8; ++nj)
+                for (int j = 0; j < 2; ++j) {
+                    float pv = p[8 * nj + 2 * qd + j];
+                    if (nj == 0 && j == 0 && !first) l[qd] = ffma_ftz(l[qd], l_pending_sc[qd], pv);
+                    else l[qd] = fadd_ftz(l[qd], pv);
+                }
         // O += P V  (4 mma k-steps of 16 keys; V rows beyond seqlen_k are zero-filled by the kernel,
         // rows in [col_limit, seqlen_k) are real data multiplied by P = 0)
         for (int d = 0; d < D; ++d) {
             Term acc = fp32_term(o[d]);
-            for (int ii = 0; ii < BN / 16; ++ii) {
-                int i = (C.variant & 2) ? (BN / 16 - 1 - ii) : ii;
+            for (int i = 0; i < BN / 16; ++i) {
                 for (int t = 0; t < 16; ++t) {
                     int col = nb * BN + 16 * i + t;
                     vcol[t] = (col < col_limit) ? V[(long)col * kv_stride + d] : (uint16_t)0;
@@ -209,16 +189,13 @@ void fa2_row(const Fa2Cfg& C, const uint16_t* q, const uint16_t* K, const uint16
             chk(f32(o[d]));
         }
         m = m_new;
-        if (dbg_m) dbg_m[nb] = u32(m);
         first = false;
     }
     float sum = fadd_ftz(fadd_ftz(l[0], l[2]), fadd_ftz(l[1], l[3]));
     chk(sum);
     if (flag) *flag = nf;
     float inv = (sum == 0.f || sum != sum) ? C.inv_degenerate : mufu_rcp(sum, C.rcp_tab);
-    if (dbg_l) for (int i = 0; i < 4; ++i) dbg_l[i] = u32(l[i]);
     for (int d = 0; d < D; ++d) {
-        if (dbg_o_pre) dbg_o_pre[d] = o[d];
         float v = fmul_ftz(f32(o[d]), inv);
         if (out_f32) out_f32[d] = u32(v);
         out[d] = f32_to_bf16_rne(u32(v), 0x7FFF);
@@ -232,29 +209,16 @@ extern "C" {
 // Batch of output rows.  Q: [nrows, D] words (one head's query per row).  K, V: [Lk, KVH, D] words
 // (the fixture's canonical KV rows); row i reads KV head kvh[i].  col_limit[i] visible keys,
 // n_block_max[i] the kernel's block count for that row's m_block.  Outputs [nrows, D].
-// dbg_* may be NULL; when given they are [nrows, max_blocks*kBlockN] / [nrows, max_blocks] / [nrows, 4] / [nrows, D].
 void fa2_rows(const uint16_t* Q, const uint16_t* K, const uint16_t* V, int KVH, int D, const int* kvh,
               const int* col_limit, const int* n_block_max, int nrows, int kBlockN, float scale_log2,
-              const uint32_t* ex2_tab, const uint32_t* rcp_tab, uint16_t* out, uint32_t* out_f32,
-              uint32_t* dbg_s, uint32_t* dbg_p, uint32_t* dbg_m, uint32_t* dbg_l, uint32_t* dbg_o_pre, int max_blocks,
-              int variant, uint8_t* flags) {
-    // variant bits (hypothesis tests; 0 = kernel as read from the source): 1 lane-sum order nj-fastest;
-    // 2 PV k-steps reversed; 4 QK k-steps reversed; 8 single sequential row sum (no lanes); 16 row sum over
-    // BF16-rounded P; 32 FMUL+FSUB instead of FFMA for the exp2 argument; 64 blocks ascending; 128 source-literal
-    // row-sum rescale (FMUL then FADD) instead of the compiled FFMA contraction.  Every bit was measured to be
-    // WRONG against the serving kernel on the natural fixture (see results/<id>/dataflow_variants.json).
-    Fa2Cfg C{D, kBlockN, scale_log2, ex2_tab, rcp_tab, variant, &AMPERE_BF16, 1.f};
+              const uint32_t* ex2_tab, const uint32_t* rcp_tab, uint16_t* out, uint32_t* out_f32, uint8_t* flags) {
+    Fa2Cfg C{D, kBlockN, scale_log2, ex2_tab, rcp_tab, &AMPERE_BF16, 1.f};
 #pragma omp parallel for schedule(dynamic, 1)
     for (int i = 0; i < nrows; ++i) {
         const uint16_t* Kh = K + (long)kvh[i] * D;
         const uint16_t* Vh = V + (long)kvh[i] * D;
         fa2_row(C, Q + (long)i * D, Kh, Vh, (long)KVH * D, col_limit[i], n_block_max[i], out + (long)i * D,
-                out_f32 ? out_f32 + (long)i * D : nullptr,
-                dbg_s ? dbg_s + (long)i * max_blocks * kBlockN : nullptr,
-                dbg_p ? dbg_p + (long)i * max_blocks * kBlockN : nullptr,
-                dbg_m ? dbg_m + (long)i * max_blocks : nullptr,
-                dbg_l ? dbg_l + (long)i * 4 : nullptr,
-                dbg_o_pre ? dbg_o_pre + (long)i * D : nullptr, flags ? flags + i : nullptr);
+                out_f32 ? out_f32 + (long)i * D : nullptr, flags ? flags + i : nullptr);
     }
 }
 
@@ -276,27 +240,20 @@ void fa2_rows(const uint16_t* Q, const uint16_t* K, const uint16_t* V, int KVH, 
 // P(n+1) V(n+1)'s gemm in fwd_step(n-1) (and the tail): the same O = O * scale + P V per element, so the same recurrence.
 void fa3_rows(const uint16_t* Q, const uint16_t* K, const uint16_t* V, int KVH, int D, const int* kvh,
               const int* col_limit, const int* n_block_max, int nrows, int kBlockN, float scale_log2,
-              const uint32_t* ex2_tab, const uint32_t* rcp_tab, uint16_t* out, uint32_t* out_f32,
-              uint32_t* dbg_s, uint32_t* dbg_p, uint32_t* dbg_m, uint32_t* dbg_l, uint32_t* dbg_o_pre, int max_blocks,
-              int variant, uint8_t* flags) {
+              const uint32_t* ex2_tab, const uint32_t* rcp_tab, uint16_t* out, uint32_t* out_f32, uint8_t* flags) {
     bool const hd128 = (kBlockN == 128 || kBlockN == 192) && (D == 64 || D == 128);
     bool const hd256 = kBlockN == 80 && D == 256;
     if (!hd128 && !hd256) {  // flag bit 1: refused
         if (flags) for (int i = 0; i < nrows; ++i) flags[i] = 2;
         return;
     }
-    Fa2Cfg C{D, kBlockN, scale_log2, ex2_tab, rcp_tab, variant, &HOPPER_BF16_WGMMA, 0.f};
+    Fa2Cfg C{D, kBlockN, scale_log2, ex2_tab, rcp_tab, &HOPPER_BF16_WGMMA, 0.f};
 #pragma omp parallel for schedule(dynamic, 1)
     for (int i = 0; i < nrows; ++i) {
         const uint16_t* Kh = K + (long)kvh[i] * D;
         const uint16_t* Vh = V + (long)kvh[i] * D;
         fa2_row(C, Q + (long)i * D, Kh, Vh, (long)KVH * D, col_limit[i], n_block_max[i], out + (long)i * D,
-                out_f32 ? out_f32 + (long)i * D : nullptr,
-                dbg_s ? dbg_s + (long)i * max_blocks * kBlockN : nullptr,
-                dbg_p ? dbg_p + (long)i * max_blocks * kBlockN : nullptr,
-                dbg_m ? dbg_m + (long)i * max_blocks : nullptr,
-                dbg_l ? dbg_l + (long)i * 4 : nullptr,
-                dbg_o_pre ? dbg_o_pre + (long)i * D : nullptr, flags ? flags + i : nullptr);
+                out_f32 ? out_f32 + (long)i * D : nullptr, flags ? flags + i : nullptr);
     }
 }
 

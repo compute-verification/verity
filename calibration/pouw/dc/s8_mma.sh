@@ -4,18 +4,24 @@
 # scratch (their sha256 is kept; s8_mma.py gen rebuilds the cases from the seed).
 #
 #   research run --on H200 --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=LANE -- bash calibration/pouw/dc/s8_mma.sh sm90 [FAMILY ...]      (sm100 on a B200)
+#     --env GPU_LEASE_WHO=LANE -- bash calibration/pouw/dc/s8_mma.sh [FAMILY ...]      (or on a B200)
 #
-# sm90 runs families mma (mma.sync m16n8k32), wg (wgmma m64n8k32) and wg64, wg128, wg256 (wgmma m64nNk32); sm100 runs mma
-# and tc (tcgen05.mma kind::i8); FAMILY ... runs those alone. `s8_mma.sh build sm90|sm100` on a CPU node only compiles:
-# out/s8_mma_<arch>, its .nvcc sidecar (nvcc --version) and its SASS; S8_MMA_BIN=<that binary, shipped with its sidecar>
-# then runs it instead of compiling here. Exit: 0 every form of every family matches the sm_120 model with one tensor
-# instruction a kernel, 1 a mismatch, 2 wrong device or no nvcc, 4 build or case generation failed, else the GPU part's code.
+# The card is the one the run opened: its card record's `arch` is the target (probe.py arch) and its architecture file
+# nvcc's -gencode (probe.py gencode). sm_90a runs families mma (mma.sync m16n8k32), wg (wgmma m64n8k32) and wg64, wg128,
+# wg256 (wgmma m64nNk32); sm_100a runs mma and tc (tcgen05.mma kind::i8); another target is refused before anything is
+# built. FAMILY ... runs those alone. `s8_mma.sh build SKU` on a CPU node only compiles, for the card file
+# calibration/hardware/cards/SKU.toml: out/s8_mma_<arch>, its .nvcc sidecar (nvcc --version) and its SASS;
+# S8_MMA_BIN=<that binary, shipped with its sidecar> then runs it instead of compiling here. Exit: 0 every form of every
+# family matches the sm_120 model with one tensor instruction a kernel, 1 a mismatch, 2 wrong device or no nvcc, 4 build
+# or case generation failed, else the GPU part's code.
 set -uo pipefail
 MODE=run
-[ "${1:-}" = build ] && { MODE=build; shift; }
-FAM=${1:?usage: s8_mma.sh [build] sm90|sm100 [FAMILY ...]}
-shift
+CARD=()
+if [ "${1:-}" = build ]; then
+  MODE=build
+  CARD=(--sku "${2:?usage: s8_mma.sh build SKU, the card file to build for (calibration/hardware/cards/SKU.toml)}")
+  shift 2
+fi
 export O=${RESEARCH_RUN_DIR:?run under research run}/out
 mkdir -p "$O"
 HERE=calibration/pouw/dc
@@ -23,14 +29,16 @@ NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 [ -x "$NVCC" ] || { echo "s8_mma.sh: no nvcc at $NVCC (cuobjdump is beside it)" >&2; exit 2; }
 export PATH="$(dirname "$NVCC"):$PATH" PYTHONPATH=$PWD PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=8
 PY=${PY:-python3}
-case "$FAM" in
-  sm90) ARCH=90a; CC=9; FAMS=${*:-mma wg wg64 wg128 wg256} ;;
-  sm100) ARCH=100a; CC=10; FAMS=${*:-mma tc} ;;
-  *) echo "s8_mma.sh: sm90 or sm100, not $FAM" >&2; exit 2 ;;
+ARCH=$("$PY" "$HERE/../opcode_probe/probe.py" arch "${CARD[@]}") || exit 2
+case "$ARCH" in
+  sm_90a) FAMS=${*:-mma wg wg64 wg128 wg256} ;;
+  sm_100a) FAMS=${*:-mma tc} ;;
+  *) echo "s8_mma.sh: the card's target is $ARCH, and s8_mma has forms for sm_90a and sm_100a only: nothing built" >&2; exit 2 ;;
 esac
+GENCODE=$("$PY" "$HERE/../opcode_probe/probe.py" gencode "${CARD[@]}") || exit 2
 build() {  # $1: the binary; writes $1.nvcc beside it
   "$NVCC" --version | tail -2 > "$1.nvcc"
-  "$NVCC" -O2 -std=c++17 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -Xptxas -v -o "$1" "$HERE/probes/s8_mma.cu" \
+  "$NVCC" -O2 -std=c++17 -gencode "$GENCODE" -Xptxas -v -o "$1" "$HERE/probes/s8_mma.cu" \
     > "$O/ptxas.txt" 2>&1 || { tail -40 "$O/ptxas.txt"; echo "build 4" | tee "$O/status.txt"; exit 4; }
 }
 sass() {
@@ -38,13 +46,11 @@ sass() {
   grep -E 'Function|MMA|IDP' "$O/sass.txt" > "$O/sass_mma.txt"
 }
 if [ "$MODE" = build ]; then
-  build "$O/s8_mma_$ARCH"
-  sass "$O/s8_mma_$ARCH"
+  build "$O/s8_mma_${ARCH#sm_}"
+  sass "$O/s8_mma_${ARCH#sm_}"
   echo "build 0" | tee "$O/status.txt"
   exit 0
 fi
-have=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
-[ "${have%%.*}" = "$CC" ] || { echo "s8_mma.sh: $FAM needs compute capability $CC.x, the device reports '$have'" >&2; exit 2; }
 export B; B=$(mktemp -d /tmp/s8-mma.XXXXXX); trap 'rm -rf "$B"' EXIT
 git rev-parse HEAD > "$O/tree.txt" 2>/dev/null || true
 if [ -n "${S8_MMA_BIN:-}" ]; then
