@@ -22,7 +22,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
 
-from verity.protocols.resource_accounting.memory.poub import SCHEME
+from verity.protocols.resource_accounting.memory.poub.scheme import SCHEME
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, receipts, wire
 from verity.protocols.resource_accounting.memory.pous.prover.period_prover import records

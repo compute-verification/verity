@@ -1,11 +1,11 @@
-"""PoUB's declaration as a resource scheme (`verity.protocols.resource_accounting.memory.poub.SCHEME`)."""
+"""PoUB's declaration as a resource scheme (`verity.protocols.resource_accounting.memory.poub.scheme.SCHEME`)."""
 
 from __future__ import annotations
 
 import pytest
 
 from verity.protocols.resource_accounting import scheme as S
-from verity.protocols.resource_accounting.memory import poub
+from verity.protocols.resource_accounting.memory.poub import scheme as poub
 from verity.protocols.resource_accounting.memory.poub.verifier import p2, p2_parties
 
 
