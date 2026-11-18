@@ -127,7 +127,10 @@ builds() {  # each of BUILDS in order, its lock released as it ends: B/EXE.ok, o
   done
 }
 if [ ${#BUILDS[@]} -gt 0 ]; then
-  tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
+  # tar's exit 1 is only a file that changed as it read it: a process importing the tree's Python writes beside it
+  # meanwhile, as a check's other suites do; 2 or more is a copy that failed
+  { tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \
+    | tar -C "$S" -x || { echo "POUS: no answer: verity/ doesn't copy for the Lean builds"; exit 7; }
   export PATH="$HOME/.elan/bin:$PATH"
   : > "$DIR/lake-build.log"
   mkdir -p "$B"
