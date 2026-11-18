@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from verity.device import gpu_card_called
-from verity.protocols.compose import schemes as composed
+from verity.protocols.experimental.dither.scheme import DITHER
 from verity.protocols.resource_accounting.compute.pouw import scheme as pouw_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover import circuit, schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
@@ -60,7 +60,7 @@ def test_a_card_of_a_built_architecture_runs_it_only_if_its_row_lists_the_card()
 
 def test_a_scheme_declaring_no_kernels_and_a_row_naming_cards_without_an_architecture_are_refused():
     with pytest.raises(LookupError, match="dither declares no kernels: experimental"):
-        schemes.of(composed.get("dither"), "rtx-pro-6000", pinned=True, arch="sm_120a")
+        schemes.of(DITHER, "rtx-pro-6000", pinned=True, arch="sm_120a")
     with pytest.raises(ValueError, match="named together"):
         K.KernelScheme("probe", "pearl-c", cards=("h100",))
 
