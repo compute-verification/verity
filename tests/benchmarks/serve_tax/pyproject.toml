@@ -54,6 +54,8 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     "verity/protocols/resource_accounting/compute/pouw/verifier/protocol.py",
     "adapters/vllm/verity_vllm/commit/__init__.py",
     "adapters/vllm/verity_vllm/commit/history_tables.py",
+    # the KV pool's roots under its salt file (tests/test_boundary.py), on the row-table kernels' CPU twin
+    "adapters/vllm/verity_vllm/commit/row_tables.py",
     "adapters/vllm/verity_vllm/engine/sampler_capture.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_logits.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",

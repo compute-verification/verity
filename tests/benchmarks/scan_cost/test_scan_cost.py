@@ -68,10 +68,10 @@ def kept(out: Path, cls: str = "test", group: int = 1, cores: int = 21, pin: boo
                "params": {"bucket_ms": 100},
                "members": {r: [{"name": name, "n": n} for name, n in names] for r in rnd},
                "stagers": {f"joint/{k}": {"lower_s": 3.0} for k in ("start", "ingress", "egress")},
-               "rounds": {r: {**rnd[r], "audit": {"timing": dict(reversed(timing[r].items()))}} for r in rnd}}
+               "rounds": {r: {**rnd[r], "audit": {"timing": dict(reversed(timing[r].items()))}} for r in rnd},
+               "answers": {str(w): {"verdict": "accept", "reason": None, "commitment": "c0",
+                                    "public": public or R.pinned(cls)} for w in range(group)}}
     (out / "sczk" / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
-    answer = {"verdict": "accept", "reason": None, "commitment": "c0", "public": public or R.pinned(cls)}
-    (out / "sczk" / "answers.json").write_text(json.dumps({"windows": [{"answer": answer}] * group}), encoding="utf-8")
     (out / "host.txt").write_text(f"CPU(s): 64\nthreads {cores}\n", encoding="utf-8")
     (out / "rss.jsonl").write_text("".join(json.dumps({"command": ["prove"], "rc": 0, "wall_s": 12, "peak_gb": gb}) + "\n"
                                            for gb in (1.5, 3.5)), encoding="utf-8")
@@ -202,15 +202,19 @@ def test_the_guard_refuses_an_answer_that_does_not_say_every_verdict_ran(tmp_pat
 def test_the_guard_refuses_a_failed_scan_a_reject_and_a_missing_answer(tmp_path):
     out = kept(tmp_path / "a")
     assert R.document(out, 3, RUN)["guard"] == {"holds": False, "scan_exit": 3, "why": ["the scan exited 3"]}
-    answers = out / "sczk" / "answers.json"
-    answers.write_text(json.dumps({"windows": [{"answer": {"verdict": "reject", "reason": "a block failed", "public": None}}]}),
-                       encoding="utf-8")
+    path = out / "sczk" / "summary.json"
+    summary = json.loads(path.read_text(encoding="utf-8"))
+
+    def answers(doc) -> None:
+        path.write_text(json.dumps({**summary, "answers": doc}), encoding="utf-8")
+    answers({"0": {"verdict": "reject", "reason": "a block failed", "public": None}})
     assert R.document(out, 0, RUN)["guard"]["why"] == ["execution phase 0's answer is 'reject': a block failed"]
-    answers.write_text(json.dumps({"windows": []}), encoding="utf-8")
-    assert R.document(out, 0, RUN)["guard"]["why"] == ["answers.json holds 0 execution phases' answers, and the group is 1"]
-    answers.unlink()
+    answers({})
+    assert R.document(out, 0, RUN)["guard"]["why"] == ["the summary holds 0 execution phases' answers, and the group is 1"]
+    answers(None)
     [why] = R.document(out, 0, RUN)["guard"]["why"]
-    assert "answers.json can't be read" in why
+    assert "the scan's summary holds no answers" in why
+    assert not (out / "sczk" / "answers.json").exists()
     assert R.guard(out, {"setup": "w0", "group": 1}, 0)["why"][0].startswith("public.json pins no public part for the class w0")
 
 
@@ -230,7 +234,7 @@ def test_write_is_the_document_and_the_runs_result(run_dir, capsys):
     assert result["schema"] == R.kit.RESULT_SCHEMA and result["run_id"] == RUN
     assert result["workload_fingerprint"] == {"benchmark": "scan_cost", **doc["identity"], "group": 1}
     assert result["validation"] == {"status": "passed", "checker": "benchmarks/scan_cost/result.py",
-                                    "detail": "the guard holds", "evidence": ["out/scan_cost.json", "out/sczk/answers.json"]}
+                                    "detail": "the guard holds", "evidence": ["out/scan_cost.json", "out/sczk/summary.json"]}
     assert result["measurement_files"] == ["out/scan_cost.json"]
     got = {m["name"]: (m["value"], m["unit"]) for m in result["measurements"]}
     assert got[R.PROVING] == (35.0, "proving seconds a second of execution phase")

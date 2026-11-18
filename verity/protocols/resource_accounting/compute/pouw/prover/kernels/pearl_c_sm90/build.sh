@@ -28,7 +28,7 @@ case " ${FLAGS[*]} " in *ftz*|*fast-math*|*fast_math*) echo "an FTZ or fast-math
 PATH="$CUDA/bin:$PATH" "$CUDA/bin/cuobjdump" -sass "$OUT/pearl_c_sm90.cubin" > "$OUT/pearl_c_sm90.sass"
 python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/pearl_c_sm90.sass" "$OUT/sass.json"
 rm "$OUT/pearl_c_sm90.sass"
-POUW_CUDA_BIN="$CUDA/bin" POUW_SASS_GATE_CACHE=none python3 "$ROOT/verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py" "$OUT/pearl_c_sm90.cubin" \
+POUW_SASS_GATE_CACHE=none python3 "$ROOT/verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py" --cuda-bin "$CUDA/bin" "$OUT/pearl_c_sm90.cubin" \
   --json "$OUT/harness_gate.json" && echo "harness gate: pass" || echo "harness gate: FAIL (recorded in harness_gate.json)"
 B=$OUT/debit; mkdir -p "$B"
 "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$B/debit_sm90.cubin" "$HERE/debit_sm90.cu" 2> "$B/debit_ptxas.txt" || { cat "$B/debit_ptxas.txt" >&2; exit 1; }

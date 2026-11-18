@@ -66,7 +66,7 @@ case $POINTS in ''|*[!0-9]*|0?*) echo "POINTS=$POINTS: a count of points (0: the
 S=$FLOCK_WORK/scratch/${RESEARCH_RUN_ID:-local-$$}; rm -rf $S; mkdir -p $S
 DTYPE=${DTYPE:-bf16}; INST=${N:-}; unset N
 # "n SOURCE": n instances and the class sweep's source for them (DEFS= BF16's Gemm_v2 row, PROGRAM= gemm_fp.py's FP8 / FP4 row)
-src() { python3 verity/protocols/proofs/flock/prover/pod/gemm_hill.py defs --dtype $DTYPE --K $K ${1:+--n $1} --out $R/out/defs.json; }
+src() { python3 benchmarks/proof_throughput/gemm_hill.py defs --dtype $DTYPE --K $K ${1:+--n $1} --out $R/out/defs.json; }
 SRC=
 if [ $DTYPE = bf16 ] || [ -n "$INST" ]; then S0=$(src $INST) || exit 1; INST=${S0%% *}; SRC=${S0#* }; GSRC=$SRC
 elif [ "${PREFLIGHT:-${GATE:-1}}" = 1 ]; then S0=$(src 16) || exit 1; GSRC=${S0#* }
@@ -88,10 +88,10 @@ Q=name,uuid,driver_version,memory.total,compute_cap,clocks.sm,clocks.max.sm,powe
   df -h /workspace | tail -1; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-} dtype=$DTYPE K=$K instances=${INST:-from the gate}"; } > $R/out/host.txt 2>&1
 DG=; case "${CUDA_VISIBLE_DEVICES:-}" in ''|*,*|*-*) ;; *) DG="--gpu $CUDA_VISIBLE_DEVICES" ;; esac
 DMON=
-if command -v nvidia-smi >/dev/null; then python3 verity/protocols/proofs/flock/prover/pod/gemm_hill.py dmon --out $R/out/dmon.tsv $DG & DMON=$!; fi
-python3 verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $R/out/others_cores.txt --every 5 &
+if command -v nvidia-smi >/dev/null; then python3 benchmarks/proof_throughput/gemm_hill.py dmon --out $R/out/dmon.tsv $DG & DMON=$!; fi
+python3 benchmarks/proof_throughput/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $R/out/others_cores.txt --every 5 &
 SAMPLER=$!
-python3 verity/protocols/proofs/flock/prover/pod/gemm_hill.py cores --cpus $HILL_PINNED --out $R/out/slice_cores.tsv --every 5 &
+python3 benchmarks/proof_throughput/gemm_hill.py cores --cpus $HILL_PINNED --out $R/out/slice_cores.tsv --every 5 &
 SLICE=$!
 # the phase's records and logs into the run dir: not its circuits, instance files or proofs (listed with their sizes instead)
 keep() {
@@ -137,10 +137,10 @@ if [ "${PREFLIGHT:-${GATE:-1}}" = 1 ]; then
     > $R/out/preflight.log 2>&1 || ok=0
   ph preflight end
   keep preflight
-  python3 verity/protocols/proofs/flock/prover/pod/gemm_hill.py key --binary-sha $R/out/preflight/binary.sha256 --out $R/out/preflight/key.json
+  python3 benchmarks/proof_throughput/gemm_hill.py key --binary-sha $R/out/preflight/binary.sha256 --out $R/out/preflight/key.json
   if [ $ok = 1 ] && [ -z "$SRC" ]; then
     PREC=results.jsonl; [ "${STAGE_ONLY:-0}" = 1 ] && PREC=staged.jsonl
-    INST=$(python3 verity/protocols/proofs/flock/prover/pod/gemm_hill.py fill --dtype $DTYPE --K $K --preflight $R/out/preflight/classes/$PREC) && S0=$(src $INST) \
+    INST=$(python3 benchmarks/proof_throughput/gemm_hill.py fill --dtype $DTYPE --K $K --preflight $R/out/preflight/classes/$PREC) && S0=$(src $INST) \
       && SRC=${S0#* } && echo "instances=$INST (m = 35 from the preflight check's staging)" >> $R/out/host.txt || ok=0
   fi
 fi
@@ -152,13 +152,13 @@ for i in $(seq 0 $((POINTS - 1))); do
   [ $ok = 1 ] || break
   P=$(pdir $i); mkdir -p $R/out/$P
   ph sweep${P:+-p$i} start
-  OUT=$S/${P}m35 RESEARCH_RUN_DIR=$S/${P}m35 WRAP="python3 $REPO/verity/protocols/proofs/flock/prover/pod/gemm_hill.py stamp --out $R/out/${P}stamps.tsv --" \
+  OUT=$S/${P}m35 RESEARCH_RUN_DIR=$S/${P}m35 WRAP="python3 $REPO/benchmarks/proof_throughput/gemm_hill.py stamp --out $R/out/${P}stamps.tsv --" \
     bash verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh $SRC BATCH=fixed N=$INST MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} \
     WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 PORT=7721 > $R/out/${P}sweep.log 2>&1 || ok=0
   ph sweep${P:+-p$i} end
   keep ${P}m35
   cp $S/${P}m35/classes/results.jsonl $R/out/${P}results.jsonl 2>/dev/null
-  python3 verity/protocols/proofs/flock/prover/pod/gemm_hill.py key --binary-sha $R/out/${P}m35/binary.sha256 --out $R/out/${P}key.json
+  python3 benchmarks/proof_throughput/gemm_hill.py key --binary-sha $R/out/${P}m35/binary.sha256 --out $R/out/${P}key.json
   ran=$((ran + 1))
 done
 kill $DMON $SAMPLER $SLICE 2>/dev/null; wait $DMON $SAMPLER $SLICE 2>/dev/null
@@ -169,7 +169,7 @@ if [ "${STAGE_ONLY:-0}" = 1 ]; then
   [ $ok = 1 ] && grep -q '"stage"' $R/out/staged.jsonl; exit
 fi
 if [ "$POINTS" = 0 ]; then
-  python3 verity/protocols/proofs/flock/prover/pod/gemm_hill.py session --dir $R --points 0 || ok=0
+  python3 benchmarks/proof_throughput/gemm_hill.py session --dir $R --points 0 || ok=0
   [ $ok = 1 ]; exit
 fi
 # the contract's own reader (verity_numerical.bench.contract) needs the tree's packages: the prover's venv, as 70-class-sweep.sh runs
@@ -181,12 +181,12 @@ for i in $(seq 0 $(( (ran > 0 ? ran : 1) - 1 ))); do
   BS=$R/out/${P}m35/binary.sha256; [ -f $BS ] || BS=$R/out/preflight/binary.sha256
   if [ "$POINTS" = 1 ]; then RES=$R/result.json HC=$R/hillclimb.json; else RES=$R/out/${P}result.json HC=$R/hillclimb-$i.json; fi
   PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python \
-    $PYBIN verity/protocols/proofs/flock/prover/pod/gemm_hill.py metrics --dtype $DTYPE --K $K --preflight $R/out/preflight/classes/results.jsonl --sweep $R/out/${P}results.jsonl \
+    $PYBIN benchmarks/proof_throughput/gemm_hill.py metrics --dtype $DTYPE --K $K --preflight $R/out/preflight/classes/results.jsonl --sweep $R/out/${P}results.jsonl \
     --stamps $R/out/${P}stamps.tsv --warm ${WARM:-1} --runs ${RUNS:-3} --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
     --gpu-csv $R/out/gpu.csv --census calibration/census/hardware.json ${PEAK_ID:+--peak-id $PEAK_ID} --binary-sha $BS --step ${STEP:-0} \
     --label "${LABEL:-baseline}" ${QUESTION:+--question "$QUESTION"} --node ${HILL_NODE:-vy-nebius-1} --point $i --points $POINTS --preflight-key $R/out/preflight/key.json \
     --point-key $R/out/${P}key.json --out $R/out/${P}metrics.json --result $RES --hillclimb $HC || ok=0
 done
 ph metrics end
-python3 verity/protocols/proofs/flock/prover/pod/gemm_hill.py session --dir $R --points $POINTS || ok=0
+python3 benchmarks/proof_throughput/gemm_hill.py session --dir $R --points $POINTS || ok=0
 [ $ok = 1 ] && grep -q '"status": "passed"' $R/result.json

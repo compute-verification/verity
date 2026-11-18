@@ -119,7 +119,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Poub.Remote.InProofs", "Properties.Poub.Remote.Refresh",
   "Properties.Composition", "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
   "Properties.Certifier.JointBridge.WorkOfCreditedWords", "Properties.Certifier.JointBridge.ServiceSoundOfSessions",
-  "Properties.Flock.Circuit", "Properties.InferenceOnly.Protocol", "Properties.Verity.Soundness", "Properties.Verity.SoundnessLevels", "Properties.Verity.Game",
+  "Properties.Flock.Circuit", "Properties.InferenceOnly.Protocol", "Properties.Verity.Soundness", "Properties.Verity.Game",
   "Properties.Verity.Sha512", "Properties.Verity.Idle", "Properties.Verity.Subprotocols", "Properties.Verity.Coupling",
   "Properties.Verity.Committed", "Properties.Flock.Circuit.GateARow",
   "Properties.Ties", "Properties.Flock.Nets", "Properties.Remote",

@@ -109,7 +109,7 @@ MEASURED_ONLY = {"gpu": {"store.l15", "store.l1i", "store.l0i", "store.const_l0"
 
 #: The entries one card of a kind holds alone, each with its card: a ceiling only that card's protocol states, built on
 #: its MEASURED_ONLY entries, so no other card of the kind has what it sums.
-ONE_CARD = {"gpu": {"store.chip": "rtx-pro-6000-server", "memory.datasheet_bandwidth": "h200-sxm-141gb"}}
+ONE_CARD = {"gpu": {"store.chip": "rtx-pro-6000-server"}}
 
 
 @pytest.mark.parametrize("kind", CARD_KINDS)

@@ -2,9 +2,9 @@
 r"""Serving's per-step row-table hashing on the GPU, overlapped: what ``row_tables_device.step_roots`` adds to a graphed int8
 decode step of Llama-3.1-8B at batch ``--batch``, on one GPU.
 
-    research run --on auto --cpus 8 --mem-gb 32 --cwd source -- bash -lc 'cd adapters/vllm && export PATH=/usr/local/cuda/bin:$PATH \
-        PYTHONPATH=.:../..:../../tools/research/src && GPU_LEASE_WHO=<you> gpu-lease 1 --wait --max-min 20 -- \
-        /workspace/jobs/venv312/bin/python3 ../../benchmarks/commitments/step_root_gpu.py'
+    research run --on auto --cpus 8 --mem-gb 32 --cwd source -- bash -lc 'cd adapters/vllm && PY=/workspace/jobs/venv312/bin/python3 \
+        && export PATH=$($PY ../../benchmarks/kernels/machine.py toolkit 13.0)/bin:$PATH PYTHONPATH=.:../..:../../tools/research/src \
+        && GPU_LEASE_WHO=<you> gpu-lease 1 --wait --max-min 20 -- $PY ../../benchmarks/commitments/step_root_gpu.py'
 
 The step is a proxy of the ``int8_exact`` profile's decode linears: per layer qkv, o, gate_up and down (K = 4096, 4096, 4096,
 14336; N = 6144, 4096, 28672, 4096), each ``int8_exact.quantize_rows``, ``int_mm`` and ``dequantize`` on random int8 weights, in
@@ -33,6 +33,7 @@ import gc
 import hashlib
 import json
 import os
+import shutil
 import statistics
 import subprocess
 import sys
@@ -42,17 +43,17 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from verity_bench.overhead import SHAPES
 
 from verity_vllm.commit import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import row_table_nvcc
 from verity_torch.pouw import row_table_side_stream
 from verity_vllm.engine import int8_exact as E
 
 RESULT_SCHEMA = "research/result/v0.1"
 #: Llama-3.1-8B's int8 linears: (K, N)
-LINEARS = {"self_attn.qkv_proj": (4096, 6144), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (4096, 28672),
-           "mlp.down_proj": (14336, 4096)}
+LINEARS = {f"{'self_attn' if lin in ('qkv', 'o') else 'mlp'}.{lin}_proj": (k, n)
+           for lin, (n, k) in SHAPES["llama-3.1-8b"].linears.items()}
 ARMS = ("plain", "copied", "kept", "overlapped")
 
 
@@ -251,7 +252,7 @@ def main(argv: list[str] | None = None) -> int:
     step_ms = {a: 1e3 * statistics.median(v) for a, v in per_arm.items()}
     ok = all(gate.values())
     nbytes = sum(c.numel() + 4 * s.numel() for c, s in model.arenas[0].values())
-    nvcc_v = subprocess.run([row_table_nvcc() or "nvcc", "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:]
+    nvcc_v = subprocess.run([shutil.which("nvcc") or "nvcc", "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:]
     summary = {
         "gpu": torch.cuda.get_device_name(), "capability": list(torch.cuda.get_device_capability()), "torch": torch.__version__,
         "cuda": torch.version.cuda, "nvcc": nvcc_v, "batch": ns.batch, "layers": ns.layers, "tables": len(model.ops),

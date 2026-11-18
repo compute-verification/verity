@@ -34,7 +34,7 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
 
 A finer division of a whole session (per engine step, per layer, per Call) is not checked here. Its root would be the
 request's body, whose reads `InferenceOnlyCheck.Desc` holds as segments of gates, each Definition's return coalesced into runs
-(`Desc.coalesce`); `inference_only_cost.py glm` counts and times them (`summarize_steps`).
+(`Desc.coalesce`).
 
 DIR/results.json has a row per check: the Program (SHA-512 digest, bytes, root nodes, gates), the division, the verdict
 summarised and the time and peak RSS; DIR/ius/<case>.json each verdict's inference blocks.

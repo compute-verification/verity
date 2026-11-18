@@ -71,7 +71,6 @@ import gc
 import os
 import resource
 import shutil
-import socket
 import sys
 import time
 from dataclasses import dataclass, field, replace
@@ -85,7 +84,8 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
 from verity.circuits.population import wired_population_program  # noqa: E402
@@ -147,12 +147,6 @@ class Tools:
         if (self.structural is None) != (self.tmpl_unit is None):
             raise ValueError("structural and tmpl_unit come together: a templated statement's prover reads the unit "
                              "flock-tmpl-unit places")
-
-
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 # --- staging ----------------------------------------------------------------------------------------------------------
@@ -365,8 +359,10 @@ def _session(m: Member, s: dict, h: Any, local: list[int], tools: Tools, sdir: P
         env = {"FC_ZK_SERVER": "1", "FC_ZK_SERVER_LEAN": tools.zk_server, **a0.zk_server_env(s)} if tools.zk_server else {}
         if m.forge:
             env["FC_ZK_SELF_CHECK"] = "skip"
+        from verity_bench import kit
+
         t = time.time()
-        record, live = a0.session(tools.bin, s, s["n"], f"subset:{len(local)}", free_port(), sdir,
+        record, live = a0.session(tools.bin, s, s["n"], f"subset:{len(local)}", kit.free_port(), sdir,
                                   sample_file=sdir / "draw.json", zk=True, env=env)
         session_s = round(time.time() - t, 1)
         return record, live, a0.lean_verify(tools.lean, s, s["n"], sdir, zk=True), session_s
@@ -437,7 +433,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         publics[s["name"]] = a0.sha512_file(s["dir"] / f"pub-{s['n']}.bin")
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
     k = population if k is None else k
-    sampling_design = D.parse_design(f"stratified:{k}")
+    sampling_design = RND.parse_design(f"stratified:{k}")
     window = window or {"kind": "stand-in", "of": "the proof subprotocol's members (prove_subprotocol.py)",
                         "members": {s["name"]: {"template": P.template_id(s["defn"]), "units": [s["base"], s["base"] + s["n"]]}
                                     for s in staged}, "link": "none"}

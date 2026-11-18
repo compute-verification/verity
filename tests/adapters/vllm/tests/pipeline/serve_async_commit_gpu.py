@@ -5,7 +5,7 @@ each scheduler, commits the same rows under the same rows-sha512 roots, and ever
         [--port 18300] [--row-key-seed vasync-ab] -- SERVE-OPENAI-ARGS        (from adapters/vllm, on one GPU)
     python -m tests.pipeline.serve_async_commit_gpu compare SYNC_DIR ASYNC_DIR
 
-`ab` serves SERVE-OPENAI-ARGS (``--run-id``, ``--admit release-order``, a bench row, the Commit's options, ``--window-steps
+`ab` serves SERVE-OPENAI-ARGS (``--run-id``, order ``release-order``, a bench row, the Commit's options, ``--window-steps
 1``) twice, synchronously and then with ``--async-scheduling``, each a `serve` of this module in its own process, and sends
 each the same ``--batches`` loads of ``adapters/vllm/tools/served_run/serve_load.py --fixed``: ``--requests`` requests of ``--prompt-ids``
 ids for one step, the learn-only warm-up's static shape (`serve_learn.shape_of`), each batch its own release run and seed.

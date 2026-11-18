@@ -12,7 +12,7 @@ session proves the B units the verifier samples from it by the stratified sampli
 over the same dot chain, its output the f32 word rather than its bf16 rounding. The sites differ in N, the number of
 coordinates a token row makes, not in the coordinate, so one proof-block family stands for them. ``bf16-k2048`` is the same
 dot chain at Llama 3.2 1B's hidden 2048 on one card: its q/k/v, o and gate/up projections and lm_head, whose ``Gemm_v2{K=2048,N=1}``
-the census prices at k_log 24 (``verity/protocols/proofs/spot/prover/audit/class_size.py``). ``fp8-coord-k*`` are served_units' block-scaled FP8
+the census prices at k_log 24 (``benchmarks/prove_path/class_size.py``). ``fp8-coord-k*`` are served_units' block-scaled FP8
 coordinates (``benchmarks/served_units/stage.py``'s ``UNITS``), declared with their profile and staged by that script; the
 point job proves only the class-statement workloads today (``stager``).
 """
