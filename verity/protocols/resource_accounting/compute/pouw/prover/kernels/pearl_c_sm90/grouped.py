@@ -233,7 +233,7 @@ def gemm_smem(R, dev, name: str) -> int:
 
 class Grouped:
     """The grouped calls of one (n, k) and expert count over buffers the caller owns (`b`: device pointers, `sizes`' at `rows`
-    and `count`, the experts' `STACKED`, and ``salts_a``, the call's rows' hm96 salts, `R.HM_SALT` bytes a row of A in row
+    and `count`, the experts' `STACKED`, and ``salts_a``, (pointer, bytes): the call's rows' hm96 salts, `R.HM_SALT` bytes a row of A in row
     order, which the caller fills with fresh bytes before each call), with the constant key `keys` (``hm``).  Its tensor
     maps, two sets in its own ``tma`` (the chain's: A, the experts' B̃, P_A, their P_B; A'F_B's: A and their F_B transposed),
     are encoded once, and a zero row's digest (`zero_state`) goes up once into its own ``zero``."""
@@ -243,7 +243,7 @@ class Grouped:
             raise ValueError(f"the grouped kernels take n a multiple of 64, k of 256 up to {R.PD_MAX_K} and rows of {SEG}, "
                              f"not {(n, k, rows)}")
         self.R, self.dev, self.n, self.k, self.experts, self.rows, self.count = R, dev, n, k, experts, rows, count
-        self.b, self.keys = dict(b), keys
+        (self.b, self.salt_bytes), self.keys = R.stated_salts(b), keys
         setup(R, dev)
         self.tma = dev.alloc(2 * R.MAP_SET)
         d, e = dev, experts
@@ -269,7 +269,7 @@ class Grouped:
             raise ValueError(f"{len(us)} units of {sum(u.seg for u in us)} rows, {len(keys)} key bytes: past the call's "
                              f"{self.count} units and {self.rows} rows, or not {KEY_BYTES} key bytes a unit")
         b, k, n, kk, R = self.b, self.k, self.n, self.keys, self.R
-        salts = R.Pipeline.salts(self, "a")
+        salts = R.Pipeline.salts(self, "a", self.rows)
         rec = np.zeros((len(us), REC), np.uint8)
         commit, tiles, tree = np.zeros(len(us), ARGS), np.zeros(len(us), ARGS), np.zeros(len(us), ARGS)
         for j, u in enumerate(us):
