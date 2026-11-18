@@ -25,8 +25,8 @@ One connection serves one registration and then `--sessions` sessions over it, e
    the next window's passes arrive; once every window is accepted the record (`AuditRun.record`), its declared outputs
    (`ledger.declared`'s: γ at both R and the memory line, snapshot and, paced, time-held and link-charged), and as
    diagnostics the node's HBM it shows held by kind (`memory`: the credited share and the residual, at ε, held at
-   every pass and held on average), and with `--host-bytes` the same by kind against the node's HBM and host DRAM
-   (`node_line`); last, once the prover has answered the session's `end` with `ended`, the coin commitment and every
+   every pass and held on average), and the same by kind against the node's HBM and host DRAM (`node_line`, the
+   figures' `host_dram_bytes`); last, once the prover has answered the session's `end` with `ended`, the coin commitment and every
    released coin's opening (`coins`, `audit.AuditRun.disclose`), which the prover checks each coin it was sent against.
 
 With `--paced K:T_MS:DRAWS:WINDOWS[:F]` each session is paced (`pace_of`, `audit.Pace(K, T, F)`): a coin every K
@@ -101,7 +101,7 @@ serve` starts.
                                [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
                                 --challenger-period P --challenger-main FILE [--challenger-minutes M]]
     python verifier_process.py --registry REGISTRY.json --close NODE_HEX
-    python verifier_process.py --memory-of VERIFIER_JSON --figures FIGURES.json [--host-bytes N]
+    python verifier_process.py --memory-of VERIFIER_JSON --figures FIGURES.json
 """
 from __future__ import annotations
 
@@ -969,11 +969,13 @@ class Pair:
                      str(failure["failure"]))
 
 
-def figures_record(figures: timing.Figures, *, pinned: bool) -> dict:
+def figures_record(figures: timing.Figures, *, pinned: bool, ingress_bytes_per_s: float) -> dict:
     """What `verifier.json` names the session's figures by: the figures whole, their `timing.Figures.sha512`, and
     whether a configuration pinned that digest (`--figures-sha512`); unpinned, the figures are the launcher's own, as
-    where both parties run on the developer's machine."""
-    return {"figures": figures.to_json(), "figures_sha512": figures.sha512(), "figures_pinned": pinned}
+    where both parties run on the developer's machine.  Beside them the one capacity they don't carry, the ingress
+    rate the paced line charges."""
+    return {"figures": figures.to_json(), "figures_sha512": figures.sha512(), "figures_pinned": pinned,
+            "ingress_bytes_per_s": ingress_bytes_per_s}
 
 
 class Verifier:
@@ -1619,19 +1621,10 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
     ap.add_argument("--registry", type=Path,
                     help="the verifier's registrations, kept across its processes (`audit.Registry`): a node with a "
                          "live registration there is refused (default: this process's own)")
-    ap.add_argument("--hbm-bytes", type=int,
-                    help="the node's HBM, the memory line's capacity (default: its GPUs', `figures.hbm_bytes`)")
-    ap.add_argument("--host-bytes", type=int, default=0,
-                    help="the node's host DRAM: with it the memory line is also by kind against HBM and DRAM "
-                         "(`node_line`)")
     ap.add_argument("--disk-bytes-per-s", type=float, default=0.0,
                     help="the node's disks' measured read rate (`Disks`' β), charged in the memory line (`ledger.Node`)")
     ap.add_argument("--link-bytes-per-s", type=float, default=0.0,
                     help="the node's boundary links' read ceiling, charged in the link-charged memory line")
-    ap.add_argument("--disk-burst-bytes", type=float,
-                    help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
-    ap.add_argument("--link-burst-bytes", type=float,
-                    help="one link burst, charged with the links (default: `figures.link_burst_bytes`)")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
@@ -1683,7 +1676,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
                          "flight (a `--paced` F = 1), which no property covers (`line.SHARED`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
-                         "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
+                         "before the average form (`recorded_memory`, with the node line), and a paced "
                          "session's paced line with --ingress-bytes-per-s (`recorded_paced`), and exit")
     a = ap.parse_args(argv)
     figures = None
@@ -1698,12 +1691,11 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
         if a.figures_sha512 is not None and figures.sha512() != a.figures_sha512.lower():
             ap.error(f"--figures {a.figures}: its SHA-512 is {figures.sha512()}, not {a.figures_sha512}, the one "
                      "--figures-sha512 pins: the figures are the verifier's configuration's, never the prover's")
-        a.hbm_bytes = figures.hbm_bytes if a.hbm_bytes is None else a.hbm_bytes
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
         print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=figures.chip_bytes,
-                                                                  host_bytes=a.host_bytes)} | (
-            {"paced": recorded_paced(s, v["registration"], figures=figures, host_bytes=a.host_bytes,
+                                                                  host_bytes=figures.host_dram_bytes)} | (
+            {"paced": recorded_paced(s, v["registration"], figures=figures, host_bytes=figures.host_dram_bytes,
                                      ingress_bytes_per_s=a.ingress_bytes_per_s)} if s.get("pace") else {})
                           for s in v["sessions"] if s["accepted"]], indent=1))
         return 0
@@ -1756,10 +1748,9 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
     v = Verifier(conn, figures=figures, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6),
                  samples=a.samples, delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
                  log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
-                 hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s,
+                 host_bytes=figures.host_dram_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s,
                  lean_exe=a.lean_exe, transcript=a.transcript, disk_bytes_per_s=a.disk_bytes_per_s,
-                 link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
-                 link_burst_bytes=a.link_burst_bytes,
+                 link_bytes_per_s=a.link_bytes_per_s,
                  challenger=challenger, appends=a.appends, groups_per_coin=a.groups_per_coin)
     c0 = time.process_time_ns()
     try:
@@ -1771,7 +1762,8 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "verdict": "lean",
              "refused": str(e), "registry": kept,
-             **figures_record(figures, pinned=a.figures_sha512 is not None)}, indent=1))
+             **figures_record(figures, pinned=a.figures_sha512 is not None,
+                                ingress_bytes_per_s=a.ingress_bytes_per_s)}, indent=1))
         if checks:
             checks.close(wait=True)
         v.stop()
@@ -1790,7 +1782,8 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
              "verdict": "lean", "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
              "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept,
-             **figures_record(figures, pinned=a.figures_sha512 is not None)}, indent=1))
+             **figures_record(figures, pinned=a.figures_sha512 is not None,
+                                ingress_bytes_per_s=a.ingress_bytes_per_s)}, indent=1))
         save_registry(a.registry, kept)
 
     record()
