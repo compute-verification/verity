@@ -790,10 +790,9 @@ class FeedReader:
 
     def __call__(self) -> list[dict[str, Any]]:
         if self.fd is None:
-            try:
-                self.fd = os.open(self.path, os.O_RDONLY)
-            except FileNotFoundError:
-                return []
+            if not os.path.exists(self.path):
+                return []                                # its writer has appended nothing yet
+            self.fd = os.open(self.path, os.O_RDONLY)
         data = self.tail
         while chunk := os.read(self.fd, 1 << 16):
             data += chunk

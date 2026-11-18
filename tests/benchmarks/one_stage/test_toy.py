@@ -128,7 +128,7 @@ def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_bound
         assert file["format"] == REG.READS_V1 and list(file["ports"]) == [x for x, _ in m.all_rows]
         e = file["ports"][p]
         assert e["value"] == value == links[(m.template, p)] and e["reads"] == list(SAMPLE) and e[RV.READS_FROM] == m.base
-        assert (e["leaves"], e["domain"], e[REG.SCHEMA_KEY]) == (N, roots[value]["domain"], T.V2)
+        assert (e["leaves"], e["domain"], e[RV.SCHEMA_KEY]) == (N, roots[value]["domain"], T.V2)
         assert e["words"] == dict(m.all_rows)[p] == port.words
         header = T.CS.registered_header(head, t)[p]
         assert header["value"] == value and header["positions"] == list(SAMPLE)

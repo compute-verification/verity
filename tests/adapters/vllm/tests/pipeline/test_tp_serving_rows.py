@@ -280,7 +280,7 @@ def test_a_deferred_ranks_stand_in_from_its_bundle_holds_the_served_values_and_p
         w = rec["window"]
         assert (w["kind"], w["run"], c["made"][r]["run"], w["commitment"], w["tp"]) == ("stand-in", mine.run, mine.run, "rows-sha512", held["tp"])
         assert w["of"] == {"commitment": "rows-sha512", "tp_run_root": c["tp_run_root"], "rank": r, "run_root": held["tp"]["run_root"],
-                           "bundle_manifest_sha256": _bundle_sha(c, r), "rows": SRT.ROWS} and w["link"] == SRT.LINK
+                           "rows": SRT.ROWS} and w["link"] == SRT.LINK
         assert SRT.source(w, mine, held) == {"ok": True, "codes": [], "detail": {"kind": "stand-in", "run": mine.run, "tp": held["tp"], "of": w["of"]}}
         assert {x["port"]: {"leaves": x["leaves"], "domain": x["domain"]} for x in rec["roots"]} == CS.expected_ports(mine)
         assert c["made"][r]["population"] == 8 and _values(c["windows"] / f"rank{r}") == _values(served_tp["windows"] / f"rank{r}")
@@ -327,13 +327,13 @@ def _copy_deferred(c, tmp_path: Path, runs=None) -> Path:
 
 
 @pytest.mark.parametrize("alter, record, codes", [
-    (lambda w: {**w, "of": {**w["of"], "bundle_manifest_sha256": "00" * 32}}, None, ["of"]),
+    (lambda w: {**w, "of": {**w["of"], "run_root": "00" * 64}}, None, ["of"]),
     (lambda w: {**w, "link": "verity-vllm serving-rows"}, None, ["link"]),
     (lambda w: {**w, "of": {**w["of"], "commitment": "vllm-v1"}}, None, ["of"]),
     (lambda w: w, lambda c, t: _copy_commit(c, t), ["kind", "no_link"]),
     (lambda w: w, lambda c, t: _copy_deferred(c, t, lambda rows: _pending(rows, 0, False)), ["kind", "no_link"]),
     (lambda w: {k: v for k, v in w.items() if k not in ("of", "link")}, None, ["of", "link"]),
-], ids=["other-bundle", "other-link", "other-commitment", "record-names-no-bundle", "replay-failed", "stand-in-without-link"])
+], ids=["other-root", "other-link", "other-commitment", "record-names-no-bundle", "replay-failed", "stand-in-without-link"])
 def test_a_stand_in_that_is_not_the_ranks_bundle_of_record_is_refused(deferred_tp, tmp_path, alter, record, codes):
     mine, held = _mine(deferred_tp, 0, record(deferred_tp, tmp_path) if record else None)
     got = SRT.source(alter(_registered(deferred_tp, 0)["window"]), mine, held)

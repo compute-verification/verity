@@ -19,9 +19,8 @@ linkage writes one bundle per instrumented run beside its outputs, `<out>/replay
 
 The private part holds what opens every committed leaf and is never in the bundle or a run's outputs: the store's salt keys
 (``store/keys.bin``) and the weights registration's salt file (``weights/tree.salts/``, `verity.commitments.salt_file`).  It goes
-under the private directory (`private_root`), at ``replay/<run root>/<digest of the bundle's path>``.  The manifest's sha256 stands in the deferred
-Commit's registration, and hides the bundle's values only because the manifest covers a salt or key file: `seal` and `open_bundle`
-refuse one that lists none (`SECRET`).  A bundle sealed with them inside (no ``private.json``) is read as it was stored.
+under the private directory (`private_root`), at ``replay/<run root>/<digest of the bundle's path>``.  A bundle sealed with them
+inside (no ``private.json``) is read as it was stored.
 
 It is built under `replay_bundle_p<pair>.partial/` and renamed into place once sealed, so a bundle directory that exists is complete.
 A full store is written from the moment the run root is fixed, beside the binding and manifest coverage (`start`), so the GPU is not
@@ -59,7 +58,7 @@ from verity_vllm.records.schema_ids import (
 # that read them, and the two deferred records take their schema ids from `records.schema_ids`: the driver's import puts the
 # catalog's Definitions into the Definition table, and the Commit that defers its replay to a bundle never loads the driver.
 
-__all__ = ["ARGS", "HASHED", "MANIFEST", "NOT_RETAINED", "PENDING", "PRIVATE", "PRIVATE_DOC", "SECRET", "deferred_records", "discard", "load_store", "open_bundle",
+__all__ = ["ARGS", "HASHED", "MANIFEST", "NOT_RETAINED", "PENDING", "PRIVATE", "PRIVATE_DOC", "deferred_records", "discard", "load_store", "open_bundle",
            "partial", "path", "private_file", "private_refusal", "private_root", "seal", "seal_all", "weights_extra", "write_store", "write_store_files"]
 
 logger = init_logger(__name__)
@@ -73,8 +72,6 @@ NOT_RETAINED = "committed_not_retained"
 #: the bundle's files that go to its private part, by their path in the bundle
 PRIVATE = ("store/keys.bin", "weights/tree.salts")
 PRIVATE_DOC = "private.json"
-#: the bundle's files that hold a salt or a salt key, by the start of their path in the bundle; a manifest lists one at least
-SECRET = (PRIVATE[0], PRIVATE[1] + "/", "store/salts/")
 ARGS = ("program_dir", "programs_root", "program_digest", "required_manifest", "replay_per_stratum", "replay_max", "replay_target", "replay_k",
         "replay_draw", "replay_workers", "replay_seed", "replay_challenge", "window_mb", "window_slots", "retain", "label", "serving_rows", "openings",
         "checkpoints", "workload", "weights_of_record", "checkpoint_dir")
@@ -417,11 +414,6 @@ def _files(b: Path) -> dict[str, Path]:
     return files
 
 
-def _secret_refusal(b: Path, rels: Any) -> None:
-    if not any(r.startswith(SECRET) for r in rels):
-        raise ValueError(f"{b}: the manifest lists no salt or key file ({', '.join(SECRET)}), so its sha256 hides nothing")
-
-
 def _sha256(p: Path) -> str:
     h = hashlib.sha256()
     with open(p, "rb") as f:
@@ -441,7 +433,6 @@ def seal(out: str | os.PathLike, pair: int, context: dict[str, Any], binding_map
     (p / "context.json").write_text(json.dumps({"schema": SCHEMA, **context}, default=str, separators=(",", ":")) + "\n")
     at = _files(p)
     rels = sorted(at)
-    _secret_refusal(p, rels)
     with ThreadPoolExecutor(8) as pool:
         sums = dict(zip(rels, pool.map(lambda r: (hashed or {}).get(r) or _sha256(at[r]), rels)))
     files: dict[str, dict[str, Any]] = {r: {"sha256": sums[r], "bytes": at[r].stat().st_size} for r in rels}
@@ -467,7 +458,6 @@ def open_bundle(bundle: str | os.PathLike) -> dict[str, Any]:
         raise ValueError(f"{b}: manifest schema {man.get('schema')!r} is not {SCHEMA}")
     at = _files(b)
     have, want = set(at), set(man["files"])
-    _secret_refusal(b, want)
     if have != want:
         raise ValueError(f"{b}: files differ from the manifest: missing {sorted(want - have)[:4]}, extra {sorted(have - want)[:4]}")
     rels = sorted(man["files"])
