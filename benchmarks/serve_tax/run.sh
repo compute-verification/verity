@@ -33,8 +33,8 @@
 # (prod for glm53, stock vLLM at vLLM's own limits for the others), the profile's load at the model's context, no
 # sampling flag (the model's generation_config) and each request to its recorded length (fixed-size's 1,024 tokens).
 # It fixes ARMS, LOADS, REPS, LIFETIMES, SAMPLED, MAX_MODEL_LEN, PASS_PROMPTS, the published arm's flags, TARGET and
-# WITH, and refuses each one given, naming it. --find-load serves stock alone over a ladder (users 1, 2, 4, 8 for
-# coding-agent; 4 to 48 requests in flight, up to the profile's prompts, for the others) and prints where its output
+# WITH, and refuses each one given, naming it. --find-load serves stock alone over a ladder (users 1, 2, 4, 8, 16 for
+# coding-agent; 4 to 192 requests in flight, up to the profile's prompts, for the others) and prints where its output
 # tokens a second stop rising: the file's line, the version to raise and the pin test's digest
 # (OUT/find_load.{json,txt}); it edits no file. --feature ARM serves stock and ARM in turn at the profile's one load,
 # two lifetimes of three reps each, and writes the result's three lines (OUT/serving_profile.{json,txt}). Where ARM

@@ -524,7 +524,7 @@ never a flag or a machine's name. The same command runs on a machine that is not
 place under `XDG_CACHE_HOME` unless given, and the commit is research run's `--tree-sha` or `RESEARCH_SOURCE_COMMIT`, with
 no `.git` needed. A tree that none of these names is refused before anything is served.
 
-- `--find-load` serves stock alone over a ladder: users 1, 2, 4 and 8 for coding-agent, and 4 to 48 requests in flight,
+- `--find-load` serves stock alone over a ladder: users 1, 2, 4, 8 and 16 for coding-agent, and 4 to 192 requests in flight,
   up to the profile's prompts, for the others. It says where output tokens a second stop rising and prints the
   file's line for this host's card, the profile's version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then
   pins. It edits no file. A profile whose load is still `not found yet` refuses `--feature` until that line is in.

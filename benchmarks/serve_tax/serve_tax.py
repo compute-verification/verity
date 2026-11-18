@@ -4144,7 +4144,7 @@ LOAD_OVERHEAD_S, STOP_S = 5.0, 60.0
 #: named as its label says it; stock is never changed
 OURS_CHANGES = {"seeded": "seeded for ours", "prefix-cache-off": "prefix cache off for ours"}
 #: `--find-load`'s ladder: a session profile's users, the requests in flight of the others, these up to its prompts
-SESSIONS_LADDER, LADDER = (1, 2, 4, 8), (4, 8, 12, 16, 24, 32, 48)
+SESSIONS_LADDER, LADDER = (1, 2, 4, 8, 16), (4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192)
 #: the reps of a lifetime and the lifetimes of a profile's job: `--find-load` serves stock once, `--feature` serves stock
 #: and the feature twice each, turned round, six paired reps with stock's two lifetimes the noise floor (`own_noise`)
 FIND_REPS, FEATURE_REPS, FEATURE_LIFETIMES = 3, 3, 2

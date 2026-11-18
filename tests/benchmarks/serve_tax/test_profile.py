@@ -276,9 +276,9 @@ def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_pa
     monkeypatch.setattr(S, "card", lambda: name)
     plan = S.profile_plan("chat", "llama32-1b", None, True)
     assert plan == {"STOCK": "compiled", "OURS": "", "CAP_MIN": "20", "CARD": card, "ARMS": "compiled",
-                    "LOADS": "chat=4+8+12+16+24+32+48", "REPS": "3", "LIFETIMES": "1"}
+                    "LOADS": "chat=4+8+12+16+24+32+48+64+96+128+192", "REPS": "3", "LIFETIMES": "1"}
     assert S.profile_plan("fixed-size", "llama32-1b", None, True)["LOADS"] == "long=4+8+12+16+24"
-    assert S.profile_plan("coding-agent", "llama32-1b", None, True)["LOADS"] == "agentic=1+2+4+8"
+    assert S.profile_plan("coding-agent", "llama32-1b", None, True)["LOADS"] == "agentic=1+2+4+8+16"
     with pytest.raises(SystemExit, match=f"on llama32-1b.{card}: the load is not found yet: run --find-load first"):
         S.profile_plan("chat", "llama32-1b", "record", False)
     tok = {4: 100, 8: 190, 12: 260, 16: 300, 24: 300, 32: 298, 48: 295}
