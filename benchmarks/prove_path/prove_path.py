@@ -1380,8 +1380,8 @@ def committer_key(path: Path) -> bytes:
 
 def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's weights registration, the committer's (`window_weights.weights_registration` under the φ its window
-    circuit lowers under, `registered_of_serve`): each weight committed under the committer's salts, sampled under ``--key``
-    (`committer_key`, never sent), once the committer has checked ``--checkpoint-dir``'s shards against ``--checkpoints``
+    circuit lowers under, `registered_of_serve`): each weight committed under fresh OS salts, kept in the salt file beside
+    ``--out`` (`salt_file.beside`, never sent), once the committer has checked ``--checkpoint-dir``'s shards against ``--checkpoints``
     (default the tree's ``manifests/checkpoints.json``), and the rotary table at the words the engine serves
     (``--tables``' ``cos_sin_cache.npy``, serve-openai's, default under ``--serve-run``'s ``private/``) once they are
     within the analytic table's bound; with no such file it stays unrooted. Written to ``--out``: what the server's
@@ -1396,11 +1396,12 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     import numpy as np
 
     from verity_vllm.pipeline.advice import registered_weights
+    from verity.commitments import salt_file as SF
     from verity_vllm.program.predict.window_weights import deployment_record, weights_registration
 
     serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
     cos_sin = Path(a.tables or Path(a.serve_run) / "private") / "cos_sin_cache.npy"
-    doc = weights_registration(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), committer_key(Path(a.key)),
+    doc = weights_registration(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), SF.beside(a.out),
                                a.checkpoint_dir, checkpoints_manifest=a.checkpoints,
                                tables={"cos_sin": np.load(cos_sin)} if cos_sin.is_file() else None)
     roots = registered_weights(doc, serve)
@@ -1788,7 +1789,6 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
                          "for the attester's scan, by what its caller passes (kept_ingress, scan_state_file), since SPOT "
                          "imports neither the attester nor a benchmark: run benchmarks/one_stage/window_commit.py")
     S.SamplingDesign(a.sampling_design)
-    key = committer_key(Path(a.key))
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
     requests = compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
@@ -1841,7 +1841,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         raise ValueError(f"{a.registration} registers {reg.repo}@{reg.revision}'s weights, not the served "
                          f"{model['repo']}@{model['revision']}'s")
     served = {label: weights(label, 0, n) for label, n in sizes.items()}
-    values = {**WW.weight_values(registered, served, key, keep_rows=True),
+    values = {**WW.weight_values(registered, served, a.registration, keep_rows=True),
               SS.SCAN_STATE: WRS.standin_state(population, cls, rows, window=run) if state is None
               else state}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))

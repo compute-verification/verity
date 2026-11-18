@@ -64,9 +64,10 @@ POOL_WAIT_S = 14400
 
 
 def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None, wait_s: float = POOL_WAIT_S,
-            twin: str | None = None, end: str | None = None, slot: str | None = None) -> list[str]:
+            twin: str | None = None, end: str | None = None, slot: str | None = None, timed: bool = False) -> list[str]:
     """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/check/slot.py --by
-    LANE [--wait-max POOL_WAIT_S --run-max S] [--end UTC] [--only-slot NAME] [--twin PAIR] -- nice -n 19 CMD...`, naming
+    LANE [--wait-max POOL_WAIT_S --run-max S] [--end UTC] [--only-slot NAME] [--twin PAIR] -- nice -n 19 CMD...`, niced so a
+    lane's run yields the cores to the checks, but for a `timed` one (`research run --timed`), whose time is its result; naming
     slot.py by its path in the run's own shipped tree (so the run's cwd is its source); the launch names the machine's own
     copy instead where the machine has one (`node_copy`). `run_max` is the run's --timeout: slot.py counts it from taking the
     slot, so the wait in the pool's line isn't spent from it, and a run with no slot in `wait_s` exits NOT_STARTED (75)
@@ -83,7 +84,7 @@ def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = No
     booked = [*(["--end", end] if end else []), *(["--only-slot", slot] if slot else [])]
     pair = ["--twin", twin] if twin else []
     return ["env", f"CHECK_SLOTS={pool_slots(pool)}", "python3", SLOT_PATHS[0], "--by", lane, *limit, *booked, *pair, "--",
-            "nice", "-n", "19", *command]
+            *([] if timed else ["nice", "-n", "19"]), *command]
 
 
 def end_left(end: str, now: float) -> float:

@@ -4,7 +4,7 @@
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
   research run --local-only REASON [...] -- CMD...   # where the store has no usable remote a local run refuses (exit 3): REASON says
                                                  # what preserves its records instead (default $RESEARCH_LOCAL_ONLY; job.json records it)
-  research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--quiet] [--on NODE] -- CMD...
+  research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--timed] [--card N,...] [--on NODE] -- CMD...
                                                  # the one queue (infra/cluster) places the job and runs it under its node's executor
   research run --on auto [--cpus N] [--mem-gb G] [--max-min M | --timeout T] [--wait] -- CMD...   # an agent's suite or build: queued
                                                  # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given;
@@ -15,8 +15,10 @@
                                                  # where it went and why is kept with the run: `inspect` prints it on the VM that launched
                                                  # it, and the machine's request.json holds it (`auto`)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--env-host MACHINE ...] [--exclusive] [--mem-gb N [--mem-wait S]]
-               [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
-                                                 # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
+               [--gpus N | --card N,...] [--timed] [--pool NAME [--slot NAME] [--pool-wait S]] [--end UTC]
+               [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
+                                                 # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) or --card (those
+                                                 # cards) shows the run any; --end bounds a booked period's run, --slot takes its slot
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
                                                  # it returns once the machine starts the run; --wait blocks until it ends and exits with its rc,
                                                  # for at most 20 min (--wait-max S lowers it): then exit 79, the run going on (research/waitcap.py)
@@ -317,6 +319,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                    help="with --queue: default its kind's (else 0). With --on MACHINE alone: on a machine whose GPUs gpu-lease hands out, "
                         "the workload waits first come first served for N of them (`gpu-lease N --wait`; the wait counts against "
                         "--timeout); a run without --gpus sees no GPU there")
+    q.add_argument("--card", action="append", default=[], metavar="N[,N...]",
+                   help="with --on MACHINE or --queue: the run's GPUs are exactly these card indices (repeatable, or a comma "
+                        "list), leased through gpu-lease's --on, so CUDA_VISIBLE_DEVICES and GPU_LEASE_UUID in the job are "
+                        "theirs; --gpus, if given, must be their count")
+    q.add_argument("--timed", action="store_true",
+                   help="a measurement whose time is the result: a --pool run's workload is not niced (pool runs otherwise "
+                        "run under `nice -n 19`, yielding to the checks), its gpu-lease lease (--gpus or --card) is a timed "
+                        "one (`gpu-lease --timed`: the node is kept quiet while it is held), and on --queue the job is a "
+                        "quiet one (the node's owner only)")
     q.add_argument("--gpu-model", default=None, metavar="M", help="e.g. rtx-pro-6000; a node with other GPUs is never chosen")
     q.add_argument("--cpus", type=int, default=None, metavar="N", help="default: its kind's (else 1); also the workload's OMP, OpenBLAS, MKL and NumExpr threads unless --env sets them")
     q.add_argument("--max-min", type=int, default=None, metavar="M",
@@ -336,8 +347,6 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                    help="a job without --gpus whose workload takes its GPUs with gpu-lease itself, around each GPU step: its CPU "
                         "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle), with GPU_LEASE naming the node's "
                         "lease tool")
-    q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
-    q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
     ap.add_argument("--id", default=None, help="use this run id (rYYYYMMDD-HHMMSS-xxxx) instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
@@ -450,6 +459,25 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         print("research run: --end is a booked period's end on a machine you name (--on MACHINE): the queue and `--on auto` "
               "choose when and where a run starts", file=sys.stderr)
         return 2
+    try:
+        ns.card = _cards(ns.card)
+    except ValueError as e:
+        print(f"research run: {e}", file=sys.stderr)
+        return 2
+    if ns.card and ns.gpus is not None and ns.gpus != len(ns.card):
+        print(f"research run: --gpus {ns.gpus} and --card {','.join(map(str, ns.card))} ({len(ns.card)} card(s)) disagree: "
+              f"give --card alone, or --gpus {len(ns.card)}", file=sys.stderr)
+        return 2
+    if (ns.card or ns.timed) and not (ns.on or ns.queue):
+        print("research run: --card and --timed are for a run on a machine (--on MACHINE) or the queue's (--queue); a local "
+              "run takes no lease", file=sys.stderr)
+        return 2
+    if ns.timed and not (ns.queue or ns.on == "auto" or ns.pool or ns.gpus or ns.card):
+        print("research run: --timed un-nices a --pool run and makes a --gpus or --card lease a timed one; this run has "
+              "neither, so give --pool, --gpus or --card", file=sys.stderr)
+        return 2
+    if ns.card and ns.gpus is None:
+        ns.gpus = len(ns.card)
     if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
@@ -457,6 +485,16 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         _auto_size(ns, harness_opts, command)
         return _auto_launch(ns, harness_opts, command, clones)
     return _run_placed(ns, harness_opts, command, clones)
+
+
+def _cards(given: list[str]) -> list[int]:
+    """`--card`'s card indices, each given once, in the order given: ValueError, with the form, on anything else."""
+    cards = [c.strip() for g in given for c in g.split(",")]
+    if not all(re.fullmatch(r"\d{1,3}", c) for c in cards):
+        raise ValueError(f"--card {','.join(given)}: a card is its index (0, 1, ...), repeated or comma-separated")
+    if len(set(cards)) < len(cards):
+        raise ValueError(f"--card {','.join(given)} names a card twice")
+    return [int(c) for c in cards]
 
 
 def _named_asks(ns: argparse.Namespace, command: list[str]) -> dict | None:
@@ -578,7 +616,7 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
                 ns.asks = asks
                 asks["wait_s"] = wait_s
             command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s, twin=ns.id if asks else None, end=ns.end,
-                                        slot=ns.slot)
+                                        slot=ns.slot, timed=ns.timed)
             if budget := getattr(ns, "budget_gb", None):       # slot.py's own option, before the `--` that ends them
                 from . import suite_size  # noqa: PLC0415
 
@@ -618,8 +656,7 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
                                            ("--gpu-model", ns.gpu_model), ("--max-min", ns.max_min is not None),
                                            ("--kind", ns.queue_kind != "adhoc"), ("--question", ns.question),
                                            ("--phase", ns.queue_phase), ("--class", ns.queue_class != "work"),
-                                           ("--preemptible", ns.preemptible), ("--quiet", ns.quiet), ("--gpu-ids", ns.gpu_ids),
-                                           ("--gpu-host", ns.gpu_host),
+                                           ("--preemptible", ns.preemptible), ("--gpu-host", ns.gpu_host),
                                            ("--disk-gb", ns.disk_gb is not None))
                   if given]
     if queue_only:
@@ -1450,7 +1487,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     or under `auto.REFUSE` refused unless --accept-wait. What it says of a job it places, where it sent it and why (what
     AUTO_NODE and each pool answered, and whether the pool was the last resort) and when it should start, it keeps as
     `ns.placed`, which the launch records (remote.launch's `auto`). The harness options it runs with, or None when it is
-    refused (a late run, `auto.Unplaceable`, or a GPU or quiet job while AUTO_NODE is down, held or starts no run,
+    refused (a late run, `auto.Unplaceable`, or a GPU or timed job while AUTO_NODE is down, held or starts no run,
     `auto.closed`). ``docs`` keeps what it read of the machines (`auto.read`): given them again, it places the job from
     them and asks no machine."""
     from . import auto
@@ -1459,12 +1496,12 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     cpus = ns.cpus or AUTO_CPUS
     budget = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
     mem = getattr(ns, "reserve_gb", None) or budget            # what a pool's slot reserves: a sized run of many suites, less
-    gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
-    target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
+    gpu = ns.gpus or ns.gpu_model or ns.card or ns.gpu_host or ns.timed or ns.queue_phase == "gpu"
+    target, why = None, "a GPU or timed job, which only the queue books" if gpu else None
     if gpu and not docs:
         docs.update(auto.read(Path(ns.source), cpus, node_only=True))
     if gpu and (closed := auto.closed(docs.get(auto.AUTO_NODE))):
-        print(f"research run --on auto: refused: {closed}, and a GPU or quiet job runs on no other node", file=sys.stderr)
+        print(f"research run --on auto: refused: {closed}, and a GPU or timed job runs on no other node", file=sys.stderr)
         return None
     told = None                                                # when it should start; a GPU job's wait is the queue's to say
     if why is None:
@@ -1552,7 +1589,8 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
             "gpu-model": ns.gpu_model, "cpus": ns.cpus, "mem-gb": math.ceil(ns.mem_gb) if ns.mem_gb is not None else None,
             "max-s": int(given_max) if given_max else None, "custody-s": RUN_MARGIN_S,
             "disk-gb": ns.disk_gb,
-            "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.quiet, "node": ns.on, "gpu-ids": ns.gpu_ids,
+            "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.timed, "node": ns.on,
+            "gpu-ids": ",".join(map(str, ns.card)) or None,
             "gpu-host": ns.gpu_host}
     try:
         placed = remote.queue_placement(Path(ns.source).expanduser(), run_id, spec)
@@ -1668,7 +1706,8 @@ def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], com
     what = dict(project=ns.project, command=command, harness_args=harness_args, cwd=None, env=env, exclusive=ns.exclusive,
                 mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait, custody_ttl=(ns.custody_ttl or "6h") if custody else None,
                 preflight_tool=ns.preflight, job_user=ns.job_user, job_namespaces=ns.job_namespaces,
-                gpus=None if queue else ns.gpus, store_read=ns.store_read, mem_limit=_stated_limit(ns))
+                gpus=None if queue else ns.gpus, cards=None if queue else ns.card or None, timed=ns.timed and not queue,
+                store_read=ns.store_read, mem_limit=_stated_limit(ns))
     try:
         rec = remote.launch(run_id=run_id, local_dir=run_dir, taken=True, machine_name=ns.on, source=source,
                             sends=[*sends, *([urls] if urls else [])], queue=queue, auto=getattr(ns, "placed", None), **what)

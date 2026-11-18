@@ -680,7 +680,7 @@ def test_spot_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, cap
     assert [c["verdict"] for c in cases if c["protocol"] == SAMPLED] == ["reject"]
     got = json.loads((tmp_path / "private" / "sampled-proofs" / "answer.json").read_text())
     assert got["protocol"] == SAMPLED and got["commitment"] == digest_of(v1), got
-    got, _ = SC.lean_answer(sampled_exe, SC.with_form(v1), tmp_path / "scratch", SC.SAMPLED_CMD)
+    got, _ = SC.lean_answer(sampled_exe, SC.with_levels(v1), tmp_path / "scratch", SC.SAMPLED_CMD)
     assert got["protocol"] == SAMPLED and got["verdict"] == "reject", got
     assert got["reason"].startswith("params: the parameters name no proofs: one-stage v1 "), got
     assert "is refused" in got["reason"], got

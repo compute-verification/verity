@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from verity import hooks as H
 from verity.circuits.defs import REGISTRY, CompositeDefinition
+from verity.protocols.interface.charge import charge_chain, window_charge
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.network import scheme as NS
 from verity.protocols.resource_accounting.network.prover.response_tie import ResponseTieStop
@@ -28,3 +29,16 @@ def test_every_block_is_a_registered_definition() -> None:
 def test_cost_is_output_bits() -> None:
     cost = NS.NETWORK_ATTESTER.blocks[NS.DEFINITIONS.index(ResponseTieStop)].cost
     assert cost({"O": 4}) == 176
+
+
+def test_the_charge_circuits_are_the_interfaces() -> None:
+    ids = {b.definition for b in NS.NETWORK_ATTESTER.blocks}
+    assert ids.isdisjoint({charge_chain.ChargeLink.id, window_charge.ChargeCount.id, window_charge.ChargeLink.id})
+    assert [c.name for c in NS.NETWORK_ATTESTER.charges][0] == "advice"
+
+
+def test_ports_are_its_blocks() -> None:
+    ids = {b.definition for b in NS.NETWORK_ATTESTER.blocks}
+    assert {(p.direction, p.definition) for p in NS.NETWORK_ATTESTER.ports} == {
+        ("input", "IngressScanStart_v1"), ("output", "EgressBucket_v1")}
+    assert {p.definition for p in NS.NETWORK_ATTESTER.ports} <= ids

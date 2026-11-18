@@ -554,13 +554,15 @@ theorem stage_held (hm : CallerCheckSound) {k : Case} {n : Named} {bs : Blobs} (
   have hchk' : VStar.Recursive.Sampled.checkBlobs p c e bs = .accept pub prof := hchk
   clear hp' hchk
   rcases p with p | q <;> rcases e with e | e
-  · obtain ⟨hcall, hz⟩ := VStar.Recursive.Caller.gate_accept
-      (show VStar.Recursive.Caller.gate c.record p.base.verifier (Spot.OneStageZk.checkBlobs p c e bs) =
-        .accept pub prof from hchk')
+  · obtain ⟨hcall, hz⟩ := VStar.Recursive.Caller.gate_accept (VStar.Recursive.Sampled.levelsHeld_accept
+      (show VStar.Recursive.Sampled.levelsHeld 1 (VStar.Recursive.Caller.gate c.record p.base.verifier
+        (Spot.OneStageZk.checkBlobs p c e bs)) = .accept pub prof from hchk')).1
     exact .inl ⟨p, c, hp'', hc', stage_zk_registered hz, hm _ _ hcall⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
-  · have hq : VStar.Recursive.SampledTwo.checkBlobs q c e bs = .accept pub prof := hchk'
+  · obtain ⟨prof', hq⟩ := VStar.Recursive.Sampled.withBoundary_accept (VStar.Recursive.Sampled.levelsHeld_accept
+      (show VStar.Recursive.Sampled.levelsHeld 2 (VStar.Recursive.Sampled.withBoundary q c
+        (VStar.Recursive.SampledTwo.checkBlobs q c e bs)) = .accept pub prof from hchk')).1
     obtain ⟨hcall, -⟩ := VStar.Recursive.Caller.gate_accept (VStar.Recursive.Caller.gate_accept hq).2
     exact .inr ⟨q, c, hp'', hc', hm _ _ hcall⟩
 
