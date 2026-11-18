@@ -123,7 +123,7 @@ def _profiler_launch(trace: Path, needle: str) -> dict[str, Any]:
 
 def sass(out: Path) -> dict[str, Any]:
     """Compile the pinned width-8 arithmetic for sm_90 and retain its SASS and operation census."""
-    nvcc = shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc"
+    nvcc = shutil.which("nvcc") or os.path.join(settings.cuda_home(), "bin", "nvcc")
     cuobjdump = shutil.which("cuobjdump") or str(Path(nvcc).with_name("cuobjdump"))
     cubin, text = out / "cuda_rmsnorm_sm90.cubin", out / "cuda_rmsnorm_sm90.sass"
     flags = ["-O3", "-DNDEBUG", "-std=c++17", "-lineinfo", "--expt-relaxed-constexpr", "--expt-extended-lambda",

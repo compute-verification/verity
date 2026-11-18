@@ -5,7 +5,7 @@
 # the network slots, as a job of at most 240 minutes on a CPU node whose input is the gate's tarball GATE.tgz:
 #   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py --by LANE -- \
 #     env CR_MEM_GB=128 CR_GATES=GATE.tgz bash benchmarks/network_traces/chain_record.sh
-# Steps, each kept under $OUT and read by the report:
+# Steps, each kept under $OUT (the endpoint's in $Q/witness/endpoint) and read by the report:
 #   custody  each gate run's files against its end.json (chain_record.py custody)
 #   certs    the network attester's own offline check on its witness, and the public certificates.jsonl held to the
 #            attested lines (chain_record.py certs --warden-run)
@@ -59,7 +59,9 @@
 # found of the traffic (which execution phases were attested or refused, and how many problems: network_attester_chain's
 # WITNESS_KEYS), nor what n2's public summary leaves out (n2_zk.py --witness: its timings, values in the clear and
 # which execution phases its members' signer refused, and its log of them with its stderr and its children's, n2.log),
-# nor a child's log in a step's output (a session's prove.log and serve.log). Those are witness,
+# nor a child's log in a step's output (a session's prove.log and serve.log), nor the endpoint step's report and logs
+# (its advice rebuilt in the clear, each window's counts; the record keeps its verdict and counts of windows,
+# chain_record.py endpoint_advice). Those are witness,
 # kept on the chain's private side, $Q/witness/STEP (0700, outside the run dir and the hold), where the period's case
 # reads the answers (attester_piece.py), and never released.
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
@@ -166,18 +168,18 @@ if [ -n "${CR_ENDPOINT:-}" ]; then
   unpack "$CR_ENDPOINT" "$W/endpoint"
   EP=$(find "$W/endpoint" -name advice_trace.jsonl -printf '%h\n' -quit)
   REP=$(find "$W/endpoint" -name report.json -print -quit)
-  mkdir -p "$OUT/endpoint"
+  EPQ=$Q/witness/endpoint; mkdir -p "$EPQ"
   if [ -z "$EP" ] && [ -n "$REP" ]; then
     log "chain: endpoint report ${REP#$W/endpoint/} ($CR_ENDPOINT), the served node's (served_session.py endpoint)"
-    cp "$REP" "$OUT/endpoint/report.json"
+    cp "$REP" "$EPQ/report.json"
   else
     [ -n "${CR_EOS_IDS:-}" ] || { log "chain: the network attester path's endpoint step needs CR_EOS_IDS, the model's EOS" \
       "token ids (128001 for Llama-3.2-1B)"; exit 3; }
     log "chain: endpoint ${EP:-none} ($CR_ENDPOINT): its advice bound to the certified I/O off ${NETWORK_CERTIFIER#$G/}'s cells"
     "$PY" "$CR" endpoint --warden-run "$NETWORK_CERTIFIER" --endpoint "${EP:-$W/endpoint}" --eos "$CR_EOS_IDS" \
-      --out "$OUT/endpoint/report.json" > "$OUT/endpoint.log" 2>&1
+      --out "$EPQ/report.json" > "$EPQ/endpoint.log" 2>&1
     log "chain: endpoint done, rc $?"
-    cp "${EP:-$W/endpoint}/advice.log" "$OUT/endpoint/" 2>/dev/null
+    cp "${EP:-$W/endpoint}/advice.log" "$EPQ/" 2>/dev/null
   fi
 fi
 (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
@@ -254,7 +256,7 @@ json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_
            "stand_in": {"n2": text("n2.standin")}}, open(sys.argv[1], "w"), indent=1)
 EOF
 PA=${CR_PERIOD_ANSWER:-}; [ -z "$PA" ] || [ -e "$PA" ] || PA=${RESEARCH_RUN_DIR:?}/inputs/$PA
-"$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
+"$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$Q/witness/endpoint/report.json" \
   $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
   $( [ -f "$W/scan.network_attester" ] && echo --warden-run "$(cat "$W/scan.network_attester")") ${CR_AUDIT:+--audit $CR_AUDIT} ${CR_PINS:+--pins "$CR_PINS"} \
   --tie "$OUT/tie/summary.json" \
