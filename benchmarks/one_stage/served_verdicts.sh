@@ -340,9 +340,9 @@
 # in-process challenger's: the COINS line, the run's first, leads with that, and the piece claims no verdict. A peer
 # set with the gate empty is a pair the preflight refuses.
 # With PEARLPLUS_TIE=1 too, the window itself is served under Pearl+, the way H1_TIE ties H1's: serve-openai serves
-# PEARLPLUS_ARM (default pouw:pearl-c-h100-v1-h3) on its one engine (`serve_pearl`, --protocols with --protocols-config
-# naming the cubin PEARLPLUS-CUBIN built before the lease), one Pearl+ epoch a Commit window beside SPOT cut at
-# Pearl+'s linears, so the window's linears are the Pearl+ matmuls whose passes are committed, each window's retained in
+# pearl-plus by its name on its one engine (`serve_pearl`, --protocols with --protocols-config naming the cubin
+# PEARLPLUS-CUBIN built before the lease), one Pearl+ epoch a Commit window beside SPOT cut at Pearl+'s linears
+# (--pearl-tables, the kernel of PEARLPLUS_ARM: default Pearl+'s declared option, as records hold it), so the window's linears are the Pearl+ matmuls whose passes are committed, each window's retained in
 # the serve dir's pearl/w<k>/. Each epoch's salt coin is a live salt-only session of its window's own on vy-challenger-1
 # (`serve_pearl.live`: serve-openai's --challenger-gate PEARLC_CHALLENGER_GATE, --challenger-peer PEARLC_CHALLENGER_PEER
 # and --challenger-lane PEARLC_CHALLENGER_LANE, defaulted as above), reserved under the lane as the window opens and
