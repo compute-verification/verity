@@ -145,3 +145,9 @@ def test_a_session_on_a_card_two_node_files_carry_is_refused_by_name(tmp_path):
     with pytest.raises(SystemExit, match="h200-sxm-141gb-x1, h200-sxm-141gb-x2 all carry h200-sxm-141gb"):
         kit.session_node("NVIDIA H200", "serving", directory=tmp_path)
     assert kit.session_node("NVIDIA H200", "serving", kind="h200-sxm-141gb-x2") == "local/h200-sxm-141gb-x2/serving"
+
+
+def test_the_data_sheets_memory_bandwidth_is_read_from_the_card_and_refused_where_the_card_has_none():
+    assert kit.datasheet_bandwidth("NVIDIA H200") == 4_800_000_000_000
+    with pytest.raises(SystemExit, match="^the card record h100-sxm-80gb .* has no memory.datasheet_bandwidth"):
+        kit.datasheet_bandwidth("NVIDIA H100 80GB HBM3")

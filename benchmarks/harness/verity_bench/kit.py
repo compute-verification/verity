@@ -11,7 +11,7 @@
   with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
 - `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set and not another, else the run's machine's
   `[properties]`'; `card_sku(name)` and `card_arch(name)`: the `sku` and `arch` of the card `card_short` finds;
-  `card_nodes(sku)` the node files carrying a card, and `session_node(name, slot)` the node a PoUB session on it registers;
+  `datasheet_bandwidth(name)` its data sheet's stated memory bandwidth; `card_nodes(sku)` the node files carrying a card, and `session_node(name, slot)` the node a PoUB session on it registers;
   `machine_arch()` the run's machine's card's.
   `benchmarks/kernels/machine.py` prints both for a shell script.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
@@ -271,6 +271,19 @@ def session_node(name: str | None, slot: str | int, *, kind: str | None = None, 
         raise SystemExit(f"the node files {', '.join(nodes)} all carry {sku}, the card here: name the session's node "
                          "with --node")
     return f"local/{nodes[0] if nodes else sku}/{slot}"
+
+
+def datasheet_bandwidth(name: str, *, directory: Path | None = None) -> int:
+    """``memory.datasheet_bandwidth`` of the card record `card_short` finds for ``name``, bytes a second: the data sheet's
+    stated memory bandwidth; refused by name where the record has none."""
+    directory = directory or cards_directory()
+    card = _card_named(name, directory)
+    entry = card.get("memory", {}).get("datasheet_bandwidth")
+    if entry is None:
+        raise SystemExit(f"the card record {card['sku']} ({directory}/{card['sku']}.toml) has no "
+                         "memory.datasheet_bandwidth, the data sheet's stated memory bandwidth: add it, its source the "
+                         "data sheet")
+    return int(entry["value"])
 
 
 def card_arch(name: str, *, directory: Path | None = None) -> str:
