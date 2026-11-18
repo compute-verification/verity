@@ -25,7 +25,7 @@ def _toy(name: str = "toy-bandwidth", **kw) -> S.Scheme:
         "charges": (S.Charge("on-chip", "on_chip_bits"), S.Charge("rebuilt", "rebuilt_bits")),
         "settings": {"refresh": False}, "requires": {"coins-at-rate": "its own challenger"},
         "delta_scheme": Fraction(0), "over": "the session's credited bits, cleared of (1 - γ)",
-        "under": "the tier's reads, in bits", **kw})
+        "under": "the tier's reads, in bits", "premises": (), **kw})
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +38,7 @@ def test_picked_by_name_its_module_imported_on_first_use(monkeypatch: pytest.Mon
 
     (tmp_path / "toy_declaration.py").write_text(
         "from verity.protocols.resource_accounting import scheme as S\n"
-        "S.register(S.Scheme('toy', 'toy', 'memory', (), (), (), ()))\n")
+        "S.register(S.Scheme('toy', 'toy', 'memory', S.Lacks('a stand-in'), (), (), ()))\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(schemes, "DECLARATIONS", {"toy": "toy_declaration", "absent": "toy_declaration"})
     assert "toy" not in S.SCHEMES
@@ -58,7 +58,7 @@ def test_a_shell_reads_one_field_of_a_declaration(monkeypatch: pytest.MonkeyPatc
 
     (tmp_path / "toy_shell_declaration.py").write_text(
         "from verity.protocols.resource_accounting import scheme as S\n"
-        "S.register(S.Scheme('toy', 'verity/toy/v0', 'memory', (), (), (), (), settings={'reads': 5, 'on': True},\n"
+        "S.register(S.Scheme('toy', 'verity/toy/v0', 'memory', S.Lacks('a stand-in'), (), (), (), settings={'reads': 5, 'on': True},\n"
         "                    option='toy:at-v1'))\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(schemes, "DECLARATIONS", {"toy": "toy_shell_declaration"})
@@ -111,8 +111,8 @@ def test_bound() -> None:
     ({"charges": (S.Charge("on-chip", "a"), S.Charge("on-chip", "b"))}, "charge twice"),
 ])
 def test_refusals(bad: dict, match: str) -> None:
-    base = {"name": "toy", "protocol": "verity/toy/v0", "resource": "read", "blocks": (), "assumptions": (), "log": (),
-            "charges": ()}
+    base = {"name": "toy", "protocol": "verity/toy/v0", "resource": "read", "blocks": S.Lacks("a stand-in"),
+            "assumptions": (), "log": (), "charges": ()}
     with pytest.raises(ValueError, match=match):
         S.Scheme(**{**base, **bad})
 
@@ -220,6 +220,7 @@ def test_unbounded_charge_refuses_a_bound() -> None:
     s = _toy(charges=(S.Charge("on-chip", "on_chip_bits"), S.Charge("padding", "Network.PaddingBound", bounded=False)))
     with pytest.raises(ValueError, match="nothing bounds yet: padding"):
         S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "padding": 0})
+    assert S.unbounded(s).terms == ("padding",) and S.unbounded(_toy()) is None
 
 
 def test_ports() -> None:
@@ -244,23 +245,33 @@ def test_every_declaration_fills_each_field_or_says_why_not() -> None:
              "from verity.protocols.resource_accounting import scheme as S\n"
              "C.load()\n"
              "F = ('parties', 'channels', 'channel_schemas', 'colocated', 'needs', 'depends', 'record', 'symbol',\n"
-             "     'published', 'record_owner')\n"
+             "     'published', 'check', 'reader', 'premises', 'tables', 'output_format', 'product_family',\n"
+             "     'y_committed', 'salt_open_root', 'kernels')\n"
              "print(json.dumps(sorted([n, f] for n in C.DECLARATIONS for f in F if getattr(C.get(n), f) == S.UNDECLARED)))\n")
     out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout) == [], "fill each field a declaration leaves unset, or say why not with S.Lacks(why)"
 
 
 def test_a_component_that_charges_nothing_is_a_scheme_bound_and_credited_refuse() -> None:
-    free = _toy(name="toy-check", resource=S.Lacks("charges nothing: it checks a policy"), record="toy")
-    assert S.declared(free, "record") == "toy" and free.composed_protocol is None
+    nothing = S.Lacks("charges nothing: it checks a policy")
+    free = _toy(name="toy-check", resource=nothing, blocks=nothing, record="toy")
+    assert S.declared(free, "record") == "toy"
     with pytest.raises(LookupError, match="toy-check declares no resource: charges nothing"):
         S.bound(free, Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, epsilon=EPS)
-    with pytest.raises(LookupError, match="toy-check declares no resource"):
-        S.credited([free], [])
+    for field in ("resource", "blocks"):
+        with pytest.raises(LookupError, match=f"toy-check declares no {field}: charges nothing"):
+            S.declared(free, field)
     with pytest.raises(LookupError, match="toy-check declares no resource"):
         free.unit
+    placed = _toy(blocks=(S.Block("Toy_v1", lambda shape: 1),))
+    assert S.credited([free], []) == frozenset()
+    assert S.credited([free, placed], [("Toy_v1", [(0, 2)])]) == {0, 1}
     with pytest.raises(ValueError, match="its resource is one of"):
         _toy(resource="disk")
+    with pytest.raises(ValueError, match="places no block"):
+        _toy(blocks=())
+    with pytest.raises(ValueError, match="charges nothing says why it has no blocks"):
+        _toy(name="toy-check", resource=nothing)
 
 
 def test_the_records_unit_is_an_exact_factor_and_schemas_are_of_carried_messages() -> None:
@@ -311,7 +322,8 @@ def test_every_scheme_is_a_line_of_the_one_table() -> None:
 
     root = Path(__file__).resolve().parents[4]
     declaring = {str(p.relative_to(root).with_suffix("")).replace("/", ".")
-                 for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental")
+                 for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental",
+                           "verity/protocols/proofs/spot", "verity/protocols/workload_classification")
                  for p in (root / d).rglob("scheme.py") if "register(" in p.read_text()}
     declaring.discard("verity.protocols.resource_accounting.scheme")
     assert declaring == set(schemes.DECLARATIONS.values()), "add each declaring module's names to compose.schemes"
@@ -326,6 +338,48 @@ def test_every_scheme_is_a_line_of_the_one_table() -> None:
     assert json.loads(out.stdout) == dict(schemes.DECLARATIONS), "each name maps to the module that registers it"
 
 
+def test_every_reason_a_list_cannot_attach_in_its_order_is_given_from_its_declarations() -> None:
+    base, store = _toy("base", depends=()), _toy("store", resource="memory", needs=frozenset({"store"}), depends=())
+    over = _toy("over", depends=("base", "absent"))
+    work = _toy("work", resource="compute", depends=("base",))
+    assert S.order_refusals([base, store, work]) == S.order_refusals([base, over]) == []
+    assert S.order_refusals([over, work, base, store, _toy("unsaid")]) == [
+        "order: over requires base, so protocols lists base before over",
+        "order: work requires base, so protocols lists base before work",
+        "depends: unsaid's declaration does not say which schemes it depends on (depends is undeclared)",
+        "outer: store is storage (it needs the workload's store) and is listed after work, useful work (resource compute); "
+        "where both wrap one site the earlier listed is the outer, so protocols lists store before work"]
+
+
+def test_the_lookup_table_is_each_declarations_own_values() -> None:
+    """`KEYS` holds, for every declared scheme, exactly the option, roles and port, framing and process names its
+    declaration states: an entry the declaration lacks fails, and so does a declared value the table lacks."""
+    probe = ("import json\n"
+             "from verity.protocols.compose import schemes\n"
+             "print(json.dumps({n: schemes.keys(s) for n, s in schemes.load().items()}))\n")
+    out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True)
+    from verity.protocols.compose import schemes
+
+    declared = {n: {f: tuple(v) for f, v in k.items()} for n, k in json.loads(out.stdout).items() if k}
+    assert {n: dict(k) for n, k in schemes.KEYS.items()} == declared, "write each declaration's values in compose.schemes.KEYS"
+
+
+def test_a_lookup_by_a_declared_value_names_one_scheme_and_refuses_none_or_two(monkeypatch) -> None:
+    from verity.protocols.compose import schemes
+
+    assert schemes.named("option", "pous:p2-16448/v4") == "pous"
+    assert schemes.named("provides", "admission") == "network-attester"
+    assert schemes.named("ports", "scan-state") == "network-attester"
+    assert "pous" not in S.SCHEMES
+    with pytest.raises(LookupError, match=r"one scheme whose option is 'pous:absent', not 0: \[\]; declared: pou"):
+        schemes.named("option", "pous:absent")
+    with pytest.raises(LookupError, match="no lookup by 'name'"):
+        schemes.named("name", "pous")
+    monkeypatch.setattr(schemes, "KEYS", {"a": {"provides": ("cut",)}, "b": {"provides": ("cut",)}})
+    with pytest.raises(LookupError, match=r"one scheme whose provides is 'cut', not 2: \['a', 'b'\]"):
+        schemes.named("provides", "cut")
+
+
 def test_a_scheme_attaches_nothing_by_default_and_registers_its_processes(monkeypatch) -> None:
     monkeypatch.setattr(S, "PROCESSES", {})
     assert _toy().requests(None) == () and _toy().attach(None, None) is None
@@ -333,3 +387,15 @@ def test_a_scheme_attaches_nothing_by_default_and_registers_its_processes(monkey
     monkeypatch.setattr(S, "SCHEMES", {})
     S.register(_toy(processes={"toy-beside": start}))
     assert S.PROCESSES == {"toy-beside": start}
+
+
+def test_a_pieces_party_is_a_declared_developer_party_and_its_development_one_of_its_bindings() -> None:
+    from verity.protocol import Role
+    parties = (Role("prover", "developer"), Role("challenger", "auditor"), Role("verifier", "auditor"))
+    ok = _toy(parties=parties, pieces={"prover": S.Launch(optional=("address",), development="address")})
+    assert ok.pieces["prover"].development == "address"
+    for pieces, why in (({"challenger": S.Launch()}, "declared developer-side parties' \\['prover'\\], not 'challenger'"),
+                        ({"prover": S.Launch(development="host")}, "development binding 'host' is one of its binds"),
+                        ({"prover": S.Launch(reaches="prover")}, "reaches a declared auditor party, not 'prover'")):
+        with pytest.raises(ValueError, match=why):
+            _toy(parties=parties, pieces=pieces)

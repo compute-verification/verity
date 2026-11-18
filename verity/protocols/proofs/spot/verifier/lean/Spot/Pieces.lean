@@ -282,7 +282,7 @@ def registered (j : Json) : V Json := do
   return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson))) (Docket.ownEntries v)
 
 /-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, and an optional
-`"window"`, to `registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32, a window that is
+`"window"`, to `registered_value.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32, a window that is
 not lowercase hex of 64 bytes). -/
 def domain (j : Json) : V Json := do
   let (.str program, .str value) := (getD j "program", getD j "value") | throw "program or value is not a string"
@@ -993,10 +993,11 @@ def edges (j : Json) : V Json := do
   let w ← Wires.Wiring.ofJson (getD j "wiring")
   return match Edges.edgesOf p.prog rs w with
     | .error e => Json.mkObj [("refusal", Json.str e)]
-    | .ok ws => Json.mkObj [("wires", Json.arr (ws.toArray.map fun e => Json.mkObj [("reader", Json.str e.reader),
+    | .ok ws => Json.mkObj [("wires", Json.arr (ws.toArray.map fun e => Json.mkObj ([("reader", Json.str e.reader),
         ("port", Json.str e.port), ("writer", Json.str e.writer), ("out", Json.str e.out), ("at", Lean.toJson e.start),
         ("radix", Lean.toJson e.radix), ("base", Lean.toJson e.base), ("step", Lean.toJson e.step),
-        ("cut", Json.arr #[Lean.toJson e.cut0, Lean.toJson e.cuts]), ("offset", Lean.toJson e.offset)]))]
+        ("cut", Json.arr #[Lean.toJson e.cut0, Lean.toJson e.cuts]), ("offset", Lean.toJson e.offset)] ++
+        (if e.ostep.isEmpty then [] else [("ostep", Lean.toJson e.ostep)]))))]
 
 /-- `second_stage.replay_rows`' input to the rows the design's links' and wires' units read
 (`SecondStage.replayRows`): a program object and the replay block's descriptor id in it (`replay`). -/

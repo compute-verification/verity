@@ -46,12 +46,11 @@ from verity.protocols.resource_accounting.memory.pous.attester import memory_att
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier import setup
 from verity.protocols.resource_accounting.memory.pous.verifier.period import (
-    C0,
     PROTOCOL,
     SESSION_DOMAIN,
     SETUP_WORKERS,
-    W,
     Run,
+    W,
     answer,
     case,
     deployment,
@@ -64,7 +63,6 @@ from verity.protocols.resource_accounting.memory.pous.verifier.period import (
     unjudged,
 )
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
-
 
 type Prover = Callable[[Sequence[bytes]], Callable[[int], bytes]]
 """The prover's side of the session: from the blocks of `C*` it was sent, its answer to each index."""
@@ -326,13 +324,11 @@ def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",))
 
 def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challenger_session.Side],
         session: Session) -> dict[str, Any]:
-    """Space's subprotocol of `benchmarks/all_protocols` (`subprotocol(period_dir, node, out, side_of=...) -> answer`). By default the
-    node's store is set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records
-    at its first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up
-    to `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period audits it with fresh
-    coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With `{"pous": {"point": "small"}}`
-    in `period.json`, each period sets the period's own records up at the small point instead, certifying nothing. The
-    memory attester is a party of its own on `period.json`'s `challenger_host` (`side_of(period, node, key, local)`,
+    """Space's subprotocol (`subprotocol(period_dir, node, out, side_of=...) -> answer`). The node's store is set up
+    once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records at its first period
+    (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up to `SETUP_WORKERS`
+    processes and kept beside the periods (`pous-store`), and every period audits it with fresh coins, so an accepted
+    period certifies `s_bits > 0` at the certificate's `eps`. The memory attester is a party of its own on `period.json`'s `challenger_host` (`side_of(period, node, key, local)`,
     which the caller that starts the run hands in, the runtime's `Side.of`; on this node by default, a process whose key
     and session log are beside the periods) and the prover is here, answering it in `session`
     (`challenger_prover.session`, which the caller hands in too). With `pous-run-protocol` and `pous-setup` among the
@@ -343,17 +339,15 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     `period.json`'s `deployment`), and that setup was checked by the developer, not the auditor
     (`challenger_session.SETUP`), go in `pous.json` and in an accepted answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
-    tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
+    tools = doc.get("tools") or {}
     workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))
     party = side_of(doc, node, "pous", challenger_session.command(Path(period_dir).parent / "pous-challenger"))
     kept = Path(period_dir).parent / "pous-store"
     t = time.monotonic()
-    if small or not (kept / "store.json").exists():
+    if not (kept / "store.json").exists():
         store = records(period_dir)
-        point = point_for(len(store), W, C0) if small else point_for(len(store))
-        held = setup_store(store, secrets.token_bytes(64), point, workers=1 if small else workers)
-        if not small:
-            held.save(kept)
+        held = setup_store(store, secrets.token_bytes(64), point_for(len(store)), workers=workers)
+        held.save(kept)
         fresh = True
     else:
         held, fresh = EncodedStore.load(kept), False

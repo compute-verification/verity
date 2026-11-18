@@ -1,7 +1,7 @@
 """The committer's registration of the per-expert cut's tables (`expert_rows`), one a TP rank (``verity-vllm tp-register-tables``):
 each table of each expert stack's weights and scales on the rank (`expert_rows.table_param`, its rows `expert_rows.table_words`
 of the weight as `check.weights_of_record` composes it from the checkpoint's shards for the rank) committed as core's
-``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows under fresh salts at the rank's program (`program`), written before
+``registered_value.Registered`` of ``hm96-sha512/row-seg/v1`` rows under fresh salts at the rank's program (`program`), written before
 the first window's coins as the record `records.expert_tables.ExpertTables`: the ``{program, values}`` the verifier pins
 (``records_audit.py audit --registered``), so a window's table read and opening count registered exactly where the window's root
 for the table is this one.  The salts go to the salt file beside the record (`verity.commitments.salt_file`) and never leave the
@@ -60,7 +60,7 @@ BITS = {"float8_e4m3fn": 8, "uint8": 8, "bfloat16": 16, "float16": 16, "float32"
 
 
 def program(repo: str, revision: str, world: int, rank: int, prefix: str) -> str:
-    """The program a rank's tables are registered under (their domains', core's ``registered.domain``): the SHA-512 of the model,
+    """The program a rank's tables are registered under (their domains', core's ``registered_value.domain``): the SHA-512 of the model,
     its revision, the TP world and rank and the Programs' wrapper prefix, so two ranks' tables of one name are distinct values."""
     doc = {"format": SCHEMA, "repo": repo, "revision": revision, "world": int(world), "rank": int(rank), "prefix": prefix}
     return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -136,7 +136,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
     for b, param, what, n in tables:
         words_of = rows(b, what, n)
         ys = os.urandom(len(words_of) * SF.SALT_BYTES)
-        v = registered_commit(digest, param, words_of, bytes(32), 0, row_salts=ys,
+        v = registered_commit(digest, param, words_of, ys,
                               schema=SCHEMA_HM96_SHA512_ROW_V2 if what == "bnk" else SCHEMA_HM96_SHA512_ROW_SEG)
         out[param], salts[param] = v.entry(), ys
     return out, salts

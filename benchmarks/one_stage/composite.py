@@ -59,6 +59,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
+# `served_composite.sh` runs this file with an interpreter that may not import `verity`: the standard library only.
 PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0", "remote-v1": "verity/remote/v1"}
 #: Each product's subprotocols, as `Core.Onsite.components`, `Core.Remote.components` and `Core.Remote.V1.components`
 #: list them; read only to name the missing ones.
@@ -111,6 +112,7 @@ class Leak(Exception):
 
 def canonical(x: Any) -> bytes:
     """`x` as `Core.canonicalJson` reads it, for the integers, strings, lists and objects of ASCII keys cases hold."""
+    # Not `codec.canonical_json`: a character outside ASCII stays raw (which `Core.canonicalJson` refuses), and NaN is refused.
     return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
 
 
@@ -189,14 +191,6 @@ def exceptions(product: str) -> list[str]:
     return [EXCEPTIONS[i] for i in COMPONENTS[product] if i in EXCEPTIONS]
 
 
-def file_sha512(path: Path) -> str:
-    h = hashlib.sha512()
-    with open(path, "rb") as f:
-        while chunk := f.read(1 << 20):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
     """What ran the check: the tree's commit (``commit``, None outside a git checkout) and whether its tracked files are
     that commit's (``clean``), the executable's SHA-512 (``verifier_sha512``), and the guarantee the product's accept
@@ -213,7 +207,9 @@ def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
         g = audit.get("guarantees", {}).get(cites)
         lock = {"listed": g is not None, "deployed": cites in audit.get("deployed", []),
                 "open": sorted(((g or {}).get("premises") or {}).get("open", []))}
-    return {"commit": commit, "clean": clean, "verifier_sha512": file_sha512(exe), "cites": cites, "lock": lock}
+    with open(exe, "rb") as f:
+        verifier = hashlib.file_digest(f, "sha512").hexdigest()
+    return {"commit": commit, "clean": clean, "verifier_sha512": verifier, "cites": cites, "lock": lock}
 
 
 def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:

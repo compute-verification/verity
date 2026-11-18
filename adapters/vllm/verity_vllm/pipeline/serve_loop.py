@@ -6,6 +6,7 @@ import collections
 import queue
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from verity import hooks as H
@@ -13,6 +14,18 @@ from verity_vllm.engine.admission import Hook
 from verity_vllm.engine.served_seed import SeedCoins, served
 from verity_vllm.pipeline.serve_admit import Admission, Delta
 from verity_vllm.pipeline.serve_commit import CommitWindows, ingress_of
+
+
+def advice_trace(out: Path, engine: Any) -> Any:
+    """The scheduler step trace (`engine.step_trace.StepTrace`) of ``engine`` for the server's lifetime, at ``out/advice_trace.jsonl``
+    (`step_trace.SERVED`, beside the committer's step_trace.jsonl), under the engine ids requests.jsonl records (vLLM's internal
+    suffix dropped): what `verity-vllm advice OUT` reads, with each window's open and close (``CommitWindows(marks=trace.window)``).
+    Its writer thread writes the file (`StepTrace.writer`): the engine thread never waits on the serve dir's disk, which the seals
+    keep busy. It holds request values, so it stays in the serve dir (`serve_mirror.MIRRORED` leaves it out)."""
+    from verity_vllm.engine.engine_driver import external_id
+    from verity_vllm.engine.step_trace import SERVED, StepTrace
+
+    return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time, writer=True).install(engine)
 
 
 class EngineLoop:

@@ -272,9 +272,10 @@ def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_take
             launched.append((name, tuple(p), tuple(i), kw))
 
     pipe = RUN.Pipeline.__new__(RUN.Pipeline)
-    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes", "salts_a"), 1)
+    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes", "salts_a"), 16)
     pipe.keys = dict.fromkeys(("unit", "dom_a", "hm"), 2)
     pipe.pd, pipe.split_a, pipe.stamps, pipe.k, pipe.m, pipe.m_real = 851, True, 0, 4096, 64, 16
+    pipe.salt_bytes = {"a": RUN.HM_SALT * 16}
     for marked in (True, False):
         pipe.dev, pipe.rows_bf16 = D(marked), None
         assert pipe.reads_bf16() is marked
@@ -349,9 +350,10 @@ def test_pd_shared_launches_the_same_pd_commit_and_pd_tree_in_half_an_sm():
         RUN.pd_setup(D({"pd_commit": 6000, "pd_tree": 70000}))
 
     pipe = RUN.Pipeline.__new__(RUN.Pipeline)
-    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes", "salts_a"), 1)
+    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes", "salts_a"), 16)
     pipe.keys = dict.fromkeys(("unit", "dom_a", "hm"), 2)
     pipe.dev, pipe.rows_bf16, pipe.fillers, pipe.split_a, pipe.k, pipe.m, pipe.m_real = d, None, True, True, 4096, 64, 32
+    pipe.salt_bytes = {"a": RUN.HM_SALT * 32}
     for pipe.pd in RUN.PD_SERVED:
         for pipe.stamps in (0, 9):
             got = {}
@@ -1035,9 +1037,9 @@ n, rows, chunk = (int(x) for x in sys.argv[3:6])
 dev = R.Dev(open(sys.argv[2], "rb").read())
 dev.open()
 keys = {name: dev.alloc(R.TIMING_KEYS[name]) for name in ("dom_b", "hm")}
-p = R.Pipeline(dev, R.BM, R.BM, n, "h100", keys, 0, 0, bufs={"tree_b": 0, "segdig_b": 0})
+p = R.Pipeline(dev, R.BM, R.BM, n, "h100", keys, 0, 0,
+               bufs={"tree_b": 0, "segdig_b": 0, "salts_b": (dev.alloc(R.HM_SALT * rows), R.HM_SALT * rows)})
 p.b["tree_b"] = dev.alloc(R.NB * (2 * R.pow2(rows) - 1))
-p.b["salts_b"] = dev.alloc(R.HM_SALT * rows)
 dig, seg = dev.alloc(64 * rows), dev.alloc(64 * (n // 256) * chunk)
 for _, f in p.tree_setup("b", rows, "dom_b"):
     f()

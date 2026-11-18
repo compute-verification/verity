@@ -64,7 +64,7 @@ whose commitment's cap is the level-0 root, at salts `hi` that are the rep's in 
 (`saltsAt`), which it has not where its coins are as many as its algebraic phase's rounds. Where it is stream
 `k + 1`'s first, the frame holds the history's words for each of stream `k`'s rounds. -/
 def StreamAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Array Stmt) (k : Nat)
-    (h : List (Claims.Msg × Claims.Msg)) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
+    (h : List (Hash.Msg × Hash.Msg)) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
     (l0 : _root_.Flock.ZkServer.Level0.Level0) (p : _root_.Flock.ZkServer.Frames.Rep)
     (R : _root_.Flock.ZkServer.Frames.Sessions) : Prop :=
   ((ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (h.length - 2)).1 = k →
@@ -109,7 +109,7 @@ theorem saltsAt_of_find? {R : _root_.Flock.ZkServer.Frames.Sessions} {root : Byt
 
 /-- **`StreamAt` is kept where the rep's salts stay**: of the loop's frames it reads only them. -/
 theorem streamAt_stay {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {k : Nat}
-    {h : List (Claims.Msg × Claims.Msg)} {rel : _root_.Flock.ZkServer.Frames.Release} {name : String}
+    {h : List (Hash.Msg × Hash.Msg)} {rel : _root_.Flock.ZkServer.Frames.Release} {name : String}
     {l0 : _root_.Flock.ZkServer.Level0.Level0} {p : _root_.Flock.ZkServer.Frames.Rep} {sid : Nat}
     {R R' : _root_.Flock.ZkServer.Frames.Sessions} (hs : Stay sid l0.root R R')
     (hA : StreamAt M spec sts k h rel name l0 p R) : StreamAt M spec sts k h rel name l0 p R' := by
@@ -132,20 +132,20 @@ def RepJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (st
 
 /-- **The model's next round** at its history `h`: its rep stream and its index in the stream, among the setup's
 rounds (`roundsOf`). -/
-def nextAt (spec : SessionSpec) (sts : Array Stmt) (h : List (Claims.Msg × Claims.Msg)) : Nat × Nat :=
+def nextAt (spec : SessionSpec) (sts : Array Stmt) (h : List (Hash.Msg × Hash.Msg)) : Nat × Nat :=
   ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (h.length - 2)
 
 /-- **The rep streams `seen` are those with a round before the model's next**, at its history `h`: a rep stream seen
 is before the next round's stream or is that stream past its first round, and that stream past its first round is
 seen. -/
-def SeenAt (spec : SessionSpec) (sts : Array Stmt) (h : List (Claims.Msg × Claims.Msg)) (seen : List String) : Prop :=
+def SeenAt (spec : SessionSpec) (sts : Array Stmt) (h : List (Hash.Msg × Hash.Msg)) (seen : List String) : Prop :=
   ∀ i r s, (i, r, s) ∈ spec.repStreams.toList →
     (seen.contains s = true → 2 * i + r < (nextAt spec sts h).1 ∨
       (2 * i + r = (nextAt spec sts h).1 ∧ 0 < (nextAt spec sts h).2)) ∧
     (2 * i + r = (nextAt spec sts h).1 → 0 < (nextAt spec sts h).2 → seen.contains s = true)
 
 /-- Before the model's first round no rep stream is seen. -/
-theorem seenAt_nil {spec : SessionSpec} {sts : Array Stmt} {h : List (Claims.Msg × Claims.Msg)}
+theorem seenAt_nil {spec : SessionSpec} {sts : Array Stmt} {h : List (Hash.Msg × Hash.Msg)}
     (hl : h.length ≤ 2) : SeenAt spec sts h [] := by
   intro i r s _
   refine ⟨fun hc => by simp at hc, fun _ h0 => ?_⟩
@@ -582,8 +582,8 @@ theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
     exact hst
 
 /-- **Past the `Hello` every earlier round passed**, below the `Finish`: the `Hello` passes (`toSrv_pass_own`). -/
-theorem liveBefore_one {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker) (x : Claims.Msg) (w : W) (ρ : Rr)
-    (κ : L.toSrv.Chk) (h : List (Claims.Msg × Claims.Msg)) (hl : h.length = 1) (hlt : 0 < L.last x) :
+theorem liveBefore_one {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker) (x : Hash.Msg) (w : W) (ρ : Rr)
+    (κ : L.toSrv.Chk) (h : List (Hash.Msg × Hash.Msg)) (hl : h.length = 1) (hlt : 0 < L.last x) :
     L.toSrv.liveBefore wk x w ρ κ h = true := by
   unfold ZkServer.liveBefore
   rw [hl]

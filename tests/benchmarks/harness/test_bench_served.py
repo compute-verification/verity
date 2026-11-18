@@ -86,48 +86,32 @@ def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
             load_spec(path)
 
 
-def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec(monkeypatch):
+def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec():
     """A protocol arm was refused before any engine started while the harness gave every protocol arm the preset's FP8
-    and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint, stock FP8 as its control, and the device,
-    kernel and setup-built cubin, which are the spec's identity, with the harness's challenger as its coins, which the
-    adapter's refusals accept."""
+    and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint, no control, and the device, kernel and
+    setup-built cubin, which are the spec's identity; without them it would be stock FP8's twin under stock FP8's control.
+    An unset ``$`` value is refused, naming it."""
 
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
-    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
-    from verity_vllm.protocols import refusals
-    from verity_vllm.protocols.interface import Context
-
-    spec, pearl = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200"), "pouw:pearl-c-h100-v1-h3"
+    spec, pearl = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200"), "pearl-plus"
     control, arm, _ = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert (control.id, control.precision) == ("stock-fp8", "fp8")
     assert (arm.protocols, arm.precision, arm.control) == ((pearl,), "bfloat16", None)
-    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "$PEARLC_KERNEL", "cubin": "$PEARLC_CUBIN"}}
+    assert arm.protocols_config == {"pearl-plus": {"device": "cuda", "kernel": "$PEARLC_KERNEL", "cubin": "$PEARLC_CUBIN"}}
     assert arm.to_json()["protocols_config"] == arm.protocols_config
     settings = spec.arm_settings[pearl]
-    other = replace(settings, protocols_config={"pouw": {**settings.protocols_config["pouw"], "schedule": "serial"}})
+    other = replace(settings, protocols_config={"pearl-plus": {**settings.protocols_config["pearl-plus"], "schedule": "serial"}})
     assert spec.config_sha256 != replace(spec, arm_settings={arm.id: other}).config_sha256
     assert resolve_arms(spec.arms)[1].control == "stock-fp8" and resolve_arms(spec.arms)[1].precision is None
 
     with pytest.raises(ValueError, match=r"\$PEARLC_CUBIN"):
         protocols_config(arm, {"PEARLC_KERNEL": "/tree/benchmarks/pouw/pearl_c_sm90"})
-    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
-    config = protocols_config(arm, {"PEARLC_KERNEL": "/tree/benchmarks/pouw/pearl_c_sm90",
-                                    "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"})
-    assert config["pouw"]["cubin"] == "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"
-    assert isinstance(config["pouw"]["coins"].commitment, CoinCommitment)
-    ctx = Context(stage="serve", enabled=arm.protocols, settings=config)
-    assert refusals(ctx) == ()
-    assert "device only" in refusals(Context(stage="serve", enabled=arm.protocols))[0]
 
 
-def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kernel_from_its_setup(monkeypatch):
-    """`served_pearlplus.sh`'s spec: Llama 3.2 1B's BF16 checkpoint through `pouw:pearl-c-h100-v1-h3` on one H200, its kernel
-    directory and cubin both the setup's (pearl_c_sm90.sh exports them), serial, beside stock FP8 eager and compiled; the
-    adapter's refusals accept it."""
-
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
-    from verity_vllm.protocols import refusals
-    from verity_vllm.protocols.interface import Context
+def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kernel_from_its_setup():
+    """`served_pearlplus.sh`'s spec: Llama 3.2 1B's BF16 checkpoint through `pearl-plus` on one H200, its kernel
+    directory and cubin both the setup's (pearl_c_sm90.sh exports them), beside stock FP8 eager and compiled; the config
+    the arm hands is plain values, its coins in-process as Pearl+'s settings say them. That Pearl+'s own settings check
+    takes it is `test_bench.py`'s `test_the_config_a_declared_schemes_arm_hands_passes_that_schemes_own_settings_check`."""
 
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
     assert (spec.preset.model, spec.preset.gpu_id, spec.preset.gpu_count) == ("unsloth/Llama-3.2-1B", "h200", 1)
@@ -135,16 +119,15 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
     control, arm, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.precision, a.control, a.execution) for a in (control, compiled)] == [
         ("stock-fp8", "fp8", None, None), ("stock-fp8@compiled", "fp8", None, "compiled")]
-    assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-h100-v1-h3",), "bfloat16", None)
-    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "$PEARLC_KERNEL", "cubin": "$PEARLC_CUBIN"}}
+    assert (arm.protocols, arm.precision, arm.control) == (("pearl-plus",), "bfloat16", None)
+    assert arm.protocols_config == {"pearl-plus": {"device": "cuda", "kernel": "$PEARLC_KERNEL", "cubin": "$PEARLC_CUBIN"}}
     with pytest.raises(ValueError, match=r"\$PEARLC_KERNEL"):
         protocols_config(arm, {"PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"})
-    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
     config = protocols_config(arm, {"PEARLC_KERNEL": "/tree/benchmarks/pouw/pearl_c_sm90",
                                     "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"})
-    assert (config["pouw"]["kernel"], config["pouw"]["cubin"]) == ("/tree/benchmarks/pouw/pearl_c_sm90",
-                                                                   "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin")
-    assert refusals(Context(stage="serve", enabled=arm.protocols, settings=config)) == ()
+    assert config["pearl-plus"] == {"device": "cuda", "kernel": "/tree/benchmarks/pouw/pearl_c_sm90",
+                                    "cubin": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin", "coins": "in-process"}
+    assert json.loads(json.dumps(config)) == config
 
 
 def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_bf16_rows_off(tmp_path):
@@ -184,6 +167,7 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's ``--protocols-config`` takes it
     (`serve_openai.scheme_settings`): the scheme's own settings alone, the setup's paths read in, no challenges flipped
     (the server flips each epoch's); an unset ``$`` value is refused, naming it."""
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
     from verity.protocols.resource_accounting.scheme import settings
@@ -200,9 +184,69 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     monkeypatch.setenv("PEARLC_KERNEL", "/tree/benchmarks/pouw/pearl_c_sm90")
     assert SP.main(["arm", "--spec", spec, "--out", str(out)]) == 0
     doc = json.loads(out.read_text())
-    assert doc == {"pouw": {"kernel": "/tree/benchmarks/pouw/pearl_c_sm90",
-                            "cubin": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"}}
-    settings(M.option("pouw:pearl-c-h100-v1-h3"), {**doc["pouw"], "coins": "in-process"})
+    assert doc == {"pearl-plus": {"kernel": "/tree/benchmarks/pouw/pearl_c_sm90",
+                                  "cubin": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"}}
+    settings(M.named("pearl-plus"), {**doc["pearl-plus"], "coins": "in-process"})
+
+
+def test_served_passes_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name(monkeypatch):
+    """No declared scheme serves Pearl-C on sm_120 (`pouw:pearl-c-sm120-v1-h3` is no declared scheme's name), so
+    ``served_passes.py`` refuses an arm of that entry by name (`undeclared`, which `pearl_c_arm` asks before any engine or
+    challenger), and its default spec is Pearl+'s."""
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
+    from benchmarks.pouw.pearl_c_vllm import served_passes as SP
+
+    for other in ("pouw:pearl-c-sm120-v1-h3", "pouw:pearl-c-nvfp4-v0"):
+        assert SP.undeclared(["pearl-plus", other]).startswith(f"{other} is no declared scheme's name")
+    assert SP.undeclared(["pouw:pearl-c-h100-v1-h3"]).startswith("pouw:pearl-c-h100-v1-h3 is no declared scheme's name")
+    assert SP.undeclared(["pearl-plus"]) is None
+    assert SP.SPEC.name == "llama32-1b-1gpu-pouw-protocol-served.toml"
+
+
+def test_served_passes_serve_attaches_pearl_plus_by_name_with_its_settings_and_a_live_sessions_ctx(monkeypatch, tmp_path):
+    """``served_passes.py serve`` attaches the arm's declared scheme on the build's exchange, not through the adapter's
+    option: the spec's arm settings that are Pearl+'s, its passes retained under DIR, and its salt in-process; under
+    the challenger gate, a session an epoch under the lane as the peer, with the gate, its ledger and the private
+    directory in its ctx, and refused by name without PEARLC_PRIVATE."""
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
+    from benchmarks.pouw.pearl_c_vllm import served_passes as SP
+    from verity.protocols.resource_accounting.scheme import settings
+    from verity_vllm import messages as M
+
+    arm = SP.pearl_c_arm(resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200"))
+    scheme = M.named(arm.protocols[0])
+    monkeypatch.setenv("PEARLC_KERNEL", "/tree/k")
+    monkeypatch.setenv("PEARLC_CUBIN", "/run/k.cubin")
+    own, ctx = SP.scheme_settings(arm, scheme, tmp_path)
+    assert (own, ctx) == ({"kernel": "/tree/k", "cubin": "/run/k.cubin", "transcript_dir": str(tmp_path),
+                           "coins": "in-process"}, {})
+    settings(scheme, own)
+
+    class Gate:
+        def __init__(self, command):
+            self.command = command
+
+        def call(self, *words):
+            return {}
+
+        def ledger(self):
+            return []
+
+    import verity_vllm.pipeline.commit_coins as CC
+
+    monkeypatch.setattr(CC, "ChallengerGate", Gate)
+    monkeypatch.setenv("PEARLC_CHALLENGER_GATE", "ssh gate")
+    monkeypatch.setenv("PEARLC_CHALLENGER_PEER", "node-1")
+    monkeypatch.delenv("PEARLC_PRIVATE", raising=False)
+    with pytest.raises(SystemExit, match="PEARLC_PRIVATE"):
+        SP.scheme_settings(arm, scheme, None)
+    monkeypatch.setenv("PEARLC_PRIVATE", str(tmp_path / "private"))
+    own, ctx = SP.scheme_settings(arm, scheme, None)
+    assert {k: own[k] for k in ("challenger", "lane", "peer")} == {"challenger": "127.0.0.1:0", "lane": "vllm",
+                                                                   "peer": "node-1"}
+    assert "coins" not in own and "transcript_dir" not in own and ctx["private"] == str(tmp_path / "private")
+    assert ctx["gate"]() == {} and ctx["ledger"]() == []
+    settings(scheme, own)
 
 
 def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
@@ -213,12 +257,12 @@ def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_
         path.write_text(source.replace('control = "none"', f'control = "{control}"', 1))
         spec = load_spec(path)
         assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[1].control == want
-    for old, new, why in (('arms = ["stock-fp8", "pouw:pearl-c-h100-v1-h3", "stock-fp8@compiled"]',
+    for old, new, why in (('arms = ["stock-fp8", "pearl-plus", "stock-fp8@compiled"]',
                            'arms = ["stock-fp8", "pouw:ncp-v2", "stock-fp8@compiled"]', "must name a protocol arm"),
-                          ('[arm_settings."pouw:pearl-c-h100-v1-h3"]\n', '[arm_settings.stock]\n', "must name a protocol arm"),
+                          ('[arm_settings."pearl-plus"]\n', '[arm_settings.stock]\n', "must name a protocol arm"),
                           ('precision = "bfloat16"', 'precision = "int4"', "precision is one of"),
                           ('control = "none"', 'control = "stock"', "control must be another arm"),
-                          ('control = "none"', 'control = "pouw:pearl-c-h100-v1-h3"', "control must be another arm")):
+                          ('control = "none"', 'control = "pearl-plus"', "control must be another arm")):
         assert old in source
         path.write_text(source.replace(old, new, 1))
         with pytest.raises(ValueError, match=why):
@@ -260,7 +304,7 @@ def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
     shares its step budget, sequence bound and KV pool."""
 
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
-    pearl = "pouw:pearl-c-h100-v1-h3"
+    pearl = "pearl-plus"
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.precision, a.control, a.execution) for a in arms] == [
         ("stock-fp8", "fp8", None, None),
@@ -323,6 +367,19 @@ def test_the_1b_whole_step_spec_is_the_1b_pouw_spec_on_the_h100_with_the_whole_s
     assert whole.pop("arm_modules") == ["benchmarks.pouw.pearl_c_vllm.bench_arm:PEARL_C_WHOLE"]
     whole["id"] = whole["preset"]["id"] = protocol["id"]
     assert whole == protocol
+
+
+@pytest.mark.parametrize("pinned", [True, False])
+def test_the_kernel_scheme_a_served_scheme_runs_on_a_card_is_its_declared_rows_name(pinned):
+    """`kernel_scheme` reads the scheme's declared ``kernels``, as the PoUW arm does (`bench_arm.py`'s
+    ``kernel_scheme(self.protocol, card, pinned=True)``); Pearl+ has no build for the RTX PRO 6000's architecture."""
+    from verity_bench.schemes import kernel_scheme
+
+    assert kernel_scheme("pearl-plus", "h100", pinned=pinned) == kernel_scheme("pearl-plus", "h200", pinned=pinned) \
+        == "pearl-c-h100-v1-h3"
+    with pytest.raises(LookupError, match="^rtx-pro-6000's architecture sm_120a has no build here: pearl-c-h100-v1-h3 is "
+                                          "built for sm_90a$"):
+        kernel_scheme("pearl-plus", "rtx-pro-6000", pinned=pinned)
 
 
 def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the_h100_record(monkeypatch):

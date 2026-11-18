@@ -436,6 +436,33 @@ def is_ml(name: str) -> bool:
     return gemm_tile(name) == (BM, BM)
 
 
+def salts_at(at: int, name: str, count: int, given: int | None) -> int:
+    """The address `at` of a buffer of hm96 salts as a leaf kernel may read it, else a refusal naming the buffer `name`: an
+    address says nothing of the bytes behind it, so the buffer's owner states its length `given`, which is `count` leaves'
+    `HM_SALT` bytes each, no fewer and no more (none stated is refused, not assumed); and the kernels read a salt by
+    16-byte loads (hash_h3.cuh's `load_salt`), so the address is a multiple of 16."""
+    if given is None:
+        raise ValueError(f"{name}: its owner stated no length, and the launch reads {HM_SALT * count} bytes ({count} leaves, "
+                         f"{HM_SALT} a leaf): a caller's salts are (address, bytes)")
+    if given != HM_SALT * count:
+        raise ValueError(f"{name}: {given} bytes for {count} leaves, which take {HM_SALT * count} ({HM_SALT} a leaf)")
+    if at % 16:
+        raise ValueError(f"{name} at {at:#x}: the leaf kernels read a salt by 16-byte loads, so the buffer's address is a "
+                         "multiple of 16 bytes (a slice of a buffer from an odd offset is not)")
+    return at
+
+
+def stated_salts(bufs: dict) -> tuple[dict[str, int], dict[str, int]]:
+    """A caller's buffers `bufs` as (each buffer's address, each tree's salts' stated length): a ``salts_<tree>`` buffer is
+    given as (address, bytes), the length its owner states.  One given as a bare address has none, and no launch reads it
+    (`Pipeline.salts`)."""
+    b, said = dict(bufs), {}
+    for name, given in bufs.items():
+        if name.startswith("salts_") and isinstance(given, tuple):
+            b[name], said[name[len("salts_"):]] = (int(x) for x in given)
+    return b, said
+
+
 class Pipeline:
     """One (shape, variant) instance: its buffers and its kernels in order, each a (name, phase, launch) step.  Phases:
     `epoch` (B's row tree, whose root the epoch's salt and seed_B follow), `unit` (the pads of A's tree and the tile tree,
@@ -489,9 +516,10 @@ class Pipeline:
     beside = 0
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
-                 bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None,
+                 bufs: dict | None = None, m_real: int | None = None, bm: int | None = None,
                  sha: str | None = None, split_a: bool = False, fillers: bool = True):
-        """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
+        """`bufs` names the buffers when the caller owns them (only those its steps touch), each by its device address and
+        a ``salts_<tree>`` one by (address, bytes), the length its owner states (`salts`); `m_real` rows of A are the
         matmul's, committed and hashed, the rest filler that only the products see (and the 64 x 64 GEMMs skip, LIVE).
         With `split_a`, `fillers` False leaves the filler rows' E_A lines as the buffer holds them: ``tree_seed_a`` (pd_tree,
         or outside pd `FUSED_GENERIC`'s) then writes A's tree, seed_A and line_a alone, nothing the forming reads."""
@@ -514,7 +542,10 @@ class Pipeline:
         sizes = self.sizes(m, n, k, self.m_real)
         self.size = sizes
         self.owned = bufs is None
-        self.b = {name: dev.alloc(s) for name, s in sizes.items()} if self.owned else dict(bufs)
+        if self.owned:
+            self.b, self.salt_bytes = {name: dev.alloc(s) for name, s in sizes.items()}, {t: sizes[f"salts_{t}"] for t in SALTED}
+        else:
+            self.b, self.salt_bytes = stated_salts(bufs)
         self.allocated: list[str] = []
         self.unsalted = set(SALTED) if self.owned else set()   # the pipeline's own salts buffers hold nothing yet
         self.b["xa"], self.b["xb"] = xa, xb
@@ -566,10 +597,12 @@ class Pipeline:
             "segdig_a": 64 * (k // 256) * m_real, "segdig_b": 64 * (k // 256) * n, "segdig_t": 64 * 32 * tiles,
         }
 
-    def salts(self, tag: str) -> int:
+    def salts(self, tag: str, count: int) -> int:
         """The device address of tree `tag`'s hm96 salts, read at each launch: ``salts_<tag>``, `HM_SALT` bytes a leaf in leaf
         order, which the caller has filled.  A tree whose salts nobody gave is refused: a caller's buffers without
-        ``salts_<tag>``, or the pipeline's own before `put_salts`."""
+        ``salts_<tag>``, or the pipeline's own before `put_salts`.  So is a buffer whose stated length (the pipeline's own
+        size, or what a caller's ``bufs`` says) is not the `count` leaves' this launch reads, and a caller's with none
+        stated (`salts_at`)."""
         at = self.b.get(f"salts_{tag}")
         if not at or tag in getattr(self, "unsalted", ()):
             raise NotImplementedError(
@@ -577,7 +610,11 @@ class Pipeline:
                 "order), and this pipeline's caller gave none.  The kernels derive no salt: the caller hands in fresh "
                 "operating-system bytes for a call's trees and a registered row's salt from its registration's salt file "
                 "(compute-accounting's goal: Pearl+ hands the leaf kernels their salts)")
-        return at
+        return salts_at(at, f"salts_{tag}", count, self.salt_bytes.get(tag))
+
+    def lent(self) -> dict:
+        """This pipeline's buffers as another pipeline's ``bufs``: each address, a salts buffer with its stated length."""
+        return {**self.b, **{x: (self.b[x], n) for t, n in self.salt_bytes.items() if (x := f"salts_{t}") in self.b}}
 
     def put_salts(self, tag: str, salts: bytes) -> None:
         """`salts` from the host into tree `tag`'s ``salts_<tag>``, whole: a check's or a bench's bytes (a serving caller
@@ -652,7 +689,7 @@ class Pipeline:
         layer (979's at gate_up, 110.3 µs against 851's 98.3 at qkv)."""
         d, b, kk, v, s = self.dev, self.b, self.keys, self.pd & ~PD_GROUP, self.k // 256
         d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), d.pd_smem[v],
-                 p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], Pipeline.salts(self, "a"),
+                 p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], Pipeline.salts(self, "a", self.m_real),
                     kk["hm"], b["pd_count"], b["seed_a"], b["line_a"], b["ea_codes"], 0), i=(self.m_real, self.k, mode, self.m))
 
     def pd_tree(self) -> None:
@@ -673,12 +710,14 @@ class Pipeline:
         else:
             d.launch(f"pd_tiles_{v}", self.tiles, 32, p=p, i=(mr, n))
 
-    def hm_level0(self, tag: str, x: int, count: int, dom: str, salts: int | None = None) -> None:
+    def hm_level0(self, tag: str, x: int, count: int, dom: str, salts: int | None = None, salt_bytes: int | None = None) -> None:
         """An `audit.HM96` tree's level 0 over `count` 64-byte values at x: hm_leaves over them and their salts, then
         s512_frame_leaves in place.  The salts are the `count` leaves' at device address `salts` (a tree written into the
-        pipeline's buffer that is not the pipeline's own tree: a call's y), else the tree's own (`Pipeline.salts`)."""
+        pipeline's buffer that is not the pipeline's own tree: a call's y) with their length `salt_bytes`, which the caller
+        that owns the buffer states and which is `count` salts of `HM_SALT` bytes (`salts_at` refuses any other, and none,
+        before any launch); else the tree's own (`Pipeline.salts`)."""
         d, tree, kk = self.dev, self.b[f"tree_{tag}"], self.keys
-        at = Pipeline.salts(self, tag) if salts is None else salts
+        at = Pipeline.salts(self, tag, count) if salts is None else salts_at(salts, f"tree {tag!r}'s salts", count, salt_bytes)
         d.launch("hm_leaves", cdiv(count, 64), 64, p=(x, tree, at, kk["hm"]), i=(count,))
         d.launch("s512_frame_leaves", cdiv(count, 64), 64, p=(tree, kk[dom]), i=(0, count))
 
@@ -948,7 +987,7 @@ def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
     launch, must fail every output."""
     count, res = dev.alloc(16), {}
     make = lambda split: Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"],  # noqa: E731
-                                  bufs={**pipe.b, "pd_count": count}, m_real=pipe.m_real, bm=BM_D,
+                                  bufs={**pipe.lent(), "pd_count": count}, m_real=pipe.m_real, bm=BM_D,
                                   split_a=split)
     whole = make(False)
     if whole.pd is None:
@@ -981,7 +1020,7 @@ def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
 def check_split(dev: Dev, pipe: Pipeline, want) -> dict:
     """`split_a` outside pd (`Pipeline.FUSED_GENERIC`) on `pipe`'s buffers: ``rows_a`` then ``tree_seed_a`` after every
     output of A's commitment (PD_OUTPUTS but the leaves) is poisoned, against the fixture's bytes (``@split``)."""
-    split = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b,
+    split = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.lent(),
                      m_real=pipe.m_real, bm=BM_D, split_a=True)
     outs = [x for x in PD_OUTPUTS if x != "leaves"]
     for x in outs:
@@ -1021,7 +1060,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             for kernel in FORM_ALTS:
                 pipe.form_alt(tag, kernel)
                 res[f"{tag}t@{kernel}"] = compare(dev, pipe, f"{tag}t", want(f"{tag}t"), alias="at2")
-        small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D)
+        small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.lent(), bm=BM_D)
         for p_, grids, tag in ((pipe, (None, 1, 3), ""), (small, (None, 3), "bm64")):
             steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
             for grid in grids:

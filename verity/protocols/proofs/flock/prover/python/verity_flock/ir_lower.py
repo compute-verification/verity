@@ -30,8 +30,9 @@ from . import fp
 from . import tail_pieces
 from .fp import ceil_pow2
 from .gf2 import Circuit, L, const_bits
+from verity.commitments.domains import FLOCK_IR_BLOCK
 
-FORMAT = "flock-ir-unit/v2"
+FORMAT = FLOCK_IR_BLOCK
 WORD = 128
 #: the circuit description's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past
 #: 100 KB), and the characters a digest encodes at a time
@@ -56,9 +57,9 @@ def _rope_out_add(C, x, y, c, s):
 @lru_cache(maxsize=None)
 def silu_table() -> tuple[int, ...]:
     """``bf16_rn(silu_f32(f32(g)))`` for every bf16 word g: the first half of ``SiluMulBf16``, from the primitive's own helpers."""
-    from verity_vllm.definitions.registry import prims as P
+    from verity.circuits.ops import fp32 as P
 
-    return tuple(P.f32_to_bf16_rn_bits(P._silu_f32_bits(P.bf16_to_f32_bits(g)), P.BF16_NAN_TORCH) for g in range(1 << 16))
+    return tuple(P.f32_to_bf16_rn_bits(P.f32_silu_bits(P.bf16_to_f32_bits(g)), P.BF16_NAN_TORCH) for g in range(1 << 16))
 
 
 def _silu_mul(C, g, u):
@@ -200,6 +201,26 @@ class NoPiece(NotImplementedError):
 
 #: the top-p keep word over every split count (``sampling.topp_mask_word``), which no one circuit holds (`topp_word`)
 TOPP_WORD = r"TopPMaskWordx(\d+)_v1"
+#: a primitive too large for one circuit, by id pattern (its one group the lane count): the module writing its composition
+#: (``ands``, ``count``, ``build``, ``NAMES``, ``OPS``), which registers itself here
+COMPOSED: dict[str, Any] = {}
+
+
+def compositions() -> dict[str, Any]:
+    """`COMPOSED`, with `topp_word`'s registered."""
+    from . import topp_word  # noqa: F401  (registers itself)
+
+    return COMPOSED
+
+
+def composition(pid: str):
+    """``(module, V)``: the composition `COMPOSED` holds for primitive ``pid``, or None."""
+    import re
+
+    for pat, mod in compositions().items():
+        if (m := re.fullmatch(pat, pid)) is not None:
+            return mod, int(m[1])
+    return None
 
 
 def no_piece(pids: Collection[str]) -> str:
@@ -475,11 +496,10 @@ def _piece_ands(prim) -> int:
     """The ANDs of ``prim``'s piece on free operands (none for a primitive Flock has no piece for, which no unit holding it
     lowers past), each primitive id lowered once. A piece that lowers only on a constant operand (a rotation by a constant
     count, which is wiring) can't be lowered on free ones, and states its ANDs as its ``ands`` attribute instead. The top-p
-    keep word (`TOPP_WORD`) has no piece but counts its composition's (`topp_word.ands`), so that a unit holding it is sized,
+    keep word (`TOPP_WORD`) has no piece but counts its composition's (`composition`), so that a unit holding it is sized,
     and refused past the range (`circuit.refuse_past_range`), before anything lowers it."""
     if prim.id not in _PIECE_ANDS:
         import inspect
-        import re
 
         from verity.circuits.evaluation.reference import signature_of
 
@@ -492,10 +512,8 @@ def _piece_ands(prim) -> int:
             outs = lower(C, prim, [C.input(f"in{j}", w) for j, w in enumerate(w for pt in params for w in pt.leaf_widths())])
             C.output("out", [b for w in outs for b in w])
             ands = C.counts()["ands"]
-        elif (m := re.fullmatch(TOPP_WORD, prim.id)) is not None:
-            from . import topp_word
-
-            ands = topp_word.ands(int(m[1]))
+        elif (c := composition(prim.id)) is not None:
+            ands = c[0].ands(c[1])
         _PIECE_ANDS[prim.id] = ands
     return _PIECE_ANDS[prim.id]
 
@@ -1374,8 +1392,7 @@ def cut_words(low: Lowering, flat_inputs: np.ndarray) -> np.ndarray:
 # --- the native tail, as the verifier evaluates it --------------------------------------------------------------------------
 
 #: The measured MUFU tables the tail primitives read, as raw u32 LE files (``write_tables``): their sha256s, pinned in the Rust
-#: verifier too (``live/src/ir_tail.rs``); they are ``verity_vllm``'s ``rms_relation.tables("cuda")``, whose xz files that
-#: module pins.
+#: verifier too (``live/src/ir_tail.rs``); they are ``verity.circuits.ops.mufu``'s ``table(name)``.
 TABLES = {"rsq": "218fc04d271773269367dedf4cff9ff719081b1218c3d67d248d8d6126040246",
           "sqrt": "4e017678de306e0be8bed66193c2ebf09e9c60a9600cad56cd05bb7b6c3f266f",
           "rcp": "c408381446132e07fa5581e930dc33fb790bea7ec4276ef3621e322df2492a55",
@@ -1410,16 +1427,15 @@ def _tail(low: Lowering) -> tuple[list[list], dict[int, int]]:
 
 def write_tables(out_dir) -> dict:
     """The MUFU tables as raw u32 LE files (``rsq.u32``, ``sqrt.u32``, ``rcp.u32``, ``ex2.u32``) for the verifier; checks
-    :data:`TABLES`. FA2's MUFU.RCP table (``fa2_relation.tables().rcp``) is ``rcp`` byte for byte."""
+    :data:`TABLES`."""
     from pathlib import Path
 
-    from verity_vllm.definitions.numerics import fa2_relation, rms_relation
+    from verity.circuits.ops import mufu
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    t, fa2 = rms_relation.tables("cuda"), fa2_relation.tables()
     for name, want in TABLES.items():
-        b = np.ascontiguousarray(getattr(fa2 if name == "ex2" else t, name), dtype="<u4").tobytes()
+        b = np.ascontiguousarray(mufu.table(name), dtype="<u4").tobytes()
         if hashlib.sha256(b).hexdigest() != want:
             raise ValueError(f"MUFU table {name}: sha256 differs from the pinned one")
         (out / f"{name}.u32").write_bytes(b)

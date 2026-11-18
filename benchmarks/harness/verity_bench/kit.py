@@ -1,7 +1,6 @@
 """The harness kit: the calls benchmarks' runners share, each written once.
 
 - `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
-- `free_port()`: a loopback port the system has free now, for a server a runner starts.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `card_short(name)`: the card's name in a measurement's member, from the one card record under `cards_directory()` whose
@@ -80,7 +79,6 @@ import platform
 import re
 import shlex
 import shutil
-import socket
 import statistics
 import subprocess
 import sys
@@ -141,12 +139,6 @@ def lease(gpus: int, minutes: float, *, on: str | None = None, cores: str | None
         raise ValueError(f"a lease needs its bound in minutes, not {minutes!r}")
     return ["gpu-lease", str(gpus), "--wait", *(["--on", on] if on else []), *(["--cores", cores] if cores else []),
             "--max-min", str(math.ceil(minutes)), "--"]
-
-
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 # ---- the host stamp ----------------------------------------------------------------------------------------------------------
@@ -444,14 +436,17 @@ def toolkit(version: str) -> str:
     """The directory of CUDA toolkit `version` (major.minor, as a machine's `[properties]` write it): ``$CUDA_HOME`` where it
     is set and its ``version.json``, where it has one, is that version; else the one the run's machine's properties
     (`machine_properties()`) list at exactly that version, the version asked for and not the first listed. Refused by name
-    otherwise, as `NotListed` where the properties list none."""
+    otherwise, as `NotListed` where the properties list none, and where ``$CUDA_HOME``'s ``version.json`` gives no
+    ``cuda.version``."""
     from verity_config.settings import SHARED
 
     if home := SHARED.get("CUDA_HOME"):
-        try:
-            said = json.loads((Path(home) / "version.json").read_text())["cuda"]["version"]
-        except (OSError, ValueError, KeyError, TypeError):
+        if not (said_in := Path(home) / "version.json").is_file():
             return home
+        try:
+            said = json.loads(said_in.read_text())["cuda"]["version"]
+        except (ValueError, KeyError, TypeError) as e:
+            raise SystemExit(f"CUDA_HOME={home}: {said_in} gives no cuda.version ({type(e).__name__}: {e})") from None
         if said == version or said.startswith(f"{version}."):
             return home
     try:

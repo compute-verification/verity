@@ -29,7 +29,7 @@ Every other unit holds its Definition's function of the window's values:
   (`chunk_best`), and its ``x0`` unit ``logits[0]``;
 - each cut linear's `LinearARow_v3` its x widened to FP32 exactly, its A row;
 - each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
-  core's ``one_stage.registered.Registered`` of ``row-seg`` rows or one like it);
+  ``registered_value.Registered`` of ``row-seg`` rows or one like it);
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
   Definition on the node's operands (`evaluate_batch`): the head's query, its KV group's keys and values in the Call's
   range, and the earlier Calls' running state.
@@ -58,7 +58,7 @@ from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
 )
@@ -703,7 +703,7 @@ def scan_slots(lowered: Lowered, state: Sequence[Any]) -> list[tuple[list[int], 
     return [_lanes(P, state)[P.lane] for P in lowered.programs]
 
 
-def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *, window: str) -> G.Registered:
+def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *, window: str) -> RV.Registered:
     """`scan_state.SCAN_STATE`'s value: ``rows``, the scan's state rows a window of ``cls`` reads (row a the state before
     bucket a, `ingress_scan.window_state`'s bits), as ``row/v2`` rows, each under 192 fresh bytes from the OS, a
     per-window value under ``program``, its circuit's `inference_blocks.program_digest`, and the execution phase's open
@@ -715,8 +715,8 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *
         raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {16 * SS.words(cls.scan)} "
                          f"bits, not {bits.shape}")
     words = (bits.reshape(cls.buckets, -1, 16) << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
-    return registered_commit(program, SS.SCAN_STATE, words, bytes(32), 0, keep_rows=True,
-                             row_salts=os.urandom(cls.buckets * CS.SALT_BYTES), window=window)
+    return registered_commit(program, SS.SCAN_STATE, words, os.urandom(cls.buckets * CS.SALT_BYTES), keep_rows=True,
+                             window=window)
 
 
 __all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "scan_slots",

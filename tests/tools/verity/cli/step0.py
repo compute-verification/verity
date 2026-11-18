@@ -1,6 +1,6 @@
 """The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the eight
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
-entry or `LIVE` (`PARTIES`), and the live run of SPOT's core parties (`live`,
+entry or `LIVE` (`PIECES`), and the live run of SPOT's core parties (`live`,
 `verity.protocols.proofs.spot.verifier.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
@@ -114,9 +114,9 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=_VERIFIER, needs=frozenset({"store"})),
     Component("bandwidth", SP.IDS["bandwidth"], parties=_VERIFIER, needs=frozenset({"receipts"})),
-    Component("certifier", SP.IDS["certifier"], parties=_ATTESTER, channels=NC.MANIFEST.channels,
+    Component("network-attester", SP.IDS["network-attester"], parties=_ATTESTER, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
-              colocated=(("challenger", "network-certifier"),), params=_attester_params,
+              colocated=(("challenger", "network-attester"),), params=_attester_params,
               default_params=ATTESTER_DEFAULTS, sampling_design=_work_design, default_sampling_design="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
@@ -137,7 +137,7 @@ def _json_if(path: Path) -> dict[str, Any] | None:
 
 def network_attester(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
     """The network attester's entry: no relay serves here (module docstring)."""
-    print("network-certifier: no relay serves at step 0 here", flush=True)
+    print("network-attester: no relay serves at step 0 here", flush=True)
     return 2
 
 
@@ -149,7 +149,7 @@ def unserved(what: str) -> Check:
 
 
 #: each listed subprotocol's period check on SPOT's verifier (its ``component``), SPOT's own aside
-CHECKS: dict[str, Check] = {"certifier": unserved("network-period check"), "pouw": unserved("PoUW window check"),
+CHECKS: dict[str, Check] = {"network-attester": unserved("network-period check"), "pouw": unserved("PoUW window check"),
                             "pearl-plus": unserved("Pearl+ run verdict"),
                             "inference-only": unserved("inference-only policy check"),
                             "pous": unserved("PoUS run check"), "bandwidth": unserved("PoUB session"),
@@ -273,11 +273,11 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
                        capabilities={p: m.capabilities(p) for p in here}, dial_to=dial or None)
 
 
-PARTIES: dict[str, dict[str, Entry | str]] = {
+PIECES: dict[str, dict[str, Entry | str]] = {
     "sampled-proofs": {p: LIVE for p in ("challenger", "firewall", "verifier")},
-    "certifier": {"network-certifier": network_attester, "verifier": LIVE},
+    "network-attester": {"network-attester": network_attester, "verifier": LIVE},
     **{c: {"verifier": LIVE} for c in ("pouw", "pearl-plus", "inference-only", "pous", "bandwidth", "wipe")},
 }
 WORKLOADS: dict[str, tuple[Workload, Entry | str]] = {"toy": (TOY, LIVE)}
 #: the order a machine's entries run in, all before the live run: a party's sends come before the parties that read them
-ORDER = ("network-certifier",)
+ORDER = ("network-attester",)

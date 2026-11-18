@@ -22,7 +22,7 @@ def run(tmp_path, *argv: str) -> int:
 
 
 @pytest.mark.parametrize("command", [
-    ["bash", "-lc", 'uv run tools/verity/check/suites.py --quick 2>&1 | tee "$OUT/suite.log"'],
+    ["bash", "-lc", 'uv run tools/check/suites.py --quick 2>&1 | tee "$OUT/suite.log"'],
     ["nice", "-n", "19", "bash", "-lc", "a | tee f"],
     ["env", "K=V", "/bin/sh", "-c", "a | tee f"],
     ["timeout", "60", "uv", "run", "zsh", "-ec", "a |& tee f"],

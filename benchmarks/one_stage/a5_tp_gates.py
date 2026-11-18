@@ -18,7 +18,7 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   1 − r, at that site and position, never another request's. The transfer gates hold that premise: each request's partial
   is its own registered value, and request q's units read request q's.
 * **The partials** (`partials`): rank r's partial of collective k for request q is the registered value `value_name`
-  (r, q, k), one row a token of H bf16 words, committed under hiding salts (`registered.Registered.commit`, row schema v2),
+  (r, q, k), one row a token of H bf16 words, committed under hiding salts (`registered_value.Registered.commit`, row schema v2),
   its domain binding the TP run root (`ROOT`) and the TP step (`PROGRAM`). Rank r's docket names each of its partials'
   entries (``of.partials``) and each peer partial's it reads (``of.peers``), by value, before any rank's coin. Synthetic:
   each rank's f32 activations, rounded to bf16.
@@ -30,7 +30,7 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   compiled model steps. The verifier's work table proves every transfer-gate unit (selection All) beside the rest's sampled
   share. Each chunk's ``part<j>`` is a shared-row table of rank j's partial's rows under rank j's salts, so its ``b || c``
   is the registered value's, and its header names the value, the rows' positions and their paths
-  (`registered.Registered.statement`); its ``o0``, the reduced row, is committed afresh. Both ranks prove the same sums:
+  (`registered_value.Registered.statement`); its ``o0``, the reduced row, is committed afresh. Both ranks prove the same sums:
   AllReduce2's add is commutative.
 * **The verifier's reads** (`reads`): every rank's docket read before any rank's coin, and from them each chunk's own
   ``--registered`` file: ``part<j>`` at the root rank j registered for request q's partial of collective k, unit i reading
@@ -85,8 +85,8 @@ from verity.circuits.ops import fp32 as W  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, docket as R  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
@@ -148,18 +148,18 @@ def sites(requests: int) -> list[tuple[int, int]]:
     return [(q, k) for q in range(requests) for k in range(len(COLLECTIVES))]
 
 
-def partials(hidden: int, tokens: int, requests: int = 2, seed: int = 0) -> dict[int, list[list[G.Registered]]]:
+def partials(hidden: int, tokens: int, requests: int = 2, seed: int = 0) -> dict[int, list[list[RV.Registered]]]:
     """The prover's registered partials, ``[r][q][k]``: rank r's of collective k for request q, the request's `tokens` rows of
     `hidden` bf16 words, under fresh salts and the domain binding the TP run root."""
     rng = np.random.default_rng(seed)
-    return {r: [[G.Registered.commit(PROGRAM, value_name(r, q, k), bf16(rng.normal(0, 0.05, (tokens, hidden))), word_bits=16,
+    return {r: [[RV.Registered.commit(PROGRAM, value_name(r, q, k), bf16(rng.normal(0, 0.05, (tokens, hidden))), word_bits=16,
                                      schema=V2, window=ROOT) for k in range(len(COLLECTIVES))] for q in range(requests)]
             for r in RANKS}
 
 
 def domain(r: int, q: int, k: int, hidden: int, tokens: int):
     """The verifier's own domain of rank r's partial of collective k for request q."""
-    return G.domain(PROGRAM, value_name(r, q, k), hidden, tokens, 16, window=ROOT)
+    return RV.domain(PROGRAM, value_name(r, q, k), hidden, tokens, 16, window=ROOT)
 
 
 def own_entry(r: int, q: int, k: int, hidden: int, tokens: int) -> dict:
@@ -296,7 +296,7 @@ def reads(mine: CS.Binding, r: int, regs: dict[int, dict]) -> dict[str, dict]:
         for j in RANKS:
             e = own_entry(j, q, k, dict(m.rows)["part0"], m.n)
             root = regs[j]["window"]["of"]["partials"][e["value"]]["root"]
-            ports[f"part{j}"] = produced.port(e["value"], e, root, list(range(m.n)), V2) | ({G.READS_FROM: m.base} if m.base else {})
+            ports[f"part{j}"] = RV.port(e["value"], e, root, list(range(m.n)), V2) | ({RV.READS_FROM: m.base} if m.base else {})
         out[m.key] = WR.reads_file(ports)
     return out
 
@@ -314,7 +314,7 @@ def source_of(mine: CS.Binding, r: int, regs: dict[int, dict]):
             return False
         for name, own in want.items():
             e = got[name]
-            if not isinstance(e, dict) or sorted(e) != sorted(G.ENTRY_KEYS) or {x: e[x] for x in own} != own:
+            if not isinstance(e, dict) or sorted(e) != sorted(RV.ENTRY_KEYS) or {x: e[x] for x in own} != own:
                 return False
             if not (isinstance(e["root"], str) and len(e["root"]) == 128 and all(ch in "0123456789abcdef" for ch in e["root"])):
                 return False
@@ -357,7 +357,7 @@ def negatives(mine: CS.Binding, parts: dict, r: int, regs: dict[int, dict]) -> d
     of, own, peer = w["of"], value_name(r, 0, 0), value_name(1 - r, 0, 0)
     other_request = value_name(1 - r, 1 % len(parts[r]), 0)
     other_root = hashlib.sha512(b"verity/a5/tp2-gates-stand-in/another-run").hexdigest()
-    elsewhere = G.Registered.commit(PROGRAM, own, parts[r][0][0].rows, word_bits=16, schema=V2, window=other_root)
+    elsewhere = RV.Registered.commit(PROGRAM, own, parts[r][0][0].rows, word_bits=16, schema=V2, window=other_root)
 
     def named(**change) -> dict:
         s = source({**w, "of": {**of, **change}})

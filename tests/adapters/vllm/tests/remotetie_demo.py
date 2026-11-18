@@ -8,7 +8,7 @@ pass both readers that look inside it:
 * credit's ROOTS1 (`credit._arow`) wants the Commit record to register `row-table/<s>/k<K>` and `input-ids/<s>`, each
   with the domain, root and leaves of the window's own `<prefix>a/<K>@<s>` and `<prefix>ids@<s>`;
 * one-stage's R1-R7 (`registration.check`) wants exactly the 14 v2 keys and the audited Program, and each registered
-  value's domain under that Program and that value's own name (`registered.domain`).
+  value's domain under that Program and that value's own name (`registered_value.domain`).
 
 The toy window: one call of one linear, `q`, at K = 2048 with m = 4, and one round, its tables registered under the H1
 window Program's domain and the window's open root. The Program digests and roots are stand-ins; the checks are the
@@ -38,10 +38,12 @@ Run from the tree's root: PYTHONPATH=. python3 tests/adapters/vllm/tests/remotet
 """
 import hashlib
 
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as C
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as W
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 I2 = hashlib.sha512(b"V3c's I2 window circuit's population Program").hexdigest()
@@ -60,7 +62,7 @@ def entry(program, value, leaves, words=1):
 h1_a, h1_ids = entry(H1, f"{PREFIX}a/{K}@0", rows), entry(H1, f"{PREFIX}ids@0", 8)
 entries = [h1_a, h1_ids]
 
-h1_commit = {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "program": H1, "window": {"kind": "served", "refused": []},
+h1_commit = {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "program": H1, "window": {"kind": "served", "refused": []},
              "registered": [{**h1_a, "value": C.commit_rows(0, K)}, {**h1_ids, "value": C.commit_ids(0)}]}
 table = "cd" * 64
 rounds = [{"request_table": table, "requests": C.requests_root(bytes.fromhex(table), bytes.fromhex(h1_ids["root"])).hex()}]
@@ -72,9 +74,9 @@ v3c_registered = [entry(I2, "weights/q@1", 64), entry(I2, "scan/state", 16)]
 print("2. credit ROOTS1 (_arow) on V3c's record:", C._arow(rounds, entries, v3c_registered, layout, PREFIX))
 
 for program in (I2, H1):
-    r7 = G.domain(program, C.commit_rows(0, K), 1, rows, window=OPEN).domain_id.hex()
+    r7 = RV.domain(program, C.commit_rows(0, K), 1, rows, window=OPEN).domain_id.hex()
     print(f"3. R7's domain for row-table/0/k{K} under {'I2' if program == I2 else 'H1'}'s Program == ROOTS1's:",
           r7 == h1_a["domain"])
 
-print("   the three readers' digest of H1's Commit record:", R.digest(h1_commit)[:16], "...;",
-      "of a V3c-shaped record:", R.digest({**h1_commit, "program": I2, "registered": v3c_registered})[:16], "...")
+print("   the three readers' digest of H1's Commit record:", DD.digest(h1_commit)[:16], "...;",
+      "of a V3c-shaped record:", DD.digest({**h1_commit, "program": I2, "registered": v3c_registered})[:16], "...")

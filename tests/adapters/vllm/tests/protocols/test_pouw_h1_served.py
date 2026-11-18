@@ -51,15 +51,17 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import core_chec
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity_torch.pouw.h1 import registered_device as D
 
 from verity_vllm.engine import hooks
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.engine import int8_ops as OPS
 from verity_vllm.protocols.pouw import h1_hooks as PHK
+
+from tests.protocols.pouw_h1_salts import Seeded
 
 TILE = PH.TILE
 T, STEPS, SERVED = 64, 2, 5
@@ -71,6 +73,18 @@ KS = (16, 32)
 SALT = hashlib.sha512(b"salt").digest()
 W1, W2 = hashlib.sha512(b"window 1").digest(), hashlib.sha512(b"window 2").digest()
 WKEY = bytes(range(32))
+
+
+class _Model:
+    """The period's ``b/<K>`` salts under the model key ``WKEY``, read as a run's are (``at(nonce, n)``)."""
+
+    @staticmethod
+    def at(nonce: int, n: int) -> bytes:
+        return SV.model_salts(WKEY, nonce, n)
+
+
+MODEL = _Model()
+
 V1, V16 = Value(1), Value(16)
 XOR1 = PrimitiveDefinition("H1ServedTestXor1", 1, (("a", V1), ("b", V1)), V1, lambda a, b: a ^ b, register=False)
 LOW1 = PrimitiveDefinition("H1ServedTestLow1", 1, (("v", V16),), V1, lambda v: v & 1, register=False)
@@ -150,7 +164,7 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
     the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index on the host, z its exact
     product and y its served y."""
     rng = np.random.default_rng(seed)
-    run = PH.H1Run("t", SALT, modules, shapes, rows, steps, key=bytes([seed + 1]) * 32,
+    run = PH.H1Run("t", SALT, modules, shapes, rows, steps, salts=Seeded(seed),
                    served=SV.Served(tile, _unit(tile, defn), blocks, window=served_key or key, weights=weights,
                                     receipts=receipts))
     ws = _weights(seed, shapes) if ws is None else ws
@@ -176,10 +190,12 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
     return run, ws, got
 
 
-def _tree(reg: G.Registered, rows: list[bytes], key: bytes, first: int) -> str:
-    """`reg`'s tree recomputed from each row's raw bytes, its bit row's memory, under row j's salt at nonce ``first``."""
+def _tree(reg: RV.Registered, rows: list[bytes], salts: Any, first: int) -> str:
+    """`reg`'s tree recomputed from each row's raw bytes, its bit row's memory, under row j's salt at nonce ``first`` of
+    ``salts`` (the run's `RunSalts`, or `MODEL`)."""
     dom, inst = reg.domain, hm96.SHA512
-    bcs = [inst.commit_string(inst.default_key, sha512_row_v2_digest(row, 8 * len(row)), hm96_salt(key, first, j))
+    ys = salts.at(first, len(rows))
+    bcs = [inst.commit_string(inst.default_key, sha512_row_v2_digest(row, 8 * len(row)), ys[192 * j:192 * (j + 1)])
            for j, row in enumerate(rows)]
     return tree_levels(dom, [row_leaf(dom, j, inst.tree_leaf(inst.default_key, bc), SV.V2)
                              for j, bc in enumerate(bcs)])[-1][0].hex()
@@ -229,10 +245,10 @@ def test_each_call_registers_its_tables_as_it_is_recorded():
     for s, k, cs in tables:
         ra = served.registered[HW.table(prog, "a", cs[0], STEPS)]
         assert ra.value == pre + f"a/{k}@{s}" and (ra.leaves, ra.words) == (T * len(cs), k // 2 + 2)
-        assert ra.domain.domain_id.hex() == G.domain(digest, ra.value, ra.words, ra.leaves, window=W1.hex()).domain_id.hex()
-        assert ra.domain.domain_id != G.domain(digest, ra.value, ra.words, ra.leaves).domain_id
+        assert ra.domain.domain_id.hex() == RV.domain(digest, ra.value, ra.words, ra.leaves, window=W1.hex()).domain_id.hex()
+        assert ra.domain.domain_id != RV.domain(digest, ra.value, ra.words, ra.leaves).domain_id
         rows = [row for c in cs for row in _a_rows(*_served_call(got, c, 0, k)[:2], T, k)]
-        assert ra.root.hex() == _tree(ra, rows, run._key, SV.nonce(cs[0], "a"))
+        assert ra.root.hex() == _tree(ra, rows, run._salts, SV.nonce(cs[0], "a"))
         assert [c.index for c in run.calls if ra.value in run.tables[c.index]["registered"]] == [cs[-1]]
         assert run.tables[cs[-1]]["registered"][ra.value] == ra.root.hex()
         assert [HW.step_of(prog, c, STEPS) for c in cs] == [(s, len(cs), T * j) for j in range(len(cs))]
@@ -241,7 +257,7 @@ def test_each_call_registers_its_tables_as_it_is_recorded():
         a, s_a, z, y = _served_call(got, c.index, n, k)
         rz = served.registered[HW.table(prog, "zy", c.index)]
         assert (rz.leaves, rz.words) == ((T // 32) * (n // 32), 3 * 32 * 32)
-        assert rz.root.hex() == _tree(rz, _records(z, y, T, n), run._key, SV.nonce(c.index, "zy"))
+        assert rz.root.hex() == _tree(rz, _records(z, y, T, n), run._salts, SV.nonce(c.index, "zy"))
         assert {rz.value: rz.root.hex()}.items() <= run.tables[c.index]["registered"].items()
     for r, log in enumerate(run.round_log):
         assert RQ.step_digest(run.salt, r, run._rows([c for c in run.calls if c.step == r])).hex() == log["calls"]
@@ -283,7 +299,7 @@ def test_a_z_table_hashing_on_the_gpu_is_read_at_its_rounds_close_and_registers_
     zy, pub = ([SV.PREFIX + f"{t}@{c}" for c in range(len(run.calls))] for t in ("zy", "pub"))
     order = [[zy[3 * s], zy[3 * s + 1], pub[3 * s], pub[3 * s + 1], zy[3 * s + 2], pub[3 * s + 2]] for s in range(STEPS)]
     assert events == [(e, v) for vs in order for e in ("hashing", "read") for v in vs]
-    assert all(isinstance(r, G.Registered) for r in run.served.registered.values())
+    assert all(isinstance(r, RV.Registered) for r in run.served.registered.values())
     assert list(run.served.registered) == list(waited.served.registered)
     assert run.served.roots() == waited.served.roots() and run.served.entries() == waited.served.entries()
     assert (run.tables, run.round_log) == (waited.tables, waited.round_log)
@@ -299,7 +315,7 @@ def test_b_is_each_linears_weight_once_a_window(steps):
     b16, b32 = served.registered[pre + "b/16"], served.registered[pre + "b/32"]
     assert (b16.leaves, b32.leaves) == (64 + 32, 32)
     rows = [w[j].numpy().tobytes() + np.float32(s[j, 0]).tobytes() for w, s in ws[:2] for j in range(len(w))]
-    assert b16.root.hex() == _tree(b16, rows, run._key, SV.B_NONCE)
+    assert b16.root.hex() == _tree(b16, rows, run._salts, SV.B_NONCE)
     assert [c.index for c in run.calls if pre + "b/16" in run.tables[c.index]["registered"]] == [1]
     assert [c.index for c in run.calls if pre + "b/32" in run.tables[c.index]["registered"]] == [2]
     tp = P.evaluate(served.program, served.query())
@@ -321,8 +337,7 @@ def test_each_expert_gemm_registers_its_tables_as_a_dense_linears_call_does():
     s13, s2 = (torch.rand(2, 32, 1, generator=g) * 0.01 + 1e-4 for _ in range(2))
     sites = X.sites("moe", w13, s13, w2, s2)
     shapes, modules = [tuple(s.weight.shape) for s in sites], {w: s.name for w, s in enumerate(sites)}
-    run = PH.H1Run("t", SALT, modules, shapes, T, STEPS, key=bytes([7]) * 32,
-                   served=SV.Served(TILE, _unit(TILE), window=W1))
+    run = PH.H1Run("t", SALT, modules, shapes, T, STEPS, served=SV.Served(TILE, _unit(TILE), window=W1))
     steps = [torch.tensor([[0, 1], [1, 0], [0, 1]]), torch.tensor([[1, X.UNROUTED], [1, X.UNROUTED]])]
     got = {}
     with hooks.Hooks("t") as h:
@@ -346,13 +361,13 @@ def test_each_expert_gemm_registers_its_tables_as_a_dense_linears_call_does():
     for _s, k, cs in CR.step_tables({"calls": served.calls, "linears": served.linears, "m": served.m}, STEPS):
         ra = served.registered[HW.table(prog, "a", cs[0], STEPS)]
         rows = [row for c in cs for row in _a_rows(*got[c][:2], T, k)]
-        assert ra.root.hex() == _tree(ra, rows, run._key, SV.nonce(cs[0], "a"))
+        assert ra.root.hex() == _tree(ra, rows, run._salts, SV.nonce(cs[0], "a"))
         assert run.tables[cs[-1]]["registered"][ra.value] == ra.root.hex()
     for c in run.calls:
         n, _k = run.shapes_[c.layer]
         _a, _s_a, z, y = got[c.index]
         rz = served.registered[HW.table(prog, "zy", c.index)]
-        assert rz.root.hex() == _tree(rz, _records(z, y, T, n), run._key, SV.nonce(c.index, "zy"))
+        assert rz.root.hex() == _tree(rz, _records(z, y, T, n), run._salts, SV.nonce(c.index, "zy"))
         assert {rz.value: rz.root.hex()}.items() <= run.tables[c.index]["registered"].items()
 
 
@@ -373,7 +388,7 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
         assert {f["ports"][f"a_k{k}_0"]["value"], f["ports"]["zy"]["value"], f["ports"][f"b_k{k}_0"]["value"]} == {
             HW.table(prog, "a", c, STEPS), HW.table(prog, "zy", c), SV.PREFIX + f"b/{k}"}
         at = HW.step_of(prog, c, STEPS)[2]
-        assert f["format"] == G.READS_V1 and all(p[G.READS_FROM] == u0 and len(p["reads"]) == n for p in f["ports"].values())
+        assert f["format"] == G.READS_V1 and all(p[RV.READS_FROM] == u0 and len(p["reads"]) == n for p in f["ports"].values())
         assert f["ports"][f"a_k{k}_0"]["reads"][0] == at and at == T * served.step_calls(c).index(c)
         assert f["ports"][HW.OK_PORT]["value"] == SV.PREFIX + "ok" and SV.PREFIX + "ok" not in served.registered
         for port, p in f["ports"].items():
@@ -569,7 +584,7 @@ def test_card_arch_is_the_cards_h1_record(monkeypatch, capability, arch):
 def test_a_replayed_windows_values_are_refused_through_their_window_bound_domains():
     """Two windows of a period share every name, so a window's call tables are its own only through their domains, which
     bind its open root: window 1's, presented as window 2's, are not under the domains window 2's root gives them
-    (`registered.domain`, as credit's `domain_of` and `h1window.table_reads_file` compute them), and no row of them opens
+    (`registered_value.domain`, as credit's `domain_of` and `h1window.table_reads_file` compute them), and no row of them opens
     under window 2's domain; window 2's statement file names window 2's domains whatever roots it is handed. The
     weights' ``b/<K>`` bind no window and are the period's in both."""
     ws = _weights()
@@ -579,7 +594,7 @@ def test_a_replayed_windows_values_are_refused_through_their_window_bound_domain
     digest = one.served.program_digest
     for v, r in one.served.registered.items():
         theirs = two.served.registered[v]
-        under_two = G.domain(digest, v, r.words, r.leaves, window=None if CR.is_held(v) else W2.hex())
+        under_two = RV.domain(digest, v, r.words, r.leaves, window=None if CR.is_held(v) else W2.hex())
         assert under_two.domain_id == theirs.domain.domain_id
         if CR.is_held(v):
             assert under_two.domain_id == r.domain.domain_id and theirs.root == r.root
@@ -606,9 +621,9 @@ def test_the_periods_weights_are_registered_once_and_every_window_registers_them
     assert sorted(period.registered) == list(KS)
     for k, r in period.registered.items():
         assert (r.value, r.words) == (SV.PREFIX + f"b/{k}", Wt.leaf_words(k))
-        assert r.domain.domain_id == G.domain(period.circuit, r.value, r.words, r.leaves).domain_id
+        assert r.domain.domain_id == RV.domain(period.circuit, r.value, r.words, r.leaves).domain_id
     rows = [w[j].numpy().tobytes() + np.float32(s[j, 0]).tobytes() for w, s in ws[:2] for j in range(len(w))]
-    assert period.registered[16].root.hex() == _tree(period.registered[16], rows, WKEY, SV.B_NONCE)
+    assert period.registered[16].root.hex() == _tree(period.registered[16], rows, MODEL, SV.B_NONCE)
     assert period.root() == CR.weights_root({k: r.root for k, r in period.registered.items()})
     for i, key in enumerate((W1, W2)):
         run, _ws, _got = _window(key, seed=i, ws=ws, weights=period)
@@ -761,10 +776,10 @@ def test_each_calls_receipts_are_its_receipt_table_once_its_roots_are_registered
                                            names.index(pre + f"zy@{last}"))
         assert np.array_equal(made.codes[c.index], _served_call(got, c.index, c.n, c.k)[0].numpy())
         assert (rc.leaves, rc.words) == (HW.call_units(prog)[c.index][1], 1) == served.receipt_shape(c.index)
-        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
+        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._salts,
                                       SV.RECEIPT_NONCE + c.index)
-        assert rc.domain.domain_id == G.domain(digest, rc.value, rc.words, rc.leaves, window=W1.hex()).domain_id
-        assert rc.domain.domain_id != G.domain(digest, rc.value, rc.words, rc.leaves).domain_id
+        assert rc.domain.domain_id == RV.domain(digest, rc.value, rc.words, rc.leaves, window=W1.hex()).domain_id
+        assert rc.domain.domain_id != RV.domain(digest, rc.value, rc.words, rc.leaves).domain_id
         assert served.root == W1.hex() and rc.window == served.registered[pre + f"zy@{c.index}"].window == W1.hex()
         assert run.tables[last]["registered"][rc.value] == rc.root.hex()
         assert all(rc.value not in run.tables[d]["registered"] for d in range(len(run.calls)) if d != last)
@@ -826,7 +841,7 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
         t = c % n
         words = np.array(pub["known"]["rows"], np.uint16)
         words[t, c % words.shape[1]] ^= 1
-        off = NR.commit(program, r.value, words, run._key, 0, True, b"".join(r.salts), window=served.root)
+        off = NR.commit(program, r.value, words, b"".join(r.salts), True, window=served.root)
         assert off.root.hex() != pub["root"] and off.domain.domain_id == r.domain.domain_id
         assert not G.verify_read(r.domain, bytes.fromhex(pub["root"]), t, off.bcs[t], off.path(t), SV.V2)
         ok = mine["ports"][CR.OK_PORT]
@@ -875,7 +890,7 @@ def test_a_producer_with_prepare_is_handed_each_steps_calls_of_one_k_before_it_i
     assert at == len(run.calls)
     for c in run.calls:
         rc = served.registered[SV.PREFIX + f"receipt@{c.index}"]
-        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
+        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._salts,
                                       SV.RECEIPT_NONCE + c.index)
     refused = _window(W1, receipts=_Prepared(fail="no launch"))[0].served.refused
     assert any(r.startswith("calls [") and r.endswith("]: no launch") for r in refused), refused
@@ -923,7 +938,7 @@ def test_a_producer_with_stage_is_handed_each_served_calls_device_rows_before_it
         assert a is seen[c] and c not in made.order[:asked] and asked == made.order.index(served.step_calls(c)[0])
     for c in run.calls:
         rc = served.registered[SV.PREFIX + f"receipt@{c.index}"]
-        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
+        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._salts,
                                       SV.RECEIPT_NONCE + c.index)
     refused = _window(W1, receipts=_Staged(fail="no copy"))[0].served.refused
     first = min(c for _asked, c, _a in made.staged)
@@ -976,7 +991,7 @@ def test_a_forward_out_of_module_order_lays_out_each_step_table_and_its_receipts
     for _s, k, cs in tables:
         ra = served.registered[HW.table(prog, "a", cs[0], STEPS)]
         rows = [row for c in cs for row in _a_rows(*_served_call(got, c, 0, k)[:2], T, k)]
-        assert ra.root.hex() == _tree(ra, rows, run._key, SV.nonce(cs[0], "a"))
+        assert ra.root.hex() == _tree(ra, rows, run._salts, SV.nonce(cs[0], "a"))
         assert [c.index for c in run.calls if ra.value in run.tables[c.index]["registered"]] == [cs[0]]
     assert [[args[0].index for args in batch] for _n, batch in made.batches] == [cs for _s, _k, cs in tables]
     assert made.order == list(range(len(run.calls)))
@@ -984,7 +999,7 @@ def test_a_forward_out_of_module_order_lays_out_each_step_table_and_its_receipts
     for c in run.calls:
         rc = served.registered[SV.PREFIX + f"receipt@{c.index}"]
         assert names.index(rc.value) > names.index(served.a_table(c.index))
-        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
+        assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._salts,
                                       SV.RECEIPT_NONCE + c.index)
 
 
@@ -1062,8 +1077,8 @@ def test_a_step_tables_words_are_each_calls_rows_padded_to_m_in_call_order(k):
 
 def test_k_up_to_4096_roots_are_unchanged():
     """SPLITK leaves every K <= 4096 as it was: the mixed-K window's A tables and ``b/<K>`` (K = 16 and 32), served
-    from a seeded torch, have the roots they had before chunk rows. Every root is registered under the declared Program's
-    digest, so a change to the window's layout repins them."""
+    from a seeded torch and the run's seeded salts (`Seeded`), have the roots they had before chunk rows. Every root is
+    registered under the declared Program's digest, so a change to the window's layout repins them."""
     with torch.random.fork_rng():
         torch.manual_seed(0)
         ws = _weights()
@@ -1072,8 +1087,8 @@ def test_k_up_to_4096_roots_are_unchanged():
     got = {v: r.root.hex()[:32] for v, r in run.served.registered.items() if "/a/" in v or "/b/" in v}
     assert period.root().hex()[:32] == "1ece0ea710f8c4eb2928eab685ffb566"
     assert got == {SV.PREFIX + v: h for v, h in {
-        "a/16@0": "c8b921b78bada773a56c50d86e4b18e5", "a/16@1": "8b4037635004312a565d50e90ad1d1f1",
-        "a/32@0": "717c4bda4f5b9a14963d83c2f4684b97", "a/32@1": "6aefc8db5b8a0da8ceea92ba37934975",
+        "a/16@0": "c4e416ff4dff1aa953b4a6f763e8f8c2", "a/16@1": "376dd3a27ee64e82c0ae1e8962b81d6e",
+        "a/32@0": "5a8bd5d69c747077ef9c23b8513a64e7", "a/32@1": "a6ad92c0f9e1b19bcb43df3513ba256b",
         "b/16": "a226c1160a24925da82ea5fcdf038552", "b/32": "434e13142ae61afb78f47ce2b04661c7"}.items()}
 
 
@@ -1116,7 +1131,8 @@ def test_the_served_paths_chunk_leaves_are_kernels_vectors(case):
         assert SV.nonce(0, "a") == nonce
         served = SV.Served()
         served.m = rows
-        reg = NR.commit(program, value, served.a_words(SimpleNamespace(k=k), codes, scales), key, nonce, window=window)
+        aw = served.a_words(SimpleNamespace(k=k), codes, scales)
+        reg = NR.commit(program, value, aw, SV.model_salts(key, nonce, aw.shape[0]), window=window)
     else:
         reg = SV.register_weights(program, [(rows, k)], {0: (codes, scales)}, key, prefix="").registered[k]
     assert (reg.value, reg.leaves, reg.words) == (value, leaves, words)
@@ -1149,12 +1165,12 @@ def test_a_chunked_llama_window_registers_chunk_leaves_and_core_credit_ties_it()
         ra = served.registered[pre + f"a/{k}@{s}"]
         assert (ra.leaves, ra.words) == (rows[ra.value], Wt.leaf_words(k)) == (Wt.chunks(k) * T * len(cs), Wt.b_words(k // Wt.chunks(k)))
         whole = [row for c in cs for row in _a_rows(*_served_call(got, c, 0, k)[:2], T, k)]
-        assert ra.root.hex() == _tree(ra, _chunk_rows(whole, k), run._key, SV.nonce(cs[0], "a"))
+        assert ra.root.hex() == _tree(ra, _chunk_rows(whole, k), run._salts, SV.nonce(cs[0], "a"))
     b4, b14 = served.registered[pre + "b/4096"], served.registered[pre + "b/14336"]
     assert (b4.leaves, b4.words, b14.leaves, b14.words) == (64, 2050, 4 * 32, 1794)
     assert b14 is period.registered[14336] and b4 is period.registered[4096]
     whole = [w[j].numpy().tobytes() + np.float32(s[j, 0]).tobytes() for w, s in ws[1:] for j in range(len(w))]
-    assert b14.root.hex() == _tree(b14, _chunk_rows(whole, 14336), WKEY, SV.B_NONCE + 1)
+    assert b14.root.hex() == _tree(b14, _chunk_rows(whole, 14336), MODEL, SV.B_NONCE + 1)
     assert period.at == {0: (4096, 0), 1: (14336, 0)} and period.matches(1, ws[1][0].numpy(), ws[1][1].numpy())
     assert CR._a_link(run.round_log, served.entries(), len(run.calls), rows) is None
     requests, session = hashlib.sha512(b"requests").digest(), "llama-session"
@@ -1246,7 +1262,7 @@ def test_a_j10r_llama_window_at_k_14336_is_credited_at_its_whole_k_and_core_ties
             chunk = [CC.public_words(run._salt, u0 + t, ab, (u0, CC.j10r_blocks(T, k // 4, TILE, t // cols, t % cols)))
                      for t in range(n)]
             assert chunk != pub["known"]["rows"]
-            off = NR.commit(program, r.value, np.array(chunk, np.uint16), run._key, 0, True, b"".join(r.salts),
+            off = NR.commit(program, r.value, np.array(chunk, np.uint16), b"".join(r.salts), True,
                             window=served.root)
             assert off.root.hex() != pub["root"]
             assert not any(G.verify_read(r.domain, bytes.fromhex(pub["root"]), t, off.bcs[t], off.path(t), SV.V2)
@@ -1281,7 +1297,7 @@ def test_a_public_table_is_built_again_on_read_and_registers_what_its_held_rows_
         assert np.array_equal(rows.at([n - 1, 0]), words[[n - 1, 0]]) and np.array_equal(rows[1:], words[1:])
         assert rows[-1] == tuple(int(v) for v in words[-1])
         assert salts.at(range(n)) == b"".join(salts) == b"".join(CC.public_row_salt(served.root, u0 + t) for t in range(n))
-        held = NR.commit(served.program_digest, r.value, words, run._key, 0, True, b"".join(salts), window=served.root)
+        held = NR.commit(served.program_digest, r.value, words, b"".join(salts), True, window=served.root)
         assert (held.root, held.bcs, held.levels, held.domain) == (r.root, r.bcs, r.levels, r.domain)
         buf = io.BytesIO()
         HO._HostOnly(buf, protocol=5).dump(r)

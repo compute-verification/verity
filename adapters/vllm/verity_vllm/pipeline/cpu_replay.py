@@ -214,8 +214,9 @@ def root_scheme(root_of_record: str | None) -> str | None:
 
 
 def salts_path(bundle: Path) -> Path:
-    """The salt file of a bundle's (or a slim keep's) weights registration: ``weights/tree.salts`` beside ``weights/tree.json``."""
-    return SF.beside(Path(bundle) / "weights" / "tree.json")
+    """The salt file of a bundle's weights registration, in its private part (`replay_bundle.private_file`), or of a slim keep's:
+    ``weights/tree.salts`` beside ``weights/tree.json``."""
+    return RB.private_file(bundle, RB.PRIVATE[1]) or SF.beside(Path(bundle) / "weights" / "tree.json")
 
 
 def tensor_salts_of(bundle: Path, tree: dict[str, Any], i: int) -> bytes | None:
@@ -456,7 +457,7 @@ def of_record(b: dict[str, Any], out: Path, *, awaiting: bool = True) -> tuple[l
         undecided(row["commit"], done["bundle"])
     if row is None or (awaiting and not RB.awaits_replay(RB.commit_of(row))):
         raise Refused(f"pair {pair}: no instrumented run awaiting its deferred replay in {out / 'runs.jsonl'}")
-    store, run = SD.load(bdir / "store")
+    store, run = RB.load_store(bdir)
     c = row["commit"]
     folded = store._run_root(run)
     for what, got in (("the bundle's run root", ctx["run_root"]), ("the store's run root", run.run_root.hex()),

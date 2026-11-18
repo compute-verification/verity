@@ -125,7 +125,7 @@ theorem setupOne_layout {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     exact ⟨S.m, hmOut_parseCommit_mask S.parse⟩
 
 /-- **Every table of a masked session in scope has the layout the rank bound reads** (`LayoutOk`). -/
-theorem layoutOk_of_scope {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg} {s : Ins}
+theorem layoutOk_of_scope {rel : Readable.Parsed → Readable.Relation} {x : Hash.Msg} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hsc : Claims.Flock.Scope (deployZk rel) x)
     (hs : setupOf true x = some (s, spec, sts)) : ∀ st ∈ sts, LayoutOk st := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk rel) rel (readOf true) rfl

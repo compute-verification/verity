@@ -26,8 +26,9 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity_torch.pouw.pearl_c import ends as ENDS
 from verity_torch.pouw.pearl_c import host as PH
 from verity_torch.pouw.pearl_c import served_y_device as SYD
@@ -283,6 +284,25 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
     assert run.commits["transcript_root"] == out["transcript_root"]
 
 
+def test_the_transcripts_leaves_are_hashed_under_its_salts_with_their_length_stated(device_run, monkeypatch):
+    """A pass's end hands `hm_level0` the transcript's salts buffer and its length, `HM_SALT` bytes a tile, so the kernels'
+    own refusal of a wrong length guards it, and its hm_leaves launch reads that buffer."""
+    make, kernel, weights, *_ = device_run
+    run = make()
+    run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    given, level0 = [], R.Pipeline.hm_level0
+
+    def spy(p, tag, *a, **kw):
+        given.append((tag, kw))
+        return level0(p, tag, *a, **kw)
+    monkeypatch.setattr(R.Pipeline, "hm_level0", staticmethod(spy))
+    kernel.dev.log.clear()
+    tiles = run.end()["tiles"]
+    (tag, kw), = given
+    assert tag == "t" and kw["salt_bytes"] == R.HM_SALT * tiles
+    assert [p[2] for n, _, p, _ in kernel.dev.log if n == "hm_leaves"] == [kw["salts"]]
+
+
 def test_a_call_over_whole_128_row_tiles_runs_the_128_tile_chain(device_run):
     """At m a multiple of 128 the chain runs on 128 x 128 tiles (gemm_pearlc, on the mainloop), writing C~, U and y, and the
     tile leaves read them."""
@@ -385,6 +405,41 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
 
 
+def test_a_retained_pass_refuses_a_weight_tree_whose_root_moved_after_the_build(device_run, tmp_path):
+    """A retained pass writes each weight's tree from the device beside the build's root: a tree_b whose root bytes were
+    written after the build is refused by the weight's name before any of the pass's last files is written, and an
+    untouched one is retained."""
+    make, _, weights, roots, _ = device_run
+    for touched in (True, False):
+        run = make()
+        d = tmp_path / str(touched)
+        run.begin(retain=str(d))
+        run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+        if touched:
+            run.weights[1].b["tree_b"][-64:] ^= 0x5A
+            with pytest.raises(ValueError, match=r"weight 1's tree on the device roots at [0-9a-f]{16}, not its build's "
+                                                  f"{roots[1].hex()[:16]}: its tree_b was written after the build"):
+                run.end()
+            assert not (d / "weights").exists() and not (d / "leaves").exists()
+        else:
+            man = json.loads(Path(run.end()["manifest"]).read_text())
+            assert (d / man["weights"]["1"]["tree"]["path"]).read_bytes()[-64:] == roots[1]
+
+
+@pytest.mark.parametrize("dtype", ["float16", "float32"])
+def test_the_weight_build_refuses_a_weight_that_is_not_bfloat16(device_run, dtype):
+    """Pearl+ commits a weight's FP32 words and retains its rows as BF16, so a weight in another format (whose words BF16
+    does not hold) is refused by name and dtype, by `weight_roots` and by a run's own build, before either allocates."""
+    make, kernel, weights, roots, _ = device_run
+    bad = {0: weights[0].to(getattr(torch, dtype)), 1: weights[1]}
+    refusal = f"weight 0 is torch.{dtype}: Pearl\\+ commits a weight's FP32 words and retains its rows as BF16"
+    with pytest.raises(ValueError, match=refusal):
+        PPDR.weight_roots(kernel, bad, SCHEME, weight_salts=salts_b(bad))
+    with pytest.raises(ValueError, match=refusal):
+        PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, bad, roots, *salt_coin(roots),
+                             capacity=1 << 12, weight_salts=salts_b(bad))
+
+
 def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(device_run, tmp_path, monkeypatch):
     """A caller that commits y with its own launches (the overhead arm) hands `_retained` its tree (``y_tree``): the pass
     retains those bytes, its y root their last node, and makes no tree of its own; so a tree its launches wrote nothing
@@ -465,13 +520,13 @@ def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_th
 
 
 def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(device_run, tmp_path):
-    """The call runs as vLLM runs it, under inference mode, so its shape's buffers are inference tensors; the retained pass
-    begins outside it (execution phase 's verify pass failed there)."""
+    """The call runs as vLLM runs it, under inference mode, and its shape's buffers are still normal tensors; the retained
+    pass begins outside it (execution phase 's verify pass failed there)."""
     make, kernel, weights, *_ = device_run
     run = make()
     with torch.inference_mode():
         run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
-    assert all(t.is_inference() for sh in run.shapes.values() for t in sh.b.values())
+    assert not any(t.is_inference() for sh in run.shapes.values() for t in sh.b.values())
     run.end()
     run.begin(retain=str(tmp_path))
     assert bool((run.leaves == 0xA5).all()) and all(bool((t == 0xA5).all()) for sh in run.shapes.values() for t in sh.b.values())
@@ -494,38 +549,43 @@ def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
     assert check["ok"] and check["flags_equal"] and check["screen"] == "torch"
 
 
-# ---- one pass per engine step, through the PoUW option (`Option.end_pass`) ---------------------------------------------
+def test_the_whole_retained_check_names_the_first_call_and_field_that_differ(tmp_path):
+    """`retained_differences`: two retained passes the same but for one call's A tree names that call, its matmul and
+    its entry's differing field, and the one file on disk; two passes the same are ok."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    mms = [Matmul(i, Shape(16, 2048, 3072), 7 + i) for i in range(3)]
+    files = [{"rows": {"path": f"calls/{i}.rows.bf16", "bytes": 4}, "tree": {"path": f"calls/{i}.tree", "bytes": 8, "sha256": "a"}}
+             for i in range(3)]
+    moved = [*files[:1], {**files[1], "tree": {**files[1]["tree"], "sha256": "b"}}, *files[2:]]
+    dirs = [tmp_path / "eager", tmp_path / "replayed"]
+    for d, tree in zip(dirs, (b"x", b"y"), strict=True):
+        (d / "calls").mkdir(parents=True)
+        (d / "calls" / "1.tree").write_bytes(tree)
+    want, got = ([None] * 3, files, {"tiles": 3}, mms), ([None] * 3, moved, {"tiles": 3}, mms)
+    assert E2E.retained_differences(want, got, dirs) == {
+        "ok": False, "disk": {"differ": 1, "first": ["calls/1.tree"]},
+        "call_files": {"calls": [3, 3], "first": 1, "matmul": {"index": 1, "shape": [16, 2048, 3072], "weight": 8},
+                       "fields": ["tree.sha256"]}}
+    assert E2E.retained_differences(want, want, [dirs[0], dirs[0]]) == {"ok": True}
 
-class _Linear:
-    """A stand-in for vLLM's ``LinearBase``: its weight and its own ``quant_method``, which the PoUW option executes."""
 
-    def __init__(self, weight):
-        self.weight, self.quant_method = weight, types.SimpleNamespace(apply=None)
+def test_a_retained_pass_is_read_after_its_end_fills_its_records_in():
+    """On the device a call's record is filled in behind it, by the time `end` joins the pass's writes: the whole check
+    reads the pass's records after its end, without its manifest."""
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    cur = types.SimpleNamespace(records=["first", None], files=[{}, {}], matmuls=[0, 1], retain="dir")
+
+    def end():
+        assert cur.retain is None
+        cur.records[1] = "behind"
+        return {"tiles": 2, "manifest": "m"}
+
+    run = types.SimpleNamespace(cur=cur, end=end)
+    assert E2E.retained_end(run, ("tiles",)) == (["first", "behind"], [{}, {}], {"tiles": 2}, [0, 1])
 
 
-class _Model:
-    def __init__(self, weights):
-        self.layers = [_Linear(weights[w]) for w in sorted(weights)]
-
-    def modules(self):
-        return iter(self.layers)
-
-
-class _Engine:
-    """A stand-in for vLLM's ``llm_engine``: each `step` runs its step's calls, (weight, rows), through the model's linears,
-    as the step's forward does, on rows sampled from `seed`."""
-
-    def __init__(self, model, steps, seed=0):
-        self.model, self.steps, self.rng, self.at = model, steps, np.random.default_rng(seed), 0
-
-    def step(self):
-        for w, m in self.steps[self.at]:
-            layer = self.model.layers[w]
-            x = torch.from_numpy(bf16_words(self.rng, m, layer.weight.shape[1]).view(np.float32).copy()).to(torch.bfloat16)
-            layer.quant_method.apply(layer, x)
-        self.at += 1
-        return []
-
+# ---- one pass per engine step, through Pearl+ attached by name (`pouw.scheme.Attached`) ---------------------------------
 
 def seeded_device_salts(monkeypatch, seed=11):
     """Every salt the device run draws (A's and the tiles', `host.fresh_into`, wherever imported; y's) from streams seeded
@@ -543,256 +603,59 @@ def seeded_device_salts(monkeypatch, seed=11):
     monkeypatch.setattr(SYD, "fresh_salts", lambda m: [ys.randbytes(HM96_SALT) for _ in range(m)])
 
 
-def _served(monkeypatch, kernel, weights, more=None, **run):
-    """`weights` served under the PoUW option as `verity_vllm.LLM` installs it (`protocol_options.install`), on `kernel`,
-    with the execution phase's coins from a seeded challenger, the further pouw settings `more` and the weights' B salts
-    `salts_b` as the entry's fresh weight salts (seeded, so two installs compared byte for byte share them) and every
-    fresh salt from `seeded_device_salts`; `run` overrides the device run's buffer sizes."""
-    import functools
+class _Steps:
+    """Pearl+ attached by name (`pouw.scheme.Attached`) over `weights` on `kernel`, as an engine's exchange drives it: the
+    weights registered, then each `step` its calls (weight, rows) as the step's blocks (`BlockDue`, through
+    `Attached.kernel`) between its `StepBegan` (its slots the step's most rows) and its `StepComputed` and `StepEnded`, on
+    rows sampled from `seed`.  Its coins are in-process from a seeded challenger, the weights' B salts `salts_b`, every other
+    fresh salt `seeded_device_salts`'; ``more`` are further Pearl+ settings and ``run`` overrides the device run's buffer
+    sizes."""
 
-    from verity_vllm import protocols as PO
-    from verity_vllm.protocols import pouw
-    monkeypatch.setattr(pouw, "linear_types", lambda: (_Linear,))
-    monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
-    monkeypatch.setattr(PPDR, "fresh_weight_salts", salts_b)
-    seeded_device_salts(monkeypatch)
-    monkeypatch.setattr(pouw, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
-    model = _Model(weights)
-    settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k", **(more or {})}}
-    comp = PO.install(model, PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings=settings))
-    return model, comp, comp.get("pouw")
+    def __init__(self, monkeypatch, kernel, weights, steps, more=None, seed=0, **run):
+        import functools
 
+        from verity import hooks as H
+        from verity.protocols.resource_accounting.compute.pouw import scheme as PP
+        from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+        from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
 
-def _per_step(engine, end):
-    """`engine.step` wrapped so that `end` closes each step's pass; each step's commitment, with the bytes it commits (the
-    tile leaves, A's roots and the screen's flags), in order."""
-    from verity_vllm.engine.hooks import Hooks
-    hooks, out = Hooks(), []
+        monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
+        seeded_device_salts(monkeypatch)
+        by_rows = {weights[w].shape[0]: b for w, b in salts_b(weights).items()}
+        monkeypatch.setattr(SV, "fresh_salts", lambda m: [by_rows[m][i * HM96_SALT:(i + 1) * HM96_SALT] for i in range(m)],
+                            raising=False)
+        monkeypatch.setattr(verifier, "coins", random.Random(7).randbytes)
+        monkeypatch.setattr(PPDR, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
+        self.H, self.weights, self.steps, self.rng, self.at = H, weights, steps, np.random.default_rng(seed), 0
+        self.scheme = PP.Attached({"settings": {"kernel": "k", "coins": "in-process", **(more or {})}})
+        self.scheme.registered(H.RegisteredValues(tuple((f"l{w}.weight", t) for w, t in weights.items()), 0,
+                                                  {f"l{w}.weight": w for w in weights}))
 
-    def make(original):
-        def step(*a, **kw):
-            run, got, served = end(original, a, kw)
-            out.append({**got, "leaves": PPDR._bytes(run.leaves[:run.nb * got["tiles"]]),
-                        "roots_a": PPDR._bytes(run.roots_buf[:run.nb * got["units"]]),
-                        "flags": PPDR._bytes(run.flag_buf[:got.get("screened_rows", 0)].contiguous().view(-1))})
-            return served
-        return step
-    hooks.wrap(engine, "step", make)
-    return hooks, out
-
-
-def _reach_in(option):
-    """The per-step pass as benchmarks' harness made it before `Option.end_pass` (`verity_bench`'s ``_pass_per_step``): the
-    device run found through the option's private ``release``, a pass begun before each engine step and ended after it."""
-    run = option.release.__self__
-
-    def end(original, a, kw):
-        run.begin()
-        served = original(*a, **kw)
-        return run, run.end(), served
-    return end
-
-
-def _end_pass(option):
-    def end(original, a, kw):
-        served = original(*a, **kw)
-        return option.end_pass.__self__, option.end_pass(), served
-    return end
-
-
-#: engine steps, each its calls (weight, rows): prefill chunks, decodes, a step with no forward, a call over 128 rows
-SERVED_STEPS = [[(0, 40), (1, 40)], [(0, 3), (1, 3)], [], [(1, 130), (0, 17), (1, 17)], [(0, 1), (1, 1)], [(0, 64)]]
-
-
-@pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
-    pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
-def test_end_pass_commits_each_engine_step_as_the_per_step_reach_in_did(monkeypatch, tmp_path, dev):
-    """The PoUW option's `end_pass` at each engine step's end commits what the harness's reach-in (begin before the step, end
-    after it) committed: per step, the same pass commitment (transcript root, A roots' digest, units, tiles, screened,
-    failing and unsure rows), the same tile leaves, A roots and screen flags.  On ``twin`` the hash kernels run on the host
-    (`TwinDev`), so the roots are real; on ``recording`` nothing is written and only the counts and the flags differ by
-    step.  After close the passes are the steps' own: `end_pass` leaves the next pass open and empty, so `finish` ends
-    nothing twice."""
-    rng = np.random.default_rng(13)
-    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
-               for w, n in ((0, 256), (1, 128))}
-    got, pd = {}, HD.build(tmp_path) if dev == "twin" else None
-    for name, end in (("reach-in", _reach_in), ("end_pass", _end_pass)):
-        kernel = PPD.Kernel(R, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
-        model, comp, option = _served(monkeypatch, kernel, weights)
-        engine = _Engine(model, SERVED_STEPS)
-        hooks, out = _per_step(engine, end(option))
-        for _ in SERVED_STEPS:
-            engine.step()
-        hooks.uninstall()
-        got[name] = out, [dict(p) for p in option.details["passes"]], dict(option.commitment())
-        comp.close()
-        if name == "end_pass":
-            assert len(option.details["passes"]) == len(SERVED_STEPS)
-    (a, a_passes, a_commits), (b, b_passes, b_commits) = got["reach-in"], got["end_pass"]
-    assert [(p["units"], p["tiles"], p.get("screened_rows", 0)) for p in b] == [
-        (2, 6, 80), (2, 6, 6), (0, 0, 0), (3, 6 + 4 + 2, 164), (2, 6, 2), (1, 4, 64)]
-    assert a == b and a_passes == b_passes and a_commits == b_commits
-    if dev == "twin":
-        assert len({p["activation_roots"] for p in b if p["units"]}) == 5
-
-
-@pytest.mark.slow
-def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkeypatch):
-    """A pass holds 32 tiles and 512 screened rows, and each step takes 24 tiles and 400 rows: with `end_pass` at each step's
-    end, 256 steps (6,144 tiles) each commit in a pass of their own; without it, the install's one pass overflows at the
-    second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows). Its
-    length is the point: a few steps would not show a buffer that grows across passes."""
-    rng = np.random.default_rng(17)
-    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
-               for w, n in ((0, 256), (1, 128))}
-    steps = [[(0, 200), (1, 200)]] * 256
-    kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
-    model, comp, option = _served(monkeypatch, kernel, weights, capacity=32, flag_rows=512)
-    engine = _Engine(model, steps)
-    hooks, out = _per_step(engine, _end_pass(option))
-    for _ in steps:
-        engine.step()
-    hooks.uninstall()
-    comp.close()
-    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in out] == [(2, 24, 400)] * len(steps)
-    assert len(option.details["passes"]) == len(steps)
-    model, comp, option = _served(monkeypatch, kernel, weights, capacity=32, flag_rows=512)
-    engine = _Engine(model, steps)
-    engine.step()
-    with pytest.raises(RuntimeError, match="over its capacity"):
-        engine.step()
-    comp.close()
-
-
-# ---- one pass per engine step, ended by the PoUW option itself at the model runner's step ----------------------------
-
-class _Runner:
-    """A stand-in for vLLM's ``GPUModelRunner``: ``execute_model`` runs one step's forward, `_Engine.step`'s calls."""
-
-    engine: ClassVar[_Engine | None] = None
-
-    def execute_model(self, scheduler_output=None):
-        return type(self).engine.step()
-
-
-def _runners(monkeypatch, *modules):
-    """vLLM's model runner modules as this process holds them once an engine is built (`pouw_pass.MODEL_RUNNERS`), each
-    with a fresh `_Runner` subclass, each module's a subclass of the one before; the classes, in order."""
-    out, base = [], _Runner
-    for mod in modules or ("vllm.v1.worker.gpu.model_runner",):
-        base = type("GPUModelRunner", (base,), {})
-        monkeypatch.setitem(sys.modules, mod, types.SimpleNamespace(GPUModelRunner=base))
-        out.append(base)
-    return out
-
-
-class _Core:
-    """A stand-in for vLLM's in-process engine core: each `step` schedules and calls the runner's ``execute_model`` once,
-    and nothing else touches the PoUW option (no harness wrapper, no ``end_pass``)."""
-
-    def __init__(self, runner, engine):
-        self.runner = runner
-        type(runner).engine = engine
+    def begin(self):
+        calls = self.steps[self.at]
+        self.scheme.step(self.H.StepBegan(self.at, slots=max((m for _, m in calls), default=0)))
+        return calls
 
     def step(self):
-        return self.runner.execute_model(object())
+        for w, m in self.begin():
+            weight = self.weights[w]
+            x = torch.from_numpy(bf16_words(self.rng, m, weight.shape[1]).view(np.float32).copy()).to(torch.bfloat16)
+            due = self.H.BlockDue(f"l{w}", w, {"m": m}, "bf16", {"x": x, "weight": weight}, self.at)
+            self.scheme.kernel(due, lambda _: None)
+        self.scheme.step(self.H.StepComputed(self.at))
+        self.scheme.step(self.H.StepEnded(self.at))
+        self.at += 1
 
-
-def _hooked(option):
-    def end(original, a, kw):
-        served = original(*a, **kw)
-        return option.end_pass.__self__, option.details["passes"][-1], served
-    return end
-
-
-@pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
-    pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
-def test_the_model_runner_hook_commits_each_engine_step_as_end_pass_did(monkeypatch, tmp_path, dev):
-    """Served with a model runner in the process, the PoUW option ends its pass when ``execute_model`` returns, so plain
-    serving commits per step exactly what `Option.end_pass` at each step's end committed without one: per step the same
-    commitment, tile leaves, A roots and screen flags, the same passes and the same commitment after close.  A caller that
-    still calls ``end_pass`` after each hooked step (benchmarks' harness) ends nothing: it gets the step's commitment back
-    and the passes stay the steps' own."""
-    rng = np.random.default_rng(13)
-    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
-               for w, n in ((0, 256), (1, 128))}
-    got, pd = {}, HD.build(tmp_path) if dev == "twin" else None
-    for name in ("end_pass", "hook", "hook and end_pass"):
-        with monkeypatch.context() as mp:
-            kernel = PPD.Kernel(R, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
-            runners = _runners(mp) if name != "end_pass" else []
-            model, comp, option = _served(mp, kernel, weights)
-            engine = _Engine(model, SERVED_STEPS)
-            stepper = _Core(runners[0](), engine) if runners else engine
-            hooks, out = _per_step(stepper, _hooked(option) if name == "hook" else _end_pass(option))
-            for _ in SERVED_STEPS:
-                stepper.step()
-            hooks.uninstall()
-            got[name] = out, [dict(p) for p in option.details["passes"]], dict(option.commitment())
-            assert option.details["pass_ends"].startswith("the caller's end_pass" if name == "end_pass" else "each engine step")
-            comp.close()
-            assert not runners or "execute_model" not in vars(runners[0])
-            assert len(option.details["passes"]) == len(SERVED_STEPS)
-    assert [(p["units"], p["tiles"], p.get("screened_rows", 0)) for p in got["hook"][0]] == [
-        (2, 6, 80), (2, 6, 6), (0, 0, 0), (3, 6 + 4 + 2, 164), (2, 6, 2), (1, 4, 64)]
-    assert got["end_pass"] == got["hook"] == got["hook and end_pass"]
-    if dev == "twin":
-        assert len({p["activation_roots"] for p in got["hook"][1] if p["units"]}) == 5
-
-
-def test_plain_serving_with_a_model_runner_never_overflows(monkeypatch):
-    """`test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows` with nothing but the engine core's steps:
-    256 steps of 24 tiles and 400 rows, under a pass of 32 tiles and 512 rows, each commit in a pass of their own."""
-    rng = np.random.default_rng(17)
-    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
-               for w, n in ((0, 256), (1, 128))}
-    steps = [[(0, 200), (1, 200)]] * 256
-    (runner,) = _runners(monkeypatch)
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights, capacity=32, flag_rows=512)
-    core = _Core(runner(), _Engine(model, steps))
-    for _ in steps:
-        core.step()
-    comp.close()
-    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in option.details["passes"]] == [(2, 24, 400)] * len(steps)
-
-
-def test_a_manual_end_pass_ends_only_what_no_engine_step_ended(monkeypatch):
-    """The two ways a pass ends can't end one twice.  After a hooked step, ``end_pass`` returns that step's commitment and
-    ends nothing, however often it is called, and arguments it is given apply to the open pass.  A call made outside any
-    step is the caller's to end: ``end_pass`` ends it.  With V1's and V2's runner modules both loaded, V2's class a
-    subclass of V1's, each step still ends one pass, and a forward that raises leaves its calls in the open pass."""
-    rng = np.random.default_rng(19)
-    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
-               for w, n in ((0, 256), (1, 128))}
-    v1, v2 = _runners(monkeypatch, "vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights)
-    run, passes = option.end_pass.__self__, option.details["passes"]
-    engine = _Engine(model, [[(0, 40)], [(1, 3)], [(0, 5), (1, 5)], [(0, 7)]])
-    core = _Core(v2(), engine)
-    core.step()
-    assert [(p["units"], p["tiles"]) for p in passes] == [(1, 4)]
-    assert option.end_pass() is passes[-1] and option.end_pass() is passes[-1] and len(passes) == 1
-    assert run.end_pass(run="r-next") is passes[-1] and (run.cur.run, run.cur.stepped, len(passes)) == ("r-next", True, 1)
-    core.step()
-    layer = model.layers[0]
-    layer.quant_method.apply(layer, torch.zeros(16, 1024, dtype=torch.bfloat16))
-    assert option.end_pass()["units"] == 1 and len(passes) == 3
-    engine.steps[2] = [(0, 5), (1, 5), (2, 5)]
-    with pytest.raises(IndexError):
-        core.step()
-    assert (len(passes), len(run.cur.matmuls)) == (3, 2)
-    engine.at = 3
-    core.step()
-    comp.close()
-    assert [p["units"] for p in passes] == [1, 1, 1, 3]
-    assert "execute_model" not in vars(v1) and "execute_model" not in vars(v2)
+    def release(self):
+        """The scheme released, as at serving's end; the run's details."""
+        self.scheme.release()
+        return self.scheme.life["summary"]
 
 
 @pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
     pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
 def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, dev):
-    """Plain serving (a model runner, nothing else ending passes) under ``transcript_dir``, three steps: each pass is one
+    """Pearl+ attached by name under ``transcript_dir``, three engine steps: each pass is one
     step's forward over every weight, retained in ``pass-NNNNN`` in the order the passes began (the one the install began
     first among them), its manifest's commitment the one it published and its calls the step's, numbered on from the last
     pass's (the execution phase's call indices, so the passes together hold each index once), its weights' files hard links to the
@@ -802,18 +665,15 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     steps = [[(0, 200), (1, 200)], [(0, 120), (1, 120)], [(0, 3), (1, 3)]]
-    kernel = PPD.Kernel(R, TwinDev(HD.build(tmp_path)) if dev == "twin" else RecordingDev(), "0" * 64)
-    (runner,) = _runners(monkeypatch)
+    kernel = PPD.Kernel(R90, H100TwinDev(HD.build(tmp_path)) if dev == "twin" else H100Dev(), "0" * 64)
     root = tmp_path / "passes"
-    model, comp, option = _served(monkeypatch, kernel, weights, {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
-    core = _Core(runner(), _Engine(model, steps))
+    served = _Steps(monkeypatch, kernel, weights, steps, {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
     for _ in steps:
-        core.step()
-    comp.close()
-    passes = option.details["passes"]
+        served.step()
+    passes = served.release()["passes"]
     assert [(p["units"], p["tiles"], p["screened_rows"]) for p in passes] == [(2, 24, 400), (2, 12, 240), (2, 6, 6)]
     assert [Path(p["manifest"]) for p in passes] == [root / f"pass-{i:05d}" / "manifest.json" for i in range(3)]
-    assert sorted(d.name for d in root.iterdir()) == [f"pass-{i:05d}" for i in range(3)]
+    assert sorted(d.name for d in root.iterdir() if d.is_dir()) == [f"pass-{i:05d}" for i in range(3)]
     mans = []
     for i, (p, step) in enumerate(zip(passes, steps)):
         man = json.loads(Path(p["manifest"]).read_text())
@@ -830,18 +690,20 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
 
 
 #: `_retained_files`' digest of the three steps below as the retention path wrote them when each call's copies, its record,
-#: y's root and the pass's files and manifest were all waited for in its step, every fresh salt `seeded_device_salts`'
-RETAINED_DIGEST = "6c6a1793d842340db221aa566cfc1ee4883db29e900f53df7d01803381e40052"
+#: y's root and the pass's files and manifest were all waited for in its step, under Pearl+'s kernel scheme
+#: (``pearl-c-h100-v1-h3``), every fresh salt `seeded_device_salts`'
+RETAINED_DIGEST = "5ab93ab77cd0f996a83ffcce36a8ac89ec0f8df4175c930caaa9b6b747c6751f"
 
 
 def _retained_files(root: Path) -> dict[str, str]:
-    """Every file under `root` and its bytes' SHA-256."""
-    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob("*")) if p.is_file()}
+    """Every file of `root`'s passes (``pass-NNNNN``) and its bytes' SHA-256."""
+    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.glob("pass-*/**/*"))
+            if p.is_file()}
 
 
 def test_a_step_completed_behind_it_retains_the_bytes_a_waiting_end_retains(monkeypatch, tmp_path):
     """`PassEnds.retain_behind`: three served steps, each pass's files, records and manifest completed behind its step
-    (`retained_ends`, which the install's close waits for), retain every byte that ends completing them in the step do, the
+    (`retained_ends`, which the run's finish waits for), retain every byte that ends completing them in the step do, the
     same files as the path that waited for each call's copies (`RETAINED_DIGEST`); each file is the owner's alone (0600)
     and each directory of a pass too (0700)."""
     zeroed_y(monkeypatch)
@@ -852,17 +714,14 @@ def test_a_step_completed_behind_it_retains_the_bytes_a_waiting_end_retains(monk
     got, cls = {}, PPDR.PearlCDeviceRun
     for behind in (False, True):
         monkeypatch.setattr(cls, "retain_behind", behind)
-        (runner,) = _runners(monkeypatch)
         root = tmp_path / f"behind-{behind}"
-        model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights,
-                                      {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
-        core = _Core(runner(), _Engine(model, steps))
+        served = _Steps(monkeypatch, PPD.Kernel(R90, H100Dev(), "0" * 64), weights, steps,
+                        {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
         for _ in steps:
-            core.step()
-        comp.close()
-        assert all(p["manifest"] and p["excluded_rows"] is not None for p in option.details["passes"])
+            served.step()
+        assert all(p["manifest"] and p["excluded_rows"] is not None for p in served.release()["passes"])
         got[behind] = _retained_files(root)
-        modes = {p.stat().st_mode & 0o777 for p in root.rglob("*")}
+        modes = {p.stat().st_mode & 0o777 for p in root.glob("pass-*/**/*")} | {p.stat().st_mode & 0o777 for p in root.glob("pass-*")}
         assert modes == {0o600, 0o700}, sorted(map(oct, modes))
     assert got[True] == got[False] and len(got[True]) == 3 * (1 + 3 + 2 * 2 * 3 + 2 * 3)
     assert hashlib.sha256(json.dumps(got[True], sort_keys=True).encode()).hexdigest() == RETAINED_DIGEST
@@ -875,23 +734,23 @@ def test_a_pass_poisons_again_only_the_shapes_a_call_took_since_the_last_poison(
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     steps = [[(0, 200), (1, 200)], [(0, 3), (1, 3)], [(0, 3), (1, 3)]]
-    (runner,) = _runners(monkeypatch)
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights,
-                                  {"transcript_dir": str(tmp_path)}, capacity=32, flag_rows=512)
-    run, core, fills, fill = option.end_pass.__self__, _Core(runner(), _Engine(model, steps)), [], torch.Tensor.fill_
+    served = _Steps(monkeypatch, PPD.Kernel(R90, H100Dev(), "0" * 64), weights, steps,
+                    {"transcript_dir": str(tmp_path)}, capacity=32, flag_rows=512)
+    fills, fill = [], torch.Tensor.fill_
     monkeypatch.setattr(torch.Tensor, "fill_", lambda t, v: (fills.append(t.data_ptr()), fill(t, v))[1])
 
     def buffers(rows):
+        run = served.scheme.run
         return [t for (m16, _, _), sh in run.shapes.items() if (m16 > 16) == rows for t in run._buffers(sh)]
-    core.step()
+    served.step()
     big = buffers(True)
     assert big and {t.data_ptr() for t in big} <= set(fills)
     fills.clear()
-    core.step()
+    served.step()
     assert not {t.data_ptr() for t in big} & set(fills) and all(bool((t == 0xA5).all()) for t in big)
     assert {t.data_ptr() for t in buffers(False)} <= set(fills)
-    core.step()
-    comp.close()
+    served.step()
+    served.release()
 
 
 def test_the_record_decided_from_the_rows_bytes_is_the_devices(monkeypatch):
@@ -929,26 +788,44 @@ def test_the_pinned_ring_hands_out_disjoint_regions_and_frees_them_in_order(monk
     assert not ring.live and ring.take(1000)[0][:2] == [0, 1000]
 
 
+def test_an_attached_pearl_plus_after_its_first_step_holds_the_run_the_harness_gate_reads(monkeypatch):
+    """`Attached.run` after the first step with tokens is the device run `verity_bench.vllm.runner._pearl_c_gate` checks,
+    with every name that gate and `bench_arm.PearlCArm.gate` read on it, its ``weights_root`` in the commits the run
+    itself made."""
+    rng = np.random.default_rng(41)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    cls = PPDR.PearlCDeviceRun
+    served = _Steps(monkeypatch, PPD.Kernel(R90, H100Dev(), "0" * 64), weights, [[(0, 8), (1, 8)]])
+    assert served.scheme.run is None
+    served.step()
+    run = served.scheme.run
+    assert isinstance(run, cls) and isinstance(run.schedule.name, str) and run.omit == frozenset()
+    assert all(callable(getattr(run, f)) for f in ("begin", "end", "gemm", "poison", "epoch_calls"))
+    assert isinstance(run.details, dict) and run.scheme is not None
+    assert {w: x.tensor.data_ptr() for w, x in run.weights.items()} == {w: t.data_ptr() for w, t in weights.items()}
+    assert run.commits["weights_root"] == run.epoch.weights_root.hex() and "registration" in run.commits
+    assert run.commits.get("coin_source", "in-process") == "in-process"
+    served.release()
+
+
 def test_a_step_over_one_pass_is_refused_before_its_forward(monkeypatch):
-    """`pouw_pass.step_tokens`: weights of n 256 and 128 take 4 + 2 tiles a 64-row tile, so a pass of 32 tiles holds 5 tile
+    """`passes.step_tokens`: weights of n 256 and 128 take 4 + 2 tiles a 64-row tile, so a pass of 32 tiles holds 5 tile
     rows (320 tokens) and one of 512 screened rows 256 tokens over its two calls a step: a step is held to 256 tokens
-    (``details["max_step_tokens"]``).  A step scheduled over it is refused before its forward runs, leaving the open pass
-    empty and nothing committed; a step at the limit commits as one pass, within both caps."""
+    (``details["max_step_tokens"]``).  Pearl+ refuses a step begun over it before any block, leaving the open pass empty
+    and nothing committed; a step at the limit commits as one pass, within both caps."""
     rng = np.random.default_rng(29)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
-    (runner,) = _runners(monkeypatch)
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights, capacity=32, flag_rows=512)
-    assert option.details["max_step_tokens"] == 256
-    r = runner()
-    type(r).engine = _Engine(model, [[(0, 257), (1, 257)], [(0, 256), (1, 256)]])
+    served = _Steps(monkeypatch, PPD.Kernel(R90, H100Dev(), "0" * 64), weights,
+                    [[(0, 257), (1, 257)], [(0, 256), (1, 256)]], capacity=32, flag_rows=512)
     with pytest.raises(RuntimeError, match=r"a step of 257 tokens is over one pass \(256 tokens a step"):
-        r.execute_model(types.SimpleNamespace(total_num_scheduled_tokens=257))
-    assert not option.end_pass.__self__.cur.matmuls and option.details["passes"] == []
-    type(r).engine.at = 1
-    r.execute_model(types.SimpleNamespace(total_num_scheduled_tokens=256))
-    comp.close()
-    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in option.details["passes"]] == [(2, 24, 512)]
+        served.begin()
+    run = served.scheme.run
+    assert run.details["max_step_tokens"] == 256 and not run.cur.matmuls and run.details["passes"] == []
+    served.at = 1
+    served.step()
+    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in served.release()["passes"]] == [(2, 24, 512)]
 
 
 # ---- the trees, their hash kernels run on the host ----------------------------------------------------------------
@@ -1605,17 +1482,21 @@ def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
 
 def test_a_seeded_serve_draws_the_same_coins_and_no_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
     """`serve --seeded`'s streams (`served_passes.seeded`) give one label's bytes however they are sampled, so two seeded
-    installs (`seed_install`) hold challengers of one coin commitment, and seed nothing else: every leaf's salt is fresh, so
-    there is no salt key to seed; ``--seeded`` is refused beside retention and beside the challenger gate, before anything
-    is built."""
+    installs (`seed_install`) give the attached scheme's in-process challenger (`serving.in_process_coins`) one coin
+    commitment, and seed nothing else: every leaf's salt is fresh, so there is no salt key to seed; ``--seeded`` is
+    refused beside retention and beside the challenger gate, before anything is built."""
+    from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     a, b = SP.seeded("coins"), SP.seeded("coins")
     assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salts")(32) != SP.seeded("coins")(32)
-    one, two = {"coins": None}, {}
-    SP.seed_install(one)
-    SP.seed_install(two)
-    assert one["coins"].commitment.to_json() == two["coins"].commitment.to_json()
-    assert set(one) == set(two) == {"coins"} and not hasattr(PPD, "new_salt_key") and not hasattr(PPD, "no_salt_key")
+    monkeypatch.setattr(verifier, "coins", verifier.coins)
+    SP.seed_install()
+    one = SV.in_process_coins(0).commitment.to_json()
+    SP.seed_install()
+    assert SV.in_process_coins(0).commitment.to_json() == one
+    assert not hasattr(PPD, "new_salt_key") and not hasattr(PPD, "no_salt_key")
     argv = ["serve", "--seeded", "--passes", str(tmp_path), "--out", str(tmp_path / "served.json")]
     with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
         SP.main(argv)
@@ -1774,6 +1655,7 @@ def _uncredited_case(tmp_path: Path, monkeypatch, capsys):
     return doc, test, VR.load(path, coins), out, run
 
 
+@pytest.mark.slow
 def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_passes_recomputes_it(tmp_path, monkeypatch, capsys):
     """An accepted verdict that credits carries `uncredited_calls` in its document (not in its answer); a test instance's
     credits nothing and carries none.  ``served_passes.py uncredited`` recomputes it from the passes in DIR, found by the
@@ -1805,6 +1687,7 @@ def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_
     assert rc == 1 and "no pass in" in said and not out.exists()
 
 
+@pytest.mark.slow
 def test_served_passes_uncredited_reads_the_grid_form_of_a_fixed_load_run(tmp_path, monkeypatch, capsys):
     """A run held to its class's fixed load (`verify_run.grid_work`) publishes the passes' whole MACs (the checked MACs
     and the excluded and voluntary cells') and their credit less the give-up padded up to the execution phase grid.
@@ -1850,6 +1733,7 @@ def _replay_every_tile(p) -> dict[int, str]:
     return {tid: reason for _, tid, ok, reason, *_ in got if not ok}
 
 
+@pytest.mark.slow
 def test_a_salt_dead_element_puts_its_row_over_the_inert_bound(tmp_path, monkeypatch):
     """P3's forming term in the tile rule (`pearl_c_inert_work.inert_elements`): credited row 9 holds one entry 300 times its
     RMS, which keeps the per-row rules and is salt-dead, inert work of fs·|cols|/n = 64 over the row's bound of 41 at
@@ -1862,6 +1746,7 @@ def test_a_salt_dead_element_puts_its_row_over_the_inert_bound(tmp_path, monkeyp
     assert _replay_every_tile(p) == {}
 
 
+@pytest.mark.slow
 def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile_then_passes(tmp_path):
     """V-EX's remedy on a retained pass before its sampling coin: under the h100 record's zero key a credited row is over its
     own cap (`proved_pass`), so the verifier rejects its tile.  `volunteer_pass` finds the same tiles from the words' counts,
@@ -1890,6 +1775,7 @@ def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
 
 
+@pytest.mark.slow
 def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_inert_bound(tmp_path, capsys):
     """The pipelines give the rows over a debit cap up before the coin exactly where ``served_passes.py volunteer-needed``
     says yes, so it says yes exactly where the verdict they call rejects a run on a sampled tile with a credited row over its
@@ -1992,6 +1878,7 @@ def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_
     assert (cpu["voluntary_a"], cpu["voluntary_b"]) == (out["voluntary_a"], out["voluntary_b"])
 
 
+@pytest.mark.slow
 def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex_or_its_published_root(tmp_path):
     """A pass whose rows over a cap are given up (`volunteer_pass`) is accepted by the run's verdict, which credits no cell
     of a given-up A row's band of 64 rows or a given-up B row's block of 64 columns.  More given-up rows than V-EX allows (⌈m/64⌉ of a call's A), or records changed after the
@@ -2042,11 +1929,12 @@ def window_record(*paths: Path, version: int = 2) -> dict:
                 "value": f"pearl-b/{u['weight']}", "root": man["weights"][str(u["weight"])]["root"], "leaves": u["n"],
                 "words": u["k"], "word_bits": 32,
                 "domain": rows_domain(weight_binding(u["weight"]), -2, u["n"], HM96).domain_id.hex()})
-    return {"format": REG.FORMAT_V2, "window": {"kind": "served", **({"version": 2} if version == 2 else {})},
+    return {"format": DM.REGISTRATION, "window": {"kind": "served", **({"version": 2} if version == 2 else {})},
             "registered": [*reg, *(weights[w] for w in sorted(weights) if version == 2),
                            {"value": "input-ids/0", "root": "00", "leaves": 1, "words": 1, "domain": "00"}]}
 
 
+@pytest.mark.slow
 def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_weights_b_root_and_domain(tmp_path):
     """``served_passes.py verify --tie W`` accepts a run whose execution phase record registers each call's A rows and y at the roots
     the verdict credits, under the domains it recomputes from the salt and the call's index, and each weight's B rows at
@@ -2062,8 +1950,8 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     coins, w, man = published(path), window_record(path), json.loads(path.read_text())
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
     rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json", "--manifest", str(path), "--tie", str(wfile))
-    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 6}, doc["line"]
-    assert f"tied to W {REG.digest(w)[:16]} on its 6 tables" in doc["line"] and doc["tie_record"] == str(wfile)
+    assert rc == 0 and answer["public"]["tie"] == {"record": DD.digest(w), "tables": 6}, doc["line"]
+    assert f"tied to W {DD.digest(w)[:16]} on its 6 tables" in doc["line"] and doc["tie_record"] == str(wfile)
     salt, (u0, u1) = bytes.fromhex(man["salt"]), man["matmuls"]
     b0, b1 = (next(e for e in w["registered"] if e["value"] == f"pearl-b/{x}") for x in (0, 1))
     n1 = b1["leaves"]
@@ -2098,14 +1986,14 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
               f"{VR.V1_WEIGHTS} pearl-b/0: a W that registers the weights states version 2"),
              ({**w, "window": {"kind": "served", "version": 1}}, PWR.UNKNOWN_VERSION),
              ({**w, "window": {"kind": "served", "version": 3}}, PWR.UNKNOWN_VERSION),
-             ({**w, "format": REG.FORMAT}, f"W is no {REG.FORMAT_V2} record")]
+             ({**w, "format": DM.REGISTRATION_V1}, f"W is no {DM.REGISTRATION} record")]
     for bad, why in cases:
         r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=bad, test_instance=True)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
     (lfile := tmp_path / "legacy.json").write_text(json.dumps(legacy))
     rc, doc, answer = served_verify(path.parent, tmp_path / "legacy-verify.json", "--manifest", str(path), "--tie", str(lfile))
     assert rc != 0 and answer["verdict"] == "reject" and VR.UNTIED_WEIGHTS in answer["reason"], doc["line"]
-    untied = {"record": REG.digest(old), "tables": 4, "weights": VR.WEIGHTS_UNTIED}
+    untied = {"record": DD.digest(old), "tables": 4, "weights": VR.WEIGHTS_UNTIED}
     r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=old, test_instance=True)
     assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"] == untied, r["line"]
     (ofile := tmp_path / "v1.json").write_text(json.dumps(old))
@@ -2114,6 +2002,7 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     assert f"on its 4 tables, {VR.WEIGHTS_UNTIED}" in doc["line"]
 
 
+@pytest.mark.slow
 def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_credits_them(tmp_path):
     """``retain --window-record W`` on a serve of a warm-up pass, a pass without calls and two timed passes: it drops the
     warm-up's round 0, retains rounds 1 and 2 (places among served.json's passes with calls), and writes W over those two
@@ -2145,12 +2034,12 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     r = VR.verify_passes([warm, a, b], 3, 1, "test", coins, b"verifier" * 4, window=w, test_instance=True)
     assert r["answer"]["verdict"] == "reject" and "W registers no pearl-a/0/0" in r["answer"]["reason"], r["line"]
     first, chained = tmp_path / "first.json", tmp_path / "w-chained.json"
-    first.write_text(json.dumps({"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "registered": [], "previous": None}))
+    first.write_text(json.dumps({"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "registered": [], "previous": None}))
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(chained), "--previous-record", str(first)]) == 0
     wc = json.loads(chained.read_text())
-    assert w["previous"] is None and wc == {**w, "previous": REG.digest(json.loads(first.read_text()))}
-    assert VR.tie(wc, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": REG.digest(wc), "tables": 10}
-    assert REG.digest(wc) != REG.digest(w)
+    assert w["previous"] is None and wc == {**w, "previous": DD.digest(json.loads(first.read_text()))}
+    assert VR.tie(wc, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": DD.digest(wc), "tables": 10}
+    assert DD.digest(wc) != DD.digest(w)
     with pytest.raises(SystemExit):
         SP.main(["retain", "--passes", str(d), "--previous-record", str(first)])
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
@@ -2161,19 +2050,20 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
                     "--day-declaration", str(declared)]) == 0
     wn = json.loads(named.read_text())
     assert wn == {**wc, "window": {**wc["window"], "day": 3, "declaration": "5d" * 64}}
-    assert VR.tie(wn, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": REG.digest(wn), "tables": 10}
+    assert VR.tie(wn, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": DD.digest(wn), "tables": 10}
     with pytest.raises(SystemExit):
         SP.main(["retain", "--passes", str(d), "--day-declaration", str(declared)])
     declared.write_text(json.dumps({"day": 3}))
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
                     "--day-declaration", str(declared)]) == 1 and not (tmp_path / "none.json").exists()
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
-    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 10}, doc["line"]
+    assert rc == 0 and answer["public"]["tie"] == {"record": DD.digest(w), "tables": 10}, doc["line"]
     assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
     before = wfile.read_text()
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
 
 
+@pytest.mark.slow
 def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_an_inert_bound_and_refuses_an_unretained_serve(tmp_path):
     """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
     each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
@@ -2233,6 +2123,7 @@ def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_
         assert doc["passes"][0]["device"]["replayed"] == doc["device"]["replayed"]
 
 
+@pytest.mark.slow
 def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_and_refuses_a_retention_after_it(tmp_path):
     """``retain`` drops passes before the coin (one ``--drop``, and with ``--volunteer`` each pass that step didn't finish or
     left over a cap): ``verify`` then reads the retained passes alone, each at its round, credits only them, and records
@@ -2275,6 +2166,7 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
     assert json.loads((d / SP.COIN).read_text()) == coin
 
 
+@pytest.mark.slow
 def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     """V-EX's give-up is the prover's before the coin: a pass whose records change after the verifier recorded its coin
     (`volunteer_pass` run past ``served_passes.py volunteer``'s refusal) is another run, and the verdict refuses it
@@ -2290,6 +2182,7 @@ def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     assert VR.verify_passes([path], 3, 1, "test", coins, test_instance=True)["answer"]["verdict"] == "accept"
 
 
+@pytest.mark.slow
 def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_draw_again(tmp_path):
     """``verify_passes``' ``draw(C, asking)``: its source is the sample's coin on the run's commitment C, recorded (v2) with
     the sample before any replay and reused by a later verdict without sampling; a sample that fails before it asks rejects
@@ -2464,6 +2357,7 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
         assert asked == (["ledger", "reserve", "ledger"] if case == "raced" else ["ledger"]), case
 
 
+@pytest.mark.slow
 def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes_over_the_dropped_rounds(tmp_path):
     """With round 0 dropped before the coin, W over both rounds ties the retained pass at its round 1, its dropped round's
     entries crediting nothing; without the drop those entries are a call the run doesn't hold, and the pass at round 0
@@ -2514,7 +2408,7 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path, monkeypatch):
 
     r = run([a, b], window_class=cls)
     assert r["answer"]["verdict"] == "accept", r["line"]
-    assert r["answer"]["public"]["tie"] == {"record": REG.digest(w), "tables": 10, "load": [2, 8, 2]} == r["tie"]
+    assert r["answer"]["public"]["tie"] == {"record": DD.digest(w), "tables": 10, "load": [2, 8, 2]} == r["tie"]
     assert "on its 10 tables, at its class's fixed load (2, 8, 2)" in r["line"]
     # held to the class, the work is in the grid form and the exact credit is the profile's; a test instance's credits 0
     passes = [VR.load(x, coins) for x in (a, b)]
@@ -2657,6 +2551,7 @@ def test_a_class_held_runs_work_is_its_structural_credit_less_the_give_up_on_the
     assert whole_record == PW.UnitRecord(Matmul(0, Shape(128, 2048, 2048), 0), 100, 2048)
 
 
+@pytest.mark.slow
 def test_a_tie_refuses_two_passes_that_commit_one_weight_under_two_roots(tmp_path):
     """W registers each weight's B rows once, so a tie over passes whose execution phases commit weight 0 under two roots (other
     weights, seed 12) has no one entry to hold them to.  `verify_passes` never gets here (one salt is one weights root,
@@ -2776,7 +2671,7 @@ def test_the_version_2_tie_holds_a_run_of_the_run_of_records_size_to_its_64_weig
     passes = [VR.load(p, coins) for p in paths]
     assert sum(len(p.records) for p in passes) == 256 and all(len(p.epoch.workload.weights()) == 64 for p in passes)
     tied, seconds = timed(lambda: VR.tie(w, passes))
-    assert tied == {"record": REG.digest(w), "tables": 576}
+    assert tied == {"record": DD.digest(w), "tables": 576}
     want = VR.tie_entries(passes)
     assert list(want) == names
     for x in range(64):
@@ -3084,6 +2979,7 @@ def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessi
         PPD.manifest_epoch(early, c)
 
 
+@pytest.mark.slow
 def test_a_runs_coins_file_is_a_live_sessions_commitment_or_an_in_process_challengers(tmp_path):
     """`verify_run.epoch_coins`, the coins file every step of a served run reads (``served_passes.py volunteer`` and
     ``verify``, ``verify_run.py --coins``, ``volunteer_pass.py --coins``): a live session's commitment when its scheme is
@@ -3111,55 +3007,6 @@ def test_served_passes_verify_accepts_a_run_salted_by_a_live_session(tmp_path):
                                                                                  "manifest": str(path)}]}))
     rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json")
     assert rc == 0 and answer["verdict"] == "accept" and doc["line"].startswith("ACCEPT"), doc["line"]
-
-
-def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes():
-    """`bench_arm.live_coins` (``served_passes.py serve``'s and ``served_step.py``'s): given the gate and this node's peer
-    name, the PoUW settings drop their in-process coins and take a salt-only session the gate reserves under the lane once
-    its ledger shows the lane's open period (``reserve --peer P --scheme S --families [["pouw/salt",1]] --epoch N``): the
-    challenger on this node, the reserve answer, the gate's open and that period, which `pouw.Settings` reads and the
-    adapter's refusals (`pouw.refusals`) refuse nothing of.  Neither given leaves the settings, and their coins
-    in-process, untouched; one alone is refused, and a reserve while the lane's open period is H1's is refused before it
-    is asked."""
-    from verity_vllm.protocols import pouw
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
-
-    BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
-    gate = "ssh -i KEY -o BatchMode=yes research@gate"
-    reserved = {"session": "s20261103T140000Z-0001", "seq": 7, "peer": "vy-dc-h200", "by": "vllm",
-                "expires_utc": "2026-11-03T16:00:00Z"}
-    ledger, asked = [], []
-
-    def run(argv):
-        assert argv[:-1] == shlex.split(gate)
-        asked.append(shlex.split(argv[-1]))
-        if asked[-1][0] == "ledger":
-            return 0, "".join(json.dumps(e) + "\n" for e in ledger)
-        return 0, json.dumps(reserved)
-
-    base = {"device": "cuda", "kernel": "k", "transcript_dir": "passes", "coins": Challenger(0, random.Random(7).randbytes)}
-    assert BA.live_coins(base, None, None, 5, "vllm", run) == (base, None) and asked == []
-    got, answer = BA.live_coins(base, gate, "vy-dc-h200", 5, "vllm", run)
-    assert answer == reserved and "coins" not in got and "coins" in base
-    assert {k: got[k] for k in ("device", "kernel", "transcript_dir", "challenger", "session", "period")} == {
-        "device": "cuda", "kernel": "k", "transcript_dir": "passes", "challenger": "127.0.0.1:0", "session": reserved,
-        "period": None}
-    assert asked == [["ledger"], ["reserve", "--peer", "vy-dc-h200", "--scheme", Wd.LIVE_SCHEME, "--families",
-                                  json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":")), "--epoch", "5"]]
-    settings = pouw.Settings.of(got)
-    assert (settings.coins, settings.challenger, settings.session, settings.period) == (None, "127.0.0.1:0", reserved, None)
-    serving = types.SimpleNamespace(stage="serve", world=1, enforce_eager=True, settings_of=lambda name: got,
-                                    filled_of=lambda name: ())
-    assert pouw.refusals(SCHEME, serving) == ()
-    for one in ((gate, None), (None, "vy-dc-h200")):
-        with pytest.raises(ValueError, match="together"):
-            BA.live_coins(base, *one, 5, "vllm", run)
-    ledger.append({"kind": "period-open", "session": None, "body": {"period": "p1", "lane": "vllm",
-                                                                     **dict.fromkeys(PHW.H1_PERIOD, 1)}})
-    asked.clear()
-    with pytest.raises(ValueError, match="refused before reserving a salt-only session: the lane's open period p1 is H1's"):
-        BA.live_coins(base, gate, "vy-dc-h200", 5, "vllm", run)
-    assert asked == [["ledger"]]
 
 
 @pytest.mark.slow
@@ -5229,6 +5076,16 @@ def _served_step_profile(path: Path) -> Path:
         kernel(s + 7_100_000, s + 7_500_000, s + 7_600_000, 6)
     con.commit()
     return path
+
+
+def test_served_step_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name():
+    """No declared scheme serves Pearl-C on sm_120, so ``served_step.py run`` refuses an arm of that entry by name
+    (`undeclared`, which `_engine` asks before any engine) and passes the H100's, and ``served_step.sh``'s RTX PRO 6000
+    default arms are stock FP8's alone."""
+    S = load("pearl_c_vllm_served_step", POUW / "pearl_c_vllm" / "served_step.py")
+    assert S.undeclared(["pouw:pearl-c-sm120-v1-h3"]).startswith("pouw:pearl-c-sm120-v1-h3 is no declared scheme's name")
+    assert S.undeclared(["pearl-plus"]) is None
+    assert "ARMS=${ARMS:-stock-fp8@compiled,stock-fp8}; SPEC" in (POUW / "pearl_c_vllm" / "served_step.sh").read_text()
 
 
 def test_the_served_step_profile_splits_each_decode_step_into_kernels_and_host_ranges(tmp_path):

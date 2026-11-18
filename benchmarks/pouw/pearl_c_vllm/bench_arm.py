@@ -9,6 +9,8 @@ challenger's salt coin) but attached through the harness's ``target.hooks``, so 
 One pass per engine step: ``llm_engine.step`` is wrapped to open `Stack.pass_` around each forward, which bounds a pass's
 tiles by the step's scheduled tokens, so the full sweep's long prefills fit the pass buffers that one generate's pass
 would overflow.
+It holds the device run directly, not Pearl+ attached by name, because it times and replays device internals no served
+setting exposes.
 
 Its tokens are Pearl-C's own y (Pearl's FP8 quantization), so no stock arm is a bit-exact control (``control=None``), and
 each call's noise is seeded by its index across the epoch, so no two of the engine's passes need agree either (the gate's
@@ -110,28 +112,6 @@ class _LiveSession:
             client.close()
 
 
-def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: int, lane: str,
-               run: Any = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """A protocols config's PoUW settings `pouw` with the salt coin a live session's on the auditor device when `gate` (infra's
-    gate as an ssh command) and `peer` (this node in the challenger host's peers) are given: a salt-only session reserved
-    now under lane `lane` (`_LiveSession`, `run` its gate's subprocess in tests), which the install opens on its salt
-    epoch's root (`salt.epoch_open_root` of the fixed operands' root and the epoch's number) and flips its salt coin from
-    (`pouw_h1_window.salt_session`), through the settings ``challenger`` (this node's 127.0.0.1, at the port the gate's open
-    answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the reserve joined), its
-    in-process ``coins`` dropped. Returns the settings and the reserve answer: `pouw` itself and None when neither is
-    given, the coins then in-process. ValueError when one is given without the other, or the reserve is refused."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
-
-    if (gate, peer) == (None, None):
-        return pouw, None
-    if gate is None or peer is None:
-        raise ValueError("live coins take PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER (this "
-                         "node's name in the challenger host's peers) together")
-    session = _LiveSession(gate, peer, epoch, lane, run)
-    return ({**{k: v for k, v in pouw.items() if k != "coins"}, "challenger": "127.0.0.1:0", "session": session.reserved,
-             "gate": PHW.gate_of(session.gate.call), "period": session.period}, session.reserved)
-
-
 class LiveDraw:
     """`verify_run.verify_passes`' ``draw`` from a sample session of its own on the auditor device's challenger, through
     infra's gate (``gate``, ``peer`` and ``lane`` as `_LiveSession`'s; `run` its gate's subprocess in tests): called on
@@ -224,19 +204,20 @@ class PearlCArm:
         self.coins: dict[str, Any] = {"source": "in-process"}
 
     def kernel(self, card: str | None = None) -> tuple[str, Path]:
-        """The kernel scheme and kernel directory the arm serves with, fixed at the first call: the scheme
-        `verity_bench.schemes.kernel_scheme` derives from the arm's useful-work scheme and the card ``card`` (its short
-        name; where None, the leased card's, `kit.card_short` of the run's stamp), for the served model's weights, which
+        """The kernel scheme and kernel directory the arm serves with, fixed at the first call: the scheme the arm's
+        served useful-work scheme's declaration runs (its ``kernels``, `scheme.declared`; `verity_bench.schemes.served`) on the card ``card`` (its short name;
+        where None, the leased card's, `kit.card_short` of the run's stamp), for the served model's weights, which
         registration pins, and its directory ``PEARLC_KERNEL`` or the tree's (`kernel_directory`)."""
         if self._kernel is None:
+            from verity.protocols.resource_accounting.scheme import declared
             from verity_bench import kit
-            from verity_bench.schemes import kernel_scheme
+            from verity_bench.schemes import arch, served, useful_work
 
             if self.protocol is None:
                 raise ValueError(f"{self.id} names no useful-work scheme: build it as {type(self).__name__}(NAME), NAME "
                                  "a registered compute scheme's name")
             card = card or kit.card_short(kit.host_stamp()["card"])
-            scheme = kernel_scheme(self.protocol, card, pinned=True)
+            scheme = declared(served(useful_work(self.protocol)), "kernels")(card, pinned=True, arch=arch(card))
             self._kernel = scheme, Path(settings.PEARLC_KERNEL or kernel_directory(scheme, card))
         return self._kernel
 

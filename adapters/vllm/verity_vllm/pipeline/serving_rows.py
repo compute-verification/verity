@@ -144,9 +144,9 @@ from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
-from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
-                                                    SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
-                                                    chain_ways, final_hits, part, template, unit_templates)
+from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, KEY_BLOCKS, LAYOUTS, PACKED,  # noqa: F401
+                                                    PART_OF, PARTS, SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
+                                                    chain_ways, final_hits, part, proved_as, template, unit_templates)
 from verity_vllm.pipeline.window_sampling_design import sampling_design_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
@@ -685,7 +685,6 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     header entries, the registered roots, ``salts_of`` and ``strings_of`` (`rows.commit`'s: a history writer's rows its
     table's), each member's index entries, the history tables' declarations (`history_rows.declarations`) and ``window``
     with each port given by reference named in its member's ``values``)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
     if on != (histories is not None):
         raise ValueError("a window commits history tables exactly when its partition file says \"histories\": true, into the "
@@ -700,14 +699,13 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     reg = registered(ms, rows, hreg) if weight_values else merged(EX.declarations(plan), hreg)
     if tables is not None:
         made = EX.commit_tables(plan, store, weights, arrivals, _slices, tables)
-        values |= made | IF.supplied(reg, {p: v.entry() for p, v in made.items()}, window.partition_digest, module=G)
+        values |= made | IF.supplied(reg, {p: v.entry() for p, v in made.items()}, window.partition_digest)
     by_t, at = dict(zip(tmpls, rows, strict=True)), {}
     first, apart = ([m for m in ms if (template(m.template).layout == "history") == a] for a in (False, True))
     got = read_all(first, [by_t[t] for t in dict.fromkeys(m.template for m in first)], store, weights, arrivals, values)
     if histories is not None:
         at = HR.append(hp, first, got, histories)
-        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp}, window.partition_digest,
-                              module=G)
+        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp}, window.partition_digest)
     if apart:
         read = dict(zip([m.key for m in first], got, strict=True))
         read |= zip([m.key for m in apart], read_all(apart, [by_t[t] for t in dict.fromkeys(m.template for m in apart)], store,

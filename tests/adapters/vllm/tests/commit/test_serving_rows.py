@@ -12,6 +12,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.circuits.defs import REGISTRY, bind
 from verity.commitments import hm96
 from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf
@@ -128,10 +130,10 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     win = SR.write(c, tmp_path, {"row": 101, "commitment": "rows-sha512"}, idx, registrar=R)
     rec = json.loads((tmp_path / "registration.json").read_text())
     assert (rec["format"], rec["population"], rec["partition"], rec["window"]["kind"], rec["window"]["run"]) == (
-        R.FORMAT, 13, w.partition_digest, "served", RUN)
+        DM.REGISTRATION_V1, 13, w.partition_digest, "served", RUN)
     ib, salt = (tmp_path / "index.json").read_bytes(), (tmp_path / SR.INDEX_SALT).read_bytes()
     assert rec["window"]["index_leaf"] == SR.index_leaf(ib, salt).hex() == win["index_leaf"] and "index" not in rec["window"]
-    assert win["registration_digest"] == R.digest(rec) and rec["program"] == P.program_digest(w.program)
+    assert win["registration_digest"] == DD.digest(rec) and rec["program"] == P.program_digest(w.program)
     leaves = {r["port"]: r["leaves"] for r in rec["roots"]}
     assert leaves == {f"{TEMPLATES[0]}/{p}": 9 for p in ("x", "cs", "out")} | {f"{TEMPLATES[1]}/{p}": 4 for p in ("in0", "in1", "out.0", "out.1")}
     for r in rec["roots"]:

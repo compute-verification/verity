@@ -403,7 +403,7 @@ theorem indexOf_lt {w : Wire} (hd : w.units % w.cuts = 0) {t : String} {u : Nat}
 /-- One wire's search among its expanded rows is its `indexOf`. -/
 theorem entries_find? {w : Wire} (hc : 1 ≤ w.cuts) (hd : w.units % w.cuts = 0) (t : String) (u : Nat) (p : String)
     (r : Nat) : (w.entries.find? (·.1 == (t, u, p, r))).map (·.2) =
-      (w.indexOf t u p r).map fun i => (w.writer, w.writerAt i, w.out, w.offset) := by
+      (w.indexOf t u p r).map fun i => (w.writer, w.writerAt i, w.out, w.offsetAt i) := by
   have key : (List.range w.units).find? (fun i => ((w.reader, (w.readerAt i).1, w.port, (w.readerAt i).2) ==
       (t, u, p, r))) = w.indexOf t u p r :=
     find?_of_unique (fun i hi => indexOf_iff hc hd t u p r i (List.mem_range.1 hi))

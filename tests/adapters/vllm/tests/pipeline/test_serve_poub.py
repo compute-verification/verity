@@ -9,23 +9,26 @@ from typing import Any
 
 import pytest
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
+from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
+from verity_vllm.pipeline import serve_mirror as sm
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import poub_session
 from verity_vllm.pipeline import serve_poub as SR
-from verity_vllm.protocols.poub import remote
+from verity.protocols.resource_accounting.memory.poub.prover import commit_session as remote
 
 VERIFIER = ("--remote-verifier", "127.0.0.1:7781")
 
 
 @pytest.fixture(autouse=True)
-def _registered(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The adapter's `CommitSession` stands in for the session memory-accounting registers by name."""
-    monkeypatch.setitem(scheme.PROCESSES, poub_session.SESSION, remote.CommitSession)
+def _registered() -> None:
+    """The session memory-accounting registers by name (`POUB.processes`), there once the declarations are loaded."""
+    declarations.load()
+    assert poub_session.SESSION in scheme.PROCESSES
 
 
 def test_without_a_registered_session_the_remote_verifier_is_not_implemented(monkeypatch):
@@ -178,5 +181,11 @@ def test_a_sealing_server_reads_the_registered_bytes_once_under_its_weights_root
     assert w._extras_of(com, SimpleNamespace(weight_registration={"root": "ab"})) == ("tree", ["bytes"]) and len(calls) == 1
 
 
-def test_the_sessions_record_is_mirrored_and_its_memory_map_is_not():
-    assert "remote_session.json" in sc.MIRRORED and "memory_map.jsonl" not in sc.MIRRORED
+def test_neither_the_sessions_record_nor_its_memory_map_is_mirrored(tmp_path):
+    out = tmp_path / "serve"
+    out.mkdir()
+    (out / "remote_session.json").write_text("{}")
+    (out / "memory_map.jsonl").write_text('{"step": 0, "freed": [], "written": [[0, 0, "00"]], "withdrawn": []}\n')
+    sm.Mirror(out, tmp_path / "OUT")()
+    assert not any((tmp_path / "OUT").iterdir()) and (out / "memory_map.jsonl").is_file()
+    assert "remote_session.json" not in sm.MIRRORED and "memory_map.jsonl" not in sm.MIRRORED

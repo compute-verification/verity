@@ -107,13 +107,17 @@ import a0  # noqa: E402
 import prove_subprotocol as PL  # noqa: E402
 import two_stage as TS  # noqa: E402
 import verity_vllm.definitions.registry.boolean_stop_rule  # noqa: E402, F401  (the stop rule's words on gates: Flock's pieces for them)
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.ports import free_port  # noqa: E402
 from verity.circuits.defs import SpecializedDefinition  # noqa: E402
 from verity.commitments.merkle import tree_levels  # noqa: E402
 from verity.commitments.rowleaf import row_leaf  # noqa: E402
 from verity.commitments.periods import rows as CS, tables as TB  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
 
@@ -239,15 +243,13 @@ def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str
     the sampled ``units`` (`a0.session`, behind the ZK server when ``zk_server`` names its binary), then Lean's
     verdict of record on it (`a0.lean_verify`). ``forged``: the prover's self-check is skipped. -> what `decide` takes:
     the session's records' SHA-512, the units it served and proved, its instances, the verdicts and its timing."""
-    from verity_bench import kit
-
     out.mkdir(parents=True, exist_ok=True)
     n, local = st["n"], sorted(int(u) for u in units)
     (out / "sample.json").write_text(json.dumps({"law": "subset", "population": n, "k": len(local), "units": local},
                                               sort_keys=True))
     env = {**a0.prover_env(zk_server, st), **({"FC_ZK_SELF_CHECK": "skip"} if forged else {})}
     t = time.time()
-    record, live = a0.session(bin_, st, n, f"subset:{len(local)}", kit.free_port(), out, sample_file=out / "sample.json",
+    record, live = a0.session(bin_, st, n, f"subset:{len(local)}", free_port(), out, sample_file=out / "sample.json",
                               zk=True, env=env, prove_timeout=timeout)
     seconds = round(time.time() - t, 1)
     lv = a0.lean_verify(lean, st, n, out, zk=True)
@@ -311,7 +313,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
         raise ValueError(f"the class's first stage registered or sampled no stop block: {(s or {}).get('error') or handoff.get('error')}")
     root = TS.first_root(handoff)
     first = TS.resume(handoff, check, delta=delta, window_root=root, stop=stop, key=key, main=main)
-    layout, logged = first.layout, {R.digest(rec): (i, rec) for i, rec in enumerate(first.stream.log)}
+    layout, logged = first.layout, {DD.digest(rec): (i, rec) for i, rec in enumerate(first.stream.log)}
     if s["record"].get("previous") not in logged:
         raise Unlogged(f"the stop record's previous, {str(s['record'].get('previous'))[:16]}, is no record of the class's "
                        f"boundary stream's log, which holds {', '.join(d[:16] for d in logged)}", first)
@@ -326,7 +328,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
         raise ValueError("the stop population's Spec isn't the one its first stage ran under")
     held = BS.stop_registration(handoff["commit"], check, stop, boundary)
     want = BS.stop_record(handoff["commit"], check, stop, S.selection_sampling_design(stream.spec.selection, layout.spans), boundary)
-    if R.digest(want) != R.digest(s["record"]):
+    if DD.digest(want) != DD.digest(s["record"]):
         raise ValueError("the stop record isn't the one the class's commitment and its boundary record give")
     reg = stream.register(s["record"], layout.stop_ports(), registered=held.values, outputs=held.outputs,
                           schemas=held.schemas, window_root=root)
@@ -348,7 +350,7 @@ def reads(r: Resumed) -> dict[str, Any]:
     mine = L.stop_ports()[BR.STOP]
     ports = dict(r.held.file["ports"])
     ports[OUT] = {"value": CS.own_value(BR.STOP), "root": stop["root"], "leaves": mine["leaves"], "words": L.words(BR.STOP),
-                  "word_bits": REG.WORD_BITS, "domain": mine["domain"], REG.SCHEMA_KEY: BR.SCHEMA,
+                  "word_bits": RV.WORD_BITS, "domain": mine["domain"], RV.SCHEMA_KEY: BR.SCHEMA,
                   "reads": list(range(L.spans))}
     return {**r.held.file, "ports": dict(sorted(ports.items()))}
 
@@ -571,7 +573,7 @@ def answer_of(r: Resumed, got: Mapping[str, Any]) -> dict[str, Any]:
     failed = sorted(k for k, c in (audit.get("checks") or {}).items() if not c.get("ok"))
     refused = sorted(k for k, v in (audit.get("verdicts") or {}).items() if v.get("accepted") is False)
     named = "; ".join(f"{what}: {', '.join(names)}" for what, names in (("checks", failed), ("verdicts", refused)) if names)
-    return {"commitment": r.docket.digest, "profile": None, "protocol": R.PROTOCOL, "public": None,
+    return {"commitment": r.docket.digest, "profile": None, "protocol": DM.ONE_STAGE_PROTOCOL, "public": None,
             "reason": named or "the stop stream refused the outcome", "verdict": "reject"}
 
 

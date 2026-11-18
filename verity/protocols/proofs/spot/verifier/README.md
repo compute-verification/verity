@@ -5,7 +5,9 @@ proof-block boundary of a partition of the program and registers the commitment 
 on the auditor's challenger's coins, the developer proves the sampled proof blocks, and the verifier checks the proofs. It never runs any part
 of the computation. An accepted audit yields an integrity profile (`verity.protocols.proofs.spot.verifier.profile.IntegrityProfile`): except with
 probability δ, at most so many proof blocks are incorrect, a proof block being incorrect when its committed outputs differ from its gates
-applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
+applied to its committed inputs. On a served run, that holds of each sampled block on its own inputs; the wires between
+blocks are not held, a limit that stands until the registered circuit carries its wires as edges.
+The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
 SPOT (`verity/sampled-proofs/v1`) is a protocol of both configurations: remote (`verity/remote/v1`,
@@ -366,9 +368,9 @@ from verity.protocols.proofs.spot.prover.costfit import fit
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
   and the population programs `population_program` and `mixed_population_program` (`verity.circuits.population`'s,
   which an integration builds its run's program with).
-- `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
-  `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
-  (the Lean verifier's `--registered`), `verify_read`.
+- `registered`: registered values, over `verity.commitments.registered_value` (`Registered.commit`, the prover's rows,
+  salts and tree, and `domain`): `registered_entries` and `reads` (the verifier's leaf counts, domains and read map,
+  from its own program), `reads_file` (the Lean verifier's `--registered`), `verify_read`.
 - `served`: `register_served`, how a served path registers its `ServedTree`s ("Served trees", below).
 - `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
   sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
@@ -437,10 +439,10 @@ A program's weights, constants and tables are values: committed once, under hidi
 - **The commitment.** Row r of a registered value is `words` leaves of `word_bits` bits (16 or 32). It is committed as
   the circuit statement commits that port's row, in the port's row format (`hm96-sha512/row/v1`, or the bit rows
   `hm96-sha512/row/v2` and `hm96-sha512/row-seg/v1`), with a salt sampled once. The root is the frame-v3-sha512 root over
-  the rows under the value's registered-value domain (`registered.domain`, on the SHA-512 identity frame of
+  the rows under the value's registered-value domain (`registered_value.domain`, on the SHA-512 identity frame of
   `verity/one-stage/registered-domain/v1`). The prover keeps the rows and salts
-  (`Registered.commit`). The record's `registered` entry is `{"value", "root", "leaves", "words", "domain"}`, with
-  `"word_bits"` when it is not 16 (`Registered.entry`).
+  (`registered_value.Registered.commit`). The record's `registered` entry is `{"value", "root", "leaves", "words", "domain"}`, with
+  `"word_bits"` when it is not 16 (`registered_value.Registered.entry`).
 - **R7** holds the entries to the verifier's own (`registered_entries`, from its own program). It holds each value to a
   root it already has, when it has one: its pinned root (`pinned`: the weights' root recorded before the salt), the root
   an earlier record of the log registered under the same domain (`held_roots`), or, for an output or reused value, the

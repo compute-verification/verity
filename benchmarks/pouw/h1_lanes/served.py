@@ -6,7 +6,7 @@ registered tables at the rows the verifier reads them.
 * **extract** (the H1 venv: it unpickles the prover's saved window, whose classes import torch). From the window's record
   (``pouw-h1-calls.json``: its manifest checked by `pouw_h1_challenger.manifest_reason`, so the served trees' entries
   are the ones its ``calls_root`` binds), the sampled proof blocks (``--drawn``, `h1_prove/served.py`'s), the period's
-  descriptor and the prover's private directory (``--prover``, `pouw_h1_prover`: its salt key, each call's kept values
+  descriptor and the prover's private directory (``--prover``, `pouw_h1_prover`: its salt file, each call's kept values
   and the saved window ``state/`` `pouw_h1_handoff.FILE`): the verifier's own reads of the sampled proof block's call
   (`credit.registered_file` at the record's roots, the window's root, steps and Program salt), and for each of its data
   ports (the unit's 32 A rows, its 32 B rows and its z/y record; ``pub`` and ``o1`` are the verifier's own rows, which no
@@ -57,6 +57,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 sys.path.insert(0, str(HERE))
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
 
 import h1form as F  # noqa: E402
@@ -67,7 +68,9 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1z
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
+from verity.protocols.proofs.spot.prover import produced as PP  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
 RC = L.RC
@@ -190,7 +193,7 @@ def extract(a: argparse.Namespace) -> None:
               "shape": (tree.leaves, tree.words) == (p["leaves"], p["words"]) and tree.schema == V2}
         path, bc = tree.path(row), tree.bcs[row]
         ok["opens"] = G.verify_read(tree.domain, tree.root, row, bc, path, V2)
-        ok["row"] = G.Registered.commit(tree.program, tree.value, [words], [tree.salts[row]], tree.word_bits, V2,
+        ok["row"] = RV.Registered.commit(tree.program, tree.value, [words], [tree.salts[row]], tree.word_bits, V2,
                                         tree.window, tree.produced).bcs[0] == bc
         checks[port] = ok
         ports[port] = {"entry": {x: v for x, v in p.items() if x != "reads"},
@@ -227,7 +230,7 @@ def smoke(a: argparse.Namespace) -> None:
     sa, sw = ((rng.uniform(1e-3, hi, 64) / 127).astype("<f4") for hi in (0.1, 0.5))
 
     def tree(value, rows, window=root):
-        return G.Registered.commit(program, value, rows, schema=V2, window=window)
+        return RV.Registered.commit(program, value, rows, schema=V2, window=window)
 
     A, A2 = tree(f"h1/a/{k}@3", U.row_words(ca, sa).tolist()), tree(f"h1/a/{k}@5", U.row_words(ca[::-1], sa).tolist())
     B = tree(f"h1/b/{k}", U.row_words(cbw, sw).tolist(), None)
@@ -241,7 +244,7 @@ def smoke(a: argparse.Namespace) -> None:
     ZY = tree("h1/zy@3", recs)
 
     def entry(tr):
-        return {**tr.entry(), "word_bits": tr.word_bits, **G.schema_entry(V2)}
+        return {**tr.entry(), "word_bits": tr.word_bits, **RV.schema_entry(V2)}
 
     def port(tr, row):
         return {"entry": entry(tr), "opening": {"value": tr.value, "row": list(tr.rows[row]), "salt": tr.salts[row].hex(),
@@ -267,7 +270,7 @@ class Served:
     roots: tuple
     registration: str
     sample: str
-    tree: G.Registered
+    tree: RV.Registered
     record: dict
     ports: dict
     values: dict
@@ -313,7 +316,7 @@ def statement(ctx: L.Ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dic
     st = ctx.stagers[LL.LANE]
     kr = L.known_rows(ctx, sw, LL.LANE, ln, ln)
     vk = {p: PR.known_port(ctx.prog, v, row, salt, sw.registration, schema=V2) for p, (v, row, salt) in kr.items()}
-    reads = {"format": G.READS, "ports": {**{p: PR.port(v, e, e["root"], [row], V2) for p, (v, e, row) in entries.items()},
+    reads = {"format": G.READS, "ports": {**{p: RV.port(v, e, e["root"], [row], V2) for p, (v, e, row) in entries.items()},
                                           **{p: kp for p, (kp, _) in vk.items()}}}
     want = expected(sw, ln, ins)
     v_ok, row_ok, salt_ok = kr[LL.OK]
@@ -442,7 +445,7 @@ def prepare(a: argparse.Namespace) -> None:
     rec = R.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, L.SCHEME, [],
                    {"kind": "served-window", "window": op["window"], "draw_root": op["draw_root"], "unit": u,
                     "call": unit["call"]}, partition=ctx.reg.part, registered=list(win.values()))
-    d = R.digest(rec)
+    d = DD.digest(rec)
     pa = L.partials(leaf, (a_root, b_root))
     # the partials' salts come from a private opening salt, so prepares of disjoint lane sets (on several nodes) commit
     # the one produced tree the unit's lanes read
@@ -450,7 +453,7 @@ def prepare(a: argparse.Namespace) -> None:
     seed = hashlib.sha512(b"h1-lanes/partials-salts/v1" + zs).digest()
     psalts = [b"".join(hashlib.sha512(seed + i.to_bytes(4, "big") + j.to_bytes(2, "big")).digest()
                        for j in range(-(-len(zs) // 64)))[:len(zs)] for i in range(len(pa))]
-    tree = PR.commit(ctx.prog, LL.PARTIALS, pa, d, psalts, schema=V2)
+    tree = PP.commit(ctx.prog, LL.PARTIALS, pa, d, psalts, schema=V2)
     ops = {LL.PARTIALS: PR.rows_of(tree)}
     for p in op["ports"].values():
         ops.setdefault(p["entry"]["value"], []).append((p["opening"]["position"], p["opening"]["bc"]))

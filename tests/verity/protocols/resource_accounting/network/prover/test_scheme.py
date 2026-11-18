@@ -28,17 +28,53 @@ def test_every_block_is_a_registered_definition() -> None:
         assert isinstance(d, CompositeDefinition) and REGISTRY.defs[tid] is d
 
 
-def test_its_own_term_is_sha512s_collision_bound_at_the_phases_calls() -> None:
+def test_bound_refuses_the_charges_no_lean_term_holds() -> None:
     from fractions import Fraction
 
     from verity.protocols.resource_accounting import scheme as S
 
     names = {c.name: 0 for c in NS.NETWORK_ATTESTER.charges}
-    got = S.bound(NS.NETWORK_ATTESTER, Fraction(1, 100), 0, names, {"q": 2**40}, epsilon=Fraction(0))
+    with pytest.raises(ValueError, match=r"nothing bounds yet: start \(.*\), tied-entries \(scans\[\]\.faulty_entries"):
+        S.bound(NS.NETWORK_ATTESTER, Fraction(1, 100), 0, names, {"q": 2**40}, epsilon=Fraction(0))
+
+
+def test_its_own_term_is_sha512s_collision_bound_at_the_phases_calls() -> None:
+    import dataclasses
+    from fractions import Fraction
+
+    from verity.protocols.resource_accounting import scheme as S
+
+    covered = dataclasses.replace(NS.NETWORK_ATTESTER,
+                                  charges=tuple(c for c in NS.NETWORK_ATTESTER.charges if c.bounded))
+    names = {c.name: 0 for c in covered.charges}
+    assert sorted(names) == ["advice", "cells", "jitter", "schedules"]
+    got = S.bound(covered, Fraction(1, 100), 0, names, {"q": 2**40}, epsilon=Fraction(0))
     assert got.term == "Claims.ecrBound" and got.delta_scheme == Fraction(2**40, 2**256)
+    assert got.premises == ("NetTiming.Attester.Phase.ChargeHolds", "NetTiming.Attester.RowsCommitted")
     with pytest.raises(ValueError, match="were not given"):
-        S.bound(NS.NETWORK_ATTESTER, Fraction(1, 100), 0, names, {}, epsilon=Fraction(0))
+        S.bound(covered, Fraction(1, 100), 0, names, {}, epsilon=Fraction(0))
     assert NS.NETWORK_ATTESTER.over.startswith("bits: ") and NS.NETWORK_ATTESTER.under == "bits: zero; the attester credits nothing"
+
+
+def test_its_check_is_the_network_period_programs_answer_unchanged_and_refuses_another_protocols(tmp_path) -> None:
+    import json
+    import subprocess
+
+    def said(answer: dict):
+        return lambda argv: subprocess.CompletedProcess(argv, 1, stdout=json.dumps(answer) + "\n", stderr="")
+
+    case = {"params": {"windows": 1}, "commitment": "00", "evidence": "01"}
+    reject = {"protocol": "verity/certifier/v0", "verdict": "reject", "reason": "a reason", "public": None}
+    assert NS.NETWORK_ATTESTER.check("network-period", case, tmp_path, said(reject)) == reject
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["commitment.bin", "evidence.json", "params.json"]
+    with pytest.raises(ValueError, match="the protocol 'verity/network-rows/v1', not verity/certifier/v0"):
+        NS.NETWORK_ATTESTER.check("network-rows", case, tmp_path, said({**reject, "protocol": "verity/network-rows/v1"}))
+
+
+def test_it_declares_it_keeps_no_weight_derived_copy() -> None:
+    from verity.protocols.resource_accounting import scheme as S
+
+    assert S.declared(NS.NETWORK_ATTESTER, "keeps_weight_copy") is False
 
 
 def test_cost_is_output_bits() -> None:

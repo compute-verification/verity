@@ -28,14 +28,15 @@ from typing import Any, Mapping, Sequence
 
 from verity.circuits.codec import canonical_json
 from verity.circuits.partition import Level
+from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.profile import (Bernoulli, IntegrityProfile, SamplingDesign, Stratified, Stratum, Subset, Work,
                                           WorkStratum)
 
 from .draw import check_draw, check_proved, sampling_design_of
-from verity.protocols.proofs.spot.verifier.one_stage.docket import PROTOCOL, digest as registration_digest
+from verity.commitments.docket_digest import digest as registration_digest
 
-FORMAT = "verity/one-stage/audit/v0"
-PROFILE = "verity/integrity-profile/v1"
+FORMAT = DM.ONE_STAGE_AUDIT
+PROFILE = DM.INTEGRITY_PROFILE
 LEVEL = "unit"
 
 
@@ -169,7 +170,7 @@ def answer(record: Mapping[str, Any], delta: Fraction) -> dict[str, Any]:
     p = profile(docket, sample, delta).to_json()
     p["delta"] = str(delta)
     wrong = wrong_units(docket, sample, delta)
-    return {"commitment": registration_digest(docket), "profile": p, "protocol": PROTOCOL,
+    return {"commitment": registration_digest(docket), "profile": p, "protocol": DM.ONE_STAGE_PROTOCOL,
             "public": {"bound": wrong["bound"], COMPLETE: record.get("complete") is True,
                        "drawn": sorted(sample["units"]), "per_template": wrong.get("per_template"),
                        "proved": sorted(record["proved_units"])},

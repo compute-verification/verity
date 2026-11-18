@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import pytest
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat
@@ -45,7 +47,7 @@ def _stream(spec=None, coins=None, window=WINDOW, sampler=None) -> S.Stream:
 
 
 def _program(counts=COUNTS, window=WINDOW, values=()):
-    return P.mixed_population_program([(t, counts[P.template_id(t)]) for t in window], values=values)
+    return PN.mixed_population_program([(t, counts[P.template_id(t)]) for t in window], values=values)
 
 
 def _gathered(counts=COUNTS) -> Program:
@@ -135,10 +137,10 @@ def test_a_registration_of_another_window_is_refused():
     other = {P.template_id(PAIR): 2, P.template_id(TRIPLE): 8}
     assert "R2-program" in _refused(lambda: stream.register(_record(other), _ports(), counts=COUNTS))
     assert "R2-program" in _refused(lambda: stream.register(_record(), _ports(), counts=other))
-    flipped = P.mixed_population_program([(TRIPLE, 9), (PAIR, 1)])
+    flipped = PN.mixed_population_program([(TRIPLE, 9), (PAIR, 1)])
     assert "query" in _refused(lambda: stream.register(
         _record(program=flipped, query=P.template_instances_query(WINDOW[::-1])), _ports(), counts=COUNTS))
-    single = P.population_program(PAIR, 10)
+    single = PN.population_program(PAIR, 10)
     assert _refused(lambda: stream.register(_record(program=single, query=P.template_instance_query(PAIR)), _ports(),
                                             counts=COUNTS))
     pair, triple = P.template_id(PAIR), P.template_id(TRIPLE)
@@ -177,7 +179,7 @@ def test_a_window_in_another_form_runs_on_the_challengers_own_copy_of_it():
     from test_service import _spec as pair_spec
     for unit, spec, kw, why in ((PAIR, pair_spec(), {}, "takes no values"),
                                 (WINDOW, _spec(), {"values": (VALUE,)}, "takes no values"),
-                                (WINDOW, _spec(), {"program": P.mixed_population_program([(TRIPLE, 9), (PAIR, 1)])},
+                                (WINDOW, _spec(), {"program": PN.mixed_population_program([(TRIPLE, 9), (PAIR, 1)])},
                                  "one range a template")):
         with pytest.raises(ValueError, match=why):
             FC.Stream(spec, unit, budget=2, delta=DELTA, challenger="c", **{"program": gathered, **kw})
@@ -235,7 +237,7 @@ VALUED = S.Spec((*VALUES, S.Value("t", None, "serve", registered=True)), SAMPLIN
 def _earlier(row: int, registered=(), roots=()) -> dict:
     """A record of the prover's log before the stream: a docket of another Program (PAIR's two instances), in
     window ``row``."""
-    prog, q = P.population_program(PAIR, 2), P.template_instance_query(PAIR)
+    prog, q = PN.population_program(PAIR, 2), P.template_instance_query(PAIR)
     return R.record(prog, q, {"law": "subset", "k": 1}, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row},
                     registered=registered)
 
@@ -245,7 +247,7 @@ def _reusing(log, entry, outputs):
     with ``outputs``, chained after the log's last record: (the stream, the record, its call)."""
     stream = FC.Stream(VALUED, WINDOW, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock(),
                        values=(VALUE,), log=log)
-    rec = _record(values=(VALUE,), previous=R.digest(log[-1]) if log else None, registered=[{**entry, "value": "t"}])
+    rec = _record(values=(VALUE,), previous=DD.digest(log[-1]) if log else None, registered=[{**entry, "value": "t"}])
     return stream, rec, lambda r=rec: stream.register(r, _ports(values=(VALUE,)), counts=COUNTS, registered={"t": 4},
                                                        outputs=outputs)
 
@@ -260,7 +262,7 @@ def test_a_window_reusing_an_earlier_records_value_runs_to_an_accepted_outcome_b
     docket on a stream with no log before it (``R6-previous``, ``R7-output``, ``R7-domain``)."""
     entry = {"value": "w/t", "root": "5a" * 64, "leaves": 2, "words": 4, "domain": "6b" * 64}
     w = _earlier(-1, registered=[entry])
-    outputs = {"t": {"record": R.digest(w), "value": "w/t"}}
+    outputs = {"t": {"record": DD.digest(w), "value": "w/t"}}
     stream, honest, register = _reusing([w], entry, outputs)
     reg = register()
     assert stream.log == (w, honest) and reg.order == 0 and reg.receipt["received"] == "1"
@@ -283,11 +285,11 @@ def test_a_registration_reads_the_earlier_record_its_outputs_name_whatever_the_l
     where that record is neither the log's last, nor of the docket's window, nor any value's first docket:
     the verdict is the whole log's, accepted. A stream that kept no record's digest reads only the last, and refuses
     (``R7-output``, and ``R7-domain`` with no output to take the domain of)."""
-    part = P.partition(P.population_program(PAIR, 2), P.template_instance_query(PAIR))
+    part = P.partition(PN.population_program(PAIR, 2), P.template_instance_query(PAIR))
     port = {"port": "o", "root": "8d" * 64, "leaves": 2,
             "domain": R.window_domain(part["program"], P.digest(part), "o", SCHEMA, 2, RUN)}
     w, x = _earlier(-2, roots=[port]), _earlier(-1)
-    outputs = {"t": {"record": R.digest(w), "port": "o"}}
+    outputs = {"t": {"record": DD.digest(w), "port": "o"}}
     entry = {"value": "t", "root": port["root"], "leaves": 2, "words": 4, "domain": port["domain"]}
     stream, rec, register = _reusing([w, x], entry, outputs)
     assert stream._earlier(rec, None, outputs) == [w, x] and stream._earlier(rec) == [x]

@@ -323,6 +323,7 @@ def passedOn (P : Prog) : Array (List Nat) :=
         | .affine p i _ count | .strided p i _ _ _ _ count =>
           if count == 0 then [] else if p then [i] else reach[i]?.getD every
         | .explicit items => items.toList.flatMap fun r => if r.p then [r.i] else reach[r.i]?.getD every
+        | .grid _ lanes => lanes.toList.flatMap fun l => if l.p then [l.i] else reach[l.i]?.getD every
       let reach := d.body.nodes.foldl (init := #[]) fun reach n =>
         let handed := (acc[n.fn]?.getD (List.range n.args.size)).flatMap fun i =>
           (n.args[i]?.map fun a => of reach a.seq).getD []
@@ -345,7 +346,7 @@ def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
 
 /-- **Every unit's rows are its own input gates** (the module docstring's "Rows of its own"), read from the root's
 body: every part of an argument of a root node that is no input node, but a part reading another such node's outputs
-(an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is runs of leaves of the root's input nodes (affine
+(a grid, in every lane; an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is runs of leaves of the root's input nodes (affine
 parts and no other; an input node a primitive or a batch of one, a leaf a gate), a batch maps every argument over its
 members (each has the `dims` resolution reads a member's leaves by), and no two runs, of one argument or of two,
 share a leaf. It costs the root's argument parts, sorted. -/
@@ -355,6 +356,7 @@ def ownRows (P : Prog) : Bool :=
   let edge := fun (q : Part) => match q with
     | .affine false i _ _ | .strided false i _ _ _ _ _ => (nodes[i]?.map fun n => !Desc.isInputNode P n).getD false
     | .explicit it => it.any fun r => !r.p && (nodes[r.i]?.map fun n => !Desc.isInputNode P n).getD false
+    | .grid _ lanes => lanes.all fun l => !l.p && (nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
     | _ => false
   let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
   let runs := parts.filterMap fun

@@ -28,9 +28,19 @@ PLAIN = [[90211, 4417, 118003], [7, 88, 9901, 31337]]
 def test_the_private_names_are_the_integrations_list_as_data():
     doc = json.loads(keep.PRIVATE_NAMES.read_text())
     assert keep.PRIVATE_NAMES == ROOT / "adapters/vllm/verity_vllm/pipeline/private_names.json"
-    kept_apart, private = keep.private_names()
+    kept_apart, private = keep.names.load()
     assert kept_apart == tuple(doc["kept_apart"]) and "replay_bundle_p" in kept_apart
     assert private == tuple(doc["private"]) and {"tokens_p*.json", "timeline.jsonl", "timeline_report.json"} <= set(private)
+
+
+def test_every_keeper_uses_the_one_matcher():
+    """keep.py's `private` is `private_names.py`'s, loaded by path, and research_outputs.py's calls it: neither has a
+    matcher of its own."""
+    pipeline = ROOT / "adapters/vllm/verity_vllm/pipeline"
+    assert Path(keep.private.__code__.co_filename) == pipeline / "private_names.py"
+    for f in (ROOT / "benchmarks/poub_session/keep.py", pipeline / "research_outputs.py"):
+        assert "fnmatch" not in f.read_text(), f"{f.name} matches names itself; call private_names.private"
+    assert "private_names.private(rel" in (pipeline / "research_outputs.py").read_text()
 
 
 @pytest.mark.parametrize("rel", ["commit/tokens_p0.json", "commit/sampled_replay_p0.json", "timeline.jsonl",
@@ -78,7 +88,9 @@ def test_the_engine_and_the_prover_keep_through_keep_py():
     node = (ROOT / "benchmarks/poub_session/node.py").read_text()
     assert '**keep.export_kept(info), "checks": keep.checks_kept(checks)' in engine
     assert 'write_json(d / f"engine.{g}.json", info)' in engine       # the full export: --dir, run.sh's scratch
-    assert 'out["engines"] = [keep.export_kept(e) for e in exports]' in node
+    assert 'write_json(a.out / f"engine.{g}.json", out)' in engine and "out = record(info, checks, a, d," in engine
+    assert 'out["engines"] = prover_engines(exports)' in node
+    assert '(a.out / "prover.json").write_text(json.dumps(out' in node
 
 
 def test_the_commits_run_table_and_memory_map_are_refused_by_name(tmp_path):

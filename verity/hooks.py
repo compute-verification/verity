@@ -20,6 +20,10 @@ HOOKS = ("declared", "steps", "values", "blocks", "memory")
 #: a directory, one for the two, whose files a scheme's front appends to and its engine reads; ``ctx["settings"]`` are the
 #: scheme's settings (`Declared.settings`).
 FRONT, ENGINE = "front", "engine"
+#: ``ctx["process"]`` of a scheme attached in a process of its own, which the served runner launches for its piece
+#: (`Scheme.pieces`) beside the workload's front and engine, neither of them: the wipe's, at block 0's opening, before
+#: any engine process is on the card
+PIECE = "piece"
 
 type Handle = object
 """A device buffer as the serving system holds it: opaque here, read only by the scheme's own prover code."""
@@ -54,7 +58,8 @@ class RegisteredValues:
 @dataclass(frozen=True)
 class InputArrived:
     """``steps``: input ``input`` of ``length`` values arrived, at ``step``, with the ``headers`` it came with (names
-    lower-cased) and its ``first_line``."""
+    lower-cased), its ``first_line`` and the ``user`` it names (None where it names none).  ``user`` is the input's own
+    value: a scheme keeps it to itself."""
 
     hook: ClassVar[str] = "steps"
     input: str
@@ -62,6 +67,7 @@ class InputArrived:
     step: int
     headers: Mapping[str, str] = field(default_factory=dict)
     first_line: str = ""
+    user: str | None = None
 
 
 @dataclass(frozen=True)
@@ -356,7 +362,7 @@ type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | StartBesi
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle",
-           "Broken", "ENGINE", "FRONT", "FixRanges", "Front", "InputArrived", "Kernel", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+           "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

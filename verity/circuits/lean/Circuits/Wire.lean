@@ -6,8 +6,10 @@ A wire states, once for many units, that reader template `reader`'s units read r
 row `out` of a unit of template `writer`. Reader index `i < units` (the product of `radix`) is reader unit
 `start + i / cuts`, row `cut0 + i % cuts`; its writer is unit `base + Σ_k d_k · step_k` of `writer`, `d` the digits of `i`
 in mixed radix `radix` (the first digit the slowest). Each index counts its own template's units, and a writer unit is
-also the writer's leaf in its template's output tree of `out`. The reader row is the writer's row from its word `offset`. With reader steps `rstep` (an uncut wire, one a digit),
-index `i` is reader unit `start + Σ_k d_k · rstep_k` instead, row 0: strided on both sides by the one sum (`accum`).
+also the writer's leaf in its template's output tree of `out`. Reader index `i`'s row is the writer's row from its u16
+word `offset + Σ_k d_k · ostep_k` (`offsetAt`; no `ostep`, `offset` for every index). With reader steps `rstep` (an
+uncut wire, one a digit), index `i` is reader unit `start + Σ_k d_k · rstep_k` instead, row 0: strided on both sides by
+the one sum (`accum`).
 -/
 module
 
@@ -31,6 +33,7 @@ structure Wire where
   cuts : Nat
   rstep : List Int := []
   offset : Nat := 0
+  ostep : List Int := []
   deriving Repr, DecidableEq
 
 namespace Wire
@@ -51,6 +54,13 @@ def accum : List (Nat × Int) → Nat → Int
 
 /-- Reader index `i`'s writer unit. -/
 def writerAt (w : Wire) (i : Nat) : Int := w.base + accum w.pairs i
+
+/-- The offset steps' radices and steps, the fastest digit first. -/
+def opairs (w : Wire) : List (Nat × Int) := (w.radix.zip w.ostep).reverse
+
+/-- Reader index `i`'s first u16 word in its writer's row `out` (0 where the sum is negative, which `Spot.Wires.check`
+refuses). -/
+def offsetAt (w : Wire) (i : Nat) : Nat := ((w.offset : Int) + accum w.opairs i).toNat
 
 /-- `Σ_k min 0 (step_k · (radix_k − 1))`. -/
 def lowOf : List (Nat × Int) → Int
@@ -110,17 +120,20 @@ def rpairs (w : Wire) : List (Nat × Int) := (w.radix.zip w.rstep).reverse
 def stridedAt (w : Wire) (u : Nat) : List Nat :=
   (List.range w.units).filter fun i => (w.start : Int) + accum w.rpairs i = u
 
-/-- The leaf of its writer's output tree that reader unit `u`'s row `row` of the wire's port reads: its writer unit,
-none where the wire doesn't cover that row or names a writer below unit 0. With reader steps, none unless the wire is
-uncut with one step a digit, `row` is 0 and exactly one index reads `u`. -/
+/-- The reader index of reader unit `u`'s row `row` of the wire's port, none where the wire doesn't cover that row. With
+reader steps, none unless the wire is uncut with one step a digit, `row` is 0 and exactly one index reads `u`. -/
+def indexAt (w : Wire) (u row : Nat) : Option Nat :=
+  if w.rstep.isEmpty then w.indexOf w.reader u w.port row
+  else if w.rstep.length == w.radix.length && w.cut0 == 0 && w.cuts == 1 && row == 0 then
+    match w.stridedAt u with
+    | [i] => some i
+    | _ => none
+  else none
+
+/-- The leaf of its writer's output tree that reader unit `u`'s row `row` of the wire's port reads: its writer unit at
+its index (`indexAt`), none where there is none or it names a writer below unit 0. -/
 def leafAt (w : Wire) (u row : Nat) : Option Nat :=
-  let i? := if w.rstep.isEmpty then w.indexOf w.reader u w.port row
-    else if w.rstep.length == w.radix.length && w.cut0 == 0 && w.cuts == 1 && row == 0 then
-      match w.stridedAt u with
-      | [i] => some i
-      | _ => none
-    else none
-  i?.bind fun i =>
+  (w.indexAt u row).bind fun i =>
     let v := w.writerAt i
     if 0 ≤ v then some v.toNat else none
 
@@ -128,7 +141,7 @@ def leafAt (w : Wire) (u row : Nat) : Option Nat :=
 index by index. -/
 def entries (w : Wire) : List ((String × Nat × String × Nat) × (String × Int × String × Nat)) :=
   (List.range w.units).map fun i =>
-    ((w.reader, (w.readerAt i).1, w.port, (w.readerAt i).2), (w.writer, w.writerAt i, w.out, w.offset))
+    ((w.reader, (w.readerAt i).1, w.port, (w.readerAt i).2), (w.writer, w.writerAt i, w.out, w.offsetAt i))
 
 end Wire
 
@@ -186,15 +199,23 @@ def sameKeys (j : Json) (ks : List String) (what : String) : Except String Unit 
 end Json
 
 open Json in
-/-- A wire's record: `{reader, port, writer, out, at, radix, base, step}` and optionally `cut: [c0, C]` and
-`offset: n`. -/
+/-- A wire's record: `{reader, port, writer, out, at, radix, base, step}` and optionally `cut: [c0, C]`, `offset: n`
+(u16 words) and `ostep: [i...]` (u16 words, one a digit). -/
 def WIRE_KEYS : List String := ["reader", "port", "writer", "out", "at", "radix", "base", "step"]
+
+open Json in
+/-- A wire record's `ostep`: none, or one integer a digit of its `n` digits. -/
+def ostepOf (j : Lean.Json) (n : Nat) : Except String (List Int) := do
+  if !((keysOf j).getD []).contains "ostep" then return []
+  let os ← (← arrOf "ostep" (← field j "ostep")).mapM (intOf "an offset step")
+  if !os.isEmpty && os.length != n then throw "a wire's ostep is one integer a digit"
+  return os
 
 open Json in
 /-- The one reader of a wire's record (`WIRE_KEYS`), which SPOT's wiring and Flock's registered reads both read. -/
 def Wire.ofJson (j : Lean.Json) : Except String Wire := do
   let ks := (keysOf j).getD []
-  sameKeys j ((["cut", "offset"].filter ks.contains) ++ WIRE_KEYS) "a wire"
+  sameKeys j ((["cut", "offset", "ostep"].filter ks.contains) ++ WIRE_KEYS) "a wire"
   let s := fun k => do strOf k (← field j k)
   let radix ← (← arrOf "radix" (← field j "radix")).mapM (natOf "a radix")
   let step ← (← arrOf "step" (← field j "step")).mapM (intOf "a step")
@@ -208,7 +229,9 @@ def Wire.ofJson (j : Lean.Json) : Except String Wire := do
       | _ => throw "a wire's cut is [c0, C]"
     | .error _ => pure (0, 1)
   let offset ← if ks.contains "offset" then natAt j "offset" else pure 0
+  let ostep ← ostepOf j radix.length
   return { reader := ← s "reader", port := ← s "port", writer := ← s "writer", out := ← s "out",
-           start := ← natAt j "at", radix, base := ← intOf "base" (← field j "base"), step, cut0, cuts, offset }
+           start := ← natAt j "at", radix, base := ← intOf "base" (← field j "base"), step, cut0, cuts, offset,
+           ostep }
 
 end Circuits

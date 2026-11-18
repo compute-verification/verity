@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 import struct
+import itertools
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -17,7 +18,7 @@ import epoch_coins as E
 
 import pearl_c_vectors as CV
 from test_pouw_pearl_c_inert_work import spiked_rows
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96_TRANSCRIPT, HM96_WEIGHTS, Epoch, Workload, hm96_salt
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, DomainError, Matmul, Shape, Tile
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
@@ -357,12 +358,22 @@ def test_v_ex_is_a_no_op_on_pearl_c():
     assert CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 
 
-def test_audit_under_hashing_h3():
+def keyed_salts(monkeypatch, key: bytes, weight: int, matmul: int) -> None:
+    """The reference prover's hm96 salts handed in as data, the stream a fixed key gives (`audit.hm96_salt`) instead of the
+    OS's: each row's seed reads the hiding roots, so a test whose rows sit near a cap fixes the draw it was sized on.  The
+    prover asks for its weight's, its matmul's and its transcript's salts in that order, each Prover once."""
+    nonces = itertools.cycle((HM96_WEIGHTS + weight, matmul, HM96_TRANSCRIPT))
+    monkeypatch.setattr(sys.modules[Prover.__module__], "fresh_salts",
+                        lambda n: (lambda nonce: [hm96_salt(key, nonce, i) for i in range(n)])(next(nonces)))
+
+
+def test_audit_under_hashing_h3(monkeypatch):
     """The work sampling design's audit is the same under hashing format -h3: its openings verify against hm96-sha512 roots, once
     the honest prover has given up (`volunteer`) the A row over its row cap.  Each row's seed reads the hiding roots, so
     which rows pass the row cap changes with the salts; under this salt key row 4 is over it, and a sampled tile holding
     it fails until it is given up."""
     h3 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3")
+    keyed_salts(monkeypatch, bytes([10]) * 32, 9, 3)
     epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h3)
     declared = CW.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     out = CW.audit(h3, epoch, prover, tr, SPLITS, declared, E.challenger(), 4).audit
@@ -425,7 +436,7 @@ def test_aligned_spike_unit_is_rejected_by_the_inert_bound():
             assert "exceeds the cap" in out.audit.verdicts[0].reason
 
 
-def test_h3_bounds_each_credited_row_as_well_as_the_tile():
+def test_h3_bounds_each_credited_row_as_well_as_the_tile(monkeypatch):
     """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with aligned spikes of
     72 among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under 3/4 of the
     tile's (at 300 its forming elements alone put the tile over).
@@ -438,6 +449,7 @@ def test_h3_bounds_each_credited_row_as_well_as_the_tile():
     rows_b = spiked_rows(k, n, 900, 300.0)
     work = Workload((Matmul(0, Shape(m, k, n), 1),))
     splits = {1: W.Split(k)}
+    keyed_salts(monkeypatch, bytes(32), 1, 0)
     prover = Prover(h3, {1: rows_b})
     epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     tr = prover.prove(epoch, {0: rows_a})
@@ -477,7 +489,7 @@ def _census_tile(scheme, spikes: list[float | None], k: int, n: int = 4):
             scheme.encode(ctx, scheme.noise(ctx), rows_a, rows_b, tile))
 
 
-def test_census_k_bounds_each_row_at_four_rho_and_the_tile_at_rho():
+def test_census_k_bounds_each_row_at_four_rho_and_the_tile_at_rho(monkeypatch):
     """At the H100 record's census k = 256, -h3 caps each credited row's debit at 4ρ of its
     cells' credit (`pearlCTilesDevRev1RowInertBoundAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.23ρ is
     accepted (the ρ row cap refused it), a row at 7.3ρ in a tile at 0.46ρ is refused by the 4ρ row cap, and 16 rows each
@@ -486,6 +498,7 @@ def test_census_k_bounds_each_row_at_four_rho_and_the_tile_at_rho():
     h3 = C.PearlC(tile=(m, 4), forming="v1", hashing="h3")
     assert h3.census_ks == (256,) and h3.row_inert_share_at(256) == 4 * h3.cap == Fraction(1, 100)
     assert CW.row_inert_bound(h3) and CW.row_inert_share_multiple(h3, 256) == 4
+    keyed_salts(monkeypatch, bytes(32), 1, 0)
     rec, tile, a, b, ops = _census_tile(h3, [50.0] + [None] * (m - 1), 256)
     debit, cap = CW._inert_work_and_bound(h3, rec, tile, ops, list(range(m)), [0, 1, 2, 3])
     row = CW._inert_work_and_bound(h3, rec, tile, ops, [0], [0, 1, 2, 3])
@@ -502,7 +515,7 @@ def test_census_k_bounds_each_row_at_four_rho_and_the_tile_at_rho():
     assert CW.check_opened(h3, rec, tile, a, b, ops).startswith("the replayed debit")
 
 
-def test_census_row_inert_share_leaves_k_from_k_min_unchanged():
+def test_census_row_inert_share_leaves_k_from_k_min_unchanged(monkeypatch):
     """At every k >= k_min the row cap stays ρ, byte for byte: the multiple is 1 on the census scheme and on every scheme
     without census ks, and at k = 1,024 a row over ρ is refused with the (C2) message, while at k = 256 the same row
     shape, under 4ρ, passes."""
@@ -512,7 +525,8 @@ def test_census_row_inert_share_leaves_k_from_k_min_unchanged():
         assert h3.row_inert_share_at(k) == h3.cap and CW.row_inert_share_multiple(h3, k) == 1
     for s in (S, C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), get("pearl-c-sm120-v1-h3")):
         assert s.census_ks == () and all(CW.row_inert_share_multiple(s, k) == 1 for k in (128, 256, 1024))
-    rec, tile, a, b, ops = _census_tile(h3, [30.0] + [None] * (m - 1), 1024)
+    keyed_salts(monkeypatch, bytes(32), 1, 0)
+    rec, tile, a, b, ops = _census_tile(h3, [20.0] + [None] * (m - 1), 1024)
     d, c = CW._inert_work_and_bound(h3, rec, tile, ops, [0], [0, 1, 2, 3])
     assert c < d < 4 * c
     assert CW.check_opened(h3, rec, tile, a, b, ops) == (

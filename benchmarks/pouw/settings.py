@@ -87,13 +87,15 @@ REGISTRY = Registry(
                                          "the card (bench_arm.kernel_directory)"),
     S("PEARLC_CUBIN", str, None, VALUE, "the cubin the arm loads; unset, the kernel directory's build.sh cubin"),
     S("PEARLC_SCHEME", str, None, VALUE, "the kernel scheme served_pearlplus.sh's Pearl-C period names; unset, "
-                                         "pearl-c-h100-v1-h3"),
+                                         "the one Pearl+ declares (compose.schemes pearl-plus option)"),
     S("PEARLC_SCHEDULE", str, "deferred", VALUE, "when the arm's hashes run: deferred (the served schedule) or serial"),
     S("PEARLC_BENCH_EPOCH", int, 20261014, VALUE, "the arm's PoUW epoch"),
     S("PEARLC_CHALLENGER_GATE", str, None, WHERE, "infra's gate as an ssh command: with PEARLC_CHALLENGER_PEER, the salt coin "
                                                   "is a live session's on the auditor device"),
     S("PEARLC_CHALLENGER_PEER", str, None, WHERE, "this node's name in the challenger host's peers"),
     S("PEARLC_CHALLENGER_LANE", str, "vllm", WHERE, "the lane the gate key is registered for"),
+    S("PEARLC_PRIVATE", str, None, WHERE, "the directory outside every run output where served_passes.py serve's Pearl+ "
+                                          "keeps its salt epoch's number (pouw.scheme.spend_epoch); a live session needs it"),
     S("PEARLC_GPU_UTIL", float, 0.55, VALUE, "vLLM's gpu_memory_utilization under the arm"),
     S("PEARLC_STEP_TOKENS", int, 4096, VALUE, "vLLM's max_num_batched_tokens under the arm"),
     S("PEARLC_WHOLE_DEFER_A", not_zero, True, VALUE, "the whole-step arm's whole_defer_a option; 0 leaves it out"),
@@ -133,6 +135,8 @@ REGISTRY = Registry(
                                               "overhead_node sets it), which pearl_c_sm90's overhead arm loads; unset, the "
                                               "arm builds one, for development only"),
     S("HZ_STAGE", str, "fast", WHERE, "how a hiding tile is staged: fast (fast_stage's patches) or library, the same bytes"),
+    S("HZ_SALTS", str, None, WHERE, "a file of the hiding tile's rows' salts: read when it exists, else written with the "
+                                    "fresh ones; unset, fresh salts kept nowhere"),
     # ---------------------------------------------------------------- which of the served path's tests run (tests/)
     # ---------------------------------------------------------------- H1's harness (h1_prove/h1form.py)
     S("H1_TILE", str, "v1", WHERE, "the H1 tile under the unit, v1 or v3 (h1unit.tile)"),

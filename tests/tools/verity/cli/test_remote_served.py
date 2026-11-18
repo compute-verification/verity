@@ -14,6 +14,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 from verity import config as K
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity_cli import run as R
@@ -292,6 +294,44 @@ def test_remotes_verifier_reads_the_compose_answers_record_pearl_plus_under_work
     written(tmp_path / "out" / "compose", {"composed": "reject", "product": "remote"},
             {**ACCEPTED, "work": {"verdict": "reject"}})
     assert T.remote_check(cfg, tmp_path)["verdict"] == "reject"
+
+
+def test_a_component_that_charges_nothing_reads_why_for_its_figure_and_shows_its_verdict(tmp_path, monkeypatch):
+    """A stand-in declaration under inference-only's name whose resource is a `Lacks`: the check's line says why it
+    has no figure (``charges_nothing``) and keeps its verdict among the components and in the combined verdict, as
+    any component's: a reject of it makes the line reject and names it, and a missing row holds the line open."""
+    from verity.protocols.resource_accounting import scheme as S
+    nothing = S.Lacks("charges nothing: a stand-in that checks a policy")
+    standin = S.Scheme("inference-only", "verity/inference-only/v0", nothing, nothing, (), (), ())
+    monkeypatch.setattr(T.schemes, "DECLARATIONS", {**T.schemes.DECLARATIONS, "inference-only": "stand-in"})
+    monkeypatch.setitem(S.SCHEMES, "inference-only", standin)
+    assert T.charges_nothing("inference-only") == nothing.why and T.charges_nothing("pouw") is None
+    cfg = R.load(CONFIG, REG)
+    base = tmp_path / "out" / "compose"
+    written(base, YES, {**ACCEPTED, "inference-only": CHECKED})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["reason"], got["components"]) == ("accept", None, ALL_ACCEPTED)
+    assert got["charges_nothing"]["inference-only"] == nothing.why
+    written(base, {"composed": "reject", "product": "remote"}, {**ACCEPTED, "inference-only": {"verdict": "reject"}})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["components"]["inference-only"]) == ("reject", "reject")
+    assert got["reason"] == "not accepted: inference-only reject"
+    written(base, YES, ACCEPTED)
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["components"]["inference-only"]) == ("undecided", "absent")
+
+
+@pytest.mark.parametrize("name,row", [("sampled-proofs", "integrity"), ("inference-only", "inference-only")])
+def test_a_reject_of_a_declared_component_that_charges_nothing_is_named_and_rejects_the_line(tmp_path, name, row):
+    """The sampled proofs and the inference-only check as declared (no stand-in): each charges nothing, and a reject
+    of it is still its verdict among the components and makes the line reject."""
+    assert T.charges_nothing(name)
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out" / "compose", {"composed": "reject", "product": "remote"},
+            {**ACCEPTED, "inference-only": CHECKED, row: {"verdict": "reject"}})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["components"][name]) == ("reject", "reject")
+    assert name in got["reason"] and name in got["charges_nothing"]
 
 
 def test_inference_onlys_row_is_the_composed_records_and_no_file_of_the_prover_nodes_side_changes_a_cell(tmp_path):

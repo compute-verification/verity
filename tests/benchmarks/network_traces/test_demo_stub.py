@@ -16,7 +16,7 @@ import pytest
 
 from verity.protocols.resource_accounting.network.verifier import id_form as IDF, io_tie as IT
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
-from verity.protocols.resource_accounting.network.verifier.release import RUN_ID_BYTES, with_release
+from verity.release import RUN_ID_BYTES, with_release
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
@@ -258,9 +258,8 @@ def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_attested_
     """served_session's endpoint step on a serve dir whose requests.jsonl and advice_trace.jsonl stay there: its copy's
     requests.jsonl, rebuilt from the users map and the attested I/O, is the endpoint's own record, and the advice on it
     (`verity-vllm advice` at a fixed compiler digest in place of the tree's code identity) is bound to the attested
-    requests and rebuilt from them, across a carry too; the art is the report, windows.jsonl
-    and serve.json, with no prompt's ids or request-valued field, and the chain's report reads it as the served
-    node's. The stand-in's windows.jsonl and serve.json take serve-openai's form: its row count as ``served_rows`` and
+    requests and rebuilt from them, across a carry too; the art is the step's public document alone, the
+    whole report staying in --keep, and the chain's step reads the same off either. The stand-in's windows.jsonl and serve.json take serve-openai's form: its row count as ``served_rows`` and
     the session's flags."""
     import chain_record as CR
     import served_session as SS
@@ -293,15 +292,18 @@ def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_attested_
     kept = tmp_path / "ep.endpoint" / "records"
     assert ADV.io_record(kept / "requests.jsonl") == ADV.io_record(ep / "requests.jsonl")
     assert not (ep / "advice").exists() and (kept / "advice" / "windows.json").is_file()
-    rep = json.loads((out / "report.json").read_text())
+    rep = json.loads((tmp_path / "ep.endpoint" / SS.ART).read_text())
     bits = rep["chain"]["bits"]
     assert (rep["verdict"], rep["at"], bits["bound"], bits["rebuilt"], bits["bound_why"], bits["why"]) == (
         "accepted", CR.SERVED_NODE, True, True, None, None), bits
     assert bool(bits["chains"]) == (window_steps == 16) and sum(w["requests"] for w in bits["commit_windows"]) == 7
-    assert sorted(p.name for p in out.iterdir()) == ["report.json", "serve.json", "windows.jsonl"]
-    published = b"".join(p.read_bytes() for p in out.iterdir())
-    assert not any(n in published for n in [*SS.needles(prompts), b'"prompt_len"', b'"sampling"', b'"emitted"'])
-    assert CR.network_attester_endpoint_step(rep)["in_the_clear"] == CR.CLEAR["warden_endpoint_served"]
+    assert sorted(p.name for p in out.iterdir()) == [SS.ART]
+    published = (out / SS.ART).read_bytes()
+    assert not any(n in published for n in [*SS.needles(prompts), b'"prompt_len"', b'"sampling"', b'"emitted"',
+                                            b"user-0", b"seed_coin", b"commit_windows\": ["])
+    pub = json.loads(published)
+    assert CR.network_attester_endpoint_step(pub) == CR.network_attester_endpoint_step(rep)
+    assert CR.network_attester_endpoint_step(pub)["in_the_clear"] == CR.CLEAR["warden_endpoint_served"]
 
 
 def test_the_gates_demo_traffic_through_the_network_attester_is_the_demo_stand_ins_class_and_the_check_accepts_its_answers(
@@ -312,7 +314,7 @@ def test_the_gates_demo_traffic_through_the_network_attester_is_the_demo_stand_i
     the bytes the network attester attested, every connection ends within the two execution phases 24 tokens take at D
     = 27, and the check accepts the run."""
     from verity.protocols.resource_accounting.network.verifier import relay_check as RC
-    from verity.protocols.resource_accounting.network.verifier.release import release_of
+    from verity.release import release_of
     prompts = S.prompts(4)
     req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
            "prompts": True, "temperature": 0.0, "top_p": 1.0}
