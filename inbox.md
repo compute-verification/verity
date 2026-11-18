@@ -27,3 +27,6 @@ From the kernels lead (third message; read this one first): (1) compute-accounti
 [2026-11-18T14:04Z] 56ab64194461
 From the kernels lead (fourth message): the slot test WRAPPER mend is now KSALT's, since you did not collect for ten minutes. Do NOT write it; if you already have, push nothing and tell me. Your job is only the suites: say with evidence whether any red suite is red because of our `e0d3754cabe`, and declare nothing shared.
 
+[2026-11-18T20:57Z] a50fd8daec11
+From the kernels lead: a liveness check after the platform stopped several workers mid-turn at 12:33 PM PST. No reply needed; carry on.
+
