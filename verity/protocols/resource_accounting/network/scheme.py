@@ -16,9 +16,22 @@ from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBu
 from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Port, Scheme, register
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay
+from verity.protocols.resource_accounting.network.prover.admission import Admitter
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,
                ResponseTieStop, ResponseTieNoStop, LengthsRow)
+
+
+def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
+    """The scheme on a served run's ``exchange``. With ``admit`` in ``ctx``, its admission (`prover.admission.Admitter`,
+    the configuration ``admit`` with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``, ``pull``, ``log`` and
+    ``clock``), installed and returned; without, the id relay beside the workload (`START_ID_RELAY`)."""
+    if "admit" not in ctx:
+        for r in requests(ctx):
+            exchange.request(NETWORK_ATTESTER.name, r)
+        return None
+    kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock") if k in ctx}
+    return Admitter(ctx["admit"], **kw).install(exchange, NETWORK_ATTESTER.name)
 
 
 def output_bits(definition: Any) -> Callable[[Mapping[str, int]], int]:
@@ -28,22 +41,11 @@ def output_bits(definition: Any) -> Callable[[Mapping[str, int]], int]:
 
 #: the scheme's request that starts the id relay beside the workload
 START_ID_RELAY = H.StartBeside("id-relay", id_relay.READERS)
-_ADMITTER = ("source", "submit", "abort", "take", "pull", "log", "clock")
 
 
 def requests(ctx: Mapping[str, Any]) -> tuple[Any, ...]:
-    return (START_ID_RELAY,)
-
-
-def attach(exchange: Any, ctx: Mapping[str, Any]) -> None:
-    """File `requests` on ``exchange`` under the scheme's name, and where ``ctx`` holds ``admission`` (`admission.Admitter`'s
-    ``cfg``, with its keyword arguments under their own names) install the admission on it."""
-    from verity.protocols.resource_accounting.network.prover.admission import Admitter
-
-    for r in requests(ctx):
-        exchange.request(NETWORK_ATTESTER.name, r)
-    if (cfg := ctx.get("admission")) is not None:
-        Admitter(cfg, **{k: ctx[k] for k in _ADMITTER if k in ctx}).install(exchange, NETWORK_ATTESTER.name)
+    """The id relay beside the workload where ``ctx`` configures no admission (``admit``), else nothing."""
+    return () if "admit" in ctx else (START_ID_RELAY,)
 
 
 NETWORK_ATTESTER = register(Scheme(

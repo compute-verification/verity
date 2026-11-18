@@ -56,12 +56,9 @@ class _Exchange:
         return lambda: None
 
 
-def test_attach_files_the_id_relay_and_installs_admission_when_configured() -> None:
+def test_requests_are_the_id_relay_unless_admission_is_configured() -> None:
     ex = _Exchange()
     NS.NETWORK_ATTESTER.attach(ex, {})
     assert ex.filed == [("network-attester", NS.START_ID_RELAY)]
-    assert NS.NETWORK_ATTESTER.requests({}) == (NS.START_ID_RELAY,)
+    assert NS.NETWORK_ATTESTER.requests({}) == (NS.START_ID_RELAY,) and NS.NETWORK_ATTESTER.requests({"admit": {}}) == ()
     assert set(NS.NETWORK_ATTESTER.processes) == {"id-relay"}
-    ex = _Exchange()
-    NS.NETWORK_ATTESTER.attach(ex, {"admission": {"order": "release-order"}, "submit": print, "abort": print})
-    assert ex.filed == [("network-attester", NS.START_ID_RELAY)]
