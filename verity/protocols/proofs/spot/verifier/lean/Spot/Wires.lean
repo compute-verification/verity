@@ -17,7 +17,8 @@ template `reader`'s units read rows of their parameter `port` whole as the words
 `check` decides a circuit's wires in work proportional to its templates and wires, never to the units they cover (AGENTS.md
 "Design rules"): each wire's writers lie in `span`, the least and greatest writer in closed
 form; and two wires wire no reader row twice exactly when they read different ports or their rectangles (reader units ×
-rows) are disjoint, compared pair by pair (#wires² comparisons, each of a few fields). Its summary gives each reader row's writer (`Summary.writerOf`, by the
+rows) are disjoint (`pairwiseDisjoint`, every pair; compiled as `pairwiseDisjointFast`, the wires sorted by reader, port
+and first unit and each compared only with the earlier wires of its port whose units reach it). Its summary gives each reader row's writer (`Summary.writerOf`, by the
 wires alone) and the wired rows and bits multiplied through (`wiredRows`, `wiredBits`), the wired term of the count of a
 window's free inputs.
 
@@ -137,6 +138,147 @@ def disjoint (a b : Wire) : Bool :=
 def pairwiseDisjoint : List Wire → Bool
   | [] => true
   | w :: ws => ws.all (disjoint w) && pairwiseDisjoint ws
+
+/-- `a` sorts no later than `b`: by reader, then port, then first reader unit. -/
+def before (a b : Wire) : Bool :=
+  a.reader < b.reader || (a.reader == b.reader && (a.port < b.port || (a.port == b.port && a.start ≤ b.start)))
+
+/-- Each two neighbours of the list in `before` order. -/
+def sortedBy : List Wire → Bool
+  | a :: b :: ws => before a b && sortedBy (b :: ws)
+  | _ => true
+
+/-- Each wire against the live wires before it, those of its reader port whose units reach past its first unit; the
+others are disjoint from it and from every wire after it when the list is sorted (`sortedBy`). -/
+def sweep : List Wire → List Wire → Bool
+  | _, [] => true
+  | live, w :: ws =>
+    let live := live.filter fun a => a.reader == w.reader && a.port == w.port && w.start < a.start + a.readerUnits
+    live.all (disjoint w) && sweep (w :: live) ws
+
+/-- `pairwiseDisjoint` sorted and swept, in work `O(W log W)` beside the live wires each wire meets: the code compiled in
+its place (`pairwiseDisjoint_eq_fast`). -/
+def pairwiseDisjointFast (ws : List Wire) : Bool :=
+  let s := ws.mergeSort before
+  if sortedBy s then sweep [] s else pairwiseDisjoint ws
+
+private def Prec (a b : Wire) : Prop :=
+  a.reader < b.reader ∨ (a.reader = b.reader ∧ (a.port < b.port ∨ (a.port = b.port ∧ a.start ≤ b.start)))
+
+private theorem before_iff {a b : Wire} : before a b = true ↔ Prec a b := by
+  simp [before, Prec]
+
+private theorem prec_refl (a : Wire) : Prec a a := Or.inr ⟨rfl, Or.inr ⟨rfl, Nat.le_refl _⟩⟩
+
+private theorem prec_trans {a b c : Wire} (h₁ : Prec a b) (h₂ : Prec b c) : Prec a c := by
+  rcases h₁ with h₁ | ⟨e₁, h₁ | ⟨f₁, s₁⟩⟩ <;> rcases h₂ with h₂ | ⟨e₂, h₂ | ⟨f₂, s₂⟩⟩
+  · exact Or.inl (String.lt_trans h₁ h₂)
+  all_goals first
+    | exact Or.inl (by rw [← e₂]; exact h₁)
+    | exact Or.inl (by rw [e₁]; exact h₂)
+    | exact Or.inr ⟨e₁.trans e₂, Or.inl (String.lt_trans h₁ h₂)⟩
+    | exact Or.inr ⟨e₁.trans e₂, Or.inl (by rw [← f₂]; exact h₁)⟩
+    | exact Or.inr ⟨e₁.trans e₂, Or.inl (by rw [f₁]; exact h₂)⟩
+    | exact Or.inr ⟨e₁.trans e₂, Or.inr ⟨f₁.trans f₂, Nat.le_trans s₁ s₂⟩⟩
+
+private theorem disjoint_symm {a b : Wire} (h : disjoint a b = true) : disjoint b a = true := by
+  simp only [disjoint, Bool.or_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq] at h ⊢
+  rcases h with ((((h | h) | h) | h) | h) | h
+  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl fun e => h e.symm))))
+  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inr fun e => h e.symm))))
+  · exact Or.inl (Or.inl (Or.inr h))
+  · exact Or.inl (Or.inl (Or.inl (Or.inr h)))
+  · exact Or.inr h
+  · exact Or.inl (Or.inr h)
+
+private theorem squeeze {x y z : String} (h₁ : x < y ∨ x = y) (h₂ : y < z ∨ y = z) (h : x = z) : x = y ∧ y = z := by
+  subst h
+  rcases h₁ with h₁ | h₁
+  · rcases h₂ with h₂ | h₂
+    · exact absurd (String.lt_trans h₁ h₂) (String.lt_irrefl _)
+    · exact absurd (h₂ ▸ h₁) (String.lt_irrefl _)
+  · exact ⟨h₁, h₁.symm⟩
+
+private theorem pruned {a w v : Wire} (haw : Prec a w)
+    (hk : ¬ (a.reader == w.reader && a.port == w.port && decide (w.start < a.start + a.readerUnits)) = true)
+    (hwv : Prec w v) : disjoint a v = true := by
+  simp only [disjoint, Bool.or_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq]
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, not_and, Nat.not_lt] at hk
+  by_cases hr : a.reader = v.reader
+  · obtain ⟨r₁, r₂⟩ := squeeze (haw.imp_right (·.1)) (hwv.imp_right (·.1)) hr
+    have haw' := haw.resolve_left (fun h => String.lt_irrefl _ (r₁ ▸ h)) |>.2
+    have hwv' := hwv.resolve_left (fun h => String.lt_irrefl _ (r₂ ▸ h)) |>.2
+    by_cases hp : a.port = v.port
+    · obtain ⟨p₁, p₂⟩ := squeeze (haw'.imp_right (·.1)) (hwv'.imp_right (·.1)) hp
+      have s₁ := haw'.resolve_left (fun h => String.lt_irrefl _ (p₁ ▸ h)) |>.2
+      have s₂ := hwv'.resolve_left (fun h => String.lt_irrefl _ (p₂ ▸ h)) |>.2
+      exact Or.inl (Or.inl (Or.inl (Or.inr (Nat.le_trans (hk ⟨r₁, p₁⟩) s₂))))
+    · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inr hp))))
+  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl hr))))
+
+private theorem sweep_complete : ∀ (live ws : List Wire), (∀ a ∈ live, ∀ v ∈ ws, disjoint a v = true) →
+    ws.Pairwise (fun a b => disjoint a b = true) → sweep live ws = true
+  | _, [], _, _ => rfl
+  | live, w :: ws, h₁, h₂ => by
+    rw [List.pairwise_cons] at h₂
+    simp only [sweep, Bool.and_eq_true, List.all_eq_true]
+    refine ⟨fun a ha => disjoint_symm (h₁ a (List.mem_filter.1 ha).1 w (List.mem_cons_self ..)),
+      sweep_complete _ ws (fun a ha v hv => ?_) h₂.2⟩
+    rcases List.mem_cons.1 ha with e | e
+    · exact e ▸ h₂.1 v hv
+    · exact h₁ a (List.mem_filter.1 e).1 v (List.mem_cons_of_mem _ hv)
+
+private theorem sweep_sound : ∀ (live ws : List Wire), ws.Pairwise Prec → (∀ a ∈ live, ∀ v ∈ ws, Prec a v) →
+    sweep live ws = true →
+    (∀ a ∈ live, ∀ v ∈ ws, disjoint a v = true) ∧ ws.Pairwise (fun a b => disjoint a b = true)
+  | _, [], _, _, _ => ⟨by simp, List.Pairwise.nil⟩
+  | live, w :: ws, hp, hl, h => by
+    simp only [sweep, Bool.and_eq_true, List.all_eq_true] at h
+    obtain ⟨hall, hrest⟩ := h
+    rw [List.pairwise_cons] at hp
+    have ih := sweep_sound _ ws hp.2 (fun a ha v hv => by
+      rcases List.mem_cons.1 ha with e | e
+      · exact e ▸ hp.1 v hv
+      · exact hl a (List.mem_filter.1 e).1 v (List.mem_cons_of_mem _ hv)) hrest
+    refine ⟨fun a ha v hv => ?_, List.pairwise_cons.2 ⟨fun v hv => ih.1 w (List.mem_cons_self ..) v hv, ih.2⟩⟩
+    by_cases hk : (a.reader == w.reader && a.port == w.port && decide (w.start < a.start + a.readerUnits)) = true
+    · have hf : a ∈ live.filter fun a =>
+          a.reader == w.reader && a.port == w.port && decide (w.start < a.start + a.readerUnits) :=
+        List.mem_filter.2 ⟨ha, hk⟩
+      rcases List.mem_cons.1 hv with e | e
+      · exact e ▸ disjoint_symm (hall a hf)
+      · exact ih.1 a (List.mem_cons_of_mem _ hf) v e
+    · refine pruned (hl a ha w (List.mem_cons_self ..)) hk ?_
+      rcases List.mem_cons.1 hv with e | e
+      · exact e ▸ prec_refl w
+      · exact hp.1 v e
+
+private theorem sortedBy_pairwise : ∀ s : List Wire, sortedBy s = true → s.Pairwise Prec
+  | [], _ => .nil
+  | [_], _ => List.pairwise_singleton _ _
+  | a :: b :: ws, h => by
+    simp only [sortedBy, Bool.and_eq_true] at h
+    have ih := sortedBy_pairwise (b :: ws) h.2
+    refine List.pairwise_cons.2 ⟨fun v hv => ?_, ih⟩
+    rcases List.mem_cons.1 hv with e | e
+    · exact e ▸ before_iff.1 h.1
+    · exact prec_trans (before_iff.1 h.1) ((List.pairwise_cons.1 ih).1 v e)
+
+private theorem pairwiseDisjoint_pairwise : ∀ ws : List Wire,
+    pairwiseDisjoint ws = true ↔ ws.Pairwise (fun a b => disjoint a b = true)
+  | [] => by simp [pairwiseDisjoint]
+  | w :: ws => by
+    simp [pairwiseDisjoint, List.pairwise_cons, List.all_eq_true, pairwiseDisjoint_pairwise ws]
+
+@[csimp] theorem pairwiseDisjoint_eq_fast : @pairwiseDisjoint = @pairwiseDisjointFast := by
+  funext ws
+  simp only [pairwiseDisjointFast]
+  split
+  · rename_i hs
+    apply Bool.eq_iff_iff.2
+    rw [pairwiseDisjoint_pairwise, ← (List.mergeSort_perm ws before).pairwise_iff disjoint_symm]
+    exact ⟨sweep_complete [] _ (by simp), fun h => (sweep_sound [] _ (sortedBy_pairwise _ hs) (by simp) h).2⟩
+  · rfl
 
 /-- What `check` establishes: the wires, in order. -/
 structure Summary where
