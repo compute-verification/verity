@@ -145,7 +145,7 @@ def ExecutionPhaseDelta : Prop :=
     (∀ c, BindSoundIn Lw sess committed A c (εbind c)) →
     ∀ σ : Strategy (auditReg Lw (executionPhaseSession sess)),
       prob (fun o => o.1 = true ∧ 𝓑 (U.incorrect (committed (reg σ) (cont σ)))) (auditReg Lw (executionPhaseSession sess)) σ ≤
-        (⨆ (B : Finset (WUnit n)) (_ : 𝓑 B), (SamplingDesign.prod (L (reg σ))).missProb B) + η + (⨆ c, κ c) +
+        (⨆ (B : Finset (WUnit n)) (_ : 𝓑 B), (Verity.SamplingDesign.prod (L (reg σ))).missProb B) + η + (⨆ c, κ c) +
           coll Lw sess g (reg σ) (cont σ) + ∑ c, εbind c (reg σ) (cont σ)
 
 /-- **The service's sample is its sessions' sampling designs on copy-closed sets.** For `N` tiles, `K ≤ N` sampled and sessions of

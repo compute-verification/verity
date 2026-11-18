@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 from verity.circuits import boolean as BL
 from verity.circuits.partition_v2 import size_class
-from verity.protocols.resource_accounting.network.prover import window_charge as WC
+from verity.protocols.interface.charge import window_charge as WC
 
 from tests.compiler.test_network_attester_compile_slice import BOOK
 from tests.compiler.test_network_attester_compile_slice_w212 import CARRY, OWN, _load
