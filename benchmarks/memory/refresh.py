@@ -234,9 +234,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--step-s", type=float, action="append", required=True, help="a step's seconds; repeatable")
     ap.add_argument("--store-bytes", type=float, action="append", default=[],
                     help="also take the work a period as this store, re-keyed whole (a card's); repeatable")
+    ap.add_argument("--rate", action="append", default=[], metavar="NAME=CODEC:SQUARINGS",
+                    help="price at this rate instead of RATES: CODEC deployed or p512, squarings a second; repeatable")
     ap.add_argument("--json", type=Path, help="write every figure here as JSON")
     args = ap.parse_args(argv)
-    rota = f"{ROTA.__module__}.{ROTA.__qualname__}"
+    codecs = {"deployed": codec.DEFAULT, "p512": P512_K2}
+    rates = dict(RATES)
+    if args.rate:
+        rates = {}
+        for spec in args.rate:
+            name, _, rest = spec.partition("=")
+            cname, _, squarings = rest.partition(":")
+            if not name or cname not in codecs or not squarings:
+                ap.error(f"--rate is NAME=CODEC:SQUARINGS with CODEC one of {sorted(codecs)}, not {spec!r}")
+            rates[name] = (codecs[cname], float(squarings))
+    module = "benchmarks.memory.refresh" if ROTA.__module__ == "__main__" else ROTA.__module__
+    rota = f"{module}.{ROTA.__qualname__}"
     print(f"{FORMULA}; rota: {rota}")
     doc = {"formula": FORMULA, "rota": rota, "maps": {}}
     for path in args.maps:
@@ -247,7 +260,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             setting = Refresh(args.lifetime, args.window_s, step_s)
             _, lives = replay(head, steps, setting)
             for store in [None, *args.store_bytes]:
-                a = appraise(lives, setting, RATES, store_bytes=store)
+                a = appraise(lives, setting, rates, store_bytes=store)
                 doc["maps"].setdefault(str(path), {})[f"{step_s:g}/{store or 'map'}"] = a
                 print("\n".join(lines(str(path), a)))
     if args.json:
