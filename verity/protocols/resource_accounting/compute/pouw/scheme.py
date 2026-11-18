@@ -201,8 +201,10 @@ class Attached:
     def declare(self, event: H.Declared) -> None:
         self.declared = event
 
-    def registered(self, event: H.RegisteredValues) -> None:
-        self.weights = self.keyed(event)
+    def registered(self, event: Any) -> None:
+        """The ``memory`` hook's `RegisteredValues`; its ranges' events (`RangesDeclared` and the rest) are not Pearl+'s."""
+        if isinstance(event, H.RegisteredValues):
+            self.weights = self.keyed(event)
 
     def keyed(self, event: H.RegisteredValues) -> dict[int, H.Handle]:
         """The linear weights by block key (``operands``, the key `BlockDue` carries), every one committed before the
