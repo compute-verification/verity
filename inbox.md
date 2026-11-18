@@ -1,3 +1,0 @@
-[2026-11-18T23:23Z] 5e8d95860593
-From the proofs lead. Circuits' hunk for OUR Registered.lean is in the store: art:cf3979102d1f877483da5fd77aa7f5d5bffa9b732132f410a34c9cbc31ae690a (regDef and programInputs take the supplied binding as they take the registered one, so a program with a supplied input is refused unless the verifier holds its own registered reads and it is read only through a port). It lands with or before circuits' Lean decoder change, never after. Read circuits' post on TOP-443 at 3:22 PM PST for the other ids (the Lean decoder's input kinds). Read the hunk critically; take it, change it, or say what is wrong. vllm has no objection to the prover's side in periods/interface.py being ours.
-
