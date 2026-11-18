@@ -282,6 +282,64 @@ def render_entry(name: str, entry: dict) -> str:
     return head + keys + tables
 
 
+_HEADER = re.compile(r"\s*\[\[?\s*[A-Za-z0-9_.\"' -]+\]\]?\s*(#.*)?$")
+
+
+def _tables_start(lines: list[str]) -> int:
+    """The index of a record's first table: its first header, less the comments and blank lines just above it, which are the
+    table's."""
+    end = next((i for i, ln in enumerate(lines) if _HEADER.match(ln)), len(lines))
+    while end < len(lines) and end and (not lines[end - 1].strip() or lines[end - 1].lstrip().startswith("#")):
+        end -= 1
+    return end
+
+
+def _sets(line: str, key: str) -> bool:
+    return re.match(rf"\s*{re.escape(key)}\s*=", line) is not None
+
+
+def with_key(text: str, key: str, value: Any | None) -> str:
+    """Machine record `text` with top-level `key` set to `value` (None: removed), every other line as it is. The key goes
+    above the first table (`_tables_start`), since a line after a table's header is the table's."""
+    lines = text.splitlines()
+    end = _tables_start(lines)
+    top = [ln for ln in lines[:end] if not _sets(ln, key)]
+    return "\n".join([*top, *([f"{_toml_key(key)} = {_toml_value(value)}"] if value is not None else []), *lines[end:]]) + "\n"
+
+
+def without_table_key(text: str, table: str, key: str) -> tuple[str, bool]:
+    """Record `text` without `key` inside `[table]`, and whether it was there."""
+    out, inside, dropped = [], False, False
+    for ln in text.splitlines():
+        if _HEADER.match(ln):
+            inside = ln.strip().split("#")[0].strip() == f"[{table}]"
+        elif inside and _sets(ln, key):
+            dropped = True
+            continue
+        out.append(ln)
+    return "\n".join(out) + "\n", dropped
+
+
+def _replace(p: Path, text: str) -> None:
+    tmp = p.with_name(f".{p.name}.tmp-{os.getpid()}")
+    tmp.write_text(text)
+    os.replace(tmp, p)
+
+
+def write_key(p: Path, key: str, value: Any | None) -> None:
+    """Set (None: remove) top-level `key` of the machine record at `p` (`with_key`): every writer of one key of a record
+    goes through here, so no mark lands inside a table (tests/test_machine_record_writers.py)."""
+    _replace(p, with_key(p.read_text(), key, value))
+
+
+def _same_tables(text: str, entry: dict) -> bool:
+    try:
+        tables = {k: v for k, v in tomllib.loads(text).items() if isinstance(v, dict)}
+    except tomllib.TOMLDecodeError:
+        return False
+    return tables == {k: v for k, v in entry.items() if isinstance(v, dict)}
+
+
 def properties_copy(name: str, entry: dict) -> str | None:
     """The file `research run` puts in a run's inputs/ as NAME.toml: the machine's name and its `[properties]` table, and no
     other field of its record (no address, user, pod id or key); None for a record without the table."""
@@ -303,11 +361,18 @@ def recorded_properties(name: str, machines_toml: Path) -> str | None:
 
 
 def write_entry(d: Path, name: str, entry: dict) -> Path:
+    """Write machine `name`'s whole record. A table equal to the one the file holds keeps its text (comments and layout):
+    only the keys above the tables are rendered again."""
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{name}.toml"
-    tmp = d / f".{name}.toml.tmp-{os.getpid()}"
-    tmp.write_text(render_entry(name, entry))
-    os.replace(tmp, p)
+    text = render_entry(name, entry)
+    if p.is_file():
+        old = p.read_text()
+        lines = old.splitlines()
+        if _same_tables(old, entry) and (start := _tables_start(lines)) < len(lines):
+            text = render_entry(name, {k: v for k, v in entry.items() if not isinstance(v, dict)}) + "\n" + \
+                "\n".join(lines[start:]).lstrip("\n") + "\n"
+    _replace(p, text)
     return p
 
 
@@ -440,16 +505,19 @@ def stopped(name: str, back: bool = False, *, machines_toml: Path | None = None,
     except tomllib.TOMLDecodeError as e:
         raise remote.Refused(f"stopped {name}: {p} doesn't parse ({e})") from None
     had = old.get("stopped_since")
+    text, stray = without_table_key(p.read_text(), "properties", "stopped_since")
+    also = "; took out the stopped_since an older `pods stopped` wrote inside [properties]" if stray else ""
     if back and had is None:
-        return p, "wasn't marked stopped"
+        if stray:
+            _replace(p, text)
+        return p, f"wasn't marked stopped{also}"
     if not back and left_out({"stopped_since": had}, 0):
-        return p, f"is marked stopped since {had} already"
+        if stray:
+            _replace(p, text)
+        return p, f"is marked stopped since {had} already{also}"
     when = f"{now or dt.datetime.now(dt.UTC):{STAMP}}"
-    kept = [ln for ln in p.read_text().splitlines() if not ln.startswith("stopped_since =")]
-    tmp = p.with_name(f".{name}.toml.tmp-{os.getpid()}")
-    tmp.write_text("\n".join([*kept, *([] if back else [f'stopped_since = "{when}"'])]) + "\n")
-    os.replace(tmp, p)
-    return p, f"is no longer marked stopped (it was since {had})" if back else f"is marked stopped since {when}"
+    _replace(p, with_key(text, "stopped_since", None if back else when))
+    return p, (f"is no longer marked stopped (it was since {had})" if back else f"is marked stopped since {when}") + also
 
 
 def plan_import(machines_toml: Path, d: Path, running: set[str] | None) -> list[dict]:
