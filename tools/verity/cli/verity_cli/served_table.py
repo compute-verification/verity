@@ -249,8 +249,8 @@ def configuration(commit: str, demo: str = "onsite_full",
     protocols = listed(demo)
     cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
-    if "pous" in protocols:
-        cfg["params"] = {SP.IDS["pous"]: dict(MANIFESTS["pous"].default_params)}
+    if stated := {c.id: dict(c.default_params) for c in map(MANIFESTS.__getitem__, protocols) if c.default_params}:
+        cfg["params"] = stated
     for p in cfg["party"]:
         remote = demo == "remote" and p["principal"] == "auditor"
         p["machine"] = AUDITOR_REMOTE if remote else PLACEMENT[p["name"]]
