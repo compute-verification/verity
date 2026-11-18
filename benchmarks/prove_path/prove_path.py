@@ -1521,7 +1521,8 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     its requests. -> the probe's census, the requests its advice compiles to and the two sizes."""
     from dataclasses import asdict
 
-    from benchmarks.prove_path import class_size as CZ
+    sys.path.insert(0, str(HERE))
+    import class_size as CZ
     from verity_vllm.definitions.registry.attention_vocab import fa2_masked_from
     from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict.window_circuit import class_circuit
