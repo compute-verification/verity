@@ -4,7 +4,7 @@ public import Flock.Lower
 
 /-! The `flock-lower-check` executable, a test's (`tests/verity/protocols/proofs/flock/prover/test_lean_lower.py`): a
 descriptor's Definition lowered by `Lower.lower` and its template written, every composite Definition's template `CALL`s
-held to `Lower.callBound`, and the template's rows, unrolled, solved on 64 instances a lane word. -/
+held to `Lower.callBound` of its lift to bits, and the template's rows, unrolled, solved on 64 instances a lane word. -/
 
 @[expose] public section
 
@@ -28,11 +28,14 @@ def main (args : List String) : IO UInt32 := do
     | .ok p => pure p
     | .error e => do IO.eprintln s!"flock-lower-check: decode: {e}"; return 1
   let nats := fun (s : String) => ((s.splitOn ",").map String.toNat!).toArray
+  let Q ← match Lift.closure P ((Array.range P.defs.size).filter fun i => !(P.defs[i]!).prim) with
+    | .ok (q, _) => pure q
+    | .error e => do IO.eprintln s!"flock-lower-check: lift: {e}"; return 1
   let mut over := false
-  for i in [0:P.defs.size] do
-    let df := P.defs[i]!
+  for i in [0:Q.defs.size] do
+    let df := Q.defs[i]!
     if df.prim then continue
-    match Lower.lower P i #[max 1 df.paramLeaves] #[max 1 df.outLeaves] with
+    match Lower.lower Q i #[max 1 df.paramLeaves] #[max 1 df.outLeaves] with
     | .ok t =>
       let calls := (t.defs.getD (t.root - 1) default).calls.size
       IO.println s!"CALLS {df.key} {calls} bound {Lower.callBound df}"
@@ -49,7 +52,7 @@ def main (args : List String) : IO UInt32 := do
   let z ← match lowerLanes t words with
     | .ok z => pure z
     | .error e => do IO.eprintln s!"flock-lower-check: rows: {e}"; return 1
-  let m := (P.defs[d]!).outLeaves
+  let m := (Q.defs[d]!).outLeaves
   IO.FS.writeFile outFile ((List.range m).foldl (fun s k => s ++ toString (z.getD (Lower.outBit t k) 0) ++ "\n") "")
   IO.println s!"LOWERED {key} defs={t.defs.size} lines={(Lower.renderLines t).size} rows={z.size}"
   if over then do IO.eprintln "flock-lower-check: a Definition's CALLs past Lower.callBound"; return 1

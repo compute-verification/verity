@@ -120,9 +120,12 @@ paths = ["verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs", "
 
 [[tool.verity.tests.reads]]
 tests = ["test_lean_lower.py"]
-# the periods' chain it lowers, loaded by file, and `lake build flock-lower-check`: its package and those it requires by path
+# the chain's first block (`restrict`), its chain and its periods loaded by file, and `lake build flock-lower-check`: its
+# package and those it requires by path
 paths = [
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py",
     "tests/verity/commitments/periods",
+    "verity/protocols/proofs/spot/verifier/one_stage",
     "verity/circuits/base",
     "verity/circuits/lean",
     "verity/commitments/lean",

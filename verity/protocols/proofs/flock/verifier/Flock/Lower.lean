@@ -1,14 +1,19 @@
 module
 
 public import Flock.TmplUnroll
+public import Flock.Lift
 public import Circuits.Program
 
 /-!
 # A Boolean Definition lowered to its template
 
 `lower P d inPorts outPorts` is the `flock-ir-tmpl/v2` template (`Flock.Tmpl`) of Definition `d` of the decoded Program
-`P`: every leaf `Value<1>` and every primitive it reaches one of PROTOCOL.md §9's gates. It is built from the
-Definition's own structure, in the description's size, and never from unrolled rows.
+`P`, a word Program (`restrict`'s) or one on bits. It is built from the Definition's own structure, in the description's
+size, and never from unrolled rows.
+
+- **The lift to bits first.** `d` is lifted (`Flock.Lift.lift`): each word composite it reaches on bits, each word
+  primitive its Boolean Definition in `P.boolean`. After it every leaf is `Value<1>` and every primitive one of PROTOCOL.md
+  §9's gates, or the lowering refuses.
 
 - **One Definition a template Definition.** Each composite Definition `d` reaches is lowered once (`lowerDef`), its
   callees first. A primitive batched by a node is a template Definition of one gate (`gateDef`), lowered once per
@@ -491,10 +496,12 @@ def lowerDef (P : Prog) : Nat → Nat → M (Nat × Array Nat)
 /-- The output rows' first column: past `n` columns, aligned to `span`. -/
 def alignUp (n span : Nat) : Nat := (n + span - 1) / span * span
 
-/-- **The block's template**: Definition `d` of `P` and every Definition it reaches, one template Definition each, callees
+/-- **The block's template**: Definition `d` of `P` lifted to bits and every Definition it reaches, one template Definition each, callees
 first, then the root: the input rows (port bit `i` at column `i`, every port bit a row), `d` placed once on them, its returns copied to the
 output rows, and the constant. `inPorts`/`outPorts` are the port widths in bits, ports concatenated, low bit first. -/
 def build (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl := do
+  if P.defs[d]?.isNone then throw s!"no Definition {d}"
+  let (P, d) ← Lift.lift P d
   let some defn := P.defs[d]? | throw s!"no Definition {d}"
   let N := defn.paramLeaves
   let Mo := defn.outLeaves
