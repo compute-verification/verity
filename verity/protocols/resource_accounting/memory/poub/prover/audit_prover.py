@@ -7,7 +7,6 @@ audit's (`Store`, `Pass`, `audit.Opening`).
 from __future__ import annotations
 
 import bisect
-import hashlib
 import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -15,17 +14,9 @@ from dataclasses import dataclass, replace
 from verity.commitments import MerkleTree
 from verity.protocols.resource_accounting.memory.poub.verifier.rota import REKEY_MAX, Origin, Schedule
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
-from verity.protocols.resource_accounting.memory.poub.verifier.audit import (REKEY_DOMAIN, Registration, append_head,
-                                                                             append_tree, payload_tree)
+from verity.protocols.resource_accounting.memory.poub.verifier.audit import (Registration, append_head, append_tree,
+                                                                             payload_tree, rekey_root)
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import SALT_BYTES, Plan
-
-
-def rekey_root(registration: bytes, first: int, count: int, origin: Origin) -> bytes:
-    """`rekeyRoot` of `Poub/Session.lean`: SHA512(REKEY_DOMAIN ‖ registration ‖ u64be first ‖ u64be count ‖ u8 0 ‖
-    u64be lo) for `("registered", lo)`, or ‖ u8 1 ‖ u64be k for `("append", k)`, k a slot."""
-    tag = {"registered": b"\0", "append": b"\1"}[origin[0]]
-    return hashlib.sha512(REKEY_DOMAIN + registration + first.to_bytes(8, "big") + count.to_bytes(8, "big") + tag
-                          + origin[1].to_bytes(8, "big")).digest()
 
 
 @dataclass(frozen=True, slots=True)

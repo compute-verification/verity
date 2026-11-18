@@ -103,7 +103,7 @@ def test_under_refresh_every_plan_and_opening_keeps_the_refresh_rules():
             assert verify_opening(domain, root, leaf, audit.PAYLOAD_SCHEMA, rb.LIMITS)
     rekeys = [a for a in store.appends if a.origin is not None]
     assert {a.origin[0] for a in rekeys} == {"registered", "append"}
-    assert all(a.root == audit_prover.rekey_root(reg.digest, a.first, a.count, a.origin) for a in rekeys)
+    assert all(a.root == audit.rekey_root(reg.digest, a.first, a.count, a.origin) for a in rekeys)
     schedule = trace.refresh.schedule
     assert all(schedule.slot_at(a.slot)[0] == joined[a.first] for a in store.appends)
     assert [a.slot for a in store.appends] == sorted({a.slot for a in store.appends})
