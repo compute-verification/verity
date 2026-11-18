@@ -472,7 +472,9 @@ prints the table; the groups are:
   `NoOutsideCompute` or `ProviderLockdown`; `label` reads the file from the ref run's record and refuses a value that isn't its).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
-  so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
+  so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`, `hot_card` (text: a sentence naming the node and
+  card a run was timed on and what the driver reported, a thermal slowdown, so the timing may be throttled; the result stays;
+  `label` refuses a bool or an empty value); `independently_verified` (bool) is the back-fill's
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
   carries no verdict — ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
   executor's worker; on `commit:<sha>`, `tasks_graph` and `verity_graph` (`art:` id of the `tasks-graph/v1` or
