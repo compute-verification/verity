@@ -255,6 +255,26 @@ theorem walk_loop (n : ℕ) (G : ℕ → Bool) (w w' : ℕ) (r : Option Bool × 
   · exact Or.inl ⟨fun k hk => hall k (by simp [List.mem_range'_1, Std.Legacy.Range.size]; omega), hr⟩
   · exact Or.inr hr
 
+/-- A loop of any body that, run from nothing found, either stops with `some false` or goes on having found `G` of
+its element. -/
+theorem walk_loop_gen (n : ℕ) (f : ℕ → Option Bool × Unit → Widths.M (ForInStep (Option Bool × Unit)))
+    (G : ℕ → Prop) (w w' : ℕ) (r : Option Bool × Unit)
+    (hf : ∀ k s st s', (f k (none, ())).run s = .ok st s' →
+      st = .done (some false, ()) ∨ (st = .yield (none, ()) ∧ G k))
+    (h : (forIn (m := Widths.M) [0:n] ((none : Option Bool), ()) f).run w = .ok r w') :
+    ((∀ k < n, G k) ∧ r.1 = none) ∨ r.1 = some false := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
+  have hL := forIn_m_inv _ G (fun r : Option Bool × Unit => r = (none, ()))
+    (fun r => r.1 = some false) _ (none, ()) r w w' rfl ?step h
+  case step =>
+    rintro k - bb s₀ st s₀' rfl hf'
+    rcases hf k s₀ st s₀' hf' with rfl | ⟨rfl, hg⟩
+    · rfl
+    · exact ⟨hg, rfl⟩
+  rcases hL with ⟨hall, hr⟩ | hr
+  · exact Or.inl ⟨fun k hk => hall k (by simp [List.mem_range'_1, Std.Legacy.Range.size]; omega), by rw [hr]⟩
+  · exact Or.inr hr
+
 /-! ## A part -/
 
 /-- **A part the width check passes names leaves of the widths its type gives them.** -/
@@ -295,6 +315,92 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
         change base + (n - 1) < S.leaves at this
         omega
       exact (eqRange_sound _ t a S base n w w' ha hb h k hk).symm
+  | grid run lanes =>
+    have hgr : ∀ l ∈ lanes, l.periods = lanes[0]!.periods := hi
+    unfold Widths.partOk at h
+    dsimp (config := { zeta := false }) only at h
+    extract_lets laneOk jp at h
+    have hjp : ∀ w₁ w₁', (jp ()).run w₁ = .ok true w₁' →
+        Widths.wAt S ((Part.grid run lanes).get k).j = Widths.wAt t (a + k) := by
+      intro w₁ w₁' hj'
+      unfold jp at hj'
+      obtain ⟨r, w₂, hloop, hj'⟩ := m_bind hj'
+      obtain ⟨r1, r2⟩ := r
+      refine (walk_loop_gen _ _ (fun k' => ∀ S', (srcOf B below).ty? ((Part.grid run lanes).get k').p
+          ((Part.grid run lanes).get k').i = some S' →
+          Widths.wAt S' ((Part.grid run lanes).get k').j = Widths.wAt t (a + k')) w₁ w₂ _ ?_ hloop).elim
+        (fun hl => hl.1 k hk S hS) (fun hr => ?_)
+      · intro k' s₀ st s₀' hf
+        try dsimp only at hf
+        obtain ⟨u, s₁, -, hf⟩ := m_bind hf
+        try dsimp only at hf
+        split at hf
+        · rename_i S' hS'
+          by_cases hc : (Widths.wAt S' ((Part.grid run lanes).get k').j != Widths.wAt t (a + k')) = true
+          · rw [ite_eq_left hc] at hf
+            exact Or.inl (m_pure hf).1.symm
+          · rw [ite_eq_right hc] at hf
+            refine Or.inr ⟨(m_pure hf).1.symm, fun S'' hS'' => ?_⟩
+            rw [hS'] at hS''
+            injection hS'' with hS''
+            subst hS''
+            simpa using hc
+        · rename_i hne
+          exact Or.inr ⟨(m_pure hf).1.symm, fun S'' hS'' => absurd hS'' (hne S'')⟩
+      · dsimp only at hr hj'
+        subst hr
+        dsimp only at hj'
+        exact absurd (m_pure hj').1 (by simp)
+    clear_value jp
+    change k < lanes.size * run * ((lanes[0]?.map Lane.periods).getD 0) at hk
+    change a + lanes.size * run * ((lanes[0]?.map Lane.periods).getD 0) ≤ t.leaves at ha
+    have hgpos : 0 < lanes.size := by
+      rcases Nat.eq_zero_or_pos lanes.size with h0 | h0
+      · rw [h0] at hk; simp at hk
+      · exact h0
+    have hP : (lanes[0]?.map Lane.periods).getD 0 = lanes[0]!.periods := by
+      rw [Array.getElem?_eq_getElem hgpos, getElem!_pos lanes 0 hgpos]; rfl
+    rw [hP] at hk ha
+    have hrun : 0 < run := by
+      rcases Nat.eq_zero_or_pos run with h0 | h0
+      · rw [h0] at hk; simp at hk
+      · exact h0
+    have hak : a + k < t.leaves := Nat.lt_of_lt_of_le (Nat.add_lt_add_left hk a) ha
+    have hm : k % (lanes.size * run) / run < lanes.size :=
+      Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm run]; exact Nat.mod_lt _ (Nat.mul_pos hgpos hrun))
+    have hlmem : lanes[k % (lanes.size * run) / run]! ∈ lanes := by
+      rw [getElem!_pos lanes _ hm]; exact Array.getElem_mem hm
+    have ht' : k / (lanes.size * run) < (lanes[k % (lanes.size * run) / run]!).periods := by
+      rw [hgr _ hlmem]; exact Nat.div_lt_of_lt_mul hk
+    have hmem := Walk.leafAt_mem (lanes[k % (lanes.size * run) / run]!) (Nat.mod_lt k hrun) ht'
+    split at h
+    · rename_i wd hwd
+      by_cases hall : lanes.all (laneOk wd) = true
+      · rw [Array.all_eq_true] at hall
+        have hl := hall _ hm
+        rw [← getElem!_pos lanes _ hm] at hl
+        change (srcOf B below).ty? (lanes[k % (lanes.size * run) / run]!).p
+          (lanes[k % (lanes.size * run) / run]!).i = some S at hS
+        change (srcOf B below).homo? (lanes[k % (lanes.size * run) / run]!).p
+          (lanes[k % (lanes.size * run) / run]!).i = Widths.homo S at hhomo
+        change ((lanes[k % (lanes.size * run) / run]!).leafAt (k / (lanes.size * run)) (k % run)).toNat
+          < S.leaves at hj
+        change Widths.wAt S ((lanes[k % (lanes.size * run) / run]!).leafAt (k / (lanes.size * run))
+          (k % run)).toNat = Widths.wAt t (a + k)
+        generalize lanes[k % (lanes.size * run) / run]! = l at hl hmem hS hhomo hj ⊢
+        rcases hbd : l.bounds run with ⟨lo, hi'⟩
+        rw [hbd] at hmem
+        simp only [laneOk, hS, hbd, Bool.or_eq_true, beq_iff_eq] at hl
+        rw [homo_wAt t wd hwd (a + k) hak]
+        rcases hl with h1 | h1
+        · exact homo_wAt S wd (by rw [← hhomo]; exact h1) _ hj
+        · have hm1 := wAt_mem_rangeWidths S lo.toNat (hi'.toNat + 1) _ (Int.toNat_le_toNat hmem.1)
+            (Nat.lt_succ_of_le (Int.toNat_le_toNat hmem.2)) hj
+          rw [h1, List.mem_singleton] at hm1
+          exact hm1
+      · rw [ite_eq_right hall] at h
+        exact hjp _ _ h
+    · exact hjp _ _ h
   | strided p i base inner os is n =>
     change (srcOf B below).ty? p i = some S at hS
     change (srcOf B below).homo? p i = Widths.homo S at hhomo
