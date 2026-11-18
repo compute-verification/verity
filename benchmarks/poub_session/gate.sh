@@ -5,8 +5,8 @@
 #
 #   probe  read-only requests: the challenger host's `pubkey` (its public key's SHA-512 must be PIN), `pins` and `ledger`
 #          (PERIOD unused, no period of LANE open), and the verifier host's `status` (pinned at COMMIT, no unit running);
-#          the circuit, `verity/remote-bandwidth/v0 verifier tree <tree>` of COMMIT's poub tree (auditor_line's
-#          `descriptor`). COMMIT, and so the verifier host's pin, must be on main's first-parent line, fetched from the
+#          the circuit, `<id> verifier tree <tree>` of COMMIT's poub tree, `<id>` poub's declared protocol
+#          (`python3 -m verity.protocols.compose.schemes poub protocol`; auditor_line's `descriptor`). COMMIT, and so the verifier host's pin, must be on main's first-parent line, fetched from the
 #          repository main is pushed to (in a run's clone, the node's bare repository behind the source root, never the
 #          source root's copy; main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
 #          there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
@@ -78,11 +78,12 @@ gate() {
 }
 
 circuit() {
-  local head tree
+  local head tree id
   head=$(git rev-parse HEAD) || return 3
   [ "$head" = "${COMMIT:?}" ] || { echo "this clone is $head, not COMMIT $COMMIT" >&2; return 3; }
   tree=$(git rev-parse "$COMMIT:verity/protocols/resource_accounting/memory/poub/verifier") || return 3
-  printf 'verity/remote-bandwidth/v0 verifier tree %s' "$tree" | sha512sum | cut -d' ' -f1
+  id=$(python3 -m verity.protocols.compose.schemes poub protocol) || return 3
+  printf '%s verifier tree %s' "$id" "$tree" | sha512sum | cut -d' ' -f1
 }
 
 probe() {

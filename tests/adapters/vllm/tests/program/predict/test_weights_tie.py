@@ -26,6 +26,7 @@ from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier import service as SV
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
     registered as H1R,
@@ -40,7 +41,7 @@ from verity_vllm.program import model as M
 from verity_vllm.program.predict import weights_tie as WT
 from verity_vllm.program.predict import window_weights as WW
 
-DESIGN, CAP = D.parse_design("work:613"), 16
+DESIGN, CAP = RND.parse_design("work:613"), 16
 EMBED = "model.embed_tokens.weight"
 
 

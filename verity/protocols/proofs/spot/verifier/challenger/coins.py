@@ -39,7 +39,8 @@ from verity.commitments.randomness import uniform_from_words
 from .challenger import (COIN_BYTES, MAX_COINS, MAX_HELLOS, MAX_LEDGER_LINES, MAX_LOG_LINES, MAX_PATH, MAX_PINS,
                          WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
                          record_many, trusted_session_of, withheld_on, Entry, released_after)
-from verity.protocols.proofs.spot.verifier.one_stage.draw import digits, strata_problem
+from verity.commitments.randomness import digits
+from verity.protocols.proofs.spot.verifier.one_stage.draw import strata_problem
 from .remote import MAX_BATCH
 
 _SAMPLING_DESIGN_KEYS = {"subset": {"law", "k"}, "bernoulli": {"law", "p"}, "stratified": {"law", "k", "strata"},
