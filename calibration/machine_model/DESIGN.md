@@ -90,7 +90,7 @@ A new measurement is lines of data and a vector file, not a script:
 3. **The epoch**: append the new vector's name to `epochs` in `data/model.toml`.
 4. **The vector**: copy the vector it builds on to `data/vectors/NAME.toml`, set `name` and `epoch`, add the row to
    `rows` (and any credit to `credits`), and drop `[published]` and `[legacy]`.
-5. `uv run machine-model solve NAME`: it prints τ, U/F_low and the margin, and checks every price, credit and attack.
+5. `uv run machine-model --device sm_120 solve NAME`: it prints τ, U/F_low and the margin, and checks every price, credit and attack.
    Record the printed numbers under `[published]` once you publish them; the tests then hold the vector to them.
 
 A new attack family is a new `data/attacks/FAMILY.jsonl` (`since` the epoch it joins); the check prices every attack of
@@ -100,7 +100,7 @@ that writes registers its `copy16` line (`tests/calibration/machine_model/test_d
 ## Adopt a probe's census
 
 An opcode probe (`../pouw/opcode_probe/`) writes its gated rows as `census.csv` in this schema, with no epochs. After steps 3
-and 4 above, `uv run machine-model adopt CENSUS EPOCH` merges it at `EPOCH`, which must be the last epoch. Each (kind,
+and 4 above, `uv run machine-model --device sm_120 adopt CENSUS EPOCH` merges it at `EPOCH`, which must be the last epoch. Each (kind,
 row) keeps the faster of its line at the epoch before and the measured one: a row's u must be a lower bound on what
 every program pays on it, so a line slower than the hardware makes a price that isn't sound. A faster line closes the
 old one at the epoch before (in the old line's file), adds its own to `data/census/EPOCH.csv` and adds its runs to the
@@ -148,8 +148,8 @@ for the design's noise, an arm that isn't a spec, and a filler off lanes.
 
 ## Devices
 
-`data/` is sm_120's, the RTX PRO 6000 at the node's 2,092 MHz lock, and every command reads it unless `--device` or
-`--data` names another directory. Another device's measurements go in `data/devices/sm_NN/`: sm_90 (the H200) and
+`data/` is sm_120's, the RTX PRO 6000 at the node's 2,092 MHz lock (its `model.toml`'s card's target). A command
+that reads one device's model is given it, by `--device`, `--card` or `--data`, and refused without one. Another device's measurements go in `data/devices/sm_NN/`: sm_90 (the H200) and
 sm_100 (the B200). Each directory's model is the one card its `model.toml` names (`card`), never another card of its
 target: `--card SKU` reads the directory whose model is that card's, and refuses a card none is (an H100, sm_90a like
 the H200, has none). `machine-model render devices` lists each directory a command can price, with its epochs, rows,
