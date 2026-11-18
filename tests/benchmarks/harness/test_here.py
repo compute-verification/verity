@@ -9,7 +9,7 @@ from verity_bench.cli import main
 from verity_bench.vllm import result as result_format
 
 ROOT = Path(__file__).resolve().parents[3]
-NAME = "llama32-1b-1gpu-pouw-protocol-served-h100"
+NAME = "llama32-1b-1gpu-pouw-protocol-served@h100"
 SHIPPED = "c" * 40
 
 
@@ -58,7 +58,7 @@ def test_here_runs_the_one_point_in_this_run_on_the_card_it_was_given_with_no_gi
     if card == "NVIDIA H100 80GB HBM3":
         assert stop.value.code == f"timed at {SHIPPED}"
     else:
-        assert stop.value.code == 2 and f"the card is a {card}, not the h100 of spec {NAME!r}" in capsys.readouterr().err
+        assert stop.value.code == 2 and f"the card is a {card}, not the h100 of spec {NAME.split('@')[0]!r}" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(("argv", "why"), [

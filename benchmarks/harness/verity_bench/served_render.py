@@ -11,6 +11,7 @@ from typing import Any
 from verity_bench import kit, settings
 from verity_bench.breakdown import AUDIT, AUDIT_SPANS, DECODE_ROWS, PLAIN, PLAIN_SPANS, ms_cell
 from verity_bench.served_table import CAVEAT_KEYS, LIVE_CAVEAT_KEYS, PER_DECODE, PER_OUTPUT, SERVED
+from verity_bench.vllm.presets import current_spec
 
 #: what a research run keeps of the table, relative to its directory (`record`)
 TABLE = "out/served-table.json"
@@ -176,6 +177,8 @@ def measurements(table: Mapping[str, Any], metrics: Mapping[str, str]) -> list[d
     out = []
     for name, at in metrics.items():
         spec, point = at.rsplit("/", 1)
+        spec = current_spec(spec)
+        at = f"{spec}/{point}"
         protocol = next((row["protocol"] for row in table["rows"] if row["spec"] == spec), None)
         members = {(row["member"], row["spec"]): row.get("why") for row in table["rows"]
                    if row["protocol"] == protocol and row.get("member")}

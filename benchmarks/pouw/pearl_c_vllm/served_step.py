@@ -145,11 +145,11 @@ def _live(arm):
 
 def _engine(spec_name: str, arm_id: str):
     from verity_bench.vllm.arms import resolve_arms
-    from verity_bench.vllm.presets import load_spec, served
+    from verity_bench.vllm.presets import load_spec, resolve_spec, served
     from verity_bench.vllm.engine import _VllmEngine, arm_execution
     from verity_vllm.engine.env import INDUCTOR_DIR_MARK
     spec = load_spec(spec_name)
-    preset, eager = served(spec.preset, spec.eager)
+    preset, eager = served(resolve_spec(spec_name).preset, spec.eager)
     names = list(spec.arms) + ([arm_id] if arm_id not in spec.arms else [])
     arms = resolve_arms(names, spec.arm_modules, {k: v for k, v in spec.arm_settings.items() if k in names})
     arm, reserved = _live(next(x for x in arms if x.id == arm_id))

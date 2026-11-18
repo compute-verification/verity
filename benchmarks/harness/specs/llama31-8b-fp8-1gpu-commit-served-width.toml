@@ -1,6 +1,7 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-commit-served-width"
+cards = ["rtx-pro-6000"]
 # The served Commit's overhead, commit@compiled / stock-fp8@compiled, across batch sizes (the width sweep, b1 to b32):
 # llama31-8b-fp8-1gpu-commit-served's two compiled arms only, on its preset's engine settings, so its b8 and b32 rows are
 # that spec's served ratio measured again. `resident_gpu_memory_utilization` is the `blocks` one: two engines of 0.80
@@ -22,7 +23,6 @@ model = "unsloth/Llama-3.1-8B"
 revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
 case = "LLAMA31_8B"
 precision = "fp8"
-gpu_id = "rtx-pro-6000"
 gpu_count = 1
 vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
 
