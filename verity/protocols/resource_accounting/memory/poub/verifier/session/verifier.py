@@ -429,16 +429,6 @@ TIME_HELD = "held over time"
 """The paced session's third form (`paced_line`): the blocks in node memory at each instant, averaged over time."""
 
 
-def origin_of(named: object) -> object:
-    """A re-key's origin as an append's message names it, `{"registered": a}` or `{"append": k, "at": o}`, as
-    `audit.Origin`; anything else as it came, which `AuditRun.append` rejects (`append`)."""
-    if isinstance(named, dict) and set(named) == {"registered"}:
-        return ("registered", named["registered"])
-    if isinstance(named, dict) and set(named) == {"append", "at"}:
-        return ("append", named["append"], named["at"])
-    return named
-
-
 def refresh_of(words: str | None, sessions: int) -> tuple[bool, ...]:
     """`--refresh`'s word as each of `sessions` sessions' setting: none (or an empty word) is off for all, one word
     (`0` or `1`) is every session's, and `0,1` is one word a session. Refused otherwise."""
@@ -891,14 +881,11 @@ class Pair:
             raise audit.SessionError(f"the verifiers disagree on window {t}'s boundary")
         return out
 
-    def append(self, root: bytes, count: int, origin=None):
-        """An append on both verifiers; `origin`, a re-key's as its message names it (`origin_of`), goes to the Lean as
-        it came and to the books as `audit.Origin`, and an append with none is the event it was."""
-        named = {} if origin is None else {"origin": origin}
+    def append(self, root: bytes, count: int, origin: audit.Origin | None = None):
+        named = {} if origin is None else {"origin": wire.origin_json(origin)}
         return self._step(self.s.filling, lambda: {"kind": "append", "root": root.hex(), "count": count} | named,
-                          lambda: self.s.append(root, count, *([origin_of(origin)] if named else [])),
-                          lv.appended_json,
-                          coin=lambda out: out[1] if isinstance(out, tuple) else None)[0]
+                          lambda: self.s.append(root, count, *(() if origin is None else (origin,))),
+                          lv.appended_json, coin=lambda out: out[1] if isinstance(out, tuple) else None)[0]
 
     def release(self, runs, withdrawn=()):
         return self._step(self.s.filling, lambda: lv.release_event(runs, withdrawn),
@@ -1157,13 +1144,14 @@ class Verifier:
         self.calibration = ready["calibration"]
         return self.registration, self.calibration
 
-    def appends_of(self) -> int:
+    def appends_of(self, refresh: bool = False) -> int:
         """A session's append coins (`coins.families`): `appends` if given, else `coins.APPENDS`, or none, and no append
-        family, when the hello said the prover's sessions append nothing (`prover.BANDWIDTH`).  That says only what
-        the prover will forgo: an append it sends then has no coin and refuses the session."""
+        family, when the hello said the prover's sessions append nothing (`prover.BANDWIDTH`) and the session does
+        not refresh, whose re-keys are appends.  That says only what the prover will forgo: an append it sends then
+        has no coin and refuses the session."""
         if self.appends is not None:
             return self.appends
-        return coins.APPENDS if self.appending else 0
+        return coins.APPENDS if self.appending or refresh else 0
 
     def ping(self, n: int) -> dict:
         rtts = []
@@ -1217,7 +1205,7 @@ class Verifier:
             params = dataclasses.replace(params, pace=dataclasses.replace(params.pace, **one))
         g = params.groups_per_coin
         shared, per = ({}, {}) if g == 1 else ({"groups_per_coin": g}, {"per_coin": g})
-        appends = self.appends_of()
+        appends = self.appends_of(bool(refresh))
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
                                       challenger=lambda e: self.challenger.open(reg.digest, e, W, appends, **per))
         case = None if self.transcript is None else lv.DifftestCase(
@@ -1494,12 +1482,11 @@ class Verifier:
 
     @staticmethod
     def append(session: audit.AuditRun, head: dict) -> dict | audit.Verdict:
-        """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`, a
-        re-key's with its `origin` (`{"registered": a}` or `{"append": k, "at": o}`): the
-        reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, sampled now, or the
-        rejection."""
-        named = [head["origin"]] if head.get("origin") is not None else []
-        got = session.append(bytes.fromhex(head["root"]), head["count"], *named)
+        """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`, and
+        under refresh a re-key's `"origin"` (`origin_of`): the reply `{"type": "appended", "first": j, "coin": hex}`,
+        its first index and its coin `c_a`, sampled now, or the rejection."""
+        origin = wire.origin_of(head.get("origin"))
+        got = session.append(bytes.fromhex(head["root"]), head["count"], *(() if origin is None else (origin,)))
         if isinstance(got, audit.Verdict):
             return got
         first, coin = got
@@ -1900,6 +1887,6 @@ __all__ = ["AVERAGE", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
            "WORST_PASS", "accepts", "gamma_answer", "ingress_bursts", "lean_record", "load_registry", "main", "memory",
            "memory_error",
            "node_line", "node_refused", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
-           "origin_of", "refresh_of",
+           "refresh_of",
            "recorded_paced", "recorded_queries", "recorded_rates", "recorded_windows", "regions_of", "save_registry",
            "sketch_at", "timing_parts"]

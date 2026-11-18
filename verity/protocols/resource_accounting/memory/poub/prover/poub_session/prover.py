@@ -65,11 +65,14 @@ takes the chain over its appends when the pass is launched (`audit_prover.Store.
 sent, never dropped at a boundary, since a coin no root follows rejects the session; one dropped before its appends
 went out sends nothing, and the next pass sends its appends and changes too.
 
-Under refresh (the session message's `refresh`, absent off), a kv or kvdrop session over the reference backend, without
-serving ahead, re-keys on the rota (`audit_prover.Refresh`): the trace's step at a window's first pass sends that
+Under refresh (the session message's `refresh`, absent off), an honest, kv or kvdrop session over the reference backend,
+without serving ahead, re-keys on the rota (`audit_prover.Refresh`; an honest session as a trace that writes no pages):
+the trace's step at a window's first pass sends that
 window's due re-keys, each append message naming its `origin`, before its pages; a page's own coin encodes nothing,
 its first encode its first re-key's; and each pass's plan is the rota's for its window, every opening of a re-key's
-block naming its origin's position.
+block naming its origin's position.  The session's entry in prover.json then has `refresh`: the re-key appends sent
+(`appends`), the blocks they re-keyed (`blocks`), the blocks encoded under an append's coin (`encoded`) and the
+host time those encodes took (`encode_ns`).
 
 Every root's message names the step its pass covers (`AuditRun.receive(..., step=...)`, the verifier's `memory_map`,
 "Passes and steps"): with serving ahead, the step the pass took; otherwise the backend's `step_of(ticket)` if it has one, which
@@ -129,7 +132,9 @@ MODES = ("honest", "skip", "kv", "kvdrop", "kvoverwrite", "serve", "servedrop")
 TRACED = ("kv", "kvdrop", "kvoverwrite")
 BANDWIDTH = ("honest", "skip")
 """The modes whose sessions read the registered store and append nothing: a plan of only these says so in its hello
-(`appends: false`), and its sessions reserve no append coins (`verifier.Verifier.register`)."""
+(`appends: false`), and its sessions reserve no append coins (`verifier.Verifier.register`) unless they refresh."""
+REFRESHED = ("honest", "kv", "kvdrop")
+"""The modes a refresh session may run: an honest one's only appends are the rota's re-keys."""
 
 
 @dataclass
@@ -169,11 +174,6 @@ def parse_plan(plan: str) -> list[tuple[str, float]]:
 def payload(rng: random.Random) -> bytes:
     """A random payload block whose last word is below any codec's p."""
     return rng.randbytes(rcodec.BLOCK_BYTES - 16) + bytes(16)
-
-
-def origin_json(origin) -> dict:
-    """A re-key's origin as the append message names it: {"registered": a} or {"append": k, "at": o}."""
-    return {"registered": origin[1]} if origin[0] == "registered" else {"append": origin[1], "at": origin[2]}
 
 
 def runs_of(blocks) -> tuple[tuple[int, int], ...]:
@@ -791,13 +791,17 @@ class ProverSide:
         trace = serving = None
         refresh = None
         if head.get("refresh", False):
-            if mode not in ("kv", "kvdrop") or self.ahead is not None or not hasattr(self.backend, "rekey"):
-                raise ValueError(f"a refresh session re-keys by appends: a kv or kvdrop session over a backend that "
-                                 f"re-keys (--cpu), without --ahead, not {mode}")
+            if mode not in REFRESHED or self.ahead is not None or not hasattr(self.backend, "rekey"):
+                raise ValueError(f"a refresh session re-keys by appends: an honest, kv or kvdrop session over a backend "
+                                 f"that re-keys (--cpu), without --ahead, not {mode}")
             if type(head.get("lifetime")) is not int:
                 raise ValueError("a refresh session's period is its lifetime cap, which the session message names")
             refresh = audit_prover.Refresh(self.backend.store, Rota(N, head["lifetime"], W))
-        if mode in TRACED:
+        if mode == "honest" and refresh is not None:
+            # serving that writes nothing: the trace's steps are the rota's re-keys alone
+            trace = ServingTrace(self.backend, self.registration, 0, self.kv_pool,
+                                 random.Random(self.rng.getrandbits(64)), head["lifetime"], 0, refresh)
+        elif mode in TRACED:
             if not hasattr(self.backend, "append"):
                 raise ValueError(f"a {mode} session needs a backend that appends blocks after the codec seed (--cpu)")
             if mode == "kvoverwrite" and self.ahead is None:
@@ -847,6 +851,7 @@ class ProverSide:
         backend, clock = self.backend, self.conn.clock
         step_of = getattr(backend, "step_of", None)
         launched, sent_plan, sent_released, sent_withdrawn, sent_appends = 0, rb.Plan.whole(N), 0, 0, 0
+        refreshed = {"appends": 0, "blocks": 0, "encoded": 0, "encode_ns": 0}
         ahead: Ahead | None = getattr(trace, "ahead", None)
         serve = mode in ("serve", "servedrop")
         self.misread = {}
@@ -938,7 +943,7 @@ class ProverSide:
             for a in todo:
                 msg = {"type": "append", "root": a.root.hex(), "count": a.count}
                 if a.origin is not None:
-                    msg["origin"] = origin_json(a.origin)
+                    msg["origin"] = wire.origin_json(a.origin)
                 self.conn.send(msg)
                 sent_appends, x.flushed = sent_appends + 1, True
             for a in todo:
@@ -949,7 +954,13 @@ class ProverSide:
                     raise ValueError(f"the verifier placed the append from block {a.first} at {reply['first']}")
                 # Under refresh a page's first encode is its first re-key's, so its own coin encodes nothing.
                 if getattr(trace, "refresh", None) is None or a.origin is not None:
+                    c0 = time.perf_counter_ns()
                     backend.encode_append(a.first, bytes.fromhex(reply["coin"]))
+                    refreshed["encode_ns"] += time.perf_counter_ns() - c0
+                    refreshed["encoded"] += a.count
+                if a.origin is not None:
+                    refreshed["appends"] += 1
+                    refreshed["blocks"] += a.count
             return None
 
         if serving is not None:
@@ -1065,6 +1076,8 @@ class ProverSide:
                          "sent_released": sent_released,
                          "pass_blocks": [p.length for p in sent],
                          "pass_appended": [sum(max(0, f + c - max(f, N)) for f, c in p.runs) for p in sent]}
+        if refresh is not None:
+            out["refresh"] = refreshed
         if ahead is not None:
             out["ahead"] = {**ahead.stats(), "headroom": getattr(trace, "headroom", None)}
         out["misread"] = [[tt, i, j] for (tt, i), js in sorted(self.misread.items()) for j in js]

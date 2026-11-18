@@ -19,6 +19,7 @@ from verity.commitments import Opening as MerkleOpening  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.prover.rota import Rota  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, receipts as rb  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 
 import prover  # noqa: E402
 
@@ -117,13 +118,17 @@ def test_with_refresh_off_the_trace_rekeys_as_before_and_sends_no_origin():
     assert out[-1][1] == rb.Plan(prover.runs_of(sorted(trace.live)), trace.replay.extent)
 
 
-def test_a_refresh_session_is_refused_outside_a_kv_session_over_a_backend_that_rekeys():
+def test_a_refresh_session_is_refused_outside_an_honest_or_kv_session_over_a_backend_that_rekeys():
     p = prover.ProverSide.__new__(prover.ProverSide)
     p.backend, p.ahead = backend(), None
     with pytest.raises(ValueError, match="re-keys by appends"):
-        prover.ProverSide.session(p, {"k": 0, "windows": 2, "lifetime": 2, "refresh": True}, "honest", 0.0)
+        prover.ProverSide.session(p, {"k": 0, "windows": 2, "lifetime": 2, "refresh": True}, "skip", 0.0)
 
 
-def test_an_origin_is_named_on_the_wire_as_the_append_message_carries_it():
-    assert prover.origin_json(("registered", 4)) == {"registered": 4}
-    assert prover.origin_json(("append", 3, 512)) == {"append": 3, "at": 512}
+def test_an_origin_is_named_on_the_wire_as_the_append_message_carries_it_and_read_back():
+    for origin, named in ((("registered", 4), {"registered": 4}), (("append", 3, 512), {"append": 3, "at": 512})):
+        assert wire.origin_json(origin) == named and wire.origin_of(named) == origin
+    assert wire.origin_of(None) is None
+    for bad in ({"append": 3}, {"registered": 1, "at": 0}, [0, 1], "registered"):
+        with pytest.raises(ValueError, match="an append's origin"):
+            wire.origin_of(bad)
