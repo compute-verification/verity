@@ -430,6 +430,8 @@ def off_list(job: Job, listed: dict[str, Entry], path: Path | None) -> str:
     whose = "; ".join(f"{i}'s {'id is missing' if i not in listed else 'command differs from its entry'}" for i in off)
     ids = ", ".join(f"id = {json.dumps(i)}" for i in off)
     entries = (f"a [[row]] with {ids}" if len(off) == 1 else f"a [[row]] for each of {ids}") + f", command = {json.dumps(job.command)}"
+    if keys := next((listed[i].keys for i in job.ids if i not in off), None):    # a listed row of the same launch: the same keys
+        entries += f", keys = {json.dumps(sorted(keys))}"
     return (f"it says {RUNS} = {CONTROL!r}, but the control pod's list {name} doesn't hold it ({whose}), "
             f"so it runs nowhere until infra adds there, on the pod, {entries}")
 

@@ -719,6 +719,14 @@ def test_each_row_of_a_shared_command_must_be_listed(tmp_path):
     assert "ci/plain's" not in state["numbers"]["ci/lean"]["why"]
 
 
+def test_the_fix_for_a_row_whose_listed_sibling_names_keys_names_them_too(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/landing": [control("ci/plain"), control("ci/lean")]},
+                control_rows=write_list(tmp_path, [("ci/plain", LANDING, LINEAR)]))
+    state, _ = run(cfg, Pod(out=here))
+    assert state["numbers"]["ci/lean"]["why"].endswith(
+        f'a [[row]] with id = "ci/lean", command = "{LANDING}", keys = ["LINEAR_CLIENT_ID", "LINEAR_CLIENT_SECRET"]')
+
+
 @pytest.mark.parametrize("contents, said", [(None, "is missing"), ("[[row]]\nid = 1\n", "is unreadable (ValueError: "),
                                             ("[[row\n", "is unreadable (TOMLDecodeError: ")])
 def test_a_missing_or_unreadable_list_runs_none_of_the_trees_control_rows_and_says_so_once(tmp_path, contents, said):
