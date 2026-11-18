@@ -8,7 +8,13 @@ under ids of their own (README.md): ``topup=False`` (or ``VERITY_VLLM_BENCH_TOPU
 under a credited id its gate fails, so the run has no line. ``topup_sms=F`` (or ``VERITY_VLLM_BENCH_TOPUP_SMS``) places
 the top-up on F SMs of its own and the engine on the rest (`kv_filler/green.py`, green contexts), split before vLLM
 starts; 0 interleaves it with the engine on every SM. A partition whose confinement check fails, or a run off the
-step's stream, fails the gate.
+step's stream, fails the gate. Set F for the token control too: the splits change the attention's rounding, so a
+partitioned audit is gated against a partitioned plain run. F rounds up to the driver's smallest partition, 8 SMs on
+the RTX PRO 6000. Under any setting the gate reads no timing: spans and filler bytes are reported, never judged.
+
+An ablation names these objects in a spec's ``arm_modules`` and their ids in ``arms``, never wrapping ``PLAIN`` or
+``AUDIT`` or setting their variables around an install; an arm they don't cover is one ``BandwidthArm(...)`` line in a
+module of its own.
 
 The GPU libraries are built outside the lease's Python process and named by:
 
