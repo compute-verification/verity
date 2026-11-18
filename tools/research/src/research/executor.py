@@ -24,8 +24,7 @@ verdict: tasks/v1's `unkeyed`) gets one of its check alone (`keyed`), so it runs
 across checks.
 
 The transport is how the rows reach the queue and the graphs and verdicts come back: `QueueTransport`, infra's queue (its
-enqueue command, drive.toml's `executor_enqueue`, and the labels and graphs from the store's remote), or `FileTransport`, a
-directory, for tests.
+enqueue command, passed in, and the labels and graphs from the store's remote), or `FileTransport`, a directory, for tests.
 
 A graph/v2 check is enqueued with `--schema verity-graph/v2` and no graph: the executor lists
 graph/v2 on a worker, puts it in the store (`verity-graph/v2`) and labels `commit:<sha> verity_graph art:<id>`
@@ -331,8 +330,8 @@ class FileTransport:
 
 
 class QueueTransport:
-    """infra's queue: a check goes in through infra's enqueue command (``command``, drive.toml's `executor_enqueue`: research
-    imports nothing from `infra/`), run with `--priority N --check ID` and, for a graph listed here, `--graph FILE` (a tasks/v1
+    """infra's queue: a check goes in through infra's enqueue command (``command``: research imports nothing from `infra/`),
+    run with `--priority N --check ID` and, for a graph listed here, `--graph FILE` (a tasks/v1
     document, each task's `key` the one its verdict is labelled under), when it inserts one row {key, task, priority, check} per
     task and exits 0 once they are in; with no `--graph`, it exits 0 at once and the executor lists the graph on a worker, a
     graph/v2 with `--schema verity-graph/v2`, else tasks/v1.  The graph the executor listed for a check comes back as the
@@ -352,8 +351,7 @@ class QueueTransport:
 
     def enqueue(self, graph_file: Path | None, priority: int, check: str, schema: str | None = None) -> None:
         if not self.command:
-            raise RuntimeError("drive.toml names no `executor_enqueue` command: set it to infra's enqueue command, the words "
-                               "of its argv")
+            raise RuntimeError("no enqueue command: pass the words of infra's enqueue command")
         graph = ["--graph", str(graph_file)] if graph_file is not None else []
         r = subprocess.run([*self.command, *graph, "--priority", str(priority), "--check", check,
                             *(["--schema", schema] if schema else [])],

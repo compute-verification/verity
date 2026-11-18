@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 from collections.abc import Mapping
 
+from verity_bench import checked_by
+
 METRIC_LABELS = {
     "time_per_output_token_s": "time / output token",
     "time_to_first_token_s": "time to first token",
@@ -44,6 +46,7 @@ def render(doc: Mapping[str, Any]) -> str:
     lines = [
         f"Baseline: `{doc['baseline']}`. Ratios are arm / baseline; lower is better for time and memory.",
         *([f"No control checks the tokens of: {', '.join(f'`{a}`' for a in ungated)}."] if ungated else []),
+        f"Gates {checked_by.words(checked_by.of(doc.get('gates', ())))}.",
         "",
         "| point | metric | " + " | ".join(arms) + " |",
         "|---|---|" + "|".join("---:" for _ in arms) + "|",

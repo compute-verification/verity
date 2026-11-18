@@ -31,7 +31,9 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
 
 It exits 0 for a passed point, `steady_spec.NOT_PASSED` for a point that was timed and didn't pass, and `REFUSED` where
 nothing was timed. Its records are `out/point.json` (the point, the prover, the cores, the cards its lease was asked
-of, the card and the versions), `out/verdict.json` (each check's answer) and `out/rate/`; `result.json` lists every
+of, the card and the versions), `out/verdict.json` (each check's answer, and `checked_by` `piece`: this job judges them
+on the node from its own files, and the sessions' `accepted` is their verifiers', which `server_rate.py` runs on this
+node beside the provers; no Lean verifier runs here, the kept proof is for one) and `out/rate/`; `result.json` lists every
 file a verdict reads (`kept`), so the store holds what `plan` judges the run by. The statement and the provers' session
 files but the kept one stay in a scratch directory that it removes, also when the run is cancelled or timed out: TERM and INT end it
 with `STOPPED`, after the command it was waiting for (`_run`) and with no result.
@@ -56,6 +58,7 @@ from typing import Any
 from verity_config import sha256
 
 from verity_bench import jobs, kit, settings, steady, steady_cards, steady_spec
+from verity_bench.checked_by import PIECE, words
 from verity_bench.steady_cards import Asker, Refused
 from verity_bench.steady_lease import (
     LEASE_SOURCE,
@@ -496,11 +499,11 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
     row = steady_spec.own_row(files, item)
     why = row if isinstance(row, str) else steady_spec.point_why(row, files, spec, item, own=True)
     _write(run_dir / VERDICT_FILE, {
-        "identity": identity, "point": item.id, "passed": why is None, "why": why,
+        "identity": identity, "point": item.id, "passed": why is None, "why": why, "checked_by": PIECE,
         "verdict": None if isinstance(row, str) else steady.verdict(row, files).record()})
     write_result(run_dir, spec.id, identity, item, why, None if isinstance(row, str) else row,
                  record["timed"].get("host"))
-    print(f"steady point {item.id}: " + ("passed" if why is None else f"not passed: {why}"))
+    print(f"steady point {item.id}: " + ("passed" if why is None else f"not passed: {why}") + f"; {words(PIECE)}")
     return 0 if why is None else steady_spec.NOT_PASSED
 
 
