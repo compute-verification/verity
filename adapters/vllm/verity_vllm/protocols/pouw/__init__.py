@@ -296,20 +296,6 @@ def requests(scheme: str, ctx: Context) -> tuple[H.Request, ...]:
             *((BUILD_BOUND,) if scheme in NCP_CIRCUIT_SCHEMES else ()))
 
 
-def cuts(scheme: str) -> bool:
-    """Whether an execution phase's circuit can be cut at ``scheme``'s sites, reading the tables each executed call commits in place
-    of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
-    return scheme in PEARL_C_SCHEMES
-
-
-def keeps_weight_copy(scheme: str, ctx: Context) -> bool:
-    """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
-    Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
-    each weight's first call and reused (`NcpCircuitRun.sides`), and the lead's, which its backend loads once per install
-    (`lead.LeadBackend.load`).  ncp-v1 forms its operands per call from the weight it is handed."""
-    return scheme in PEARL_C_SCHEMES or scheme in NCP_CIRCUIT_SCHEMES or scheme == LEAD_SCHEME
-
-
 def linear_types() -> tuple[type, ...]:
     """The hook-site types: vLLM's ``LinearBase`` (qkv, o, gate_up, down).  lm_head is a ``VocabParallelEmbedding``, not
     covered."""

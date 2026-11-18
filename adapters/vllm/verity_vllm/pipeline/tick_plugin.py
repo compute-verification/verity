@@ -121,6 +121,6 @@ def register() -> None:
     from verity_vllm import messages
     from verity_vllm.engine import admission
     admit = {**settings.get(TICK_ENV), "order": "tick"}
-    admission.register(lambda exchange: messages.providing("admission").attach(
-        exchange, {"admit": admit, "source": TICK_ENV, "pull": FeedReader(cfg["feed"]), "log": _log_to(cfg["log"])}))
+    admission.register(lambda exchange: exchange.attach(
+        messages.providing("admission"), admit=admit, source=TICK_ENV, pull=FeedReader(cfg["feed"]), log=_log_to(cfg["log"])))
     _PLUGIN.append(cfg)
