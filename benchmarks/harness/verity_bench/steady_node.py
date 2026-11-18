@@ -66,7 +66,6 @@ from verity_bench.steady_lease import (
     toolkit,
     toolkit_on_node,
 )
-from verity_bench.vllm.presets import wrong_card
 
 __all__ = ["FETCH", "KEPT_LOG_BYTES", "KEPT_SESSION", "KEPT_SESSION_BYTES", "KIND", "LEASE_SOURCE", "MEMORY", "NOT_RUN",
            "POINT_FILE", "RATE", "REFUSED", "SESSION_FILES", "STAGED", "STOPPED", "STOP_S", "TIMED_FILE", "VERDICT_FILE",
@@ -352,7 +351,7 @@ def timed(spec: steady_spec.SteadySpec, item: steady_spec.SteadyPoint, scratch: 
         read = {"driver": host["driver"], "cuda_toolkit": toolkit_on_node(ask)}
         record |= {"device": device, "host": dict(host), steady_spec.VERSIONS: read,
                    steady.CARD_NUMA: steady_cards.card_numa_node(device, ask)}
-        if why := wrong_card(spec.id, spec.card, host["card"]):
+        if why := kit.wrong_card(spec.id, spec.card, host["card"]):
             raise Refused(why)
         if read != steady_spec.versions(spec):
             raise Refused(f"the node's driver and CUDA toolkit are {read}, and spec {spec.id!r} says "

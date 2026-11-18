@@ -28,7 +28,7 @@ It is this cut at every N: also up to `WHOLE_MAX` keys, where `dsa_topk_reads.cu
 row is.  The index rows are inputs so that one chunk template and one slot template serve every instance; where ``c[k]`` = k and
 ``i[k]`` = k (`index_values`, what the verifier supplies) its reads return (kv, ok) as `DsaTopKReadRows_v1` does
 (`read_calls`), and it returns their ok.  At the served statics (`SERVED`, `served`: N = 2^17 keys, TOPK 2,048, blocks of
-16,384, `EmbeddingRead_v1{V=2^17, H=576}`) that is 44 + 9 + 64 + 2,048 + 2,048 = 4,213 units of 56 templates an instance.
+16,384, `EmbeddingRead_v2{V=2^17, H=576}`) that is 44 + 9 + 64 + 2,048 + 2,048 = 4,213 units of 56 templates an instance.
 `layout` registers it over the window's class (`PROMPT`, `OUTPUTS`): per_prompt 0 and per_output 1, instance i the row at
 decode step i.
 

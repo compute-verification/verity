@@ -10,7 +10,7 @@ side's (`egress`): no request, response or value one host sends another has a he
 attester's own salts. The value is `rows` rows of `words` leaves of `word_bits` bits (16, or 32: the reading
 parameter's width, `registered.width`), row r its leaves in the order the proof blocks read them, each row the bit row a
 proof block's port carries in its `schema` (`SCHEMAS`: ``hm96-sha512/row/v2``, or ``hm96-sha512/row-seg/v1`` for a row a
-port reads in segments, as `EmbeddingRead_v1` reads a token's embedding):
+port reads in segments, as `EmbeddingRead_v2` reads a token's embedding):
 
     b‖c_r  = hm96.SHA512.commit_string(default_key, registered.row_digest(row r, word_bits, schema), salt_r)
     leaf_r = row_leaf(D, r, hm96.SHA512.tree_leaf(default_key, b‖c_r), schema)

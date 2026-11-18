@@ -2,10 +2,14 @@
 so a unit reads the token's row alone (its row digest, its hm96 leaf and one frame-v3 read), never the table, and never opens
 the token's position in the clear.
 
-    EmbeddingRead_v1{V, H}
-        (tok: Array<32, Value<1>>, root: Digest, domain: Digest, row: Array<H, Array<16, Value<1>>>, salt: Array<24, Word>,
-         path: Array<D, Digest>) -> Tuple<Array<H, Array<16, Value<1>>>, Value<1>>                                   (h, ok)
+    EmbeddingRead_v2{V, H}
+        (tok: Value<32>, root: Digest, domain: Digest, row: Array<H, Array<16, Value<1>>>, salt: Array<24, Word>,
+         path: Array<D, Digest>) -> Tuple<Array<H, Value<16>>, Value<1>>                                             (h, ok)
         Digest = Array<8, Word>, Word = Array<64, Value<1>>; D = merkle_depth(V); 2 <= V <= 2^31, H >= 1
+
+``tok`` and ``h`` are words at the widths of the token's writers and the row's readers; their bits are wiring inside
+(`WordBits_v1{32}`, `BitsWord_v1{16}`), in the order of the bits the rest of the read takes, so a proof block holding the
+read has the rows `Flock.ReadNet.readTmpl` builds.
 
 **The table** is registered one token a row (`one_stage.registered` with ``words = H`` 16-bit leaves under
 ``hm96-sha512/row-seg/v1``): row r is token r's H bf16 words as a bit row (`rowleaf.bit_row`, each word little-endian), its
@@ -23,7 +27,7 @@ the row's digest under the salt (hm96's binding), tok as its rank and position, 
 climbs to ``root``. A unit that holds the read takes ``root`` and ``domain`` as the registered value's root and domain id,
 each a registered read of that root (a supplied value, `one_stage.registered`), never a free input, and publishes ``ok``.
 ``tok``, ``row``, ``salt`` and ``path`` are values and ``h`` an output value, so neither the token nor its row is opened
-outside the proof. A Boolean Definition has no assertion, so the read returns its verdict as ``ok``, as
+outside the proof. A Definition has no assertion, so the read returns its verdict as ``ok``, as
 `block_check.BlockOpeningCheck` returns its verdict word.
 
 **The parts:** `Sha512RowSeg_v1{16 H}` (`gates.rowleaf`), `Hm96Sha512Leaf_v1` (`gates.hm96`),
@@ -47,8 +51,9 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ONE, ZERO, const_bits
 from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.refs import Coll
-from verity.circuits.types import Array, Tuple
+from verity.circuits.population import BitsWord, WordBits
+from verity.circuits.refs import Coll, coll_concat
+from verity.circuits.types import Array, Tuple, Value
 
 from ..merkle import merkle_depth
 from ..rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row
@@ -64,6 +69,7 @@ __all__ = ["EmbeddingRead", "EmbeddingReadSelect", "FILL", "SCHEMA", "arguments"
 BIT = BL.BIT
 BF16 = Array(16, BIT)
 TOKEN = Array(32, BIT)
+WORD = Value(16)
 SCHEMA = SCHEMA_HM96_SHA512_ROW_SEG
 #: the word a token outside the vocabulary gives (`Embedding_v2`'s gathers)
 FILL = 0x7FFF
@@ -84,7 +90,7 @@ def _check(V: int, H: int) -> int:
 
 def reference(V: int, tok: int, root: bytes, domain_id: bytes, row: Sequence[int], salt: bytes,
               path: Sequence[bytes]) -> tuple[list[int], int]:
-    """`EmbeddingRead_v1{V, H = len(row)}`'s reference: (h, ok) for a 32-bit token (signed or unsigned) and bf16 words."""
+    """`EmbeddingRead_v2{V, H = len(row)}`'s reference: (h, ok) for a 32-bit token (signed or unsigned) and bf16 words."""
     _check(V, len(row))
     t = tok & 0xFFFFFFFF
     if t >= V:
@@ -95,7 +101,7 @@ def reference(V: int, tok: int, root: bytes, domain_id: bytes, row: Sequence[int
 
 def arguments(V: int, tok: int, root: bytes, domain_id: bytes, row: Sequence[int], salt: bytes,
               path: Sequence[bytes]) -> tuple[list[int], ...]:
-    """`EmbeddingRead_v1{V, H = len(row)}`'s six arguments, each a flat list of bits in leaf order."""
+    """`EmbeddingRead_v2{V, H = len(row)}`'s six arguments, each a flat list of its bits, each word's least significant first."""
     D = _check(V, len(row))
     if len(path) != D:
         raise ValueError(f"a read of {V} rows takes a path of {D} siblings, not {len(path)}")
@@ -143,21 +149,23 @@ def _refs(c: Coll) -> list:
 
 def _signature(S):
     D = _check(S.V, S.H)
-    return ((("tok", TOKEN), ("root", DIGEST), ("domain", DIGEST), ("row", Array(S.H, BF16)), ("salt", SALT),
-             ("path", Array(D, DIGEST))), Tuple(Array(S.H, BF16), BIT))
+    return ((("tok", Value(32)), ("root", DIGEST), ("domain", DIGEST), ("row", Array(S.H, BF16)), ("salt", SALT),
+             ("path", Array(D, DIGEST))), Tuple(Array(S.H, WORD), BIT))
 
 
 def _body(B, S, tok, root, domain, row, salt, path):
     D = merkle_depth(S.V)
+    bits = B.call(bind(WordBits, W=32), tok)
     x = B.call(digest(16 * S.H), Coll(Array(16 * S.H, BIT), row.refs))
     leaf = Coll(DIGEST, TR._refs(_refs(B.call(Hm96Sha512Leaf, x, salt))[2 * DIGEST.leaves:]))
-    pos = Coll(Array(D, BIT), TR._refs(_refs(tok)[:D]))
+    pos = Coll(Array(D, BIT), TR._refs(_refs(bits)[:D]))
     opened = B.call(frame_read(D, SCHEMA), root, domain, leaf, pos, path)
-    return B.call(bind(EmbeddingReadSelect, V=S.V, H=S.H), tok, opened, row)
+    h, ok = B.call(bind(EmbeddingReadSelect, V=S.V, H=S.H), bits, opened, row)
+    return coll_concat(Tuple(Array(S.H, WORD), BIT), [B.batch(bind(BitsWord, W=16), h, axes=(0,)), ok])
 
 
 EmbeddingRead = CompositeDefinition(
-    "EmbeddingRead", 1, ("V", "H"), _signature, _body, conformance="exact-model-tested",
+    "EmbeddingRead", 2, ("V", "H"), _signature, _body, conformance="exact-model-tested",
     doc="Embedding_v1{V, H} with its table registered one token a row under hm96-sha512/row-seg/v1: (h, ok), h the witness row "
         "if tok < V (unsigned) else 0x7FFF in every word, ok = 1 iff tok >= V or the row under salt opens at position tok to "
         "root in the dense frame-v3-sha512 tree of domain id domain (Sha512RowSeg_v1, Hm96Sha512Leaf_v1, FrameV3Read_v1)")

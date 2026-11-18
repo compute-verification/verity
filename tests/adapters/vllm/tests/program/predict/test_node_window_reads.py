@@ -21,7 +21,7 @@ from verity.commitments.periods import interface as IF
 
 FAMILIES = {**SELECT, **NE.FAMILIES}
 BLOCKS, OUTPUTS = 6144 // NE.WIDTH, 2
-READ, COMBINE = "EmbeddingRead_v1{V=154880,H=192}", "GreedyCombine_v2{V=154880,N=7744}"
+READ, COMBINE = "EmbeddingRead_v2{V=154880,H=192}", "GreedyCombine_v2{V=154880,N=7744}"
 
 
 def _window(rank: int, stand_ins: bool = True):

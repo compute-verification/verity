@@ -11,6 +11,7 @@ public import Definitions.Core.Boolean
 public import Definitions.Core.Game
 public import Definitions.Core.Uniform
 public import Definitions.Core.Draw
+public import Definitions.Core.Scheme
 public import Definitions.Core.Challenger
 public import Definitions.Core.Decisive
 public import Definitions.Core.Scalar
@@ -36,6 +37,7 @@ select a sample of proof blocks by a sampling design (`Draw`). Every area states
 and defines none of its own: a circuit and its trace, a partition into proof blocks and a proof block's correctness are
 the ones here.
 
+* Schemes: `Scheme` (what a resource accounting protocol supplies, and `Scheme.GetsBack`, what it gets back).
 * Circuits: `Circuit` (gates, traces, `Implements`), `Boolean` (the Boolean profile), `Expand` (a multi-bit circuit as
   a Boolean one), `Digest`.
 * Partitions: `Partition` (committed wires, a proof block's correctness), `Annotation`, `PrivatePartition`,

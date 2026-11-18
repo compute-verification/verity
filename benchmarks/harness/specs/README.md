@@ -54,6 +54,8 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   on Llama-3.2-1B's BF16 checkpoint on one H200, against eager and compiled stock FP8 at batch 32, 8,192 tokens a step
   (`served_pearlplus.sh`'s step).
 - `llama32-1b-1gpu-pouw-protocol-served-h100`: the same on one H100.
+- `llama32-1b-1gpu-stock-served-h100`: its two stock arms alone, with no setup: a served point on an H100 whose machine
+  has no CUDA toolkit to build Pearl-C with (`verity-bench run SPEC --here` on VCF's node).
 
 ## PoUS's bandwidth audit
 
