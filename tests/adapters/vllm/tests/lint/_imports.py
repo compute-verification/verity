@@ -13,7 +13,8 @@ is ``pipeline``, ``check``, ``acquire``, ``observe|commit``, ``engine``, ``query
 sits in ``pipeline``.  ``OPTIONAL`` names the packages a
 tree may hold or not (a private protocol's driver, the commitment scheme's reference).  ``engine.hooks``, the one owner of
 runtime patches, ``engine.env``, the one writer of vLLM's env pins, ``settings``,
-the environment's registry, and ``log``, the logger, import nothing from the package and sit in ``core`` so every layer may call them.  Peers in one layer
+the environment's registry, ``messages``, the schemes' exchange, and ``log``, the logger, import nothing from the package
+but ``settings`` and sit in ``core`` so every layer may call them.  Peers in one layer
 (``observe|commit``, ``query|correspondence``) may import each other; no rule restricts a peer edge.
 """
 from __future__ import annotations
@@ -51,6 +52,7 @@ LAYER = {
     "verity_vllm.settings": "core",                            # the environment's registry; imports nothing from verity_vllm
     "verity_vllm.gc_tuning": "core",                           # the offline processes' GC thresholds; imports only settings
     "verity_vllm.log": "core",                                 # the logger; imports nothing from verity_vllm
+    "verity_vllm.messages": "core",                            # the schemes' exchange; imports only settings
     "verity_vllm.commit.challenge": "core",                    # -> verity.commitments.randomness; imports nothing from verity_vllm
     "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
     "verity_vllm.errors": "core",                              # the one Refused; imports nothing from verity_vllm

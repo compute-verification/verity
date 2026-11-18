@@ -14,7 +14,7 @@ refused by `checkComplete`; with `pub` among the verifier's ports, it passes.
 namespace Flock.Test.RegComplete
 
 open Lean (Json)
-open Flock.Test.RegFormats (dom bcs root v2 v2Port)
+open Flock.Test.RegFormats (dom bcs root v2 v2Port derivedReads)
 
 def pubPort : Port := { name := "pub", words := 1, chunks := 1, nb := 0, bits := 16, v2 := true }
 
@@ -34,15 +34,15 @@ def pub : Public :=
 def pubW : Public := { pub with digests := bcs, tables := some { counts := #[2], starts := #[0], refs := #[0, 1] } }
 
 def wEntry : Json := Json.mkObj [("value", Json.str "weights"), ("root", Json.str (hexOf (root v2))),
-  ("leaves", Lean.toJson (2 : Nat)), ("domain", Json.str (hexOf dom)), ("reads", Lean.toJson [some 0, some 1]),
+  ("leaves", Lean.toJson (2 : Nat)), ("domain", Json.str (hexOf dom)),
   ("words", Lean.toJson (32 : Nat)), ("row_schema", Json.str v2)]
 
 def file : Json := Json.mkObj [("format", Json.str Registered.FORMAT), ("ports", Json.mkObj [("w", wEntry)])]
 
-/-- `verity-verify-proof`'s registered reads of `f`: `Registered.check`, then `checkComplete`. -/
+/-- `verity-verify-proof`'s registered reads of `f` (`derivedReads`): `Registered.check`, then `checkComplete`. -/
 def run (c : Circuit) (f : Json) (p : Public := pub) : Except String Unit := do
   let own ← Registered.ofJson f
-  Registered.check c p (some own) true
+  Registered.check c p (some (derivedReads own)) true
   Registered.checkComplete c own
 
 def why (c : Circuit) (f : Json) : String :=
@@ -51,7 +51,7 @@ def why (c : Circuit) (f : Json) : String :=
   | .ok () => ""
 
 -- the verifier's reads hold `w` and say nothing of `pub`: `check` passes the index row stated by the public file
-#guard (Registered.ofJson file >>= fun own => Registered.check lane pub (some own) true).toBool
+#guard (Registered.ofJson file >>= fun own => Registered.check lane pub (some (derivedReads own)) true).toBool
 
 -- and `checkComplete` refuses it by name
 #guard !(run lane file).toBool

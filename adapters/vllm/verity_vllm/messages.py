@@ -14,7 +14,9 @@ message's writers and readers.
 
 from __future__ import annotations
 
+import inspect
 import itertools
+import typing
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
@@ -42,12 +44,23 @@ def _pins(entries: Any) -> tuple[Mapping[str, str], ...]:
 _KEYS = itertools.count()
 
 
+def _taken(fn: Subscriber) -> tuple[type, ...] | None:
+    """The events of `H.EVENTS` ``fn``'s first parameter is annotated with; None where it names none."""
+    try:
+        first = next(iter(inspect.signature(fn).parameters))
+        hint = typing.get_type_hints(fn).get(first)
+    except (StopIteration, TypeError, ValueError, NameError):
+        return None
+    named = tuple(t for t in (typing.get_args(hint) or (hint,)) if t in H.EVENTS)
+    return named or None
+
+
 class Exchange:
     """One process's exchange: subscribers by hook, requests by scheme (filed until `answer`, fixed after it), and the
     workload's step, as the last `StepBegan` emitted it."""
 
     def __init__(self) -> None:
-        self.subscribers: dict[str, list[tuple[str, Subscriber]]] = {h: [] for h in H.HOOKS}
+        self.subscribers: dict[str, list[tuple[str, Subscriber, tuple[type, ...] | None]]] = {h: [] for h in H.HOOKS}
         self.requests: list[tuple[str, H.Request]] = []
         self.declared: H.Declared | None = None
         self.fixed = False
@@ -138,12 +151,16 @@ class Exchange:
     def step(self, value: int) -> None:
         self._step = value
 
-    def subscribe(self, name: str, hook: str, fn: Subscriber) -> Callable[[], None]:
-        """``name`` receives every event of ``hook`` from now on, in the order the adapter emits them; returns its
-        removal."""
+    def subscribe(self, name: str, hook: str, fn: Subscriber, takes: tuple[type, ...] | None = None) -> Callable[[], None]:
+        """``name`` receives the events of ``hook`` it takes from now on, in the order the adapter emits them; returns
+        its removal. It takes ``takes``, else the events of `H.EVENTS` its first parameter is annotated with (one, or a
+        union), else every event of ``hook``; one that rides another hook is refused."""
         if hook not in H.HOOKS:
             raise Refused(name, f"{hook!r} is not a hook of a served run {H.HOOKS}")
-        entry = (name, fn)
+        takes = _taken(fn) if takes is None else takes
+        if takes is not None and (other := [t.__name__ for t in takes if getattr(t, "hook", None) != hook]):
+            raise Refused(name, f"subscribes to {hook!r} for {', '.join(other)}, which {hook!r} does not carry")
+        entry = (name, fn, takes)
         self.subscribers[hook].append(entry)
         return lambda: self.subscribers[hook].remove(entry) if entry in self.subscribers[hook] else None
 
@@ -195,8 +212,9 @@ class Exchange:
             self.step = event.step
         elif isinstance(event, H.RegisteredValues):
             self.registered = True
-        for _, fn in tuple(self.subscribers[event.hook]):
-            fn(event)
+        for _, fn, takes in tuple(self.subscribers[event.hook]):
+            if takes is None or isinstance(event, takes):
+                fn(event)
 
     def compute(self, due: H.BlockDue, original: Callable[[Mapping[str, H.Handle] | None], H.Handle]) -> H.Handle:
         """A due block's output: emitted to ``blocks``' subscribers, then computed by the filed kernels, the workload's
@@ -349,9 +367,13 @@ def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
 def attach_listed(exchange: Exchange, listed: Sequence[tuple[schemes.Scheme, Mapping[str, Any]]], **ctx: Any) -> list[Any]:
     """Each scheme of ``listed`` (a configuration's list, each with its settings) attached on ``exchange`` with ``ctx``
     (`Exchange.attach`) in list order, once `listed_refusals` refuses none: the order `schemes.order_refusals` holds,
-    in which the scheme listed earlier is the outer (`Exchange.request`); what each attach returned."""
+    in which the scheme listed earlier is the outer (`Exchange.request`); what each attach returned. Where one runs
+    kernels on the card (`Scheme.kernels`), the workload's device code is handed in first (`verity_torch.pouw.hand_in`)."""
     if bad := listed_refusals([s for s, _ in listed]):
         raise Refused("listed schemes", "; ".join(bad))
+    if any(not isinstance(s.kernels, schemes.Lacks) for s, _ in listed):
+        from verity_torch.pouw import hand_in
+        hand_in()
     return [exchange.attach(s, given, **ctx) for s, given in listed]
 
 

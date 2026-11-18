@@ -36,6 +36,7 @@ import hashlib
 import json
 import random
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -54,9 +55,11 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
 )
 from verity.protocols.proofs.spot.prover import docket as DK
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from holes import waits_on
 from test_challenger_difftest import Ledger, TreeSession, _pinned, lms_verify
-from test_difftest import (LEAF, PAIR, RECEIVED, SCHEME, STAND_IN_CIRCUIT, TRIPLE, V2_TABLES, WINDOW, Setup,
-                           _challenger_sample, _json)
+from test_difftest import (LEAF, PAIR, RECEIVED, SCHEME, TRIPLE, V2_TABLES, WINDOW, Setup, _challenger_sample,
+                           _json)
 
 #: slow: the first of them builds the executable, and each row runs it
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
@@ -136,8 +139,7 @@ class Audit:
                          "receipt": R.receipt(self.rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                          "statement": {}, "proofs": {"statements": statements},
                          "sessions": [s["name"] for st in statements for s in st["sessions"]]}
-        members = {name: {"circuit": self.put(STAND_IN_CIRCUIT + name.encode()),
-                          "public": self.put(json.dumps({"member": name}).encode() + b"\nnot a public file"),
+        members = {name: {"public": self.put(json.dumps({"member": name}).encode() + b"\nnot a public file"),
                           "registered": None, "units": UNITS[name], "vus_per_block": 4} for name in (A, B)}
         self.params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
                        "law": DESIGN, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
@@ -173,6 +175,7 @@ class Audit:
         return self.params | {"proofs": {"members": ms | {name: ms[name] | changes}}}
 
 
+@waits_on("restrict")
 def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp_path):
     """On an audit with nothing wrong but its stand-in files, Lean's check ends at the first member's files, its
     circuit one that does not parse, and the twin answers that reason, the Flock verifier's own (`members.flock_form`);
@@ -181,15 +184,11 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
     member the parameters don't name, a second statement of one member, a statement of two sessions, a record or a proof
     file no blob holds, a proof file changed after its session's closing round (`NO_CLOSING`), a tree no statement's
     session records (`UNUSED_TREE`), members that are not the population laid range by range (`MEMBERS_LAID`), two
-    members reading one registered value at two roots, a circuit no blob holds, and blobs without the lookup table a
-    member's circuit names."""
+    members reading one registered value at two roots. A member's circuit is C_S (`one_circuit.restrict`), read
+    last."""
     a = Audit("members-twin")
     first, last = a.evidence["proofs"]["statements"]
     s0 = first["sessions"][0]
-
-    why, (run, refused) = a.ask(tmp_path / "honest")
-    assert run is None and why == M.run_reason(run, refused), (why, refused)
-    assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
 
     def same(k: str, starts: str, **ask) -> None:
         why, (run, refused) = a.ask(tmp_path / k, **ask)
@@ -221,41 +220,12 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
         B: a.params["proofs"]["members"][B] | {"registered": registered("bb")}}}}
     same("class", f"registered: members {A} and {B} read the registered value v as two (root {'aa' * 64}, against "
                   f"{'bb' * 64}): a value the window registers is one tree", params=two)
-    same("no-circuit", f"member {A}: circuit: no blob has the SHA-512", without=(a.params["proofs"]["members"][A]["circuit"],))
-    looks = a.put(b"a circuit\nMETA " + json.dumps({"lookups": {"rcp": {}}}).encode() + b"\n")
-    same("tables", f"member {A}: {PF.NO_TABLES}: the circuit looks up rcp, the blobs hold none",
-         params=a.members(A, circuit=looks))
+    why, (run, refused) = a.ask(tmp_path / "honest")
+    assert run is None and why == M.run_reason(run, refused), (why, refused)
+    assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
 
 
-def test_the_members_wiring_is_a_parameter_its_check_refuses_and_is_read_after_the_members_files(tmp_path):
-    """Parameters naming the members' wiring: one SPOT's check refuses is refused with the parameters (a wire of no
-    template), and one it passes (`TRIPLE`'s rows of ``x``, cut one a word, each `PAIR`'s unit 1's ``o0``) leaves Lean's
-    reason the audit's without it, the first member's circuit, since a wired port's tree is read after every member's
-    files (`OneStageZk.fieldRoots`). The twin leaves a wiring `Outside`."""
-    a = Audit("members-twin-wiring")
-    wire = {"reader": TRIPLE.id, "port": "x", "writer": PAIR.id, "out": "o0", "at": 0, "radix": [3, 3], "base": 1,
-            "step": [0, 0], "cut": [0, 3]}
-    wiring = {"templates": {PAIR.id: {"units": 2, "rows": {"x": [2, 2]}, "outs": {"o0": 1}},
-                            TRIPLE.id: {"units": 3, "rows": {"x": [3, 3]}, "outs": {"o0": 1}}},
-              "cuts": {TRIPLE.id: {"x": 3}}, "wires": [wire]}
-
-    def ask(w: dict) -> str:
-        p = _json(a.params | {"proofs": a.params["proofs"] | {"wiring": w}})
-        paths = []
-        for d, b in a.files.items():
-            (tmp_path / d[:16]).write_bytes(b)
-            paths.append(tmp_path / d[:16])
-        verdict, why = M.check(p, D.canonical(a.rec).encode(), D.canonical(a.evidence).encode(), paths)
-        assert verdict == "reject", (verdict, why)
-        with pytest.raises(M.Outside, match="wiring"):
-            M.members_run(p, _json(a.rec), a.evidence, M.blobs_of(paths), program=a.s.program, verify=lms_verify)
-        return why
-
-    assert ask(wiring | {"wires": [wire | {"writer": "H"}]}) == (
-        "params: proofs: wiring: SPOT's check refuses it (template, wire 0)")
-    assert ask(wiring).startswith(f"proofs: member {A}: {M.UNREAD[0]}")
-
-
+@waits_on("restrict")
 def test_a_member_with_no_statement_has_its_files_held_by_both_before_any_session(tmp_path):
     """A window audited with a statement of its second member alone, that statement's tree logged and closed: Lean
     holds every member's files, sampled or not (`OneStageZk.membersFiles`), so it refuses the first member, which has
@@ -267,6 +237,7 @@ def test_a_member_with_no_statement_has_its_files_held_by_both_before_any_sessio
     assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
 
 
+@waits_on("restrict")
 def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_both(tmp_path):
     """A window audited with a statement of its second member alone, its first member's files a circuit a prover
     staged and that circuit's public file: Lean holds the public file's header and rows as a session's setup takes
@@ -284,7 +255,6 @@ def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_b
         f"{STAGED.parent} is not fetched: `uv run research data fetch-fixtures "
         f"{STAGED.parent.relative_to(Path(__file__).resolve().parents[7])}`")
     a = Audit("members-twin-header", opened=(B,))
-    circuit = a.put((STAGED / "stage" / "circuit.txt").read_bytes())
     line, body = (STAGED / "pub-4.bin").read_bytes().split(b"\n", 1)
 
     def held(header=None, rows=None) -> str:
@@ -293,8 +263,7 @@ def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_b
             header(h)
         public = a.put(json.dumps(h, separators=(",", ":"), sort_keys=True).encode() + b"\n"
                        + (body if rows is None else rows(body)))
-        why, (run, refused) = a.ask(tmp_path / "held", params=a.members(A, circuit=circuit, public=public,
-                                                                         vus_per_block=2))
+        why, (run, refused) = a.ask(tmp_path / "held", params=a.members(A, public=public, vus_per_block=2))
         assert run is None and why == M.run_reason(run, refused), (why, refused)
         assert why.startswith(f"proofs: member {A}: "), why
         return why.removeprefix(f"proofs: member {A}: ")
@@ -311,6 +280,7 @@ def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_b
         f"refused: {HEADER_WHY} (row r0: schema is not hm96-sha512/row/v2){FORM}")
 
 
+@waits_on("restrict")
 def test_a_member_no_statement_names_is_held_to_its_own_circuits_lookup_tables(tmp_path):
     """A window audited with a statement of its second member alone: the first member, which no statement names, is
     held to its own circuit's lookup tables among the blobs as a sampled one is (`OneStageZk.ownTables`, the first read
@@ -322,11 +292,6 @@ def test_a_member_no_statement_names_is_held_to_its_own_circuits_lookup_tables(t
     `benchmarks/one_stage`'s (``tests/test_members_tables.py``)."""
     a = Audit("members-twin-no-statement-tables", opened=(B,))
     assert [st["member"] for st in a.evidence["proofs"]["statements"]] == [B]
-    looks = a.put(b"a circuit\nMETA " + json.dumps({"lookups": {"rcp": {}}}).encode() + b"\n")
-    why, (run, refused) = a.ask(tmp_path / "looks", params=a.members(A, circuit=looks))
-    assert run is None and why == M.run_reason(run, refused), (why, refused)
-    assert why == f"proofs: member {A}: {PF.NO_TABLES}: the circuit looks up rcp, the blobs hold none", why
-
     _, plain = a.ask(tmp_path / "holds")
     blobs = M.blobs_of(sorted((tmp_path / "holds").iterdir()))
     held = M.members_run(_json(a.params), _json(a.rec), _json(a.evidence),
@@ -385,15 +350,3 @@ def test_a_statement_of_a_member_the_sample_missed_is_refused_by_both_before_any
         assert run is None and why == M.run_reason(run, refused), (k, why, refused)
         assert why == (f"proofs: member {missed}: the sample holds none of its units, and a member the sample missed "
                        "has no statement")
-
-
-def test_the_one_row_run_here_where_the_twin_is_not_leans(tmp_path):
-    """A circuit file whose META names 8 units a proof block, under parameters naming 4, that is no circuit file: Lean
-    reads no ``vus_per_block`` off a file it cannot parse and refuses the member's files for the circuit that does not
-    parse; the twin reads the META alone and refuses the ``vus_per_block``. Both refuse the member before any session."""
-    a = Audit("members-twin-block")
-    odd = a.put(b"not a circuit file\nMETA " + json.dumps({"vus_per_block": 8}).encode() + b"\n")
-    why, (run, refused) = a.ask(tmp_path / "block", params=a.members(A, circuit=odd))
-    assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
-    assert run is None and refused == (f"member {A}: vus_per_block: the member's circuit has 8 units a proof block, "
-                                       "not the 4 the parameters name")

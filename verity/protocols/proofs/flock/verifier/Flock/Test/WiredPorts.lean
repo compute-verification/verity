@@ -12,9 +12,8 @@ meta import Lean.Data.Json
 Tree ports: a link row read by path in its writer template's output field's tree. On `Flock.Test.RegProgram`'s program a
 unit's leaf in its template's trees (`HmLinks.treeLeaf`) is its rank among the template's units in root order, counted
 from the nodes, and a unit's writer (`HmLinks.writerOf`) is the unit whose output it reads. A tree port states no reads,
-a statement's reads come from the program (`withTrees`), the honest reader's positions pass `badInstance` and a reader
-that refers to another writer's row (the shared-tree toy's `ra`) does not; a link row passes `checkLinked` only as a tree
-port. On a registered tree of two real leaves, a reader's table rows open it only as committed: a row with one bit
+every port's reads come from the program (`withPositions`), the honest reader's positions pass `badInstance` and a reader
+that refers to another writer's row (the shared-tree toy's `ra`) does not. On a registered tree of two real leaves, a reader's table rows open it only as committed: a row with one bit
 flipped (the toy's `rb`), the writer's value under a fresh salt (`mc`) and the rows' paths swapped (`rd`) are refused by
 `badRow`. A wire strided on the reader's side too (`Circuits.Wire.leafAt` with reader steps) gives each reader unit the leaf
 of the one index reading it, and refuses a unit read twice, a cut, a row past 0 and steps that are not one a digit.
@@ -45,15 +44,15 @@ def fnOf (v : Nat) : Option Nat := (unitAt ns v).map fun (k, _) => ((prog.defs[p
 
 def hex64 : Json := Json.str (String.ofList (List.replicate 128 'a'))
 
-def portJ (reads : List (Option Nat)) (tree : Option Json) : Json :=
-  Json.mkObj ([("value", Json.str "rope/out"), ("root", hex64), ("leaves", toJson 16), ("domain", hex64),
-    ("reads", toJson reads)] ++ (tree.map fun t => [("tree", t)]).getD [])
+def portJ (tree : Option Json) (extra : List (String × Json) := []) : Json :=
+  Json.mkObj ([("value", Json.str "rope/out"), ("root", hex64), ("leaves", toJson 16), ("domain", hex64)] ++
+    (tree.map fun t => [("tree", t)]).getD [] ++ extra)
 
 def treeJ : Json := Json.mkObj [("template", Json.str "rope"), ("field", Json.str "out")]
 
 def fileJ (ports : List (String × Json)) : Json := Json.mkObj [("format", Json.str FORMAT), ("ports", Json.mkObj ports)]
 
-def x : Registered.Port := match ofJson (fileJ [("x", portJ [] (some treeJ))]) with
+def x : Registered.Port := match ofJson (fileJ [("x", portJ (some treeJ))]) with
   | .ok ps => ps.getD 0 default
   | .error _ => default
 
@@ -61,12 +60,13 @@ def refused (j : Json) : Bool := (ofJson j).toOption.isNone
 
 -- a tree port names its tree and states no reads
 #guard x.tree == some ("rope", "out") && x.readsRel.isEmpty
-#guard refused (fileJ [("x", portJ [some 0] (some treeJ))])
-#guard refused (fileJ [("x", portJ [] (some (Json.mkObj [("template", Json.str "rope")])))])
+#guard refused (fileJ [("x", portJ (some treeJ) [("reads", toJson [some 0])])])
+#guard refused (fileJ [("x", portJ (some (Json.mkObj [("template", Json.str "rope")])))])
 
--- without tree ports the registered reads are as given; a tree port needs the verifier's program
-#guard ((withTrees default default none (some #[{ x with tree := none }])).toOption.join.map (·.size)) == some 1
-#guard (withTrees default default none (some #[x])).toOption.isNone
+-- every port's reads are derived from the verifier's program: without it, a tree port and a registered value are refused
+#guard (withPositions default default none (some #[{ x with tree := none }])).toOption.isNone
+#guard (withPositions default default none (some #[x])).toOption.isNone
+#guard (withPositions default default none none).toOption == some none
 
 -- the toy's reader statement (units [8, 16), instance i its row i, `x` port 0 of 2): unit 8 + i reads writer leaf 7 - i
 def resolved : Registered.Port := { x with readsRel := (Array.range 8).map fun i => some (7 - i), readsFrom := 8 }
@@ -75,26 +75,11 @@ def units : Array Nat := (Array.range 8).map (· + 8)
 #guard badInstance resolved tabs 2 0 8 8 ((Array.range 8).map (7 - ·)) units == none
 #guard badInstance resolved tabs 2 0 8 8 (#[6] ++ (Array.range 7).map (6 - ·)) units == some 0
 
--- a link row is a tree port
 def inP : Flock.Port := { name := "x", words := 4, chunks := 1, nb := 0 }
 def outP : Flock.Port := { name := "out", words := 4, chunks := 1, nb := 0 }
-def links : Json := Json.mkObj [("links", Json.arr #[Json.mkObj [("port", Json.str "x"), ("leaves", toJson [0, 4])]])]
-def linked : Circuit :=
-  { (default : Circuit) with
-    ports := #[inP, outP]
-    outRowPorts := #[1]
-    metaJ := links }
-def ok? (r : V Unit) : Bool := r.toOption.isSome
-#guard ok? (HmLinks.parse linked >>= fun _ => pure ())
-#guard ok? (checkLinked linked #[x])
-#guard !ok? (checkLinked linked #[{ x with tree := none }])
-#guard !ok? (checkLinked linked #[{ x with name := "y" }])
-#guard ok? (checkLinked { linked with metaJ := Json.null } #[])
--- without registered reads, a statement that declares links is refused, and one that declares none is not
-#guard !ok? (Registered.check linked default none false)
-#guard ok? (Registered.check { linked with metaJ := Json.null } default none false)
+def outC : Circuit := { (default : Circuit) with ports := #[inP, outP], outRowPorts := #[1] }
 -- a link row reads its writer's whole output row: a tree port of another field is refused by name
-#guard match treeReads linked prog #[] { x with tree := some ("rope", "aux") } with
+#guard match treeReads outC prog #[] { x with tree := some ("rope", "aux") } with
   | .error e => e.startsWith "registered reads: tree port x reads rope's aux tree"
   | .ok _ => false
 

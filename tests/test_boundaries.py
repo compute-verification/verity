@@ -1013,16 +1013,35 @@ RESOURCE_ACCOUNTING = ("verity.protocols.resource_accounting", "verity.protocols
 RESOURCE_ACCOUNTING_SHARED = ("verity.protocols.resource_accounting", "verity.protocols.resource_accounting.scheme")
 
 
+#: a shell file's Python: a ``python``/``python3``/``$PY`` ``-c`` body in single or double quotes, or a heredoc
+SHELL_PYTHON = re.compile(r"""(?:python3?|\$\{?PY\}?)"?\s+-c\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")"""
+                          r"""|(?:python3?|\$\{?PY\}?)"?\s+-\s[^\n]*<<-?\s*['"]?(\w+)['"]?[^\n]*\n(.*?)^\s*\3$""", re.S | re.M)
+
+
+def _python_of(rel: str, text: str) -> list[tuple[int, ast.AST]]:
+    """Each Python body of ``rel`` with the number of lines before it: the file itself, or a shell file's
+    (`SHELL_PYTHON`)."""
+    if not rel.endswith(".sh"):
+        return [(0, ast.parse(text, filename=rel))]
+    out = []
+    for m in SHELL_PYTHON.finditer(text):
+        i = next(g for g in (1, 2, 4) if m[g] is not None)
+        # a double-quoted body is the shell's expansion: an unescaped ``$VAR`` stands for a name
+        body = m[i] if i != 2 else re.sub(r"\\([\"\\$`])", r"\1", re.sub(r"(?<!\\)\$\{?\w+\}?", "_", m[i]))
+        out.append((text.count("\n", 0, m.start(i)), ast.parse(body, filename=rel)))
+    return out
+
+
 def _adapter_importers(texts: dict[str, str], modules: tuple[str, ...], shared: tuple[str, ...] = ()) -> dict[str, list[str]]:
     """``{file: ["line: module", ...]}`` for each file of the vLLM adapter outside its tests that names a module under
     ``modules`` but ``shared``: in an import statement, or as a whole string (an import call's argument, a
-    ``"module:attr"``, a registry's entry)."""
+    ``"module:attr"``, a registry's entry), in a Python file or a shell file's Python (`SHELL_PYTHON`)."""
     found: dict[str, list[str]] = {}
     for rel, text in sorted(texts.items()):
         if not rel.startswith("adapters/vllm/") or _is_test(rel) or not any(r in text for r in modules):
             continue
         hits = set()
-        for node in ast.walk(ast.parse(text, filename=rel)):
+        for before, node in ((b, n) for b, tree in _python_of(rel, text) for n in ast.walk(tree)):
             if isinstance(node, ast.Import):
                 names = [a.name for a in node.names]
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
@@ -1032,7 +1051,7 @@ def _adapter_importers(texts: dict[str, str], modules: tuple[str, ...], shared: 
             else:
                 continue
             named = {n for n in names if any(n == r or n.startswith(r + ".") for r in modules)}
-            hits |= {(node.lineno, n) for n in named if n not in shared}
+            hits |= {(before + node.lineno, n) for n in named if n not in shared}
         if hits:
             found[rel] = [f"{line}: {name}" for line, name in sorted(hits)]
     return found
@@ -1057,13 +1076,16 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+    # the shell files', by owning lane
+    "adapters/vllm/tools/served_run/h100_smoke.sh",  # compute: Pearl+'s tie class
 )
 
 
 def test_the_vllm_adapter_imports_no_resource_accounting_protocol() -> None:
-    """No file of the vLLM adapter, outside its tests, names a module of a resource-accounting protocol, apart from
-    ``RESOURCE_ACCOUNTING_IMPORTERS``, which only shrinks."""
-    found = _adapter_importers(_tracked_python(), RESOURCE_ACCOUNTING, RESOURCE_ACCOUNTING_SHARED)
+    """No file of the vLLM adapter, outside its tests, names a module of a resource-accounting protocol, in its Python
+    or a shell file's (`SHELL_PYTHON`), apart from ``RESOURCE_ACCOUNTING_IMPORTERS``, which only shrinks."""
+    shell = {rel: (ROOT / rel).read_text(encoding="utf-8") for rel in _tracked("adapters/vllm/*.sh") if (ROOT / rel).is_file()}
+    found = _adapter_importers(_tracked_python() | shell, RESOURCE_ACCOUNTING, RESOURCE_ACCOUNTING_SHARED)
     offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in RESOURCE_ACCOUNTING_IMPORTERS for hit in hits]
     assert not offenders, ("the vLLM adapter imports no resource-accounting protocol: emit the event or answer the request "
                            "through `verity_vllm.messages` (the types are `verity.hooks`), and leave the scheme's code in "
@@ -1073,8 +1095,9 @@ def test_the_vllm_adapter_imports_no_resource_accounting_protocol() -> None:
 
 
 def test_a_resource_accounting_import_is_found() -> None:
-    """The check above isn't vacuous: a statement, a ``from`` import, an import call, a registry's string and an
-    experimental scheme are found; the scheme interface, a test and a file outside the adapter are not."""
+    """The check above isn't vacuous: a statement, a ``from`` import, an import call, a registry's string, an
+    experimental scheme and a shell file's ``-c`` and heredoc Python are found; the scheme interface, a shell file's
+    text outside its Python, a test and a file outside the adapter are not."""
     pouw = "verity.protocols.resource_accounting.compute.pouw.prover.serving"
     texts = {
         "adapters/vllm/x/a.py": f"import {pouw}\nfrom {pouw} import Challenger\n",
@@ -1083,11 +1106,15 @@ def test_a_resource_accounting_import_is_found() -> None:
         "adapters/vllm/x/clean.py": "from verity.protocols.resource_accounting import scheme\nfrom verity import hooks\n",
         "adapters/vllm/x/tests/test_a.py": f"import {pouw}\n",
         "verity/protocols/x/d.py": f"import {pouw}\n",
+        "adapters/vllm/x/e.sh": f"""set -e\nN=$("$PY" -c 'from {pouw} import X; print(X)')\npython3 -c "import $M; import {pouw}"\n"""
+                                f"$PY - <<'EOF'\nimport os\nfrom {pouw} import Y\nEOF\n",
+        "adapters/vllm/x/clean.sh": f"""echo {pouw}\n"$PY" -c 'from verity_vllm.messages import providing'\n""",
     }
     assert _adapter_importers(texts, RESOURCE_ACCOUNTING, RESOURCE_ACCOUNTING_SHARED) == {
         "adapters/vllm/x/a.py": [f"1: {pouw}", f"2: {pouw}"],
         "adapters/vllm/x/b.py": [f"2: {pouw}", f"3: {pouw}"],
         "adapters/vllm/x/c.py": ["1: verity.protocols.experimental.dither"],
+        "adapters/vllm/x/e.sh": [f"2: {pouw}", f"3: {pouw}", f"6: {pouw}"],
     }
 
 
