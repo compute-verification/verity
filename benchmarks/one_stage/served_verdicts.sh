@@ -1120,6 +1120,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     (cd "$TREE" && timeout -k 1m "${WIPE_TIMEOUT:-20m}" bash -c "$WIPE_CMD" _ "$D" all "$OUT/pieces/wipe") \
       > "$LOGS/wipe-piece.log" 2>&1
     rc=$?
+    printf '{"limit": "%s", "rc": %d}\n' "${WIPE_TIMEOUT:-20m}" "$rc" > "$OUT/pieces/wipe/piece.json"
     say "WIPE (exit $rc, within WIPE_TIMEOUT=${WIPE_TIMEOUT:-20m}): $(said "$rc" "$LOGS/wipe-piece.log" | cut -c1-600)"
   fi
   local period=0
