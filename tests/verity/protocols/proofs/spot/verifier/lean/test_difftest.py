@@ -2787,8 +2787,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
-        return ch, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public),
-                                                        "registered": None}}
+        return ch, evidence, base, params | {"proofs": {"public": _sha(public), "registered": None}}
 
     ch, evidence, base, p2 = audit(1)
     record, stand_in = D.canonical(ch.trees[0].record).encode(), b"{}"
@@ -2843,7 +2842,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     assert run(base | {"proofs": {"public": _sha(public), **proofs(["s"])}, "sessions": ["s"]}) == (
         "reject", "evidence: the keys of the evidence's proofs are not sessions")
     got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
-    assert got == ("reject", "params: the keys of proofs are not circuit, public, registered"), got
+    assert got == ("reject", "params: the keys of proofs are not public, registered"), got
     for keys in (["circuit", "z"], ["a", "circuit"], ["circuit-00"], []):
         ch_k, _, base_k, p_k = audit(1, keys)
         extra = D.canonical(ch_k.trees[0].record).encode()
@@ -2888,7 +2887,7 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
         public, record = _public_of(rec), D.canonical(ch.trees[0].record).encode()
         v2 = base | {"proofs": {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}, "sessions": ["s"]}
         case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(v2),
-                "params": params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None}}}
+                "params": params | {"proofs": {"public": _sha(public), "registered": None}}}
         out = server_v2.exchange(_json(case))
         want = "verdict flock-verify/s did not accept" if ok else f"proofs: {POPULATION_ORDER}"
         assert (out["verdict"], out["reason"]) == ("reject", want), (s.templates, out)
@@ -2917,7 +2916,7 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tm
             (at / x / "session.json").write_text(json.dumps({"member": name, "session": x}))
             (at / x / "rep-0.bin").write_bytes(f"{name} {x}".encode())
         return PF.Member(name, PF.Proof(at / "circuit.txt", at / "pub.bin", tuple(at / x for x in sessions)),
-                         PF.file_sha512(at / "circuit.txt"), PF.file_sha512(at / "pub.bin"), None, ((lo, hi),), 4)
+                         PF.file_sha512(at / "pub.bin"), None, ((lo, hi),), 4)
 
     ms = [member(0, f"{PAIR.id}/c0", 0, 2, "s0"), member(1, f"{TRIPLE.id}/c0", 2, 4),
           member(2, f"{TRIPLE.id}/c1", 4, 5, "s1")]
@@ -2931,7 +2930,7 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tm
     got, refused = PF.members_parsed(p2, e2)
     assert refused is None, refused
     assert got == {
-        "members": sorted(({"circuit": m.circuit_sha512, "name": m.name, "public": m.public_sha512, "registered": False,
+        "members": sorted(({"name": m.name, "public": m.public_sha512, "registered": False,
                             "units": [list(u) for u in m.units], "vus_per_block": 4} for m in ms), key=lambda m: m["name"]),
         "parsed": "parsed, not checked",
         "statements": [{"member": ms[0].name, "sessions": ["s0"]}, {"member": ms[2].name, "sessions": ["s1"]}]}
@@ -2964,9 +2963,8 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tm
         "evidence: proofs: the sessions are not the evidence's sessions, in order")
     one = {"sessions": [x for st_ in pe["statements"] for x in st_["sessions"]]}
     assert why(e=e2 | {"proofs": one}) == "evidence: the keys of the evidence's proofs are not statements"
-    assert why(p=params | {"proofs": {"circuit": ms[0].circuit_sha512, "public": ms[0].public_sha512,
-                                      "registered": None}}) == ("params: the keys of proofs are not members, or "
-                                                         "members and wiring")
+    assert why(p=params | {"proofs": {"public": ms[0].public_sha512, "registered": None}}) == (
+        "params: the keys of proofs are not members")
     again = pm["members"] | {"z/c0": {**pm["members"][ms[0].name], "units": [[1, 2]]}}
     assert why(p=params | {"proofs": {"members": again}}) == (
         "params: proofs: unit 1 is in two members' units: a unit is one member's")
@@ -3009,7 +3007,7 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
         case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
                 "evidence": _hex(base | {"proofs": proofs, "sessions": ["s"]}),
-                "params": params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None}}}
+                "params": params | {"proofs": {"public": _sha(public), "registered": None}}}
         out = server_v2.exchange(_json(case))
         assert (out["verdict"], out["reason"]) == (
             "reject", "verdict flock-verify/s did not accept" if want is None else f"proofs: {want}"), order
@@ -3068,7 +3066,7 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
             evidence["coins"] = coins
         p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": sampling_design,
              "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query), "ports": s.ports,
-             "program": s.desc, "proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None},
+             "program": s.desc, "proofs": {"public": _sha(public), "registered": None},
              "query": s.query, "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"],
              "work_table": None}
         return {"evidence": evidence, "params": {k: v for k, v in (p | params).items() if k not in params or v is not None},
@@ -9161,7 +9159,7 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         v2 = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
               "evidence": _hex(base | {"proofs": {"sessions": []}}),
               "params": params | {"challenger": {"key": d.s.key.to_json(), "label": "draw"},
-                                  "proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None},
+                                  "proofs": {"public": _sha(public), "registered": None},
                                   "window_root": d.ledger.window["root"]}}
         out = server_v2.exchange(_json(v2))
         if kind == "closure":

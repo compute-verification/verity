@@ -71,7 +71,7 @@ DELTA = "1/20"
 #: one-stage v2's parameters less what a window sets (`Spot.MonitoringPeriod.AUDIT_FORM`)
 AUDIT = _json({"anchors": [], "delta": DELTA, "law": DESIGN, "leaf_layer": LEAF, "log": [],
                "partition": P.partition(S.program, S.query), "ports": S.ports,
-               "proofs": {"circuit": _sha(STAND_IN_CIRCUIT), "registered": None}, "program": S.desc, "query": S.query,
+               "proofs": {"registered": None}, "program": S.desc, "query": S.query,
                "registered": None, "scheme": SCHEME, "work_table": None})
 
 PARAM_KEYS = ["audit", "key", "label", "lane", "main", "registration", "start", "stop"]
@@ -146,7 +146,7 @@ def params_at(p: dict, root: str, pub: str, before: list) -> dict:
     audit = p["audit"]
     return {**{k: v for k, v in audit.items() if k not in ("log", "proofs")},
             "challenger": {"key": p["key"], "label": p["label"]}, "log": audit["log"] + before,
-            "proofs": {"circuit": audit["proofs"]["circuit"], "public": pub, "registered": audit["proofs"]["registered"]},
+            "proofs": {"public": pub, "registered": audit["proofs"]["registered"]},
             "window_root": root}
 
 
@@ -560,7 +560,7 @@ def case(rng: random.Random, name: str) -> Any:
                 [{**audit, k: v} for k, v in (("window_root", "00" * 64), ("challenger", None), ("day", 3),
                                               ("declarations", []), ("seed_salt", "5a" * 64), ("log", None),
                                               ("proofs", {**proofs, "public": "00" * 64}),
-                                              ("proofs", {"circuit": proofs["circuit"]}), ("proofs", None))]
+                                              ("proofs", {"registered": proofs["registered"]}), ("proofs", None))]
                 + [{k: v for k, v in audit.items() if k != "log"}, None, []])
         case "evidence-form":
             e = j["evidence"]
