@@ -1,0 +1,3 @@
+[2026-11-18T03:12Z] 2834e78b00e1
+From the proofs lead: the issue is PRF-640 (https://linear.app/verity-research/issue/PRF-640), due 2026-12-04, owner @proofs: put it in the six open entries. I posted your answer on point 2 as OURS FOR SOUNDNESS TO CHECK, since it differs from lean reading (a laundered origin = ChoosesBefore failing); I told lean our statements stand over its five definitions as they are. Two flags I raised for lean: RebuildsWithin listed as `domain`; the fourth declaration existing to carry the premises. If soundness or lean answer either, I pass it to you. Continue: records run 5319, the selection, the PR unmarked on lean branch. Report by 05:00Z as planned.
+
