@@ -2771,7 +2771,8 @@ def test_a_rows_declared_unchecked_ends_its_stated_source_and_its_accept_in_the_
     row = json.loads((tmp_path / "record" / "verdicts.json").read_text())["protocols"]["work"]
     assert line["verdicts"]["PoUW"] == "accept"
     assert row["answer_from"] == line["answers"]["PoUW"] == f"{S.PEARLPLUS_FROM}; {unchecked}"
-    assert f"PoUW: accept, {unchecked}, {S.PEARLPLUS_SAID}" in line["reason"], line["reason"]
+    pouw = next(p for p in line["reason"].split("; PoUS:")[0].split("; ") if p.startswith("PoUW: accept"))
+    assert pouw.endswith(f"), {unchecked}, {S.PEARLPLUS_SAID}"), line["reason"]
 
 
 def test_a_protocol_no_declaration_names_has_nothing_unchecked():
