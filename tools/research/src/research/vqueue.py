@@ -520,9 +520,9 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             chain, rest = chain[:k], [*chain[k:], *rest]
         break
     kept, passed, moved, under = [], [], [], _beneath(s)
-    dead = {a.sha for a in acts if isinstance(a, Drop) and a.why != ON_MAIN}
     for c in _ordered(staged, under):
         u = under(c)
+        dead = {a.sha for a in acts if isinstance(a, Drop) and a.why != ON_MAIN}
         if s.lean_stages > 1 and u is not None and _lean(u) and u.sha in dead:
             acts.append(Drop(c.sha, BASE_DROPPED))
             rest.append(c)
