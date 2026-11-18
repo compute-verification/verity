@@ -9,8 +9,8 @@ with a wire into `R` (`security/Definitions/Core/Circuit.lean`). The instance an
 (`verity.circuits`), gate `g` of width `Value<w>` bits, an input gate when its primitive is an input
 (`program.is_input`, with no operands), reading the gates its operands name; θ is a list of ids of input gates bound at
 registration (`program.is_registered`; one bound per run is refused, `theta-not-registered`); the division is one owner
-per gate, `"input"` or an inference block index. A primitive is taken as the descriptor declares it, as Flock's decoder takes it, so
-no registry is needed.
+per gate, `"input"` or an inference block index. A primitive is taken as the descriptor declares it, and a Boolean gate by its
+id, as Flock's decoder takes them, so no registry is needed.
 
     check_desc(instance) -> the same, for `InferenceOnlyCheck.Desc`'s instance: θ and the owners per root node
 
@@ -41,6 +41,7 @@ first record, the first run's own included; any other record is refused `theta-n
 from __future__ import annotations
 
 import json
+import re
 from fractions import Fraction
 
 from verity.circuits import codec
@@ -65,11 +66,16 @@ def _unevaluated(*_a):
     raise NotImplementedError("the inference-only check evaluates no gate")
 
 
+#: PROTOCOL.md §4.9's Boolean gates and constant bits, known by id: the decoder takes the catalog's, which `is_boolean` reads
+GATE_ID = re.compile(r"(And|Xor)([2-9]|[1-9][0-9]+)_v1|Not_v1|Const1\[0x[01]\]_v1")
+
+
 def declared(desc: dict) -> DefinitionTable:
-    """A registry of the descriptor's primitives as it declares them (inputs aside, which the decoder makes itself)."""
+    """A registry of the descriptor's primitives as it declares them (inputs and gates aside, which the decoder makes
+    itself)."""
     reg = DefinitionTable()
     for fid, d in desc["definitions"].items():
-        if d.get("form") == "primitive" and input_id(fid) is None:
+        if d.get("form") == "primitive" and input_id(fid) is None and not GATE_ID.fullmatch(fid):
             name, _, version = fid.rpartition("_v")
             reg.add(PrimitiveDefinition(name, int(version), tuple((n, type_from_json(t)) for n, t in d["params"]),
                                         type_from_json(d["ret"]), _unevaluated, register=False))

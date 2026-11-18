@@ -595,9 +595,11 @@ def passscan(n: int) -> str:
 
 
 def mutate(rng: random.Random, text: str) -> str:
-    """One to three edits of a descriptor: a node's count, axis or type, or a reference's base, space or leaf."""
+    """One to three edits of a descriptor: a node's count, axis or type, or a reference's base, space or leaf, never in a
+    Boolean body (`stand_ins`)."""
     d = json.loads(text)
-    comps = [v for v in d["definitions"].values() if v.get("form") == "composite"]
+    bodies = set(d.get("boolean", {}).values())
+    comps = [v for k, v in d["definitions"].items() if v.get("form") == "composite" and k not in bodies]
     for _ in range(rng.randint(1, 3)):
         c = rng.choice(comps)
         nodes = c["body"]["nodes"]
