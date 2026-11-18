@@ -66,9 +66,10 @@ def count(lines: Iterable[str], source: str, only: str | None = None) -> dict:
     return {"source": source, "archs": archs}
 
 
-def elfs(lelf: Iterable[str]) -> list[str]:
-    """The ELF files a `cuobjdump -lelf` listing names, in its order, the order a dump of the whole binary meets them."""
-    return [m.group(1) for line in lelf if (m := re.match(r"\s*ELF file\s+\d+:\s+(\S+)", line))]
+def elfs(listing: Iterable[str]) -> list[str]:
+    """The ELF files a `cuobjdump -lelf` or `-xelf all` listing names, in its order, the order a dump of the whole binary
+    meets them. cuobjdump names them after the path it was given, so a listing names the files of its own run."""
+    return [m.group(1) for line in listing if (m := re.search(r"\bELF file\s+\d+:\s+(\S+)", line))]
 
 
 #: what setting up one ELF costs `cuobjdump -sass`, in bytes of SASS it disassembles in that time
@@ -205,9 +206,13 @@ def main(argv: list[str] | None = None) -> int:
         for line in (a.work / "fresh").read_text().splitlines():
             sha, path = line.split("\t")[:2]
             paths[sha] = path
-            names = elfs((a.work / "lelf" / sha).read_text().splitlines())
+            x = a.work / "elf" / f"{sha}.x"
+            names = elfs(x.read_text(errors="replace").splitlines()) if x.is_file() else []
             d = a.work / "elf" / sha
-            ok = names and len(set(names)) == len(names) and all((d / n).is_file() for n in names)
+            ok = bool(names) and len(set(names)) == len(names) and all((d / n).is_file() for n in names)
+            if names and not ok:
+                print(f"dump: {path}: {sum(not (d / n).is_file() for n in names)} of its {len(names)} ELFs weren't "
+                      "extracted, so it is dumped whole", file=sys.stderr)
             binaries.append((sha, Path(path).stat().st_size, [(n, (d / n).stat().st_size) for n in names] if ok else None))
         for w, sha, i, run in plan(binaries, a.jobs):
             if run is not None:

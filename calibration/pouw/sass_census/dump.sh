@@ -31,7 +31,7 @@ JOBS=${JOBS:-$(nproc)}
 CACHE=${SASS_CENSUS_CACHE-${HOME:+$HOME/.cache/verity/sass-census}}
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-mkdir -p "$OUT/counts" "$WORK/lelf" "$WORK/sha256" "$WORK/parts" "$WORK/elf"
+mkdir -p "$OUT/counts" "$WORK/sha256" "$WORK/parts" "$WORK/elf"
 { "$CUOBJDUMP" --version; "$NVCC" --version; } >"$OUT/toolkit.txt" 2>&1
 VERSION=$(python3 "$HERE/sass_count.py" version --tool "$("$CUOBJDUMP" --version 2>&1)" "$HERE/dump.sh" "$HERE/sass_count.py")
 
@@ -55,13 +55,12 @@ scan() {
   [ -n "$archs" ] || archs=$("$CUOBJDUMP" -sass "$f" 2>/dev/null | grep -m1 -o 'sm_[0-9]*[a-z]\?')
   [ -n "$archs" ] || return 0
   sha=$(sha256sum "$f" | cut -d' ' -f1)
-  printf '%s\n' "$lelf" >"$WORK/lelf/${sha:0:16}"
   echo "$sha" >"$WORK/sha256/${sha:0:16}"
   printf '%s\t%s\t%s\t%s\t%s\n' "$i" "${sha:0:16}" "$(stat -L -c %s "$f")" "$archs" "$f" >"$WORK/scan/$i"
 }
 export -f scan
 mkdir -p "$WORK/scan"
-awk '{printf "%d\t%s\0", NR, $0}' "$WORK/candidates" | xargs -0 -r -P "$JOBS" -I{} bash -c 'scan "$@"' _ {}
+awk '{printf "%d\t%s\n", NR, $0}' "$WORK/candidates" | tr '\n' '\0' | xargs -0 -r -P "$JOBS" -I{} bash -c 'scan "$@"' _ {}
 find "$WORK/scan" -type f -exec cat {} + | sort -t$'\t' -k1,1n | cut -f2- | sort -t$'\t' -k1,1 -u >"$OUT/corpus.tsv"
 wc -l <"$OUT/corpus.tsv" >"$OUT/corpus.count"
 echo "dump: $(cat "$OUT/corpus.count") binaries with device code, found in ${SECONDS}s"
@@ -82,7 +81,10 @@ while IFS=$'\t' read -r sha bytes archs f; do
   fi
   printf '%s\t%s\t%s\n' "$sha" "$f" "$entry" >>"$WORK/fresh"
   mkdir -p "$WORK/parts/$sha" "$WORK/elf/$sha"
-  (cd "$WORK/elf/$sha" && "$CUOBJDUMP" -xelf all "$(readlink -f "$f")" >/dev/null 2>&1) || true
+  # cuobjdump names the ELFs after the path it is given; its listing of this extraction is the one plan reads
+  abs=$(cd "$(dirname "$f")" && pwd)/$(basename "$f")
+  (cd "$WORK/elf/$sha" && "$CUOBJDUMP" -xelf all "$abs") >"$WORK/elf/$sha.x" 2>&1 </dev/null \
+    || echo "dump: $src: cuobjdump -xelf all failed, so it is dumped whole"
 done <"$OUT/corpus.tsv"
 python3 "$HERE/sass_count.py" plan --jobs "$JOBS" --work "$WORK" >"$WORK/units" || exit 1
 echo "dump: $(wc -l <"$WORK/units") units of $(wc -l <"$WORK/fresh") binaries to disassemble, $JOBS at once," \

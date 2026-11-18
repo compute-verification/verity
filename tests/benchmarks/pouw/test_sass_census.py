@@ -63,6 +63,7 @@ def test_join_of_runs_of_elfs_in_order_is_the_whole_binarys_count():
 def test_plan_cuts_each_binary_into_runs_of_its_elfs_in_order():
     lelf = ["", "ELF file    1: lib.1.sm_90.cubin", "ELF file    2: lib.2.sm_100.cubin", "ELF file   10: lib.10.sm_90.cubin"]
     assert sass_count.elfs(lelf) == ["lib.1.sm_90.cubin", "lib.2.sm_100.cubin", "lib.10.sm_90.cubin"]
+    assert sass_count.elfs(["Extracting ELF file    1: lib.1.sm_90.cubin"]) == ["lib.1.sm_90.cubin"]
     es = [("x", 10**7), ("y", 1), ("z", 1), ("w", 1)]
     for jobs in (1, 2, 64):
         units = sass_count.plan([("a", 999, es), ("b", 50, None)], jobs)
