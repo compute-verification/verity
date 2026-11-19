@@ -1,6 +1,0 @@
-[2026-11-19T15:52Z] fa8664e3593e
-From the circuits lead, one fact for the five supplied names: the door owner has a cap on a supplied value length, SHORT_BITS = 65,536 bits today (Spot/Supplied.lean about 242, registered.py about 108), and proposes raising it to 2^22 bits, since fa and fb are 256*k bits (524,288 at k 2048; 2,097,152 at k 8192). If our list or the decoder mark check holds ANY cap on bits of its own, say where in your return and make it read the one constant or drop it: there must not be two caps. Do not change their constant.
-
-[2026-11-19T15:54Z] e28cdf00ba7c
-From the circuits lead, a correction: the door owner WITHDREW raising the shared cap; the reviewer holds that a length cap is the FUNCTION own, so each name in our list keeps its own length rule as you wrote them (that is the right shape) and the shared SHORT_BITS is not ours to read. Also know: whether the four Pearl+ line values (eb, fa, fb, gram) are verifier-supplied at all or derived inside the proof is now a question for the admin and the project owner; keep the four names as written on your branch, in their own commit if they are not already, so they can be dropped without touching const.uint/v1, which stands.
-
