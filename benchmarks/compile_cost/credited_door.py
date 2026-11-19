@@ -1,13 +1,13 @@
 """Pearl+'s credited block through the door: `window_cut.credited` at one size, the tile the verifier's own draw picks
 (`scheme.drawn_blocks` over a one-call run), its one block cut by Python's `restrict`, evaluated on bits on the honest
-tile and on that tile with its y word's sign flipped, lowered by Lean's `flock-lower-check compose` (`lean_lower`), and
+tile and on that tile with its y word's sign flipped, lowered by the door's `one_circuit.lower` (Lean's
+`flock-lower-check compose`), and
 staged for `flock-circuit` with every row registered (`registered_value.Registered`, `FC.write(registered=...)`), so no
 row is committed afresh: ``OUT/honest`` holds the honest rows and outputs, ``OUT/dishonest`` the flipped y (registered as
 the prover would) with the honest outputs (ok 1), which no proof may carry. Each holds the verifier's ``--registered``
 file (`registered.reads_file`), whose roots of ``unit``, ``rows`` and ``col`` the verifier computes from its draw, and
 ``OUT/honest/registered-wrong.json`` names the root of another unit's ``unit`` row. `credited_door.sh` proves both and
-verifies them by Lean directly and through the door (``door``: `proofs.verify`, as it is and with `lean_lower` as
-`one_circuit.lower`); run it on a node."""
+verifies them by Lean directly and through the door (``door``: `proofs.verify`); run it on a node."""
 from __future__ import annotations
 
 import argparse
@@ -17,9 +17,7 @@ import json
 import os
 import random
 import resource
-import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -160,64 +158,32 @@ def register(program, bits: dict[str, list[int]], supplied: tuple[str, ...] = DR
     return out
 
 
-def output(program, row: list[int]):
-    """The block's output row ``o0`` registered as the record a later reader holds it to: one ``sha512/row/v2`` row of
-    the circuit port's u16 words (the outputs zero-padded to whole SHA-512 blocks, as `FC.write` writes them)."""
+def output(program, value: str, row: list[int]):
+    """An output row registered as the record a later reader holds it to: ``value``, its field's tree
+    (`Flock.Registered.fieldTree`, ``KEY/oJ``), one ``sha512/row/v2`` row of the circuit port's u16 words (the outputs
+    zero-padded to whole SHA-512 blocks, as `FC.write` writes them)."""
     from verity.circuits.codec import program_digest
     from verity.commitments import registered_value as RV
-    return RV.Registered.commit(program_digest(program), "o0", [row], word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
+    return RV.Registered.commit(program_digest(program), value, [row], word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
 
 
-def reads(program, partition, bits: dict[str, list[int]], roots: dict[str, str], out) -> dict:
-    """The verifier's ``--registered`` file over its program and the partition's query: `registered.reads_file`'s ports
-    in the position-free format the door reads (`interface.REGISTERED_FILE`, Lean's `Registered.FORMAT`), which derives
-    every position from C, and the output row ``out`` (`output`), since Lean holds every port of the statement to a
-    registered root (`Registered.checkComplete`)."""
+def reads(program, partition, bits: dict[str, list[int]], roots: dict[str, str], outs: dict) -> dict:
+    """The verifier's ``--registered`` file over its program and the partition's query, in the position-free format
+    (`registered.reads_file` without positions, Flock's `Registered.FORMAT`), which derives every position from C, and
+    each output row of ``outs`` (`output`: port to its registration), since Lean holds every port of the statement to a
+    registered root (`Registered.checkComplete`) and an output row to its field's tree (`Registered.outReads`)."""
     from verity.commitments import registered_value as RV
-    from verity.commitments.periods.interface import REGISTERED_FILE
     from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
     f = REG.reads_file(program, partition["query"], {p: len(v) // 16 for p, v in bits.items()}, roots,
-                       schemas={p: RV.SCHEMA_HM96_SHA512_ROW_V2 for p in bits})
-    ports = {p: {x: v for x, v in e.items() if x != "reads"} for p, e in f["ports"].items()}
-    ports["o0"] = {"value": out.value, "root": out.root.hex(), "leaves": out.leaves, "words": out.words, "word_bits": 16,
-                   "domain": out.domain.domain_id.hex(), RV.SCHEMA_KEY: out.schema}
-    return {"format": REGISTERED_FILE, "ports": ports}
-
-
-def lean_lower(lower_bin: str, partition, fn) -> "callable":
-    """`one_circuit.lower` as Lean's `flock-lower-check compose` gives it, for a partition object of one template
-    (`Q_template_instance`) and ``fn``, that template's Definition as the verifier builds it (a decoded one is no
-    `Program`'s root): C_S's template instance lowered to the templated block circuit, its input ports the template's
-    parameters as bit rows, its output the template's return bits as one u16 port ``o0``. The function the door's
-    `one_circuit.lower` would need, taking the partition and the template beside C_S."""
-    from verity.circuits import boolean as BL
-    from verity.circuits import partition_object as PO
-    from verity.circuits.codec import descriptor_id, program_digest
-    from verity.circuits.program import Program
-
-    key = partition["query"]["params"]["template"]
-    if descriptor_id(fn) != key:
-        raise ValueError(f"the template {descriptor_id(fn)} is not the partition's {key}")
-
-    def lower(c_s: bytes) -> bytes:
-        params, ret = fn.signature()
-        ins = ",".join(f"{p}:{sum(BL.elements(t))}" for p, t in params)
-        outs = f"o0:{-(-sum(BL.elements(ret)) // 16)}"
-        with tempfile.TemporaryDirectory(prefix="credited-lower-") as d:
-            src, dst = Path(d, "c_s.json"), Path(d, "circuit.txt")
-            src.write_bytes(c_s)
-            p = subprocess.run([lower_bin, "compose", str(src), key, f"unit/{fn.id}", ins, outs, LAYOUT,
-                                partition["program"], PO.digest(partition), json.dumps({key: program_digest(Program(fn))}),
-                                str(dst)], capture_output=True, text=True)
-            if p.returncode != 0:
-                raise RuntimeError(f"flock-lower-check compose ({p.returncode}): {(p.stderr or p.stdout)[-2000:]}")
-            return dst.read_bytes()
-    return lower
+                       schemas={p: RV.SCHEMA_HM96_SHA512_ROW_V2 for p in bits}, positions=False)
+    for p, out in outs.items():
+        f["ports"][p] = {"value": out.value, "root": out.root.hex(), "leaves": out.leaves, "words": out.words,
+                         "word_bits": 16, "domain": out.domain.domain_id.hex(), RV.SCHEMA_KEY: out.schema}
+    return f
 
 
 def stage(a) -> int:
     k, tm, tn, n = map(int, a.size.split(","))
-    from verity.circuits import partition_object as PO
     from verity.circuits import restrict as R
     from verity.circuits.codec import descriptor_chunks, descriptor_id
     from verity.circuits.evaluation import evaluate_bits
@@ -273,8 +239,8 @@ def stage(a) -> int:
 
     a.out.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
-    text = lean_lower(a.lower, part, core)(b.descriptor).decode()
-    rec["lower"] = {"by": "lean flock-lower-check compose (lean_lower)", "wall_s": round(time.perf_counter() - t0, 2),
+    text = OC.lower(b.descriptor, part, lambda: a.lower).decode()
+    rec["lower"] = {"by": "the door's one_circuit.lower (flock-lower-check compose)", "wall_s": round(time.perf_counter() - t0, 2),
                     "peak_gib_children": _peak_gib(resource.RUSAGE_CHILDREN)}
     meta = FC.meta_of(text)
     rec["circuit"] = {"bytes": len(text), "head": text.split("\n", 1)[0], "sha512": hashlib.sha512(text.encode()).hexdigest(),
@@ -282,8 +248,10 @@ def stage(a) -> int:
     print("LOWER " + json.dumps(rec["lower"] | {"circuit": rec["circuit"]}), flush=True)
     phase("lower")
 
-    outs_h = {"o0": np.asarray([words16(got[0])], dtype=np.uint16)}
-    out_row = words16(got[0]) + [0] * (dict((q[0], q[1]) for q in meta["ports"])["o0"] - len(words16(got[0])))
+    widths = dict((q[0], q[1]) for q in meta["ports"])
+    fields = {"o0": got[0][:512], "o1": got[0][512:]}
+    outs_h = {p: np.asarray([words16(v)], dtype=np.uint16) for p, v in fields.items()}
+    out_rows = {p: words16(v) + [0] * (widths[p] - len(words16(v))) for p, v in fields.items()}
     verifier_roots = {p: r.root.hex() for p, r in register(program, mine).items()}
     wrong = {"unit": drawn_bits(core, SimpleNamespace(unit=block.unit + 1, rows=block.rows, col=block.col))["unit"]}
     rec["registered"] = {}
@@ -294,17 +262,25 @@ def stage(a) -> int:
         regs = register(program, bits)
         assert all(regs[p].root.hex() == verifier_roots[p] for p in DRAWN)
         roots = {p: r.root.hex() for p, r in regs.items()} | verifier_roots
-        out = output(program, out_row)
-        (d / "registered.json").write_text(json.dumps(reads(program, part, bits, roots, out)))
+        outs = {p: output(program, f"{key}/{p}", row) for p, row in out_rows.items()}
+        (d / "registered.json").write_text(json.dumps(reads(program, part, bits, roots, outs)))
         if tag == "honest":
             bad = roots | {p: r.root.hex() for p, r in register(program, wrong).items()}
-            (d / "registered-wrong.json").write_text(json.dumps(reads(program, part, bits, bad, out)))
+            (d / "registered-wrong.json").write_text(json.dumps(reads(program, part, bits, bad, outs)))
+            flip = list(out_rows["o0"])
+            flip[31] ^= 1 << 15
+            wrong_out = outs | {"o0": output(program, f"{key}/o0", flip)}
+            (d / "registered-wrong-out.json").write_text(json.dumps(reads(program, part, bits, roots, wrong_out)))
+            named = outs | {"o0": output(program, "o0", out_rows["o0"])}
+            (d / "registered-named-out.json").write_text(json.dumps(reads(program, part, bits, roots, named)))
+            (d / "registered-no-out.json").write_text(json.dumps(reads(program, part, bits, roots, {"o0": outs["o0"]})))
         tables = {p: np.asarray([words16(v)], dtype=np.uint16) for p, v in bits.items()}
-        salts = {p: [r.salts[0]] for p, r in regs.items()} | {"o0": [out.salts[0]]}
+        salts = {p: [r.salts[0]] for p, r in regs.items()} | {p: [o.salts[0]] for p, o in outs.items()}
         iset = SimpleNamespace(name=f"credited-{tag}", subcircuit=SimpleNamespace(id=core.id, inputs=[], outputs=[]))
         FC.write(text, iset, 0, 1, d / "inst-1.bin", d / "pub-1.bin", indices=[units[0][0]], tables=tables,
                  refs={p: [0] for p in bits}, share_rows=True, salts=salts,
-                 registered={p: r.statement([0])[2] for p, r in regs.items()} | {"o0": out.statement([0])[2]}, outs=outs_h)
+                 registered={p: r.statement([0])[2] for p, r in regs.items()} | {p: o.statement([0])[2] for p, o in outs.items()},
+                 outs=outs_h)
         (d / "unit.tmpl").write_text(FC.template_of(text))
         (d / "partition.json").write_text(json.dumps(part))
         (d / "program.json").write_bytes(c)
@@ -319,14 +295,18 @@ def stage(a) -> int:
 
 
 def door(a) -> int:
-    """`proofs.verify` on each staged proof, with the verifier's own program, partition, draw and registered file: as it
-    is, then with `lean_lower` as `one_circuit.lower`. The Lean executable is the one the job built from the same
-    source (`proofs.executable` builds it in the tree), and `one_circuit.restrict`, a function of its arguments, is
-    computed once for the calls."""
+    """`proofs.verify` on each staged proof, with the verifier's own program, partition, draw and registered file, its
+    lowering the door's own (`one_circuit.lower`, the executable the job built) and the drawn block's inputs read by the
+    scheme from the run's records (`scheme.drawn_inputs`, handed to the door as ``inputs``). The Lean executables are the
+    ones the job built from the same source, and `one_circuit.restrict`, a function of its arguments, is computed once
+    for the calls."""
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.resource_accounting.compute.pouw import scheme as PS
+    from verity_vllm.program.predict import window_cut as WK
     os.environ[PF.TMPL_SWITCH] = "1"
     PF.executable = lambda: Path(a.lean)
+    PF.lower_executable = lambda: Path(a.lower)
     restrict, memo = OC.restrict, {}
 
     def once(c: bytes, partition, units) -> bytes:
@@ -339,24 +319,32 @@ def door(a) -> int:
     h = a.out / "honest"
     program, partition = (h / "program.json").read_bytes(), json.loads((h / "partition.json").read_text())
     draw_ = json.loads((h / "draw.json").read_text())
+    k, tm, tn, n = map(int, a.size.split(","))
+    scheme, passes = run(k, tm, tn, n)
+    blocks = PS.credited_blocks(scheme, passes)
+    tr = WK.credited_product(SCHEME, k, tm, tn, n).bindings["TR"]
 
-    def call(label: str, tag: str, reads_name: str) -> None:
+    def inputs(i: int):
+        return PS.drawn_inputs(passes, blocks[i], tr)
+
+    def call(tag: str, reads_name: str, tr_: int | None = None) -> None:
         d = a.out / tag
         t0 = time.perf_counter()
+        given = inputs if tr_ is None else (lambda i: PS.drawn_inputs(passes, blocks[i], tr_))
         found, refusal = PF.verify(PF.Proof(d / "circuit.txt", d / "pub-1.bin", tuple(map(Path, a.session[tag]))),
                                    program=program, partition=partition, draw=draw_,
-                                   registered=json.loads((d / reads_name).read_text()))
-        print("DOOR " + json.dumps({"call": label, "proof": tag, "registered": reads_name,
+                                   registered=json.loads((d / reads_name).read_text()), inputs=given)
+        print("DOOR " + json.dumps({"proof": tag, "registered": reads_name, "tr": tr if tr_ is None else tr_,
                                     "wall_s": round(time.perf_counter() - t0, 2), "peak_gib": _peak_gib(),
                                     "refusal": refusal, "findings": [dataclasses.asdict(f) for f in found or []]},
                                    default=str), flush=True)
 
-    call("as-is", "honest", "registered.json")
-    from verity_vllm.program.predict import window_cut as WK
-    OC.lower = lean_lower(a.lower, partition, WK.credited_product(SCHEME, *map(int, a.size.split(","))))
-    call("lean_lower", "honest", "registered.json")
-    call("lean_lower", "dishonest", "registered.json")
-    call("lean_lower", "honest", "registered-wrong.json")
+    call("honest", "registered.json")
+    call("dishonest", "registered.json")
+    for name in ("registered-wrong.json", "registered-wrong-out.json", "registered-named-out.json",
+                 "registered-no-out.json"):
+        call("honest", name)
+    call("honest", "registered.json", tr_=tr + 1)
     return 0
 
 

@@ -4,8 +4,9 @@
 # the CPU flock-circuit built once per source; `credited_door.py stage` stages OUT/honest and OUT/dishonest on the
 # verifier's draw, every row registered; each is placed (flock-tmpl-unit), its statement built, proved over a live
 # loopback session (`flock-circuit serve --zk`, the Rust verifier) and its session verified by Lean (`verity-verify-proof
-# verify --zk --registered`, the honest one also on a registered file naming another unit's root); `credited_door.py door`
-# then verifies both through `proofs.verify`. SIZE=K,TM,TN,N (256,1,1,1).
+# verify --zk --registered`, the honest one also on registered files naming another unit's root, a wrong output root, an
+# output row registered under a name of the caller's, and no output row o1); `credited_door.py door` then verifies them
+# through `proofs.verify`. SIZE=K,TM,TN,N (256,1,1,1).
 # research run --on auto --cwd source --wait --mem-gb 64 --cpus 16 --timeout 180m -- bash benchmarks/compile_cost/credited_door.sh
 set -uxo pipefail
 SIZE=${SIZE:-256,1,1,1}
@@ -95,7 +96,7 @@ for v in honest dishonest; do
   SESS=$(dirname $(ls -1 $S/sessions-$v/*/session.json | LC_ALL=C sort | tail -1)) || { tail -20 $Ov/serve.log; continue; }
   challenger_audit $Ov/challenger $SESS
   DOOR+=(--session $v $SESS)
-  for r in registered $([ $v = honest ] && echo registered-wrong); do
+  for r in registered $([ $v = honest ] && echo registered-wrong registered-wrong-out registered-named-out registered-no-out); do
     timed lean-$v-$r $LEAN_BIN verify --zk --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $D/pub-$N.bin --tables $D/tables \
       --partition $D/partition.json --program $D/program.json --registered $D/$r.json --session $SESS > $Ov/lean-$r.log 2>&1
     echo "$v $r lean rc $?"; cat $O/time-lean-$v-$r.txt; grep -h '^VERDICT' $Ov/lean-$r.log | head -1 | cut -c1-1500; tail -3 $Ov/lean-$r.log | cut -c1-600
