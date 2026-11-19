@@ -32,7 +32,7 @@ open Flock.Program
 open Std.Do
 open BodiesOk (DM ex_throw_bind decode_root)
 open private getDef composite staticFns decodeAll decodeBodies goOf decodeDefs_walk DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs liftV
-  from Circuits.Program
+  from Circuits.Descriptor
 
 /-! ## What the decoder keeps -/
 

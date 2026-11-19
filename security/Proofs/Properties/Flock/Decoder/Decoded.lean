@@ -43,7 +43,7 @@ namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 open private getDef composite staticFns goOf decodeDefs decodeDefs_plain DecState DecState.defs DecState.index DecState.busy
   Desc Desc.types Desc.callees Desc.ddefs liftV at_ paramsOf buildNode natJ? decodeAll decodeBodies primEntries
-  from Circuits.Program
+  from Circuits.Descriptor
 
 theorem ex_throw_bind {α β : Type} {e : String} {f : α → Flock.V β} {b : β}
     (h : (throw e >>= f : Flock.V β) = .ok b) : False := by
@@ -85,7 +85,7 @@ open Flock.Program
 open Std.Do
 open BodiesOk (DM)
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs liftV
-  from Circuits.Program
+  from Circuits.Descriptor
 
 /-! ## Reading the decoder's functions -/
 
@@ -182,7 +182,7 @@ open Std.Do
 open DecodeKeys (of_triple liftV_spec throw_spec discard_eq staticFns_step composite_step)
 open private getDef composite staticFns goOf decodeDefs decodeDefs_plain DecState DecState.defs DecState.index DecState.busy
   Desc Desc.types Desc.callees Desc.ddefs liftV at_ paramsOf buildNode natJ? decodeAll decodeBodies primEntries
-  from Circuits.Program
+  from Circuits.Descriptor
 
 /-- `decodeAll`: each primitive entry by `getDef`. -/
 theorem decodeAll_grows (desc : Desc) (fs : Array String) (s s' : DecState) (u : Unit)

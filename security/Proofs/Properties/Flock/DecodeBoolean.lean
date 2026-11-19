@@ -32,7 +32,7 @@ open InferenceOnlyVerifier.Properties.SecurityProofs
 open BodiesOk (DM st_bind st_pure st_get st_liftV st_discard Inv Pre pre_refl pre_trans specs go_inv decode_steps)
 open DecodeKeys (Kept Keys of_triple kept_fuel getDef_idx go_kept formOf)
 open private getDef composite staticFns decodeAll decodeBodies extendReach primEntries DecState DecState.defs
-  DecState.index DecState.busy Desc Desc.ddefs liftV from Circuits.Program
+  DecState.index DecState.busy Desc Desc.ddefs liftV from Circuits.Descriptor
 
 /-! ## Maps and sets built by folds -/
 

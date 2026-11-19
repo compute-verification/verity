@@ -72,7 +72,7 @@ set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
 open private Flock.Program.DecState.mk Flock.Program.DecState.defs Flock.Program.DecState.index
-  Flock.Program.DecState.busy Flock.Program.DecState.walked from Circuits.Program
+  Flock.Program.DecState.busy Flock.Program.DecState.walked from Circuits.Descriptor
 
 namespace SpotFlock.InstanceStmt.Decode
 
