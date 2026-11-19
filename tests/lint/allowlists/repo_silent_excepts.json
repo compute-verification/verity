@@ -28,7 +28,6 @@
     {"file": "benchmarks/network_traces/record.py", "count": 4},
     {"file": "benchmarks/one_stage/a11.py", "count": 1},
     {"file": "benchmarks/one_stage/a11_kinds.py", "count": 1},
-    {"file": "benchmarks/one_stage/a11_twins.py", "count": 1},
     {"file": "benchmarks/one_stage/a5_network_attester.py", "count": 1},
     {"file": "benchmarks/one_stage/m1_unit.py", "count": 1},
     {"file": "benchmarks/one_stage/network_attester_replay.py", "count": 1},

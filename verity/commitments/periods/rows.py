@@ -1292,7 +1292,7 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
     roots += [{k: o[k] for k in ("port", "root", "leaves", "domain")} for o in outputs]
     return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
                             leaf_layer=c.leaf_layer, previous=previous, work_table=w.work_table,
-                            registered=list(entries))
+                            registered=list(entries), partition=w.partition)
 
 
 def units_doc(m: Member) -> dict[str, Any]:

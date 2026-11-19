@@ -44,6 +44,7 @@ import json
 from fractions import Fraction
 
 from verity.circuits import codec
+from verity.circuits.boolean import is_boolean
 from verity.circuits.defs import PrimitiveDefinition, DefinitionTable
 from verity.circuits.program import input_id, is_input, is_registered
 from verity.circuits.types import type_from_json
@@ -65,11 +66,19 @@ def _unevaluated(*_a):
     raise NotImplementedError("the inference-only check evaluates no gate")
 
 
+def _boolean_gate(fid: str) -> bool:
+    try:
+        return is_boolean(codec.lookup_primitive(DefinitionTable(), fid))
+    except KeyError:
+        return False
+
+
 def declared(desc: dict) -> DefinitionTable:
-    """A registry of the descriptor's primitives as it declares them (inputs aside, which the decoder makes itself)."""
+    """A registry of the descriptor's primitives as it declares them (inputs and the Boolean profile's gates aside, which
+    the decoder makes itself: a gate is one by identity)."""
     reg = DefinitionTable()
     for fid, d in desc["definitions"].items():
-        if d.get("form") == "primitive" and input_id(fid) is None:
+        if d.get("form") == "primitive" and input_id(fid) is None and not _boolean_gate(fid):
             name, _, version = fid.rpartition("_v")
             reg.add(PrimitiveDefinition(name, int(version), tuple((n, type_from_json(t)) for n, t in d["params"]),
                                         type_from_json(d["ret"]), _unevaluated, register=False))

@@ -36,7 +36,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   path, which rechecks a host witness; ``nofw``), on the device with ``--gpu``: the process's wall and CPU seconds, and the
   session's ``e2e_s``, ``wait_s`` (the prover waiting on the verifier), ``witness_s`` and ``prove_total_s``. ``--no-audit``
   stages only the honest statement and runs the points, Lean verifying each arm's session at the largest k. ``--lease``
-  is a command each prover process runs under (`a8_gpu.sh`'s GPU lease), so the device is held for the proofs alone; the
+  is a command each prover process runs under (a GPU lease), so the device is held for the proofs alone; the
   process's wall then includes the lease's wait, and the session's own times don't.
 """
 from __future__ import annotations

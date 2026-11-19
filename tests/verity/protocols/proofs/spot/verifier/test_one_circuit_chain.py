@@ -87,22 +87,25 @@ def committed(x=None) -> Any:
 
 
 def drawn(win: Any) -> Any:
-    """One proof block of the window, by a stand-in coin (the challenger's live coin is not the door's input)."""
+    """One proof block of the window, by a stand-in coin: the door's draw (`python_door`) samples it alone."""
     ms = win.window.members
     return ms[int(np.random.default_rng(0).integers(len(ms)))]
 
 
-def python_door(member: Any, circuit_file: bytes = b"", public: bytes = b"",
+def python_door(member: Any, circuit_file: bytes = b"", public: bytes | None = None,
                 partition: dict | None = None) -> tuple[Any, Any]:
+    """The door on a proof of ``member``'s block, under a draw that sampled that block alone; ``public`` defaults to a
+    public file naming the block's first unit."""
     r = registered()
     with tempfile.TemporaryDirectory() as d:
         cf, pub, s = Path(d, "circuit.txt"), Path(d, "pub.bin"), Path(d, "s0")
         cf.write_bytes(circuit_file)
-        pub.write_bytes(public)
+        pub.write_bytes(json.dumps({"units": {"indices": [member.base]}}).encode() + b"\n" if public is None else public)
         s.mkdir()
         (s / "session.json").write_text("{}")
+        k = [m.base for m in r["window"].window.members].index(member.base)
         return PF.verify(PF.Proof(cf, pub, (s,)), program=r["C"], partition=r["partition"] if partition is None else partition,
-                         block=[m.base for m in r["window"].window.members].index(member.base), registered=r["theta"])
+                         draw={"units": [k]}, registered=r["theta"])
 
 
 def own_root_public(k: int) -> bytes:

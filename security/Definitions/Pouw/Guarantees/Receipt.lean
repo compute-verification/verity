@@ -73,7 +73,7 @@ So a receipt a thread a window is not a full-state commitment, and a chain that 
 receipt; the checkpoint a segment of the chains' full states (`ResourceAccounting.Guarantees.TS.DuoSegmentsBind`) can't.
 
 Three words' receipts can have one: with `r₁ + r₃ ≡ 0 (mod n)`, `a₂ ≡ −1 (mod 2^r₁)` and `a₃ ≡ ±1 (mod 2^(n−r₁))`,
-flipping the top bit of all three words moves the receipt by one constant (`benchmarks/pouw/theory/duo_proj.c`).
+flipping the top bit of all three words moves the receipt by one constant (`calibration/pouw/theory/duo_proj.c`).
 
 The whole state binds one word at a state (`DuoRunWordInjective`), and no more than that for every choice of words:
 
