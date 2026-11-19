@@ -405,6 +405,39 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
 
 
+def test_a_passs_salts_are_its_keys_stream_in_fill_order_and_its_end_drops_the_key(device_run, tmp_path, monkeypatch):
+    """A's salts and the tiles' (`host.fresh_into`) are the leaves of the pass's own keyed stream from leaf 0, in the order
+    they were filled, under a key `derive` made from fresh bytes at its first fill; its end drops the key, so no object
+    holds it after, a fill then is refused by name, and the next pass draws another."""
+    import gc
+    make, _, weights, _, _ = device_run
+    keys, derive = [], PH.derive
+    monkeypatch.setattr(PH, "derive", lambda *a: keys.append(derive(*a)) or keys[-1])
+    run = make()
+    run.begin(retain=str(tmp_path / "first"))
+    ended = run.cur
+    assert ended.salts.key is None and not keys, "a pass draws its key at its first fill"
+    run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    key = ended.salts.key
+    run.gemm(1, torch.randn(32, 1024).to(torch.bfloat16), weights[1], None)
+    out = run.end()
+    man = json.loads(Path(out["manifest"]).read_text())
+    files = [u["salts"]["path"] for u in man["matmuls"]] + [man["salts_t"]["path"]]
+    got = b"".join((tmp_path / "first" / f).read_bytes() for f in files)
+    assert len(got) == HM96_SALT * (32 + 32 + 6) and len(keys) == 1
+    assert got == b"".join([key.block(PH.SALT_INDEX, c) for c in range(3 * (32 + 32 + 6))])  # inlined: no cell holds key
+    del out
+    gc.collect()
+    holders = [r for r in gc.get_referrers(key) if r is not keys and not isinstance(r, types.FrameType)]
+    assert ended.ended and ended.salts.key is None and not holders, "an ended pass's key is held by no object"
+    with pytest.raises(PH.SaltsRefused, match="NO_OPEN_PASS") as refused:
+        run.gemm(0, torch.randn(16, 1024).to(torch.bfloat16), weights[0], None)
+    assert refused.value.name == "NO_OPEN_PASS"
+    run.begin()
+    run.gemm(0, torch.randn(16, 1024).to(torch.bfloat16), weights[0], None)
+    assert len(keys) == 2 and run.cur.salts.key is keys[1] and keys[1].value != key.value and run.cur.salts.next == 16
+
+
 def test_a_retained_pass_refuses_a_weight_tree_whose_root_moved_after_the_build(device_run, tmp_path):
     """A retained pass writes each weight's tree from the device beside the build's root: a tree_b whose root bytes were
     written after the build is refused by the weight's name before any of the pass's last files is written, and an
@@ -653,7 +686,7 @@ def seeded_device_salts(monkeypatch, seed=11):
 
     rng, ys = random.Random(f"{seed} fresh_into"), random.Random(f"{seed} y")
 
-    def fresh_into(dst, n, raw=None):
+    def fresh_into(dst, n, raw=None, *, salts):
         dst[:HM96_SALT * n].copy_(torch.frombuffer(bytearray(rng.randbytes(HM96_SALT * n)), dtype=torch.uint8))
     for name in ("ends", "graphs", "grouped", "host", "lanes_device", "run_device", "whole_calls"):
         mod = sys.modules.get(f"verity_torch.pouw.pearl_c.{name}")
@@ -1003,8 +1036,8 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     kernel.dev.log.clear()
     drawn, fresh = [], ENDS.fresh_into
 
-    def recorded(dst, n, raw=None):
-        fresh(dst, n, raw)
+    def recorded(dst, n, raw=None, *, salts):
+        fresh(dst, n, raw, salts=salts)
         drawn.append(PPDR._bytes(dst[:HM96_SALT * n]))
     monkeypatch.setattr(ENDS, "fresh_into", recorded)
     out = run.end()
@@ -1085,7 +1118,7 @@ def kept_leaves(d, tree: MerkleTree, schema: str = ROW_SCHEMA) -> list[bytes]:
 def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
                 live: int | None = None, seed: int = 11, spike: float | None = None, bad_b: int | None = None,
                 tile: tuple[int, int] = (16, 16), zero_a: int | None = None,
-                load: tuple[int, int] | None = None):
+                load: tuple[int, int] | None = None, k: int = 128, filler: int | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts the prover's, kept in the pass's salts files beside the rows; the unpromoted record's debit isn't stated, so
@@ -1104,11 +1137,13 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     keeping it a test instance.  With `zero_a`, that real row of the first call is all +0: it fails liveness and is
     excluded, its U is +0 and so is every word of its served y.  With `load` (rows, committed rows), both calls are of
     that many real rows in that many committed ones, as a round of a class's fixed load is (`verify_run.held_to_load`),
-    the first call's failing row its row 1."""
+    the first call's failing row its row 1.  `k` is the calls' depth.  With `filler` (an FP32 word of a BF16 value), the first
+    call's first filler row holds that word at its column 0, committed and proved as every row is: a prover whose filler
+    row is not zero."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = pouw_schemes.get(scheme, k_min=32, tile=tile)
-    rng, k = np.random.default_rng(seed), 128
+    rng = np.random.default_rng(seed)
     n0, n1 = max(16, tile[1]), max(32, tile[1])
     wrows = {0: bf16_words(rng, n0, k), 1: bf16_words(rng, n1, k)}
     (real, m0), m1, bad = (load, load[1], 1) if load else ((20, 32), 16, 5)
@@ -1121,6 +1156,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
         wrows[1][bad_b, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
     if zero_a is not None:
         a0[zero_a] = 0
+    if filler is not None:
+        a0[real, 0] = filler
     i0, i1 = indices
     acts = {i0: a0, i1: bf16_words(rng, m1, k)}
     if load:
@@ -4773,7 +4810,7 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
 
     monkeypatch.setattr(PPH, "_event", lambda: "slot")
     monkeypatch.setattr(PPL, "_event", lambda: "done0")
-    monkeypatch.setattr(PPL, "fresh_into", lambda dst, n, raw=None: calls.append(("fresh", dst, n, raw)))
+    monkeypatch.setattr(PPL, "fresh_into", lambda dst, n, raw=None, *, salts: calls.append(("fresh", dst, n, raw)))
     monkeypatch.setattr(run, "salts_a", lambda sh, pipe: "salts")
     run.driver = Driver()
     side0, side1 = (types.SimpleNamespace(raw=raw, event=f"side{raw // 2}", tree_event=f"tree{raw // 2}") for raw in (1, 3))

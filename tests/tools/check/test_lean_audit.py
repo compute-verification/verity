@@ -2430,6 +2430,13 @@ def test_kept_dependencies_and_replays_past_their_limits_go_oldest_first(tmp_pat
         os.utime(replay / f"{i}.json", (2000 + i, 2000 + i))
     assert LA.prune_replays(replay, kept=2) == 3 and sorted(p.name for p in replay.iterdir()) == ["3.json", "4.json"]
     assert LA.prune_replays(tmp_path / "absent", kept=2) == 0
+    (replay / "graphs").mkdir()
+    for i in range(3):
+        (replay / "graphs" / f"{i}.json").write_text("{}")
+        os.utime(replay / "graphs" / f"{i}.json", (2000 + i, 2000 + i))
+    assert LA.prune_replays(replay, kept=2) == 1 and sorted(p.name for p in (replay / "graphs").iterdir()) == ["1.json",
+                                                                                                             "2.json"]
+    assert sorted(p.name for p in replay.iterdir()) == ["3.json", "4.json", "graphs"]
 
 
 def test_records_trees_beyond_the_limit_go_least_recently_used_first_unless_a_run_holds_one(tmp_path):
@@ -2460,9 +2467,9 @@ def test_records_trees_beyond_the_limit_go_least_recently_used_first_unless_a_ru
 def test_a_node_with_more_build_slots_than_records_kept_keeps_a_tree_per_slot_and_its_passes(tmp_path):
     """Trees seeded for `build 8` keep their source's old `.who`, and an hourly prune that keeps 3 would take some of them,
     so a waiting run would build Mathlib from scratch on the root disk. The slots' own trees stay, the
-    ones a lowered limit left (`build-8`) go first whatever their use, and `passes/` is not a tree."""
+    ones a lowered limit left (`build-8`) go first whatever their use, and `passes/` and `facts/` are not trees."""
     store = tmp_path / "lean-records"
-    for i, name in enumerate(["build-8", *(f"build-{j}" for j in range(8)), "passes"]):
+    for i, name in enumerate(["build-8", *(f"build-{j}" for j in range(8)), "passes", "facts"]):
         (store / name).mkdir(parents=True)
         (store / name / ".who").write_text("r")
         t = 2000 - 100 * (name != "build-8") - i
@@ -2471,10 +2478,23 @@ def test_a_node_with_more_build_slots_than_records_kept_keeps_a_tree_per_slot_an
     slots.write_text("check 4\nbuild 8   # one per tree\n")
     assert LA.build_slots(slots) == 8 and LA.build_slots(tmp_path / "absent") == 0
     assert LA.prune_records(store, slots=8) == 1
-    assert sorted(p.name for p in store.iterdir()) == sorted([*(f"build-{j}" for j in range(8)), "passes"])
+    assert sorted(p.name for p in store.iterdir()) == sorted([*(f"build-{j}" for j in range(8)), "facts", "passes"])
     slots.write_text("build 2\n")
     assert LA.prune_records(store, slots=LA.build_slots(slots)) == 5
-    assert sorted(p.name for p in store.iterdir()) == ["build-0", "build-1", "build-2", "passes"]
+    assert sorted(p.name for p in store.iterdir()) == ["build-0", "build-1", "build-2", "facts", "passes"]
+
+
+def test_the_records_facts_cache_keeps_its_last_stored_documents_each_with_its_sidecar(tmp_path):
+    """`lean-records/facts` gains a document per audited package and run, and nothing but this ages them out."""
+    facts = tmp_path / "facts"
+    facts.mkdir()
+    for i, k in enumerate("abcd"):
+        for p in (facts / f"{k}.json.gz", facts / f"{k}.json"):
+            p.write_text("x")
+            os.utime(p, (1, 1000 + i))
+    assert LA.prune_records_facts(facts, kept=2) == 2
+    assert sorted(p.name for p in facts.iterdir()) == ["c.json", "c.json.gz", "d.json", "d.json.gz"]
+    assert LA.prune_records_facts(facts, kept=2) == 0 and LA.prune_records_facts(tmp_path / "absent") == 0
 
 
 def test_a_scratch_tree_refuses_a_tracked_link_and_in_tree_resolves_before_it_compares(tmp_path, monkeypatch):

@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Properties.InferenceOnly.BodiesOk.Decoded
+public import Proofs.Properties.Flock.Decoder.Decoded
 public import Proofs.Properties.InferenceOnly.BodiesOk.Order
+public import Proofs.Properties.InferenceOnly.Resolve
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
 import Mathlib.Tactic.Echelon.Zsqrtd

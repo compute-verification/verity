@@ -44,8 +44,7 @@ def test_a_tied_application_states_each_listed_schemes_declared_tie(monkeypatch)
                         if n == "network-attester" else real(n))
     got = T.tied(("sampled-proofs", "pearl-plus", "network-attester"))
     assert got[T.MANIFESTS["network-attester"].id] == {"order": "fifo"}
-    assert got[T.MANIFESTS["pearl-plus"].id] == {"class": "4,27,2", "tie-uniform": True}
-    assert T.MANIFESTS["sampled-proofs"].id not in got
+    assert T.MANIFESTS["pearl-plus"].id not in got and T.MANIFESTS["sampled-proofs"].id not in got
 
 
 def test_each_declared_read_is_a_run_of_a_party_its_scheme_declares():
@@ -68,10 +67,10 @@ def test_only_the_sampled_proofs_carry_the_served_windows_rule_and_its_default()
 
 
 def test_a_tied_schemes_parameters_are_what_its_tie_names_and_nothing_else(monkeypatch):
-    s = dataclasses.replace(T.schemes.get("pearl-plus"), tie={"class": "1,2,3", "tie-uniform": True, "kernel": ""})
+    s = dataclasses.replace(T.schemes.get("pearl-plus"), tie={"class": "1,2,3", "schedule": "serial", "kernel": ""})
     assert T._tied(s, "x", {"class": "4,27,2", "kernel": "k"}) == {
-        "class": "4,27,2", "tie-uniform": T.schemes.get("pearl-plus").settings["tie-uniform"], "kernel": "k"}
-    with pytest.raises(T.Refused, match=r"lane \(known: class, kernel, tie-uniform\)"):
+        "class": "4,27,2", "schedule": T.schemes.get("pearl-plus").settings["schedule"], "kernel": "k"}
+    with pytest.raises(T.Refused, match=r"lane \(known: class, kernel, schedule\)"):
         T._tied(s, "x", {"lane": "v"})
 
 

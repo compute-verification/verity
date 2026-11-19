@@ -52,18 +52,24 @@ private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String)
   let m := (← Flock.canonUtf8 manifest).toUTF8
   return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
 
-/-- `registered_value.domain(program, value, words, leaves, word_bits, ...).domain_id` (`verity/commitments/registered_value.py`), `leaves`
-the value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the 64 bytes of
+/-- `registered_value.domain(program, value, words, leaves, word_bits, ...).binding` (`verity/commitments/registered_value.py`), `leaves`
+the value's rows, whose domain is `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512")`: `B` the 64 bytes of
 `identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})` with
 `"word_bits"` beside them when it is not 16, and `extra` after them (a per-window value's `"window"`, a produced value's
 `"produced"`). -/
-def domainWith (program value : String) (words leaves wordBits : Nat) (extra : List (String × Json)) :
+def bindingWith (program value : String) (words leaves wordBits : Nat) (extra : List (String × Json)) :
     V ByteArray := do
   if !WIDTHS.contains wordBits then throw s!"a registered value's leaves are 16 or 32 bits, not {wordBits}"
   let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str HmRow.ROW_SCHEMA),
     ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
     (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]) ++ extra)
-  let binding ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash REGISTERED_DOMAIN manifest
+  tagged "verity/tagged-sha512/v1" Flock.Sha512.hash REGISTERED_DOMAIN manifest
+
+/-- `registered_value.domain(...).domain_id`: `bindingWith`'s binding `B` as a frame-v3 domain over the value's `leaves`
+rows (above). -/
+def domainWith (program value : String) (words leaves wordBits : Nat) (extra : List (String × Json)) :
+    V ByteArray := do
+  let binding ← bindingWith program value words leaves wordBits extra
   let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
     (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
   return FV3.hash "domain" [binding, FV3.uint 0, positions, FV3.uint leaves] Flock.Sha512.hash
@@ -417,9 +423,43 @@ def treeReads (P : Program.Prog) (indices : Array Nat) (lo : Nat) (reg : Port) :
     throw s!"registered reads: row {reg.name} of in(S): {wired} of the statement's {indices.size} units read it from a writer, and a row is one tree's"
   return { reg with readsRel := rel, readsFrom := first }
 
+/-- Output row `j` of the statement's circuit `c` (its port `HmOut.nIn c + j`) at the statement's units `indices`, from the
+verifier's program `P`: the row is output field `j` of each unit of the circuit's template `t` (`HmRow.queryTemplate`),
+the field's bits from the field's first in whole words, and that field is committed once, in its tree (`fieldTree t j`),
+so `reg` must be that tree and each unit reads its own leaf in it by `HmLinks.treeLeaf`, the leaf `treeReads` opens for
+a reader of the field. An output of several fields in fewer rows, a row of another width or offset, a port registered
+as another value and a unit of another template are refused by name. -/
+def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (reg : Port) : V Port := do
+  let some (t, _) := HmRow.queryTemplate c
+    | throw s!"registered reads: output row {reg.name}: the circuit names no template of C (META program_digests)"
+  let some f := (rootNodes P).findSome? fun x => (P.defs[x.fn]?).filter (·.key == t)
+    | throw s!"registered reads: output row {reg.name}: C's root calls no {t}, the circuit's template"
+  let fs := Program.fieldsOf f.ret
+  if j ≥ c.outRowPorts.size then
+    throw s!"registered reads: output row {reg.name}: the circuit has {c.outRowPorts.size} output rows, and this is row {j}"
+  if fs.length != c.outRowPorts.size then
+    throw s!"registered reads: output row {reg.name}: {t} returns {fs.length} output fields and the circuit has {c.outRowPorts.size} output rows: each field is committed in its own tree ({fieldTree t 0}, …), one output row a field"
+  let bitsOf := fun (ty : Program.Ty) => (Program.Ty.widths ty).foldl (· + ·) 0
+  let before := (fs.take j).foldl (fun n ty => n + bitsOf ty) 0
+  let bits := bitsOf (fs.getD j default)
+  let (_, _, w0, words) := HmOut.outGroup c j
+  if 16 * w0 != before || words != (bits + 15) / 16 then
+    throw s!"registered reads: output row {reg.name} is output words [{w0}, {w0 + words}), and {t}'s output field {j} is bits [{before}, {before + bits}): a row is one field's whole words"
+  if reg.value != fieldTree t j then
+    throw s!"registered reads: output row {reg.name} is registered as {reg.value}, and it is {t}'s output field {j}, committed once in {fieldTree t j}: the row opens that tree's root, at its unit's leaf"
+  let ns := HmLinks.nodes P
+  let first := indices.foldl min (indices.getD 0 0)
+  let mut rel : Array (Option Nat) := Array.replicate (indices.foldl max 0 + 1 - first) none
+  for u in indices do
+    let some (tu, leaf) := HmLinks.treeLeaf P ns u
+      | throw s!"registered reads: output row {reg.name}: unit {u} is outside the program's units"
+    if tu != t then throw s!"registered reads: output row {reg.name}: unit {u} is an instance of {tu}, not the circuit's template {t}"
+    rel := rel.set! (u - first) (some leaf)
+  return { reg with readsRel := rel, readsFrom := first }
+
 /-- The verifier's registered reads `own` with every port's reads derived at the statement's circuit `c` and public file
-`pub` from C, the verifier's program `program`: a row of in(S) (`OneCircuit.io`) by `treeReads`, a registered value's
-by `OneCircuit.pos`; without the program every port is refused. -/
+`pub` from C, the verifier's program `program`: an output row (a port past `HmOut.nIn c`) by `outReads`, a row of in(S)
+(`OneCircuit.io`) by `treeReads`, a registered value's by `OneCircuit.pos`; without the program every port is refused. -/
 def withPositions (c : Circuit) (pub : Public) (program : Option ByteArray) (own : Option (Array Port)) :
     V (Option (Array Port)) := do
   let some own := own | return none
@@ -427,7 +467,13 @@ def withPositions (c : Circuit) (pub : Public) (program : Option ByteArray) (own
   let P ← Program.decode b
   let indices ← unitIndices pub
   let rows ← OneCircuit.io c P
+  let nIn := HmOut.nIn c
   some <$> own.mapM fun reg =>
+    match (List.range c.ports.size).find? fun q => (c.ports.getD q default).name == reg.name with
+    | some q => if q ≥ nIn then outReads c P indices (q - nIn) reg else ins c P indices rows reg
+    | none => ins c P indices rows reg
+where
+  ins (c : Circuit) (P : Program.Prog) (indices : Array Nat) (rows : Array (Nat × Nat × Nat)) (reg : Port) : V Port :=
     match rows.find? fun (p, _, _) => (c.ports.getD p default).name == reg.name with
     | some (_, lo, _) => do
       let r ← treeReads P indices lo reg

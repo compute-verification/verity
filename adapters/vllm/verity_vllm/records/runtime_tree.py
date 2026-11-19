@@ -30,13 +30,19 @@ class RuntimeTree:
     buffers: list[str] = field(default_factory=list)
     runner: dict[str, Any] = field(default_factory=dict)      # {"sample": bool, "sampler_module": bool, "source": str}
     source: str = ""
+    shared: dict[str, list[Any]] = field(default_factory=dict)  # path -> [the instance's first path, k]: the instance's k-th path
 
     def has_module(self, path: str) -> bool:
         return path in self.modules
 
+    def aliases(self) -> dict[str, tuple[str, int]]:
+        """The shared instances' alias table: a module instance under several paths runs its k-th call (in path order) as its k-th
+        path, under its first path's hooks."""
+        return {p: (str(c), int(k)) for p, (c, k) in self.shared.items()}
+
     def to_json(self) -> dict[str, Any]:
         return {"schema": SCHEMA, "source": self.source, "runner": dict(self.runner), "modules": {k: list(v) for k, v in sorted(self.modules.items())},
-                "buffers": sorted(self.buffers)}
+                "buffers": sorted(self.buffers), "shared": {k: list(v) for k, v in sorted(self.shared.items())}}
 
     @classmethod
     def from_json(cls, d: Mapping[str, Any]) -> RuntimeTree:
@@ -45,10 +51,11 @@ class RuntimeTree:
         schema = d.get("schema")
         if schema not in (None, SCHEMA):
             raise ValueError(f"runtime tree schema {schema!r} != {SCHEMA}")
-        modules, buffers, runner, source = d.get("modules"), d.get("buffers"), d.get("runner"), d.get("source")
+        modules, buffers, runner, source, shared = d.get("modules"), d.get("buffers"), d.get("runner"), d.get("source"), d.get("shared")
         return cls(modules={str(k): [str(c) for c in v] for k, v in modules.items()} if modules else {},
                    buffers=[str(b) for b in buffers] if buffers else [],
-                   runner=dict(runner) if runner else {}, source=str(source) if source else "")
+                   runner=dict(runner) if runner else {}, source=str(source) if source else "",
+                   shared={str(k): [str(v[0]), int(v[1])] for k, v in shared.items()} if shared else {})
 
     @classmethod
     def load(cls, path: str | Path) -> RuntimeTree:
@@ -66,6 +73,10 @@ def runtime_tree_of(model: Any, runner: Any = None, *, source: str = "live") -> 
     """The tree of a built `torch.nn.Module` (+ the engine's runner).  The root module (`named_modules()` name "") is kept under its
     name "" so a Value produced in the root's forward body has an owning module in the tree."""
     mods = {name: mro_names(m) for name, m in model.named_modules()}
+    paths: dict[int, list[str]] = {}
+    for name, m in model.named_modules(remove_duplicate=False):
+        paths.setdefault(id(m), []).append(name)
+    shared = {p: [ps[0], k] for ps in paths.values() if len(ps) > 1 for k, p in enumerate(ps) if k}
     bufs = [name for name, _b in model.named_buffers()]
     r: dict[str, Any] = {"sample": bool(runner is not None and hasattr(runner, "sample")), "sampler_module": False, "source": "engine runner" if runner is not None else "no runner"}
     if runner is not None:
@@ -74,7 +85,7 @@ def runtime_tree_of(model: Any, runner: Any = None, *, source: str = "live") -> 
         r["sampler_module"] = isinstance(smp, torch.nn.Module)
         if r["sampler_module"]:
             r["sampler_class"] = mro_names(smp)
-    return RuntimeTree(modules=mods, buffers=bufs, runner=r, source=source)
+    return RuntimeTree(modules=mods, buffers=bufs, runner=r, source=source, shared=shared)
 
 
 def runtime_tree_from_paths(paths: Mapping[str, Iterable[str]], *, buffers: Iterable[str] = (), runner: Mapping[str, Any] | None = None, source: str = "synthetic") -> RuntimeTree:
