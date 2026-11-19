@@ -2,11 +2,10 @@
 
 ## Interface
 
-The network attester's device: what it needs of the deployment layer's runtime, its end of the challenges' link, its host programs, and the network attester's program in executable Lean (the executable forms of the
+The network attester's device: its end of the challenges' link, its host programs, and the network attester's program in executable Lean (the executable forms of the
 network attester's definitions). It has no console script.
 
-- **Python**: the package `verity.protocols.resource_accounting.network.attester`. `device_needs` holds what the
-  runtime has no form for yet, one proposed type each. `coin_link.CoinLink` is the link for an execution phase's challenges,
+- **Python**: the package `verity.protocols.resource_accounting.network.attester`. `coin_link.CoinLink` is the link for an execution phase's challenges,
   which `verity/protocols/compose/verifier/live_challenger/coin_link.py` runs (`../verifier/protocol/coin-link.md`).
   Their tests are in `../../../../../tests/verity/protocols/resource_accounting/network/verifier`. The relay (`../verifier/network_attester.py`) and its pacer stay in `../verifier`,
   whose modules read the schedule and the cells' layout from them.
