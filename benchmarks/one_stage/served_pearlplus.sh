@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PoUW's piece with Pearl+, `served_verdicts.sh`'s POUW_CMD under POUW=pearlplus (H1 off): Pearl+'s own served run on the
+# PoUW's piece with Pearl+, `served_verdicts.sh`'s POUW_CMD under POUW=pearlplus: Pearl+'s own served run on the
 # card after the window's serve, every pass retained, and Pearl+'s verdict over all of them:
 #   POUW_CMD='bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"'      (served_verdicts.sh runs it in the tree)
 #   bash benchmarks/one_stage/served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR
@@ -95,7 +95,7 @@
 # passes to W, with PEARLPLUS_CLASS (served_verdicts.sh's: V3C_CLASS, the class the window is committed at) `--class`,
 # which refuses passes that are not that class's fixed load, so the verdict's counts of passes, calls and tables are the
 # class's, and whose accept publishes its work in the grid form (verify_run.grid_work: the class's structural credit less
-# the give-up padded up to H1's window grid; the exact credit is the profile's exact_work, which `publish` holds on the
+# the give-up padded up to the window grid; the exact credit is the profile's exact_work, which `publish` holds on the
 # node), and under the gate it samples only after the window serve's Pearl-C period (SERVE_DIR/pearlplus/period.json,
 # the one its RULE line reads) closed with the lane's reserves since its open the window's salt sessions alone. Its salt coin is the
 # scheme's: a salt session of the window's own under the gate (`serve_openai.scheme_settings`), which step 5 holds each pass
@@ -319,7 +319,7 @@ if [ -n "$GO" ] && { [ -s "$Q/volunteer.json" ] || [ -n "$TIE" ]; }; then
   say "retain: served_passes.py retain exit $rc: $(grep -m1 '^retain ' "$Q/retain.log" | cut -c1-400)"
   [ "$rc" = 0 ] || [ -z "$TIE" ] || GO=
 fi
-# the window commit tied to W, before Pearl+'s coin, as H1's is made at its window's close before its sample coin
+# the window commit tied to W, before Pearl+'s coin
 if [ -n "$GO" ] && [ -n "$TIE" ]; then
   if [ -s "$W" ]; then
     say "W: $(grep -m1 '^retain W: ' "$Q/retain.log" | sed -E 's/^retain W: [^,]*, //' | cut -c1-300)"
