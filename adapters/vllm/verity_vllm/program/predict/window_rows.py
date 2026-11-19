@@ -545,9 +545,10 @@ class Rows:
 
     def _scan(self, P: Any, S: Slot, picks: Sequence[int]) -> None:
         """The slot's scan units: its `ScanSlots_v3` every lane's first token and slot, occupancy word and head of the scan
-        state row at its anchor (its lane's row the slot's, refused by name where it isn't), each position's
-        `SelectCollect_v1` but the last its select collected on from the lane's head (its ``o1``; its select ``o0`` is the
-        node's), and the last's `SelectEntry_v1` its entry of the scan's Programs' row."""
+        state row at its anchor (its lane's row the slot's, refused by name where it isn't); its collectors on from the
+        lane's head, a prompt position's before the last (`OutCollect_v1`) on its token, a select's (`SelectCollect_v1`, its
+        ``o1``; its select ``o0`` is the node's) on its pick and KO - O pads on the last pick; and its `SlotEntry_v1` entry
+        of the scan's Programs' row."""
         tid, u = P.scan_unit
         for k, lane in enumerate(_lanes(P, self.state, IO.scan_reference)):
             for i, v in enumerate(lane):
@@ -556,13 +557,13 @@ class Rows:
         if row != S.row:
             raise ValueError(f"{P.name}: its slot's row isn't lane {P.lane}'s of the scan state row at bucket {P.anchor}")
         KO = P.cls.outputs
-        if len(P.collects) != len(picks) - 1:
-            raise ValueError(f"{P.name}: {len(P.collects)} collectors for {len(picks)} selects, not one each but the last's")
-        for p, tok in enumerate(picks):
-            a = IO.collect_reference(a, tok, KO, p == 0)
-            if p < len(P.collects):
-                ct, cu = P.collects[p]
-                self._put(ct, cu, "o1", _i32(a), EVALUATED)
+        toks = [*S.tokens[:P.L - 1], *picks, *[picks[-1]] * (KO - len(picks))]
+        if len(P.collects) != len(toks):
+            raise ValueError(f"{P.name}: {len(P.collects)} collectors, not one a prompt position, one a select and one a pad "
+                             f"to KO ({len(toks)})")
+        for k, ((ct, cu), tok) in enumerate(zip(P.collects, toks)):
+            a = IO.collect_reference(a, tok, KO, k == 0)
+            self._put(ct, cu, "o0" if self.fns[ct].name == "OutCollect" else "o1", _i32(a), EVALUATED)
         e = P.entry.bindings
         entry = IO.entry_reference(S.row[0], a, KO, e["IDB"], e["NP"], e["STOP"])
         et, eu = P.entry_unit
