@@ -290,11 +290,11 @@ def setup_pin(tmp_path: Path, row: str, workload: str) -> subprocess.CompletedPr
                           capture_output=True, text=True, check=False)
 
 
-def test_a_tied_rows_predicted_workload_is_held_to_its_traced_build_by_predict_compare(tmp_path):
+def test_a_tied_rows_predicted_workload_is_pinned_by_no_build_of_record(tmp_path):
     """A predicted row's record holds its workload digest and no Program or manifest digest, so no BUILD_OF_RECORD pins it."""
     for row in (PLACEMENT["tied_row"], H100["rows"]["tied_row"]):
         told = setup_pin(tmp_path, row, "a" * 128)
-        assert told.returncode == 0 and f"{row}: its predicted workload {'a' * 128} is held to its traced Build by predict compare" in told.stdout
+        assert told.returncode == 0 and f"{row}: its predicted workload {'a' * 128}: no pin holds a row's but an int8 one's" in told.stdout
 
 
 def test_no_file_of_the_served_run_names_the_retired_node():
