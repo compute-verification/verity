@@ -224,14 +224,14 @@ def Prog.gate (P : Prog) (g : Nat) : V (Nat × Array Nat × Scope) := do
   if g ≥ (P.defs[P.root]!).gates then throw s!"gate {g} outside the circuit"
   Steps.run "gate location" (gateStep P g) Steps.FUEL P.rootScope
 
-theorem Prog.gate_of {P : Prog} (h : (P.defs[P.root]!).body.recut = #[]) (g : Nat) : P.gate g = (do
+theorem Prog.gate_of {P : Prog} (h : (P.defs[P.root]!).body.recut = #[]) (g : Nat) : Prog.gate P g = (do
     if g ≥ (P.defs[P.root]!).gates then throw s!"gate {g} outside the circuit"
     Steps.run "gate location" (gateStep P g) Steps.FUEL P.rootScope : V (Nat × Array Nat × Scope)) := by
   unfold Prog.gate
   rw [h]
   rfl
 
-theorem Prog.gate_recut {P : Prog} {g : Nat} {x : Nat × Array Nat × Scope} (h : P.gate g = .ok x) :
+theorem Prog.gate_recut {P : Prog} {g : Nat} {x : Nat × Array Nat × Scope} (h : Prog.gate P g = .ok x) :
     (P.defs[P.root]!).body.recut = #[] := by
   cases hc : (P.defs[P.root]!).body.recut.isEmpty
   · unfold Prog.gate at h

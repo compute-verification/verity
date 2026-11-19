@@ -55,7 +55,7 @@ private def recutVerdict (s : String) : String :=
   | .error e => e) ==
   "recut-gates: input nodes [0] are read in leaves of part of their width, which the gate layout doesn't lay out"
 #guard (match decode recutDesc_legal.toUTF8 with
-  | .ok P => match P.gate 0 with
+  | .ok P => match Flock.Program.Prog.gate P 0 with
     | .ok (p, _, _) => s!"gate of {p}"
     | .error e => e
   | .error e => e) ==
