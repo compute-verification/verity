@@ -27,8 +27,8 @@ is the bound cover is held back from it, and the record says so. After `archive-
 **The program is not held to the circuit.** A unit statement's `program_sha512` is no digest of a program file: the
 stager writes there the SHA-512 of its `program_digests`, the unit's name with a SHA-256 over the staged Definition's
 id and the row layout, which no program descriptor holds. So the command hashes no program against it. It reads the
-program only to record which was handed (its digest as the verifier computes it, the SHA-512 of the descriptor's
-canonical JSON without `annotations`, and the Definition it names, `program_fn`) and to refuse one that names another
+program only to record which was handed (its program digest, `codec.program_digest`, and the Definition it names,
+`program_fn`) and to refuse one that names another
 Definition than `stage.json`'s `word`: a comparison of two names, which binds nothing. Under `PARTITION_V1` the bound
 partition object names its Program (`program`), and the verifier refuses a session handed any other; so there the handed
 Program is held to that digest instead (a bound statement's is the population Program of its word, which names the
