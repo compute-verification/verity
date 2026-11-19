@@ -585,18 +585,25 @@ class Committed:
         p = self.window.row_tables[t].port
         return np.ascontiguousarray(self.rows[p]).astype("<u2").tobytes() + self.salts[p]
 
+    def _value_domain(self, m: Member, p: str, rows: int) -> CommitmentDomain:
+        v = self.given[m.port(p)].value
+        if hasattr(v, "domain_id"):
+            return self.window.domain(m.port(p), m.schema(p), rows)
+        return CommitmentDomain(v.domain.binding, OWNER, RangeIndexedDomain(0, rows), hash="sha512")
+
     def frame_entry(self, k: int) -> dict[str, Any]:
         """The circuit prover's header ``frame_v3`` entry for member ``k``: its bare port names, as its statement reads them,
         each at the tree over its own rows (its table's, in a shared-row member) that Flock holds its public file to. A port
         that is not its own tree (`Binding.held`) gets that tree here from its public strings alone: a header root anyone
         makes again from the public body, which the record never names, under the binding of the tree holding the port
-        (`Binding.tree`: a wired port's writer's, where the verifier places it). A registered value's port is under its own
-        port's (`Binding.domain`): a table reused from an earlier registration (`h1.commit.Reused`) names its registration's
-        domain by id alone, with no binding to put here."""
+        (`Binding.tree`: a wired port's writer's, where the verifier places it). A registered value's port is under its
+        registration's binding (`registered_value.domain`), where round 2 places it (`second_stage.registered_binding`),
+        and under its own port's (`Binding.domain`) only for a value that names its registration's domain by id alone
+        (``domain_id``: a table reused from an earlier registration, `h1.commit.Reused`, has no binding to recompute)."""
         m, w = self.window.members[k], self.window
         names = [p for p, _ in m.all_rows]
         rows = {p: dict(m.tables).get(p, m.n) if p not in dict(m.outs) else m.n for p in names}
-        local = {p: w.domain(m.port(p), m.schema(p), rows[p]) if p in m.values
+        local = {p: self._value_domain(m, p, rows[p]) if p in m.values
                  else CommitmentDomain(self.domains[w.tree(m, p)].binding, OWNER, RangeIndexedDomain(0, rows[p]), hash="sha512")
                  for p in names if not w.held(m, p)}
         made, _ = commit_ports({p: d for p, d in local.items()}, {}, {}, {}, schemas={p: m.schema(p) for p in local},
