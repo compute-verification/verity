@@ -197,7 +197,7 @@ def hold(f: Files, stage: Mapping[str, Any]) -> dict:
     binds nothing for, is refused here. `held` names
     the files that passed, and `withheld` the ones the verifier isn't given: the partition under `PARTITION_COVER`,
     for which it takes no object. The program is held to nothing the circuit states. `program` is the one handed: its
-    digest as the verifier computes it (`ProvedScope.programDigest`: the descriptor without `annotations`) and the
+    program digest (`program_digest`, none for a descriptor that is no Program) and the
     Definition it names (`program_fn`), which is refused when `stage` names another as its `word`, unless the held
     partition is under `PARTITION_V1`: then it is refused unless it is the Program the partition object names."""
 
@@ -210,7 +210,7 @@ def hold(f: Files, stage: Mapping[str, Any]) -> dict:
         if not isinstance(desc, dict):
             raise ValueError(f"{f.program} (--program) is not a program descriptor, a JSON object: no verifier was started")
         fn = desc.get("program_fn")
-        doc["program"] = {"sha512": program_digest(desc), "fn": fn}
+        doc["program"] = {"sha512": program_digest(desc) if {"schema", "program_fn", "root", "definitions"} <= desc.keys() else None, "fn": fn}
         if named is None and None not in (fn, stage.get("word")) and fn != stage["word"]:
             raise ValueError(f"{f.program} is the program of another Definition than the statement's: its `program_fn` "
                              f"is {fn}, and {f.stage} names the `word` {stage['word']}: no verifier was started (the "

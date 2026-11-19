@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from verity.circuits.codec import program_digest
 from verity_bench import exfiltration as E
 from verity_bench import lean_verify as L
 from verity_bench import prove as P
@@ -325,7 +326,8 @@ class Verifier:
 
 
 #: a made-up program descriptor of the census type `RMSNORM`, whose `annotations` are in no digest
-PROGRAM = {"schema": "made-up", "program_fn": RMSNORM, "definitions": {"Staged_v1{N=1}": [1, 2]}, "annotations": {"theta": [3]}}
+PROGRAM = {"schema": "made-up", "program_fn": RMSNORM, "inputs": [], "root": "Staged_v1{N=1}", "boolean": {},
+           "definitions": {"Staged_v1{N=1}": {"form": "primitive", "id": "Staged_v1{N=1}"}}, "annotations": {"theta": [3]}}
 #: the program's file, spelled as no canonical form is
 PROGRAM_FILE = json.dumps(PROGRAM, indent=1).encode()
 
@@ -334,9 +336,9 @@ def _sha512(prefix: bytes, obj: object) -> str:
     return hashlib.sha512(prefix + json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-#: the program's digest as the verifier computes it, over the descriptor without `annotations`, and what a unit
+#: the program's digest as the verifier computes it (`codec.program_digest`, which `annotations` don't enter), and what a unit
 #: statement's circuit states as `program_sha512`: the digest of its `program_digests`, which no program file has
-PROGRAM_SHA512 = _sha512(b"", {k: v for k, v in PROGRAM.items() if k != "annotations"})
+PROGRAM_SHA512 = program_digest(PROGRAM)
 UNIT_SHA512 = _sha512(b"", {"unit/made-up": hashlib.sha256(b"the staged Definition's id and the row layout").hexdigest()})
 #: a `verity/partition/v1` object, naming `PROGRAM` as a bound statement's names its Program
 PARTITION = {"format": "verity/partition/v1", "program": PROGRAM_SHA512, "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}
