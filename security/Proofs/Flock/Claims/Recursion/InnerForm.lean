@@ -120,7 +120,7 @@ theorem checkShape_spec {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
       rcases hd : RecBudget.innerDefs f.program with e | v
       · simp [e1, e2, e3, e4, hr, hd, pure, Except.pure] at h
       · cases v
-        refine ⟨spec, st, rfl, e1, e2, e3, e4, hr, hd, ?_⟩
+        refine ⟨spec, st, rfl, e1, e2, e3, e4, by first | exact hr | rfl, by first | exact hd | rfl, ?_⟩
         simpa [e1, e2, e3, e4, hr, hd, pure, Except.pure] using h
 
 /-- **The setup's shape check**: where `RecSetup.checkShape` passes on the inner statement's files, they set it up, the
@@ -165,6 +165,12 @@ theorem checkShape_defs {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
   · simp [hp, throw, throwThe, MonadExceptOf.throw] at hd
   refine ⟨b, rfl, fun text j kvs ht hj hk => Nat.le_of_not_lt fun hlt => ?_⟩
   simp [hp, ht, hj, hk, hlt, throw, throwThe, MonadExceptOf.throw] at hd
+
+/-- **`innerDefs` refuses a Program that names more than `defsCap` Definitions.** -/
+theorem innerDefs_refuses {b : ByteArray} {text : String} {j : Lean.Json} {kvs}
+    (ht : String.fromUTF8? b = some text) (hj : JsonParse.parse text = .ok j) (hk : j.getObjValD "definitions" = .obj kvs)
+    (hlt : RecBudget.defsCap < kvs.toArray.size) : ∃ e, RecBudget.innerDefs (some b) = .error e := by
+  simp [RecBudget.innerDefs, ht, hj, hk, hlt, throw, throwThe, MonadExceptOf.throw]
 
 /-! ## Flock's plain verifier on the inner statement -/
 

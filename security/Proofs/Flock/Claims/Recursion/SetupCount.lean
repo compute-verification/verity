@@ -2016,7 +2016,7 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
     rotate_left
     · cases samplingDesign
       all_goals
-        dsimp -zeta only
+        dsimp -zeta only [Except.map]
         apply countC.mono
         · repeat (first
             | extract_lets
@@ -2026,6 +2026,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
             | (with_reducible apply hS)
             | (with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D hP)
             | (with_reducible apply workSamplingDesign_cost' h _ _ _ _ D hP)
+            | ((with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
+            | ((with_reducible apply workSamplingDesign_cost' h _ _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
             | (with_reducible apply sha_cost h)
             | (with_reducible intro _)
             | (with_reducible apply Cost.pure)
@@ -2050,7 +2052,7 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
             | (with_reducible apply diteAny)
             | split)
           iterate 40
-            all_goals try (dsimp +zetaDelta -zeta only)
+            all_goals try (dsimp +zetaDelta -zeta only [Except.map])
             all_goals repeat (first
               | extract_lets
               | (with_reducible apply throwBind)
@@ -2059,6 +2061,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
               | (with_reducible apply hS)
               | (with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D hP)
               | (with_reducible apply workSamplingDesign_cost' h _ _ _ _ D hP)
+              | ((with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
+              | ((with_reducible apply workSamplingDesign_cost' h _ _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
               | (with_reducible apply sha_cost h)
               | (with_reducible intro _)
               | (with_reducible apply Cost.pure)
@@ -2085,7 +2089,7 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
           all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *)
           all_goals first | omega
         · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega
-    · dsimp -zeta only
+    · dsimp -zeta only [Except.map]
       apply countC.mono
       · repeat (first
           | extract_lets
@@ -2095,6 +2099,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
           | (with_reducible apply hS)
           | (with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D hP)
           | (with_reducible apply workSamplingDesign_cost' h _ _ _ _ D hP)
+          | ((with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
+          | ((with_reducible apply workSamplingDesign_cost' h _ _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
           | (with_reducible apply sha_cost h)
           | (with_reducible intro _)
           | (with_reducible apply Cost.pure)
@@ -2119,7 +2125,7 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
           | (with_reducible apply diteAny)
           | split)
         iterate 40
-          all_goals try (dsimp +zetaDelta -zeta only)
+          all_goals try (dsimp +zetaDelta -zeta only [Except.map])
           all_goals repeat (first
             | extract_lets
             | (with_reducible apply throwBind)
@@ -2128,6 +2134,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
             | (with_reducible apply hS)
             | (with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D hP)
             | (with_reducible apply workSamplingDesign_cost' h _ _ _ _ D hP)
+            | ((with_reducible apply stratifiedSamplingDesign_cost h _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
+            | ((with_reducible apply workSamplingDesign_cost' h _ _ _ _ D); (cases ‹(_, _, _) = (_, _, _)› <;> exact hP))
             | (with_reducible apply sha_cost h)
             | (with_reducible intro _)
             | (with_reducible apply Cost.pure)

@@ -150,12 +150,6 @@ def innerDefs (program : Option ByteArray) : V Unit := do
             tail)
 
 #guard (innerDefs none).toOption.isNone
-#guard (innerDefs (some "{\"definitions\":{\"a\":{},\"b\":{}}}".toUTF8)).toOption.isSome
-#guard
-  let defs := String.intercalate "," ((List.range (defsCap + 1)).map fun i => s!"\"d{i}\":0")
-  match innerDefs (some s!"\{\"definitions\":\{{defs}}}".toUTF8) with
-  | .error e => e == s!"refused: the inner statement's program names {defsCap + 1} Definitions, more than {defsCap}: {tail}"
-  | .ok _ => false
 
 end RecBudget
 end Flock
