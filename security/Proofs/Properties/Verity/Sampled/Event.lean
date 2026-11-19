@@ -102,7 +102,7 @@ theorem step_event {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads
 theorem run_event {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.RunFiles}
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p #[s] pu bs = .ok r) :
-    ∃ tags0 circuitB pubB rd, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+    ∃ tags0 circuitB pubB rd, Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.readsOf p.registered = .ok rd ∧
       ∃ scope programSha want,
@@ -185,9 +185,9 @@ theorem circuitOf_parse {t : Flock.Tags} (hh : t.hiddenOutputs = true) (ht : t.i
   simp only [Flock.ProvedScope.circuitOf, hh, ↓reduceIte, Flock.HmOut.parseCommit, ht, Bool.false_eq_true]
 
 /-- **v2's statement under `--zk`'s tags has hidden outputs and is not templated**, at any mask and table count. -/
-theorem statement_zkTags {t : Flock.Tags} (h : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some t)
+theorem statement_zkTags {t : Flock.Tags} (h : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some t)
     (m k : ℕ) : (Flock.Zk.tags t m k).hiddenOutputs = true ∧ (Flock.Zk.tags t m k).isTmpl = false := by
-  have htg : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
+  have htg : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
   obtain rfl := Option.some.inj (htg.symm.trans h)
   exact ⟨rfl, rfl⟩
 
@@ -218,7 +218,7 @@ theorem checkBlobsAt_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
     (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ tags0 circuitB pubB record proofs n,
-      Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+      Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       sessionRecord e bs = some record ∧ sessionProofs p e bs = some proofs ∧
       _root_.Spot.nat? (_root_.Spot.getD c.record "population") = some n ∧
@@ -249,7 +249,7 @@ theorem checkBlobs_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.On
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
     (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
     ∃ tags0 circuitB pubB record proofs n,
-      Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+      Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       sessionRecord e bs = some record ∧ sessionProofs p e bs = some proofs ∧
       _root_.Spot.nat? (_root_.Spot.getD c.record "population") = some n ∧

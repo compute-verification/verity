@@ -34,7 +34,6 @@ import pytest
 from verity.circuits import partition_object as PO
 from verity.protocols.proofs.spot.verifier.one_stage import members as M, proofs as PF
 
-from holes import waits_on
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "form-refusals"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
@@ -125,7 +124,6 @@ def test_verify_zk_refuses_a_tail_returning_the_outputs_for_its_form(fx):
     assert v["why"] == _cases(fx)["tail"]["lean"]["why"], v
 
 
-@waits_on("restrict", "lower")
 def test_the_v2_audits_own_run_accepts_the_honest_session_and_refuses_the_tail_for_its_form(fx):
     """v2 verifies under the flat statement only, so of the templated and tail sessions it runs the tail's."""
     honest, tail = _v2(fx, "honest"), _v2(fx, "tail")
@@ -161,7 +159,6 @@ def _public_inputs_files(to: Path) -> tuple[Path, Path, dict]:
     return circuit, public, partition
 
 
-@waits_on("restrict", "lower")
 def test_the_v2_audit_refuses_a_circuit_with_a_public_input_port(tmp_path):
     """v2 sets its session up without the verifier's own recomputation of public input words (`OneStageZk.buildSessionOf`
     passes no `--public-inputs`), so a circuit naming a public input port is refused at setup (`HmIn.checkOwn`), before
