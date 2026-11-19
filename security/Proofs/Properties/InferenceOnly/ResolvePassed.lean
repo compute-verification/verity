@@ -187,7 +187,7 @@ theorem step_passing (U : Scope) (B : ℕ) (s s' : Scope × Ref) (hs : Inv P B s
 
 /-- **A walk of resolution that starts passing under `U` ends in `U` or leaves through a leaf of a parameter `U`'s
 Definition passes on**: the state the walk leaves `U` from is a reference of `U`'s body. -/
-theorem run_passing (U : Scope) (B : ℕ) :
+theorem run_passing (hrc : (P.defs[P.root]!).body.recut = #[]) (U : Scope) (B : ℕ) :
     ∀ (n : ℕ), n ≤ Flock.Steps.FUEL → ∀ (s : Scope × Ref) (b : ℕ), Inv P B s → Under U s.1 → Passing P U s →
       Flock.Steps.run "scope resolution" (resolveStep P) n s = .ok b →
       (U.off ≤ b ∧ b < B) ∨ ∃ i j, i ∈ passOf P U.d ∧ i < (P.defs[U.d]!).body.params.size ∧
@@ -208,7 +208,7 @@ theorem run_passing (U : Scope) (B : ℕ) :
         ⟨hp0, d, off, k, m, hc⟩ | ⟨hp, parent, d, off, k, m, hsc, hc⟩
       · have hpass' := step_passing P hroot hB hret harg U B s s' hs hx
           (fun hc' => by have h2 := hc'.2; rw [hp0] at h2; cases h2) hpass
-        refine run_passing U B n (by omega) s' b hs' ?_ hpass' h'
+        refine run_passing hrc U B n (by omega) s' b hs' ?_ hpass' h'
         rw [hc]
         exact Or.inr hu
       · by_cases hU : s.1 = U
@@ -219,7 +219,7 @@ theorem run_passing (U : Scope) (B : ℕ) :
           have hb : i < (P.defs[sc.d]!).body.params.size ∧ j < ((P.defs[sc.d]!).body.params[i]!).2.leaves :=
             hs.2.1.1 hp'
           rw [hU'] at hb
-          exact Or.inr ⟨i, j, passing_exit P U i j hpass, hb.1, hb.2, resolve_of_run P hn h⟩
+          exact Or.inr ⟨i, j, passing_exit P U i j hpass, hb.1, hb.2, resolve_of_run P hrc hn h⟩
         · have hpass' := step_passing P hroot hB hret harg U B s s' hs hx (fun hc' => hU hc'.1) hpass
           have hup : Under U parent := by
             rw [hsc] at hu hU
@@ -228,10 +228,10 @@ theorem run_passing (U : Scope) (B : ℕ) :
             · exact absurd hu'.symm hU
             · exact hu'
           rcases hc with hc | ⟨off', m', hc⟩
-          · refine run_passing U B n (by omega) s' b hs' ?_ hpass' h'
+          · refine run_passing hrc U B n (by omega) s' b hs' ?_ hpass' h'
             rw [hc]
             exact hup
-          · refine run_passing U B n (by omega) s' b hs' ?_ hpass' h'
+          · refine run_passing hrc U B n (by omega) s' b hs' ?_ hpass' h'
             rw [hc]
             exact Or.inr hup
 
@@ -243,8 +243,9 @@ theorem ret_passed_on (U : Scope) (hU : Good P U) (t : ℕ) (ht : t < (P.defs[U.
         j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
   obtain ⟨hd, hpc⟩ := good_d P hroot hB U hU
   obtain ⟨q, hq, t', ht', hget⟩ := seq_part _ (hret U.d hd hpc) t ht
-  exact run_passing P hroot hB hL hret harg U _ Flock.Steps.FUEL (Nat.le_refl _) _ b
-    (down_ok P hroot hB hL _ U hU (Nat.le_refl _) t ht) (under_refl U) (passing_start P U hd hpc hq ht' hget) h
+  exact run_passing P hroot hB hL hret harg (Flock.Program.resolve_recut (good_base P hU) h) U _ Flock.Steps.FUEL (Nat.le_refl _) _ b
+    (down_ok P hroot hB hL _ U hU (Nat.le_refl _) t ht) (under_refl U) (passing_start P U hd hpc hq ht' hget)
+    (Flock.Program.resolve_run h)
 
 end
 
@@ -252,7 +253,8 @@ end
 its root is a composite, every activation's body is `BodyOk` and laid out, a composite's parameters are its body's,
 and a return and each argument of each node are the sequences of their parts. -/
 theorem decoded_walk (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) :
+    (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ sc, Good P sc → BodyOk P sc.d) ∧
       (∀ d < P.defs.size, Walk.LaidOut P d) ∧
       (∀ d < P.defs.size, (P.defs[d]!).prim = false → (P.defs[d]!).body.params = (P.defs[d]!).params) ∧
@@ -291,6 +293,7 @@ theorem ret_passed_on_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.de
     (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨
       ∃ i j, i ∈ passOf P U.d ∧ i < (P.defs[U.d]!).body.params.size ∧
         j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
+  have hrc := Flock.Program.resolve_recut (good_base P hU) h
   obtain ⟨hroot, hB, hL, -, hret, harg⟩ := decoded_walk bytes P hdec hov hlay
   exact ret_passed_on P hroot hB hL hret harg U hU t ht h
 
@@ -304,6 +307,7 @@ theorem param_returned_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.d
     (hb : resolve P U ⟨true, i, j⟩ = .ok b) (t : ℕ) (ht : t < (P.defs[U.d]!).body.ret.count)
     (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
     ∃ i' j', i' ∈ passOf P U.d ∧ resolve P U ⟨true, i', j'⟩ = .ok b := by
+  have hrc := Flock.Program.resolve_recut (good_base P hU) h
   obtain ⟨hroot, hB, hL, hprm, hret, harg⟩ := decoded_walk bytes P hdec hov hlay
   obtain ⟨hd, hpc⟩ := good_d P hroot hB U hU
   have hlt : b < U.off :=

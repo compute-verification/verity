@@ -29,7 +29,7 @@ open Flock.Program
 open Claims.Json (Wf)
 open FlockDeploy (JsonEquiv)
 open InferenceOnlyVerifier.DefinitionDigest (canonicalEntry)
-open private natJ? intJ? paramsOf at_ buildNode from Circuits.Program
+open private natJ? intJ? paramsOf at_ buildNode from Circuits.Descriptor
 
 /-- Node `nd`'s callee as `Reaches` reads it: its `fn` index into the descriptor's callees. -/
 def calleeAt (cs : Array Json) (nd : Json) : Option Json :=
