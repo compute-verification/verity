@@ -1,7 +1,11 @@
 """The word-parameter scan of a circuit's descriptor: every Definition reachable from the root's templates whose parameter
 or return type is not all bits (Lean's `Ty.bits`) and that reaches no word primitive, transitively (`Flock.Lift.closure`'s
 `wordy` over `isWordPrim`), on the descriptor JSON as Lean reads it. Such a Definition `Flock.Lift.lift` leaves as it is.
-``python word_shape_scan.py C.json ...`` prints one ``SCAN`` line per file and one ``HIT`` line per such Definition."""
+Its second scan, ``unaligned``: every template (a Definition the root calls) with a parameter, or a return field
+(`fieldsOf`), whose bits are not a multiple of 16 and which another parameter or field follows, which `lowerBlock` lays
+in whole 16-bit words while `Lower.build` places the leaves one after another; a cut port's rows (`ioCuts`) are not
+read. ``python word_shape_scan.py C.json ...`` prints one ``SCAN`` line per file, one ``HIT`` line per Definition of
+the first scan and one ``UNALIGNED`` line per template of the second."""
 from __future__ import annotations
 
 import json
@@ -48,6 +52,34 @@ def bits(t: Any) -> bool:
     if tag == "Record":
         return all(bits(x[1]) for x in t[1])
     raise ValueError(f"type {t}")
+
+
+def width(t: Any) -> int:
+    tag = t[0]
+    if tag == "Value":
+        return t[1]
+    if tag == "Array":
+        return t[1] * width(t[2])
+    if tag == "Tuple":
+        return sum(width(x) for x in t[1])
+    if tag == "Record":
+        return sum(width(x[1]) for x in t[1])
+    raise ValueError(f"type {t}")
+
+
+def fields(t: Any) -> list:
+    if t[0] == "Tuple":
+        return list(t[1])
+    if t[0] == "Record":
+        return [x[1] for x in t[1]]
+    return [t]
+
+
+def unaligned_of(params: list, ret: Any) -> dict | None:
+    """The parameters' and return fields' bits where one not a multiple of 16 is followed by another; else None."""
+    pb, fb = [width(t) for t in params], [width(f) for f in fields(ret)]
+    bad = lambda bs: any(b % 16 for b in bs[:-1])
+    return {"param_bits": pb, "field_bits": fb} if bad(pb) or bad(fb) else None
 
 
 def scan(desc: dict, name: str) -> dict:
@@ -109,20 +141,26 @@ def scan(desc: dict, name: str) -> dict:
         ps, r = sig(d)
         if (not all(bits(p) for p in ps) or not bits(r)) and not w(f):
             hit.append({"id": f, "template": f in templates, "params": ps, "ret": r})
+    unaligned = [{"id": f, **u} for f in templates if defs[f]["form"] != "primitive"
+                 for u in [unaligned_of(*sig(defs[f]))] if u is not None]
     wide_bool = sorted(f for f in reach if defs[f]["form"] == "primitive" and is_boolean_prim(f)
                        and not (all(bits(p) for p in sig(defs[f])[0]) and bits(sig(defs[f])[1])))
     return {"circuit": name, "definitions": len(defs), "reached": len(reach), "templates": templates,
             "composites_reached": sum(defs[f]["form"] != "primitive" for f in reach),
             "shape": len(hit), "shape_templates": sum(h["template"] for h in hit), "hits": hit,
+            "unaligned": unaligned,
             "wide_boolean_prims": wide_bool}
 
 
 def report(desc: dict, name: str) -> dict:
     out = scan(desc, name)
-    print("SCAN " + json.dumps({k: v for k, v in out.items() if k != "hits"} | {"hit_ids": [h["id"] for h in out["hits"]]}),
-          flush=True)
+    print("SCAN " + json.dumps({k: v for k, v in out.items() if k not in ("hits", "unaligned")}
+                               | {"hit_ids": [h["id"] for h in out["hits"]], "unaligned": len(out["unaligned"]),
+                                  "unaligned_ids": [u["id"] for u in out["unaligned"]]}), flush=True)
     for h in out["hits"][:200]:
         print("HIT " + json.dumps({"circuit": name, **h}), flush=True)
+    for u in out["unaligned"][:200]:
+        print("UNALIGNED " + json.dumps({"circuit": name, **u}), flush=True)
     return out
 
 
@@ -144,6 +182,20 @@ def selftest() -> None:
     out = scan(desc, "selftest")
     assert [h["id"] for h in out["hits"]] == ["C"], out
     print("SELFTEST ok: C(a : Value 32, b : Value 1) = Not b is found, D (reaches Add32_v1) is not", flush=True)
+    bit3 = ["Array", 3, v(1)]
+    desc = {"root": "R", "definitions": {
+        "R": {"form": "composite", "body": {"params": [], "ret_type": v(1), "nodes": [{"fn": "E"}, {"fn": "F"}, {"fn": "G"}]}},
+        "E": {"form": "composite", "body": {"params": [["x", bit3], ["y", v(1)]], "ret_type": ["Tuple", [bit3, v(1)]],
+                                            "nodes": [{"fn": "Not_v1"}]}},
+        "F": {"form": "composite", "body": {"params": [["x", ["Array", 16, v(1)]], ["y", bit3]],
+                                            "ret_type": ["Tuple", [["Array", 16, v(1)], bit3]], "nodes": [{"fn": "Not_v1"}]}},
+        "G": {"form": "composite", "body": {"params": [["x", ["Array", 16, v(1)]], ["y", v(1)]], "ret_type": bit3,
+                                            "nodes": [{"fn": "Not_v1"}]}},
+        "Not_v1": {"form": "primitive", "params": [["x", v(1)]], "ret": v(1)}}}
+    out = scan(desc, "selftest-unaligned")
+    assert out["unaligned"] == [{"id": "E", "param_bits": [3, 1], "field_bits": [3, 1]}], out["unaligned"]
+    print("SELFTEST ok: E(x : Array 3 (Value 1), y : Value 1) = (x, Not y) is unaligned, F and G (each short field "
+          "last) are not", flush=True)
 
 
 if __name__ == "__main__":
