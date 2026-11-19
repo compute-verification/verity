@@ -177,8 +177,9 @@ _VERSIONS: dict[tuple[str | None, str], Any] = {}
 def boolean_version(fn: FunctionDefinition, family: str | None = None, opt_in: bool = False) -> FunctionDefinition:
     """The Boolean Definition whose word is ``fn``: the one registered Boolean Definition linked to it, with ``bit_type`` of
     ``fn``'s signature as its own; `NoBooleanVersion` where none is, or several are.  With ``family`` (`Name_vN`), only that
-    one is weighed: the one a Program names, for a reader of that Program.  With ``opt_in``, an ``opt_in`` Boolean Definition
-    is weighed too.  The lookup `Program` builds its Boolean map with (`program.register_boolean_bodies`)."""
+    one is weighed, an ``opt_in`` one too: the one a Program names, for a reader of that Program.  With ``opt_in``, an ``opt_in``
+    Boolean Definition is weighed too.  The lookup `Program` builds its Boolean map with (`program.register_boolean_bodies`)."""
+    opt_in = opt_in or family is not None
     fid = descriptor_id(bind(fn) if isinstance(fn, CompositeDefinition) else fn)
     key = (family, fid, opt_in)
     hit = _VERSIONS.get(key)
