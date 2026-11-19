@@ -12,10 +12,10 @@ public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 sets' count, their patterns' count and the served-output cap's sum are at most `δ^{−θ}` times a product over the
 replay blocks.
 
-* `stratumOf_lt`, `replayOf_lt`, `mem_blocksIn`, `blocksIn_disjoint`, `biUnion_inter_blocksIn`: a proof block of `Pt`
-  lies in replay block `ρ`'s proof blocks (`blocksIn`) exactly when its replay block is `ρ`; distinct replay blocks'
-  are disjoint, and in scope they cover every proof block, so a set `T` of proof blocks is the union of its pieces
-  `T ∩ blocksIn ρ`.
+* `mem_blocksIn`, `blocksIn_disjoint`, `biUnion_inter_blocksIn` (with `SamplingGeneric/TwoCount.lean`'s
+  `stratumOf_lt` and `replayOf_lt`): a proof block of `Pt` lies in replay block `ρ`'s proof blocks (`blocksIn`)
+  exactly when its replay block is `ρ`; distinct replay blocks' are disjoint, and in scope they cover every proof
+  block, so a set `T` of proof blocks is the union of its pieces `T ∩ blocksIn ρ`.
 * `bitsOf_eq_sum`, `esc_inter_blocksIn`, `passes_inter_blocksIn`: `b(T)` is the sum of its pieces', and replay block
   `ρ`'s escape at `T`'s counts reads only `T`'s piece in `ρ`.
 * `Design.Two.passes_nonneg`, `Pa_le_passes`: at rates `q_ρ ≤ 1` each factor is nonnegative, and `P̄_a` is at most
@@ -48,26 +48,6 @@ replay blocks.
 namespace Claims.Sampling
 
 open Finset
-
-theorem stratumIdx_lt : ∀ (ns : List ℕ) {v : ℕ}, v < ns.sum → stratumIdx ns v < ns.length
-  | [], v, h => by simp at h
-  | n :: ns, v, h => by
-    unfold stratumIdx
-    split_ifs with hv
-    · simp
-    · have := stratumIdx_lt ns (v := v - n) (by simp only [List.sum_cons] at h; omega)
-      simp only [List.length_cons]
-      omega
-
-/-- Every proof block's stratum is one of `Pt`'s strata. -/
-theorem stratumOf_lt {P : Partition} {v : ℕ} (hv : v < P.blocks.length) : P.stratumOf v < P.strata.length := by
-  have h := stratumIdx_lt (P.strata.map List.length) (v := v) (by rw [← List.length_flatten]; exact hv)
-  simpa [Partition.stratumOf] using h
-
-/-- A proof block's replay block is one of the replay partition's blocks. -/
-theorem replayOf_lt {Pt Pρ : Partition} {v ρ : ℕ} (h : replayOf Pt Pρ v = some ρ) : ρ < Pρ.blocks.length := by
-  unfold replayOf at h
-  exact List.mem_range.1 (List.mem_of_find?_eq_some h)
 
 theorem mem_blocksIn {Pt Pρ : Partition} {ρ v : ℕ} :
     v ∈ blocksIn Pt Pρ ρ ↔ v < Pt.blocks.length ∧ replayOf Pt Pρ v = some ρ := by

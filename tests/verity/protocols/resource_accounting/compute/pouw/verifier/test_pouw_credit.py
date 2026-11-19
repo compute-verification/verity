@@ -558,7 +558,7 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix, unit
     `h1window.table_reads_file`'s over the compiled Program (its ports `window_ports`', its domains binding the window's
     open root but the weights', its A rows in its step's A table of its K, and a J10-R window's public rows its units'
     call and blocks) without its positions (`_positionless`), byte for byte, at each step count that divides the calls; and `credit.partition_of` is the
-    Program's partition object under `h1window.query`."""
+    Program's partition object under `h1window.query`, each unit its own proof block."""
     window, salt = "ef" * 64, "5a" * 64
     for linears, calls, m in COMPILED:
         raw = _compiled(linears, calls, m, prefix, unit)
@@ -568,9 +568,10 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix, unit
         lay, _ = Cr.layout_of(raw)
         shape = Cr.shape_of(raw)
         assert all(t["j10r"] == (unit is h1.unit_j10r) for t in shape["tiles"].values())
-        assert Cr.partition_of(digest, shape) == {"format": Cr.PARTITION_FORMAT, "program": digest,
-                                                  "query": h1.HW.query(prog)}
         tp = h1.P.evaluate(prog, h1.HW.query(prog))
+        assert Cr.partition_of(digest, shape, lay) == {"format": Cr.PARTITION_FORMAT, "program": digest,
+                                                       "query": h1.HW.query(prog),
+                                                       "blocks": [[[u, u + 1] for u in range(tp.population)]]}
         for steps, call in ((s, c) for s in range(1, len(calls) + 1) if len(calls) % s == 0
                             for c in range(len(calls))):
             k = dict((name, k) for name, k, _n in linears)[calls[call][0]]

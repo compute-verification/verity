@@ -15,6 +15,7 @@ from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_served as WS
 from verity.protocols.resource_accounting.memory.pous.scheme import MEMORY_ATTESTER, WIPE
+from verity.protocols.resource_accounting.memory.pous.verifier.period import UNPINNED
 from verity.protocols.resource_accounting.memory.pous.verifier.wipe_period import LIMIT_NS
 
 PIN = {"party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0", "key-sha512": "ab" * 64}
@@ -185,12 +186,14 @@ def test_the_period_names_the_judge_and_the_streamer_its_launcher_built(tmp_path
 
 
 @pytest.mark.parametrize("facts, development", [
-    (BOUND, []), ({"run_keys": True}, ["run_keys"]), ({"run_keys": True, "simulated": True}, ["run_keys", "simulated"]),
-    (BOUND | {"foreign_bytes": 1}, ["foreign_bytes"])])
+    (BOUND, None), ({"run_keys": True}, f"development run: ran with run_keys; {UNPINNED}"),
+    ({"run_keys": True, "simulated": True}, f"development run: ran with run_keys; ran with simulated; {UNPINNED}"),
+    (BOUND | {"foreign_bytes": 1}, "development run: ran with foreign_bytes")])
 def test_a_record_names_the_development_facts_it_ran_under(tmp_path, monkeypatch, facts, development) -> None:
-    """A record made under ``run_keys``, ``simulated`` or a cheat says so in ``served.development``, in the file and
-    the report alike, so a simulated wipe never reads as one; its placement's premise reads rehearsal besides
-    (`wipe_party.placement`)."""
+    """A record made under ``run_keys``, ``simulated``, a cheat or a key no pin gives says why in
+    ``served.development``, in the file and the report alike, so a simulated wipe never reads as one, and its piece
+    writes ``development.json`` in place of ``answer.json`` (`period.publish`); its placement's premise reads rehearsal
+    besides (`wipe_party.placement`)."""
     def subprotocol(period, node, out, *, side_of, ready):
         (out / "wipe.case.json").write_text("{}")
         (out / "wipe.json").write_text("{}")

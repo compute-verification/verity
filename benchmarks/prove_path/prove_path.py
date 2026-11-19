@@ -1472,7 +1472,7 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1))
     lowered = time.time() - t0
     try:
-        one = CZ.project(seen, probe, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)),
+        one = CZ.project(seen, probe, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)[0]),
                          lambda T, BN: fa2_masked_from(T, 1, 0, BN, False))
         sources = json.loads((HERE / "sources.json").read_text())
         sizes = {"program": CZ.size(one, sources), "window": CZ.size(one, sources, cls.slots)}

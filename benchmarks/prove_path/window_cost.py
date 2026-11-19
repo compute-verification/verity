@@ -187,20 +187,21 @@ def canonical(lab: str) -> str:
 
 
 def units_of(census: dict) -> list[Unit]:
-    """A census's templates as `Unit`s (a wired+registered port counted wired)."""
+    """A census's templates as `Unit`s (a wired+registered port counted wired), those of one label and the same rows one."""
     def by_kind(d: dict) -> dict:
         return {"wired": sum(v for k, v in d.items() if "wired" in k),
                 "registered": sum(v for k, v in d.items() if "wired" not in k and "registered" in k),
                 "other": sum(v for k, v in d.items() if k != "out" and "wired" not in k and "registered" not in k)}
 
-    out = []
+    out: dict[Unit, int] = {}
     for lab, t in census["templates"].items():
         rows, b = by_kind(t["rows"]), by_kind(t["bytes"])
         o = t["rows"].get("out", 0)
         fresh = t["compressions_a_unit"] - CR.REUSED * sum(rows.values())
-        out.append(Unit(canonical(lab), t["units"], **rows, out=o, out_bytes=t["bytes"].get("out", 0),
-                        x=fresh - CR.FRESH_EXTRA * o, **{f"{k}_bytes": v for k, v in b.items()}))
-    return out
+        u = Unit(canonical(lab), 0, **rows, out=o, out_bytes=t["bytes"].get("out", 0), x=fresh - CR.FRESH_EXTRA * o,
+                 **{f"{k}_bytes": v for k, v in b.items()})
+        out[u] = out.get(u, 0) + t["units"]
+    return [replace(u, n=n) for u, n in out.items()]
 
 
 def kv_bytes(D: int) -> int:
@@ -519,7 +520,7 @@ def _slot_definition(lab: str, cls: WindowClass) -> object:
     none, which its rows don't read)."""
     fam, s = CS.statics(lab)
     if fam == CS.SCAN:
-        return SS.bridge(cls.scan, cls.prompt)
+        return SS.bridge(cls.scan, cls.prompt)[0]
     make = {CS.FEED: IO.TokenFeed, CS.COLLECT: IO.SelectCollect, CS.ENTRY: IO.SelectEntry}[fam]
     return bind(make, **s, **({"STOP": ()} if fam == CS.ENTRY else {}))
 
@@ -566,7 +567,7 @@ def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "
         raise ValueError(f"the probe's token selects are group units of {sorted(groups)} logits, not one count")
     out = []
     for u in rest:
-        lab, n = CS.projected(u.label, u.n, at, to, CS.label(SS.bridge(to.scan, to.prompt)))
+        lab, n = CS.projected(u.label, u.n, at, to, CS.label(SS.bridge(to.scan, to.prompt)[0]))
         if CS.placed(u.label, 1, at.positions) is not None:
             u = _slot_unit(u, lab, at, to, next(iter(groups), None))
         out.append(replace(u, label=lab, n=slots * n))
@@ -578,7 +579,7 @@ def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: i
     """One slot's output rows at position T under ``levers`` as a `commit_slots` step layout (`slots._layout_json`'s form,
     for ``step.py time`` at ``--slots S``): a group a template, one tensor of its units' bytes, each unit its rows, a unit's
     bytes split evenly over its rows (the census keeps a unit's total, not each row's). A template outside attention is at
-    every position as often, a slot's where it places it (`class_size.placed`). No lever but ``P``, whose shared rows are
+    every position as often, a slot's where it places it (`class_size.placed`), as many a slot as it has. No lever but ``P``, whose shared rows are
     another layout (the H200 demo's `window.shared_layout`, in history at `5c095bb4ab70`), changes a template's output rows
     outside attention."""
     if "P" in levers:
@@ -591,6 +592,8 @@ def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: i
             k, r = divmod(u.n, S * P)
             if r:
                 raise ValueError(f"{u.n} {u.label} units are not a fixed count at each of {S} × {P} positions")
+        else:
+            k *= u.n // (S * sum(CS.placed(u.label, t, P) or 0 for t in range(1, P + 1)))
         here.append((u, k))
     nb, nvis = heads.blocks_at(T, BN)
     one = replace(heads, S=1, P=T, BN=BN)

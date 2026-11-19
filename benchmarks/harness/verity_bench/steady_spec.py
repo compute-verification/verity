@@ -76,7 +76,6 @@ from verity_bench.vllm.presets import (
     RESERVED_ENV,
     SOURCE_ROOT,
     SPEC_ROOT,
-    former_name,
 )
 
 SCHEMA = "verity-bench/steady-spec/v0"
@@ -208,7 +207,7 @@ def is_steady(source: str | Path) -> bool:
 
 def spec_path(source: str | Path) -> Path:
     path = Path(source)
-    return path if path.is_file() else SPEC_ROOT / f"{former_name(source) or source}.toml"
+    return path if path.is_file() else SPEC_ROOT / f"{source}.toml"
 
 
 def _positive(spec: str, **counts: int) -> None:

@@ -87,21 +87,22 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
             s, i = (0, 4 * k + p) if p < CLASS.prompt else (1, k)
             for c_, r in enumerate(quants[p]):
                 want[(r.tid, "o2", r.unit)] = (f"row-table/{s}/k64", 8 * c_ + i)
-            tok = ((st, f"o{4 * CLASS.lane(k)}", su) if p == 0 else (P.tokens[p][0], "o0", P.tokens[p][1]) if p < CLASS.prompt
+            tok = ((st, "o0", su) if p == 0 else (P.tokens[p][0], "o0", P.tokens[p][1]) if p < CLASS.prompt
                    else (P.collects[p - 1][0], "o0", P.collects[p - 1][1]))
             want[tok] = (f"input-ids/{s}", i)
     got = _held_rows(c)
     assert got == want and len(set(got.values())) == len(got) == 2 * 5 * 7
     doc = json.loads(json.dumps(c.description()))
     assert IF.input_count(doc, **held(c)) == {
-        "units": 1568, "inputs": 10547104, "wired": 1385248, "registered": 9161856, "ingress": 0, "free": 0}
+        "units": 1570, "inputs": 10692640, "wired": 1385248, "registered": 9307392, "ingress": 0, "free": 0}
 
 
 def test_each_tables_readers_are_templates_of_their_own():
     """A sample stratified by template samples a unit from every template, so each table has a sampled reader when its readers
     are templates of their own: each template that holds a table row holds one on each of its units, all of one table, and
-    every table has one. Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v3` and `TokenFeed_v1`
-    units' and round 1's its selects', `SelectCollect_v2{..., ROUND=1}`. Without the tables no template binds a round."""
+    every table has one, but a `ScanSlots_v4` lane's, a unit a slot, which holds one on the units its lane's slots read.
+    Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v4` and `TokenFeed_v1` units' and round
+    1's its selects', `SelectCollect_v2{..., ROUND=1}`. Without the tables no template binds a round."""
     c = _lowered().circuit
     tables: dict[str, set[str]]
     held_units: dict[str, set[int]]
@@ -109,10 +110,13 @@ def test_each_tables_readers_are_templates_of_their_own():
     for (tid, _port, u), (table, _row) in _held_rows(c).items():
         tables.setdefault(tid, set()).add(table)
         held_units.setdefault(tid, set()).add(u)
-    assert all(len(ts) == 1 and held_units[t] == set(range(units[t])) for t, ts in tables.items())
+    scans = [t for t in tables if t.startswith("ScanSlots_v4")]
+    assert all(len(ts) == 1 and (t in scans or held_units[t] == set(range(units[t]))) for t, ts in tables.items())
+    assert sorted(u for t in scans for u in held_units[t]) == list(range(CLASS.slots)) == list(range(units[scans[0]]))
     readers = sorted((t.split("{")[0], *ts, "ROUND=1" in t) for t, ts in tables.items())
     assert readers == [("Int8RowQuant_v5", "row-table/0/k64", False)] * 2 + [("Int8RowQuant_v5", "row-table/1/k64", True)] * 2 + [
-        ("ScanSlots_v3", "input-ids/0", False), ("SelectCollect_v2", "input-ids/1", True), ("TokenFeed_v1", "input-ids/0", False)]
+        *[("ScanSlots_v4", "input-ids/0", False)] * CLASS.lanes, ("SelectCollect_v2", "input-ids/1", True),
+        ("TokenFeed_v1", "input-ids/0", False)]
     assert {s for t, ts in tables.items() for s in ts} == {p for p in c.registered.params
                                                             if p.startswith(("row-table/", "input-ids/"))}
     assert not any("ROUND=" in IF.descriptor_id(fn) for fn, _ in _lowered(None).circuit.templates)

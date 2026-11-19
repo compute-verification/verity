@@ -314,7 +314,7 @@ def _prove(plan: dict, d: Path) -> None:
     """Each staged call proved (`_session`) on the window's Program and partition and the ``--registered`` file stage wrote
     beside it."""
     raw = gzip.decompress((d / "h1" / SH.PROGRAM).read_bytes())
-    part = CR.partition_of(hashlib.sha512(raw).hexdigest(), CR.shape_of(raw))
+    part = CR.partition_of(hashlib.sha512(raw).hexdigest(), CR.shape_of(raw), CR.layout_of(raw)[0])
     for x in plan["calls"]:
         _bound(x, raw, part)
         _session(x, raw, part, (Path(x["dir"]) / "registered.json").read_bytes())
