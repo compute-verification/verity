@@ -1,5 +1,5 @@
 """The wires a Program's root states (`Spot.Edges.edgesOf`, the `edges` piece) against its twin,
-`verity.commitments.periods.edges`, on descriptors the builder writes and on their root arguments' references rewritten:
+`verity.circuits.edges`, on descriptors the builder writes and on their root arguments' references rewritten:
 both give the same wires or the same refusal, and the named cases give the wires or refusal the rule says."""
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.commitments.periods.edges import _lane_wire, _parts, edges
+from verity.circuits.edges import _lane_wire, _parts, edges
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

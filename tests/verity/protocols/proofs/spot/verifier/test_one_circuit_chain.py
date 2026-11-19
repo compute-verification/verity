@@ -232,7 +232,8 @@ def prove_block(member: Any) -> dict[str, Any]:
     try:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(IL, "_lower_gate", _hand_piece)
-            text = OC.lower(block.descriptor, r["partition"], PF.lower_executable).decode()
+            text = OC.lower(block.descriptor, r["partition"], PF.lower_executable,
+                            cut=OC.cuts(r["C"], r["partition"])).decode()
     except (OC.NotDerived, OC.Refused) as e:
         raise Stop(f"prove: C_S derived {rec}; its statement is the door's one_circuit.lower ({OC.__file__}:lower): {e}") from e
     meta = FC.meta_of(text)
@@ -278,7 +279,8 @@ def stage_lean_door() -> str:
     k = [x.base for x in r["window"].window.members].index(m.base)
     try:
         units = OC.block(r["C"], r["partition"], k)
-        want = OC.lower(OC.restrict(r["C"], r["partition"], units), r["partition"], PF.lower_executable)
+        want = OC.lower(OC.restrict(r["C"], r["partition"], units), r["partition"], PF.lower_executable,
+                        cut=OC.cuts(r["C"], r["partition"]))
     except (OC.NotDerived, OC.Refused) as e:
         raise Stop(f"lean door: the Python door derives no C_S for block {k} ({OC.__file__}): {e}") from e
     with tempfile.TemporaryDirectory() as d:

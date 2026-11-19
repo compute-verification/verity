@@ -561,50 +561,6 @@ def fieldRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms :
         | none => got) own
     pure (acc.insert m.name mine)) roots
 
-/-- **in(S)'s row cuts**: `ioCuts : C -> Partition -> {template: {port: rows}}`, the rows each port of a block's
-circuit is cut into, from C and the partition (the ranges `rs`), in O(C's description). A port a part of a root node's argument reads from a non-input root node is cut into its leaves over the leaves of the
-writer's output field at the part's first reference (`Flock.Program.partLeafAt`, `fieldIx`); an uncut port is left out.
-`edgesOf` holds every row so cut to one whole writer field, so a cut here only decides which rows it checks. Its work
-is the root's nodes, arguments and parts. A scan at the root is refused by name (no closed form yet, `edgesOf`'s
-`edge-form`), and so is a port of one template read in rows of two lengths. -/
-def ioCuts (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) :
-    V (List (String × List (String × Nat))) := do
-  let fu := Spot.Edges.firstUnits rs
-  let nodes := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
-  let mut cs : List (String × List (String × Nat)) := []
-  for k in [0:nodes.size] do
-    if Spot.Edges.isInputNode P k then continue
-    let node := nodes[k]!
-    if node.form == .scan then
-      throw (Flock.OneCircuit.notDerived "ioCuts : a scan node of C's root (edge-form: no closed form yet)")
-    let some (rt, _) := fu[k]? | throw "edge-template"
-    let defn := P.defs[node.fn]!
-    for i in [0:node.args.size] do
-      let (port, ty) := defn.params[i]!
-      for q in node.args[i]!.seq.parts do
-        let (run, lanes) := Flock.Program.partLanes q
-        let some (false, w, l) := Flock.Program.partLeafAt run lanes 0 | continue
-        if l < 0 || w ≥ nodes.size || Spot.Edges.isInputNode P w then continue
-        let wd := P.defs[nodes[w]!.fn]!
-        if wd.outLeaves == 0 then continue
-        let some f := Flock.Program.fieldIx wd.ret (l.toNat % wd.outLeaves) | continue
-        let fl := ((Flock.Program.fieldsOf wd.ret)[f]?.map (·.leaves)).getD 0
-        if fl == 0 || ty.leaves % fl != 0 then throw "edge-rows"
-        let kc := ty.leaves / fl
-        let ports := (cs.lookup rt).getD []
-        match ports.lookup port with
-        | some k' =>
-          if k' != kc then
-            throw s!"ioCuts: template {rt}'s port {port} is read in rows of {ty.leaves / k'} and of {fl} leaves"
-        | none => cs := (rt, ports ++ [(port, kc)]) :: cs.filter (·.1 != rt)
-  return (cs.reverse.map fun (t, ps) => (t, ps.filter (·.2 > 1))).filter (!·.2.isEmpty)
-
-/-- Whether C's root has an edge: an argument part of a root node that reads a root node that is no input. Its work is
-the root's nodes, arguments and parts. -/
-def hasEdge (P : Flock.Program.Prog) : Bool :=
-  ((P.defs[P.root]?).map (·.body.nodes)).getD #[] |>.any fun n => n.args.any fun a =>
-    a.seq.parts.any fun q => (Flock.Registered.partNodes q).any fun k => !Spot.Edges.isInputNode P k
-
 /-- **C's wiring under the partition**: the templates of the partition's ranges `rs`, read off C
 (`Spot.RecordText.tmplAt`), in(S)'s row cuts (`ioCuts`), and the wires C's root states (`Spot.Edges.edgesOf`). -/
 def derivedWiring (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) : V Spot.Wires.Wiring := do

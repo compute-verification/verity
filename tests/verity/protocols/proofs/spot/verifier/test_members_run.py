@@ -53,7 +53,8 @@ lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchai
 @functools.cache
 def lowered(member: str) -> bytes:
     """The member's circuit file: its block's C_S, lowered by Lean (`one_circuit.lower`)."""
-    return OC.lower(OC.restrict(DESCRIPTOR, PARTITION, UNITS[member]), PARTITION, PF.lower_executable)
+    return OC.lower(OC.restrict(DESCRIPTOR, PARTITION, UNITS[member]), PARTITION, PF.lower_executable,
+                    cut=OC.cuts(DESCRIPTOR, PARTITION))
 
 
 def header(member: str, **changes) -> dict:

@@ -988,7 +988,7 @@ def replayWires (j : Json) : V Json := do
     | some ws => Json.arr (ws.map SecondStage.Wire.toJson)
     | none => .null
 
-/-- `periods.edges`' input to the wires a Program's root states (`Edges.edgesOf`): a program object, its ranges
+/-- `circuits.edges`' input to the wires a Program's root states (`Edges.edgesOf`): a program object, its ranges
 (`[node, template, first, count]` each) and a wiring (`Wires.Wiring.ofJson`'s); `{"wires": [...]}` or
 `{"refusal": code}`. -/
 def edges (j : Json) : V Json := do
