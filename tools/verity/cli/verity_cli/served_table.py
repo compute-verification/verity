@@ -57,7 +57,8 @@ from verity.config import Component, Workload
 from verity.protocol import Channel, ProtocolDef, Role, Starter
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.scheme import Executable, Lacks, Launch, Scheme, declared, settings
+from verity.protocols.resource_accounting.scheme import (Executable, Lacks, Launch, LaunchRefused, Scheme, declared,
+                                                             settings)
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.registration.verifier import registration as RL
@@ -81,7 +82,6 @@ NOT_YET = "memory-accounting/onsite-memory-verdicts"
 RUNNER = "benchmarks/one_stage/served_verdicts.sh"
 VERDICTS_SCRIPT = "benchmarks/one_stage/served_verdicts.py"
 ATTESTER_PIECE = "benchmarks/network_traces/attester_piece.py"
-PEARLPLUS_SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
 PEARLPLUS_GATE = "benchmarks/one_stage/pearlplus_local_e2e.py"
 ONSITE = "verity/onsite/v1"
 REMOTE = "verity/remote/v1"
@@ -426,7 +426,11 @@ class Piece:
                  **{k: str(v) for k, v in mine.items() if k in self.binds or k in self.optional}}
         params = cfg["params"].get(MANIFESTS[self.component].id, {}) if self.component in MANIFESTS else {}
         dev = not self.development or self.development in mine
-        return self.hooks(cfg, params, bound, _pinned(cfg, self.reaches or self.party, self.component) if dev else [])
+        try:
+            return self.hooks(cfg, params, bound,
+                              _pinned(cfg, self.reaches or self.party, self.component) if dev else [])
+        except LaunchRefused as e:
+            raise Refused(e.name, e.detail) from e
 
     def describe(self, cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, Any]:
         """What `verity run --dry-run` prints of it; `verity_cli.run` refuses ``no-piece`` while ``missing`` names a
@@ -483,38 +487,6 @@ def _pouw(cfg, params, bound, pinned):
 
 def _pinned(cfg: Mapping[str, Any], party: str, protocol: str) -> list[str]:
     return [p["key-sha512"] for p in cfg.get("pin", []) if (p["party"], p["protocol"]) == (party, protocol)][:1]
-
-
-_PEARLPLUS_LIVE = {"gate": "PEARLC_CHALLENGER_GATE", "peer": "PEARLC_CHALLENGER_PEER", "key-sha512": "H1_KEY_SHA512"}
-
-
-def _pearlplus(cfg, params, bound, pinned):
-    """Pearl+ on the workload's engine (POUW=pearlplus, PEARLPLUS_TIE=1): each engine step's passes retained under the
-    gate's salts, Pearl+'s window record tied to the execution phase, then its verdict and the Lean verifier
-    (served_pearlplus.sh). With no gate bound the gate variables are set empty, since unset served_verdicts.sh takes the lane's gate: Pearl+'s
-    epoch coins are then an in-process challenger's on the workload's machine, its verdict claims none, and the run is a
-    development one."""
-    product = "remote" if K.composite(cfg["protocols"], MANIFESTS) == REMOTE else "onsite"
-    hooks = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": product}
-    if given := [k for k in _PEARLPLUS_LIVE if k in bound]:
-        if lacking := [k for k in _PEARLPLUS_LIVE if k not in bound]:
-            raise Refused("unbound", f"Pearl+'s live challenger takes {', '.join(_PEARLPLUS_LIVE)} together, and the "
-                                     f"deploy bindings bind {', '.join(given)} without "
-                                     f"{', '.join(f'{CHALLENGER}.pearl-plus.{k}' for k in lacking)}: bind them, or "
-                                     f"none for coins flipped on the workload's machine")
-        hooks |= {v: bound[k] for k, v in _PEARLPLUS_LIVE.items()}
-    else:
-        hooks |= {"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
-    hooks |= {v: bound[k] for k, v in (("lane", "PEARLC_CHALLENGER_LANE"), ("main-file", "MAIN_FILE")) if k in bound}
-    if "class" in params:
-        w = cfg["workload"]["params"]
-        slots, _, outputs = (int(x) for x in params["class"].split(","))
-        if (slots, outputs) != (w["slots"], w["window-steps"]):
-            raise Refused("params", f"Pearl+'s class {params['class']} is {slots} requests of {outputs} output tokens, "
-                                    f"and the workload's slots and window-steps are {w['slots']} and {w['window-steps']}: "
-                                    f"state slots = {slots} and window-steps = {outputs}, or a class that agrees")
-        hooks |= {"V3C_CLASS": params["class"], "CLASSES": params["class"]}
-    return hooks | ({"PEARLPLUS_TIE_UNIFORM": "1"} if params["tie-uniform"] else {})
 
 
 #: the challenger's hosts that `verity run` started on this machine, by the run's state, from its serve to its stop
@@ -657,10 +629,6 @@ def spot_entry(declaration: Any) -> Launcher:
 
 def pouw_entry(declaration: Any) -> Launcher:
     return Launcher(_pouw)
-
-
-def pearlplus_entry(declaration: Any) -> Launcher:
-    return Launcher(_pearlplus, (PEARLPLUS_SCRIPT,))
 
 
 def attester_entry(declaration: Any) -> Launcher:
