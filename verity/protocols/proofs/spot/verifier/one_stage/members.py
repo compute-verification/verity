@@ -651,7 +651,7 @@ def flock_form(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]]) 
     with tempfile.TemporaryDirectory(prefix="verity-members-form-") as d:
         for name, f in tables:
             os.symlink(f, Path(d, f"{name}.u32"))
-        p = subprocess.run([str(PF.executable()), "ks-form", "--statement", PF.STATEMENT, "--circuit", str(circuit),
+        p = subprocess.run([str(PF.executable()), "ks-form", "--statement", PF.TMPL_STATEMENT, "--circuit", str(circuit),
                             "--public", str(public), "--tables", d], capture_output=True, text=True,
                            env=PF.verifier_env())
     out = p.stdout.removesuffix("\n")
@@ -686,17 +686,21 @@ def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], u
 
 
 def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes, partition: Mapping[str, Any],
-           strata: Any, slice_: Mapping[str, Any], form: Form) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
-    """`OneStageZk.Member.files`: the member `name`'s circuit file, C_S (`one_circuit.restrict`), and public files and its own lookup tables, the blobs'
-    pinned tables its circuit looks up (`proofs.own_tables`, `OneStageZk.ownTables`), read as `Member.statement` reads
-    them and held with no session (`files_why`); a refusal names the member. A table its circuit looks up that the
-    blobs do not hold refuses (`proofs.tables_match_why`); one only another member's circuit looks up is none of its."""
+           strata: Any, slice_: Mapping[str, Any], form: Form,
+           derived: Path) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
+    """`OneStageZk.Member.files`: the member `name`'s circuit file, C_S as `OneStageZk.restrict` derives it
+    (`one_circuit.restrict`, then `one_circuit.lower`), written under `derived`, and public files and its own lookup
+    tables, the blobs' pinned tables its circuit looks up (`proofs.own_tables`, `OneStageZk.ownTables`), read as
+    `Member.statement` reads them and held with no session (`files_why`); a refusal names the member. A table its
+    circuit looks up that the blobs do not hold refuses (`proofs.tables_match_why`); one only another member's circuit
+    looks up is none of its."""
     try:
         try:
             c = OC.lower(OC.restrict(descriptor, partition, m["units"]), partition, PF.lower_executable)
         except (OC.NotDerived, OC.Refused) as e:
-            raise _Refused(f"circuit: {e}") from None
-        circuit = _blob(blobs, hashlib.sha512(c).hexdigest(), "circuit")
+            raise _Refused(f"restrict: {e}") from None
+        circuit = derived / f"{hashlib.sha512(c).hexdigest()}.txt"
+        circuit.write_bytes(c)
         meta = _meta(circuit)
         try:
             lookups = PF.lookups_of(meta)
@@ -742,7 +746,7 @@ def flock_verdict(st: Statement) -> dict[str, Any]:
         if st.registered is not None:
             (at / "registered.json").write_text(json.dumps(st.registered))
             reads = ["--registered", str(at / "registered.json")]
-        p = subprocess.run([str(PF.executable()), "verify", "--zk", "--statement", PF.STATEMENT, "--circuit", str(st.circuit),
+        p = subprocess.run([str(PF.executable()), "verify", "--zk", "--statement", PF.TMPL_STATEMENT, "--circuit", str(st.circuit),
                             "--public", str(st.public), "--tables", str(at / "tables"),
                             "--partition", str(at / "partition.json"), "--program", str(at / "program.json"), *reads,
                             "--session", str(at / "s")], capture_output=True, text=True, env=PF.verifier_env())
@@ -793,6 +797,15 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
     descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
     ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"])} for name, m in ms.items()}
     _apart(ms)
+    with tempfile.TemporaryDirectory(prefix="verity-members-cs-") as derived:
+        return _members_run(params, record, evidence, blobs, ms, sts, descriptor, program, verify, verdict, form,
+                            Path(derived))
+
+
+def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any],
+                 blobs: Mapping[str, Path], ms: dict[str, Any], sts: list[Any], descriptor: bytes, program: Program,
+                 verify: Ch.Verify, verdict: Callable[[Statement], Mapping[str, Any]], form: Form,
+                 derived: Path) -> tuple[Run | None, str | None]:
     try:
         held = _held(ms, sts)
         if [s["name"] for st in sts for s in st["sessions"]] != evidence["sessions"]:
@@ -816,7 +829,8 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
         except (P.QueryRefused, ValueError) as e:
             strata = e
         files = {name: _files(name, m, blobs, descriptor, params["partition"], strata,
-                              {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form)
+                              {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form,
+                              derived)
                  for name, m in ms.items()}
         findings: list[PF.Finding] = []
         for st, name in zip(sts, held):

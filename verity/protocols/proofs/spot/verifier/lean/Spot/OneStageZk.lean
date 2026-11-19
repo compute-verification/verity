@@ -1254,8 +1254,7 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
 #guard (runMembers (fun _ => Json.null) #[] #[] #[] ⟨#[]⟩).toOption.map (·.all) == some true
 #guard whyT (runMembers (fun _ => Json.null) #[] #[] #[1] ⟨#[]⟩) ==
   "the units the sessions proved are not the evidence's proved_units"
-#guard (whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[2] ⟨#[]⟩)).startsWith
-  "member m2: restrict: "
+#guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[2] ⟨#[]⟩) == s!"member m2: {NO_BLOCKS_T}"
 #guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[] ⟨#[]⟩) == unsampled "m2"
 #guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2", statementT "m10"] #[10] ⟨#[]⟩) ==
   unsampled "m2"
@@ -1284,7 +1283,7 @@ private def statedT (c : ByteArray) (bs : Core.Blobs) : String :=
 
 /-- A statement of no file whose scope, ports, form, header and population checks are the ones given. -/
 private def stepT (scope ksFiles ksForm header population : V Unit) : Option StepAt :=
-  (Flock.Tags.find? STATEMENT).map fun tags =>
+  (Flock.Tags.byName? STATEMENT).map fun tags =>
     { I := inputsOf tags sharedT .empty .empty ⟨#[]⟩, rd := { registered := none, known := #[], params := #[] }, scope,
       ksFiles, ksForm, header, g := none, population, programSha := none, want := Json.null }
 
@@ -1303,7 +1302,7 @@ private def stepT (scope ksFiles ksForm header population : V Unit) : Option Ste
 /-- The statement `StepAt.ofOwn` builds of no file: its form check is `Flock.KsScope.filesOf`'s refusal of a circuit
 that does not parse, and it names no units a proof block. -/
 private def ownT : Option StepAt :=
-  (Flock.Tags.find? STATEMENT).map fun tags =>
+  (Flock.Tags.byName? STATEMENT).map fun tags =>
     StepAt.ofOwn sharedT tags .empty .empty [] { registered := none, known := #[], params := #[] } (.ok ())
 
 #guard (ownT.map fun a => (refusal a.ksForm).startsWith "refused: ") == some true
