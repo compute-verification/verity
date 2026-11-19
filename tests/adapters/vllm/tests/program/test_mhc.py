@@ -23,8 +23,11 @@ from verity.circuits.evaluation import evaluate
 from verity.device import load_card, number
 
 from verity_vllm.definitions.numerics import mhc_twin as W
+from verity_vllm.definitions.numerics import tf32_twin as TT
 from verity_vllm.definitions.registry import boolean_mhc as BM
+from verity_vllm.definitions.registry import boolean_tf32_wgmma as BTW
 from verity_vllm.definitions.registry import mhc as M
+from verity_vllm.definitions.registry import tf32_wgmma as TW
 
 EPS = 1e-6
 #: the H200's SMs, the served split counts' device
@@ -196,8 +199,8 @@ def _step_rows(rng, n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 def test_tf32_step_twin_random() -> None:
     rng = np.random.default_rng(6)
     acc, a, b = _step_rows(rng, 400)
-    want = np.array([M.HopperTf32WgmmaDot8.evaluate(int(c), *map(int, x), *map(int, y)) for c, x, y in zip(acc, a, b)], np.uint32)
-    same(W.tf32_dot8(acc, a, b), want, "HopperTf32WgmmaDot8_v1")
+    want = np.array([TW.HopperTf32WgmmaDot8.evaluate(int(c), *map(int, x), *map(int, y)) for c, x, y in zip(acc, a, b)], np.uint32)
+    same(TT.tf32_dot8(acc, a, b), want, "HopperTf32WgmmaDot8_v1")
 
 
 def test_tf32_step_twin_specials() -> None:
@@ -208,19 +211,19 @@ def test_tf32_step_twin_specials() -> None:
     a[:, 0], b[:, 0] = pairs[:, 0], pairs[:, 1]
     a[:, 3], b[:, 3] = pairs[:, 1], np.uint32(0x3F800000)
     acc: np.ndarray = np.resize(F32_SPECIALS, n)
-    want = np.array([M.HopperTf32WgmmaDot8.evaluate(int(c), *map(int, x), *map(int, y)) for c, x, y in zip(acc, a, b)], np.uint32)
-    same(W.tf32_dot8(acc, a, b), want, "HopperTf32WgmmaDot8_v1 on specials")
+    want = np.array([TW.HopperTf32WgmmaDot8.evaluate(int(c), *map(int, x), *map(int, y)) for c, x, y in zip(acc, a, b)], np.uint32)
+    same(TT.tf32_dot8(acc, a, b), want, "HopperTf32WgmmaDot8_v1 on specials")
 
 
 def test_tf32_rounding_modes() -> None:
     w = np.array([0x3F800FFF, 0x3F801000, 0x3F803000, 0x3F801001, 0x7F7FFFFF, 0x7FC00001, 0xFF800000, 0xBF802000], np.uint32)
-    assert (W.round_tf32(w, "trunc") == w).all() and np.array_equal(W.round_tf32(w), W.round_tf32(w, "rne"))
-    assert [hex(v) for v in W.round_tf32(w, "rna")] == [hex(v) for v in (0x3F800000, 0x3F802000, 0x3F804000, 0x3F802000, 0x7F800000,
+    assert (TT.round_tf32(w, "trunc") == w).all() and np.array_equal(TT.round_tf32(w), TT.round_tf32(w, "rne"))
+    assert [hex(v) for v in TT.round_tf32(w, "rna")] == [hex(v) for v in (0x3F800000, 0x3F802000, 0x3F804000, 0x3F802000, 0x7F800000,
                                                                          0x7FC00001, 0xFF800000, 0xBF802000)]
-    assert [hex(v) for v in W.round_tf32(w, "rne")] == [hex(v) for v in (0x3F800000, 0x3F800000, 0x3F804000, 0x3F802000, 0x7F800000,
+    assert [hex(v) for v in TT.round_tf32(w, "rne")] == [hex(v) for v in (0x3F800000, 0x3F800000, 0x3F804000, 0x3F802000, 0x7F800000,
                                                                          0x7FC00001, 0xFF800000, 0xBF802000)]
-    assert [M.tf32_operand(int(v)) for v in w] == [int(v) >> 13 | (1 if (int(v) & 0x7F800000 == 0x7F800000 and int(v) & 0x7FFFFF) else 0)
-                                                   for v in W.round_tf32(w, "rne")]
+    assert [TW.tf32_operand(int(v)) for v in w] == [int(v) >> 13 | (1 if (int(v) & 0x7F800000 == 0x7F800000 and int(v) & 0x7FFFFF) else 0)
+                                                   for v in TT.round_tf32(w, "rne")]
 
 
 def test_tf32_split_twins() -> None:
@@ -319,7 +322,7 @@ def test_boolean_sigmoid_and_step() -> None:
     rng = np.random.default_rng(11)
     _agree(bind(BM.MhcSigmoidV2), np.concatenate([F32_SPECIALS, f32(rng, 64, 8.0)]))
     acc, a, b = _step_rows(rng, 64)
-    _agree(bind(BM.HopperTf32WgmmaDot8V2), acc, a, b)
+    _agree(bind(BTW.HopperTf32WgmmaDot8V2), acc, a, b)
 
 
 @pytest.mark.slow

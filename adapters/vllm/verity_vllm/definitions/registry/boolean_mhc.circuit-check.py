@@ -16,7 +16,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     # two streams, the smallest blocks each kernel's check accepts, two Sinkhorn iterations and two splits; each big fuse's Calls
     # are the mixes (K 32 in both) and the norm bound beside it, the TF32 GEMM's its split, so each flat circuit is traced once
     return [
-        ("HopperTf32WgmmaDot8_v2", lambda: bind(BM.HopperTf32WgmmaDot8V2)),
         ("MhcSigmoid_v2", lambda: bind(BM.MhcSigmoidV2)),
         ("MhcSinkhorn_v2", lambda: bind(BM.MhcSinkhornV2, HC=2, REPEAT=2, EPS=1e-6)),
         ("MhcMixes_v2", lambda: bind(BM.MhcMixesV2, HC=2, NS=2, K=32, REPEAT=2, **e)),

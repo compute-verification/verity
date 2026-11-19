@@ -21,6 +21,7 @@ from verity.circuits.evaluation import evaluate
 from tests import fake_vllm
 from tests.properties import dsv4_mhc_capture_gpu as X
 from verity_vllm.definitions.numerics import mhc_twin as W
+from verity_vllm.definitions.numerics import tf32_twin as TT
 from verity_vllm.definitions.registry import mhc as R
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
@@ -63,8 +64,8 @@ def test_the_adder_families_read_b_exactly(launches) -> None:
     for L in launches:
         if L["family"] != "round":
             assert not (L["b"] & np.uint32(0x1FFF)).any(), L["family"]
-            for r in W.B_ROUNDINGS:
-                assert np.array_equal(W.round_tf32(L["b"], r), L["b"]), (L["family"], r)
+            for r in TT.B_ROUNDINGS:
+                assert np.array_equal(TT.round_tf32(L["b"], r), L["b"]), (L["family"], r)
 
 
 def test_the_round_family_reads_b_alone(launches) -> None:
@@ -73,10 +74,10 @@ def test_the_round_family_reads_b_alone(launches) -> None:
     L = launches[i]
     ys = [W.prenorm_tf32(L["a"], L["b"], L["NS"], m)[0] for m in X.step_models()[::7]]
     assert all(np.array_equal(y, ys[0]) for y in ys)
-    for r in W.B_ROUNDINGS:
-        y = W.prenorm_tf32(L["a"], L["b"], L["NS"], W.CANDIDATE, r)[0]
+    for r in TT.B_ROUNDINGS:
+        y = W.prenorm_tf32(L["a"], L["b"], L["NS"], TT.CANDIDATE, r)[0]
         k = np.arange(X.PROBE_M) % L["a"].shape[1]
-        assert np.array_equal(y[:, 0, :], W.round_tf32(L["b"][:, k].T, r) & ~np.uint32(0x1FFF)), r
+        assert np.array_equal(y[:, 0, :], TT.round_tf32(L["b"][:, k].T, r) & ~np.uint32(0x1FFF)), r
 
 
 @pytest.mark.slow
