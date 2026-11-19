@@ -309,6 +309,26 @@ def rootNodes (P : Program.Prog) : Array Program.Node := ((P.defs[P.root]?).map 
 /-- Root node `k` of `P` is a registered input. -/
 def regNode (P : Program.Prog) (k : Nat) : Bool := ((rootNodes P)[k]?).any (regDef P ·.fn)
 
+def runDef (P : Program.Prog) (fn : Nat) : Bool :=
+  match P.defs[fn]? with
+  | some f => f.prim && f.binding == some Program.RUN
+  | none => false
+
+/-- Root node `k` of `P` is an input bound per run: no registered value, its rows a fresh input of the units reading them. -/
+def runNode (P : Program.Prog) (k : Nat) : Bool := ((rootNodes P)[k]?).any (runDef P ·.fn)
+
+/-- The one value holding run input node `w`'s rows. Every port that reads any of them names it, so they are committed
+once, in one tree, each row a leaf, at the position C gives (`OneCircuit.pos`). -/
+def freshValue (w : Nat) : String := s!"input/n{w}"
+
+/-- The first value two of `ps` name with another root, domain or row count: a value is one commitment. -/
+def splitValue? : List Port → Option String
+  | [] => none
+  | p :: qs =>
+    if qs.any fun q => q.value == p.value && (q.root != p.root || q.domain != p.domain || q.leaves != p.leaves) then
+      some p.value
+    else splitValue? qs
+
 /-- A port's template parameter (`PARAM_KEY`) as its name and, for `name[i]`, row `i` of an array of rows. -/
 def paramRow (param : String) : String × Option Nat :=
   match param.splitOn "[" with
@@ -325,7 +345,8 @@ namespace OneCircuit
 
 open Registered (regNode paramRow)
 
-/-- Member `m` of root node `k` reads its parameter `param` (`paramRow`) at a registered input node's row: the node
+/-- Member `m` of root node `k` reads its parameter `param` (`paramRow`) at an input node's row, a registered input or a
+run input (`runNode`): the node
 the row (its leaf over the row's leaves) and the row's leaves, from the argument's part holding the member's row (`Program.laneWire`).
 A form with no closed form here (an explicit part, a row across parts or lanes) is refused by name. -/
 def regRow (P : Program.Prog) (k m : Nat) (param : String) : V (Nat × Nat × Nat) := do
@@ -355,7 +376,8 @@ def regRow (P : Program.Prog) (k m : Nat) (param : String) : V (Nat × Nat × Na
   let (w, leaf, _, _) ← match Program.laneWire run lanes (x - s0) 0 len 1 with
     | .ok v => pure v
     | .error _ => throw (notDerived s!"pos : {ctx}: a row of no lane's run (an explicit part, or across lanes)")
-  if !regNode P w then throw s!"{ctx}: member {m} reads root node {w}, which is no registered input"
+  if !(regNode P w || Registered.runNode P w) then
+    throw s!"{ctx}: member {m} reads root node {w}, which is no registered input and no run input"
   if len == 0 || leaf % len != 0 then throw s!"{ctx}: member {m} reads leaf {leaf} of node {w}, off its rows of {len}"
   return (w, leaf / len, len)
 
@@ -363,7 +385,8 @@ def regRow (P : Program.Prog) (k m : Nat) (param : String) : V (Nat × Nat × Na
 `reg` each unit of `indices` reads at `reg`'s parameter (`regRow`), a function of C (`P`): the registered input node's
 leaf over the row's leaves, the leaf order of its tree. Every unit reads one node, whose rows are `reg.leaves`. Its
 work is the statement's units, each found from the root's nodes and its argument's parts. The code's Core
-`RegisteredCircuit.pos`, restricted to registered values. -/
+`RegisteredCircuit.pos`, restricted to input nodes. A run input node `w` is read from its one tree `freshValue w`, and
+a registered one under any other name. -/
 def pos (P : Program.Prog) (indices : Array Nat) (reg : Registered.Port) : V Registered.Port := do
   let ns := HmLinks.nodes P
   let param := if reg.param.isEmpty then reg.name else reg.param
@@ -376,10 +399,14 @@ def pos (P : Program.Prog) (indices : Array Nat) (reg : Registered.Port) : V Reg
     if node.any (· != w) then
       throw s!"registered reads: port {reg.name}: units read registered nodes {node.getD 0} and {w}, and a port is one value"
     if node.isNone then
+      if regNode P w && reg.value.startsWith "input/" then
+        throw s!"registered reads: port {reg.name}: C's node {w} is a registered input, read at its registered root, and the port names the fresh input {reg.value}"
+      if Registered.runNode P w && reg.value != Registered.freshValue w then
+        throw s!"registered reads: port {reg.name}: C's node {w} is a run input, its rows committed once, in {Registered.freshValue w}, and the port names {reg.value}"
       let wn := (Registered.rootNodes P)[w]!
       let rows := (P.defs[wn.fn]!).outLeaves * wn.members / len
       if rows != reg.leaves then
-        throw s!"registered reads: port {reg.name}: {reg.value} holds {reg.leaves} rows, and C's registered node {w} {rows}"
+        throw s!"registered reads: port {reg.name}: {reg.value} holds {reg.leaves} rows, and C's input node {w} {rows}"
     node := some w
     rel := rel.set! (u - first) (some r)
   return { reg with readsRel := rel, readsFrom := first }
@@ -459,11 +486,14 @@ def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (r
 
 /-- The verifier's registered reads `own` with every port's reads derived at the statement's circuit `c` and public file
 `pub` from C, the verifier's program `program`: an output row (a port past `HmOut.nIn c`) by `outReads`, a row of in(S)
-(`OneCircuit.io`) by `treeReads`, a registered value's by `OneCircuit.pos`; without the program every port is refused. -/
+(`OneCircuit.io`) by `treeReads`, a registered value's or a run input's by `OneCircuit.pos`; without the program every
+port is refused, and so is a value named under two roots, domains or row counts (`splitValue?`). -/
 def withPositions (c : Circuit) (pub : Public) (program : Option ByteArray) (own : Option (Array Port)) :
     V (Option (Array Port)) := do
   let some own := own | return none
   let some b := program | throw "registered reads: a port's reads are derived from C, the verifier's program (--program)"
+  if let some v := splitValue? own.toList then
+    throw s!"registered reads: value {v} is registered under two roots, domains or row counts, and a value is one commitment every port reading it opens"
   let P ← Program.decode b
   let indices ← unitIndices pub
   let rows ← OneCircuit.io c P

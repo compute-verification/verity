@@ -166,6 +166,29 @@ def theta : Registered.Port := { x with name := "w", value := "theta", leaves :=
 #guard (OneCircuit.pos regP #[2] theta).toOption.isNone
 #guard (OneCircuit.pos regP #[0] { theta with name := "v" }).toOption.isNone
 
+-- a fresh input: node 0 a run input, its rows read at the positions C gives from its one tree `input/n0`, the row count
+-- held as a registered value's; a run input named as another value, and a registered one named as a fresh input, refused
+def whyPos (P : Program.Prog) (units : Array Nat) (reg : Registered.Port) : String :=
+  match OneCircuit.pos P units reg with
+  | .error e => e
+  | .ok _ => ""
+def runP : Program.Prog :=
+  { regP with defs := regP.defs.set! 0 { regP.defs[0]! with key := "Input16_v1", id := "Input16_v1", binding := some Program.RUN } }
+def fresh : Registered.Port := { theta with value := freshValue 0 }
+#guard ((OneCircuit.pos runP #[0, 1] fresh).toOption.map fun r => (r.readsRel, r.readsFrom)) == some (#[some 1, some 2], 0)
+#guard (OneCircuit.pos runP #[0, 1] { fresh with leaves := 3 }).toOption.isNone
+#guard (whyPos runP #[0, 1] theta).startsWith
+  "registered reads: port w: C's node 0 is a run input, its rows committed once, in input/n0, and the port names theta"
+#guard (whyPos runP #[0, 1] { fresh with value := freshValue 1 }).startsWith "registered reads: port w: C's node 0 is a run input"
+#guard (whyPos regP #[0, 1] fresh).startsWith
+  "registered reads: port w: C's node 0 is a registered input, read at its registered root, and the port names the fresh input input/n0"
+#guard (OneCircuit.pos runP #[2] fresh).toOption.isNone
+-- a value is one commitment: two ports of one value under two roots, domains or row counts
+#guard splitValue? [theta, { theta with name := "w1" }] == none
+#guard splitValue? [theta, { theta with name := "w1", root := ByteArray.mk #[1] }] == some "theta"
+#guard splitValue? [fresh, theta, { fresh with name := "w1", leaves := 8 }] == some (freshValue 0)
+#guard splitValue? [theta, { fresh with root := ByteArray.mk #[1] }] == none
+
 -- output rows: a block circuit of `regP`'s template T, whose one output field (16 bits) is its one output row `o0`
 def oMeta (t : String) : Json := Json.mkObj [("program_digests", Json.mkObj [(t, Json.str "d")])]
 def oPort (name : String) (words : Nat) : Flock.Port := { name, words, chunks := 1, nb := 0 }
