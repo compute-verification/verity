@@ -26,7 +26,6 @@ from typing import Any
 
 from verity_vllm.acquire.sources.call_boundary_plan import CALL_BOUNDARY, MODULE_OUTPUT
 from verity_vllm.log import init_logger
-from verity_vllm.query.manifest.bind import Port
 
 logger = init_logger(__name__)
 
@@ -97,23 +96,17 @@ def kv_modules(plan: Sequence[Mapping[str, Any]]) -> list[str]:
                    if c["capture"] == MODULE_OUTPUT and _of(c, KV) and str(c["member"]).rsplit(".", 1)[-1] in KV_PORTS})
 
 
-def kv_definitions(plan: Sequence[Mapping[str, Any]]) -> frozenset[str]:
-    """The Int8KvQuant Definitions (name and version) of the plan's captured ports, which `Int8Source.ports` declares."""
-    return frozenset(str(d) for c in plan if c["capture"] == MODULE_OUTPUT and _of(c, KV) for d in c["definitions"])
-
-
 class Int8Source:
     short_name = SHORT_NAME
 
-    def __init__(self, committer: Any, model: Any, quant: Mapping[tuple[int, str], str], kv: list[str],
-                 kv_definitions: frozenset[str] = frozenset()) -> None:
+    def __init__(self, committer: Any, model: Any, quant: Mapping[tuple[int, str], str], kv: list[str]) -> None:
         """``quant``: (engine step, module) -> its op path, read with ``get`` at each step (`Sites`: the same at every step)."""
         import torch
 
         if not quant and not kv:
             raise ValueError("int8: no quantizer to tap")
         self.torch, self.c, self.model = torch, committer, model
-        self.quant, self.kv, self.kv_definitions = quant, list(kv), frozenset(kv_definitions)
+        self.quant, self.kv = quant, list(kv)
         self.modules = sorted({m for _e, m in self.quant} | set(self.kv))
         self._names = frozenset(f"{op}/{m}" for op in self.quant.values() for m in QUANT_MEMBERS)
         self._hooks: list[Any] = []
@@ -248,10 +241,6 @@ class Int8Source:
     def target_names(self) -> frozenset[str]:
         return self._names
 
-    def ports(self) -> dict[str, Port]:
-        """`bind.Binder`'s declared labels: each KV label, its Int8KvQuant port (of the plan's Definitions, `kv_definitions`)."""
-        return {label: Port(self.kv_definitions, port) for label, port in zip(KV_LABELS, KV_PORTS)} if self.kv else {}
-
     def split_step_names(self, names: Mapping[str, int], engine_step: int, padding_only: bool) -> tuple[dict[str, int], dict[str, tuple[int, int]]]:
         """X-03 for the call-boundary names, as `call_boundary_source.CallBoundarySource.split_step_names`: (the step's other names,
         name -> (committed, targets) where they differ)."""
@@ -305,7 +294,7 @@ def attach(com: Any, enabled: bool, plan: Sequence[Mapping[str, Any]], required_
         logger.error("[delta] REFUSE: the int8 source but the capture plan names no Int8RowQuant call boundary and no Int8KvQuant "
                      "output")
         raise SystemExit(3)
-    src = Int8Source(com, model if model is not None else getattr(com, "model", None), quant, kv, kv_definitions(plan))
+    src = Int8Source(com, model if model is not None else getattr(com, "model", None), quant, kv)
     com.attach_source(src)
     logger.info("[delta] int8 source attached: %d row_quant sites, %d kv_quant modules -> committer %s", len(quant), len(kv), com.name)
     if quant and not explicit_classes and CALL_BOUNDARY not in required_classes:
@@ -317,4 +306,4 @@ def applies(plan: Sequence[Mapping[str, Any]]) -> bool:
     return bool(quant_sites(plan) or kv_modules(plan))
 
 
-__all__ = ["Int8Source", "SHORT_NAME", "Sites", "claim", "quant_sites", "kv_modules", "kv_definitions", "applies", "attach"]
+__all__ = ["Int8Source", "SHORT_NAME", "Sites", "claim", "quant_sites", "kv_modules", "applies", "attach"]

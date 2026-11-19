@@ -41,9 +41,8 @@ def _plan(quant=True, version=1):
 def _identities(steps=(0,)):
     """What the seal's binder places of the attention at each step (`serve_seal.served_binder_of`): each member of its plan rows."""
     return {"identities": [{"op_path": ATTN, "output_member": m, "invocation": 0, "identity": None, "request_id": "*", "step": None,
-                            "engine_step": e, "rank": 0, "spec": spec}
-                           for e in steps for m, spec in [*((f"kv_quant.{p}", "Int8KvQuant_v1") for p in I8.KV_PORTS),
-                                                          ("out", "Int8LutAttentionRow_v1")]], "requests_declared": []}
+                            "engine_step": e, "rank": 0}
+                           for e in steps for m in [*(f"kv_quant.{p}" for p in I8.KV_PORTS), "out"]], "requests_declared": []}
 
 
 class _Linear(nn.Module):
@@ -272,16 +271,16 @@ def test_a_plan_without_int8_sites_refuses_the_source():
         I8.attach(_Committer(), True, _plan(quant=False)[:1], (), model=_Model())
 
 
-def test_the_binder_binds_the_kv_quantization_and_the_attentions_return_under_the_plans_spelling():
-    """The plan spells a hinted multi-port Call's Values `<hint>.<port>` (`query.required.member_name`) and the attention's return
-    `out`.  Committed as bare digits, `<attention>/0..3` were slots of the attention's return beside the return itself, so none of the
-    five bound (5,120 of 27,333 unbound, first model.layers.0.self_attn.attn/kv_quant.0).  Declared as the plan's
-    Int8KvQuant Definition's ports they bind by port, and the return binds its one remaining member."""
+def test_the_seals_binder_places_the_kv_quantization_by_the_plans_member_names():
+    """The plan spells a hinted multi-port Call's Values `<hint>.<port>` and the attention's return `out`; the source commits
+    `<attention>/kv_quant.0..3`, so the binder of the plan's rows (`serve_seal.served_binder_of`, which carry no Definition and no
+    port) places each by its label and the return at its one remaining member.  Committed as bare digits, `<attention>/0..3` were
+    slots of the attention's return beside the return itself, and none of the five bound."""
     plan, man = _plan(), _identities()
-    src = I8.Int8Source(_Committer(), _Model(), {}, I8.kv_modules(plan), I8.kv_definitions(plan))
-    assert src.kv == [ATTN] and src.kv_definitions == {"Int8KvQuant_v1"}
+    src = I8.Int8Source(_Committer(), _Model(), {}, I8.kv_modules(plan))
+    assert src.kv == [ATTN] and not hasattr(src, "ports")
     names = [*(f"{ATTN}/{m}" for m in I8.KV_LABELS), ATTN]
-    bound = Binder.of_manifest(man, rank=0, ports=src.ports()).bind(0, names)
-    assert [(op, m, how) for op, m, _k, how in bound] == [*((ATTN, f"kv_quant.{p}", "port") for p in I8.KV_PORTS), (ATTN, "out", "slot")]
+    bound = Binder.of_manifest(man, rank=0).bind(0, names)
+    assert [(op, m, how) for op, m, _k, how in bound] == [*((ATTN, f"kv_quant.{p}", "label") for p in I8.KV_PORTS), (ATTN, "out", "slot")]
     digits = Binder.of_manifest(man, rank=0).bind(0, [*(f"{ATTN}/{p}" for p in I8.KV_PORTS), ATTN])
     assert {how for *_x, how in digits} == {"unbound"}
