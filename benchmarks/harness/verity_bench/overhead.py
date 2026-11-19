@@ -125,8 +125,8 @@ class Gpu:
 FP8 = ("fp8-e4m3", "fp8-e4m3-rowwise", "fp8-blk128")
 #: the GPUs the door measures on, each by its node file
 DOOR = (
-    Gpu("h200-sxm-141gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm-80gb-tensor/e4m3"),
-    Gpu("h100-sxm-80gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm-80gb-tensor/e4m3"),
+    Gpu("h200-sxm-141gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm-80gb-sm/e4m3"),
+    Gpu("h100-sxm-80gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm-80gb-sm/e4m3"),
     Gpu("rtx-pro-6000-server-x8", {"fp8": FP8, "nvfp4": ("nvfp4",)}, ("cublaslt", "cutlass"), False,
         "rtx-pro-6000-server-tensor/e4m3"),
 )
