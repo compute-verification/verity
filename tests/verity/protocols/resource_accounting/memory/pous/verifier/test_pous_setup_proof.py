@@ -105,7 +105,7 @@ def registered():
     circuit = setup.circuit()
     program, _query = circuit.program()
     win = I.Window(circuit, RUN, {"law": "all"}, WIN.CAP, registered=setup.registered(program_digest(program)))
-    part = {**win.window.partition, "blocks": I.partition_blocks(circuit, WIN.CAP, (program, _query))}
+    part = {**win.window.partition, "blocks": [I.partition_blocks(circuit, WIN.CAP, (program, _query))]}
     return b"".join(descriptor_chunks(program)), win, part, circuit.registered.doc()
 
 
@@ -127,7 +127,7 @@ def test_the_setup_is_one_circuit_over_every_store_block():
     assert salt.source(units).tolist() == [0] * 12
     assert sorted(p.split("/")[1] for p in circuit.external) == ["at", "slot"]
     _c, _win, part, _reg = registered()
-    assert part["blocks"] == [[u, u + 1] for u in range(12)]
+    assert part["blocks"] == [[[u, u + 1] for u in range(12)]]
     assert OC.block(_c, part, 5) == [(5, 6)]
     with pytest.raises(ValueError, match="12 blocks and 4 rows"):
         WIN.Setup(64, 189, 16, 4, 4, None, [b""] * 11, [b""] * 4).registered("00" * 64)
@@ -186,7 +186,7 @@ def test_the_verifier_refuses_at_the_units_constants():
     with pytest.raises(V.NotBound, match=r"^pous setup: not bound: C's setup/salt is marked None, not "):
         V.check(OC.block, PF.verify, proofs, c, part, {**reg, "supplied": {}}, DRAW, params, salt, 16)
     with pytest.raises(OC.Refused, match="E_BLOCKS"):
-        V.check(OC.block, PF.verify, proofs, c, {**part, "blocks": part["blocks"][:-1]}, reg, DRAW, params, salt, 16)
+        V.check(OC.block, PF.verify, proofs, c, {**part, "blocks": [part["blocks"][0][:-1]]}, reg, DRAW, params, salt, 16)
 
 
 @pytest.mark.slow
