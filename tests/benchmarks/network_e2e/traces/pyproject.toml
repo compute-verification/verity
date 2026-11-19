@@ -42,7 +42,6 @@ inputs = [
 
 [[tool.verity.tests.reads]]
 tests = [
-    "test_admit_release.py",
     "test_adversary.py",
     "test_arrival_order.py",
     "test_ids_job.py",

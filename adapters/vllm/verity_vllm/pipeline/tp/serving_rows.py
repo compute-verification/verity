@@ -44,7 +44,7 @@ from verity_vllm.config import option
 from verity_vllm.pipeline.tp import run_root as RT
 from verity_vllm.records.schema_ids import TP_SERVING_ROWS_SCHEMA
 
-__all__ = ["BINDING", "Options", "ROWS_SCHEME", "from_bundle", "main", "record", "source", "window_of", "window_of_record", "write_node_window"]
+__all__ = ["BINDING", "Options", "ROWS_SCHEME", "from_bundle", "main", "record", "source", "window_of", "window_of_record"]
 
 SCHEMA = TP_SERVING_ROWS_SCHEMA
 ROWS_SCHEME = "rows-sha512"
@@ -147,24 +147,6 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
     finally:
         H.release(hs, request.get("open", ()))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
-
-
-def write_node_window(st: Mapping[str, Any], request: Mapping[str, Any], tp: Mapping[str, Any]) -> dict[str, Any]:
-    """`write`'s node-window form, which `rank_rows` runs in each rank in place of `write` when ``request["form"]`` is
-    ``"node-window"`` (a request's window) or ``"class-window"`` (its class's); ``"served"``, the default, is `write`.
-    No other RPC and no ``tp-commit`` option picks it. Of the request it reads ``form``, ``dir``, ``partition`` (its
-    ``law``), ``cap``, ``programs`` (rank -> the directory of the rank's compiled Program: a request's, or the class's,
-    `class_window.class_request` at the request's (P, O)) and ``tables`` (`expert_rows.of_request`, as `write` reads
-    them). In the rank's process: the rank's window built from its Program (`node_window_reads.rank_window`, or the
-    class window), its values (`node_window_rows.served_values`), `expert_rows.commit_bnk` for each ``/bnk`` name its
-    circuit registers (refused when the request has no ``tables``), and the window committed
-    (`node_window_rows.commit_rank_window`) under ``run`` = `run_of` (TP run root, rank), the string `write` uses, and the
-    partition's sampling design. Returns `write`'s five keys and ``window``, the rank's H, which `gather` writes into ``tp.json``.
-    The request's ``joined`` is the joined record registered before the serve: `require` refuses, before the engine, a
-    node-window request without ``cap``, ``partition``, ``joined`` or a Program for every rank; `commit` holds the ranks' ``circuit.json`` to it
-    (`node_window_rows.rank_records`) before it returns, before the coin."""
-    raise NotImplementedError("vllm/compiler-wires-period-pieces: no rank commits a node window yet: rank_rows picks no "
-                              "form, and node_window_rows.served_values is not built")
 
 
 def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, *, pair: int = 0,

@@ -120,8 +120,8 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   record or a value the verifier holds,
   and the read's verdict port reads a value the verifier fills with 1 (`openedRow`): the row is then the table's at
   that key, short of a SHA-512 collision. A key the block computes, a wire, is refused, with a reason of its own
-  (`KEY_WHY`): no statement covers it. Only where the wired key's switch is on (`WIRED_KEY`, off in the build of
-  record; on only in the development executable `spot-wired-key-dev`) is such a key taken, when it is whole
+  (`KEY_WHY`): no statement covers it. Only where the wired key's switch is on (`WIRED_KEY`, off in every build)
+  is such a key taken, when it is whole
   (`keyFailure`, each failure its own reason) and each sampled proof block's key its writer unit's committed output row
   (`second-read`). A read is a template the auditor's params record as one (`Own.reads`,
   `Run.templateReads`): the template check (`flock-read-tmpl check V H`, `Flock.ReadNet.check`) accepted the circuit
@@ -217,9 +217,8 @@ def KEY_WHY : String :=
 
 /-- **The wired key's switch**: whether round 2 takes a read whose key a wire fills (`openedRow`, `keyFailure`). Off, it
 refuses each one with `KEY_WHY`. It is a constant of the build: the run of record (`Run.run`) holds `Own.wiredKey` to
-it, and no executable reads the field from its input; only the development executable `spot-wired-key-dev`
-(`Spot.WiredKeyDevMain`) holds it on, for development plays, never an accept of record. It turns on only once the
-statement that a sampled reader unit's key is its writer unit's committed output row is proved. -/
+it, and no executable reads the field from its input or holds it on. It turns on only once the statement that a
+sampled reader unit's key is its writer unit's committed output row is proved. -/
 def WIRED_KEY : Bool := false
 
 def KEY_WIRES_WHY : String :=

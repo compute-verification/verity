@@ -15,6 +15,10 @@ printed for a shell script, or refused by name before the script takes a card.
     sku              `kit.run_card_sku`: the `sku` of the card the run is on, `kit.card_sku` of the name
                      nvidia-smi reports for the lease's GPUs, else the host's (vLLM's CARD_SKU).
     session-node NAME SLOT  `kit.session_node`: the node a PoUB session on that card registers (NAME `cpu`: no card).
+
+A reader of the run's machine refuses where its record is missing, naming the file it looked for
+($RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml): a build that sets RESEARCH_RUN_DIR to a private run directory must
+carry the record there.
 """
 from __future__ import annotations
 
@@ -25,7 +29,32 @@ ROOT = Path(__file__).resolve().parents[2]
 NOT_LISTED = 3
 
 
+def missing_record(refusal: str) -> str | None:
+    """What to add to ``refusal`` where it is the kit's of the run's machine's record, whose copy is not in the run
+    directory: the file looked for, and that a private run directory must carry it; None for any other refusal."""
+    from verity_bench import settings
+
+    if not settings.is_set("RESEARCH_MACHINE"):
+        return None
+    path = Path(settings.RESEARCH_RUN_DIR) / "inputs" / f"{settings.RESEARCH_MACHINE}.toml"
+    if path.is_file() or str(path) not in refusal:
+        return None
+    return (f"machine.py: looked for the run's machine record at $RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml, here {path}, "
+            "and it is not there. `research run --on` puts it in the run directory it makes; a build that sets "
+            "RESEARCH_RUN_DIR to a private run directory must carry the record: copy the launching run's "
+            f"inputs/{settings.RESEARCH_MACHINE}.toml into that directory's inputs/ before it calls machine.py")
+
+
 def main(argv: list[str]) -> int:
+    try:
+        return read(argv)
+    except SystemExit as e:
+        if isinstance(e.code, str) and (hint := missing_record(e.code)):
+            raise SystemExit(f"{e.code}\n{hint}") from None
+        raise
+
+
+def read(argv: list[str]) -> int:
     from verity_bench import kit
 
     match argv:

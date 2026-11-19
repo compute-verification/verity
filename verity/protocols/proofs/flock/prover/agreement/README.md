@@ -205,8 +205,8 @@ that, and that every statement before hm96-sha512 rows is refused once every che
 
 The other subcommands of `verity verify proof` run one part on its own: `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
 `verity/commitments/hm96/vectors.json`) and `comp-check` (`Flock.Comp`'s checks); `draw` and `draw-test` (the proof-block
-sample); `unit-cut`, `cut-check`, `qword-program`, `qcall-program`, `input-ids`, `sigma-check` and `template-query` (the
-partition and program checks); `net-check`, `region-words`, `typed-expand`, `typed-rows`, `circuit-type` and `layout`
+sample); `unit-cut`, `cut-check`, `qword-program`, `qcall-program`, `input-ids`, `sigma-check`, `template-query` and
+`partition-object` (the partition and program checks); `net-check`, `region-words`, `typed-expand`, `typed-rows`, `circuit-type` and `layout`
 (statement setup); `archive-put` (the object store); `evaluate`; and `rec-inner`, `rec-statements`, `rec-transcript` and
 `rec-record` (the recursion). The other executables are `flock-zk-server` (`contract`, `frame`, `tap`, `coins`, `hello`,
 `session`, `finish`: the ZK server), `flock-rows`, `flock-witness`, `flock-rec-opening` and
@@ -303,7 +303,7 @@ Each holds one Lean part to its Python or Rust counterpart, or generates inputs 
 | `selftest_records.py` | the prover's selftest cases as replayable sets |
 | `record_text.py` | the record's canonical text against Lean's |
 | `zk_mutants.py` | `--zk` session mutants |
-| `template_query_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`, `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py` | each Lean part against its Python counterpart in `verity` |
+| `template_query_agree.py`, `partition_object_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`, `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py` | each Lean part against its Python counterpart in `verity` |
 | `zk_server_agree.py`, `zk_server_controls.sh`, `zk_server_finish_agree.py`, `zk_server_finish_agree.sh` | the ZK server's contract and session loop against the inner phase's proxy, and each tamper control held to a visible refusal |
 | `tool.py` | the agreement job's store declaration: `ci-pod.sh` with its settings, the shipped bundle as its input |
 
