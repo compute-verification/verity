@@ -100,8 +100,7 @@ that writes registers its `copy16` line (`tests/calibration/machine_model/test_d
 ## Adopt a probe's census
 
 An opcode probe (`../pouw/opcode_probe/`) writes its gated rows as `census.csv` in this schema, with no epochs. After steps 3
-and 4 above, `uv run machine-model --device sm_120 adopt CENSUS EPOCH` merges it at `EPOCH`, which must be the last epoch. Each (kind,
-row) keeps the faster of its line at the epoch before and the measured one: a row's u must be a lower bound on what
+and 4 above, merge it at `EPOCH`, the last epoch, by hand. Each (kind, row) keeps the faster of its line at the epoch before and the measured one: a row's u must be a lower bound on what
 every program pays on it, so a line slower than the hardware makes a price that isn't sound. A faster line closes the
 old one at the epoch before (in the old line's file), adds its own to `data/census/EPOCH.csv` and adds its runs to the
 row's in `rows.csv`; a slower one changes nothing. A probe case the census has no row for is a new row and, if it is
