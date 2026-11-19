@@ -41,8 +41,8 @@ import all Init.Data.Repr
 /-! # The two-instance statement's inputs: `Raw.ins` and its reading
 
 `ins_x` walks `Raw.ins` on `rawOf r ls lh H C` to `insX r ls lh H C`: the tags `Tags.circuit`, tree coins for one table,
-the sample `sampleJ` (rebuilt by `norm`, which leaves it as it is), the partition `partObj`, the program's bytes and the
-registered reads `regPorts` (`Registered.ofJson regJ`). At the fixed nets' layouts and a run whose strings are plain,
+the sample `sampleJ` (rebuilt by `norm`, which leaves it as it is), the partition `partObj`, the program's bytes and no
+registered reads. At the fixed nets' layouts and a run whose strings are plain,
 `x r` decodes to that `Raw` (`decode_x`), so the verifier reads it as `rX` (`readOf_x`), under the masked tags `tz`
 (`tags_rX`), whose outputs are hidden (`hiddenOf_x`).
 -/
@@ -98,12 +98,7 @@ theorem fjnorm_part : FlockSoundness.Discharge.Recursion.ZkServerJson.norm partO
 theorem jsonOf_part (what : String) : jsonOf what (printJson partObj).toUTF8 = .ok partObj :=
   jsonOf_print part_plain fjnorm_part what
 
-/-- The registered reads' ports, as `Registered.ofJson` reads `regJ`. -/
-def regPorts : Array Registered.Port := (Registered.ofJson regJ).toOption.getD #[]
-
-theorem ofJson_reg : Registered.ofJson regJ = .ok regPorts := by kernel_rfl
-
-/-- `Option.mapM` of a file that is there, as `Raw.ins` reads the sample, the partition and the registered reads:
+/-- `Option.mapM` of a file that is there, as `Raw.ins` reads the sample and the partition:
 unfolded, it is a `Functor.map` with a projection at its head, which no rule matches. Its side condition is walked. -/
 theorem optMapM_ok {α β ε : Type} {f : α → Except ε β} {a : α} {b : β} (h : f a = .ok b) :
     (some a).mapM f = .ok (some b) := by
@@ -117,16 +112,15 @@ def rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : Read :=
   { I := { tags := t0, circuitFile := bytesOf ls lh, publicFile := pubOf r (hexOf H) (hexOf C),
            coins := .tree (Zk.coinSpec (t0.tableNames 1)), count := 1, tables := [], partition := some partObj,
            program := some progBytes, work := none, stratified := none, closure := none },
-    zk := true, draw := some sampleJ, publicInputs := none, registered := true }
+    zk := true, draw := some sampleJ, publicInputs := none, registered := false }
 
-/-- The statement's inputs: its tags, the registered reads and the reading. -/
+/-- The statement's inputs: its tags, no registered reads, and the reading. -/
 def insX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : Ins :=
-  { stmtTags := t0, registered := some regPorts, read := rX r ls lh H C }
+  { stmtTags := t0, registered := none, read := rX r ls lh H C }
 
 theorem ins_x (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) :
     (rawOf r ls lh H C).ins = .ok (insX r ls lh H C) := by
-  fwd_walk [byName_t0, plain_t0, optMapM_ok, jsonOf_sample, map_norm_sample, norm_sample, jsonOf_part, jsonOf_reg,
-      ofJson_reg]
+  fwd_walk [byName_t0, plain_t0, optMapM_ok, jsonOf_sample, map_norm_sample, norm_sample, jsonOf_part]
     block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, canon, canonUtf8, Net.parse, Registered.ofJson, Flock.norm,
       FlockDeploy.jsonOf, printJson]
     shallow [metaText]
