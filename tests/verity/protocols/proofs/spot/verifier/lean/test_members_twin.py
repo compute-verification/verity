@@ -232,10 +232,12 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
     laid = Audit("members-twin-laid", opened=(A,))
     why, (run, refused) = laid.ask(tmp_path / "laid", params=laid.without(B))
     assert run is None and why == M.run_reason(run, refused) == f"proofs: {M.MEMBERS_LAID}", (why, refused)
-    port = {"value": "v", "leaves": 4, "domain": "dd" * 64, "reads": [0]}
+    port = {"value": "v", "leaves": 4, "domain": "dd" * 64}
 
-    def registered(root: str) -> dict:
-        return {"format": "verity/registered-reads/v1", "ports": {"p": {**port, "root": root * 64}}}
+    def registered(root: str, form: str = "verity/registered-reads/v2") -> dict:
+        return {"format": form, "ports": {"p": {**port, "root": root * 64}}}
+    same("v1", f"member {A}: registered reads: not a verity/registered-reads/v2 file",
+         params=a.members(A, registered=registered("aa", "verity/registered-reads/v1")))
     two = a.members(A, registered=registered("aa"))
     two = two | {"proofs": {"members": two["proofs"]["members"] | {
         B: a.params["proofs"]["members"][B] | {"registered": registered("bb")}}}}

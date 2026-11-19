@@ -70,6 +70,7 @@ from verity.protocols.proofs.spot.verifier.challenger.coins import DRAW_FORM
 
 from . import closing as CL, docket as DK, one_circuit as OC, partition as P, proofs as PF
 from verity.commitments import registered_value as RV
+from verity.commitments.domains import REGISTERED_READS_V2
 from .proofs import V2_EXE, LeanError, v2_executable
 
 #: the exit of the v2 executable's ``check`` by its verdict (`Core.BlobProtocol.main`)
@@ -386,7 +387,10 @@ def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) ->
 
 def _ports(name: str, registered: Mapping[str, Any]) -> list[dict[str, Any]]:
     """A registered file's ports by the fields `classHeld` compares, in the file's order; `Outside` where one is not
-    read."""
+    read. A file of another format is refused by name, as `Flock.Registered.portsOf` refuses it."""
+    form = registered.get("format")
+    if type(form) is str and form != REGISTERED_READS_V2:
+        raise _Refused(f"member {name}: registered reads: not a {REGISTERED_READS_V2} file")
     ports = registered.get("ports")
     if not (isinstance(ports, dict) and ports):
         raise Outside(f"member {name}: its registered file names no ports")
