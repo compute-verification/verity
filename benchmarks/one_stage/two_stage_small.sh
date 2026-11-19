@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # two_stage.py's two commands end to end on a CPU node, on a token select class at small statics (two_stage_small.py: no
-# engine): flock-circuit, verity-verify-proof and SPOT's Lean verifier built from this tree as the toy's audit.sh builds them,
+# engine): flock-circuit, verity-verify-proof and SPOT's Lean verifier built from this tree,
 # then `first` (the boundary docket and the first stage on a local challenger session) and `second` (the interior,
 # the second stage on a session of its own, a --zk session per member, Lean's verdicts, round 2 and the stream's outcome).
 # Exit 0 when the second stage is what the play expects (two_stage_small.py expect). With no arguments the play is the
