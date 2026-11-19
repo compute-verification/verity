@@ -58,7 +58,7 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
         0.49571996911002464)
     assert by[P.MODELED]["per_token"] == pytest.approx(2902445.3797909454) and by[P.MODELED]["time_share"] == pytest.approx(
         0.2710368026048355)
-    assert doc["serving"]["gpu_seconds_per_token"] == pytest.approx(0.00012950804344665488, rel=1e-12)
+    assert doc["serving"]["gpu_seconds_per_token"] == pytest.approx(0.00012951069269261992, rel=1e-12)
 
     # each steady-state type is the newest run's, at the statement it finished; the two killed before any statement are
     # named on the rows the card prices
@@ -95,7 +95,7 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert t["tokens_per_gpu_second"] == pytest.approx(14246, abs=0.5)
     assert t["gpus_per_serving_gpu"] == pytest.approx(0.5420038985704952, rel=1e-12)
     assert t["gpus_per_serving_gpu_range"] == pytest.approx([0.1860208609869626, 0.5420038985704952], rel=1e-12)
-    assert t["tokens_per_gpu_second_range"][1] == pytest.approx(41509, abs=0.5)
+    assert t["tokens_per_gpu_second_range"][1] == pytest.approx(41508, abs=0.5)
     assert t["gpu_seconds_per_token"] == pytest.approx(7.019e-05, rel=1e-4)
     # the plan covers one compute and period; every block proved is the same ratio at any
     assert [(x["compute"], x["period"]) for x in spot["periods"]["rows"]] == [("world year", "year")]
@@ -148,7 +148,7 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
 
     text = R.render(spot)
     assert "- prover GPUs per serving GPU: 0.542 (range 0.186 to 0.542), modeled" in text
-    assert "- served tokens covered per second per prover GPU: 14,246 (range 14,246 to 41,509)" in text
+    assert "- served tokens covered per second per prover GPU: 14,246 (range 14,246 to 41,508)" in text
     assert "| world year | year |" in text and "no plan of record covers another period, or a datacenter." in text
     assert text.count("\n| `") == 2 * 150                               # the cost table and the Lean verifier's
 

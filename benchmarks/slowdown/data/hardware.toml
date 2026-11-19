@@ -63,7 +63,7 @@ links = { value = 3.2e12, unit = "bit/s", source = "benchmarks/nci/tiers.py DEFA
 # Four DGX H200s whose certifiers sit on the rack's uplinks only: the servers' links to each other are seen by none.
 [location.h200-hgx-rack4]
 devices = { value = 32, unit = "GPU", source = "4 x location.h200-hgx", status = "derived" }
-flops = { value = 6.33248e16, unit = "FLOP/s", low = 3.16608e16, high = 6.33248e16, source = "4 x location.h200-hgx flops", status = "derived" }
+flops = { value = 6.332350464e16, unit = "FLOP/s", low = 3.166175232e16, high = 6.332350464e16, source = "4 x location.h200-hgx flops", status = "derived" }
 hosts = { value = 4, unit = "server", source = "4 DGX H200s", status = "derived" }
 host_memory = { value = 6.4e13, unit = "bit", source = "4 x location.h200-hgx host_memory", status = "derived" }
 host_ops = { value = 1.835e15, unit = "op/s", source = "4 x location.h200-hgx host_ops", status = "derived" }
