@@ -155,3 +155,15 @@ def test_a_C_that_reads_a_supplied_input_at_another_width_is_refused_as_python_r
     kind, body = pieces.call("restrict", {"descriptor": c, "units": units, "python": c})
     print("lean restrict on a recut supplied read", units, kind, body)
     assert kind == "reject", body
+
+
+@pytest.mark.parametrize("name, ranges", [(n, r) for n, (_f, rs) in toys().SPLIT_TOYS.items() for r in rs],
+                         ids=lambda x: str(x))
+def test_lean_restrict_on_the_split_toys(pieces, name, ranges):
+    T = toys()
+    _p, c, bits = T.toy(name)
+    py = R.restrict(c, T.TOY_PARTITION, ranges, bits).descriptor.decode()
+    units = [u for lo, hi in ranges for u in range(lo, hi)]
+    kind, body = pieces.call("restrict", {"descriptor": c.decode(), "units": units, "python": py})
+    print("SPLIT", name, ranges, "python inputs", json.loads(py).get("inputs"), "lean", kind, body[:1500])
+    assert kind == "output", body

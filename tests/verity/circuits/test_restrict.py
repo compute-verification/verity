@@ -227,14 +227,37 @@ TOYS = {"fanout": (fanout, [[(0, 1)], [(1, 3)], [(0, 3)], [(2, 3)]]),
         "wired": (wired, [[(0, 1)], [(1, 3)], [(0, 3)]])}
 
 
+#: a supplied 4-bit constant
+S4 = {"supplied": "const.uint/v1", "args": {"value": 5, "bits": 4}, "layout": "le", "bits": 4}
+
+
+def two_supplied() -> Program:
+    """u0 = T(s, t), s and t two supplied parameters of one width, adjacent in C's inputs, then u1 = T(u0, k)."""
+    def body(B, S, k, s, t):
+        return B.call(T, B.call(T, s, t), k)
+    return _toy("RestrictToyTwoSupplied", (("k", A4), ("s", A4), ("t", A4)), A4, body, supplied={"s": S4, "t": S4})
+
+
+def gapped() -> Program:
+    """u0 = T(x, s's bits 0, 1, 4 and 5), s supplied, then u1 = T(u0, k): u0 reads s with a gap."""
+    def body(B, S, x, k, s):
+        return B.call(T, B.call(T, x, array_of([s[0], s[1], s[4], s[5]])), k)
+    return _toy("RestrictToyGapped", (("x", A4), ("k", A4), ("s", Array(8, BL.BIT))), A4, body,
+                supplied={"s": S_MARK})
+
+
+#: the toys whose blocks read supplied inputs Python cuts by parameter and by gap, where Lean cuts by width and binding
+SPLIT_TOYS = {"two_supplied": (two_supplied, [[(0, 1)], [(0, 2)]]), "gapped": (gapped, [[(0, 1)], [(0, 2)]])}
+
+
 @functools.cache
 def toy(name: str):
-    program = TOYS[name][0]()
+    program = {**TOYS, **SPLIT_TOYS}[name][0]()
     c = b"".join(descriptor_chunks(program))
     return program, c, R.Bits(R.program(c))
 
 
-@pytest.mark.parametrize("name,units", [(n, u) for n, (_f, us) in TOYS.items() for u in us])
+@pytest.mark.parametrize("name,units", [(n, u) for n, (_f, us) in {**TOYS, **SPLIT_TOYS}.items() for u in us])
 def test_a_toys_block(name, units):
     program, c, bits = toy(name)
     b = R.restrict(c, TOY_PARTITION, units, bits)
