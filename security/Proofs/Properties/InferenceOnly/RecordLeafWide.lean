@@ -30,12 +30,12 @@ namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 open Flock.Program
 
 /-- A reference whose first step of resolution ends resolves to where the step ends. -/
-theorem resolve_one {P : Prog} {sc : Scope} {r : Ref} {g : ℕ} (h : resolveStep P (sc, r) = .ok (.inl g)) :
+theorem resolve_one {P : Prog} {sc : Scope} {r : Ref} {g : ℕ} (h : resolveStep P (sc, r) = .ok (.inl g))
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     resolve P sc r = .ok g := by
   obtain ⟨n, hn⟩ : ∃ n, Flock.Steps.FUEL = n + 1 :=
     ⟨Flock.Steps.FUEL - 1, by unfold Flock.Steps.FUEL; omega⟩
-  unfold resolve
-  rw [hn]
+  rw [Flock.Program.resolve_eq hrc, hn]
   exact run_one h n
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve

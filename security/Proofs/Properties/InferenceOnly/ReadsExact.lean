@@ -2853,10 +2853,10 @@ theorem run_inr {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α
 
 /-- Resolution ending at a step's gate. -/
 theorem resolve_inl (P : Prog) (sc : Flock.Program.Scope) (r : Ref) (g : Nat)
-    (h : Flock.Program.resolveStep P (sc, r) = .ok (.inl g)) : Flock.Program.resolve P sc r = .ok g := by
+    (h : Flock.Program.resolveStep P (sc, r) = .ok (.inl g))
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) : Flock.Program.resolve P sc r = .ok g := by
   obtain ⟨n, hn⟩ := fuel_succ
-  unfold Flock.Program.resolve
-  rw [hn, Flock.Steps.run.eq_2, h]
+  rw [Flock.Program.resolve_eq hrc, hn, Flock.Steps.run.eq_2, h]
   rfl
 
 /-- Resolution going on from a step's state, to the same gate. -/
@@ -2864,7 +2864,8 @@ theorem resolve_inr (P : Prog) (sc : Flock.Program.Scope) (r : Ref) (s : Flock.P
     (h : Flock.Program.resolveStep P (sc, r) = .ok (.inr s)) {g : Nat} (hr : Flock.Program.resolve P sc r = .ok g) :
     Flock.Program.resolve P s.1 s.2 = .ok g := by
   obtain ⟨n, hn⟩ := fuel_succ
-  unfold Flock.Program.resolve at hr ⊢
+  rw [Flock.Program.resolve_eq (Flock.Program.resolve_recut hr)]
+  replace hr := Flock.Program.resolve_run hr
   rw [hn] at hr ⊢
   exact Flock.Steps.run_mono (Nat.le_succ n) (run_inr h hr)
 

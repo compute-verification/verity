@@ -208,7 +208,7 @@ theorem batch_lands (hc : InferenceOnlyVerifier.Desc.calleesFirst P = true) (hrp
   have hinv' := Resolve.down_ok P hroot hB hL _ _ hgA (le_refl _) _ (hdn3 hcomp)
   have hstep := Resolve.rs_batch P P.rootScope ke j hbatch
   simp only [rootScope_d, hcomp, Bool.false_eq_true, ite_false] at hstep
-  unfold Flock.Program.resolve at ha
+  replace ha := Flock.Program.resolve_run ha
   rw [fuel_succ] at ha
   generalize Flock.Steps.FUEL - 1 = fuel at ha
   replace ha := ReadsExact.run_inr hstep ha
@@ -277,7 +277,7 @@ theorem param_lands (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i
   have hstep : resolveStep P (P.child P.rootScope kl m, ⟨true, 0, j⟩) =
       .ok (.inr (P.rootScope, (((P.defs[P.root]!).body.nodes[kl]!).args[0]!).memberRef m j)) :=
     Resolve.rs_up_batch P P.rootScope _ _ kl m 0 j hbatch
-  unfold Flock.Program.resolve at ha
+  replace ha := Flock.Program.resolve_run ha
   rw [fuel_succ] at ha
   generalize Flock.Steps.FUEL - 1 = fuel at ha
   replace ha := ReadsExact.run_inr hstep ha
