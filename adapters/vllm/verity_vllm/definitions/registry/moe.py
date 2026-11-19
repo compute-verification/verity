@@ -538,6 +538,27 @@ def router_kernel(num_experts: int, num_tokens: int, topk: int) -> str | None:
     return "block" if num_experts >= 1024 or (num_experts >= 256 and num_tokens <= 1024) else "warp"
 
 
+#: `topkGating<VPT, NUM_EXPERTS, WARPS_PER_CTA, BYTES_PER_LDG, WARP_SIZE, ...>`: values per thread for bf16 gating logits -- 16-byte loads
+#: = 8 bf16 words per thread-vector, ONE vector per thread while E <= 8 * 32 (`VECs_PER_THREAD = max(1, E / (ELTS_PER_LDG * WARP_SIZE))`), so
+#: VPT = 8 at E = 64 (OLMoE; bit-exact on the recorded topk_softmax cases) and at E = 128 (Qwen3-30B-A3B; the frontend's
+#: `vllm_moe.TOPK_SOFTMAX_VPT[bf16]`, the same 8 the Build of record bound -- `MoeRouterTopKNorm_v1{E=128,TOPK=8,VPT=8}`).
+ROUTER_VPT_BY_E: dict[int, int] = {64: 8, 128: 8}
+
+
+def router_vpt_bf16(E: int) -> int:
+    """`topkGatingSoftmax<T=bf16, EXPERTS=E>`'s values per thread (vLLM csrc/moe/topk_softmax_kernels.cu): 16-byte loads = `ELTS_PER_LDG =
+    min(16, sizeof(T) * E) / sizeof(T)` bf16 words, `VECs_PER_THREAD = max(1, E / (ELTS_PER_LDG * 32))`, `VPT = ELTS_PER_LDG * VECs_PER_THREAD`.
+    8 at E = 64 (OLMoE, bit-exact on the recorded cases) and at E = 128 (Qwen3-30B-A3B, the Build's binding); `ROUTER_VPT_BY_E` where it has
+    the entry -- the two must agree (asserted), the rule covers the tiny test configurations."""
+    if E <= 0 or E & (E - 1):
+        raise ValueError(f"E={E}: the router kernel is instantiated for powers of two only")
+    elts = min(8, E)
+    vpt = elts * max(1, E // (elts * 32))
+    if E in ROUTER_VPT_BY_E and ROUTER_VPT_BY_E[E] != vpt:
+        raise ValueError(f"E={E}: router_vpt_bf16 gives {vpt}, ROUTER_VPT_BY_E pins {ROUTER_VPT_BY_E[E]}")
+    return vpt
+
+
 def _router_kernel(S) -> str:
     if S.KERNEL not in ROUTER_KERNELS:
         raise ValueError(f"KERNEL must be one of {ROUTER_KERNELS}, got {S.KERNEL!r}")

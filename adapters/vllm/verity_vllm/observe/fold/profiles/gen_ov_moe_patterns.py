@@ -41,6 +41,7 @@ from typing import Any, ClassVar
 from verity.circuits.defs import bind
 from verity_vllm.definitions.registry import act as _ACT
 from verity_vllm.definitions.registry import moe as _MOE
+from verity_vllm.definitions.registry.moe import ROUTER_VPT_BY_E
 from verity_vllm.program.frontend import targets as T
 from verity_vllm.definitions.registry import moe as Q
 
@@ -122,12 +123,6 @@ FUSED_MOE_NUMERIC_PINS: dict[str, Any] = {"compute_type": "bf16", "use_fp8_w8a8"
 FUSED_MOE_PINS: dict[str, Any] = {"BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 8}
 FUSED_MOE_NUM_WARPS = 4
 FUSED_MOE_NUM_STAGES = 3
-
-#: `topkGating<VPT, NUM_EXPERTS, WARPS_PER_CTA, BYTES_PER_LDG, WARP_SIZE, ...>`: values per thread for bf16 gating logits -- 16-byte loads
-#: = 8 bf16 words per thread-vector, ONE vector per thread while E <= 8 * 32 (`VECs_PER_THREAD = max(1, E / (ELTS_PER_LDG * WARP_SIZE))`), so
-#: VPT = 8 at E = 64 (OLMoE; bit-exact on the recorded topk_softmax cases) and at E = 128 (Qwen3-30B-A3B; the frontend's
-#: `vllm_moe.TOPK_SOFTMAX_VPT[bf16]`, the same 8 the Build of record bound -- `MoeRouterTopKNorm_v1{E=128,TOPK=8,VPT=8}`).
-ROUTER_VPT_BY_E: dict[int, int] = {64: 8, 128: 8}
 
 
 

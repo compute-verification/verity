@@ -405,6 +405,14 @@ def family_of(cfg: dict[str, Any]) -> str:
     return str(cfg.get("model_type", "")).lower()
 
 
+def effective_sliding_window(cfg: dict[str, Any]) -> int | None:
+    """The `sliding_window` vLLM's model code sees: the config key, unless the family gates it (Qwen2's `use_sliding_window: false`)."""
+    gate = FAMILY_FACTS.get(family_of(cfg), {}).get("sliding_window_gate")
+    if gate is not None and not cfg.get(gate):
+        return None
+    return cfg.get("sliding_window") or None
+
+
 def facts_for(cfg: dict[str, Any]) -> dict[str, Any]:
     fam = family_of(cfg)
     if fam not in FAMILY_FACTS:
@@ -472,4 +480,4 @@ def table() -> list[dict[str, Any]]:
     return rows
 
 
-__all__ = ["FAMILY_FACTS", "FAMILIES", "family_of", "facts_for", "resolve_facts", "header_checks", "table", "math"]
+__all__ = ["FAMILY_FACTS", "FAMILIES", "family_of", "effective_sliding_window", "facts_for", "resolve_facts", "header_checks", "table", "math"]

@@ -125,7 +125,7 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
         FusedTopKRouter,
     )
 
-    from verity_vllm.observe.fold.profiles.generic import router_vpt_bf16
+    from verity_vllm.definitions.registry.moe import router_vpt_bf16
 
     def flag(test: Callable[[], Any]) -> bool | None:
         try:

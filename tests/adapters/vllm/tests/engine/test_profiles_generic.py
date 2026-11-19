@@ -9,6 +9,7 @@ import json
 
 import pytest
 
+from verity_vllm.definitions.registry import moe as MOE
 from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.observe.events import RunHeader
@@ -155,9 +156,9 @@ def test_moe_hand_facts_and_derived_router_vpt():
     assert o["RENORMALIZE"] is False and o["QK_NORM"] is True and o["QK_NORM_EPS"] == 1e-5 and o["EPS"] == 1e-5 and o["NUM_EXPERTS"] == 64 and o["ROUTER_VPT"] == 8
     assert q["RENORMALIZE"] is True and q["QK_NORM"] == "head" and q["NUM_EXPERTS"] == 128 and q["ROUTER_VPT"] == 8
     assert q["I"] == q["MOE_I_FULL"] == 768
-    assert G.router_vpt_bf16(64) == 8 and G.router_vpt_bf16(128) == 8 and G.router_vpt_bf16(16) == 8 and G.router_vpt_bf16(256) == 8
+    assert MOE.router_vpt_bf16(64) == 8 and MOE.router_vpt_bf16(128) == 8 and MOE.router_vpt_bf16(16) == 8 and MOE.router_vpt_bf16(256) == 8
     with pytest.raises(ValueError):
-        G.router_vpt_bf16(96)
+        MOE.router_vpt_bf16(96)
 
 
 # --------------------------------------------------------------------------------------------------------------------- world > 1

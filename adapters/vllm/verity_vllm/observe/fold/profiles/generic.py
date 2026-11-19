@@ -48,8 +48,10 @@ from verity_vllm.observe.fold.patterns import (Embedding, LogitsGather, TokenSel
                                                TransparentAten, TransparentTritonMetadata, dsa_patterns, dsv4_patterns)
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.observe.fold.patterns.collectives import EmbeddingShardCuda, TpCollective
+from verity_vllm.definitions.registry.moe import ROUTER_VPT_BY_E, router_vpt_bf16
 from verity_vllm.engine.profiles import dense_generic as _dg
 from verity_vllm.engine.profiles import family_facts as FF
+from verity_vllm.engine.profiles.family_facts import effective_sliding_window
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as base
 from verity_vllm.observe.fold.profiles import gen_mhc_moe as MHC
 from verity_vllm.observe.fold.profiles.gen_dense2_patterns import with_dense2_patterns
@@ -58,13 +60,12 @@ from verity_vllm.observe.fold.profiles.gen_dense_softcap_patterns import with_so
 from verity_vllm.observe.fold.profiles.gen_llama_patterns import ADA_TUNED_GEMM, with_tuned_gemm
 from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern, with_ln_patterns
 from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
-                                  MOE_FP8_CONSTRUCTION_PATTERNS, ROUTER_VPT_BY_E, MoEFusedExperts, MoEFusedExpertsFp8)
+                                  MOE_FP8_CONSTRUCTION_PATTERNS, MoEFusedExperts, MoEFusedExpertsFp8)
 from verity_vllm.observe.fold.profiles.gen_marlin_moe_patterns import MoEMarlinSharedExperts
 from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
-__all__ = ["derive_config", "effective_sliding_window", "module_name", "rank_hf_config", "router_vpt_bf16",
-           "structural_refusal"]
+__all__ = ["derive_config", "module_name", "rank_hf_config", "structural_refusal"]
 
 MODULE_PREFIX = "derived_"
 OV_SAMPLING_SUFFIX = "_ovs"
@@ -145,14 +146,6 @@ def rank_hf_config(cfg: dict[str, Any], world: int) -> dict[str, Any]:
     return out
 
 
-def effective_sliding_window(cfg: dict[str, Any]) -> int | None:
-    """The `sliding_window` vLLM's model code sees: the config key, unless the family gates it (Qwen2's `use_sliding_window: false`)."""
-    gate = FF.FAMILY_FACTS.get(FF.family_of(cfg), {}).get("sliding_window_gate")
-    if gate is not None and not cfg.get(gate):
-        return None
-    return cfg.get("sliding_window") or None
-
-
 def _quant_config_for_profile(cfg: dict[str, Any], arch: str) -> dict[str, Any] | None:
     """The checkpoint quantization contract that generic ``config_of`` validates.
 
@@ -202,20 +195,6 @@ def structural_refusal(cfg: dict[str, Any]) -> str | None:
     if why:
         return why
     return None
-
-
-def router_vpt_bf16(E: int) -> int:
-    """`topkGatingSoftmax<T=bf16, EXPERTS=E>`'s values per thread (vLLM csrc/moe/topk_softmax_kernels.cu): 16-byte loads = `ELTS_PER_LDG =
-    min(16, sizeof(T) * E) / sizeof(T)` bf16 words, `VECs_PER_THREAD = max(1, E / (ELTS_PER_LDG * 32))`, `VPT = ELTS_PER_LDG * VECs_PER_THREAD`.
-    8 at E = 64 (OLMoE, bit-exact on the recorded cases) and at E = 128 (Qwen3-30B-A3B, the Build's binding); `ROUTER_VPT_BY_E` where it has
-    the entry -- the two must agree (asserted), the rule covers the tiny test configurations."""
-    if E <= 0 or E & (E - 1):
-        raise ValueError(f"E={E}: the router kernel is instantiated for powers of two only")
-    elts = min(8, E)
-    vpt = elts * max(1, E // (elts * 32))
-    if E in ROUTER_VPT_BY_E and ROUTER_VPT_BY_E[E] != vpt:
-        raise ValueError(f"E={E}: router_vpt_bf16 gives {vpt}, ROUTER_VPT_BY_E pins {ROUTER_VPT_BY_E[E]}")
-    return vpt
 
 
 def derive_config(cfg: dict[str, Any], *, repo: str | None, revision: str | None, world: int = 1) -> tuple[dict[str, Any], dict[str, str]]:
