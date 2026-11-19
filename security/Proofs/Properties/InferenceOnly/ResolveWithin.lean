@@ -193,7 +193,7 @@ theorem ret_within (U : Scope) (hU : Good P U) (t : ℕ) (ht : t < (P.defs[U.d]!
     (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
     (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
       j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b :=
-  run_within P hroot hB hL (Flock.Program.resolve_recut h) U _ Flock.Steps.FUEL (Nat.le_refl _) _ b
+  run_within P hroot hB hL (Flock.Program.resolve_recut (good_base P hU) h) U _ Flock.Steps.FUEL (Nat.le_refl _) _ b
     (down_ok P hroot hB hL _ U hU (Nat.le_refl _) t ht) (under_refl U) (Flock.Program.resolve_run h)
 
 /-- **An operand of a gate inside an activation is an earlier gate of the activation or a leaf of one of its
@@ -220,7 +220,7 @@ theorem operands_within (U : Scope) (sc : Scope) (hg : Good P sc) (hu : Under U 
         else t) := by
     split <;> simp only [memberRef_eq]
   rw [hr] at hres
-  exact run_within P hroot hB hL (Flock.Program.resolve_recut hres) U _ Flock.Steps.FUEL (Nat.le_refl _) _ a
+  exact run_within P hroot hB hL (Flock.Program.resolve_recut (good_base P hg) hres) U _ Flock.Steps.FUEL (Nat.le_refl _) _ a
     (start_ok P hroot hB hL sc hg k hk _ (hargs i _ hidx)) hu (Flock.Program.resolve_run hres)
 
 /-- **An operand of a gate the walk locates from inside `U` is an earlier gate of `U` or a leaf of one of its

@@ -1808,6 +1808,11 @@ inductive Scope where
   | child (parent : Scope) (d : Nat) (off : Nat) (node : Nat) (member : Nat)
   deriving Inhabited
 
+/-- The Definition whose activation `sc`'s chain of parents starts from. -/
+def Scope.base : Scope → Nat
+  | .top d _ _ => d
+  | .child parent _ _ _ _ => parent.base
+
 def Scope.d : Scope → Nat
   | .top d _ _ => d
   | .child _ d _ _ _ => d
@@ -1860,10 +1865,12 @@ def resolveStep (P : Prog) : Scope × Ref → V (Nat ⊕ (Scope × Ref))
       pure (.inr (.child sc node.fn (o + m * callee.gates) k m, callee.body.ret.get jj))
 
 /-- `layout.resolve`: the gate a body-scoped reference denotes in an activation, up through parameters and down through node
-outputs until a primitive. Refused (`recut-gates`, `Program.circuit`'s refusal) while the root reads an input node recut
-(`Body.recut`): a gate is one leaf of its width, and the layout has no operand of part of a gate. -/
+outputs until a primitive. Refused (`recut-gates`, `Program.circuit`'s refusal) in an activation under the root's while
+the root reads an input node recut (`Body.recut`): a gate is one leaf of its width, and the layout has no operand of part
+of a gate. An activation of a Definition taken on its own (`Scope.top d _ (some starts)`, `d` not the root) resolves to
+its own parameters and gates, and never reads the root's. -/
 def resolve (P : Prog) (sc : Scope) (r : Ref) : V Nat :=
-  if (P.defs[P.root]!).body.recut.isEmpty then Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
+  if sc.base != P.root || (P.defs[P.root]!).body.recut.isEmpty then Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
   else throw (s!"recut-gates: input nodes {((P.defs[P.root]!).body.recut.map (·.1)).toList} are read in leaves of part " ++
     "of their width, which the gate layout doesn't lay out")
 
@@ -1874,18 +1881,28 @@ theorem resolve_run {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P s
   · exact h
   · cases h
 
-theorem resolve_eq {P : Prog} (h : (P.defs[P.root]!).body.recut = #[]) (sc : Scope) (r : Ref) :
+theorem resolve_of {P : Prog} {sc : Scope} (h : sc.base ≠ P.root ∨ (P.defs[P.root]!).body.recut = #[]) (r : Ref) :
     resolve P sc r = Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r) := by
   unfold resolve
-  rw [h]
-  rfl
+  rw [if_pos]
+  rcases h with h | h <;> simp [h]
 
-theorem resolve_recut {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P sc r = .ok a) :
-    (P.defs[P.root]!).body.recut = #[] := by
+theorem resolve_eq {P : Prog} (h : (P.defs[P.root]!).body.recut = #[]) (sc : Scope) (r : Ref) :
+    resolve P sc r = Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r) :=
+  resolve_of (.inr h) r
+
+theorem resolve_cond {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P sc r = .ok a) :
+    sc.base ≠ P.root ∨ (P.defs[P.root]!).body.recut = #[] := by
   unfold resolve at h
   split at h
-  · exact Array.isEmpty_iff.mp (by assumption)
+  · next hc =>
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, Array.isEmpty_iff] at hc
+    exact hc
   · cases h
+
+theorem resolve_recut {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (hb : sc.base = P.root)
+    (h : resolve P sc r = .ok a) : (P.defs[P.root]!).body.recut = #[] :=
+  (resolve_cond h).resolve_left (· hb)
 
 /-- `partition_object.order_violation`: the first reference naming neither a parameter of its body nor an earlier node of it
 (a body's `ret` may name any node), over every body the root reaches, root first and callees in node order, each
