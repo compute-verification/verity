@@ -7,7 +7,8 @@ Credit's window check and the period's (`credit.window`, `credit.period_credit`,
 by its key, from its memo, and otherwise runs the verifier and keeps the answer, one ``LEAN-ANSWER`` line a run; each
 step still judges every answer itself, in its own order, and refuses where it refuses.
 
-A run's key is the SHA-512 of all of its inputs (`key`): the verifier's executable, the circuit file, the public file,
+A run's key is the SHA-512 of all of its inputs (`key`): the verifier's executable, the lowering's (`proofs.verify`
+lowers the drawn block's C_S with it, `proofs.lower_executable`), the circuit file, the public file,
 every file of each session directory (its name and SHA-512), the paths the verifier is handed, the program's bytes,
 and the partition object, the draw and the ``--registered`` file as canonical JSON. Those are the
 statement's proof files and what credit builds from the window's entries, root, rounds, salt and sample, so a changed
@@ -64,8 +65,8 @@ def file_digest(path: Path) -> str:
     return got
 
 
-def key(proof: PF.Proof, *, exe: Path, program: bytes, partition: Mapping[str, Any], draw: Mapping[str, Any],
-        registered: Mapping[str, Any] | None = None) -> str:
+def key(proof: PF.Proof, *, exe: Path, lower: Path, program: bytes, partition: Mapping[str, Any],
+        draw: Mapping[str, Any], registered: Mapping[str, Any] | None = None) -> str:
     """The SHA-512 of every input of `proofs.verify`'s run on `proof` (the module docstring); OSError when a file it names
     is missing, which `Answers` leaves to the verifier's own answer."""
     sessions = []
@@ -75,7 +76,7 @@ def key(proof: PF.Proof, *, exe: Path, program: bytes, partition: Mapping[str, A
             raise FileNotFoundError(f"session directory {s} holds no file")
         sessions.append([[str(p.relative_to(s)), file_digest(p)] for p in files])
     return hashlib.sha512(canonical_json({
-        "exe": file_digest(exe), "circuit": file_digest(proof.circuit), "public": file_digest(proof.public),
+        "exe": file_digest(exe), "lower": file_digest(lower), "circuit": file_digest(proof.circuit), "public": file_digest(proof.public),
         "sessions": sessions, "paths": [str(proof.circuit), str(proof.public), [str(s) for s in proof.sessions]],
         "program": hashlib.sha512(program).hexdigest(), "partition": partition, "draw": draw,
         "registered": registered})).hexdigest()
@@ -123,11 +124,12 @@ class Answers:
     and `unkeyed` the runs left to `verify` unkept because a file they name is missing; `summary` says all three."""
 
     def __init__(self, directory: Path | None = None, *, by: str, verify: Callable[..., Any] | None = None,
-                 exe: Callable[[], Path] | None = None, say: Callable[[str], Any] | None = SAY,
+                 exe: Callable[[], Path] | None = None, lower: Callable[[], Path] | None = None, say: Callable[[str], Any] | None = SAY,
                  clock: Callable[[], float] = time.monotonic) -> None:
         self.directory, self.by, self.say, self.clock = directory, by, say, clock
         self.verify = verify or (lambda proof, **kw: PF.verify(proof, **kw))
         self.exe = exe or (lambda: PF.executable())
+        self.lower = lower or (lambda: PF.lower_executable())
         self.memo: dict[str, dict[str, Any]] = {}
         self.ran, self.unkeyed = 0, 0
         self.taken: dict[str, int] = {}
@@ -139,7 +141,7 @@ class Answers:
                 os.umask(old)
 
     def key(self, proof: PF.Proof, **kw: Any) -> str:
-        return key(proof, exe=self.exe(), **kw)
+        return key(proof, exe=self.exe(), lower=self.lower(), **kw)
 
     def lookup(self, k: str) -> dict[str, Any] | None:
         got = self.memo.get(k)
