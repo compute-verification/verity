@@ -27,6 +27,7 @@ from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
+from verity.protocols.resource_accounting.network.prover import egress as EG
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
 from verity.protocols.resource_accounting.network.verifier import network_attester as W
@@ -38,11 +39,12 @@ from tests.program.predict.test_window_circuit import (
     GRAIN,
     SPLIT,
     SPLIT_GRAIN,
+    _labels,
     entry_of,
     state_row,
 )
 from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
-from tests.program.predict.test_window_circuit_fa3 import H200, _wired_in_slot_and_step
+from tests.program.predict.test_window_circuit_fa3 import H200
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
@@ -123,21 +125,40 @@ def unserved_slots(low, state, weights) -> list[WR.Slot]:
             for P, (row, _) in zip(low.programs, WR.scan_slots(low, state))]
 
 
+def scan_values(row, cls=CLASS, ingress=None, program=PROGRAM) -> dict[str, RV.Registered]:
+    """The scan's registered values a served window's circuit reads, in ``row/v2`` rows as `Rows` and `Window` take them:
+    its start's state row ``row`` and the network attester's ingress rows ``ingress`` (u16 words, a bucket a row; none:
+    every cell of every bucket zero)."""
+    words = dict(IF.layout(cls.scan.bucket).rows)["row"]
+    rows = [[0] * words] * cls.buckets if ingress is None else ingress
+    return {SS.SCAN_STATE: RV.Registered.commit(program, SS.SCAN_STATE, [row], [hm96_salt(bytes(32), 0, 0)],
+                                                schema=CR.SCHEMA_V2),
+            SS.INGRESS_ROWS: RV.Registered.commit(program, SS.INGRESS_ROWS, list(rows),
+                                                  [hm96_salt(bytes(32), 1, j) for j in range(len(rows))],
+                                                  schema=CR.SCHEMA_V2)}
+
+
 def _window(config=S.TINY, grain=GRAIN):
     """The served circuit lowered (`REQUESTS`), its weights, its registered values (each weight's parameter under fresh
-    salts, and the scan state's, `STATE` committed as a stand-in for the network attester's, in ``row/v2`` rows as the
-    scan's units commit their state rows, as `Rows` and `Window` take them) and each request's `Slot` of its lane's row
-    (`scan_slots`), every node computed."""
+    salts, and the scan's, `STATE`'s first row as a stand-in for the state before the window, `scan_values`) and each
+    request's `Slot` of its lane's row (`scan_slots`), every node computed."""
     low = WC.lower(_registered(config), CLASS, None, grain, requests=REQUESTS)
     fields = _weights(low.fn)
-    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
-                                 schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(_registered(config), fields, None, grain, keep_rows=True), SS.SCAN_STATE: state}
+    values = {**WW.weight_values(_registered(config), fields, None, grain, keep_rows=True), **scan_values(STATE[0])}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
         return fields[label][lo:hi]
 
     return low, fields, values, weights, unserved_slots(low, STATE, weights)
+
+
+def released(rows: WR.Rows, program=PROGRAM) -> dict[str, RV.Registered]:
+    """The released rows ``rows``' egress units compute, committed as the circuit's `scan_state.RELEASED_ROWS`, as a
+    window that records them takes them."""
+    out = rows.outs[descriptor_id(CLASS.scan.egress)][1]
+    return {SS.RELEASED_ROWS: RV.Registered.commit(program, SS.RELEASED_ROWS, out.tolist(),
+                                                   [hm96_salt(bytes(32), 2, j) for j in range(len(out))],
+                                                   schema=CR.SCHEMA_V2)}
 
 
 @pytest.fixture(scope="module")
@@ -260,23 +281,24 @@ def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):
         WR.Rows(WC.lower(_registered(), CLASS, None, GRAIN), slots, values)
     with pytest.raises(ValueError, match="a Program of 5 positions for a request served at 4"):
         WR.Slot(low.fn, CLASS, SLOTS[0], weights, Unserved(4, 4))
-    with pytest.raises(ValueError, match=re.escape(f"give the scan state's registered value, {SS.SCAN_STATE}, with its rows")):
-        WR.Rows(low, slots, {p: v for p, v in values.items() if p != SS.SCAN_STATE})
+    for p in (SS.SCAN_STATE, SS.INGRESS_ROWS):
+        with pytest.raises(ValueError, match=re.escape(f"give the scan's registered value {p} with its rows")):
+            WR.Rows(low, slots, {q: v for q, v in values.items() if q != p})
 
 
 def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
     """Where no scan ran (`prove_path`'s window commit), `scan_state_rows.standin_rows` is the scan state rows that give each slot its row
     and ``max_tokens`` at its anchor and lane, every other field zero: bucket 0's row is `STATE`'s, which holds the slots'
-    lanes alone. It is a per-window value in its reading port's rows, each row under 192 fresh bytes from the OS, so a
-    second commit of the same rows opens the same rows under other salts and another root; `Rows` takes it as the scan
-    state."""
+    lanes alone. Its first row is the start's per-window value in its reading port's rows, under 192 fresh bytes from
+    the OS, so a second commit of the same row opens it under another salt and another root; `Rows` takes it as the
+    scan's start."""
     low, _f, values, _w, slots = window
     heads = [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)]
-    v, again = (WR.state_value(PROGRAM, CLASS, SR.standin_rows(CLASS, heads), window=RUN) for _ in range(2))
+    v, again = (WR.state_value(PROGRAM, CLASS, SR.standin_rows(CLASS, heads)[0], window=RUN) for _ in range(2))
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) and v.rows[0] == tuple(STATE[0])
-    assert (v.leaves, v.words, v.schema, v.window) == (CLASS.buckets, SS.words(CLASS.scan), CR.SCHEMA_V2, RUN)
+    assert (v.leaves, v.words, v.schema, v.window) == (1, SS.words(CLASS.scan), CR.SCHEMA_V2, RUN)
     salts = [bytes(s) for s in (*v.salts, *again.salts)]
-    assert list(again.rows) == list(v.rows) and len(set(salts)) == 2 * CLASS.buckets
+    assert list(again.rows) == list(v.rows) and len(set(salts)) == 2
     assert {len(s) for s in salts} == {192} and again.entry()["root"] != v.entry()["root"]
     ref = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, list(v.rows), list(v.salts), schema=CR.SCHEMA_V2, window=RUN)
     assert ref.entry() == v.entry()
@@ -328,9 +350,9 @@ def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
             assert IS.token_row(scan, IS.decode(scan, rows[SLOTS_CLASS.anchor(k)]))[SLOTS_CLASS.lane(k)] == \
                 ((1, len(p), p) if q else (0, 0, ()))
             heads.append(([int(bool(q)), len(p), *p, *[0] * (SLOTS_CLASS.prompt - len(p))], 2 if q else 0))
-        got = WR.state_value(PROGRAM, SLOTS_CLASS, rows, window=RUN)
-        standin = WR.state_value(PROGRAM, SLOTS_CLASS, SR.standin_rows(SLOTS_CLASS, heads), window=RUN)
-        assert got.rows != standin.rows and (got.leaves, got.words) == (standin.leaves, standin.words)
+        standin = SR.standin_rows(SLOTS_CLASS, heads)
+        got, there = (WR.state_value(PROGRAM, SLOTS_CLASS, r[0], window=RUN) for r in (rows, standin))
+        assert rows != standin and (got.leaves, got.words) == (there.leaves, there.words)
     assert rows[0] != IS.encode(scan, IS.empty(scan))
     assert SR.scan_state(SLOTS_CLASS, ingress, outputs, 0)[0][0] == IS.encode(scan, IS.empty(scan))
     with pytest.raises(ValueError, match="refuses the network attester's ingress rows"):
@@ -342,15 +364,37 @@ def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
 def test_the_scans_state_value_gives_the_window_its_slots(window):
     """The window's scan state as the network attester's scan gives it: `LANES`' two requests, admitted at bucket 0 of
     TINY's 16-bucket windows, are anchored at bucket 16, window 1's one boundary, in lanes 0 and 1, so class Programs 0
-    and 1 start them; the scan's rows, committed (`state_value`), give each slot its row and head as the stand-in's
-    `STATE` does (`scan_slots`), and `Rows` takes the scan's value with the slots of those rows."""
+    and 1 start them; the state before the window, committed (`state_value`), gives each slot its row and head as the
+    stand-in's `STATE` does (`scan_slots`). With the network attester's ingress rows of window 1, `Rows` fills the
+    circuit's scan units with the scan's own outputs: the start's is that state, ingress unit t's are
+    `ingress_scan.reference` on ingress row 16 + t, the state before it and the entries the window's Programs computed,
+    ok every one, and egress unit t's are `egress.outputs` on its view."""
     low, _f, values, _w, slots = window
     ingress, outputs = _traffic(CLASS, [ids[:lp] for _o, lp, _m, ids in LANES], (0, 0))
     rows, starts = SR.scan_state(CLASS, ingress, outputs, CLASS.buckets)
     assert starts == [1, 2]
-    v = WR.state_value(PROGRAM, CLASS, rows, window=RUN)
+    v = WR.state_value(PROGRAM, CLASS, rows[0], window=RUN)
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) == [(r, [r[1], 2]) for r in SLOTS]
-    WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
+    T, scan = CLASS.buckets, IS.Class(**CLASS.scan.shape)
+    own = ingress[T:2 * T]
+    filled = WR.Rows(low, slots, {**values, **scan_values(v.rows[0], ingress=[np.frombuffer(r, "<u2") for r in own])})
+    start, bucket, egress = (descriptor_id(f) for f in (CLASS.scan.start, CLASS.scan.bucket, CLASS.scan.egress))
+
+    def bits(words) -> list[int]:
+        return [int(w) >> j & 1 for w in words for j in range(16)]
+
+    assert bits(filled.outs[start][0][0]) == list(rows[0])
+    prog = [b for P in sorted(low.programs, key=lambda P: P.lane) for b in bits(filled.outs[P.entry_unit[0]][0][P.entry_unit[1]])]
+    sin = list(rows[0])
+    for t in range(T):
+        before = IS.decode(scan, sin)
+        ok, st, view = IS.reference(scan, own[t], sin, prog)
+        assert (ok, bits(filled.outs[bucket][0][t])) == (1, [1] + [0] * 15)
+        assert bits(filled.outs[bucket][1][t]) == st and bits(filled.outs[bucket][2][t]) == view
+        after = IS.step(scan, own[t], before, IS.prog_decode(scan, prog))
+        assert bits(filled.outs[egress][0][t]) + bits(filled.outs[egress][1][t]) == \
+            EG.output_bits(scan.egress, IS.view(scan, after, before.now))
+        sin = st
 
 
 def test_a_full_windows_entry_j_is_the_request_the_scan_started_in_slot_j_whatever_the_programs_order():
@@ -379,21 +423,30 @@ def test_a_full_windows_entry_j_is_the_request_the_scan_started_in_slot_j_whatev
 def test_a_window_of_lanes_1_and_3_of_four_has_an_entry_a_lane_and_the_scan_takes_them():
     """Requests in lanes 1 and 3 of a class of four lanes: the window's one `SlotEntry_v1` has four units in lane order,
     lanes 0 and 2 each on its occupancy word and a collector of its own (`OutCollect_v1{FIRST}`), both in lane 1's
-    Program's slot, so no wire crosses slots. Their entries read 0 and the occupied lanes' read 1 with their 2 outputs,
-    and the network attester's scan step takes that Programs' row at the lanes' anchor, where it refuses the two
-    occupied lanes' entries as the first two of the row."""
+    Program's slot, so no wire but the scan's crosses slots: every slot's `ScanSlots_v3` reads its start, and its
+    ingress units read entry j at port ``prog<j>``. Their
+    entries read 0 and the occupied lanes' read 1 with their 2 outputs, and the network attester's scan step takes that
+    Programs' row at the lanes' anchor, where it refuses the two occupied lanes' entries as the first two of the row."""
     cls = WC.WindowClass(4, 4, 2)
     lanes = [(0, 0, 0, [0] * 4), (1, 3, 2, [5, 77, 42, 0]), (0, 0, 0, [0] * 4), (1, 2, 2, [9, 8, 0, 0])]
     requests = tuple(WC.Request(cls.anchor(k), cls.lane(k), lp, m) for k, (occ, lp, m, _ids) in enumerate(lanes) if occ)
     reg = _registered()
     low = WC.lower(reg, cls, None, GRAIN, requests=requests)
-    _wired_in_slot_and_step(low.circuit)
+    labels, bucket = _labels(low.circuit), descriptor_id(cls.scan.bucket)
+    scan_ids = {descriptor_id(f) for f in (cls.scan.start, cls.scan.egress)} | {bucket}
+    assert all((lab >= 0).all() for lab in labels.values())
+    for w in low.circuit.wires:
+        i = np.arange(w.units, dtype=np.int64)
+        reader, writer = labels[w.reader][w.at + i // w.cut[1]], labels[w.writer][w.source(i)]
+        assert {w.reader, w.writer} & scan_ids or (
+            (reader[:, 0] == writer[:, 0]).all() and (writer[:, 1] <= reader[:, 1]).all())
+    et = low.programs[0].entry_unit[0]
+    assert {(w.port, int(w.source(0))) for w in low.circuit.wires if (w.reader, w.writer) == (bucket, et)} == {
+        (f"prog{j}", j) for j in range(cls.lanes)}
     assert [(s, k) for s, k, _c, _e in low.empty] == [(0, 0), (2, 0)] and low.programs[0].lane == 1
     rows_ = [state_row(cls.scan, lanes)] * cls.buckets
     fields = _weights(low.fn)
-    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
-                                 schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
+    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), **scan_values(rows_[0], cls)}
     slots = [WR.Slot(P.fn, cls, row, lambda label, lo, hi: fields[label][lo:hi], Unserved(row[1], P.positions))
              for P, (row, _) in zip(low.programs, WR.scan_slots(low, rows_))]
     rows = WR.Rows(low, slots, values)
@@ -746,19 +799,21 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     """Each weight's parameter is its words in rows of its reading port's (``row/v2``), the table's its V rows of H
     (``row-seg``), each committed under salts of its own, 192 a row and no two alike: the table and a weight are core's
     commits of those rows under the weights record's program and those salts, and the entries name nothing but each value's size, domain and hiding
-    root. The scan state is no value of the committer's but the network attester's, a row a bucket of the window. Each
-    value is in its reading ports' rows, which a window's commit refuses otherwise. Another parameter is refused."""
+    root. The scan's are no values of the committer's: its start's, a row, and the network attester's ingress rows, a
+    row a bucket of the window, and its released rows, which the window's egress units compute (`released`). Each value
+    is in its reading ports' rows, which a window's commit refuses otherwise. Another parameter is refused."""
     low, fields, got, *_ = window
-    assert set(got) == set(low.circuit.registered.params)
-    reads = low.circuit.registered.reads
+    assert set(got) | {SS.RELEASED_ROWS} == set(low.circuit.registered.params)
+    reads = [r for r in low.circuit.registered.reads if r.param != SS.RELEASED_ROWS]
     lays = {r.reader: dict(IF.layout(low.circuit.template(r.reader)).schemas) for r in reads}
     assert {(r.param, got[r.param].schema) for r in reads} == {(r.param, lays[r.reader][r.port]) for r in reads}
     t = got[TABLE]
     assert (t.leaves, t.words, t.schema, t.window) == (256, 64, CR.SCHEMA_SEG, None) and t.schema == E.SCHEMA
     assert np.array_equal(t.rows[:].reshape(-1), fields[EMBED])
     program = WC.class_program(_registered(), WW.WEIGHTS_CLASS.positions).digest
-    assert {v.program for p, v in got.items() if p != SS.SCAN_STATE} == {program}
-    assert (got[SS.SCAN_STATE].leaves, got[SS.SCAN_STATE].words) == (CLASS.buckets, SS.words(CLASS.scan))
+    assert {v.program for p, v in got.items() if p not in (SS.SCAN_STATE, SS.INGRESS_ROWS)} == {program}
+    assert (got[SS.SCAN_STATE].leaves, got[SS.SCAN_STATE].words) == (1, SS.words(CLASS.scan))
+    assert got[SS.INGRESS_ROWS].leaves == CLASS.buckets
     for name, rows, schema in ((TABLE, fields[EMBED].reshape(-1, 64), CR.SCHEMA_SEG),
                                (WB.weight_param(EMBED, 1024), fields[EMBED].reshape(-1, 1024), CR.SCHEMA_V2)):
         salts = list(got[name].salts)
@@ -884,27 +939,29 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
     path to `Window.write` skips."""
     low, _f, values, _w, slots = window
     c, words = low.circuit, SS.words(CLASS.scan)
-    assert c.registered.values == (SS.SCAN_STATE,)
+    assert c.registered.values == (SS.SCAN_STATE, SS.INGRESS_ROWS, SS.RELEASED_ROWS)
     program, digest = c.program()[0], IB.program_digest(c)
-    assert dict(program.fn.signature()[0])[SS.SCAN_STATE].leaves == CLASS.buckets * words
-    state = WR.state_value(digest, CLASS, SR.standin_rows(CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)]),
+    assert dict(program.fn.signature()[0])[SS.SCAN_STATE].leaves == words
+    state = WR.state_value(digest, CLASS, SR.standin_rows(CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)])[0],
                            window=RUN)
     vals = {**values, SS.SCAN_STATE: state}
+    rows = WR.Rows(low, slots, vals)
+    vals |= released(rows)
     win = IF.Window(c, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
     win.supply()
-    WR.Rows(low, slots, vals).record(win)
+    rows.record(win)
     win.write(win.close(), tmp_path, {}, registrar=DK)
     rec = json.loads((tmp_path / "registration.json").read_text())
     kept = (tmp_path / CS.INDEX_SALT).read_bytes()
     assert len(kept) == CS.SALT_BYTES and kept not in {bytes(s) for s in state.salts}
     assert CS.index_leaf((tmp_path / "index.json").read_bytes(), kept).hex() == rec["window"]["index_leaf"]
-    (e,) = rec["registered"]
+    (e,) = [e for e in rec["registered"] if e["value"] == SS.SCAN_STATE]
     scan = RV.Registered.commit(digest, SS.SCAN_STATE, list(state.rows), list(state.salts), schema=CR.SCHEMA_V2, window=RUN)
     want = CR.registered_entries(program, {SS.SCAN_STATE: words}, {SS.SCAN_STATE: CR.SCHEMA_V2}, RUN)[SS.SCAN_STATE]
     assert rec["format"] == DM.REGISTRATION and e == state.entry() == scan.entry()
-    assert e["value"] == SS.SCAN_STATE and e["root"] == rec["window"]["registered_roots"][SS.SCAN_STATE]
+    assert e["root"] == rec["window"]["registered_roots"][SS.SCAN_STATE]
     assert (e["leaves"], e["words"], e["domain"]) == (want["leaves"], want["words"], want["domain"]) == (
-        CLASS.buckets, words, RV.domain(digest, SS.SCAN_STATE, words, CLASS.buckets, window=RUN).domain_id.hex())
+        1, words, RV.domain(digest, SS.SCAN_STATE, words, 1, window=RUN).domain_id.hex())
 
 
 class _Kept:
@@ -923,12 +980,11 @@ def _rows(requests, lanes):
     registered values and its `Rows` of every node computed."""
     reg = _registered()
     low = WC.lower(reg, CLASS, None, GRAIN, requests=requests)
-    rows_ = [state_row(CLASS.scan, lanes), *STATE[1:]]
+    rows_ = [state_row(CLASS.scan, lanes)]
     fields = _weights(low.fn)
-    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
-                                 schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
-    return low, values, WR.Rows(low, unserved_slots(low, rows_, lambda label, lo, hi: fields[label][lo:hi]), values)
+    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), **scan_values(rows_[0])}
+    rows = WR.Rows(low, unserved_slots(low, rows_, lambda label, lo, hi: fields[label][lo:hi]), values)
+    return low, values | released(rows), rows
 
 
 #: one request in lane 0 (a prompt of 3 keeping 1 output: 3 positions), lane 1 empty
@@ -965,7 +1021,7 @@ def test_a_window_of_fewer_requests_than_slots_commits(tmp_path):
     rows.record(win)
     win.write(win.close(), tmp_path, {}, registrar=DK)
     rec = json.loads((tmp_path / "registration.json").read_text())
-    assert [e["value"] for e in rec["registered"]] == [SS.SCAN_STATE]
+    assert [e["value"] for e in rec["registered"]] == [SS.SCAN_STATE, SS.INGRESS_ROWS, SS.RELEASED_ROWS]
 
 
 def _private(seed: int):
@@ -974,10 +1030,9 @@ def _private(seed: int):
     reg = _registered()
     low = WC.lower(reg, CLASS, None, GRAIN, requests=REQUESTS)
     fields = _weights(low.fn, seed)
-    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
-                                 schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
-    return low, values, WR.Rows(low, unserved_slots(low, STATE, lambda label, lo, hi: fields[label][lo:hi]), values)
+    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), **scan_values(STATE[0])}
+    rows = WR.Rows(low, unserved_slots(low, STATE, lambda label, lo, hi: fields[label][lo:hi]), values)
+    return low, values | released(rows), rows
 
 
 def test_a_windows_labels_are_its_step_slot_and_form_alone():
