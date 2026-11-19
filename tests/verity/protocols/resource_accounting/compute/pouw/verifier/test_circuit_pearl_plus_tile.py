@@ -1,5 +1,5 @@
-"""Pearl+'s -h3 tile unit (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile`): its core on words equals the
-scheme (`reference`), its σ equals its words, the tile leaf opens as `leaf_reference`, and the whole unit's ``ok`` is the
+"""Pearl+'s -h3 tile unit (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile`): its σ core's word view
+equals the scheme (`reference`), the σ on bits equals its word view, the tile leaf opens as `leaf_reference`, and the whole unit's ``ok`` is the
 core's ``ok`` and the leaf's opening, on honest fixture tiles and tampered ones."""
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ import random
 import numpy as np
 import pytest
 
-from verity.circuits.defs import bind
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.commitments.gates import frame_v3 as F3
@@ -96,8 +97,7 @@ class Tile:
         self.tr, self.y = tr, self.y[:tr]
 
     def core(self):
-        return bind(T.PearlPlusTileCore, K=self.k, TM=self.tm, TR=self.tr, TN=self.tn, N=self.n, RHO=self.rho,
-                    RHOR=self.rhor, DEV=self.dev)
+        return word_of(self.core_v2())
 
     def core_v2(self):
         return bind(T.PearlPlusTileCoreV2, K=self.k, TM=self.tm, TR=self.tr, TN=self.tn, N=self.n, RHO=self.rho,
@@ -124,8 +124,10 @@ SHAPES = [("h100", 256, 1, 1, 1, 0, 1), ("h100", 256, 2, 2, 4, 0, 2)]
 
 @pytest.mark.parametrize("dev,k,tm,tn,n,col,depth", SHAPES)
 def test_core_on_words_is_the_scheme(dev, k, tm, tn, n, col, depth):
-    """The core on words is `reference`: the digest and ok = 1 on an honest tile."""
+    """The σ core's word view is `reference`: the digest and ok = 1 on an honest tile.  The word body is no registered
+    Definition: the σ is the core's one."""
     t = Tile(dev, k, tm, tn, n, col, depth, f"core/{dev}/{k}/{tm}x{tn}")
+    assert "PearlPlusTileCore_v1" not in REGISTRY.defs and "PearlPlusTileCore_v2" in REGISTRY.defs
     out = list(evaluate(t.core(), *(_flat(a) for a in t.core_args())))
     assert t.ok == 1
     assert bytes(out[:64]) == t.digest and out[64] == 1
@@ -180,7 +182,7 @@ def test_tr_is_within_the_tile():
     """TR is 1 to TM: a tile has a real row, and no more real rows than rows."""
     for tr in (0, 2):
         with pytest.raises(ValueError, match="real rows are 1 to its TM rows"):
-            bind(T.PearlPlusTileCore, TM=1, TR=tr)
+            bind(T.PearlPlusTileCoreV2, TM=1, TR=tr)
 
 
 @pytest.mark.parametrize("tm,tn,n,gates", [(1, 1, 1, 11_443), (2, 2, 4, 24_340)])

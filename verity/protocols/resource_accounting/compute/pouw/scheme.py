@@ -13,7 +13,9 @@ arrives (`Attached.step`); outside an epoch a block is the workload's own. At a 
 ``capture``) each call is one dispatcher op, ``verity_pouw::pearl_plus_linear`` (`serving.tensors.PearlCDevice.linear_op`),
 in the first-stage linear's form, which the capture records; its coins are in-process and credit nothing. It ends the run's pass once each step's blocks
 are issued (``steps``, `StepComputed`). It provides the ``cut`` (`Scheme.provides`): a phase's circuit is cut at the
-linears it computes, whose calls commit their A rows and y. Its settings are
+linears it computes, whose calls commit their A rows and y. Its credited product is one block per grid tile of every
+call of every pass, in the Lean verifier's tile order (`credited_blocks`), and its sample draws over those blocks
+(`drawn_blocks`). Its settings are
 `SETTINGS`; ``tie-uniform`` lets a uniform sampling rate stand under the tie to its tables, with the weaker tie its
 record states.
 """
@@ -22,7 +24,8 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,8 +34,10 @@ from typing import Any
 from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
+from verity.config import COMPOSITES
 from verity.protocol import VERIFIER
-from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Launch, Order, Scheme, Term, register
+from verity.protocols.resource_accounting.scheme import (Block, Charge, Executable, Lacks, Launch, LaunchRefused, Order,
+                                                             Scheme, Term, register)
 
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
@@ -44,6 +49,63 @@ READS = ("bf16",)
 
 def tile_macs(shape: Mapping[str, int]) -> int:
     return shape.get("TR", shape["TM"]) * shape["TN"] * shape["K_KEPT"]
+
+
+@dataclass(frozen=True)
+class CreditedBlock:
+    """One credited block: tile ``id`` = (pass, tile id) of the run, the tile id its transcript leaf's position; ``record``
+    its call's position in the pass, ``unit`` the call's index, ``rows`` and ``cols`` the tile's, ``col`` its column block
+    (``cols[0] // TN``), ``size`` its template's (K, TM, TN, N), ``real`` its template's static real-row count TR (its
+    rows below the call's ``real_rows``; the rest are filler, held to zero), and ``ticket`` its integer sample weight."""
+
+    id: tuple[int, int]
+    record: int
+    unit: int
+    rows: tuple[int, ...]
+    cols: tuple[int, ...]
+    col: int
+    size: tuple[int, int, int, int]
+    real: int
+    ticket: int
+
+
+def credited_blocks(scheme: Any, passes: Sequence[Sequence[Any]]) -> list[CreditedBlock]:
+    """The run's credited product as blocks, one per grid tile of every call of every pass (``passes``, each pass's
+    `UnitRecord`s in order), in the Lean verifier's order (`Run.lean`'s `tile?` and `tickets`): pass by pass, call by call,
+    each call's tiles row-major (`audit.tile_refs` over `grid_tiles`), each ticketed at its credited cells' `wref` share
+    (`clear_work.tickets` over every pass's records together). A tile with no credited cell has ticket 0 and is never
+    drawn."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.clear import clear_work as CW
+    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Workload, tile_refs
+
+    tickets = iter(CW.tickets(scheme, [r for records in passes for r in records]))
+    tn, out = scheme.tile[1], []
+    for i, records in enumerate(passes):
+        for ref in tile_refs(scheme, Workload(tuple(r.matmul for r in records))):
+            _, tile, ticket = next(tickets)
+            r = records[ref.matmul]
+            u = r.matmul
+            assert tile == ref.tile, "clear_work.tickets and audit.tile_refs enumerate one grid"
+            out.append(CreditedBlock((i, ref.id), ref.matmul, u.index, tile.rows, tile.cols, tile.cols[0] // tn,
+                                     (u.shape.k, len(tile.rows), tn, u.shape.n),
+                                     sum(row < r.real_rows for row in tile.rows), ticket))
+    return out
+
+
+def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int,
+                 draw: Callable[..., Any] | None = None) -> list[CreditedBlock]:
+    """The ``t`` blocks of `credited_blocks` that ``key`` draws (``draw``, `clear_work.draw` unless a caller holding
+    `clear_work` by its bare name gives its own: work-weighted with replacement, in its order): `Run.lean`'s `draw` under
+    `drawKey`."""
+    if draw is None:
+        from verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_work import draw
+
+    blocks, at = credited_blocks(scheme, passes), [0]
+    for records in passes:
+        at.append(at[-1] + len(records))
+    by_tile = {(at[b.id[0]] + b.record, b.rows[0], b.cols[0]): b for b in blocks}
+    return [by_tile[(pos, tile.rows[0], tile.cols[0])]
+            for pos, tile in draw(scheme, [r for records in passes for r in records], key, t)]
 
 
 #: Its settings (`Scheme.settings`), each a default of its type: ``kernel`` the kernel's library (required on a served
@@ -525,7 +587,11 @@ PEARL_PLUS = register(Scheme(
     depends=(),
     pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"), development="gate",
                               starts=("gate", "peer", "lane", "key-sha512", "main-file"),
-                              starts_optional=("lane", "main-file"))},
+                              starts_optional=("lane", "main-file"),
+                              entry="verity.protocols.resource_accounting.compute.pouw.scheme:launch_pearlplus",
+                              executables=(Executable(
+                                  "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus",
+                                  "pouw-pearlplus"),))},
     answers=Lacks("has no piece that answers outside an exchange"),
     # until the salt and sample sessions' signature pin is in Lean
     unchecked={"coins-signatures-checked-by-the-auditor":
@@ -554,3 +620,44 @@ PEARL_PLUS = register(Scheme(
                               "with Pearl+'s formed FP8 buffers as a third form, and storage's release of a weight frees "
                               "nothing.",
 ))
+
+SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
+#: served_verdicts.sh's variable for each binding of Pearl+'s live challenger, the party that sends its salt
+_LIVE = {"gate": "PEARLC_CHALLENGER_GATE", "peer": "PEARLC_CHALLENGER_PEER", "key-sha512": "H1_KEY_SHA512"}
+_CHALLENGER = workload.PEARL_CHANNELS[0].sender
+
+
+def _hooks(cfg, params, bound, pinned):
+    """Pearl+ on the workload's engine (POUW=pearlplus, PEARLPLUS_TIE=1): each engine step's passes retained under the
+    gate's salts, Pearl+'s window record tied to the execution phase, then its verdict and the Lean verifier
+    (served_pearlplus.sh). With no gate bound the gate variables are set empty, since unset served_verdicts.sh takes the
+    lane's gate: Pearl+'s epoch coins are then an in-process challenger's on the workload's machine, its verdict claims
+    none, and the run is a development one."""
+    product = "remote" if sorted(cfg["protocols"]) == sorted(COMPOSITES["verity/remote/v1"]) else "onsite"
+    hooks = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": product}
+    if given := [k for k in _LIVE if k in bound]:
+        if lacking := [k for k in _LIVE if k not in bound]:
+            raise LaunchRefused("unbound", f"Pearl+'s live challenger takes {', '.join(_LIVE)} together, and the "
+                                           f"deploy bindings bind {', '.join(given)} without "
+                                           f"{', '.join(f'{_CHALLENGER}.pearl-plus.{k}' for k in lacking)}: bind "
+                                           f"them, or none for coins flipped on the workload's machine")
+        hooks |= {v: bound[k] for k, v in _LIVE.items()}
+    else:
+        hooks |= {"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
+    hooks |= {v: bound[k] for k, v in (("lane", "PEARLC_CHALLENGER_LANE"), ("main-file", "MAIN_FILE")) if k in bound}
+    if "class" in params:
+        w = cfg["workload"]["params"]
+        slots, _, outputs = (int(x) for x in params["class"].split(","))
+        if (slots, outputs) != (w["slots"], w["window-steps"]):
+            raise LaunchRefused("params", f"Pearl+'s class {params['class']} is {slots} requests of {outputs} output "
+                                          f"tokens, and the workload's slots and window-steps are {w['slots']} and "
+                                          f"{w['window-steps']}: state slots = {slots} and window-steps = {outputs}, "
+                                          "or a class that agrees")
+        hooks |= {"V3C_CLASS": params["class"], "CLASSES": params["class"]}
+    return hooks | ({"PEARLPLUS_TIE_UNIFORM": "1"} if params["tie-uniform"] else {})
+
+
+def launch_pearlplus(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
+    """Pearl+'s workers piece (its `Launch.entry`): its hooks and the script they run. It launches and collects, and
+    decides no verdict."""
+    return _hooks, (SCRIPT,)
