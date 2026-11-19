@@ -299,7 +299,8 @@ DEVELOPMENT = "development.json"
 #: why a development piece's verdict credits nothing, so its subprotocol's row in the record stays missing
 DEV_WHY = ("development run, credits nothing: the record takes no H1 piece as PoUW's verdict of record, and core's credit "
            "also needs the window in a period whose open commits its draw K, rows and weights")
-_PEARLPLUS_UNTIED = ("development run, credits nothing: Pearl+ (pearl-c-h100-v1-h3) served its own seeded load on this card "
+#: the record's sentence for a Pearl+ piece tied to no window record W (no PEARLPLUS_TIE), every one the harness runs
+PEARLPLUS_UNTIED = ("development run, credits nothing: Pearl+ (pearl-c-h100-v1-h3) served its own seeded load on this card "
                      "after the window's serve, the BF16 checkpoint's linears as its FP8 product, so its passes are not the "
                      "window sampled proofs audited and nothing ties them to that window's Commit")
 #: ... under PEARLPLUS_TIE, where serve-openai's Pearl+ arm served the window itself (`pearlplus`'s ``tie``)
@@ -312,11 +313,13 @@ _IN_PROCESS_WHY = ("its epoch's coins are an in-process challenger's, which the 
 #: the challenger a live session's coins are named from where its open answer carries no ``host`` (`challenger_of`)
 UNNAMED_CHALLENGER = "the gate's challenger, which the session's open answer doesn't name"
 #: `pearlplus_why` where its epoch's coins are an in-process challenger's: the piece then claims no verdict (`UNCLAIMED`)
-PEARLPLUS_WHY_IN_PROCESS = f"{_PEARLPLUS_UNTIED}; {_IN_PROCESS_WHY}"
+PEARLPLUS_WHY_IN_PROCESS = f"{PEARLPLUS_UNTIED}; {_IN_PROCESS_WHY}"
 #: the same under PEARLPLUS_TIE (a live session's: `pearlplus_why_tied`)
 PEARLPLUS_WHY_TIED_IN_PROCESS = f"{_PEARLPLUS_TIED}; {_IN_PROCESS_WHY}"
 #: the Pearl+ piece's verdict where its epoch's coins are an in-process challenger's and nothing failed
 UNCLAIMED = "unclaimed"
+#: a development piece's verdict where its check didn't decide (no Lean ran it): its row is missing with the document's why
+UNDECIDED = "undecided"
 #: the replay's samples where verify ran without the gate (`verify_run.node_draw`)
 PEARLPLUS_NODE_SAMPLES = ("the Lean verifier's IO.getRandomBytes in verify_run.py on the serving node, one source for the "
                         "run, taken once every pass's roots are read and recorded in the passes' coin.json before any "
@@ -344,7 +347,7 @@ def challenger_of(served: Mapping[str, Any] | None) -> str:
 def pearlplus_why(challenger: str) -> str:
     """Why the Pearl+ piece's verdict (`pearlplus`) credits nothing, its epoch's salt coin a live session's on
     `challenger` (`challenger_of`)."""
-    return (f"{_PEARLPLUS_UNTIED}; its epoch's salt coin is a live session's on {challenger}; and an ACCEPT is the "
+    return (f"{PEARLPLUS_UNTIED}; its epoch's salt coin is a live session's on {challenger}; and an ACCEPT is the "
             "reference replay's (verify_run.py), not PouwVerifier's ZK proof")
 
 
@@ -2316,8 +2319,10 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
     """A subprotocol's runner row from its piece's answer; Pearl+'s accepted development piece is PoUW's verdict of record
     where `pearlplus_of_record` says so (`spot`, `key_sha512` and `lane` what it reads), its row that answer's
     with its document as ``piece``, else ``missing`` with its document, its ``why`` `DEV_VERDICT` and the first condition
-    of record it fails; any other development piece's is ``missing`` with its document when it accepts or claims no
-    verdict (`UNCLAIMED`; it credits nothing, for the document's ``why``, else `DEV_WHY`), else ``reject``; a piece that
+    of record it fails; an `UNDECIDED` development piece's is ``missing`` with its document and the document's own ``why``
+    (its ``error`` naming the document where it gives none); any other development piece's is ``missing`` with its
+    document when it accepts or claims no verdict (`UNCLAIMED`; it credits nothing, for the document's ``why``, else
+    `DEV_WHY`), else ``reject``; a piece that
     ran (`RAN`) and wrote neither is its ``error``, unless it refused to run (`REFUSED`): then ``refused`` with its
     sentence as ``reason``; otherwise ``missing``, naming why."""
     from verity_e2e_demo import block_record as BR
@@ -2334,6 +2339,11 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
             if answer is not None:
                 return {**row_of(owner, answer, d, run), "piece": doc, "answer_from": PEARLPLUS_FROM}
             return {"verdict": "missing", "owner": owner, "why": f"{DEV_VERDICT}: {failed}"[:2000], "development": doc}
+        if doc.get("verdict") == UNDECIDED:
+            if not isinstance(doc.get("why"), str) or not doc["why"].strip():
+                return {"verdict": "error", "owner": owner,
+                        "reason": f"its piece's {comp}/{DEVELOPMENT} is {UNDECIDED} and says no why"}
+            return {"verdict": "missing", "owner": owner, "why": doc["why"][:2000], "development": doc}
         if doc.get("verdict") in ("accept", UNCLAIMED):
             own = doc.get("why") or DEV_WHY
             refused = (doc.get("credit") or {}).get("window")

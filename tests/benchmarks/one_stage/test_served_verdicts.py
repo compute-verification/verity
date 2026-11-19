@@ -3002,6 +3002,41 @@ def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_deve
     assert rec["legs"]["pouw"] is None
 
 
+
+def test_an_untied_pearlplus_piece_is_never_pouws_verdict_of_record(tmp_path, monkeypatch, live):
+    """With the tie retired, Pearl+'s verdict holds its passes to no window record W, so `pearlplus_of_record` returns
+    no answer for any piece the harness writes, though every other condition of record is met: the piece says it is
+    Pearl+'s own verdict over its own passes, tied to no window, crediting nothing (`PEARLPLUS_UNTIED`), and the
+    composer's row for useful work reads missing, never accept."""
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, "untied")
+    doc = json.loads((pieces / "pouw" / S.DEVELOPMENT).read_text())
+    assert (doc["verdict"], doc["tie"], doc["credited"]) == ("accept", None, False)
+    assert doc["why"].startswith(S.PEARLPLUS_UNTIED), doc["why"]
+    answer, failed = S.pearlplus_of_record(doc, pieces / "pouw", audit, pin, lane)
+    assert answer is None and failed.startswith("Pearl+'s verdict holds its passes to no window record W"), failed
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
+    _report, rec, line = S.record({"integrity": _accepted(), "work": row}, window=1, steps=(0, 4), node="vy-dc-h200",
+                                  run="r", servers={"work": ("vy-dc-h200", "real")}, product="remote")
+    assert row["verdict"] == "missing" and line["verdicts"]["PoUW"] == S.DEV_VERDICT != "accept", (row, line)
+    assert rec["legs"]["pouw"] is None
+
+
+@pytest.mark.parametrize("why", ["undecided: no Lean executable present", None, ""])
+def test_an_undecided_development_piece_is_missing_with_its_own_why_or_an_error_naming_it(tmp_path, why):
+    """A development piece whose check didn't decide (`UNDECIDED`) is no reject: its row is missing with its document
+    and the document's own why, which the record carries; one that says no why is an error naming its document."""
+    (d := tmp_path / "pieces" / "pous").mkdir(parents=True)
+    doc = {"verdict": S.UNDECIDED, "reasons": ["the Lean's replay did not run"], **({} if why is None else {"why": why})}
+    (d / S.DEVELOPMENT).write_text(json.dumps(doc))
+    row = S.piece_row("space", tmp_path / "pieces")
+    if why:
+        assert row == {"verdict": "missing", "owner": "memory-accounting", "why": why, "development": doc}
+        _report, _rec, line = S.record({"integrity": _accepted(), "space": row}, window=1, steps=(0, 4), node="n", run="r")
+        assert line["missing"]["PoUS"] == why, line
+    else:
+        assert row == {"verdict": "error", "owner": "memory-accounting",
+                       "reason": f"its piece's pous/{S.DEVELOPMENT} is undecided and says no why"}
+
 def _sample_answers(calls: list, public: bytes = PUBLIC):
     """The gate's answers for the run's sample session, as `pearlplus_draw` asks them: its tree for ``fetch`` (its key),
     the ledger (its reserve and its open on the run's commitment) and the pins."""
