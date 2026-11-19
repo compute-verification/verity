@@ -441,6 +441,9 @@ if [ -n "${SETTINGS:-}" ]; then
   . "$SETTINGS"
   set +a
 fi
+[ -z "${H1_TIE:-}${PEARLPLUS_TIE:-}" ] || {
+  echo "PREFLIGHT: H1_TIE and PEARLPLUS_TIE are retired: window-commit fills a served window's circuit, which reads no H1 or Pearl+ tables, so no window is tied to a W. Unset them; Pearl+'s own run and its --tie W verdict still run" >&2
+  exit 3; }
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=$PWD
 DEPLOY_MANIFEST=$TREE/tools/research/src/research/pods/nebius/deploy.toml  # infra's, where research reads the auditor devices
