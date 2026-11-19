@@ -617,10 +617,10 @@ theorem gateOf_none {k : String} (hb : isBooleanPrim k = false) (hm : misspelt k
     cases h : gateKind? k with
     | none => rfl
     | some g => simp [isBooleanPrim, h] at hb
-  have hfam : ∀ pre ∈ ["Input", "RegisteredInput", "And", "Xor"], Flock.Lower.family? pre k = true → False := by
+  have hfam : ∀ pre ∈ ["Input", "RegisteredInput", "SuppliedInput", "And", "Xor"], Flock.Lower.family? pre k = true → False := by
     intro pre hpre hf
     obtain ⟨hs, hd⟩ := family_front hf
-    have hany : ["Input", "RegisteredInput", "And", "Xor"].any (fun pre =>
+    have hany : ["Input", "RegisteredInput", "SuppliedInput", "And", "Xor"].any (fun pre =>
         k.startsWith pre && (k.drop pre.length).toString.front.isDigit) = true :=
       List.any_eq_true.2 ⟨pre, hpre, by simp only [hs, hd, Bool.and_self]⟩
     have : misspelt k = true := by
