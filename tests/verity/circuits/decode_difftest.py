@@ -43,7 +43,7 @@ def chain() -> str:
 
 def cases() -> list[tuple[str, str, object]]:
     base = VECTORS["descriptor"]
-    out = [("format", base, spec.REG), ("wide", VECTORS["wide"]["descriptor"], spec.REG),
+    out = [("format", base, spec.REG), ("wide", spec.wide_descriptor(), spec.REG),
            ("registered_program", VECTORS["registered_program"]["descriptor"], spec.REG)]
     for label, edit, _why in spec.REJECT:
         d = json.loads(base)

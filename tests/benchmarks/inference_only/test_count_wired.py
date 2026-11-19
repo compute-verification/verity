@@ -4,12 +4,12 @@ The soundness-correct count reads the registered wired C itself (`interface.prog
 edges) and the registered partition object, never a Program rebuilt from the record. On a wired window a wired row is an
 edge, so the count's fresh bits a block are the record's count (`block_counts.fresh`): the two are one by construction.
 
-Two of the three assertions below are green today and guard that invariant on the Python side. The third, the
-Lean-verifier-vs-Python agreement on the wired C, is RED today for ONE reason and no other: the circuit format's decoder
-refuses the base gates And2_v1/Not_v1/Xor2_v1 for want of a Boolean body (`codec._decode_boolean`, `E_BODY_MISSING`), so
-the count's Python reference (which the count's difftest holds the Lean verifier to) returns `{"error": "program"}`
-before it counts anything. It is written with no xfail: it turns green when circuits lifts that decoder refusal for the
-base gates and the new partition-form count reads the wired C's partition. Nothing else here is expected to fail.
+Two assertions guard that invariant on the Python side; the third, the reference's decode of the wired C (which the
+count's difftest holds the Lean verifier to), guards that the reference reads the registered C under the same gate
+exemption as the real registry. The reference's `declared(desc)` leaves the Boolean profile's base gates
+And2_v1/Not_v1/Xor2_v1 to the decoder (a gate is one by identity), so it decodes the wired C rather than refusing it for
+want of a Boolean body (`codec._decode_boolean`, `E_BODY_MISSING`); a regression that drops that exemption fails the
+third assertion with that error. Nothing here is expected to fail.
 """
 from __future__ import annotations
 
@@ -63,26 +63,22 @@ def test_the_records_count_is_block_counts_fresh(wired: bool) -> None:
 
 @pytest.mark.parametrize("wired", [False, True])
 def test_the_lean_count_on_the_wired_C_is_the_records_count(wired: bool) -> None:
-    """RED today for the reference's registry alone: the registered wired C (`partition_instance`) decodes under the real
-    registry (`BC.resolve` / `defs.REGISTRY`), but the count's reference decodes under its own `declared(desc)`, under which
-    the base gates `And2_v1`/`Not_v1`/`Xor2_v1` resolve to primitives `is_boolean` refuses, so `codec._decode_boolean`
-    raises `E_BODY_MISSING` and the reference returns `{"error": "program"}` before any count. No xfail: this turns green
-    when the reference's `declared(desc)` exempts the base gates as the real registry does, and the partition-form count
-    reads the wired C's blocks."""
+    """The registered wired C (`partition_instance`) decodes under the reference's own `declared(desc)` registry, which
+    leaves the base gates And2_v1/Not_v1/Xor2_v1 to the decoder as the real registry (`BC.resolve`/`defs.REGISTRY`) does.
+    A regression that drops that exemption makes those gates resolve to primitives `is_boolean` refuses, so
+    `codec._decode_boolean` raises `E_BODY_MISSING` and the reference returns `{"error": "program"}` before any count."""
     doc = made(wired)
     m = BC.session(doc)[1]
     c, k, n = 10 ** 9, BC.fresh(doc, m, None, None), doc["blocks"]["slots"] if "slots" in doc["blocks"] else 2
     inst = IO.partition_instance(doc, None, None, c, k, n)
     decoded = _decodes(inst["program"])
-    assert decoded is None, (f"the reference does not decode the registered wired C: {decoded}. Today this is the "
-                             "reference's own `declared(desc)` registry (not the core decoder, which accepts C under "
-                             "`BC.resolve`/`defs.REGISTRY`): under it the base gates And2_v1/Not_v1/Xor2_v1 resolve to "
-                             "primitives is_boolean refuses, so `codec._decode_boolean` raises E_BODY_MISSING; when the "
-                             "reference exempts them this reads the partition's blocks, each block's fresh the record's count")
+    assert decoded is None, (f"the reference does not decode the registered wired C: {decoded}. The reference's "
+                             "`declared(desc)` must leave the base gates And2_v1/Not_v1/Xor2_v1 to the decoder as the "
+                             "real registry does; a regression that drops that exemption raises E_BODY_MISSING here")
 
 
 def _decodes(program: str) -> str | None:
-    """None if the circuit format's decoder decodes ``program``, else the error (today `E_BODY_MISSING` for the base gates)."""
+    """None if the reference's registry decodes ``program``, else the error (`E_BODY_MISSING` if a base gate is unexempted)."""
     ref = reference({})
     try:
         desc = codec.decode_program(__import__("json").loads(program), ref.declared(__import__("json").loads(program)))

@@ -431,14 +431,17 @@ def _layout(D) -> dict:
     return {"gates_total": c.size, "nodes": nodes, "offsets": offsets, "gates": gates, "root_outputs": list(c.root_outputs()), "resolve": res}
 
 
+def wide_descriptor() -> str:
+    return _canon(codec.encode_program(Program(WIDE_PROG)))
+
+
 def build() -> dict:
     enc = codec._BodyEncoder(codec.SCHEMA_V1, codec._Tables())
     program = Program(PROG)
     desc = codec.encode_program(program)
     D = codec.decode_program(json.loads(_canon(desc)), REG)
-    wide = Program(WIDE_PROG)
-    wdesc = codec.encode_program(wide)
-    W = codec.decode_program(json.loads(_canon(wdesc)), REG)
+    wdesc = wide_descriptor()
+    W = codec.decode_program(json.loads(wdesc), REG)
     wg = W.circuit
     k = next(k for k, n in enumerate(W.root.body.nodes) if not is_input(n.fn))
     lo = W.root.body.offsets[k]
@@ -487,7 +490,7 @@ def build() -> dict:
         "wiring": sorted(cut.WIRING),
         "wide": {
             "wide_fan_in": cut.WIDE_FAN_IN,
-            "descriptor": _canon(wdesc),
+            "descriptor_sha512": hashlib.sha512(wdesc.encode()).hexdigest(),
             "gates": [[lo + j, wg.gate(lo + j).prim.id, len(wg.gate(lo + j).operands), _runs(wg.gate(lo + j).operands)] for j in range(4)],
             "graph": {"wide": _graph(cut.CallGraph(WideCall)), "narrow": _graph(cut.CallGraph(NarrowCall))},
         },
@@ -537,17 +540,24 @@ def live() -> dict:
 
 
 @pytest.fixture(scope="module")
+def wide_desc() -> str:
+    d = wide_descriptor()
+    assert hashlib.sha512(d.encode()).hexdigest() == VECTORS["wide"]["descriptor_sha512"], REWRITE
+    return d
+
+
+@pytest.fixture(scope="module")
 def decoded():
     return codec.decode_program(json.loads(VECTORS["descriptor"]), REG)
 
 
 # -- 1. canonical JSON ----------------------------------------------------------------------------------------------------------------
 
-def test_canonical_json_is_jcs_on_the_domain(live):
+def test_canonical_json_is_jcs_on_the_domain(live, wide_desc):
     assert live["canonical_json"] == VECTORS["canonical_json"], REWRITE
     for v, s in VECTORS["canonical_json"]["in_domain"]:
         assert codec.jcs_domain_error(v) is None and codec.canonical_json(v) == jcs(v) == s.encode()
-    for d in (VECTORS["descriptor"], VECTORS["wide"]["descriptor"]):
+    for d in (VECTORS["descriptor"], wide_desc):
         assert jcs(json.loads(d)) == d.encode() and codec.jcs_domain_error(json.loads(d)) is None
 
 
@@ -707,10 +717,10 @@ def test_the_descriptor_round_trips(decoded):
     assert desc["schema"] == "verity-ir/descriptor/v2" and desc["root"] == "Root[TProg_v1]_v1" and desc["program_fn"] == "TProg_v1"
 
 
-def test_the_interning_tables_are_first_seen_order():
+def test_the_interning_tables_are_first_seen_order(wide_desc):
     desc = json.loads(VECTORS["descriptor"])
     assert first_seen_tables(desc) == (desc["callees"], desc["types"])
-    w = json.loads(VECTORS["wide"]["descriptor"])
+    w = json.loads(wide_desc)
     assert first_seen_tables(w) == (w["callees"], w["types"])
 
 
