@@ -63,13 +63,14 @@ theorem coveredDesign_ok {l samplingDesign : Flock.Draw.SamplingDesign} (h : Spo
     cases h
   all_goals exact ⟨(Except.ok.inj h).symm, fun _ _ h' => by cases h'⟩
 
-/-- **The units a sampling design samples**: a subset sampling design's `k`, a stratified or work sampling design's strata's `k`s summed; none for a Bernoulli
-sampling design, whose count the coins set. -/
+/-- **The units a sampling design samples**: a subset sampling design's `k`, a stratified, work or rated sampling design's strata's
+`k`s summed; none for a Bernoulli sampling design, whose count the coins set. -/
 def samplingDesignK : Flock.Draw.SamplingDesign → ℕ
   | .subset k => k
   | .bernoulli _ _ => 0
   | .stratified _ St => (St.toList.map (·.k)).sum
   | .work _ ws => (ws.toList.map (·.k)).sum
+  | .rated _ rs => (rs.toList.map (·.k)).sum
 
 /-- **The deployed sample is `sampleUnits` under `sampledDesign`**: at a verifier whose program the descriptor `desc` parses to,
 under the sampling design object `Draw.derive` writes from its own, `sampledFrom` samples under the sampling design `sampledDesign` reads off its query,
@@ -129,24 +130,30 @@ theorem notBernoulli_sampledDesign {desc : Hash.Msg} {q lj : Lean.Json} {tb : Op
   obtain ⟨rfl, hb⟩ := coveredDesign_ok h
   exact hb
 
-/-- **`sampledDesign`'s cases**: a subset sampling design within the population, a Bernoulli sampling design, or the sampling design `Flock.Draw.derive` or
-`deriveWork` expands over the registration's strata (`Partition.strata`). -/
+/-- **`sampledDesign`'s cases**: a subset sampling design within the population, a Bernoulli sampling design, the sampling design
+`Flock.Draw.derive` or `deriveWork` expands over the registration's strata (`Partition.strata`), or the rated one
+`Flock.Draw.deriveRated` expands over them. -/
 theorem sampledDesign_cases {desc : Hash.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign}
     (h : sampledDesign desc q lj tb n = .ok samplingDesign) :
     (∃ k, samplingDesign = .subset k ∧ k ≤ n) ∨ (∃ a b, samplingDesign = .bernoulli a b) ∨
-      ∃ p S k, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Partition.strata p q = .ok S ∧
-        (Flock.Draw.derive k S = .ok samplingDesign ∨ ∃ tab, Flock.Draw.deriveWork k S tab = .ok samplingDesign) := by
+      (∃ p S k, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Partition.strata p q = .ok S ∧
+        (Flock.Draw.derive k S = .ok samplingDesign ∨ ∃ tab, Flock.Draw.deriveWork k S tab = .ok samplingDesign)) ∨
+      ∃ p S rates works, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Partition.strata p q = .ok S ∧
+        Flock.Draw.deriveRated rates S works = .ok samplingDesign := by
   obtain ⟨p, derived, parsed, hp, hd, hpar, rfl⟩ := sampledDesign_ok h
-  rcases SecurityProofs.deriveSamplingDesign_cases p q lj tb derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S, k, samplingDesign', hS, rfl, hlaw⟩
-  · rcases SecurityProofs.flockSamplingDesign_cases _ _ _ hpar with ⟨k, rfl, hk, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk
+  rcases SecurityProofs.deriveSamplingDesign_cases p q lj tb derived hd with ⟨rfl, hk1, hk2, hk3⟩ |
+      ⟨S, k, samplingDesign', hS, rfl, hlaw⟩ | ⟨S, rates, works, samplingDesign', -, hS, rfl, hrated⟩
+  · rcases SecurityProofs.flockSamplingDesign_cases _ _ _ hpar with ⟨k, rfl, hk, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk | hk
     · exact Or.inl ⟨k, rfl, hk⟩
     · exact Or.inr (Or.inl ⟨a, b, rfl⟩)
     · exact absurd hk hk1
     · exact absurd hk hk2
-  · refine Or.inr (Or.inr ⟨p, S, k, hp, hS, ?_⟩)
+    · exact absurd hk hk3
+  · refine Or.inr (Or.inr (Or.inl ⟨p, S, k, hp, hS, ?_⟩))
     rcases hlaw with hder | ⟨-, tab, -, hwork⟩
     · exact Or.inl hder
     · exact Or.inr ⟨tab, hwork⟩
+  · exact Or.inr (Or.inr (Or.inr ⟨p, S, rates, works, hp, hS, hrated⟩))
 
 /-- The registration's strata are the evaluated query's ranges, by template (`Partition.strata`). -/
 theorem strata_evaluate {p : Spot.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
@@ -211,9 +218,25 @@ theorem samplingDesignOn_sampledDesign {desc : Hash.Msg} {q lj : Lean.Json} {tb 
     (hpop : PopMatches desc q n) (h : sampledDesign desc q lj tb n = .ok samplingDesign) (hb : NotBernoulli samplingDesign) :
     SamplingDesignOn samplingDesign (nsOf desc q) (samplingDesignK samplingDesign) := by
   have hsum : (nsOf desc q).sum = n := nsOf_sum hpop
-  rcases sampledDesign_cases h with ⟨k, rfl, hk⟩ | ⟨a, b, rfl⟩ | ⟨p, S, k, hp, hS, hlaw⟩
+  rcases sampledDesign_cases h with ⟨k, rfl, hk⟩ | ⟨a, b, rfl⟩ | ⟨p, S, k, hp, hS, hlaw⟩ |
+      ⟨p, S, rates, works, hp, hS, hrated⟩
   · exact ⟨rfl, by rw [hsum]; exact hk⟩
   · exact (hb a b rfl).elim
+  rotate_left
+  · obtain ⟨hns, hn⟩ := popMatches_strata hpop hp hS
+    unfold Flock.Draw.deriveRated at hrated
+    split at hrated
+    · cases hrated
+    obtain rfl := (Except.ok.inj hrated).symm
+    refine ⟨⟨?_, ?_⟩, ?_, rfl⟩
+    · rw [Flock.Draw.ratedStrata, Array.toList_map, List.map_map, List.flatMap_map, hsum, ← hn]
+      rfl
+    · rw [hns, Flock.Draw.ratedStrata, Array.toList_map, List.map_map, List.map_map]
+      exact List.map_congr_left fun x _ => SecurityProofs.stratum_size _
+    · intro s hs
+      rw [Flock.Draw.ratedStrata, Array.toList_map] at hs
+      obtain ⟨⟨t, rs⟩, -, rfl⟩ := List.mem_map.1 hs
+      exact Flock.Draw.rateK_le _ _ _
   obtain ⟨hns, hn⟩ := popMatches_strata hpop hp hS
   have hns' : (nsOf desc q).sum = SecurityProofs.strataSize S := by rw [hns]; rfl
   have hslots : (S.toList.flatMap fun s => SecurityProofs.expand s.2.toList) = List.range (nsOf desc q).sum := by
@@ -249,9 +272,18 @@ files hold `samplingDesignK` units (`samplingDesignSized_size`). -/
 theorem samplingDesignSized_sampledDesign {desc : Hash.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
     {samplingDesign : Flock.Draw.SamplingDesign} (h : sampledDesign desc q lj tb n = .ok samplingDesign) (hb : NotBernoulli samplingDesign) :
     SamplingDesignSized samplingDesign (samplingDesignK samplingDesign) := by
-  rcases sampledDesign_cases h with ⟨k, rfl, -⟩ | ⟨a, b, rfl⟩ | ⟨p, S, k, -, hS, hder | ⟨tab, hwork⟩⟩
+  rcases sampledDesign_cases h with ⟨k, rfl, -⟩ | ⟨a, b, rfl⟩ | ⟨p, S, k, -, hS, hder | ⟨tab, hwork⟩⟩ |
+      ⟨p, S, rates, works, -, hS, hrated⟩
   · exact rfl
   · exact (hb a b rfl).elim
+  rotate_left 2
+  · unfold Flock.Draw.deriveRated at hrated
+    split at hrated
+    · cases hrated
+    obtain rfl := (Except.ok.inj hrated).symm
+    refine ⟨?_, rfl⟩
+    rw [Flock.Draw.ratedStrata, Array.toList_map, List.map_map, List.flatMap_map]
+    exact strata_nodup hS
   · obtain rfl := SecurityProofs.derive_ok k S samplingDesign hder
     refine ⟨?_, rfl⟩
     rw [Array.toList_map, List.flatMap_map]
@@ -303,9 +335,9 @@ theorem sampledDesign_subset {desc : Hash.Msg} {q lj : Lean.Json} {tb : Option L
     (hs : SecurityProofs.kindOf lj = "subset") (h : sampledDesign desc q lj tb n = .ok samplingDesign) : ∃ k, samplingDesign = .subset k := by
   have hnb := notBernoulli_sampledDesign h
   obtain ⟨p, derived, parsed, -, hd, hpar, rfl⟩ := sampledDesign_ok h
-  rw [SecurityProofs.deriveSamplingDesign_none p q lj tb (by rw [hs]; decide) (by rw [hs]; decide)] at hd
+  rw [SecurityProofs.deriveSamplingDesign_none p q lj tb (by rw [hs]; decide) (by rw [hs]; decide) (by rw [hs]; decide)] at hd
   obtain rfl : derived = none := (Except.ok.inj hd).symm
-  rcases SecurityProofs.flockSamplingDesign_cases _ n parsed hpar with ⟨k, rfl, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk
+  rcases SecurityProofs.flockSamplingDesign_cases _ n parsed hpar with ⟨k, rfl, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk | hk
   · exact ⟨k, rfl⟩
   · exact (hnb a b rfl).elim
   all_goals

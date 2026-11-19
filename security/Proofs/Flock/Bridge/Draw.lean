@@ -16,7 +16,8 @@ sampling design's own `P_a`. This file holds what the statement reads and how th
 * `StrataOn St ns`: the strata `St`'s ranges, in order, are the slots `0, …, Σ ns − 1`, at sizes `ns`, so each stratum
   is one run of consecutive slots;
 * `SamplingDesignOn samplingDesign ns kd`: `samplingDesign` is `subset kd`, or `stratified K` or `work K` over strata at `ns`, each stratum's `k` the
-  rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli sampling design is none (`NotBernoulli`);
+  rule's (`stratumK`, `workK`) and `kd` their sum, or a rated design over strata at `ns` whose `k`s sum to `kd`, whose claims
+  design is `subset 0` (`oneStageOf`), so every bound below is `1` there. A Bernoulli sampling design is none (`NotBernoulli`);
 * `pa_stratified`, `pa_work`: such a sampling design's claims design (`oneStageOf`) misses `B` with `strataPa` of its strata's sizes
   and samples; `pa_empty_of_samplingDesignOn`: it misses nothing with probability `1`;
 * `wellFormed_of_samplingDesignOn`: such a sampling design, where it is the one the verifier's agreed sampling design gives (`deriveSamplingDesign`, else
@@ -67,6 +68,32 @@ theorem ofJson_count_work {j : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSa
     rw [← Array.forIn_toList] at hf
     simpa using forIn_throw_ok _ _ _ _ hf s (by simpa using hs)
 
+set_option maxHeartbeats 2000000 in
+/-- **`UnitSample.ofJson`'s per-stratum count, at a rated sampling design** (`ofJson_count`): a sample it decodes under a rated
+sampling design holds exactly `k_s` of its units in each stratum `s`'s ranges. -/
+theorem ofJson_count_rated {j : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D)
+    {rates : Array Draw.RateEntry} {strata : Array Draw.RatedStratum} (hl : D.samplingDesign = .rated rates strata)
+    (s : Draw.RatedStratum) (hs : s ∈ strata) :
+    D.units.foldl (fun acc u => if (s.units.any fun x => decide (x.1 ≤ u) && decide (u < x.2)) = true then acc + 1
+      else acc) 0 = s.k := by
+  unfold Draw.UnitSample.ofJson at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+  all_goals
+    have hp := ‹(pure _ : V Draw.SamplingDesign) = Except.ok _›
+    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq] at hp
+  all_goals
+    simp only [reduceCtorEq, Draw.SamplingDesign.rated.injEq] at hl
+  all_goals
+    obtain ⟨rfl, rfl⟩ := hl
+    have hf := ‹forIn _ _ _ = Except.ok _›
+    rw [← Array.forIn_toList] at hf
+    simpa using forIn_throw_ok _ _ _ _ hf s (by simpa using hs)
+
 end FlockSoundness.Discharge.ZkLink
 
 namespace Flock.Bridge
@@ -80,7 +107,8 @@ def StrataOn (St : List Flock.Draw.Stratum) (ns : List ℕ) : Prop :=
     St.map (·.size) = ns
 
 /-- **A sampling design at the strata `ns` that samples `kd` units**: `subset kd`, or `stratified K` or `work K` over strata at `ns`
-(`StrataOn`), each stratum's `k` the rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli sampling design is none. -/
+(`StrataOn`), each stratum's `k` the rule's (`stratumK`, `workK`) and `kd` their sum, or a rated design over strata at `ns`
+each sampling at most its size, whose `k`s sum to `kd`. A Bernoulli sampling design is none. -/
 def SamplingDesignOn (samplingDesign : Flock.Draw.SamplingDesign) (ns : List ℕ) (kd : ℕ) : Prop :=
   match samplingDesign with
   | .subset k => k = kd ∧ kd ≤ ns.sum
@@ -90,10 +118,16 @@ def SamplingDesignOn (samplingDesign : Flock.Draw.SamplingDesign) (ns : List ℕ
   | .work K ws => StrataOn (ws.toList.map (·.toStratum)) ns ∧
       (∀ s ∈ ws.toList, s.k = Flock.Draw.workK K s.work s.size (Flock.Draw.totalWork ws) s.floor) ∧
       (ws.toList.map (·.k)).sum = kd
+  | .rated _ rs => StrataOn (rs.toList.map (·.toStratum)) ns ∧ (∀ s ∈ rs.toList, s.k ≤ s.size) ∧
+      (rs.toList.map (·.k)).sum = kd
 
 /-- **No Bernoulli sampling design**: `samplingDesign` samples a count its strata or its `k` fix, not one the coins set, as `SamplingDesignOn` and
 `SamplingDesignSized` require. -/
 def NotBernoulli (samplingDesign : Flock.Draw.SamplingDesign) : Prop := ∀ a b, samplingDesign ≠ .bernoulli a b
+
+/-- **No rated sampling design**: no selection rule's text names one (`Select.parseDesign`), and Flock refuses a rated draw
+(`Draw.RATED_UNCHECKED`), so a statement about the design a rule's text names is over these. -/
+def NotRated (samplingDesign : Flock.Draw.SamplingDesign) : Prop := ∀ rates strata, samplingDesign ≠ .rated rates strata
 
 /-- A stratified sampling design's design misses `B` with `strataPa` of its strata's sizes and samples, when its strata have sizes `ns`
 and each stratum's `k` is the rule's. -/
@@ -160,6 +194,8 @@ theorem pa_empty_of_samplingDesignOn {samplingDesign : Flock.Draw.SamplingDesign
     show w.k ≤ w.size
     rw [hk w hw]
     exact min_le_left _ _
+  | rated _ _ =>
+    simp only [Properties.Spot.oneStageOf, Claims.Sampling.OneStage.Pa, Nat.choose_zero_right, Nat.cast_one, div_one]
 
 /-- `UnitSample.ofJson`'s range test is membership in the ranges' slots. -/
 theorem any_iff_mem_expand (rs : Array (ℕ × ℕ)) (u : ℕ) :
@@ -238,6 +274,9 @@ theorem sampleUnits_miss_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : L
     refine strata_bound_on _ _ (Or.inr ⟨K, ws, rfl, rfl⟩) n ?_ U hU L
     rw [Array.toList_map, ← hns]
     exact hon
+  | rated _ _ =>
+    simp only [Properties.Spot.oneStageOf, Claims.Sampling.OneStage.Pa, Nat.choose_zero_right, Nat.cast_one, div_one]
+    exact Claims.Pr_le_one _
 
 /-- **The deployed sample as a sampling design**: `Spot.Draw.sampleUnits` under `samplingDesign` over `[0, pop)` on the source `t`'s bytes,
 read in order as one stream; a sample that runs out of them samples every unit. -/
@@ -325,8 +364,8 @@ theorem mem_expand_of_mem {rs : List (ℕ × ℕ)} {r : ℕ × ℕ} (hr : r ∈ 
   simp only [Properties.Spot.SecurityProofs.expand, List.mem_flatMap, List.mem_range'_1]
   exact ⟨r, hr, h1, by omega⟩
 
-/-- **A sampling design whose sample files hold `kd` units** (`samplingDesignSized_size`): `subset kd`, or a stratified or work sampling design whose
-strata's slots hold each unit once and whose strata's `k`s sum to `kd`. A Bernoulli sampling design is none. -/
+/-- **A sampling design whose sample files hold `kd` units** (`samplingDesignSized_size`): `subset kd`, or a stratified, work or rated
+sampling design whose strata's slots hold each unit once and whose strata's `k`s sum to `kd`. A Bernoulli sampling design is none. -/
 def SamplingDesignSized (samplingDesign : Flock.Draw.SamplingDesign) (kd : ℕ) : Prop :=
   match samplingDesign with
   | .subset k => k = kd
@@ -338,6 +377,10 @@ def SamplingDesignSized (samplingDesign : Flock.Draw.SamplingDesign) (kd : ℕ) 
     ((ws.toList.map (·.toStratum)).flatMap fun s =>
         Properties.Spot.SecurityProofs.expand s.units.toList).Nodup ∧
       (ws.toList.map (·.k)).sum = kd
+  | .rated _ rs =>
+    ((rs.toList.map (·.toStratum)).flatMap fun s =>
+        Properties.Spot.SecurityProofs.expand s.units.toList).Nodup ∧
+      (rs.toList.map (·.k)).sum = kd
 
 /-- A sampling design on strata at `ns` is sized: its strata's slots are `0, …, Σ ns − 1`, each once. -/
 theorem samplingDesignSized_of_samplingDesignOn {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ} (h : SamplingDesignOn samplingDesign ns kd) : SamplingDesignSized samplingDesign kd := by
@@ -348,6 +391,9 @@ theorem samplingDesignSized_of_samplingDesignOn {samplingDesign : Flock.Draw.Sam
     obtain ⟨⟨hon, -⟩, -, -, -, hsum⟩ := h
     exact ⟨by rw [hon]; exact List.nodup_range, hsum⟩
   | work K ws =>
+    obtain ⟨⟨hon, -⟩, -, hsum⟩ := h
+    exact ⟨by rw [hon]; exact List.nodup_range, hsum⟩
+  | rated _ rs =>
     obtain ⟨⟨hon, -⟩, -, hsum⟩ := h
     exact ⟨by rw [hon]; exact List.nodup_range, hsum⟩
 
@@ -434,6 +480,42 @@ theorem samplingDesignSized_size {n : ℕ} {samplingDesign : Flock.Draw.Sampling
           rfl
       _ = (ws.toList.map (·.k)).sum := congrArg List.sum (List.map_congr_left hc)
       _ = kd := hsum
+  | rated rates rs =>
+    obtain ⟨hnd, hsum⟩ := hlaw
+    have hch := Spot.Sampling.StrataExec.ratedProblem_chain (Spot.Sampling.StrataExec.ofJson_rated hD rfl)
+    have hin : ∀ u ∈ (Discharge.ZkLink.drawOf (.rated rates rs) n S).units.toList,
+        u ∈ (rs.toList.map (·.toStratum)).flatMap fun s =>
+          Properties.Spot.SecurityProofs.expand s.units.toList := by
+      intro u hu
+      obtain ⟨r, hr, h1, h2⟩ := Spot.Sampling.StrataExec.chain_covers hch u (Nat.zero_le u) (hlt u hu)
+      have hr' := (Spot.Sampling.StrataExec.qsort_perm _ _).subset hr
+      rw [Spot.Sampling.StrataExec.foldl_units_rated] at hr'
+      obtain ⟨w, hw, hrw⟩ := List.mem_flatMap.1 hr'
+      exact List.mem_flatMap.2 ⟨w.toStratum, List.mem_map_of_mem hw, mem_expand_of_mem hrw h1 h2⟩
+    have hc : ∀ s ∈ rs.toList, ((Discharge.ZkLink.drawOf (.rated rates rs) n S).units.toList.filter fun u =>
+        decide (u ∈ Properties.Spot.SecurityProofs.expand s.units.toList)).length = s.k := by
+      intro s hs
+      have h := Discharge.ZkLink.ofJson_count_rated hD rfl s (Array.mem_toList_iff.1 hs)
+      rw [← Array.foldl_toList, Discharge.ZkLink.foldl_count_filter, zero_add] at h
+      rw [← h]
+      congr 1
+      refine List.filter_congr fun u _ => ?_
+      rw [Bool.eq_iff_iff, decide_eq_true_iff]
+      exact (any_iff_mem_expand s.units u).symm
+    have hcount := sum_count_strata (fun s : Flock.Draw.Stratum =>
+      Properties.Spot.SecurityProofs.expand s.units.toList) (rs.toList.map (·.toStratum))
+      (Discharge.ZkLink.drawOf (.rated rates rs) n S).units.toList hnd hin
+    calc (Discharge.ZkLink.drawOf (.rated rates rs) n S).units.size
+        = (Discharge.ZkLink.drawOf (.rated rates rs) n S).units.toList.length := Array.length_toList.symm
+      _ = ((rs.toList.map (·.toStratum)).map fun s => ((Discharge.ZkLink.drawOf (.rated rates rs) n S).units.toList.filter
+            fun u => decide (u ∈ Properties.Spot.SecurityProofs.expand s.units.toList)).length).sum :=
+          hcount.symm
+      _ = (rs.toList.map fun s => ((Discharge.ZkLink.drawOf (.rated rates rs) n S).units.toList.filter fun u =>
+            decide (u ∈ Properties.Spot.SecurityProofs.expand s.units.toList)).length).sum := by
+          rw [List.map_map]
+          rfl
+      _ = (rs.toList.map (·.k)).sum := congrArg List.sum (List.map_congr_left hc)
+      _ = kd := hsum
 
 open Properties.Spot.SecurityProofs in
 /-- **The sampling design the verifier agrees is well formed over its strata**: where `deriveSamplingDesign` expands the named sampling design, or
@@ -445,20 +527,25 @@ theorem wellFormed_of_samplingDesignOn {p : Spot.Program} {query samplingDesign 
     {n : ℕ} {derived : Option Flock.Draw.SamplingDesign} {parsed : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ}
     (hJ : Spot.Draw.derive p query samplingDesign table = .ok samplingDesignJ)
     (hd : Spot.Draw.deriveSamplingDesign p query samplingDesign table = .ok derived)
-    (hp : Spot.Draw.flockSamplingDesign samplingDesignJ n = .ok parsed) (hlaw : SamplingDesignOn (derived.getD parsed) ns kd) :
+    (hp : Spot.Draw.flockSamplingDesign samplingDesignJ n = .ok parsed) (hlaw : SamplingDesignOn (derived.getD parsed) ns kd)
+    (hr : kindOf samplingDesign ≠ "rated") :
     (Properties.Spot.oneStageOf (derived.getD parsed)).WellFormed ns := by
-  rcases deriveSamplingDesign_cases p query samplingDesign table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S, k, samplingDesign', hS, rfl, hlaw'⟩
+  rcases deriveSamplingDesign_cases p query samplingDesign table derived hd with ⟨rfl, hk1, hk2, hk3⟩ |
+      ⟨S, k, samplingDesign', hS, rfl, hlaw'⟩ | ⟨-, -, -, -, hk, -⟩
+  rotate_right
+  · exact absurd hk hr
   · have hJ' : samplingDesignJ = samplingDesign := by
       unfold Spot.Draw.derive at hJ
       rw [hd] at hJ
       exact (Except.ok.inj hJ).symm
     subst hJ'
-    rcases flockSamplingDesign_cases _ _ _ hp with ⟨k, rfl, -, -, hk⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
+    rcases flockSamplingDesign_cases _ _ _ hp with ⟨k, rfl, -, -, hk⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk | hk
     · obtain ⟨rfl, hkd⟩ := hlaw
       exact ⟨hk, hkd⟩
     · exact ⟨hb, hab⟩
     · exact absurd hk hk1
     · exact absurd hk hk2
+    · exact absurd hk hk3
   · rcases hlaw' with hder | ⟨t, tab, ht, hwork⟩
     · obtain ⟨hk1, -⟩ := derive_bounds k S samplingDesign' hder
       obtain rfl := derive_ok k S samplingDesign' hder
@@ -637,6 +724,25 @@ theorem sampleUnits_size {samplingDesign : Flock.Draw.SamplingDesign} {ns : List
       rw [StateT.run_bind] at hw
       cases ho : (Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need)
           (ws.map (·.toStratum))).run 0 with
+      | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
+      | ok y =>
+        obtain ⟨v, p⟩ := y
+        rw [ho, bind_ok, StateT.run_pure] at hw
+        obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hw)
+        cases v with
+        | none => exact absurd h1 (by simp)
+        | some D =>
+          obtain rfl := (Option.some.inj h1).symm
+          refine (stratifiedWith_size src _ 0 p D ho).trans ?_
+          rw [← hsum, Array.toList_map, List.map_map]
+          rfl
+    | rated _ rs =>
+      obtain ⟨-, -, hsum⟩ := hlaw
+      unfold Flock.Draw.drawWith at hw
+      dsimp only at hw
+      rw [StateT.run_bind] at hw
+      cases ho : (Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need)
+          (rs.map (·.toStratum))).run 0 with
       | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
       | ok y =>
         obtain ⟨v, p⟩ := y

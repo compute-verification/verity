@@ -377,21 +377,54 @@ theorem partition_covered (d : Program) (query : Lean.Json) (rs : Array Flock.Te
 
 /-! ## The design -/
 
+theorem kindOf_law_k (s : String) (x : Json) : kindOf (Json.mkObj [("law", Json.str s), ("k", x)]) = s := (rfl)
+
+theorem kindOf_law_p (s : String) (x : Json) : kindOf (Json.mkObj [("law", Json.str s), ("p", x)]) = s := (rfl)
+
+/-- **`parseDesign` names no rated law**: its object's law is `subset`, `stratified`, `work` or `bernoulli`. -/
+theorem kindOf_parseDesign {t : String} {j : Json} (h : Select.parseDesign t = .ok j) : kindOf j ≠ "rated" := by
+  unfold Select.parseDesign at h
+  repeat' split at h
+  all_goals first
+    | exact absurd h (throw_ne _ _)
+    | obtain rfl := (Except.ok.inj h).symm
+  all_goals first
+    | (rw [kindOf_law_p]; decide)
+    | (rw [kindOf_law_k]; decide)
+    | (rw [kindOf_law_k]
+       intro hr
+       subst hr
+       simp_all)
+
+/-- **A selection rule names no rated law** (`kindOf_parseDesign`; `All` names `subset n`). -/
+theorem kindOf_samplingDesignOver {rule : Select.Rule} {n : ℕ} {named : Json} (h : rule.samplingDesignOver n = .ok named) :
+    kindOf named ≠ "rated" := by
+  cases rule with
+  | all =>
+    obtain rfl := (Except.ok.inj h).symm
+    exact (show "subset" ≠ "rated" by decide)
+  | samplingDesign t => exact kindOf_parseDesign h
+  | twoStage _ t _ => exact kindOf_parseDesign h
+
 /-- **The population's first stage is well formed over its strata**: the sampling design the sample samples, over strata of sizes
 `ns` summing to `n`, each of at least one unit. -/
 theorem first_wf (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
     (derived : Option Flock.Draw.SamplingDesign) (parsed : Flock.Draw.SamplingDesign) (S : Array (String × Array (ℕ × ℕ)))
     (hS : Partition.strata d query = .ok S)
     (hd : Draw.deriveSamplingDesign d query named table = .ok derived) (hp : Draw.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed)
-    (hsum : strataSize S = n) (hpos : ∀ m ∈ S.toList.map (fun p => rsSize p.2), 1 ≤ m) :
+    (hsum : strataSize S = n) (hpos : ∀ m ∈ S.toList.map (fun p => rsSize p.2), 1 ≤ m) (hr : kindOf named ≠ "rated") :
     (oneStageOf (derived.getD parsed)).WellFormed (S.toList.map fun p => rsSize p.2) := by
   have hsum' : (S.toList.map fun p => rsSize p.2).sum = n := hsum
-  rcases deriveSamplingDesign_cases d query named table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S', k, samplingDesign', hS', rfl, hlaw⟩
-  · rcases flockSamplingDesign_cases _ _ _ hp with ⟨k, rfl, hk, -, hk0⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
+  rcases deriveSamplingDesign_cases d query named table derived hd with ⟨rfl, hk1, hk2, hk3⟩ |
+      ⟨S', k, samplingDesign', hS', rfl, hlaw⟩ | ⟨-, -, -, -, hk, -⟩
+  rotate_right
+  · exact absurd hk hr
+  · rcases flockSamplingDesign_cases _ _ _ hp with ⟨k, rfl, hk, -, hk0⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk | hk
     · exact ⟨hk0, by rw [hsum']; exact hk⟩
     · exact ⟨hb, hab⟩
     · exact absurd hk hk1
     · exact absurd hk hk2
+    · exact absurd hk hk3
   · rw [hS] at hS'
     obtain rfl := Except.ok.inj hS'
     rcases hlaw with hder | ⟨t, tab, ht, hwork⟩
@@ -425,7 +458,7 @@ theorem designWellFormed : DesignWellFormed := by
   set S := Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)) with hS
   have hperm : (popUnits S).Perm (List.range' 0 (Flock.TemplateQuery.population rs)) :=
     strataOf_perm _ _ (partition_evaluate_tiles d query rs he)
-  obtain ⟨n, named, derived, hn, -, hd, hDc⟩ := slotDesign_ok rule d query table D hD
+  obtain ⟨n, named, derived, hn, hnamed, hd, hDc⟩ := slotDesign_ok rule d query table D hD
   have hnU : n = (popUnits S).length := by
     rw [units_eq d query rs he] at hn
     rw [hperm.length_eq, List.length_range']
@@ -440,7 +473,8 @@ theorem designWellFormed : DesignWellFormed := by
       (⟨[first, .all]⟩ : Design).WellFormed (slotPartition { classes := #[pop, inputClass d] }) by
     rcases hDc with ⟨-, rfl⟩ | ⟨-, parsed, hp, rfl⟩
     · exact h .all trivial
-    · exact h _ (first_wf d query table n named derived parsed S (strata_eq d query rs he) hd hp hsum hpos)
+    · exact h _ (first_wf d query table n named derived parsed S (strata_eq d query rs he) hd hp hsum hpos
+      (kindOf_samplingDesignOver hnamed))
   intro first hf
   refine ⟨rfl, fun p hp => ?_⟩
   simp only [slotPartition, List.map_cons, List.map_nil, List.zip_cons_cons, List.zip_nil_left, List.mem_cons,

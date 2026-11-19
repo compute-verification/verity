@@ -117,10 +117,12 @@ theorem throw_ne {ε α : Type} (e : ε) (b : α) : (throw e : Except ε α) ≠
   simp [throw, throwThe, MonadExceptOf.throw]
 
 /-- **The sampling design `flockSamplingDesign` accepts**: a subset of the sampling design object's `k` units, at least one and no
-more than the population, a Bernoulli sampling design at a probability, or a sampling design of kind `stratified` or `work`. -/
+more than the population, a Bernoulli sampling design at a probability, or a sampling design of kind `stratified`, `work` or
+`rated`. -/
 theorem flockSamplingDesign_cases (samplingDesign : Json) (n : ℕ) (parsed : Flock.Draw.SamplingDesign) (h : Draw.flockSamplingDesign samplingDesign n = .ok parsed) :
     (∃ k, parsed = .subset k ∧ k ≤ n ∧ nat? (getD samplingDesign "k") = some k ∧ 1 ≤ k) ∨
-      (∃ a b, parsed = .bernoulli a b ∧ 0 < b ∧ a ≤ b) ∨ kindOf samplingDesign = "stratified" ∨ kindOf samplingDesign = "work" := by
+      (∃ a b, parsed = .bernoulli a b ∧ 0 < b ∧ a ≤ b) ∨ kindOf samplingDesign = "stratified" ∨ kindOf samplingDesign = "work" ∨
+      kindOf samplingDesign = "rated" := by
   unfold Draw.flockSamplingDesign at h
   split at h
   next s hs =>
@@ -147,18 +149,22 @@ theorem flockSamplingDesign_cases (samplingDesign : Json) (n : ℕ) (parsed : Fl
         · exact absurd h (throw_ne _ _)
       · exact absurd h (throw_ne _ _)
     · exact Or.inr (Or.inr (Or.inl (by rwa [hk])))
-    · exact Or.inr (Or.inr (Or.inr (by rwa [hk])))
+    · exact Or.inr (Or.inr (Or.inr (Or.inl (by rwa [hk]))))
+    · exact Or.inr (Or.inr (Or.inr (Or.inr (by rwa [hk]))))
     · exact absurd h (throw_ne _ _)
   next => exact absurd h (throw_ne _ _)
 
-/-- **`deriveSamplingDesign`'s expansion**: none for a sampling design of neither kind `stratified` nor `work`, else the stratified or work sampling design
-`Flock.Draw.derive` or `Flock.Draw.deriveWork` expands over the query's strata. -/
+/-- **`deriveSamplingDesign`'s expansion**: none for a sampling design of no kind `stratified`, `work` or `rated`, else the
+stratified or work sampling design `Flock.Draw.derive` or `Flock.Draw.deriveWork` expands over the query's strata, or the rated
+one `Flock.Draw.deriveRated` expands over them. -/
 theorem deriveSamplingDesign_cases (d : Program) (query samplingDesign : Json) (table : Option Json)
     (derived : Option Flock.Draw.SamplingDesign) (h : Draw.deriveSamplingDesign d query samplingDesign table = .ok derived) :
-    (derived = none ∧ kindOf samplingDesign ≠ "stratified" ∧ kindOf samplingDesign ≠ "work") ∨
-      ∃ S k samplingDesign', Partition.strata d query = .ok S ∧ derived = some samplingDesign' ∧
+    (derived = none ∧ kindOf samplingDesign ≠ "stratified" ∧ kindOf samplingDesign ≠ "work" ∧ kindOf samplingDesign ≠ "rated") ∨
+      (∃ S k samplingDesign', Partition.strata d query = .ok S ∧ derived = some samplingDesign' ∧
         (Flock.Draw.derive k S = .ok samplingDesign' ∨
-          ∃ t tab, Flock.Draw.workTableOfJson t = .ok tab ∧ Flock.Draw.deriveWork k S tab = .ok samplingDesign') := by
+          ∃ t tab, Flock.Draw.workTableOfJson t = .ok tab ∧ Flock.Draw.deriveWork k S tab = .ok samplingDesign')) ∨
+      ∃ S rates works samplingDesign', kindOf samplingDesign = "rated" ∧ Partition.strata d query = .ok S ∧
+        derived = some samplingDesign' ∧ Flock.Draw.deriveRated rates S works = .ok samplingDesign' := by
   unfold Draw.deriveSamplingDesign at h
   split at h
   next s hs =>
@@ -168,18 +174,25 @@ theorem deriveSamplingDesign_cases (d : Program) (query samplingDesign : Json) (
     · rename_i hc
       obtain rfl := (Except.ok.inj h).symm
       simp only [Bool.not_eq_true', Bool.or_eq_false_iff, beq_eq_false_iff_ne, ne_eq] at hc
-      exact Or.inl ⟨rfl, hk ▸ hc.1, hk ▸ hc.2⟩
+      exact Or.inl ⟨rfl, hk ▸ hc.1.1, hk ▸ hc.1.2, hk ▸ hc.2⟩
     · obtain ⟨S, hS, h⟩ := bind_eq_ok.1 h
+      split at h
+      · rename_i hr
+        obtain ⟨rates, -, h⟩ := bind_eq_ok.1 h
+        obtain ⟨works, -, h⟩ := bind_eq_ok.1 h
+        obtain ⟨samplingDesign', hd, h⟩ := bind_eq_ok.1 h
+        obtain rfl := (Except.ok.inj h).symm
+        exact Or.inr (Or.inr ⟨S, rates, works, samplingDesign', by rw [hk]; simpa using hr, hS, rfl, hd⟩)
       split at h
       · split at h
         · obtain ⟨samplingDesign', hd, h⟩ := bind_eq_ok.1 h
           obtain rfl := (Except.ok.inj h).symm
-          exact Or.inr ⟨S, _, samplingDesign', hS, rfl, Or.inl hd⟩
+          exact Or.inr (Or.inl ⟨S, _, samplingDesign', hS, rfl, Or.inl hd⟩)
         · split at h
           · obtain ⟨tab, ht, h⟩ := bind_eq_ok.1 h
             obtain ⟨samplingDesign', hd, h⟩ := bind_eq_ok.1 h
             obtain rfl := (Except.ok.inj h).symm
-            exact Or.inr ⟨S, _, samplingDesign', hS, rfl, Or.inr ⟨_, tab, ht, hd⟩⟩
+            exact Or.inr (Or.inl ⟨S, _, samplingDesign', hS, rfl, Or.inr ⟨_, tab, ht, hd⟩⟩)
           · exact absurd h (throw_ne _ _)
       · exact absurd h (throw_ne _ _)
   next hne =>
@@ -192,19 +205,20 @@ theorem deriveSamplingDesign_cases (d : Program) (query samplingDesign : Json) (
     swap
     · rename_i hc; exact absurd (by decide) hc
     obtain rfl := (Except.ok.inj h).symm
-    exact Or.inl ⟨rfl, by rw [hk]; decide, by rw [hk]; decide⟩
+    exact Or.inl ⟨rfl, by rw [hk]; decide, by rw [hk]; decide, by rw [hk]; decide⟩
 
-/-- **`deriveSamplingDesign` expands no sampling design of neither kind `stratified` nor `work`**: it returns `none` there, whatever
-the program, query and work table. -/
+/-- **`deriveSamplingDesign` expands no sampling design of no kind `stratified`, `work` or `rated`**: it returns `none` there,
+whatever the program, query and work table. -/
 theorem deriveSamplingDesign_none (d : Program) (query samplingDesign : Json) (table : Option Json) (h1 : kindOf samplingDesign ≠ "stratified")
-    (h2 : kindOf samplingDesign ≠ "work") : Draw.deriveSamplingDesign d query samplingDesign table = .ok none := by
+    (h2 : kindOf samplingDesign ≠ "work") (h3 : kindOf samplingDesign ≠ "rated") :
+    Draw.deriveSamplingDesign d query samplingDesign table = .ok none := by
   unfold Draw.deriveSamplingDesign
   split
   next s hs =>
     have hk : kindOf samplingDesign = s := by simp [kindOf, hs]
-    rw [hk] at h1 h2
+    rw [hk] at h1 h2 h3
     dsimp only
-    rw [ite_eq_left (by simp [h1, h2])]
+    rw [ite_eq_left (by simp [h1, h2, h3])]
     rfl
   next => rfl
 

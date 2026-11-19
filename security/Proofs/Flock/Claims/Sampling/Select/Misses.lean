@@ -241,12 +241,17 @@ theorem samplingDesign_bound (d : Program) (query : Lean.Json) (rs : Array Flock
     rw [hlen]; have := List.mem_range'.1 (hperm.subset hx); omega
   have hns : pop.toList.map (·.size) = S.toList.map fun p => rsSize p.2 := (laysOut_units _ _ hlays).2
   have hsum : (pop.toList.map (·.size)).sum = (popUnits S).length := by rw [hns, length_popUnits]
-  rcases deriveSamplingDesign_cases d query named table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S', k, samplingDesign', hS', rfl, hlaw⟩
+  rcases deriveSamplingDesign_cases d query named table derived hd with ⟨rfl, hk1, hk2, hk3⟩ | ⟨S', k, samplingDesign', hS', rfl, hlaw⟩ |
+      ⟨-, rates, works, samplingDesign', -, -, rfl, hrated⟩
+  rotate_right
+  · obtain ⟨ss, rfl, -⟩ := Flock.Draw.deriveRated_meetsRate hrated
+    simp only [Option.getD_some, oneStageOf, OneStage.Pa, Nat.choose_zero_right, Nat.cast_one, div_one]
+    exact Claims.Pr_le_one _
   · obtain ⟨hU, hcard⟩ := image_units _ hnd hlt W hW
     have hmiss : ∀ units : Array ℕ, (∀ v ∈ W, (popUnits S).getD v 0 ∉ units) →
         ∀ u ∈ W.image fun v => (popUnits S).getD v 0, u ∉ units := fun units hm u hu => by
       obtain ⟨v, hv, rfl⟩ := mem_image.1 hu; exact hm v hv
-    rcases flockSamplingDesign_cases _ _ _ hp with ⟨k, rfl, hk, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
+    rcases flockSamplingDesign_cases _ _ _ hp with ⟨k, rfl, hk, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk | hk
     · refine le_trans (Claims.Pr_mono fun src ⟨units, read, hu, hm⟩ => ⟨units, read, hu, hmiss units hm⟩)
         ((one_bound _ _ hU L).1 k hk) |>.trans_eq ?_
       simp only [Option.getD_none, oneStageOf, OneStage.Pa, hsum, hcard]
@@ -255,6 +260,7 @@ theorem samplingDesign_bound (d : Program) (query : Lean.Json) (rs : Array Flock
       simp only [Option.getD_none, oneStageOf, OneStage.Pa, hcard]
     · exact absurd hk hk1
     · exact absurd hk hk2
+    · exact absurd hk hk3
   · have hS'eq : S' = S := by rw [strata_eq d query rs he] at hS'; exact (Except.ok.inj hS').symm
     subst hS'eq
     rcases hlaw with hder | ⟨t, tab, ht, hwork⟩
