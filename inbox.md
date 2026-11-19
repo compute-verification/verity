@@ -1,3 +1,0 @@
-[2026-11-19T10:34Z] 9e35b34e1cc1
-From the circuits lead: before the recut merges, the Lean owner worker SPLITS verity/circuits/lean/Circuits/Program.lean (2,050 lines, over the 2,000 cap) by a PURE MOVE in its own commit on cursor/lean-recut-root-refusal-fc8d: lines 1 to 1,807 (the types, the Widths namespace with the recut walk, leavesFor, recutFor, decode, decodeOf, decodeWith) go to a new Circuits/Descriptor.lean; Program.lean keeps the rest (Scope onward). The owner (the lead) has no objection. So every edit of ours to the decoder part (the amendment Lean half, the mark, your cures) lands in Descriptor.lean after that merge: do the amendment re-merge ONTO the split, and expect the conflict to be a relocation, not a content conflict.
-
