@@ -91,7 +91,7 @@ owner = "compute-accounting"
 [[distribution]]
 directory = "verity/protocols/resource_accounting/compute/pouw/prover/lowering"
 owner = "compute-accounting"
-reason = "H1's lowering (`h1unit.py`, `stagers.py`, `live.py`) runs Flock's staging (`verity_flock`); goes the day `verity_flock` joins `verity`"
+reason = "H1's lowering (`h1unit.py`, `live.py`) runs Flock's staging (`verity_flock`); goes the day `verity_flock` joins `verity`"
 
 [[distribution]]
 directory = "verity/protocols/resource_accounting/compute/pouw/verifier/receipts"
@@ -532,8 +532,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/commit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/handoff.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled_rows.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_sample.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served_files.py",
@@ -675,8 +673,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/live.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/public_rows.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled_rows.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_sample.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/tables.py",
