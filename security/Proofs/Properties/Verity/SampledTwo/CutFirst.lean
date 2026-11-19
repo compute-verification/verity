@@ -137,6 +137,7 @@ theorem form_audit {j : Json} {p : VStar.Recursive.SampledTwo.Params}
   · ⇓? _ => ⌜True⌝
   all_goals first
     | exact True.intro
+    | exact fun h => h
     | exact ⟨_, by assumption⟩
 
 end FormAudit

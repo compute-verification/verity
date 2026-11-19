@@ -324,7 +324,7 @@ def _seeded(d: dict, s: dict, roots: tuple[str, str]) -> dict:
     call's own: every other port credit's."""
     program, lay, shape, reg = _files(d, s)
     pub = reg["ports"][Cr.PUB_PORT]
-    u0, n = pub[RV.READS_FROM], pub["leaves"]
+    u0, n = sum(x for x, _w in Cr.call_work(lay)[:s["call"]]), pub["leaves"]
     rows, salts, got = Cr.public_table(program, pub["value"], d["salt"], d["window"]["root"], u0, n, roots)
     return {**reg, "ports": {**reg["ports"], Cr.PUB_PORT: {**pub, "root": got.root.hex(), "known": {
         "rows": rows, "salts": [x.hex() for x in salts]}}}}
@@ -359,7 +359,7 @@ def test_a_units_public_row_is_its_calls_own_salt_position_and_roots(seed, tmp_p
         a, b = (reg["ports"][f"a_k{k}_0"], reg["ports"][f"b_k{k}_0"])
         u0, size = sum(n for n, _w in Cr.call_work(lay)[:c]), Cr.call_work(lay)[c][0]
         assert pub["value"].endswith(f"pub@{c}") and pub["leaves"] == size and pub["words"] == 100
-        assert (pub[RV.READS_FROM], pub["reads"]) == (u0, list(range(size)))
+        assert RV.READS_FROM not in pub and "reads" not in pub
         assert pub["known"]["rows"] == [Cr.CC.public_words(bytes.fromhex(d["salt"]), u0 + t, (
             bytes.fromhex(a["root"]), bytes.fromhex(b["root"]))) for t in range(size)]
         assert pub["known"]["salts"] == [Cr.CC.public_row_salt(d["window"]["root"], u0 + t).hex() for t in range(size)]
@@ -385,9 +385,9 @@ def window_j10r(seed: int, tmp: Path) -> tuple[dict, list[dict]]:
 def _j10r_rows(d: dict, s: dict, call: int, blocks: list[tuple[int, int]]) -> dict:
     """Statement ``s``'s ``--registered`` file with its public rows the prover's, each unit's ``call`` and ``blocks``
     `call` and `blocks` (one a unit of its call) in place of the ones credit derives: every other port credit's."""
-    program, _lay, _shape, reg = _files(d, s)
+    program, lay, _shape, reg = _files(d, s)
     pub, w = reg["ports"][Cr.PUB_PORT], d["window"]["root"]
-    u0, n = pub["reads"].index(0), pub["leaves"]
+    u0, n = sum(x for x, _w in Cr.call_work(lay)[:s["call"]]), pub["leaves"]
     roots = tuple(bytes.fromhex(next(p for x, p in reg["ports"].items() if x.startswith(f"{t}_k"))["root"]) for t in "ab")
     rows = [Cr.CC.public_words(bytes.fromhex(d["salt"]), u0 + t, roots, (call, blocks[t])) for t in range(n)]
     salts = [Cr.CC.public_row_salt(w, u0 + t) for t in range(n)]
@@ -419,7 +419,7 @@ def test_a_j10r_units_public_row_holds_the_call_and_blocks_credit_derives(seed, 
     s = random.Random(seed).choice(statements)
     _program, lay, _shape, reg = _files(d, s)
     pub = reg["ports"][Cr.PUB_PORT]
-    u0, size = pub["reads"].index(0), pub["leaves"]
+    u0, size = sum(x for x, _w in Cr.call_work(lay)[:s["call"]]), pub["leaves"]
     k, n = next((k, n) for name, k, n in lay["linears"] if name == lay["calls"][s["call"]][0])
     own = [Cr.CC.j10r_blocks(lay["m"], k, tuple(lay["tile"]), t // (n // lay["tile"][1]), t % (n // lay["tile"][1]))
            for t in range(size)]
@@ -476,10 +476,9 @@ def test_a_units_ok_row_is_the_verifiers_one_word_1(seed, tmp_path, verifier):
     w, population = d["window"]["root"], sum(n for n, _w in Cr.call_work(_layout(d)))
     for s in statements:
         program, lay, shape, reg = _files(d, s)
-        c, ok = s["call"], reg["ports"][Cr.OK_PORT]
-        u0, size = sum(n for n, _w in Cr.call_work(lay)[:c]), Cr.call_work(lay)[c][0]
+        ok = reg["ports"][Cr.OK_PORT]
         assert ok["value"] == f"{shape['prefix']}ok" and ok["leaves"] == population and ok["words"] == 1
-        assert (ok[RV.READS_FROM], ok["reads"]) == (u0, list(range(u0, u0 + size)))
+        assert RV.READS_FROM not in ok and "reads" not in ok
         assert ok["known"] == {"rows": [[1]] * population, "salts": [Cr.CC.ok_salt(w, u).hex() for u in range(population)]}
         assert ok["domain"] == RV.domain(program, ok["value"], 1, population, window=w).domain_id.hex()
     assert credit(d, statements) == (_credited(d), None)

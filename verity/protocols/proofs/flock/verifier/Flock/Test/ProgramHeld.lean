@@ -186,7 +186,16 @@ def withBlocks (obj b : Json) : Json := obj.setObjVal! "blocks" b
 
 def pairs (ps : List (Int × Int)) : Json := Json.arr (ps.toArray.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])
 
-def chain : Json := pairs [(0, 2), (2, 4), (4, 6), (6, 8)]
+/-- `blocks` of the levels `ls`, coarsest first. -/
+def levels (ls : List Json) : Json := Json.arr ls.toArray
+
+/-- `blocks` of one level. -/
+def one (ps : List (Int × Int)) : Json := levels [pairs ps]
+
+def chain : Json := one [(0, 2), (2, 4), (4, 6), (6, 8)]
+
+/-- Two levels over eight units: halves, then quarters. -/
+def twoLevels : Json := levels [pairs [(0, 4), (4, 8)], pairs [(0, 2), (2, 4), (4, 6), (6, 8)]]
 
 def form (obj : Json) : String :=
   match HmRow.checkPartitionObject obj with
@@ -201,18 +210,36 @@ def code (e : String) : String := ((e.splitOn ": ")[1]?).getD ""
 #guard form template == "Q_template_instance v0" && (HmRow.checkBlocksCover template 5).toBool
 #guard form (template.setObjVal! "grouping" chain) ==
   "partition: the object's keys are not format, program, query and optionally blocks"
--- the form: a non-empty list of pairs of naturals lo < hi
-#guard [Json.arr #[], Json.str "0-8", pairs [(0, 2), (2, 2)], pairs [(-1, 2)],
-  Json.arr #[Json.arr #[Lean.toJson 0, Lean.toJson 2, Lean.toJson 4]]].all fun b => code (form (withBlocks template b)) == "blocks-form"
+-- two levels, each refining the one before, pass and cover; a level may equal the one before
+#guard form (withBlocks template twoLevels) == "Q_template_instance v0"
+#guard (HmRow.checkBlocksCover (withBlocks template twoLevels) 8).toBool
+#guard form (withBlocks template (levels [pairs [(0, 4), (4, 8)], pairs [(0, 4), (4, 8)]])) == "Q_template_instance v0"
+-- the form: a non-empty list of levels, each a non-empty list of pairs of naturals lo < hi; the flat spelling is no list
+-- of levels
+#guard [Json.arr #[], Json.str "0-8", pairs [(0, 2), (2, 8)], one [(0, 2), (2, 2)], one [(-1, 2)], levels [Json.arr #[]],
+  levels [pairs [(0, 8)], Json.str "0-8"], levels [Json.arr #[Json.arr #[Lean.toJson 0, Lean.toJson 2, Lean.toJson 4]]]].all
+  fun b => form (withBlocks template b) == HmRow.BLOCKS_FORM
 #guard code (form (withBlocks unread chain)) == "blocks-query"
--- ascending, each from where the one before ends
-#guard code (form (withBlocks template (pairs [(1, 2), (2, 8)]))) == "blocks-gap"
-#guard code (form (withBlocks template (pairs [(0, 2), (3, 8)]))) == "blocks-gap"
-#guard code (form (withBlocks template (pairs [(0, 4), (2, 8)]))) == "blocks-overlap"
-#guard code (form (withBlocks template (pairs [(0, 2), (2, 4), (0, 8)]))) == "blocks-unsorted"
--- against the population: the last block ends at it
+-- each level ascending, each block from where the one before ends
+#guard code (form (withBlocks template (one [(1, 2), (2, 8)]))) == "blocks-gap"
+#guard code (form (withBlocks template (one [(0, 2), (3, 8)]))) == "blocks-gap"
+#guard code (form (withBlocks template (one [(0, 4), (2, 8)]))) == "blocks-overlap"
+#guard code (form (withBlocks template (one [(0, 2), (2, 4), (0, 8)]))) == "blocks-unsorted"
+#guard form (withBlocks template (levels [pairs [(0, 8)], pairs [(0, 2), (3, 8)]])) ==
+  "partition: blocks-gap: level 1: units 2..3 are in no block"
+-- each block of a level inside one block of the level before
+#guard form (withBlocks template (levels [pairs [(0, 4), (4, 8)], pairs [(0, 2), (2, 6), (6, 8)]])) ==
+  "partition: blocks-refine: level 1: [2, 6] does not lie inside one block of level 0"
+#guard form (withBlocks template (levels [pairs [(0, 4), (4, 8)], pairs [(0, 2), (2, 4)]])) ==
+  "partition: blocks-refine: level 1: no block ends at 8, where a block of level 0 ends"
+#guard code (form (withBlocks template (levels [pairs [(0, 2), (2, 8)], pairs [(0, 8)]]))) == "blocks-refine"
+#guard code (form (withBlocks template (levels [pairs [(0, 8)], pairs [(0, 4), (4, 8)], pairs [(0, 3), (3, 8)]]))) ==
+  "blocks-refine"
+-- against the population: each level's last block ends at it
 #guard code (why (HmRow.checkBlocksCover (withBlocks template chain) 7)) == "blocks-range"
 #guard code (why (HmRow.checkBlocksCover (withBlocks template chain) 9)) == "blocks-gap"
+#guard why (HmRow.checkBlocksCover (withBlocks template twoLevels) 7) ==
+  "partition: blocks-range: level 0: the last block ends at 8, past the population's 7 units"
 /-- The template query over `DescOfProg.pops`, whose five instances are its population. -/
 def five : Json := object (sha Flock.Test.DescOfProg.pops) "Q_template_instances" 0
   (Json.mkObj [("templates", Json.arr (Flock.Test.DescOfProg.templates.map Json.str))])
@@ -227,21 +254,28 @@ def NO_TEMPLATE : String := "partition: META program_digests does not name the c
 -- where the setup evaluates the query: the units derived (refused past the cover for want of a template) and a sample's strata
 #guard ((TemplateQuery.Desc.parse Flock.Test.DescOfProg.pops).toOption.bind fun d =>
   (TemplateQuery.evaluate d Flock.Test.DescOfProg.templates).toOption.map TemplateQuery.population) == some 5
-#guard units five == NO_TEMPLATE && units (withBlocks five (pairs [(0, 2), (2, 5)])) == NO_TEMPLATE
-#guard code (units (withBlocks five (pairs [(0, 2), (2, 6)]))) == "blocks-range"
-#guard code (units (withBlocks five (pairs [(0, 2), (2, 4)]))) == "blocks-gap"
-#guard code (match HmRow.stratifiedSamplingDesign (withBlocks five (pairs [(0, 6)])) Flock.Test.DescOfProg.pops 1 with
+#guard units five == NO_TEMPLATE && units (withBlocks five (one [(0, 2), (2, 5)])) == NO_TEMPLATE
+#guard code (units (withBlocks five (one [(0, 2), (2, 6)]))) == "blocks-range"
+#guard code (units (withBlocks five (one [(0, 2), (2, 4)]))) == "blocks-gap"
+#guard code (match HmRow.stratifiedSamplingDesign (withBlocks five (one [(0, 6)])) Flock.Test.DescOfProg.pops 1 with
   | .error e => e
   | .ok _ => "") == "blocks-range"
 
 def blocks (obj : Json) : Except String (Option (Array (Nat × Nat))) := HmRow.blocksOf obj Flock.Test.DescOfProg.pops
 
+def fiveTwo : Json := withBlocks five (levels [pairs [(0, 2), (2, 5)], pairs [(0, 1), (1, 2), (2, 5)]])
+
 -- a reader's blocks: only once they cover the population
-#guard (blocks (withBlocks five (pairs [(0, 2), (2, 5)]))).toOption == some (some #[(0, 2), (2, 5)])
+#guard (blocks (withBlocks five (one [(0, 2), (2, 5)]))).toOption == some (some #[(0, 2), (2, 5)])
 #guard (blocks five).toOption == some none
-#guard [pairs [(0, 2), (2, 6)], pairs [(0, 2), (2, 4)], pairs [(0, 2), (3, 5)], pairs [(0, 0)]].map
+#guard [one [(0, 2), (2, 6)], one [(0, 2), (2, 4)], one [(0, 2), (3, 5)], one [(0, 0)]].map
   (fun b => match blocks (withBlocks five b) with | .error e => code e | .ok _ => "") ==
   ["blocks-range", "blocks-gap", "blocks-gap", "blocks-form"]
+-- every level as `levelsOf` reads it; `blocksOf` refuses more than one level by name
+#guard (HmRow.levelsOf fiveTwo Flock.Test.DescOfProg.pops).toOption ==
+  some (some #[#[(0, 2), (2, 5)], #[(0, 1), (1, 2), (2, 5)]])
+#guard (match blocks fiveTwo with | .error e => e | .ok _ => "") == HmRow.blocksLevels 2
+#guard code (HmRow.blocksLevels 2) == "blocks-levels"
 -- over another program than the verifier's, no blocks
 #guard (match blocks (withBlocks template chain) with | .error e => e | .ok _ => "") == NOT_THE_OBJECTS
 
