@@ -175,10 +175,23 @@ class Measure:
         self.held = {o: _last(ev) for o, ev in by.items()}
 
     def block(self, a: int, b: int) -> tuple[tuple[int, ...], tuple[int, ...], int]:
-        start = self.lo[a]
-        ins = _merge([(lo, min(hi, start), w, x) for u in range(a, b) for lo, hi, w, x in self.reads[u] if lo < start])
-        outs = _merge([(lo, hi, w, RUN) for u in range(a, b) for lo, hi, w, last in self.held.get(u, ()) if last >= b])
-        return _rows(ins, lambda r: (r[2], r[3])), _rows(outs, lambda r: r[2]), sum(self.ands[a:b])
+        for c, cost in self.grow(a):
+            if c == b:
+                return cost
+        raise IndexError(b)
+
+    def grow(self, a: int) -> Iterator[tuple[int, tuple[tuple[int, ...], tuple[int, ...], int]]]:
+        start, ins, alive, ands = self.lo[a], [], [], 0
+        for b in range(a + 1, len(self.units) + 1):
+            u = b - 1
+            ins = _merge(ins + [(lo, min(hi, start), w, x) for lo, hi, w, x in self.reads[u] if lo < start])
+            for p in self.held.get(u, ()):
+                heapq.heappush(alive, (p[3], p[:3]))
+            while alive and alive[0][0] < b:
+                heapq.heappop(alive)
+            ands += self.ands[u]
+            outs = _merge([(lo, hi, w, RUN) for _l, (lo, hi, w) in alive])
+            yield b, (_rows(ins, lambda r: (r[2], r[3])), _rows(outs, lambda r: r[2]), ands)
 
     def _unit_reads(self, u: int) -> Iterator[tuple[int, int, int, str]]:
         k, m = self.units[u]
@@ -357,17 +370,19 @@ def _rows(runs: list, key: Callable[[tuple], Any]) -> tuple[int, ...]:
     return tuple(rows)
 
 
-def pack(program: Any, fits: Fits, q: Any = None) -> list[tuple[int, int]]:
-    m = Measure(program, q or query(program))
+def pack(program: Any, fits: Fits, q: Any = None, m: Measure | None = None) -> list[tuple[int, int]]:
+    m = m or Measure(program, q or query(program))
     n, out, a = len(m.units), [], 0
     while a < n:
         if not fits(*m.block(a, a + 1)):
             k = m.units[a][0]
             raise Unlaid("lay-primitive" if isinstance(m.root.nodes[k].fn, PrimitiveDefinition) else "pack-unit",
                          f"unit {a} (root node {k}, {descriptor_id(m.root.nodes[k].fn)}) alone does not fit: `lay` it first")
-        b = a + 1
-        while b < n and fits(*m.block(a, b + 1)):
-            b += 1
+        b = a
+        for c, cost in m.grow(a):
+            if not fits(*cost):
+                break
+            b = c
         out.append((a, b))
         a = b
     return out
