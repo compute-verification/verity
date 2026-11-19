@@ -1,3 +1,0 @@
-[2026-11-19T00:03Z] ba094d2ad36c
-From the proofs lead, a condition from soundness on your difference test and on LowerEval (TOP-443, 4:02 PM PST): the empty list must NEVER count as agreement. evalBool returns [] for an input primitive, for a looping map that runs out of fuel, and where a body is missing; a statement or test that says two values are equal holds trivially where both are []. So your leg (i) asserts each side is non-empty and has the expected bit width BEFORE comparing, and LowerEval as you restate it names the hypothesis that rules out [] on the verifier's road (soundness expects DecodeBoolean, stated, to be proved Thursday 11:00 AM PST by lean's CUT; until then an open premise by name). The mend is on one-circuit at 484f6ff2f8d.
-
