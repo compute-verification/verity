@@ -1026,11 +1026,12 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
       exact Iff.rfl)
   have h1r := reset h1
   have h0 : ∀ c, j0 () c = #[] ↔ c = #[] ∧
-      (∃ samplingDesign, Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (get "law") samplingDesign = true) ∧
+      (∃ samplingDesign, Draw.agreed v.program v.query v.samplingDesign v.workTable (get "law") = .ok samplingDesign ∧
+          jeq (get "law") samplingDesign = true) ∧
       j1 () #[] = #[] := by
     intro c
     simp only [j0]
-    rcases hd : Draw.derive v.program v.query v.samplingDesign v.workTable with a | samplingDesign
+    rcases hd : Draw.agreed v.program v.query v.samplingDesign v.workTable (get "law") with a | samplingDesign
     · rw [h1r]
       simp only [addCode_ne_nil, false_and, false_iff]
       rintro ⟨_, ⟨samplingDesign, hl, _⟩, _⟩
@@ -1057,7 +1058,8 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
         keys? rec = some (if v2 = true then Docket.KEYS_V2 else Docket.KEYS) ∧
         (jeq (get "format") (if v2 = true then Json.str Docket.FORMAT_V2 else Json.str Docket.FORMAT) = true ∧
           jeq (get "protocol") (Json.str Docket.PROTOCOL) = true) ∧
-        (∃ samplingDesign, Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (get "law") samplingDesign = true) ∧
+        (∃ samplingDesign, Draw.agreed v.program v.query v.samplingDesign v.workTable (get "law") = .ok samplingDesign ∧
+          jeq (get "law") samplingDesign = true) ∧
         j1 () #[] = #[]) := by
     intro bk bf hk hf
     cases bk
@@ -1288,7 +1290,7 @@ theorem checkSample_nil (draw pop samplingDesign : Json) : Draw.checkDraw draw p
     · rintro ⟨h, _⟩; cases h
 
 theorem registered_samplingDesign {v : Docket.Verifier} {rec samplingDesign : Json} (h : Registered v rec samplingDesign) :
-    Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign := h.1.2.2.2.1
+    Draw.agreed v.program v.query v.samplingDesign v.workTable (getD rec "law") = .ok samplingDesign := h.1.2.2.2.1
 
 theorem creditedGate_accept {α : Type} {prof : Core.Integrity} {o : Core.Outcome α Core.Integrity} {a : α}
     {b : Core.Integrity} :
