@@ -20,8 +20,8 @@ def _scan_slots(ns: int, firsts: tuple[int, int, int, int], stride: int, lanes: 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`IngressPrompt_v2` at a small layout (3 ids under a 1,000-entry vocabulary) and at a served one (16 ids under a
     128,256-entry vocabulary, 6-character fields); `IngressSampled_v1` at the same two with a 6-byte and a 16-byte id;
-    `ScanSlots_v3` at TINY's class's scan state row (2 lanes, KO 2, 4 prompt ids) and the class of record's (4 lanes, KO 64,
-    1,024)."""
+    `ScanSlots_v3` at TINY's class's scan state row (2 lanes, KO 2, 4 prompt ids), the class of record's (4 lanes, KO 64,
+    1,024) and the remote application's (4 lanes, KO 2, 27, ``ScanSlots_v3:4:2:27``)."""
     from verity.circuits.defs import bind
 
     from verity_vllm.definitions.registry import boolean_io_shell as BX
@@ -33,4 +33,5 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("IngressSampled_v1:2", lambda: bind(BX.IngressSampledV1, MODEL="served-model", LP=16, V=128256, RID=16)),
         ("ScanSlots_v3:2:2:4", lambda: _scan_slots(4548, (376, 168, 200, 474), 36333, 2, 4)),
         ("ScanSlots_v3:4:64:1024", lambda: _scan_slots(9353, (376, 168, 200, 1528), 37387, 4, 1024)),
+        ("ScanSlots_v3:4:2:27", lambda: _scan_slots(9090, (376, 168, 200, 474), 36333, 4, 27)),
     ]

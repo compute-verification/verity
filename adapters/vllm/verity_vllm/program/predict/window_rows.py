@@ -48,15 +48,15 @@ import numpy as np
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
+from verity.commitments import registered_value as RV
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
 )
 
-from verity_vllm.check.replay.checks import check_rows
+from verity_vllm.check.capture_plan import NODE, captured
 from verity_vllm.definitions.numerics.rows import ROWS
 from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity_vllm.definitions.registry import io_shell as IO
@@ -263,9 +263,6 @@ def _op(d: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
     return str(d["op_path"]), tuple(str(m[0]) for m in d["members"])
 
 
-#: a call boundary's op path: its module, then its fx node, its op counted over the request (`naming`: ``row_quant``,
-#: ``row_quant_1``, ...)
-_NODE = re.compile(r"(.+)/(.+?)(?:_\d+)?")
 
 
 def _respelt(rows: Sequence[Mapping[str, Any]], store: Any, rid: str, arrive: int) -> dict[tuple[int, str], str]:
@@ -278,7 +275,7 @@ def _respelt(rows: Sequence[Mapping[str, Any]], store: Any, rid: str, arrive: in
     want: dict[tuple[int, str], set[str]] = {}
     for d in rows:
         want.setdefault((int(d["step"]), str(d["op_path"])), set()).update(str(m[0]) for m in d["members"])
-    node = {key: x.groups() for key in want if (x := _NODE.fullmatch(key[1]))}
+    node = {key: x.groups() for key in want if (x := NODE.fullmatch(key[1]))}
     alone = Counter((s, g) for (s, _op), g in node.items())
     out = {}
     for (s, op), members in want.items():
@@ -286,7 +283,7 @@ def _respelt(rows: Sequence[Mapping[str, Any]], store: Any, rid: str, arrive: in
         e, g = arrive + s, node.get((s, op))
         if g is None or alone[(s, g)] != 1 or store.resolve(op) != (op, 0) or all(store.has(rid, e, op, m) for m in members):
             continue
-        same = [o for o in store.ops(rid, e) if (x := _NODE.fullmatch(o)) and x.groups() == g]
+        same = [o for o in store.ops(rid, e) if (x := NODE.fullmatch(o)) and x.groups() == g]
         if len(same) == 1 and store.resolve(same[0]) == (same[0], 0) and all(store.has(rid, e, same[0], m) for m in members):
             out[(s, op)] = same[0]
     return out
@@ -401,16 +398,9 @@ class Served:
         ``arrive``, each op read under the op path the record binds it under (`_respelt`). A check of its Program (its
         instances header's ``checks``: the length rule, the seed rule) computes the Program's verdict from committed
         values; the engine never runs it and the record binds no member of it, so it is no served op and is left out. Any
-        other row with no committed member is refused by name."""
-        checks = {i for _what, i, _lo, _hi in check_rows(pi)}
-        rows = []
-        for r in pi.rows:
-            d = pi.describe(r)
-            if d is None or not d["members"]:
-                if int(r["i"]) in checks:
-                    continue
-                raise ValueError(f"{rid}: row {r['i']} ({r['spec']}) has no committed member")
-            rows.append({**d, "spec": r["spec"]})
+        other row with no committed member, or with a member whose value family is not served or is unknown, is refused by
+        name (`capture_plan.captured`)."""
+        rows = captured(pi, rid)
         at = _respelt(rows, store, rid, arrive)
 
         def bound(s: int, op: str, m: str) -> int:
@@ -498,6 +488,13 @@ class Rows:
                        for t, lay in self.lays.items()}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
+        P0 = lowered.programs[0] if lowered.programs else None
+        for a, (tid, u) in lowered.scans:
+            for k, lane in enumerate(_lanes(P0, self.state, IO.scan_reference, a)):
+                for i, v in enumerate(lane):
+                    self._put(tid, u, f"o{4 * k + i}", _i32(v if isinstance(v, list) else [v]), EVALUATED)
+        for s, _k, c, e in lowered.empty:
+            self._empty(P0, s, c, e)
         if bad := {t: int((~h).any(axis=1).sum()) for t, h in self.held.items() if not h.all()}:
             raise ValueError(f"units with rows no node or Definition fills, by template: {bad}")
 
@@ -555,9 +552,10 @@ class Rows:
 
     def _scan(self, P: Any, S: Slot, picks: Sequence[int]) -> None:
         """The slot's scan units: its `ScanSlots_v3` every lane's first token and slot, occupancy word and head of the scan
-        state row at its anchor (its lane's row the slot's, refused by name where it isn't), each position's
-        `SelectCollect_v1` but the last its select collected on from the lane's head (its ``o1``; its select ``o0`` is the
-        node's), and the last's `SelectEntry_v1` its entry of the scan's Programs' row."""
+        state row at its anchor (its lane's row the slot's, refused by name where it isn't); its collectors on from the
+        lane's head, a prompt position's before the last (`OutCollect_v1`) on its token, a select's (`SelectCollect_v1`, its
+        ``o1``; its select ``o0`` is the node's) on its pick and KO - O pads on the last pick; and its `SlotEntry_v1` entry
+        of the scan's Programs' row."""
         tid, u = P.scan_unit
         for k, lane in enumerate(_lanes(P, self.state, IO.scan_reference)):
             for i, v in enumerate(lane):
@@ -566,17 +564,28 @@ class Rows:
         if row != S.row:
             raise ValueError(f"{P.name}: its slot's row isn't lane {P.lane}'s of the scan state row at bucket {P.anchor}")
         KO = P.cls.outputs
-        if len(P.collects) != len(picks) - 1:
-            raise ValueError(f"{P.name}: {len(P.collects)} collectors for {len(picks)} selects, not one each but the last's")
-        for p, tok in enumerate(picks):
-            a = IO.collect_reference(a, tok, KO, p == 0)
-            if p < len(P.collects):
-                ct, cu = P.collects[p]
-                self._put(ct, cu, "o1", _i32(a), EVALUATED)
+        toks = [*S.tokens[:P.L - 1], *picks, *[picks[-1]] * (KO - len(picks))]
+        if len(P.collects) != len(toks):
+            raise ValueError(f"{P.name}: {len(P.collects)} collectors, not one a prompt position, one a select and one a pad "
+                             f"to KO ({len(toks)})")
+        for k, ((ct, cu), tok) in enumerate(zip(P.collects, toks)):
+            a = IO.collect_reference(a, tok, KO, k == 0)
+            self._put(ct, cu, "o0" if self.fns[ct].name == "OutCollect" else "o1", _i32(a), EVALUATED)
         e = P.entry.bindings
         entry = IO.entry_reference(S.row[0], a, KO, e["IDB"], e["NP"], e["STOP"])
         et, eu = P.entry_unit
         self._put(et, eu, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
+
+    def _empty(self, P: Any, s: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
+        """Empty slot ``s``'s collector and entry (`_Program.place_empty`), on its lane of the scan state row at its
+        anchor."""
+        a, lane = P.cls.anchor(s), P.cls.lane(s)
+        (row, head), tok = _lanes(P, self.state, anchor=a)[lane], _lanes(P, self.state, IO.scan_reference, a)[lane][0]
+        KO, e = P.cls.outputs, P.entry.bindings
+        a = IO.collect_reference(head, tok, KO, True)
+        self._put(*collect, "o0", _i32(a), EVALUATED)
+        self._put(*entry, "o0", np.array([IO.entry_reference(row[0], a, KO, e["IDB"], e["NP"], e["STOP"])], dtype=np.uint16),
+                  EVALUATED)
 
     def _heads(self, node: Any, plan: Any, calls: Sequence[tuple[str, int]], S: Slot) -> None:
         """An attention cut by key block: every Call but its last (whose output is the node's) its Definition on the node's
@@ -637,11 +646,12 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
     return np.ascontiguousarray(words, dtype=np.uint16).view(f"<u{width // 8}")
 
 
-def _lanes(P: Any, state: Sequence[Any], of: Callable[..., list] = IO.slots_reference) -> list[Any]:
-    """Every lane of ``state``'s row at Program ``P``'s anchor: its row and head (`io_shell.slots_reference`), or
-    ``of``'s (`io_shell.scan_reference`: `ScanSlots_v3`'s outputs)."""
+def _lanes(P: Any, state: Sequence[Any], of: Callable[..., list] = IO.slots_reference,
+           anchor: int | None = None) -> list[Any]:
+    """Every lane of ``state``'s row at Program ``P``'s anchor (or ``anchor``): its row and head
+    (`io_shell.slots_reference`), or ``of``'s (`io_shell.scan_reference`: `ScanSlots_v3`'s outputs)."""
     b = P.scan.bindings
-    row = np.asarray(state[P.anchor], dtype=np.uint16).reshape(-1)
+    row = np.asarray(state[P.anchor if anchor is None else anchor], dtype=np.uint16).reshape(-1)
     return of(row.tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])
 
 

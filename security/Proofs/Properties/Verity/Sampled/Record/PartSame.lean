@@ -391,12 +391,18 @@ theorem canon_of_chkPart {c : Circuit} {o : Json} {f : HmRow.PartitionFinding}
     rw [hc] at hd
     cases hd
 
+theorem ranges_same {a b : Json} (h : Same a b) (readDesc : ByteArray → V TemplateQuery.Desc) (refusal name : String)
+    (version : Nat) (program : ByteArray) :
+    HmRow.templateRangesBy readDesc refusal name version a program
+      = HmRow.templateRangesBy readDesc refusal name version b program := by
+  unfold HmRow.templateRangesBy
+  simp only [tm_same (same_sub (same_sub h "query") "params"), asStr_same h "program", cover_same h]
+
 theorem derive_same {a b : Json} (h : Same a b) (c : Circuit) (program : ByteArray) (indices : Array Nat) :
     HmRow.deriveTemplateUnits c a program indices = HmRow.deriveTemplateUnits c b program indices := by
   have hq := same_sub h "query"
-  unfold HmRow.deriveTemplateUnits
-  simp only [asStr_same hq "name", asNat_same hq "version", tm_same (same_sub hq "params"), asStr_same h "program",
-    cover_same h]
+  unfold HmRow.deriveTemplateUnits HmRow.deriveTemplateUnitsBy
+  simp only [asStr_same hq "name", asNat_same hq "version", ranges_same h]
 
 theorem qwordUnits_same {a b : Json} (h : Same a b) (c : Circuit) (program : ByteArray) (indices : Array Nat) :
     HmRow.deriveQwordUnits c a program indices = HmRow.deriveQwordUnits c b program indices := by
@@ -419,9 +425,8 @@ theorem qword_same {a b : Json} (h : Same a b) (c : Circuit) (pub : Public) (pro
 
 theorem strata_same {a b : Json} (h : Same a b) (samplingDesign : String) (program : ByteArray) :
     HmRow.templateStrataWith With.std samplingDesign a program = HmRow.templateStrataWith With.std samplingDesign b program := by
-  have hp := same_sub (same_sub h "query") "params"
-  unfold HmRow.templateStrataWith
-  simp only [chkObj_same h, tm_same hp, asStr_same h "program", cover_same h]
+  unfold HmRow.templateStrataWith HmRow.templateStrataBy
+  simp only [chkObj_same h, ranges_same h]
 
 theorem strat_same {a b : Json} (h : Same a b) (program : ByteArray) (k : Nat) :
     HmRow.stratifiedSamplingDesign a program k = HmRow.stratifiedSamplingDesign b program k := by

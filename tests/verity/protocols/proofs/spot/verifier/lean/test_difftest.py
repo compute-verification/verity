@@ -195,15 +195,16 @@ def _json(value):
 
 
 class Setup:
-    """A verifier's program and query, with its descriptor and the ports its layout derives, each `rows` rows a unit."""
+    """A verifier's program and query, with its descriptor and the ports its layout derives, each `rows` rows a unit, and
+    its partition object, with `blocks` (`partition_object.build`) where given."""
 
-    def __init__(self, program, query, names=("out", "x"), rows=(2, 1)):
+    def __init__(self, program, query, names=("out", "x"), rows=(2, 1), blocks=None):
         self.program, self.query = program, query
         self.desc = _json(codec.encode_program(program))
         self.sha512 = PO.program_sha512(program)
         self.population = P.units(program, query)
         self.templates = [t for t, _ in P.strata(program, query)]
-        part = P.partition(program, query)
+        part = self.partition = P.partition(program, query) if blocks is None else PO.build(program, query, blocks)
         self.ports = {p: {"domain": R.window_domain(self.sha512, P.digest(part), p, schema, leaves, "r-test"), "leaves": leaves}
                       for p, schema, leaves in ((names[0], "u16", rows[0] * self.population),
                                                 (names[1], "hm96-sha512/row/v1", rows[1] * self.population))}
@@ -229,6 +230,9 @@ SETUPS = [Setup(PN.population_program(PAIR, n), P.template_instance_query(PAIR.i
     Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]), P.template_instances_query([PAIR.id, TRIPLE.id])),
     Setup(PN.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id])),
     Setup(call_program((0, 2, 0, 3)), PO.query()), Setup(call_program((1, 2, 3)), PO.call_query(8))]
+#: `SETUPS[3]` with a partition object naming its proof blocks, one unit each: the door derives the drawn block's circuit
+#: from them (`one_circuit.block`), and refuses an object naming none.
+BLOCKED = Setup(SETUPS[3].program, SETUPS[3].query, blocks=[(u, u + 1) for u in range(SETUPS[3].population)])
 
 
 def _registered_program(name: str, n: int, extra, registered) -> Program:
@@ -2773,10 +2777,10 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     the blobs hold another, or its sessions are not the evidence's. The public file is the parameters', committed before
     any coin: evidence naming one of its own, or parameters naming none, are refused. `test_proofs.py` holds the
     verdicts to `verify`'s on a real session, and `test_challenger_difftest.py` the trees' check to its Python."""
-    s = SETUPS[3]
+    s = BLOCKED
     sampling_design = {"k": 2, "law": "subset"}
     rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
+                   WINDOW, leaf_layer=LEAF, partition=s.partition)
     rng = random.Random("v2-verdicts")
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
 
@@ -2787,7 +2791,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                     "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
         params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-                  "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+                  "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": s.partition,
                   "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
                   "window_root": ch.ledger.window["root"], "work_table": None}
         v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
@@ -2863,14 +2867,14 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     ``verdicts``, and v1's parameters, which v2 reads with ``proofs``."""
     sampling_design = {"k": 2, "law": "subset"}
     rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
+                   WINDOW, leaf_layer=LEAF, partition=s.partition)
     ch, d, coins = _challenger_sample(random.Random(seed), s, sampling_design, rec)
     proved = DR.proved(d)
     base = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
             "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
             "statement": {}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-              "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+              "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": s.partition,
               "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
               "window_root": ch.ledger.window["root"], "work_table": None}
     v1 = base | {"sessions": [], "verdicts": {"lean": {"accepted": True, "of_record": True}}}
@@ -2885,10 +2889,10 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
     in order (`OneStageZk.popHeld`, `Slots.popOk`), before any session is verified, as the service's run refuses it at
     docket (`population-order`): the session's knowledge soundness reads slot `u` as proof block `u`. v1, whose
     R2 holds only the population's count, accepts the same audit on its verdicts. `SETUPS[4]` and `SETUPS[5]` are out
-    of order (`test_the_run_refuses_a_population_out_of_order`); `SETUPS[3]`'s audit goes on to its session's
+    of order (`test_the_run_refuses_a_population_out_of_order`); `BLOCKED`'s audit goes on to its session's
     verdict."""
     circuit = STAND_IN_CIRCUIT
-    for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True)):
+    for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (BLOCKED, True)):
         assert P.in_order(s.program, s.query, s.population) is ok, s.templates
         rec, ch, base, params = _audit_v1_accepts(s, f"v2-order-{s.templates}", server)
         public, record = _public_of(rec), D.canonical(ch.trees[0].record).encode()
@@ -2990,10 +2994,10 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
     (`sample-late`), and one whose first round opened is of another stream than the link's (`link-late`), are refused
     (`SAMPLE_LINK_FIRST`). The Python twins (`challenger.sample_link_first`, `one_stage.proofs.order_why`) agree;
     `test_challenger_difftest.py` holds the first to Lean's piece."""
-    s = SETUPS[3]
+    s = BLOCKED
     sampling_design = {"k": 2, "law": "subset"}
     rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
+                   WINDOW, leaf_layer=LEAF, partition=s.partition)
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     for order in ORDERS:
         ch, d, coins = _challenger_sample(random.Random(f"v2-order-{order}"), s, sampling_design, rec, 1, order=order)
@@ -3002,7 +3006,7 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                     "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
         params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-                  "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+                  "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": s.partition,
                   "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
                   "window_root": ch.ledger.window["root"], "work_table": None}
         v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
@@ -3051,9 +3055,9 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
     than theirs is rejected after them (`checkBlobsAt`, v1's `checkAt`). Each step Lean rejects at is the Python
     reference's: `decode_params_v2`, `coins_within`, `_coins_of`, then v1's `check` with the session's verdict the
     reject its blobs give, its record on the coin tree the challenger sampled."""
-    s, sampling_design = SETUPS[3], {"k": 3, "law": "subset"}
+    s, sampling_design = BLOCKED, {"k": 3, "law": "subset"}
     rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
+                   WINDOW, leaf_layer=LEAF, partition=s.partition)
     after = bytes.fromhex(DD.digest(rec))
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
@@ -3074,7 +3078,7 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
         if coins is not None:
             evidence["coins"] = coins
         p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": sampling_design,
-             "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query), "ports": s.ports,
+             "leaf_layer": LEAF, "log": [], "partition": s.partition, "ports": s.ports,
              "program": s.desc, "proofs": {"public": _sha(public), "registered": None},
              "query": s.query, "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"],
              "work_table": None}
@@ -4034,13 +4038,14 @@ TABLE_DIGEST = st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512.values())), st.bi
 LOOKUPS = st.one_of(st.dictionaries(st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512)), st.text("abx", max_size=4)),
                                     st.just({}), max_size=5),
                     st.none(), st.integers(-9, 9), st.text("abx", max_size=4), st.lists(st.sampled_from(sorted(PF.MUFU_SHA512))))
-TABLES_CASES = st.one_of(
+#: Each case names `BLOCKED`'s C and partition, so the verifier's circuit file is the derived one (`restrict`).
+TABLES_CASES = st.one_of(st.one_of(
     st.builds(lambda ds, lk: {"digests": ds, "lookups": lk}, st.lists(TABLE_DIGEST, max_size=5), LOOKUPS),
     st.builds(lambda ds, lk: {"digests": ds, "lookups": lk}, st.lists(TABLE_DIGEST, max_size=5), LOOKUPS),
     st.lists(TABLE_DIGEST, max_size=5).map(lambda ds: {"digests": ds}),
     st.lists(st.one_of(TABLE_DIGEST, st.sampled_from(["0", "AB", "0g", PF.MUFU_SHA512["rcp"].upper()]), st.integers(0, 3)),
              min_size=1, max_size=4).map(lambda ds: {"digests": ds}),
-    JSON)
+).map(lambda j: j | {"program": BLOCKED.desc, "partition": BLOCKED.partition}), JSON)
 TABLES_HELD = D.Port(PIECES, "tables_held", tables_held, TABLES_CASES, package=PACKAGE)
 OWN_TABLES = D.Port(PIECES, "own_tables", own_tables, TABLES_CASES, package=PACKAGE)
 
@@ -4138,7 +4143,8 @@ PUBLIC_PORTS = D.Port(PIECES, "public_ports", public_ports, st.one_of(
     st.builds(lambda m, ps, x: {"record": {"roots": _roots([f"{m}/{p}" for p in ps], x)}}, MEMBER_NAMES,
               st.lists(OWN_PORTS, min_size=1, max_size=4), st.integers(0, 63)),
     st.builds(lambda ps, x: {"record": {"roots": _roots(ps, x)}}, st.lists(st.one_of(
-        OWN_PORTS, st.builds("{}/{}".format, MEMBER_NAMES, OWN_PORTS), st.sampled_from(["row-table", "row-table/s0/t"])),
+        OWN_PORTS, st.builds("{}/{}".format, MEMBER_NAMES, OWN_PORTS), st.sampled_from(["row-table", "row-table/s0/t"]),
+        st.builds("{}/{}".format, st.sampled_from(["T{K=1}", "A", "B"]), st.sampled_from(["o0", "x"]))),
         min_size=1, max_size=4), st.integers(0, 63)),
     JSON), package=PACKAGE)
 
@@ -4857,8 +4863,9 @@ def _second_own(j):
     their sources (`supplied`, `second_stage.supplied_of`), and the names of those it pinned or holds to an earlier
     record (`fixed`), each null for none, the templates the auditor's params record as table reads with their
     tables' rows (`reads`, `{template: V}`, null for none), the registered tables they pin (`tables`,
-    `{parameter: entry}`, `service.pinned_tables`, null for none), and the words of the rows each wire joins (`widths`,
-    null for none). The wired key's switch is `second_stage.WIRED_KEY`'s: no input sets it."""
+    `{parameter: entry}`, `service.pinned_tables`, null for none), the words of the rows each wire joins (`widths`,
+    null for none), and the terms the interior registration's own entries were held to (`held`, `{program, window,
+    fixed}`, `second_stage.Held`, null for none). The wired key's switch is `second_stage.WIRED_KEY`'s: no input sets it."""
     j = _json(j)
     if not (isinstance(j, dict) and isinstance(j.get("sample"), list) and all(map(_nat, j["sample"]))):
         raise D.Reject("sample is not a list of replay blocks")
@@ -4906,10 +4913,18 @@ def _second_own(j):
     widths = () if j.get("widths") is None else SS.widths_of(j["widths"])
     if widths is None:
         raise D.Reject("widths is null or a list of {template, port, reads, writes}, two strings and two naturals")
+    held = j.get("held")
+    if held is not None:
+        if not (isinstance(held, dict) and isinstance(held.get("program"), str)
+                and (held.get("window") is None or isinstance(held.get("window"), str))
+                and isinstance(held.get("fixed"), list) and all(isinstance(v, str) for v in held["fixed"])):
+            raise D.Reject("held is null or {program, window, fixed}: a string, a string or null, a list of strings")
+        held = SS.Held(held["program"], held.get("window"), tuple(held["fixed"]))
     own = SS.Own(tuple(j["sample"]), SS.parts(len(j["sample"]), strata), j.get("interior"), j.get("boundary"),
                  tuple(j["drawn"]), links, audit.session_registered(verdicts), SS.verified_of(verdicts),
                  tuple((refs or {}).items()), tuple((ref_reads or {}).items()), wires, rows, returns, supplied,
-                 tuple(fixed or ()), tuple((reads or {}).items()), tuple(sorted((tables or {}).items())), widths)
+                 tuple(fixed or ()), tuple((reads or {}).items()), tuple(sorted((tables or {}).items())), widths,
+                 held=held)
     return own, statements
 
 
@@ -5673,7 +5688,10 @@ def second_statement_runs(draw) -> dict:
             ("ref_reads", "r"), ("supplied", []), ("supplied", {"v": 5}), ("supplied", {"v": [5]}),
             ("supplied", {"v": [[5]]}), ("supplied", {"v": [[{"bytes": 5}]]}),
             ("supplied", {"v": [[{"bytes": "00", "port": "x"}]]}), ("supplied", {"v": [[{}]]}), ("fixed", 5),
-            ("fixed", [5]), ("fixed", "v"), ("tables", 5), ("tables", []), ("tables", {"v": 5}), (None, None)]))
+            ("fixed", [5]), ("fixed", "v"), ("tables", 5), ("tables", []), ("tables", {"v": 5}), ("held", 5),
+            ("held", {"program": "p", "fixed": []}), ("held", {"program": "p", "window": 5, "fixed": []}),
+            ("held", {"program": 5, "window": None, "fixed": []}), ("held", {"program": "p", "window": None}),
+            ("held", {"program": "p", "window": None, "fixed": [5]}), (None, None)]))
         drop = draw(st.sampled_from(sorted(c)))
         c = {k: v for k, v in c.items() if k != drop} if key is None else {**c, key: value}
     return c
@@ -8089,6 +8107,82 @@ def test_round_two_holds_each_session_to_its_part(pieces):
         assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
 
 
+def _registered_at(c: dict, t: str, value: str, program: str, window: str | None, both: bool = False) -> dict:
+    """`c` with template `t`'s `x` linked to read `value`, which the interior registers (Program `program`, window
+    `window`; six leaves of two words) and the verifier holds, and no tree of `x` of its own unless `both`; `t`'s
+    statement reads it at its slots' rows and its header binds it as that registration committed it; the interior
+    registration held under `c`'s program and the window `WINDOW_OPEN`."""
+    i = next(k for k, s in enumerate(c["statements"]) if s["template"] == t)
+    rec, s, q = c["interior"], c["statements"][i], len(c["sample"])
+    n, lo, per = s["header"]["instances"] // q, s["header"]["units"]["indices"][0], 3
+    d = RV.domain(program, value, 2, q * per, 16, window)
+    e = {"value": value, "root": "5b" * 64, "leaves": q * per, "words": 2, "domain": d.domain_id.hex()}
+    read = {"value": value, "root": e["root"], "domain": e["domain"], "leaves": e["leaves"], "reads_from": lo,
+            "reads": [(k // n) * per + k % n % per for k in range(q * n)]}
+    fv = s["header"]["frame_v3"]
+    header = {**s["header"], "frame_v3": {**fv, "roots": {**fv["roots"], "x": e["root"]},
+                                          "domain_ids": {**fv["domain_ids"], "x": e["domain"]},
+                                          "bindings": {**fv["bindings"], "x": d.binding.hex()}}}
+    registered = {"format": "verity/registered-reads/v1", "ports": {"x": read}}
+    roots = [r for r in rec["roots"] if both or r["port"] != f"{t}/x"]
+    lean = {**c["verdicts"]["lean"], "registered": {**c["verdicts"]["lean"].get("registered", {}),
+                                                    f"{t}/x": {"value": value, "root": e["root"]}}}
+    out = {**c, "interior": {**rec, "roots": roots, "registered": [*rec["registered"], e]},
+           "links": [*c["links"], {"template": t, "port": "x", "value": value}],
+           "rows": [*c["rows"], {"template": t, "port": "x", "per": per, "runs": _runs(n, per)}],
+           "verdicts": {**c["verdicts"], "lean": lean}, "fixed": [value],
+           "held": {"program": rec["program"], "window": WINDOW_OPEN, "fixed": []},
+           "ref_reads": {**c["ref_reads"], t: registered}}
+    return _second_with(out, i, header=header, registered=registered)
+
+
+#: The interior window's open root its registered values are bound under.
+WINDOW_OPEN = "5a" * 64
+
+
+def test_round_two_binds_a_registered_values_port_by_its_held_registration(pieces):
+    """Round 2's placing of a header's ports, Lean's the Python's whole: a port a link names to read a value the
+    interior registers is bound, in its template's reference header placed in the run, by the binding that value's
+    tree was committed under, recomputed from the held registration (its Program's digest and its window's open root,
+    `second_stage.registered_binding`) and held to the entry's domain: the honest statement passes, and one bound by
+    the window rule over the reader's own record is refused; the same name and leaves registered by another Program, or by another window of the
+    same Program under another open root, or a held registration under another open root, or none held, is refused
+    (`second-header`); a port its own tree and a registered value both place, or none of the three rules places, is
+    refused by name (`second-place-two`, `second-place-none`); and a wired port whose header carries a registered
+    value's binding is refused (`second-header`)."""
+    pair, triple = SECOND_MIXED.templates
+    sample, drawn = [0, 2], [1, 4, 6, 9]
+    honest = _second_case(SECOND_MIXED, True, sample, drawn)
+    prog = honest["interior"]["program"]
+    reg = _registered_at(honest, triple, "lg", prog, WINDOW_OPEN)
+    other = "6b" * 64
+    wired = _second_case(SECOND_MIXED, True, sample, drawn, wires=[(triple, pair)])
+    wh = wired["statements"][1]["header"]
+    as_registered = RV.domain(prog, "lg", 2, 6, 16, WINDOW_OPEN).binding.hex()
+    i = len(reg["links"]) - 1
+    rh, rec = reg["statements"][1]["header"], reg["interior"]
+    readers = window_binding(prog, rec["partition"], f"{triple}/x", SECOND_SCHEMAS["x"], 6, rec["window"]["run"]).hex()
+    cases = [
+        (reg, []),
+        (_second_with(reg, 1, header={**rh, "frame_v3": {**rh["frame_v3"], "bindings": {
+            **rh["frame_v3"]["bindings"], "x": readers}}}), ["second-header"]),
+        (_registered_at(honest, triple, "lg", "p-other", WINDOW_OPEN), ["second-header"]),
+        (_registered_at(honest, triple, "lg", prog, other), ["second-header"]),
+        ({**reg, "held": {**reg["held"], "window": other}}, ["second-header"]),
+        ({**reg, "held": None}, ["second-header"]),
+        ({**reg, "held": {**reg["held"], "fixed": ["lg"]}}, ["second-header"]),
+        (_registered_at(honest, triple, "lg", prog, WINDOW_OPEN, both=True), ["second-header", "second-place-two"]),
+        ({**reg, "links": reg["links"][:i] + [{**reg["links"][i], "value": "lg-none"}]},
+         ["second-header", "second-read", "second-place-none"]),
+        (_second_with(wired, 1, header={**wh, "frame_v3": {**wh["frame_v3"], "bindings": {
+            **wh["frame_v3"]["bindings"], "x": as_registered}}}), ["second-header"]),
+    ]
+    for case, codes in cases:
+        got = second_statements(copy.deepcopy(case))
+        assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
+        assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
+
+
 def test_round_two_holds_the_boundary_schedule_to_its_replay_blocks(pieces):
     """Round 2's schedule, Lean's the Python's whole, over the two-template interior after a replay sample of two: a
     boundary record that commits a schedule of its four replay blocks (`window.schedule`: runs of positions of its
@@ -8150,8 +8244,8 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
     `out`, each slot the row of its writer's unit its rows name, its writer's first in its cell, and binds its `x` at
     PAIR's `out` (`second_stage.at_run`), which passes, as does a slot reading nothing; read at another instance's or
     another cell's rows, at PAIR's `x`, or not read, it fails ``second-read``; without the wire, or with one naming
-    another writer port, its header fails too (``second-header``: bound at a port the interior doesn't hold it at), as
-    does a wire's for a port no session reads; and wires none derived (null or missing), naming a template of no part as
+    another writer port, its header fails too (``second-header``: bound at a port the interior doesn't hold it at; and
+    without the wire no rule places it, ``second-place-none``), as does a wire's for a port no session reads; and wires none derived (null or missing), naming a template of no part as
     reader or writer, or one whose rows don't place its reader's units, fail ``second-wires``, after ``second-links``
     when the links are none too, and a wire not of strings is refused."""
     pair, triple = SECOND_MIXED.templates
@@ -8177,7 +8271,7 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
          ["second-read", "second-values", "second-reported"]),
         (_second_with(wired, 1, registered=None), ["second-roots", "second-read", "second-values", "second-reported"]),
         ({k: v for k, v in wired.items() if k != "wires"}, ["second-wires"]),
-        ({**wired, "wires": []}, ["second-header", "second-read"]),
+        ({**wired, "wires": []}, ["second-header", "second-read", "second-place-none"]),
         ({**wired, "wires": [{**wire, "wport": "x"}]}, ["second-header", "second-read"]),
         ({**wired, "wires": [wire, {"template": pair, "port": "x", "writer": triple, "wport": "out"}],
           "rows": [*wired["rows"], {"template": pair, "port": "x", "per": 2, "runs": [[0, 3, 0, 0]]}]},

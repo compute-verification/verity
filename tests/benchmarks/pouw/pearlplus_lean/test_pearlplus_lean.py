@@ -137,6 +137,13 @@ def challenger_sample(entropy: int = 7, after: bytes | None = None):
     return draw
 
 
+def pinned_y(monkeypatch, seed: int = 0) -> None:
+    """`proved_pass` commits each call's y under fresh salts (`served_y.retain_y`), and y's roots are in the run's commitment,
+    which keys the sample: seeded salts (`seeded_salts`) fix the sample, so a case that names a tile its draws reach reaches it
+    on every run."""
+    monkeypatch.setattr(T.SY, "fresh_salts", T.seeded_salts(seed))
+
+
 def edit(path: Path, f) -> None:
     man = json.loads(path.read_text())
     f(man)
@@ -227,9 +234,10 @@ def test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_so
     16 credited words flag each block and the rest don't, so no block is inert and its debit is the chain's, 160, over
     its row cap, with or without the term.  On 16 x 1 tiles that column's tile has one credited word, which flags all
     four blocks, so every element of the row is inert and the tile's debit is 672, 160 without the term.  The Lean's
-    verdicts are the Python's on both, under each ``over_cap`` rule."""
+    verdicts are the Python's on both, under each ``over_cap`` rule; y's salts are pinned, so the draws reach that tile."""
     cases = [((16, 16), 16, "A row 11's replayed debit 160 exceeds", "A row 11's replayed debit 160 exceeds"),
              ((16, 1), 64, "the replayed debit 672 exceeds", "the replayed debit 160 exceeds")]
+    pinned_y(monkeypatch)
     paths = []
     for tile, draws, why, _ in cases:
         path = T.proved_pass(tmp_path / f"{tile[0]}x{tile[1]}", H100, key=bytes(32), tile=tile)[0]
@@ -249,7 +257,8 @@ def test_the_forming_term_reads_a_row_some_of_whose_blocks_are_inert(exe, tmp_pa
     of its four atom blocks and not the other three, and no element of the tile is salt-dead.  So 32 of the row's 128
     elements are inert and the tile's debit is 168 (40 for the flagged atom-word, 4 per inert element), 40 without the
     term; reading the three unflagged blocks as the inert ones would make it 424.  The Lean's verdicts are the Python's
-    under each ``over_cap`` rule."""
+    under each ``over_cap`` rule; y's salts are pinned, so the 96 draws reach tile 14."""
+    pinned_y(monkeypatch)
     path = T.proved_pass(tmp_path, H100, key=bytes([4]) * 32, tile=(16, 1))[0]
     for rule in (None, *VR.OVER_INERT_BOUND):
         got = same(exe, [path], 96, over_cap=rule)

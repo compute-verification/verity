@@ -12,8 +12,9 @@ torch's current stream, in the device's primary context:
 * **The trees** are -h3's (the kernel schemes' ``pearl-c`` family): `audit.HM96`, frame-v3-sha512 over hm96-sha512 leaves (64-byte nodes), each leaf
   over a row's SHA-512 row digest and the row's salt.  The kernels derive no salt: each tree's are bytes in its
   ``salts_<tree>`` buffer.  B's are the weights' registration's (``weight_salts``, `pearl_c.weight_row_salts`; a bench's
-  `fresh_weight_salts`), put once a weight; A's are fresh operating-system bytes a call, written before the call's launches
-  or its graph's replay (`host.fresh_into`); the tiles' are fresh at the pass's end (`ends`); y's are fresh and kept
+  `fresh_weight_salts`), put once a weight; A's are the next leaves of the pass's keyed stream, filled on the card before the
+  call's launches or its graph's replay (`host.fresh_into`, under the pass's own key, `_Pass.salts`, drawn fresh at its first
+  fill and dropped at its end); the tiles' are the stream's at the pass's end (`ends`); y's are fresh and kept
   beside its tree (`served_y_device`).  A retained pass keeps every salt beside the rows it salts.
 * **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact; a weight
   in any other format is refused, `_weight_words`) are hashed into B's row tree (phase ``epoch``), whose root must be the
@@ -123,6 +124,7 @@ from verity_torch.pouw.pearl_c.host import (
     _write,  # noqa: F401 - kept importable here, as the tests read it
     _zeros,
     call_keys,  # noqa: F401 - kept importable here, as callers read it
+    fill_lib,
     memmove,
     write_manifest,  # noqa: F401 - kept importable here, as callers read it
 )
@@ -321,6 +323,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         self._side_cache: dict[tuple, frozenset[str]] = {}
         self._launching: Any = None          # the torch stream the current step group launches on (the GEMM's timing events)
         self.const = _constants(self.device)
+        if self.device.type == "cuda" and self.hashing:
+            fill_lib(self.device)
         self.const_keys = _constant_keys(self.const)
         if hasattr(kernel.run, "pd_setup"):   # it syncs, so here rather than at a call's first pipeline, which may be captured
             kernel.run.pd_setup(kernel.dev)
@@ -642,6 +646,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         if at is not None:
             raise ValueError(f"{self.entry}: begin(at={at!r}): {CHOSEN_INDEX}")
         self.join_sides()                   # the last pass's side lanes are done before anything new
+        self.cur.salts.drop()               # a pass replaced without its end keeps no key
         retain = retain or pass_dir(self)
         last, self._eager_from = self._eager_from or self.schedule, None
         self._use(last if schedule is None else schedule_of(schedule, self.scheme, self.kernel))

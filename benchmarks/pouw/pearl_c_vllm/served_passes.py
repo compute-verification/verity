@@ -861,7 +861,7 @@ def uncredited(args: argparse.Namespace) -> int:
 
 
 def tile_files(p, tile: int) -> list[dict]:
-    """The manifest entries the opening of pass ``p``'s tile ``tile`` reads (`verify_run.Opened`'s ``open`` and
+    """The manifest entries the opening of pass ``p``'s tile ``tile`` reads (`opened.Opened`'s ``open`` and
     ``open_y``, the Lean's ``filesOf``): its call's rows and tree, its fixed operand's, the pass's leaves and transcript tree, and
     its call's y where the call commits one."""
     pos, man = p.verifier.refs[tile].matmul, p.man

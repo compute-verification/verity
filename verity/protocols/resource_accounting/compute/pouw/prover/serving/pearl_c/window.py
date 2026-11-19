@@ -25,8 +25,9 @@ them, and its coins, `coins_of`), which ``served_passes.py serve`` and serve-ope
 
 The audited window's registration, chained right after W, registers each call's value as W's (`reuse`): the rows the
 audited circuit's proof blocks make of it, committed as Pearl+ committed them, so its entry is W's, and one-stage's R7
-takes it as an output value of W (records_audit's `tie_of`). The circuit is cut at its linears and reads no B row, so
-W's B rows are no value of it."""
+takes it as an output value of W (records_audit's `tie_of`). At version 2 it registers each weight's B rows as W's too,
+from the pass's weight file: the circuit is cut at its linears, and the credited block over a linear reads its b rows
+from that value."""
 from __future__ import annotations
 
 import json
@@ -295,15 +296,16 @@ def kept_salts(base: Path, spec: Mapping[str, Any], n: int) -> list[bytes]:
 def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
           rows_of: Callable[[str, int, np.ndarray], np.ndarray], rounds: Sequence[int] | None = None,
           dirs: Sequence[str | Path] | None = None) -> dict[str, Committed]:
-    """The calls' values W registers (``w``, the window record of ``manifests`` at ``rounds``, at the version it states
-    and naming the day it names: `record`, `version_of`, `naming_of`; its B rows are no value of the audited circuit), each
-    as the audited circuit's registered
-    value: the rows ``rows_of(name, rows,
-    empty)`` gives (`window_rows.Rows.value`: u16 words, an FP32 word's two low first, every row no proof block makes
-    ``empty``, zero), each under the salt its pass kept for it (`kept_salts`: a call's ``salts`` for A, its y's
-    ``salts`` for y), read from the pass's directory, ``dirs[i]`` for ``manifests[i]``. ValueError unless ``w`` is the
-    record of ``manifests`` and each value's entry is W's: the proof blocks don't make the rows Pearl+ committed, or the
-    salts are another pass's."""
+    """The values W registers (``w``, the window record of ``manifests`` at ``rounds``, at the version it states and naming
+    the day it names: `record`, `version_of`, `naming_of`), each as the audited circuit's registered value. A call's A
+    rows and y are the rows ``rows_of(name, rows, empty)`` gives (`window_rows.Rows.value`: u16 words, an FP32 word's two
+    low first, every row no proof block makes ``empty``, zero), each under the salt its pass kept for it (`kept_salts`: a
+    call's ``salts`` for A, its y's ``salts`` for y). At version 2 each weight's B rows ``pearl-b/<w>`` are its pass's
+    weight file (`kept_rows`, the weight's ``rows``, BF16 widened to FP32) under the weight's ``salts``, in the tree under
+    `audit.weight_binding`'s domain, the value the credited block reads its b rows from; a weight two passes read is
+    taken from the first. Each is read from the pass's directory, ``dirs[i]`` for ``manifests[i]``. ValueError unless
+    ``w`` is the record of ``manifests`` and each value's entry is W's: the proof blocks don't make the rows Pearl+
+    committed, the weight file isn't the weight PoUW committed, or the salts are another pass's."""
     if dict(w) != record(manifests, w.get("previous"), rounds, version_of(w), naming_of(w)):
         raise ValueError("W is not the window record of these passes (`record`), whose calls' values the audited window reads")
     if dirs is None:
@@ -318,19 +320,42 @@ def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
                 e = next(want)
                 n, k = e["leaves"], e["words"]
                 words = np.ascontiguousarray(rows_of(e["value"], n, np.zeros(2 * k, np.uint16)), "<u2").view("<u4")
-                base_value = RV.Registered.commit(man["scheme"], e["value"], words.tolist(), kept_salts(base, spec, n),
-                                                 word_bits=WORD_BITS, schema=G.SCHEMA_SEG)
-                dom = rows_domain(binding, i, n, "sha512")
-                levels = tree_levels(dom, [RV.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base_value.bcs)])
-                got = out[e["value"]] = Committed(**{**{f.name: getattr(base_value, f.name) for f in fields(base_value)},
-                                                     "levels": levels}, call_domain=dom)
-                if got.entry() != e:
-                    raise ValueError(f"{e['value']}: the rows the audited circuit's proof blocks make of it are not the rows "
-                                     f"Pearl+ committed (root {got.root.hex()[:16]}… for W's {e['root'][:16]}…): the model "
-                                     "didn't make them, or the salts are another pass's")
+                out[e["value"]] = _committed(man["scheme"], e, words, kept_salts(base, spec, n),
+                                             rows_domain(binding, i, n, "sha512"),
+                                             "the rows the audited circuit's proof blocks make of it are not the rows Pearl+ "
+                                             "committed", "the model didn't make them")
+        for e in b_entries(man, s) if version_of(w) == VERSION else ():
+            if e["value"] not in out:
+                wid, n = int(e["value"].rsplit("/", 1)[1]), e["leaves"]
+                wt = man["weights"][str(wid)]
+                out[e["value"]] = _committed(man["scheme"], e, kept_rows(base, wt["rows"], n, e["words"]),
+                                             kept_salts(base, wt["salts"], n), rows_domain(weight_binding(wid), -2, n, "sha512"),
+                                             "the rows the pass's weight file holds are not the rows PoUW committed",
+                                             "the file is another install's")
     return out
 
 
+def kept_rows(base: Path, spec: Mapping[str, Any], n: int, k: int) -> np.ndarray:
+    """The ``n`` rows of ``k`` BF16 words a pass kept in the file at manifest entry ``spec`` under the pass's directory
+    ``base``, each word widened to the FP32 word PoUW commits. ValueError for a file of another size."""
+    data = (Path(base) / spec["path"]).read_bytes()
+    if len(data) != spec["bytes"] or len(data) != 2 * n * k:
+        raise ValueError(f"{spec['path']}: {len(data)} bytes, and {n} rows of {k} BF16 words are {2 * n * k}")
+    return np.frombuffer(data, "<u2").astype("<u4").reshape(n, k) << 16
+
+
+def _committed(scheme: str, e: Mapping[str, Any], words: np.ndarray, salts: list[bytes], dom: CommitmentDomain,
+               differs: str, because: str) -> Committed:
+    base_value = RV.Registered.commit(scheme, e["value"], words.tolist(), salts, word_bits=WORD_BITS, schema=G.SCHEMA_SEG)
+    levels = tree_levels(dom, [RV.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base_value.bcs)])
+    got = Committed(**{**{f.name: getattr(base_value, f.name) for f in fields(base_value)}, "levels": levels},
+                    call_domain=dom)
+    if got.entry() != e:
+        raise ValueError(f"{e['value']}: {differs} (root {got.root.hex()[:16]}… for W's {e['root'][:16]}…): {because}, "
+                         "or the salts are another pass's")
+    return got
+
+
 __all__ = ["KEEP", "NAMING", "SERVED_SCHEMA", "UNKNOWN_VERSION", "VERSION", "VERSIONS", "WORD_BITS", "Committed", "a_value",
-           "b_entries", "b_value", "coins_of", "entries", "kept_salts", "macs", "naming_of", "record", "reuse", "served_passes", "version_of",
+           "b_entries", "b_value", "coins_of", "entries", "kept_rows", "kept_salts", "macs", "naming_of", "record", "reuse", "served_passes", "version_of",
            "write", "y_value"]

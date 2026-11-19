@@ -70,7 +70,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     window = window_circuit(reg, S.compile_steps(reg, *S._session(*FULL)), CLASS, GRAIN)
     add = "RMSNormFusedCudaAdd_v2{N=64,C=64,AT=0,R=8}"
     assert {t: k for fn, k in window.templates if (t := _label(fn)).startswith("RMSNormFused")} == {
-        "RMSNormFusedCuda_v2{N=64}": 20, add: 20, "RMSNormFusedCudaTail_v1{N=64}": 20}
+        "RMSNormFusedCuda_v2{N=64}": 14, add: 14, "RMSNormFusedCudaTail_v1{N=64}": 14}
     assert {t: c for t, c in window.cuts.items() if t.startswith("RMSNormFused")} == {NORM: {"x": 4}, add: {"x": 8}}
     circuit = _lowered(reg)
     n = {_label(fn): k for fn, k in circuit.templates}

@@ -118,7 +118,6 @@ import dataclasses
 import hashlib
 import json
 import math
-import mmap
 import os
 import sys
 import multiprocessing
@@ -133,7 +132,6 @@ from verity.commitments import domains as DM
 from verity.commitments import Commitment, Opening, VerificationLimits, verify_opening
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
-    HM96_SALT,
     ROW_SCHEMA,
     Epoch,
     activation_binding,
@@ -160,13 +158,14 @@ from verity.protocols.resource_accounting.compute.pouw.prover import schemes as 
 from verity.protocols.resource_accounting.compute.pouw import scheme as PP
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.opened import Files, Opened, f32_row, opening, pow2
 from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
 import fast_tile as FT
 import clear_work as CW
-from clear_audit import TileOpening, Transcript, Verifier
+from clear_audit import Transcript, Verifier
 
 settings = of(__file__)
 DRAWS = 3
@@ -185,84 +184,6 @@ DELTA = Fraction(1, 100)
 REJECT, UNCREDITED = "reject", "uncredited"
 OVER_INERT_BOUND = (REJECT, UNCREDITED)
 LIMITS = VerificationLimits()
-
-
-def pow2(n: int) -> int:
-    return 1 << max(n - 1, 0).bit_length()
-
-
-def opening(tree: bytes, count: int, pos: int, value: bytes, nb: int = 32) -> Opening:
-    """Position `pos`'s path in a tree laid out as the device writes it: level 0 padded to a power of two, then each level
-    above it, `nb` bytes a node (64 under hm96-sha512)."""
-    path, off, width, cur = [], 0, pow2(count), pos
-    while width > 1:
-        s = off + (cur ^ 1)
-        path.append(bytes(tree[nb * s:nb * s + nb]))
-        off, width, cur = off + width, width // 2, cur >> 1
-    return Opening(pos, value, tuple(path))
-
-
-class Files:
-    """The pass's files, each read once (large ones memory-mapped) and held to its size and, where the manifest has one, its
-    SHA-256."""
-
-    def __init__(self, base: Path):
-        self.base, self.cache = base, {}
-
-    def __call__(self, spec: dict):
-        key = spec["path"]
-        if key not in self.cache:
-            with open(self.base / key, "rb") as fh:
-                data = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) if spec["bytes"] > 1 << 24 else fh.read()
-            if len(data) != spec["bytes"]:
-                raise ValueError(f"{key}: {len(data)} bytes; the manifest says {spec['bytes']}")
-            if "sha256" in spec and hashlib.sha256(data).hexdigest() != spec["sha256"]:
-                raise ValueError(f"{key}: its SHA-256 is not the manifest's")
-            self.cache[key] = data
-        return self.cache[key]
-
-
-def f32_row(data, k: int, i: int) -> bytes:
-    """Row i of a BF16 row file as the committed FP32 words (BF16 widened, exact)."""
-    return (np.frombuffer(data[2 * k * i:2 * k * (i + 1)], "<u2").astype("<u4") << 16).tobytes()
-
-
-class Opened:
-    """The prover's side of the audit from the pass's files: `open`, as `clear_audit.Prover` has it."""
-
-    def __init__(self, man: dict, files: Files, refs):
-        self.man, self.files, self.refs = man, files, refs
-        self.hm96 = pouw_schemes.get(man["scheme"]).commitment_hash == HM96
-        self.nb = 64 if self.hm96 else 32
-
-    def _salted(self, value: bytes, spec: dict | None, i: int) -> bytes:
-        """``value`` followed by leaf ``i``'s salt from the kept salts at manifest entry ``spec``."""
-        return value + bytes(self.files(spec)[HM96_SALT * i:HM96_SALT * (i + 1)]) if self.hm96 else value
-
-    def open(self, epoch: Epoch, tile_id: int) -> TileOpening:
-        ref, nb, sv = self.refs[tile_id], self.nb, self._salted
-        u, rec = epoch.workload.matmuls[ref.matmul], self.man["matmuls"][ref.matmul]
-        wt = self.man["weights"][str(u.weight)]
-        a_rows, a_tree = self.files(rec["rows"]), self.files(rec["tree"])
-        b_rows, b_tree = self.files(wt["rows"]), self.files(wt["tree"])
-        c = self.man["commitment"]
-        leaves = self.files(self.man["leaves"])
-        a_salts, b_salts, t_salts = (rec["salts"], wt["salts"], self.man["salts_t"]) if self.hm96 else (None, None, None)
-        return TileOpening(ref, tuple(opening(a_tree, u.shape.m, i, sv(f32_row(a_rows, u.shape.k, i), a_salts, i), nb)
-                                      for i in ref.tile.rows),
-                           tuple(opening(b_tree, u.shape.n, j, sv(f32_row(b_rows, u.shape.k, j), b_salts, j), nb)
-                                 for j in ref.tile.cols),
-                           opening(self.files(self.man["tree_t"]), c["count"], tile_id,
-                                   sv(bytes(leaves[nb * tile_id:nb * tile_id + nb]), t_salts, tile_id), nb))
-
-    def open_y(self, epoch: Epoch, tile_id: int) -> tuple[Opening, ...]:
-        """The tile's real rows of its call's committed y (`served_y`; filler rows aren't served)."""
-        ref = self.refs[tile_id]
-        u, rec = epoch.workload.matmuls[ref.matmul], self.man["matmuls"][ref.matmul]
-        rows, tree, real = self.files(rec["y"]["rows"]), self.files(rec["y"]["tree"]), rec["real_rows"]
-        salts = rec["y"]["salts"] if self.hm96 else None
-        return tuple(opening(tree, real, i, self._salted(f32_row(rows, u.shape.n, i), salts, i), self.nb)
-                     for i in ref.tile.rows if i < real)
 
 
 class Refused(ValueError):

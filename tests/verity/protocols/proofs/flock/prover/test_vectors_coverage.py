@@ -24,18 +24,10 @@ VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proof
 #: forms no entry of vectors.json exercises yet; an entry leaves this list in the change that adds its vector
 UNCOVERED = frozenset({
     "statement verity/flock-circuit@eb90718f",
-    "statement verity/flock-circuit@e51e2b86",
     "statement verity/flock-circuit@967b8d06",
     "statement verity/flock-circuit/types@210d32e1",
     "statement verity/flock-circuit/types@210d32e1+seed-injection",
-    "statement verity/flock-circuit@f5df3bbc",
-    "statement verity/flock-circuit/types@f5df3bbc",
-    "statement verity/flock-circuit@b3727bd9",
-    "statement verity/flock-circuit/types@b3727bd9",
-    "statement verity/flock-circuit/types@b3727bd9+seed-injection",
     "statement verity/flock-circuit@cec3e347",
-    "statement verity/flock-circuit/types@cec3e347",
-    "statement verity/flock-circuit/types@cec3e347+seed-injection",
     "statement verity/flock-circuit+seed-injection",
     "statement verity/flock-circuit/types",
     "statement verity/flock-circuit/types+seed-injection",
