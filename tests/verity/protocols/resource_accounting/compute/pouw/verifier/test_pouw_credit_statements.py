@@ -1,17 +1,18 @@
-"""`credit.window` and `credit.period_credit` on a window's statements, each call's proof files: credit runs the
-verifier itself (`one_stage.proofs.verify`) on the circuit file the period's open committed for the call's K,
-with the partition object and the ``--registered`` file it builds from the committed descriptor and the window's entries,
-and credits nothing from a verdict the evidence carries.
+"""`credit.window` and `credit.period_credit` on a window's statements, each one drawn unit's proof files: credit runs
+the verifier itself (`one_stage.proofs.verify`) against the committed descriptor, with the partition object (one proof
+block a unit), the draw of the window's sampled units and the ``--registered`` file it builds from the committed
+descriptor and the window's entries, and credits nothing from a verdict the evidence carries.
 
 The verifier here is a stand-in `verity-verify-proof` (`FAKE`), so the test runs without a Flock proof of an H1 window: it
 answers as the Lean verifier does, one ``VERDICT`` line a session, and accepts a session only when its proof is the
-SHA-512 of every file it was handed (the circuit file, the public file, the program, the partition object and the
-``--registered`` file, those two as the JSON they hold, whose key order the verifier doesn't read) and the units its
-session sampled. `prove` makes those proofs with the files a prover would hold,
+SHA-512 of every file it was handed (the circuit file `proofs.verify` derives for the drawn block, the public file, the
+program, the partition object and the ``--registered`` file, those two as the JSON they hold, whose key order the
+verifier doesn't read) and the units its session sampled. The derived circuit is the real C_S (`one_circuit.restrict`),
+its Lean lowering stood in by C_S itself (`stand_in`). `prove` makes those proofs with the files a prover would hold,
 the ``--registered`` file `h1window.table_reads_file`'s form, so a window is credited only when credit handed the
-verifier the files the prover proved against. `spot/tests/test_proofs.py` holds the real verifier to
-rejecting tampered proof bytes and to the circuit file's digest; `test_pouw_credit.py` holds `credit.registered_file`
-to `h1window.table_reads_file` byte for byte.
+verifier the files the prover proved against. `spot/tests/test_proofs.py` holds the real verifier to rejecting tampered
+proof bytes and to the circuit it derives; `test_pouw_credit.py` holds `credit.registered_file` to
+`h1window.table_reads_file` byte for byte.
 
 The verdict acted on is the Lean's (`verifier.of_record`): `Credit.executionPhase`'s and `Credit.periodCredit`'s on the outcomes
 the statement runs gave, and the challenger's salt check's (`core_check.salt_of_record`, on the salt difftest's cases),
@@ -34,8 +35,11 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import credit as
 from verity.protocols.resource_accounting.compute.pouw.verifier import live_reads as LR
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.commitments import registered_value as RV
+from verity.circuits import codec
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import live as LV
 
 PKG = Path(__file__).resolve().parent / "lean" / "check"
 for _name in ("pouw_rounds_cases", "pouw_credit_cases"):
@@ -59,11 +63,19 @@ reg = json.loads(files[4])
 for s in sessions:
     rec = json.loads((Path(s) / "session.json").read_text())
     ok = rec["proof"] == hashlib.sha512(bound + json.dumps(rec["unit_draw"]["units"]).encode()).hexdigest()
-    print("VERDICT " + json.dumps({{"session": s, "accepted": ok, "why": "" if ok else "the proof does not verify",
+    print("VERDICT " + json.dumps({{"session": s, "zk": True, "accepted": ok,
+                                   "why": "" if ok else "the proof does not verify",
                                    "program_sha512": hashlib.sha512(files[2]).hexdigest(),
                                    "registered": {{p: {{"value": e["value"], "root": e["root"]}}
                                                   for p, e in reg["ports"].items()}} if ok else {{}}}}))
 """
+
+
+def stand_in(monkeypatch, exe: Path) -> None:
+    """`proofs.verify` on the stand-in verifier `exe` (`FAKE`), the Lean lowering of each drawn block's C_S
+    (`one_circuit.lower`) stood in by C_S itself."""
+    monkeypatch.setattr(PF, "executable", lambda: exe)
+    monkeypatch.setattr(OC, "lower", lambda c_s, _partition, _exe, *_a: c_s)
 
 
 @pytest.fixture
@@ -71,8 +83,15 @@ def verifier(tmp_path, monkeypatch) -> Path:
     exe = tmp_path / "verity-verify-proof"
     exe.write_text(FAKE)
     exe.chmod(0o755)
-    monkeypatch.setattr(PF, "executable", lambda: exe)
+    stand_in(monkeypatch, exe)
     return exe
+
+
+def derived(raw: bytes, partition: dict, public: Path) -> bytes:
+    """The circuit `proofs.verify` hands the verifier for the statement whose public file is `public`: C (`raw`)
+    restricted to the one-unit block the file names (`one_circuit.restrict`), its lowering stood in (`stand_in`)."""
+    u = json.loads(public.read_bytes().split(b"\n")[0])["units"]["indices"][0]
+    return OC.restrict(raw, partition, [(u, u + 1)])
 
 
 def circuit(k: int) -> bytes:
@@ -116,16 +135,31 @@ def live_reads(d: dict, s: int, m: int | None = None) -> dict:
                          positions=False)
 
 
+def live_raw(d: dict) -> bytes:
+    """The window's compiled live Program (`live.program_v2` at the T, S and PREFIX `credit.live_of` reads from the
+    cases' stand-in, `pouw_credit_cases.live_program`, which has no body `proofs.verify` derives a round's circuit
+    from), its descriptor's bytes."""
+    got, why = Cr.live_of(bytes.fromhex(d["live"]["descriptor"]))
+    assert why is None, why
+    prog = LV.program_v2(got["T"], got["S"], got["prefix"])
+    return codec.canonical_json({k: v for k, v in codec.encode_program(prog).items() if k != "annotations"})
+
+
+def live_partition(raw: bytes) -> dict:
+    """The live descriptor `raw`'s partition object credit verifies under: every instance of its template one unit, each
+    round its own proof block."""
+    return {"format": Cr.PARTITION_FORMAT, "program": hashlib.sha512(raw).hexdigest(),
+            "query": {"name": Cr.QUERY[0], "version": Cr.QUERY[1], "params": {"templates": [Cr.live_of(raw)[0]["unit"]]}},
+            "blocks": [[[s, s + 1] for s in range(Cr.live_of(raw)[0]["S"])]]}
+
+
 def prove_live(d: dict, to: Path, m: dict[int, int] | None = None) -> dict:
     """The window's live evidence as an honest prover delivers it (`credit.LIVE_STATEMENTS`): its live descriptor and
     each round's statement, the live template's circuit file, a public file whose one instance is unit s, and one session
-    sampling it, its proof bound to the files the verifier is handed (round s's ``--registered`` file at the manifest's
-    m_s, or ``m[s]``)."""
-    desc = d["live"]["descriptor"]
-    raw = bytes.fromhex(desc)
-    unit = Cr.live_of(raw)[0]["unit"]
-    partition = {"format": Cr.PARTITION_FORMAT, "program": hashlib.sha512(raw).hexdigest(),
-                 "query": {"name": Cr.QUERY[0], "version": Cr.QUERY[1], "params": {"templates": [unit]}}}
+    sampling it, its proof bound to the files the verifier is handed (the derived circuit of block s and round s's
+    ``--registered`` file at the manifest's m_s, or ``m[s]``)."""
+    raw = live_raw(d)
+    desc, partition = raw.hex(), live_partition(raw)
     out = []
     for s in range(len(d["rounds"])):
         base = to / f"live-{s}"
@@ -133,7 +167,7 @@ def prove_live(d: dict, to: Path, m: dict[int, int] | None = None) -> dict:
         (base / "circuit.txt").write_bytes(LIVE_CIRCUIT)
         (base / "pub.bin").write_bytes(json.dumps({"units": {"indices": [s]}}).encode() + b"\n")
         reg = live_reads(d, s, (m or {}).get(s))
-        _bind(base, [LIVE_CIRCUIT, base.joinpath("pub.bin").read_bytes(), raw,
+        _bind(base, [derived(raw, partition, base / "pub.bin"), base.joinpath("pub.bin").read_bytes(), raw,
                      json.dumps(partition, sort_keys=True).encode(), json.dumps(reg, sort_keys=True).encode()], [0])
         out.append({"round": s, "circuit": str(base / "circuit.txt"), "public": str(base / "pub.bin"),
                     "sessions": [str(base / "session")]})
@@ -152,10 +186,10 @@ def _units(d: dict, k: int) -> list[int]:
 
 
 def prove(d: dict, k: int, to: Path) -> list[dict]:
-    """The window's statements as an honest prover delivers them: for each call with a sampled proof block, its K's circuit file,
-    a public file whose instances are the call's sampled proof blocks, and one session sampling all of them, its proof bound to
-    the files the verifier is handed (the call's ``--registered`` file as `h1window.table_reads_file` writes it, at the
-    roots the window registers)."""
+    """The window's statements as an honest prover delivers them: for each sampled unit, of its call, its K's circuit
+    file, a public file whose one instance is the unit, and one session sampling it, its proof bound to the files the
+    verifier is handed (the unit's derived circuit and its call's ``--registered`` file as `h1window.table_reads_file`
+    writes it, at the roots the window registers)."""
     raw, lay = bytes.fromhex(d["descriptor"]), _layout(d)
     program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
     roots = {}
@@ -167,23 +201,20 @@ def prove(d: dict, k: int, to: Path) -> list[dict]:
         c = next(c for c in range(len(sizes)) if sum(sizes[:c]) <= u < sum(sizes[:c + 1]))
         by_call.setdefault(c, []).append(u)
     ks = {name: kk for name, kk, _n in lay["linears"]}
+    partition = Cr.partition_of(program, shape, lay)
     out = []
     for c, units in sorted(by_call.items()):
-        base = to / f"call-{c}"
-        (base / "session").mkdir(parents=True)
-        (base / "circuit.txt").write_bytes(circuit(ks[lay["calls"][c][0]]))
-        (base / "pub.bin").write_bytes(json.dumps({"units": {"indices": units}}).encode() + b"\n")
         reg, why = Cr.registered_file(program, lay, shape, c, roots, d["window"]["root"], len(d["rounds"]), d["salt"])
         assert why is None, why
-        files = [base.joinpath("circuit.txt").read_bytes(), base.joinpath("pub.bin").read_bytes(), raw,
-                 json.dumps(Cr.partition_of(program, shape), sort_keys=True).encode(),
-                 json.dumps(reg, sort_keys=True).encode()]
-        bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()
-        drew = list(range(len(units)))
-        (base / "session" / "session.json").write_text(json.dumps(
-            {"unit_draw": {"units": drew}, "proof": hashlib.sha512(bound + json.dumps(drew).encode()).hexdigest()}))
-        out.append({"call": c, "circuit": str(base / "circuit.txt"), "public": str(base / "pub.bin"),
-                    "sessions": [str(base / "session")]})
+        for u in units:
+            base = to / f"unit-{u}"
+            (base / "session").mkdir(parents=True)
+            (base / "circuit.txt").write_bytes(circuit(ks[lay["calls"][c][0]]))
+            (base / "pub.bin").write_bytes(json.dumps({"units": {"indices": [u]}}).encode() + b"\n")
+            _bind(base, [derived(raw, partition, base / "pub.bin"), base.joinpath("pub.bin").read_bytes(), raw,
+                         json.dumps(partition, sort_keys=True).encode(), json.dumps(reg, sort_keys=True).encode()], [0])
+            out.append({"call": c, "circuit": str(base / "circuit.txt"), "public": str(base / "pub.bin"),
+                        "sessions": [str(base / "session")]})
     return out
 
 
@@ -245,28 +276,25 @@ def test_tampered_proof_files_fail_the_window(seed, part, tmp_path, verifier):
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_a_circuit_file_other_than_the_committed_one_is_refused_before_the_verifier_runs(seed, tmp_path, verifier,
-                                                                                          monkeypatch):
+def test_a_k_with_no_committed_circuit_file_is_refused_before_the_verifier_runs(seed, tmp_path, verifier, monkeypatch):
     d, statements = window(seed, tmp_path)
     files = files_of(_layout(d))
     k = next(iter(files))
     monkeypatch.setattr(PF, "executable", lambda: (_ for _ in ()).throw(AssertionError("the verifier ran")))
-    for other in ({**files, k: "ab" * 64}, {x: v for x, v in files.items() if x != k}):
-        got, refused = credit(d, statements, other)
-        assert got is None and refused[0] == "circuit", refused
-        assert ("is not the one the auditor committed" in refused[1] if k in other
-                else refused[1] == Cr.no_statement_files(k[1:]))
+    assert credit(d, statements, {x: v for x, v in files.items() if x != k}) == (
+        None, ("circuit", Cr.no_statement_files(k[1:])))
     assert credit(d, statements, {k: "zz"}) == (None, ("circuit", Cr.FILES_FORM))
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_statements_the_sample_did_not_ask_for_are_refused(seed, tmp_path, verifier):
-    """A call proved twice (a retry), a statement of a call no sampled proof block is in, a statement whose session proved a unit
-    of another call, and a sampled call with no statement: each refuses the window."""
+    """A unit proved twice (a retry), a statement of a call no sampled proof block is in, a sampled unit with no
+    statement, and a statement of a call the window hasn't: each refuses the window."""
     d, statements = window(seed, tmp_path)
+    u = json.loads(Path(statements[0]["public"]).read_bytes().split(b"\n")[0])["units"]["indices"][0]
     assert credit(d, statements + [statements[0]])[1] == (
-        "outcome", (f"call {statements[0]['call']} has two statements: a call's drawn units are proved in one "
-                    "statement and verified once, and a retry never reproves them"))
+        "outcome", (f"unit {u} has two proof outcomes: a drawn unit is proved and verified once, and a retry never "
+                    "reproves it"))
     lay = _layout(d)
     idle = [c for c in range(len(lay["calls"])) if c not in {s["call"] for s in statements}]
     if idle:
@@ -279,33 +307,36 @@ def test_statements_the_sample_did_not_ask_for_are_refused(seed, tmp_path, verif
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_session_proving_another_calls_unit_is_refused(seed, tmp_path, verifier):
+    """A statement of call c whose public file names a unit of another call: an undrawn one is refused by the verifier
+    (``undrawn``), and a drawn one, proved against that unit's circuit and call c's ``--registered`` file, is refused by
+    credit (``proof``: a call's statement proves its own call's units)."""
     d, statements = window(seed, tmp_path)
     s = statements[0]
     lay = _layout(d)
     sizes = [size for size, _w in Cr.call_work(lay)]
+    lo, hi = sum(sizes[:s["call"]]), sum(sizes[:s["call"] + 1])
+    drawn = _units(d, d["k"])
     pub = Path(s["public"])
-    indices = json.loads(pub.read_text())["units"]["indices"]
-    other = sum(sizes[:s["call"] + 1]) % sum(sizes)
-    pub.write_bytes(json.dumps({"units": {"indices": [other, *indices[1:]]}}).encode() + b"\n")
-    raw = bytes.fromhex(d["descriptor"])
-    program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
-    roots = {}
-    for e in d["entries"]:
-        roots.setdefault(e["value"], []).append(e["root"])
-    reg, _ = Cr.registered_file(program, lay, shape, s["call"], roots, d["window"]["root"],
-                                len(d["rounds"]), d["salt"])
-    files = [Path(s["circuit"]).read_bytes(), pub.read_bytes(), raw,
-             json.dumps(Cr.partition_of(program, shape), sort_keys=True).encode(),
-             json.dumps(reg, sort_keys=True).encode()]
-    bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()
-    p = Path(s["sessions"][0]) / "session.json"
-    rec = json.loads(p.read_text())
-    rec["proof"] = hashlib.sha512(bound + json.dumps(rec["unit_draw"]["units"]).encode()).hexdigest()
-    p.write_text(json.dumps(rec))
+    undrawn = next((u for u in range(sum(sizes)) if u not in drawn), None)
+    if undrawn is not None:
+        pub.write_bytes(json.dumps({"units": {"indices": [undrawn]}}).encode() + b"\n")
+        got, refused = credit(d, statements)
+        assert got is None and refused[0] == "undrawn" and refused[1].startswith(f"call {s['call']}'s statement: "), \
+            refused
+    other = next((u for u in drawn if not lo <= u < hi), None)
+    if other is None:
+        return
+    pub.write_bytes(json.dumps({"units": {"indices": [other]}}).encode() + b"\n")
+    _rebind(d, s, _files(d, s)[3])
     got, refused = credit(d, statements)
     assert got is None and refused == ("proof", (f"call {s['call']}'s session {s['sessions'][0]} proved unit {other}, "
                                                  f"which is no unit of call {s['call']}: a call's statement proves its "
                                                  "own call's units"))
+
+
+def _firsts(statements: list[dict]) -> list[dict]:
+    """Each call's first statement: a stand-in answering for every run on a call's ``--registered`` file refuses it."""
+    return [s for i, s in enumerate(statements) if i == 0 or statements[i - 1]["call"] != s["call"]]
 
 
 def _files(d: dict, s: dict) -> tuple[str, dict, dict, dict]:
@@ -335,9 +366,9 @@ def _rebind(d: dict, s: dict, reg: dict) -> None:
     """Statement ``s``'s session reproved against ``reg`` in place of the file credit builds."""
     raw = bytes.fromhex(d["descriptor"])
     program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
-    files = [Path(s["circuit"]).read_bytes(), Path(s["public"]).read_bytes(), raw,
-             json.dumps(Cr.partition_of(program, shape), sort_keys=True).encode(),
-             json.dumps(reg, sort_keys=True).encode()]
+    partition = Cr.partition_of(program, shape, _layout(d))
+    files = [derived(raw, partition, Path(s["public"])), Path(s["public"]).read_bytes(), raw,
+             json.dumps(partition, sort_keys=True).encode(), json.dumps(reg, sort_keys=True).encode()]
     bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()
     p = Path(s["sessions"][0]) / "session.json"
     rec = json.loads(p.read_text())
@@ -439,7 +470,7 @@ def test_a_session_that_opened_another_public_table_root_is_refused(seed, tmp_pa
     (another call's roots, or made up) refuses the window (``registration``): no entry registers that table, so
     `_registration` holds it only through `_verified`."""
     d, statements = window(seed, tmp_path)
-    s = random.Random(seed).choice(statements)
+    s = random.Random(seed).choice(_firsts(statements))
     _program, _lay, _shape, reg = _files(d, s)
     pub = reg["ports"][Cr.PUB_PORT]
 
@@ -502,7 +533,7 @@ def test_a_session_that_opened_another_ok_root_is_refused(seed, opened, tmp_path
     at another value, or not at all refuses the window (``registration``): no entry registers them, so `_registration`
     holds them only through `_verified`."""
     d, statements = window(seed, tmp_path)
-    s = random.Random(seed).choice(statements)
+    s = random.Random(seed).choice(_firsts(statements))
     _program, _lay, _shape, reg = _files(d, s)
     ok = reg["ports"][Cr.OK_PORT]
 
@@ -532,6 +563,7 @@ def test_a_verifier_that_cannot_run_leaves_the_window_refused(tmp_path, monkeypa
     def broken():
         raise PF.LeanError("lake build verity-verify-proof failed")
 
+    stand_in(monkeypatch, tmp_path / "verity-verify-proof")
     monkeypatch.setattr(PF, "executable", broken)
     got, refused = credit(d, statements)
     assert got is None and refused[0] == "proof" and "could not be verified, so the window stays refused" in refused[1]
@@ -590,9 +622,10 @@ def test_a_live_statement_proved_at_another_m_is_rejected(seed, tmp_path, verifi
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_live_evidence_carrying_outcomes_or_no_committed_file_is_refused(seed, tmp_path, verifier, monkeypatch):
-    """The live evidence carries each round's proof files, never verdicts (`credit.LIVE_STATEMENTS`), on the circuit
-    file the period's open committed for the live template (``circuit_files.live``); a round proved twice or past the
-    window's rounds, or a session that proved another unit than its round's, refuses the window."""
+    """The live evidence carries each round's proof files, never verdicts (`credit.LIVE_STATEMENTS`), its circuit file
+    committed in the period's open for the live template (``circuit_files.live``); a round proved twice or past the
+    window's rounds, a statement of no round's unit (``undrawn``), or a session that proved another round's unit than
+    its own, refuses the window."""
     d, statements = window(seed, tmp_path)
     outcomes = cases.window_instance(random.Random(f"statements/{seed}"), "honest")["live"]
     assert credit({**d, "live": outcomes}, statements) == (None, ("live", Cr.LIVE_STATEMENTS_FORM))
@@ -607,15 +640,17 @@ def test_live_evidence_carrying_outcomes_or_no_committed_file_is_refused(seed, t
     assert got is None and refused == ("live", refused[1]) and "round 0's live@0 has no proof outcome" in refused[1]
     pub = Path(live[0]["public"])
     pub.write_bytes(json.dumps({"units": {"indices": [steps]}}).encode() + b"\n")
-    reg = live_reads(d, 0)
-    raw = bytes.fromhex(d["live"]["descriptor"])
-    partition = {"format": Cr.PARTITION_FORMAT, "program": hashlib.sha512(raw).hexdigest(),
-                 "query": {"name": Cr.QUERY[0], "version": Cr.QUERY[1],
-                           "params": {"templates": [Cr.live_of(raw)[0]["unit"]]}}}
-    _bind(pub.parent, [LIVE_CIRCUIT, pub.read_bytes(), raw, json.dumps(partition, sort_keys=True).encode(),
+    got, refused = credit(d, statements)
+    assert got is None and refused[0] == "undrawn" and refused[1].startswith("round 0's live@0: "), refused
+    if steps < 2:
+        return
+    pub.write_bytes(json.dumps({"units": {"indices": [1]}}).encode() + b"\n")
+    reg, raw = live_reads(d, 0), bytes.fromhex(d["live"]["descriptor"])
+    partition = live_partition(raw)
+    _bind(pub.parent, [derived(raw, partition, pub), pub.read_bytes(), raw, json.dumps(partition, sort_keys=True).encode(),
                        json.dumps(reg, sort_keys=True).encode()], [0])
     got, refused = credit(d, statements)
-    assert got is None and refused[0] == "live" and f"proved units [{steps}], not unit 0" in refused[1], refused
+    assert got is None and refused[0] == "live" and "proved units [1], not unit 0" in refused[1], refused
 
 
 @pytest.mark.parametrize("seed", SEEDS)
