@@ -114,12 +114,12 @@ def committer_args(opts: Any) -> SimpleNamespace:
 
 
 def window_class_of(opts: Any) -> Any:
-    """The window class ``opts.window_class`` (``S,P,O``) declares, a `window_class.WindowClass`; `ValueError` when it declares none."""
+    """The window class ``opts.window_class`` (``S,P,O[,LANES,EVERY]``) declares, a `window_class.WindowClass`; `ValueError` when it declares none."""
     from verity_vllm.program.predict.window_class import WindowClass
 
     parts = str(opts.window_class or "").split(",")
-    if len(parts) != 3 or not all(p.strip().isdecimal() for p in parts):
-        raise ValueError(f"--window-class {opts.window_class!r} is not S,P,O")
+    if not 3 <= len(parts) <= 5 or not all(p.strip().isdecimal() for p in parts):
+        raise ValueError(f"--window-class {opts.window_class!r} is not S,P,O[,LANES,EVERY]")
     return WindowClass(*(int(p) for p in parts))
 
 

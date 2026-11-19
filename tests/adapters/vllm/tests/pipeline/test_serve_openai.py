@@ -281,7 +281,7 @@ def test_the_served_commit_is_rows_sha512_alone(tmp_path):
     bare = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), "--row-build", str(man)],
                      environ={})
     assert "sizes the Commit's arena from the window class the application declares: pass --window-class S,P,O" in refusal(bare)
-    assert "is not S,P,O" in refusal(parse("--row-build", str(man), "--window-class", "4,27"))
+    assert "is not S,P,O[,LANES,EVERY]" in refusal(parse("--row-build", str(man), "--window-class", "4,27"))
     assert refusal(parse("--row-build", str(man), "--window-class", "4,27,2")) == (
         "--window-class 4,27,2 bounds a step at 4 sequences of 29 positions, and the engine admits 8 of 512: pass "
         "--max-num-seqs 4 --max-model-len 29")
