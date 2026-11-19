@@ -3023,10 +3023,10 @@ def test_an_untied_pearlplus_piece_is_never_pouws_verdict_of_record(tmp_path, mo
 
 @pytest.mark.parametrize("why", ["undecided: no Lean executable present", None, ""])
 def test_an_undecided_development_piece_is_missing_with_its_own_why_or_an_error_naming_it(tmp_path, why):
-    """A development piece whose check didn't decide (`UNDECIDED`) is no reject: its row is missing with its document
+    """A development piece whose check didn't decide (`UNDECIDED_VERDICT`) is no reject: its row is missing with its document
     and the document's own why, which the record carries; one that says no why is an error naming its document."""
     (d := tmp_path / "pieces" / "pous").mkdir(parents=True)
-    doc = {"verdict": S.UNDECIDED, "reasons": ["the Lean's replay did not run"], **({} if why is None else {"why": why})}
+    doc = {"verdict": S.UNDECIDED_VERDICT, "reasons": ["the Lean's replay did not run"], **({} if why is None else {"why": why})}
     (d / S.DEVELOPMENT).write_text(json.dumps(doc))
     row = S.piece_row("space", tmp_path / "pieces")
     if why:

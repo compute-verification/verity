@@ -319,7 +319,7 @@ PEARLPLUS_WHY_TIED_IN_PROCESS = f"{_PEARLPLUS_TIED}; {_IN_PROCESS_WHY}"
 #: the Pearl+ piece's verdict where its epoch's coins are an in-process challenger's and nothing failed
 UNCLAIMED = "unclaimed"
 #: a development piece's verdict where its check didn't decide (no Lean ran it): its row is missing with the document's why
-UNDECIDED = "undecided"
+UNDECIDED_VERDICT = "undecided"
 #: the replay's samples where verify ran without the gate (`verify_run.node_draw`)
 PEARLPLUS_NODE_SAMPLES = ("the Lean verifier's IO.getRandomBytes in verify_run.py on the serving node, one source for the "
                         "run, taken once every pass's roots are read and recorded in the passes' coin.json before any "
@@ -2319,7 +2319,7 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
     """A subprotocol's runner row from its piece's answer; Pearl+'s accepted development piece is PoUW's verdict of record
     where `pearlplus_of_record` says so (`spot`, `key_sha512` and `lane` what it reads), its row that answer's
     with its document as ``piece``, else ``missing`` with its document, its ``why`` `DEV_VERDICT` and the first condition
-    of record it fails; an `UNDECIDED` development piece's is ``missing`` with its document and the document's own ``why``
+    of record it fails; an `UNDECIDED_VERDICT` development piece's is ``missing`` with its document and the document's own ``why``
     (its ``error`` naming the document where it gives none); any other development piece's is ``missing`` with its
     document when it accepts or claims no verdict (`UNCLAIMED`; it credits nothing, for the document's ``why``, else
     `DEV_WHY`), else ``reject``; a piece that
@@ -2339,10 +2339,10 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
             if answer is not None:
                 return {**row_of(owner, answer, d, run), "piece": doc, "answer_from": PEARLPLUS_FROM}
             return {"verdict": "missing", "owner": owner, "why": f"{DEV_VERDICT}: {failed}"[:2000], "development": doc}
-        if doc.get("verdict") == UNDECIDED:
+        if doc.get("verdict") == UNDECIDED_VERDICT:
             if not isinstance(doc.get("why"), str) or not doc["why"].strip():
                 return {"verdict": "error", "owner": owner,
-                        "reason": f"its piece's {comp}/{DEVELOPMENT} is {UNDECIDED} and says no why"}
+                        "reason": f"its piece's {comp}/{DEVELOPMENT} is {UNDECIDED_VERDICT} and says no why"}
             return {"verdict": "missing", "owner": owner, "why": doc["why"][:2000], "development": doc}
         if doc.get("verdict") in ("accept", UNCLAIMED):
             own = doc.get("why") or DEV_WHY
