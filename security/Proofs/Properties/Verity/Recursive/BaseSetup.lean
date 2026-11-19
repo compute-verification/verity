@@ -117,6 +117,25 @@ theorem body_ok {α : Type} {A B : α → V Unit} {a : α} :
   rcases hA : A a with e | ⟨⟩ <;> rcases hB : B a with e' | ⟨⟩ <;>
     simp [bind, Except.bind, pure, Except.pure]
 
+/-- A loop step `do C a (← W a); B a; pure (.yield ())` yields exactly when `W a >>= C a` and `B a` are `.ok`. -/
+theorem body_bind_ok {α β : Type} {W : α → V β} {C : α → β → V Unit} {B : α → V Unit} {a : α} :
+    (do C a (← W a); B a; pure (ForInStep.yield PUnit.unit) : V (ForInStep PUnit)) = .ok (.yield PUnit.unit) ↔
+      (W a >>= C a) = .ok () ∧ B a = .ok () := by
+  rcases hW : W a with e | r
+  · simp [bind, Except.bind]
+  · rcases hC : C a r with e | ⟨⟩ <;> rcases hB : B a with e' | ⟨⟩ <;>
+      simp [bind, Except.bind, pure, Except.pure, hC, hB]
+
+theorem body_bind_yield {α β : Type} {W : α → V β} {C : α → β → V Unit} {B : α → V Unit} :
+    ∀ a s, (do C a (← W a); B a; pure (ForInStep.yield PUnit.unit) : V (ForInStep PUnit)) = .ok s →
+      s = .yield PUnit.unit := by
+  intro a s h
+  rcases hW : W a with e | r
+  · simp [hW, bind, Except.bind] at h
+  · rcases hC : C a r with e | ⟨⟩ <;> rcases hB : B a with e' | ⟨⟩ <;>
+      simp [hW, hC, hB, bind, Except.bind, pure, Except.pure] at h
+    exact h.symm
+
 theorem body_yield {α : Type} {A B : α → V Unit} :
     ∀ a s, (do A a; B a; pure (ForInStep.yield PUnit.unit) : V (ForInStep PUnit)) = .ok s →
       s = .yield PUnit.unit := by
@@ -151,7 +170,7 @@ and tags `partVerdict` sets its session up on. Suppose the compiled `buildSessio
 and staged public file `pubB` up at the sample `draw`, with `partition`, `program` and the verifier's registered reads
 `registered`, to `(spec, sts)`. Let `r` read the same inputs as `Raw.ins` reads a `--zk` statement. Then the model's
 calls at the start of `RecIns.setup` all succeed at `r` with the same `(spec, sts)`: the hm96-sha512 rows check,
-`Read.setup`, each table's `checkRegistered` and `noIdentifier` (pointwise, and as `RecIns.setup`'s loop), and
+`Read.setup`, each table's `checkRegistered` at its reads derived by `Registered.withPositions` and `noIdentifier` (pointwise, and as `RecIns.setup`'s loop), and
 `Registered.checkFull` at `r`'s sample. -/
 theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {draw partition : Option Json}
     {program : Option ByteArray} {registered : Option (Array Flock.Registered.Port)} {spec : Flock.SessionSpec}
@@ -178,9 +197,10 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
         closure := none })
     (hzk : r.zk = true) (hdraw : r.draw = draw) (hpi : r.publicInputs = none) :
     r.tags.hm96Rows = true ∧ r.setup = .ok (spec, sts) ∧
-      (∀ st ∈ sts, Flock.checkRegistered st registered = .ok () ∧ FlockDeploy.noIdentifier st = .ok ()) ∧
+      (∀ st ∈ sts, (Flock.Registered.withPositions st.c st.pub program registered >>= Flock.checkRegistered st) = .ok () ∧
+        FlockDeploy.noIdentifier st = .ok ()) ∧
       (forIn sts PUnit.unit fun st _ => do
-          Flock.checkRegistered st registered
+          Flock.checkRegistered st (← Flock.Registered.withPositions st.c st.pub program registered)
           FlockDeploy.noIdentifier st
           pure (ForInStep.yield PUnit.unit) : V PUnit) = .ok PUnit.unit ∧
       Flock.Registered.checkFull registered r.draw = .ok () := by
@@ -203,7 +223,7 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
       Flock.Stmt.setupTables
         (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
         circuitB pubB (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) 1 [] draw partition program = .ok x ∧
-      (∀ st ∈ x.2, Flock.checkRegistered st registered = .ok () ∧
+      (∀ st ∈ x.2, (Flock.Registered.withPositions st.c st.pub program registered >>= Flock.checkRegistered st) = .ok () ∧
         Spot.OneStageZk.checkIdentifier st = .ok ()) ∧
       Flock.Registered.checkFull registered draw = .ok () ∧ (x.1, x.2) = (spec, sts) := by
     split at hb
@@ -211,25 +231,26 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
       obtain ⟨x, hs, hb⟩ := bind_ok hb
       obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
       obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
-      refine ⟨x, ?_, fun st hst => (body_ok (A := fun st => Flock.checkRegistered st registered)
-        (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
+      refine ⟨x, ?_, fun st hst => (body_bind_ok (W := fun st => Flock.Registered.withPositions st.c st.pub program registered)
+        (C := Flock.checkRegistered) (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_bind_yield hloop st hst), hfull,
         Except.ok.inj hb⟩
       rw [Flock.Stmt.setupTables_eq]
       simpa only [Flock.ProvedScope.circuitOf, hhid, ↓reduceIte] using hs
     · obtain ⟨x, hs, hb⟩ := bind_ok hb
       obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
       obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
-      exact ⟨x, hs, fun st hst => (body_ok (A := fun st => Flock.checkRegistered st registered)
-        (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
+      exact ⟨x, hs, fun st hst => (body_bind_ok (W := fun st => Flock.Registered.withPositions st.c st.pub program registered)
+        (C := Flock.checkRegistered) (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_bind_yield hloop st hst), hfull,
         Except.ok.inj hb⟩
   obtain ⟨⟨spec', sts'⟩, hs, hpt, hfull, hx⟩ := hstep
   simp only [Prod.mk.injEq] at hx
   obtain ⟨rfl, rfl⟩ := hx
-  have hpt' : ∀ st ∈ sts', Flock.checkRegistered st registered = .ok () ∧
-      FlockDeploy.noIdentifier st = .ok () :=
+  have hpt' : ∀ st ∈ sts', (Flock.Registered.withPositions st.c st.pub program registered >>= Flock.checkRegistered st) =
+      .ok () ∧ FlockDeploy.noIdentifier st = .ok () :=
     fun st hst => ⟨(hpt st hst).1, noIdentifier_of_check (hpt st hst).2⟩
   refine ⟨by rw [htags]; exact hh, hsetup.trans hs, hpt', forIn_ok fun st hst =>
-    (body_ok (A := fun st => Flock.checkRegistered st registered) (B := FlockDeploy.noIdentifier)).2 (hpt' st hst), ?_⟩
+    (body_bind_ok (W := fun st => Flock.Registered.withPositions st.c st.pub program registered)
+      (C := Flock.checkRegistered) (B := FlockDeploy.noIdentifier)).2 (hpt' st hst), ?_⟩
   rw [hdraw]
   exact hfull
 
