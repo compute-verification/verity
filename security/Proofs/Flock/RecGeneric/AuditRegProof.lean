@@ -27,6 +27,6 @@ theorem Flock.SecurityProofs.RecursiveAuditBoundReg : Flock.Guarantees.Recursive
         (cont (atReg σ)))) ≤ δ
   · refine (Verity.Game.prob_mono (fun o h => h.1) _ _).trans (hb.trans ?_)
     rw [add_assoc]
-    exact add_le_add_right hE _
+    exact add_le_add hE le_rfl
   · exact ((Verity.Game.prob_mono (q := fun _ => False) (fun o h => hE h.2) _ _).trans
-      (Verity.Game.prob_false _ _).le).trans (zero_le _)
+      (Verity.Game.prob_false _ _).le).trans (by simp)
