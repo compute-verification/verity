@@ -349,6 +349,7 @@ def wired_rows(program, node: int, port_rows: list[str], cut: dict) -> dict[str,
     """Each input row of in(S) of the reader at root ``node`` (a call) that C wires from another unit: its writer's root
     node, member and output field, the row being that field whole and in order. A row that is part of a field, or of
     more than one, is refused by name (``FIELD``): Lean's registered reads read one field's tree."""
+    from verity.circuits.program import is_input
     sig = dict(program.root.body.nodes[node].fn.signature()[0])
     args = dict(zip(sig, program.root.body.nodes[node].args))
     nodes, out = program.root.body.nodes, {}
@@ -360,7 +361,7 @@ def wired_rows(program, node: int, port_rows: list[str], cut: dict) -> dict[str,
         lo, hi = (int(j) * ln // rows, (int(j) + 1) * ln // rows) if j else (0, ln)
         refs = args[p].refs
         got = [tuple(refs[i]) for i in range(lo, hi)]
-        if not any(r[0] == "n" and r[1] != node for r in got):
+        if not any(r[0] == "n" and r[1] != node and not is_input(nodes[r[1]].fn) for r in got):
             continue
         kw = got[0][1]
         wn = nodes[kw]
