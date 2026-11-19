@@ -32,7 +32,7 @@ def sizes_of_class(cls: str, scheme: str) -> list:
             "sizes": window_cut.credited_sizes(low), "templates": len(low.circuit.templates)}
 
 
-def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False) -> dict:
+def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False, restrict: bool = True) -> dict:
     from verity.circuits import count as CT
     from verity.circuits import restrict as R
     from verity.circuits.codec import descriptor_chunks, descriptor_id
@@ -51,6 +51,13 @@ def block(scheme: str, k: int, tm: int, tn: int, n: int, bits: bool = False) -> 
     c = b"".join(descriptor_chunks(program))
     out["descriptor_bytes"] = len(c)
     phase("descriptor")
+    if not restrict:
+        root = CT.count(c)[descriptor_id(program.root)]
+        out["gates"], out["ands"] = root.gates, root.ands
+        phase("count")
+        print("CREDITED-COUNT", k, tm, tn, n, "gates", out["gates"], "ands", out["ands"], flush=True)
+        out["peak_gib"] = _peak_gib()
+        return out
     b = R.restrict(c, part, [(0, 1)])
     phase("restrict")
     params, ret = b.program.fn.signature()
@@ -93,6 +100,8 @@ def main() -> int:
     ap.add_argument("--size", help="K,TM,TN,N")
     ap.add_argument("--cls", help="a window class, e.g. 4,27,2: its cut calls' credited sizes on Llama 3.2 1B")
     ap.add_argument("--bits", action="store_true", help="also evaluate the block on bits once, on random inputs")
+    ap.add_argument("--no-restrict", action="store_true",
+                    help="count the Program's one unit from its descriptor, with no restrict: the block is the whole Program")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -103,8 +112,10 @@ def main() -> int:
         print("CREDITED-SIZES", a.cls, got["sizes"], "templates", got["templates"], flush=True)
     if a.size:
         k, tm, tn, n = map(int, a.size.split(","))
-        got = block(a.scheme, k, tm, tn, n, a.bits)
+        got = block(a.scheme, k, tm, tn, n, a.bits, not a.no_restrict)
         (a.out / f"block-{k}-{tm}-{tn}-{n}.json").write_text(json.dumps(got, indent=1))
+        if a.no_restrict:
+            return 0
         print("CREDITED-BLOCK", a.size, "gates", got["gates"], "ands", got["ands"], "sum_of_bodies", got["sum_of_bodies"],
               "inputs", [(r["port"], r["rows"], r["width"], r["binding"]) for r in got["inputs"]],
               "outputs", [(r["port"], r["rows"], r["width"]) for r in got["outputs"]], "peak_gib", got["peak_gib"], flush=True)
