@@ -25,7 +25,10 @@ Every other unit holds its Definition's function of the window's values:
   ``registered_value.Registered`` of ``row-seg`` rows or one like it);
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
   Definition on the node's operands (`evaluate_batch`): the head's query, its KV group's keys and values in the Call's
-  range, and the earlier Calls' running state.
+  range, and the earlier Calls' running state;
+- the scan's start the state row before the window, its ingress unit t its Definition on the network attester's ingress
+  row t, the state row before t and the entries at t's boundary, and its egress unit t its Definition on ingress unit
+  t's view (`evaluate_bits`).
 
 `Rows.record` gives a `Window` each template's units in runs of one step, one slot and one form (`FORMS`: a node's value,
 or its Definition's function of the window's values), every input by reference but an opening's ports. The lowering
@@ -46,7 +49,7 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.codec import descriptor_id
-from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation import evaluate_batch, evaluate_bits
 from verity.circuits.refs import runs
 from verity.commitments import registered_value as RV
 from verity.commitments.gates import embedding as E
@@ -451,10 +454,11 @@ class Served:
 class Rows:
     """Every unit's output rows of ``lowered``'s circuit (module docstring) as u16 words by template and output, with each
     unit's source and an embedding read's opening ports, from each slot's `Slot` (in slot order) and the circuit's
-    registered values by parameter (`window_weights.weight_values` with their rows kept, and the scan state's,
-    `scan_state.SCAN_STATE`, with its rows: the network attester's, a row a bucket of the window), of which an embedding
-    read opens its table's (its ``rows``, ``salts`` and ``path``) and a slot's `ScanSlots_v3` reads the scan state's row at
-    its anchor. Refused unless every unit's every row is filled once."""
+    registered values by parameter (`window_weights.weight_values` with their rows kept, the scan's start row
+    `scan_state.SCAN_STATE` and the network attester's ingress rows `scan_state.INGRESS_ROWS`, each with its rows), of
+    which an embedding read opens its table's (its ``rows``, ``salts`` and ``path``). The scan's units are filled a
+    boundary at a time (`window_circuit`'s module docstring), each its Definition on its inputs, so a slot's `ScanSlots_v3`
+    reads the state row its ingress units computed. Refused unless every unit's every row is filled once."""
 
     def __init__(self, lowered: Lowered, slots: Sequence[Slot], registered: Mapping[str, Any]) -> None:
         if lowered.requests is None:
@@ -466,9 +470,11 @@ class Rows:
             raise ValueError(f"slot {bad[0]}'s values are of another Program than the circuit's slot {bad[0]}")
         c = self.circuit = lowered.circuit
         self.lowered = lowered
-        if getattr(registered.get(SS.SCAN_STATE), "rows", None) is None:
-            raise ValueError(f"give the scan state's registered value, {SS.SCAN_STATE}, with its rows")
-        self.state = registered[SS.SCAN_STATE].rows
+        for p in (SS.SCAN_STATE, SS.INGRESS_ROWS):
+            if getattr(registered.get(p), "rows", None) is None:
+                raise ValueError(f"give the scan's registered value {p} with its rows")
+        #: the scan's state row before each bucket filled so far, the start's before bucket 0
+        self.state: dict[int, Any] = {0: registered[SS.SCAN_STATE].rows[0]}
         tables = {t.name: t.param for t in (c.registered.tables if c.registered else ())}
         self.tables: dict[str, Any] = {}
         for o in c.registered.openings if c.registered else ():
@@ -488,13 +494,23 @@ class Rows:
                        for t, lay in self.lays.items()}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
-        P0 = lowered.programs[0] if lowered.programs else None
-        for a, (tid, u) in lowered.scans:
-            for k, lane in enumerate(_lanes(P0, self.state, IO.scan_reference, a)):
-                for i, v in enumerate(lane):
-                    self._put(tid, u, f"o{4 * k + i}", _i32(v if isinstance(v, list) else [v]), EVALUATED)
-        for s, _k, c, e in lowered.empty:
-            self._empty(P0, s, c, e)
+        P0, cls = lowered.programs[0], lowered.programs[0].cls
+        start, bucket, egress = (descriptor_id(f) for f in (cls.scan.start, cls.scan.bucket, cls.scan.egress))
+        self._put(start, 0, "o0", np.asarray([self.state[0]], dtype=np.uint16), EVALUATED)
+        ingress = registered[SS.INGRESS_ROWS].rows
+        entries = {**{(P.anchor, P.lane): P.entry_unit for P in lowered.programs},
+                   **{(cls.anchor(s), cls.lane(s)): e for s, _k, _c, e in lowered.empty}}
+        for a in cls.boundaries:
+            for _, (tid, u) in [x for x in lowered.scans if x[0] == a]:
+                for k, lane in enumerate(_lanes(P0, self.state, IO.scan_reference, a)):
+                    for i, v in enumerate(lane):
+                        self._put(tid, u, f"o{4 * k + i}", _i32(v if isinstance(v, list) else [v]), EVALUATED)
+            for s, _k, c, e in [x for x in lowered.empty if cls.anchor(x[0]) == a]:
+                self._empty(P0, s, c, e)
+            progs = [self.outs[et][0][eu] for et, eu in (entries[(a, j)] for j in range(cls.lanes))]
+            for t in range(a, a + cls.every):
+                self.state[t + 1] = self._evaluate(bucket, t, [ingress[t], self.state[t], *progs])["o1"][0]
+        self._evaluate(egress, 0, [self.outs[bucket][2]])
         if bad := {t: int((~h).any(axis=1).sum()) for t, h in self.held.items() if not h.all()}:
             raise ValueError(f"units with rows no node or Definition fills, by template: {bad}")
 
@@ -505,6 +521,19 @@ class Rows:
         self.outs[tid][o][unit:unit + k] = rows
         self.held[tid][unit:unit + k, o] = True
         self.source[tid][unit:unit + k] = np.minimum(self.source[tid][unit:unit + k], src)
+
+    def _evaluate(self, tid: str, unit: int, ports: Sequence[Any]) -> dict[str, np.ndarray]:
+        """A Boolean Definition's units from ``unit``, one a row of each of ``ports`` (its inputs' u16 words, a unit a row
+        or one unit's row), filled with its outputs, which it returns by output."""
+        ins = [np.atleast_2d(np.asarray(p, dtype=np.uint16)) for p in ports]
+        bits = [np.unpackbits(np.ascontiguousarray(x).view(np.uint8), axis=1, bitorder="little") for x in ins]
+        flat = np.asarray(evaluate_bits(self.fns[tid], *bits), dtype=np.uint8).reshape(len(ins[0]), -1)
+        outs, at = {}, 0
+        for o, words in self.lays[tid].outs:
+            outs[o] = np.packbits(flat[:, at:at + 16 * words], axis=1, bitorder="little").view("<u2")
+            self._put(tid, unit, o, outs[o], EVALUATED)
+            at += 16 * words
+        return outs
 
     def _slot(self, P: Any, S: Slot) -> None:
         nodes = P.fn.body.nodes
@@ -662,20 +691,18 @@ def scan_slots(lowered: Lowered, state: Sequence[Any]) -> list[tuple[list[int], 
     return [_lanes(P, state)[P.lane] for P in lowered.programs]
 
 
-def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *, window: str) -> RV.Registered:
-    """`scan_state.SCAN_STATE`'s value: ``rows``, the scan's state rows a window of ``cls`` reads (row a the state before
-    bucket a, `ingress_scan.window_state`'s bits), as ``row/v2`` rows, each under 192 fresh bytes from the OS, a
+def state_value(program: str, cls: WindowClass, row: Sequence[int], *, window: str) -> RV.Registered:
+    """`scan_state.SCAN_STATE`'s value in a served window's circuit: ``row``, the scan's state row before the window
+    (`ingress_scan.window_state`'s bits, the start's ``sin``), as a ``row/v2`` row under 192 fresh bytes from the OS, a
     per-window value under ``program``, its circuit's `inference_blocks.program_digest`, and the execution phase's open
-    root ``window``. It is the prover's side of the tree (its rows, salts and levels) for the window's prover and the
-    scan's alike: the scan's state ports open their rows in it, by its root and domain, and its salts exist only in it and
-    in the files written from it (the window's ``v<j>-private.bin``, `scan_zk.SCAN_STATE_FILE`)."""
-    bits = np.asarray(rows, dtype=np.uint16)
-    if bits.shape != (cls.buckets, 16 * SS.words(cls.scan)) or bits.max(initial=0) > 1:
-        raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {16 * SS.words(cls.scan)} "
-                         f"bits, not {bits.shape}")
-    words = (bits.reshape(cls.buckets, -1, 16) << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
-    return registered_commit(program, SS.SCAN_STATE, words, os.urandom(cls.buckets * CS.SALT_BYTES), keep_rows=True,
-                             window=window)
+    root ``window``. It is the prover's side of the tree (its row, salt and levels) for the window's prover and the
+    scan's alike, and its salt exists only in it and in the files written from it (the window's ``v<j>-private.bin``,
+    `scan_zk.SCAN_STATE_FILE`)."""
+    bits = np.asarray(row, dtype=np.uint16)
+    if bits.shape != (16 * SS.words(cls.scan),) or bits.max(initial=0) > 1:
+        raise ValueError(f"a window's state row is {16 * SS.words(cls.scan)} bits, not {bits.shape}")
+    words = (bits.reshape(1, -1, 16) << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
+    return registered_commit(program, SS.SCAN_STATE, words, os.urandom(CS.SALT_BYTES), keep_rows=True, window=window)
 
 
 __all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "scan_slots",
