@@ -27,6 +27,12 @@ inputs = [
     "verity/circuits/kernels",
     "adapters/vllm/verity_vllm",
     "adapters/torch/verity_torch",
+    # verity_vllm's attach imports `verity_torch.pouw.hand_in`, and verity_torch.pouw imports the prover's serving.tensors
+    "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/tensors.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/device.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/row_table_kernels.py",
     "adapters/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json",
     "adapters/vllm/workloads/SHA256SUMS",
     "adapters/vllm/workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
