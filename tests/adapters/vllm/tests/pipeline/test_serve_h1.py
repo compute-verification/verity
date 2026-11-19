@@ -57,6 +57,17 @@ from verity_vllm.protocols import pouw
 #: each window's two requests: step 0 admits both (prompt tokens, cap), step 1 decodes a row of each
 PROMPTS = ({"a": [5, 6, 7], "b": [8, 9]}, {"c": [11, 12], "d": [13, 14, 15, 16]})
 
+_SERVERS: list[_Server] = []
+
+
+@pytest.fixture(autouse=True)
+def _sources_uninstalled() -> Iterator[None]:
+    """A test that fails before its own ``srv.src.uninstall()`` would leave `int8_ops.row_quant` wrapped for every later
+    test in its process."""
+    yield
+    while _SERVERS:
+        _SERVERS.pop().src.uninstall()
+
 
 class _Server:
     """The server's Commit as the arm sees it: the committer (`test_pouw_h1_commit.Committer`) with its step-input port
@@ -69,6 +80,7 @@ class _Server:
         monkeypatch.setattr(handle, "model_runner", lambda llm: self.runner)
         self.port, self.src = _served_commit(self.com, self.model, _plan_sites() if quant is None else quant)
         self.src.install()
+        _SERVERS.append(self)
 
     def serve(self, prompts, seed):
         """One window's two engine steps through the model, the Commit acquiring each as serve-openai's does."""

@@ -874,7 +874,7 @@ def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, ti
         case "descriptor-form":
             raw = desc_bytes(desc)
             return rng.choice([raw + b" ", raw.replace(b",", b", ", 1), b"\xff" + raw, b"[]",
-                               desc_bytes({**desc, "schema": "verity-ir/descriptor/v2"}),
+                               desc_bytes({**desc, "schema": "verity-ir/descriptor/v1"}),
                                desc_bytes({k: v for k, v in desc.items() if k != "callees"}),
                                desc_bytes({**desc, "callees": [*desc["callees"], 5]}),
                                desc_bytes({**desc, "program_fn": None}), b'{"a":NaN}']).hex()

@@ -47,7 +47,7 @@ ERR = 0.08
 
 
 def _e2e() -> Any:
-    """`e2e.py`, loaded from its file: the call check's verdict (`call_verdict`, `under_salt`) and `whole_check`."""
+    """`e2e.py`, loaded from its file: the call check (`call_checks` on `shape_cases`) and `whole_check`."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("pearl_c_e2e", HERE / "e2e.py")
@@ -341,34 +341,16 @@ class PearlCArm:
         self.run, self.stack, self.weights = run, stack, weights
 
     def gate(self, target: Any) -> dict[str, Any]:
-        """`e2e.gate`'s call check, between passes: y against x·Wᵀ, the call twice under the salt, and the negative control
-        (`e2e.call_verdict`)."""
+        """`e2e.gate`'s call check (`e2e.call_checks`, each pass on a twin of the run): y against x·Wᵀ, the call twice under
+        the salt, and the negative control."""
         import torch
 
         run, weights, e2e = self.run, self.weights, _e2e()
-        checks, seen = [], set()
-        gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
-        for w, W in weights.items():
-            if tuple(W.shape) in seen:
-                continue
-            seen.add(tuple(W.shape))
-            for m in (16, 64):
-                x = torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-                commits, served, at = [], None, run.epoch_calls()
-                for omit in ((), (), ("hash_leaf",)):
-                    run.begin(at=at)
-                    run.poison()
-                    run.omit = frozenset(omit)
-                    y = run.gemm(w, x, W, None)
-                    served = y if served is None else served
-                    commits.append(e2e.under_salt(run, run.end()))
-                run.omit = frozenset()
-                ref = x.float() @ W.float().T
-                err = float(((served.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
-                checks.append({"n": W.shape[0], "k": W.shape[1], "m": m, **e2e.call_verdict(commits, err)})
+        cases = e2e.shape_cases(weights, (16, 64), torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930))
+        checks = [{"n": W.shape[0], "k": W.shape[1], "m": x.shape[0], **v}
+                  for (_, W, x), v in zip(cases, e2e.call_checks(run, cases), strict=True)]
         from verity_bench.vllm.runner import PER_PASS_TOKENS
 
-        run.details["passes"].clear()
         return {"passed": all(c["ok"] for c in checks), "scheme": run.scheme.name, "schedule": self.schedule,
                 "coins": self.coins, "checks": checks, PER_PASS_TOKENS: True}
 
