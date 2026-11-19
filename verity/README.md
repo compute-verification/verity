@@ -50,11 +50,10 @@ The protocols, by layer, with registration beside them:
 | Being tried | `protocols/experimental/` | `dither/`, [`pearl_c4/`](protocols/experimental/pearl_c4/README.md) |
 | Shared | [`protocols/interface/`](protocols/interface/README.md) | The Lean interface each protocol's check implements |
 
-Nine directories here are distributions of their own, each with its own import root (`tests/import_order.toml`'s
+Eight directories here are distributions of their own, each with its own import root (`tests/import_order.toml`'s
 `[[distribution]]`), all under `protocols/`: `proofs/flock/`, `compose/verifier/live_challenger/`, and under
 `resource_accounting/`, `memory/pous/verifier/check/`, `memory/pous/prover/p2/`, `memory/poub/prover/`,
-`memory/poub/attester/live_verifier/`, `compute/pouw/prover/clear/`, `compute/pouw/prover/lowering/` and
-`compute/pouw/verifier/receipts/`.
+`memory/poub/attester/live_verifier/`, `compute/pouw/prover/clear/` and `compute/pouw/verifier/receipts/`.
 
 ## Read next
 

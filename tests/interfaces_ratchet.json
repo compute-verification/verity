@@ -203,7 +203,6 @@
   "benchmarks/serve_tax/serve_tax.py": 2,
   "benchmarks/spot_figures/cards.py": 1,
   "benchmarks/spot_figures/figure1.py": 1,
-  "benchmarks/unit_lowering/structural.py": 14,
   "benchmarks/verifier_cost/ledger_replay/replays.py": 1,
   "benchmarks/vllm_encoded/paged_gate.py": 2,
   "benchmarks/vllm_encoded/rekey_gate.py": 2,
