@@ -197,7 +197,7 @@ tables find, `I`'s statement is untyped with at most one table and its circuit f
 session `Exec.setupOfP` sets up at `--zk`'s inputs with the tables `T'` is the one it sets up with `I`'s. -/
 theorem setupOfP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext : TablesExtend I.tables T')
     (hcount : I.count ≤ 1) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hp : Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) (own : Option ByteArray)
+    (hp : Flock.ProvedScope.circuitOf (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) (own : Option ByteArray)
     (record : String) :
     OkLe (Exec.setupOfP (ZkExec.zkInputs { I with tables := T' }) own record)
       (Exec.setupOfP (ZkExec.zkInputs I) own record) :=
@@ -207,7 +207,7 @@ theorem setupOfP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext 
 premises. -/
 theorem acceptsZKP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext : TablesExtend I.tables T')
     (hcount : I.count ≤ 1) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hp : Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) {own : Option ByteArray}
+    (hp : Flock.ProvedScope.circuitOf (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) {own : Option ByteArray}
     {t : Exec.Transcript} (h : AcceptsZKP { I with tables := T' } own t) : AcceptsZKP I own t := by
   obtain ⟨spec, sts, hs, hshape, hv⟩ := h
   exact ⟨spec, sts, setupOfP_back hext hcount ht hp own t.record _ hs, hshape, hv⟩
@@ -448,7 +448,12 @@ theorem accepts_sent {V : Vocab d α} {k : Verity.Registration.Composite} {A : L
     hA.stratified hA.closure
   rw [hz] at hs
   rw [hA.own]
-  have hp := Flock.Desc.parse_flat A.hD
+  have htm : (ZkExec.zkTags A.I).hiddenOutputs = true ∧ (ZkExec.zkTags A.I).isTmpl = true :=
+    statement_zkTags hA.tags _ _
+  obtain ⟨c, hc, -⟩ := parseTmpl_of_parseStmt htm.2 A.hD
+  have hp : Flock.ProvedScope.circuitOf (ZkExec.zkTags A.I) A.I.circuitFile A.I.tables = .ok c := by
+    rw [circuitOf_tmpl htm.1 htm.2]
+    exact hc
   exact ⟨record, proofs, spec, sts, hrec, hpr, setupOfP_back hF.tables hA.count.le A.ht hp none record _ hs,
     acceptsZKP_back hF.tables hA.count.le A.ht hp ((acceptsZKP_congr hz).1 hat)⟩
 
