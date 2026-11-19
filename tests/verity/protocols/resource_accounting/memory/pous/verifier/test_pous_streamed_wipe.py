@@ -15,7 +15,7 @@ import math
 
 import pous_test_signer as ts
 import pytest
-from pous_fakes import Clock
+from pous_fakes import Clock, Server
 
 from verity.clock import Reading, raw_ns, raw_resolution_ns
 from verity.commitments.randomness import derive
@@ -178,30 +178,6 @@ def test_the_side_serves_its_wipe_on_the_raw_clock(tmp_path, monkeypatch) -> Non
     """`main` serves the wipe on the device's raw monotonic clock at that clock's resolution, the clock its records
     are readings of."""
     got: dict = {}
-
-    class Conn:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_):
-            return False
-
-        def setblocking(self, *_):
-            pass
-
-        def setsockopt(self, *_):
-            pass
-
-        def makefile(self, *_):
-            return Conn()
-
-    class Server(Conn):
-        def getsockname(self):
-            return ("127.0.0.1", 1)
-
-        def accept(self):
-            return Conn(), None
-
     monkeypatch.setattr(WC.onsite, "device_key", lambda *_, **__: ts.TestSigner(b"side", 2))
     monkeypatch.setattr(WC.socket, "create_server", lambda *_: Server())
     monkeypatch.setattr(WC, "serve", lambda f, request, **kw: got.update(kw))

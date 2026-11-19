@@ -549,23 +549,6 @@ def test_the_side_serves_its_session_on_the_raw_clock(tmp_path, monkeypatch, cap
     clock its records are readings of."""
     got: dict = {}
 
-    class Conn:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_):
-            return False
-
-        def setsockopt(self, *_):
-            pass
-
-    class Server(Conn):
-        def getsockname(self):
-            return ("127.0.0.1", 1)
-
-        def accept(self):
-            return Conn(), None
-
     def serve(f, request, **kw):
         got.update(kw)
         return b"s" * 64, None
@@ -573,7 +556,7 @@ def test_the_side_serves_its_session_on_the_raw_clock(tmp_path, monkeypatch, cap
     monkeypatch.setattr(CP, "designate", lambda *_: None)
     monkeypatch.setattr(CP, "setup_of", lambda _: None)
     monkeypatch.setattr(CP.onsite, "device_key", lambda *_, **__: ts.TestSigner(b"side", 2))
-    monkeypatch.setattr(CP.socket, "create_server", lambda *_: Server())
+    monkeypatch.setattr(CP.socket, "create_server", lambda *_: pous_fakes.Server())
     monkeypatch.setattr(CP, "serve", serve)
     monkeypatch.setattr(CP, "keep", lambda *_: None)
     monkeypatch.setattr(CP, "report", lambda *_: {})
