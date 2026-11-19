@@ -7,7 +7,7 @@ below p (two pieces a word at p1024, one at p512), and payload 0 is all zeros (t
 the default codec, p1024 masked at k = 3.  Every coin and salt comes from `entropy(label)`, SHA-512 in counter mode:
 call c returns the first n bytes of `SHA512(label ‖ u64be c) ‖ SHA512(label ‖ u64be c + 1) ‖ …`, the counter running on
 across calls (`Entropy`).  The challenger (`coins.local`, session 0's epoch of the one challenger) flips each coin of its
-layout and then its salt, in layout order: window 0's challenge, its openings coin, then the append coins; a coin is 64
+layout and then its salt, in layout order: window 0's challenge, its sample's coins, then the append coins; a coin is 64
 bytes and the audit's is its first 32, so one SHA-512 block a coin.  `coins.window` is R, the session's window over its
 registration, which chal_0 is opened after; the commitment names no registration, so every variant's coins are the same
 coins under the same root, each opened after its own R.  The payload salts are sampled in block order and the receipt
@@ -37,9 +37,9 @@ import json
 
 from poub_fakes import Entropy
 
-from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.proofs.spot.verifier.challenger.challenger import live_domain, live_leaf
+from verity.protocols.proofs.spot.verifier.challenger.coins import OwnRandomness, draw_first
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
 from verity.protocols.resource_accounting.memory.poub.verifier.vectors import PATH, payload
@@ -96,12 +96,12 @@ def registered(receipt: str, bind: bool, rows: int) -> audit_prover.Store:
     return out
 
 
-def chain(st: audit_prover.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpening, coins.SessionCoins]:
+def chain(st: audit_prover.Store) -> tuple[coins.LiveOpening, list[dict], bytes, coins.SessionCoins]:
     """Window 0's challenge, opened after R, its three passes under the registration's receipt kind and `bind` (the
-    stub tiles' z when it binds them), its openings coin, opened after the last pass's root, and the session's coins."""
+    stub tiles' z when it binds them), its sample's coins' bytes, opened after the last pass's root, and the session's coins."""
     reg, blocks = st.registration, st.blocks
     tiles = TILES if reg.bind else None
-    challenger = coins.local(reg.digest, 0, PARAMS.windows, Entropy(COIN_LABEL))
+    challenger = coins.local(reg.digest, 0, PARAMS.windows, Entropy(COIN_LABEL), samples=PARAMS.samples)
     leaf_salts = Entropy(LEAF_SALT_LABEL)
     sketched = reg.receipt == receipts.SKETCH_SHA512
 
@@ -130,7 +130,7 @@ def chain(st: audit_prover.Store) -> tuple[coins.LiveOpening, list[dict], coins.
             sigma = {str(p): receipter.sketch(blocks[j], zs[j]).hex() for p, j in zip(ends, map(plan.block, ends))}
             passes[-1] |= {"sign_bits_sha512": _sha(b"".join(receipts.sign_bits(s, reg.rows))), "sigma": sigma}
         previous = root
-    return challenge, passes, challenger.openings(0, previous), challenger
+    return challenge, passes, challenger.sample(0, previous), challenger
 
 
 def _passes(st: audit_prover.Store, challenge: coins.LiveOpening, passes: list[dict]) -> dict:
@@ -141,12 +141,12 @@ def _passes(st: audit_prover.Store, challenge: coins.LiveOpening, passes: list[d
 def variant(kind: str, bind: bool, rows: int) -> dict:
     st = registered(kind, bind, rows)
     reg = st.registration
-    challenge, passes, opening, challenger = chain(st)
+    challenge, passes, src, challenger = chain(st)
     return {"registration": {"receipt": reg.receipt, "bind": reg.bind, "layout": reg.layout, "rows": reg.rows,
                              "codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()},
             "coins_root": challenger.commitment.root.hex(), "window": challenger.window.hex(),
             "passes": _passes(st, challenge, passes),
-            "openings": {"coin": coins.coin(opening).hex(), "draws": sampled(reg, opening)}}
+            "sample": {"bytes_sha512": _sha(src), "draws": sampled(src)}}
 
 
 def zero_seed_signs() -> dict:
@@ -160,9 +160,17 @@ def zero_seed_signs() -> dict:
     return out
 
 
-def sampled(reg: audit.Registration, opening: coins.LiveOpening) -> list[int]:
-    key = derive(coins.coin(opening), audit.OPENINGS_DOMAIN, {"registration": reg.digest, "window": 0})
-    return list(key.subset(PARAMS.samples, sum(p.length for p in PLANS), "openings"))
+def sampled(src: bytes) -> list[int]:
+    """The window's sample on the service's draw: k = min(samples, U) of its U receipts, rejection sampled without
+    replacement on the sample's coins' bytes as they are, read in order."""
+    units, at = sum(p.length for p in PLANS), 0
+
+    def read(n: int) -> bytes:
+        nonlocal at
+        at += n
+        return src[at - n:at]
+
+    return list(draw_first(OwnRandomness(read), {"law": "subset", "k": min(PARAMS.samples, units)}, units)["units"])
 
 
 def bound(payload: bytes, j: int, key: codec.Key, coin: bytes | None = None) -> dict:
@@ -178,7 +186,7 @@ def generate() -> dict:
     st = store()
     payloads, salts, tree, reg, blocks = st.payloads, st.salts, st.payload_tree, st.registration, st.blocks
     key = reg.key
-    challenge, passes, opening, challenger = chain(st)
+    challenge, passes, src, challenger = chain(st)
     c = challenger.commitment
     z_short, z_long = bytes(range(100)), bytes((7 * u) % 251 for u in range(codec.BLOCK_BYTES + 1000))
     s, last = reg.codec.field.word_bytes, reg.codec.field.block_words - 1
@@ -209,9 +217,9 @@ def generate() -> dict:
         "spread": {"short": {"z": z_short.hex(), "sha512": _sha(receipts.spread(z_short))},
                    "long": {"z_len": len(z_long), "sha512": _sha(receipts.spread(z_long))}},
         "passes": _passes(st, challenge, passes),
-        "openings": {"coin": coins.coin(opening).hex(), "label": opening.label, "index": opening.index,
-                     "position": c.position(opening.label, opening.index), "after": opening.after.hex(),
-                     "units": sum(p.length for p in PLANS), "draws": sampled(reg, opening)},
+        "sample": {"bytes_sha512": _sha(src), "label": coins.SAMPLE, "coins": challenger.m,
+                   "position": c.position(coins.SAMPLE, 0), "after": challenger.afters(coins.SAMPLE)[0].hex(),
+                   "units": sum(p.length for p in PLANS), "draws": sampled(src)},
         "sketch": {"sign_domain": receipts.SIGN_DOMAIN, "sign_domain_wide": receipts.SIGN_DOMAIN_WIDE,
                    "wide_rows": receipts.WIDE_ROWS, "receipt_domain": receipts.SKETCH_RECEIPT_DOMAIN.decode(),
                    "rows": receipts.SKETCH_ROWS, "rows_allowed": list(receipts.ROWS), "zero_seed": zero_seed_signs()},

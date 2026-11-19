@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import (
-    breakdown,
     jobs,
     kit,
     lean_verify,
@@ -159,14 +158,6 @@ def _point(args: Any) -> int:
     return 0 if passed else 3
 
 
-def _table(args: Any) -> int:
-    doc = result.merge([json.loads(path.read_text()) for path in args.results])
-    if args.out is not None:
-        write(doc, args.out)
-    print(render(doc), end="")
-    return 0
-
-
 def _served_table(args: Any) -> int:
     table = served_table.build(local_only=args.local_only)
     if args.json:
@@ -175,15 +166,6 @@ def _served_table(args: Any) -> int:
         print(served_render.render(table), end="")
     if args.metrics and settings.is_set("RESEARCH_RUN_DIR"):
         served_render.record(table, args.metrics)
-    return 0
-
-
-def _breakdown(args: Any) -> int:
-    doc = breakdown.from_results(args.results) if args.results else breakdown.build(local_only=args.local_only)
-    if args.json:
-        print(json.dumps(doc, indent=1, sort_keys=True))
-    else:
-        print(breakdown.render(doc), end="")
     return 0
 
 
@@ -379,28 +361,11 @@ def _parser() -> argparse.ArgumentParser:
     _spec_argument(check)
     check.set_defaults(run=_check, command_parser=check)
 
-    compare = commands.add_parser("compare", help="compare results only when their identities agree")
-    result.add_judge_arguments(compare)
-    compare.set_defaults(run=result.run_judge, command_parser=compare)
-
-    table = commands.add_parser("table", help="one table from one spec's per-point results, when their identities agree")
-    table.add_argument("results", type=Path, nargs="+")
-    table.add_argument("--out", type=Path, default=None, help="also write the merged result here")
-    table.set_defaults(run=_table, command_parser=table)
-
     served = commands.add_parser("served-table", help="every protocol's served overhead, from the store's runs of record")
     served.add_argument("--json", action="store_true", help="the rows as JSON, not markdown")
     served.add_argument("--local-only", action="store_true",
                         help="read this machine's catalog alone, not the store's remote")
     served.set_defaults(run=_served_table, command_parser=served)
-
-    split = commands.add_parser("breakdown", help="where the bandwidth audit's time goes, by span, from its breakdown spec")
-    split.add_argument("results", type=Path, nargs="*",
-                       help="result files (benchmark.json) to read instead of the store's newest passing runs")
-    split.add_argument("--json", action="store_true", help="the breakdown as JSON, not markdown")
-    split.add_argument("--local-only", action="store_true",
-                       help="read this machine's catalog alone, not the store's remote")
-    split.set_defaults(run=_breakdown, command_parser=split)
 
     _overhead_parser(commands)
     _prove_parser(commands)

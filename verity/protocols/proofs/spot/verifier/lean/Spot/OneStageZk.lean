@@ -1355,6 +1355,14 @@ private def rootsT (roots : List (String × String)) (name : String) : Option (A
 #guard whyT (rootsOf #[memberT "W/c0" #[(0, 1)], memberT "V" #[(1, 2)]] (recordT 2 [("W/y", "aa"), ("V/y", "bb")])) == ""
 #guard whyT (publicPorts (recordT 2 [("t/c0/y", "aa"), ("t/y", "bb")])) == OWN_FIELD "t/c0" "y"
 #guard whyT (publicPorts (recordT 2 [("t/c0/x", "aa"), ("t/y", "bb")])) == ""
+-- a run input node's tree `input/n<w>` is the window's, no member's and no public file's
+#guard rootsT [("t/c0/x", "aa"), ("input/n3", "ee")] "t/c0" == some #[("x", "aa")]
+#guard rootsT [("t/c0/x", "aa"), ("input/n3", "ee")] "t/c1" == some #[]
+#guard (whyT (rootsOf keyedT (recordT 5 [("input/n03", "ee")]))).startsWith
+  "roots: the registration's root input/n03 is no member's"
+#guard whyT (rootsOf #[memberT "input" #[(0, 2)], memberT "t/c1" #[(2, 5)]] (recordT 5 [])) == INPUT_MEMBER
+#guard (publicPorts (recordT 2 [("x", "aa"), ("input/n3", "ee")])).toOption.map (·.map (·.1)) == some #["x"]
+#guard (publicPorts (recordT 2 [("t/c0/x", "aa"), ("input/n3", "ee")])).toOption.map (·.map (·.1)) == some #["x"]
 #guard (memberT "m" #[(2, 4), (7, 8)]).count == 3
 #guard refusal (laidHeld keyedT (recordT 5 [])) == ""
 #guard refusal (laidHeld keyedT (recordT 6 [])) == MEMBERS_LAID
@@ -1465,6 +1473,28 @@ private def treeRegT (c : Char) (leaves : Nat := 2) (value : String := "committe
 #guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "committed/W/o0"))] treeRecT) ==
   TREE_UNHELD "member R/c0" "x" "W/o0"
 #guard !fieldTreeName "o0" && !fieldTreeName "W/o" && !fieldTreeName "W/ox" && fieldTreeName "a/b/o12"
+
+/-- `treeRecT` with run input node 3's tree, `input/n3`, at the root of `f`s. -/
+private def treeFreshRecT : Json :=
+  Json.mkObj [("population", Lean.toJson (4 : Nat)),
+    ("roots", Json.arr #[hexRootT "W/y" 'a', hexRootT "R/c0/z" 'b', hexRootT "input/n3" 'f']), ("scheme", Json.str "s")]
+
+-- a fresh input, node 3's tree, opened at the record's one root of it
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3"))] treeFreshRecT) == ""
+-- the fresh row changed after the coin: its tree's root is not the record's
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'c' (value := "input/n3"))] treeFreshRecT) ==
+  TREE_OTHER "member R/c0" "x" "input/n3" "root"
+-- a block reading a run node the record holds no entry of: refused, with no fall back to the file's root
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n4"))] treeFreshRecT) ==
+  TREE_UNHELD "member R/c0" "x" "input/n4"
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3"))] treeRecT) ==
+  TREE_UNHELD "member R/c0" "x" "input/n3"
+-- two blocks of one window opening node 3 under two roots: each held to the record's, and to each other's
+#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3")),
+  readerT "R/c1" (treeRegT 'c' (value := "input/n3"))] treeFreshRecT) == TREE_OTHER "member R/c1" "x" "input/n3" "root"
+#guard (whyT (classHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3")),
+  readerT "R/c1" (treeRegT 'c' (value := "input/n3"))])).startsWith
+  "registered: members R/c0 and R/c1 read the registered value input/n3 as two"
 #guard refusal (treePortsHeld #[memberT "R/c0" #[(0, 1)]] treeRecT) == ""
 
 /-- A writer `W/c0`, template `W`'s two units, and a reader `R/c0`, template `R`'s two after them. -/

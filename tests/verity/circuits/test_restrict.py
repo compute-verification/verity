@@ -16,6 +16,7 @@ from verity.circuits import restrict as R
 from verity.circuits.codec import definition_digest, definition_entry, descriptor_chunks, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate_region
+from verity.circuits.population import wired_population_program
 from verity.circuits.program import Program, input_id
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
@@ -163,8 +164,9 @@ T = bind(CompositeDefinition("RestrictToyT", 1, (), lambda S: ((("a", A4), ("k",
 TOY_PARTITION = {"query": {"name": "Q_template_instances", "version": 0, "params": {"templates": [descriptor_id(T)]}}}
 
 
-def _toy(name: str, params, ret, body) -> Program:
-    return Program(CompositeDefinition(name, 1, (), lambda S: (params, ret), body, register=False), registered=["k"])
+def _toy(name: str, params, ret, body, supplied=()) -> Program:
+    return Program(CompositeDefinition(name, 1, (), lambda S: (params, ret), body, register=False), registered=["k"],
+                   supplied=supplied)
 
 
 def fanout() -> Program:
@@ -190,9 +192,32 @@ def batched() -> Program:
     return _toy("RestrictToyBatch", (("x", Array(3, A4)), ("k", A4)), Tuple(Array(3, A4), A4), body)
 
 
+def supplied() -> Program:
+    """u0 = T(x, s), s supplied, then u1 = T(u0, k) and u2 = T(x, s); C returns u1 and u2."""
+    def body(B, S, x, k, s):
+        return tuple_of(B.call(T, B.call(T, x, s), k), B.call(T, x, s))
+    return _toy("RestrictToySupplied", (("x", A4), ("k", A4), ("s", A4)), Tuple(A4, A4), body, supplied=["s"])
+
+
+SALT = {"supplied": "pous.setup.salt/v1", "args": {}, "layout": "le", "bits": 4}
+
+
+def wired() -> Program:
+    """Three wired units of T, unit u + 1's a unit u's output, each k the record's supplied s."""
+    t = descriptor_id(T)
+    return wired_population_program([(T, 3)], {
+        "templates": [[t, 3]], "external": [], "order": [[t, u, 1] for u in range(3)],
+        "wires": [{"reader": t, "port": "a", "writer": t, "out": "o0", "at": 1, "radix": [2], "base": 0, "step": [1]}],
+        "registered": {"params": {"s": 4}, "formats": {"s": {"word_bits": 1}}, "tables": [], "roots": [], "openings": [],
+                       "reads": [{"reader": t, "port": "k", "param": "s", "at": 0, "radix": [3], "base": 0, "step": [0]}],
+                       "supplied": {"s": SALT}}})[0]
+
+
 TOYS = {"fanout": (fanout, [[(0, 1)], [(1, 3)], [(0, 3)], [(2, 3)]]),
         "pair": (pair, [[(0, 2)], [(0, 1)], [(1, 3)], [(2, 3)]]),
-        "batch": (batched, [[(0, 3)], [(1, 2)], [(0, 2)], [(2, 4)], [(3, 4)]])}
+        "batch": (batched, [[(0, 3)], [(1, 2)], [(0, 2)], [(2, 4)], [(3, 4)]]),
+        "supplied": (supplied, [[(0, 1)], [(1, 2)], [(0, 3)], [(2, 3)]]),
+        "wired": (wired, [[(0, 1)], [(1, 3)], [(0, 3)]])}
 
 
 @functools.cache
@@ -238,6 +263,33 @@ def test_a_registered_value_is_a_registered_input_of_the_block():
     d = json.loads(b.descriptor)
     assert any(k.startswith("RegisteredInput1_v1") for k in d["definitions"])
     assert [x for x in b.listing().split(b"\n")[2:2 + len(b.input_bits)]].count(b"registration") == 4
+
+
+@pytest.mark.parametrize("units", [[(0, 1)], [(2, 3)], [(0, 3)]])
+def test_a_supplied_value_is_a_supplied_input_of_the_block(units):
+    program, c, bits = toy("supplied")
+    assert program.bindings == ("run", "registration", "supplied") and program.supplied == {"s": None}
+    b = R.restrict(c, TOY_PARTITION, units, bits)
+    assert b.program.bindings.count(R.SUPPLIED) == 1 and set(b.program.supplied) == {
+        n for (n, _t), w in zip(b.program.fn.signature()[0], b.program.bindings) if w == R.SUPPLIED}
+    assert any(k.startswith("SuppliedInput1_v1") for k in json.loads(b.descriptor)["definitions"])
+    assert b.listing().split(b"\n")[2:2 + len(b.input_bits)].count(b"supplied") == 4
+    assert R.listing_of(b.descriptor).split(b"\n")[2:2 + len(b.input_bits)].count(b"supplied") == 4
+
+
+@pytest.mark.parametrize("units", TOYS["wired"][1])
+def test_a_wired_populations_supplied_value_is_a_supplied_input_of_each_block_that_reads_it(units):
+    program, c, bits = toy("wired")
+    assert program.bindings == ("supplied", "run") and program.supplied == {"s": SALT}
+    b = R.restrict(c, TOY_PARTITION, units, bits)
+    assert b.program.bindings.count(R.SUPPLIED) == 1
+    assert R.listing_of(b.descriptor).split(b"\n")[2:2 + len(b.input_bits)].count(b"supplied") == 4
+
+
+def test_a_block_that_reads_no_supplied_value_has_no_supplied_input():
+    _, c, bits = toy("supplied")
+    b = R.restrict(c, TOY_PARTITION, [(1, 2)], bits)
+    assert R.SUPPLIED not in b.program.bindings and b.program.supplied == {}
 
 
 def test_a_wire_inside_a_two_unit_block_is_no_port():

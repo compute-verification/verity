@@ -24,9 +24,9 @@ verity-bench check SPEC    # exit 0 only when every point has a passing run
 
 SPEC is a spec's id or its path, and `SPEC@CARD` names the card a run is on. Without one, a run is on the spec's one card,
 else on the card the driver reports, and a card the spec doesn't list is refused by name. A point's identity holds its
-card. A spec id from before its spec named no card (`llama32-1b-1gpu-pouw-protocol-served-h100`) names a stored run's spec
-alone: `verity_bench/data/former_spec_ids.toml` says which spec and card it is now, and no launch takes it. Its
-`[retired]` names each spec deleted with no successor, and a launch of one is refused with why. `tests/` checks that every pinned preset resolves as the vLLM integration's engine spec to
+card. A stored run whose record names its spec by a path or id it no longer has carries a `spec` label, its `SPEC@CARD`
+now, and a run whose result names an arm by a former id an `arms` label, each id as it is named now
+(`verity_bench.served_table`). `tests/` checks that every pinned preset resolves as the vLLM integration's engine spec to
 its checkpoint pin, and that every spec and sweep here has its line below.
 
 ## Stock serving
@@ -63,7 +63,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   stock FP8 on the same graph path and compiled stock FP8, at 6 reps, on one RTX PRO 6000 or H200.
 - `llama32-1b-fp8-1gpu-bandwidth-served`: the same on Llama-3.2-1B on one H200.
 - `llama31-8b-fp8-1gpu-bandwidth-ablation`: where the audit's time goes, by part and with the top-up off
-  (`verity-bench breakdown`).
+  (`verity-bench served-table`).
 
 ## The proof server at steady state
 

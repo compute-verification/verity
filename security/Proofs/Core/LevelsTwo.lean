@@ -17,6 +17,8 @@ indices), whose first design misses each set of outer blocks with the probabilit
 each outer block `X` misses `T_X` with the escape `e_{ρ(X)}` at the footprint `fp`, the level-by-level sample misses `T`
 with probability `P̄_a(fp)`. So `Design.Two.Pa` is the miss of `Levels.design` wherever the levels realize its outer
 and inner samples; `Levels.missProb_two_toReal_cells` takes the inner designs to be its uniform subsets of each cell.
+`missProb_two_toReal_on` and `missProb_two_toReal_cells_on` take the outer blocks onto the replay blocks `I` only, where
+every other replay block escapes surely (`Design.Two.Pa_eq_sum_on`): a replay block holding no proof block.
 -/
 
 @[expose] public section
@@ -81,15 +83,48 @@ namespace Levels
 
 variable {G : Type} [Fintype G] [DecidableEq G]
 
-/-- **Two levels agree with `Design.Two`** where they realize its outer and inner samples: the outer blocks are its replay blocks
-under `ρ`, the first design's miss is `P_a` (`h₁`), and the design in each outer block misses `T`'s blocks inside it with
-the escape at `fp` (`h₂`). -/
-theorem missProb_two_toReal (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l₁, l₂]) (d : Design.Two)
-    (Pt : Partition) (ρ : Finset G → ℕ)
-    (hρ : Set.BijOn ρ (l₁.blocks.parts : Set (Finset G)) (Finset.range d.part.blocks.length : Set ℕ))
+/-- **`P̄_a` over the replay blocks `I`** where every other replay block escapes surely (`e_ρ = 1`): a sample holding
+such a block catches nothing in it, so only the terms over subsets of `I` remain. -/
+theorem _root_.Claims.Sampling.Design.Two.Pa_eq_sum_on (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ)
+    (I : Finset ℕ) (hI : I ⊆ Finset.range d.part.blocks.length)
+    (hone : ∀ i ∈ Finset.range d.part.blocks.length \ I, d.esc Pt fp i = 1) :
+    d.Pa Pt fp = ∑ T ∈ I.powerset,
+      d.replay.Pa d.part T * ((∏ i ∈ T, (1 - d.esc Pt fp i)) * ∏ i ∈ I \ T, d.esc Pt fp i) := by
+  classical
+  unfold Design.Two.Pa
+  rw [← Finset.sum_subset (Finset.powerset_mono.2 hI) (f := fun T => d.replay.Pa d.part T *
+      ((∏ i ∈ T, (1 - d.esc Pt fp i)) * ∏ i ∈ Finset.range d.part.blocks.length \ T, d.esc Pt fp i)) ?_]
+  · refine Finset.sum_congr rfl fun T hT => ?_
+    have hTI := Finset.mem_powerset.1 hT
+    have hsplit : Finset.range d.part.blocks.length \ T = (I \ T) ∪ (Finset.range d.part.blocks.length \ I) := by
+      ext i
+      simp only [Finset.mem_sdiff, Finset.mem_union]
+      constructor
+      · rintro ⟨hi, hiT⟩
+        by_cases hiI : i ∈ I
+        · exact Or.inl ⟨hiI, hiT⟩
+        · exact Or.inr ⟨hi, hiI⟩
+      · rintro (⟨hiI, hiT⟩ | ⟨hi, hiI⟩)
+        · exact ⟨hI hiI, hiT⟩
+        · exact ⟨hi, fun h => hiI (hTI h)⟩
+    rw [hsplit, Finset.prod_union (Finset.disjoint_left.2 fun i h1 h2 =>
+      (Finset.mem_sdiff.1 h2).2 (Finset.mem_sdiff.1 h1).1), Finset.prod_eq_one hone, mul_one]
+  · intro T hT hT'
+    obtain ⟨i, hiT, hiI⟩ := Finset.not_subset.1 fun h => hT' (Finset.mem_powerset.2 h)
+    have hi : i ∈ Finset.range d.part.blocks.length := Finset.mem_powerset.1 hT hiT
+    rw [Finset.prod_eq_zero hiT (by rw [hone i (Finset.mem_sdiff.2 ⟨hi, hiI⟩), sub_self]), zero_mul, mul_zero]
+
+/-- **Two levels agree with `Design.Two`** where they realize its outer and inner samples on the replay blocks `I`:
+the outer blocks are the replay blocks of `I` under `ρ`, the first design's miss is `P_a` (`h₁`), the design in each
+outer block misses `T`'s blocks inside it with the escape at `fp` (`h₂`), and every replay block off `I` escapes
+surely (`hone`). -/
+theorem missProb_two_toReal_on (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l₁, l₂]) (d : Design.Two)
+    (Pt : Partition) (ρ : Finset G → ℕ) (I : Finset ℕ) (hI : I ⊆ Finset.range d.part.blocks.length)
+    (hρ : Set.BijOn ρ (l₁.blocks.parts : Set (Finset G)) (I : Set ℕ))
     (T : Finset (Finset G)) (fp : ℕ → ℕ → ℕ)
     (h₁ : ∀ R ⊆ l₁.blocks.parts, ((l₁.design Finset.univ).missProb R).toReal = d.replay.Pa d.part (R.image ρ))
-    (h₂ : ∀ X ∈ l₁.blocks.parts, ((l₂.design X).missProb (T.filter (· ⊆ X))).toReal = d.esc Pt fp (ρ X)) :
+    (h₂ : ∀ X ∈ l₁.blocks.parts, ((l₂.design X).missProb (T.filter (· ⊆ X))).toReal = d.esc Pt fp (ρ X))
+    (hone : ∀ i ∈ Finset.range d.part.blocks.length \ I, d.esc Pt fp i = 1) :
     (L.design.missProb T).toReal = d.Pa Pt fp := by
   classical
   have hi := L.inside
@@ -111,28 +146,27 @@ theorem missProb_two_toReal (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels 
       1 - ((l₂.design X).missProb (T.filter (· ⊆ X))).toReal := fun X => by
     rw [ENNReal.toReal_sub_of_le (SamplingDesign.missProb_le_one _ _) ENNReal.one_ne_top, ENNReal.toReal_one]
   simp only [hsub]
-  unfold Design.Two.Pa
+  rw [d.Pa_eq_sum_on Pt fp I hI hone]
   set A := l₁.blocks.parts
-  set n := d.part.blocks.length
   have hinj : Set.InjOn ρ (A : Set (Finset G)) := hρ.injOn
-  have himage_sdiff : ∀ R ⊆ A, (A \ R).image ρ = Finset.range n \ R.image ρ := by
+  have himage_sdiff : ∀ R ⊆ A, (A \ R).image ρ = I \ R.image ρ := by
     intro R hR
     ext i
-    simp only [Finset.mem_image, Finset.mem_sdiff, Finset.mem_range]
+    simp only [Finset.mem_image, Finset.mem_sdiff]
     constructor
     · rintro ⟨X, ⟨hXA, hXR⟩, rfl⟩
-      refine ⟨by simpa using hρ.mapsTo (Finset.mem_coe.2 hXA), ?_⟩
+      refine ⟨Finset.mem_coe.1 (hρ.mapsTo (Finset.mem_coe.2 hXA)), ?_⟩
       rintro ⟨Y, hYR, hY⟩
       exact hXR (hinj (Finset.mem_coe.2 (hR hYR)) (Finset.mem_coe.2 hXA) hY ▸ hYR)
     · rintro ⟨hi, hnot⟩
-      obtain ⟨X, hXA, rfl⟩ := hρ.surjOn (by simpa using hi)
+      obtain ⟨X, hXA, rfl⟩ := hρ.surjOn (Finset.mem_coe.2 hi)
       exact ⟨X, ⟨Finset.mem_coe.1 hXA, fun hXR => hnot ⟨X, hXR, rfl⟩⟩, rfl⟩
   refine Finset.sum_nbij' (fun R => R.image ρ) (fun S => A.filter fun X => ρ X ∈ S) ?_ ?_ ?_ ?_ ?_
   · intro R hR
     simp only [Finset.mem_powerset] at hR ⊢
     intro i hi
     obtain ⟨X, hX, rfl⟩ := Finset.mem_image.1 hi
-    simpa using hρ.mapsTo (Finset.mem_coe.2 (hR hX))
+    exact Finset.mem_coe.1 (hρ.mapsTo (Finset.mem_coe.2 (hR hX)))
   · intro S _
     simp only [Finset.mem_powerset]
     exact Finset.filter_subset _ _
@@ -153,7 +187,7 @@ theorem missProb_two_toReal (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels 
     · rintro ⟨X, ⟨-, hX⟩, rfl⟩
       exact hX
     · intro hi
-      obtain ⟨X, hXA, rfl⟩ := hρ.surjOn (by simpa using hS hi)
+      obtain ⟨X, hXA, rfl⟩ := hρ.surjOn (Finset.mem_coe.2 (hS hi))
       exact ⟨X, ⟨Finset.mem_coe.1 hXA, hi⟩, rfl⟩
   · intro R hR
     simp only [Finset.mem_powerset] at hR
@@ -162,6 +196,41 @@ theorem missProb_two_toReal (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels 
     congr 2
     · exact Finset.prod_congr rfl fun X hX => by rw [h₂ X (hR hX)]
     · exact Finset.prod_congr rfl fun X hX => by rw [h₂ X (Finset.mem_sdiff.1 hX).1]
+
+/-- **Two levels agree with `Design.Two`** where they realize its outer and inner samples: the outer blocks are its replay blocks
+under `ρ`, the first design's miss is `P_a` (`h₁`), and the design in each outer block misses `T`'s blocks inside it with
+the escape at `fp` (`h₂`). -/
+theorem missProb_two_toReal (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l₁, l₂]) (d : Design.Two)
+    (Pt : Partition) (ρ : Finset G → ℕ)
+    (hρ : Set.BijOn ρ (l₁.blocks.parts : Set (Finset G)) (Finset.range d.part.blocks.length : Set ℕ))
+    (T : Finset (Finset G)) (fp : ℕ → ℕ → ℕ)
+    (h₁ : ∀ R ⊆ l₁.blocks.parts, ((l₁.design Finset.univ).missProb R).toReal = d.replay.Pa d.part (R.image ρ))
+    (h₂ : ∀ X ∈ l₁.blocks.parts, ((l₂.design X).missProb (T.filter (· ⊆ X))).toReal = d.esc Pt fp (ρ X)) :
+    (L.design.missProb T).toReal = d.Pa Pt fp :=
+  L.missProb_two_toReal_on hL d Pt ρ _ subset_rfl hρ T fp h₁ h₂ fun i hi => by simp at hi
+
+/-- **Two levels agree with `Design.Two` at its uniform inner subsets, on the replay blocks `I`**: as
+`missProb_two_toReal_on`, with the design in each outer block `X` a uniform `min(k_t, n_{ρ(X),t})`-subset of each of its
+cells `C X t`, which have `Design.Two`'s cell sizes and hold `fp(ρ(X), t)` blocks of `T`. -/
+theorem missProb_two_toReal_cells_on (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l₁, l₂]) (d : Design.Two)
+    (Pt : Partition) (ρ : Finset G → ℕ) (I : Finset ℕ) (hI : I ⊆ Finset.range d.part.blocks.length)
+    (hρ : Set.BijOn ρ (l₁.blocks.parts : Set (Finset G)) (I : Set ℕ))
+    (T : Finset (Finset G)) (fp : ℕ → ℕ → ℕ)
+    (h₁ : ∀ R ⊆ l₁.blocks.parts, ((l₁.design Finset.univ).missProb R).toReal = d.replay.Pa d.part (R.image ρ))
+    (C : Finset G → ℕ → Finset (Finset G))
+    (hdesign : ∀ X ∈ l₁.blocks.parts,
+      l₂.design X = SamplingDesign.cellSubsets Pt.strata.length (C X) fun t => d.k.getD t 0)
+    (hcard : ∀ X ∈ l₁.blocks.parts, ∀ t < Pt.strata.length, (C X t).card = (cell Pt d.part (ρ X) t).card)
+    (hcount : ∀ X ∈ l₁.blocks.parts, ∀ t < Pt.strata.length, (T.filter (· ⊆ X) ∩ C X t).card = fp (ρ X) t)
+    (hone : ∀ i ∈ Finset.range d.part.blocks.length \ I, d.esc Pt fp i = 1) :
+    (L.design.missProb T).toReal = d.Pa Pt fp := by
+  refine L.missProb_two_toReal_on hL d Pt ρ I hI hρ T fp h₁ (fun X hX => ?_) hone
+  rw [hdesign X hX, SamplingDesign.missProb_cellSubsets, ENNReal.toReal_prod]
+  unfold Design.Two.esc
+  rw [← Fin.prod_univ_eq_prod_range]
+  refine Finset.prod_congr rfl fun t _ => ?_
+  rw [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast, hcard X hX t t.2, hcount X hX t t.2]
+  rfl
 
 /-- **Two levels agree with `Design.Two` at its uniform inner subsets**: as `missProb_two_toReal`, with the design in each outer
 block `X` a uniform `min(k_t, n_{ρ(X),t})`-subset of each of its cells `C X t`, which have `Design.Two`'s cell sizes
@@ -176,14 +245,8 @@ theorem missProb_two_toReal_cells (L : Levels G) {l₁ l₂ : Level G} (hL : L.l
       l₂.design X = SamplingDesign.cellSubsets Pt.strata.length (C X) fun t => d.k.getD t 0)
     (hcard : ∀ X ∈ l₁.blocks.parts, ∀ t < Pt.strata.length, (C X t).card = (cell Pt d.part (ρ X) t).card)
     (hcount : ∀ X ∈ l₁.blocks.parts, ∀ t < Pt.strata.length, (T.filter (· ⊆ X) ∩ C X t).card = fp (ρ X) t) :
-    (L.design.missProb T).toReal = d.Pa Pt fp := by
-  refine L.missProb_two_toReal hL d Pt ρ hρ T fp h₁ fun X hX => ?_
-  rw [hdesign X hX, SamplingDesign.missProb_cellSubsets, ENNReal.toReal_prod]
-  unfold Design.Two.esc
-  rw [← Fin.prod_univ_eq_prod_range]
-  refine Finset.prod_congr rfl fun t _ => ?_
-  rw [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast, hcard X hX t t.2, hcount X hX t t.2]
-  rfl
+    (L.design.missProb T).toReal = d.Pa Pt fp :=
+  L.missProb_two_toReal_cells_on hL d Pt ρ _ subset_rfl hρ T fp h₁ C hdesign hcard hcount fun i hi => by simp at hi
 
 end Levels
 

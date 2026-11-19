@@ -233,7 +233,7 @@ OWN_NAMES = {
         (r"_PeriodAuditor",
          "the auditor of H1's challenge period in the vLLM adapter's PoUW tests: a span of time, which retired_terms.md's row "
          "of \"window\" calls a period, and not the stretch of time a bound is about that its row of `*Period*` retires",
-         ("tests/adapters/vllm/tests/pipeline/test_serve_h1.py", "tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py")),
+         ("tests/adapters/vllm/tests/pipeline/test_serve_h1.py",)),
     ),
     "row of record": (
         (r"row[\s_]+of[\s_]+record",

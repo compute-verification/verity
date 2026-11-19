@@ -9,7 +9,7 @@
   "PousVerifier.DifftestMain": "the difftest against the Python verifier, under `runs`: compiled evaluation of PousVerifier.Difftest.main, audited under PousVerifier, a test and not a proof; with `serve`, Difftest.serve of PousVerifier.Difftest.transcript, which interop.py drives against wire.py",
   "PousVerifier.VerdictDifftestMain": "the pous-verdict-difftest server's entry point, one line: Difftest.serve of PousVerifier.VerdictDifftest's gates and eval, which tests/test_verdict_difftest.py drives against the Definition verdict_circuit.PousVerdict, compiled; audited under PousVerifier",
   "PousVerifier.RunProtocolMain": "the pous-run-protocol executable's entry point, one line: Core.Protocol.main of PousVerifier.RunProtocol.protocol (testProtocol under --test), audited under PousVerifier and CoreProtocol; tests/test_run_protocol.py drives its serve against the Python reference",
-  "PousVerifier.SignedRunMain": "the pous-signed-run executable's entry point, one line: Core.Protocol.main of PousVerifier.SignedRun.protocol (testProtocol under --test), audited under PousVerifier and CoreProtocol; tests/test_signed_run.py drives its serve against the Python reference"
+  "PousVerifier.SignedRunMain": "the pous-signed-run executable's entry point, one line: Core.Protocol.main of PousVerifier.SignedRun.protocol (testProtocol under --test), audited under PousVerifier and CoreProtocol"
  },
  "runs": {
   "PousVerifier.DifftestMain": {
