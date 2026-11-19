@@ -42,7 +42,7 @@ its prompt ids, prompt position p at `ids[position(p)]` for p below `fields`, ea
 `max_tokens`, `seed`, `temperature` and `top_p`. The ids are the scan's own reading of the attested cells, each the
 decimal field of the network attester's signed ingress row its request came in on, so the row is held to the attested
 bytes by the scan's gates and needs no other tie. A Program that reads its slot as i32s (occupancy, prompt length and NP
-ids; vLLM's `ScanSlots_v3`) reads `occ`, `fields` and the ids each at its bits in the state row (`slot_row`),
+ids; vLLM's `ScanSlots_v4`, one a lane) reads `occ`, `fields` and the ids each at its bits in the state row (`slot_row`),
 zero-extended, copies with no gate, through a read of the whole state row (`state_bits`, 9,353 words at w63's class).
 An empty slot's `fields` and ids aren't zeroed, nor are the ids past `fields` (they can be a request's not
 anchored at b, or an earlier request's), so such a Program masks its outputs by `occ` and reads a slot's first
@@ -598,7 +598,7 @@ def token_row(cls: Class, st: State) -> list[tuple[int, int, tuple[int, ...]]]:
 
 
 def slot_row(cls: Class, j: int, NP: int) -> list[tuple[int, int]]:
-    """Where slot j's row of NP + 2 i32s (as vLLM's `ScanSlots_v3` reads it: occupancy, prompt length, then the ids of prompt
+    """Where slot j's row of NP + 2 i32s (as vLLM's `ScanSlots_v4` of lane j reads it: occupancy, prompt length, then the ids of prompt
     positions 0 … NP − 1) is in the state row: each i32's (offset, width) in bits (`layout`), its value those bits
     zero-extended, least significant first: `occ`, `fields`, then position p's id at `ids[position(p)]`."""
     if not 0 <= j < cls.NR:
@@ -918,7 +918,7 @@ IngressScanStart = CompositeDefinition(
     "IngressScanStart", 3, STATICS, _sig_start, _body_start, conformance="exact-model-tested",
     doc="the scan's state at a boundary: sin, the state there (`state_bits` bits, the class's state row; at the first, "
         "the state an execution phase's scan starts from), each bit through two NOTs, so the rows its outputs commit "
-        "are sin, o0 as bits and o1 as the u16 words `ScanSlots_v3` reads")
+        "are sin, o0 as bits and o1 as the u16 words each lane's `ScanSlots_v4` reads")
 
 
 def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[int]]]) -> list[list]:

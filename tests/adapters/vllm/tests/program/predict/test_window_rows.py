@@ -423,7 +423,7 @@ def test_a_full_windows_entry_j_is_the_request_the_scan_started_in_slot_j_whatev
 def test_a_window_of_lanes_1_and_3_of_four_has_an_entry_a_lane_and_the_scan_takes_them():
     """Requests in lanes 1 and 3 of a class of four lanes: the window's one `SlotEntry_v1` has four units in lane order,
     lanes 0 and 2 each on its occupancy word and a collector of its own (`OutCollect_v1{FIRST}`), both in lane 1's
-    Program's slot, so no wire but the scan's crosses slots: every slot's `ScanSlots_v3` reads its start, and its
+    Program's slot, so no wire but the scan's crosses slots: every lane's `ScanSlots_v4` reads its start, and its
     ingress units read entry j at port ``prog<j>``. Their entries read 0 and the occupied lanes' read 1 with their 2
     outputs, and the network attester's scan step takes that Programs' row at the lanes' anchor, where it refuses the
     two occupied lanes' entries as the first two of the row."""
