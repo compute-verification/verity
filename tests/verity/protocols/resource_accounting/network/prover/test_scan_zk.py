@@ -1478,7 +1478,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
 
 def test_a_served_windows_circuit_record_is_refused_by_name(tmp_path):
     """The window-circuit record `window_circuit` writes without tables is a served window's circuit, whose entries are
-    its Programs' longest first, not slot k's at k: `circuit_of_record` refuses it, and a record that registers no value
+    in the order its Programs end, not slot k's at k: `circuit_of_record` refuses it, and a record that registers no value
     or no `registered` at all, by `SERVED`; one that registers a table's value beside the scan state names its program."""
     from verity.protocols.resource_accounting.network.prover import scan_period as SP
     head = {"format": SP.CIRCUIT, "program": "c3" * 64}

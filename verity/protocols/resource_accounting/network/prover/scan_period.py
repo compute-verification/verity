@@ -72,9 +72,9 @@ from verity.commitments.periods.interface import CIRCUIT
 
 ATTESTATION_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
 #: why a window-circuit record that registers no value beside the scan state, the served lowering's, is refused
-SERVED = ("a served window's circuit writes its Programs' entries longest first, and the period check reads entry k as "
-          "slot k's: refused until the entries are in slot order (a window-circuit record that registers no value "
-          "beside the scan state, no table, is a served window's circuit)")
+SERVED = ("a served window's circuit writes its Programs' entries in the order its Programs end, and the period check "
+          "reads entry k as slot k's: refused until the check holds each entry to its slot (a window-circuit record "
+          "that registers no value beside the scan state, no table, is a served window's circuit)")
 
 
 def certificates(run: Path, w: int) -> list[dict]:

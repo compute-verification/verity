@@ -1052,9 +1052,9 @@ def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, ne
             "a scan of no v3c": f"the chain's scan read no V3c window, not {v3c / 'window'}",
             "no period.json": "the period's rows case: FileNotFoundError",
             "no window-circuit record": "the verifier's window-circuit record: FileNotFoundError",
-            "a served window's circuit record": "a served window's circuit writes its Programs' entries longest first, "
-                                                "and the period check reads entry k as slot k's: refused until the "
-                                                "entries are in slot order"}[case] in why, why
+            "a served window's circuit record": "a served window's circuit writes its Programs' entries in the order "
+                                                "its Programs end, and the period check reads entry k as slot k's: "
+                                                "refused until the check holds each entry to its slot"}[case] in why, why
     logs = {"chain.log", "period.log"} - ({"chain.log"} if case == "no chain step" else set())
     assert {p.name for p in piece.iterdir()} == {CP.REFUSED, *logs}
     said = (piece / "period.log").read_text()
