@@ -126,8 +126,15 @@ def step(a) -> int:
                 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
                 t = time.perf_counter()
                 try:
-                    rec["circuit_bytes"] = len(OC.lower(c_s, part, PF.lower_executable))
-                    rec["refused"] = None
+                    exe = PF.lower_executable()
+                    rec["build_s"] = round(time.perf_counter() - t, 1)
+                    t = time.perf_counter()
+                    text = OC.lower(c_s, part, lambda: exe)
+                    (d / f"circuit-{u}.txt").write_bytes(text)
+                    from verity_flock import circuit as FC
+                    meta = FC.meta_of(text.decode())
+                    rec |= {"circuit_bytes": len(text), "head": text.split(b"\n", 1)[0].decode()[:300],
+                            "ports": [q[:2] for q in meta.get("ports", [])][:40], "refused": None}
                 except (OC.NotDerived, OC.Refused) as e:
                     rec["refused"] = f"{type(e).__name__}: {e}"
         elif a.name == "door":
