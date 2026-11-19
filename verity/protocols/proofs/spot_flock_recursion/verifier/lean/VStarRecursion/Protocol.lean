@@ -241,8 +241,7 @@ def registeredOf (j : Json) :
   let own ← Flock.Registered.ofJson j
   let known ← Flock.Registered.knownOf j
   Flock.Registered.checkKnownAll own known
-  pure (own, true, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
-    ← Flock.Registered.paramsOf j)
+  pure (own, true, known, ← Flock.Registered.paramsOf j)
 
 /-- `pure ()` when `b`, else the refusal `why`. -/
 def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
