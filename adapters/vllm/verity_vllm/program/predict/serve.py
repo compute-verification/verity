@@ -68,11 +68,13 @@ def preflight(opts: Any, *, card: bool) -> dict[str, Any]:
     import tempfile
 
     import numpy as np
+    from verity.commitments import randomness as RND
     from verity.commitments.cuda.salt_stream.engine import host_lib
     from verity.commitments.periods import rows as RW
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 
     from . import window_strings as WS
+    from .window_record import SALTS
 
     out = Path(tempfile.mkdtemp(prefix="plan-preflight-"))
     plan = plan_of(out, opts, lambda: None)
@@ -88,7 +90,7 @@ def preflight(opts: Any, *, card: bool) -> dict[str, Any]:
             raise UsageError(f"--checkpoint-dir {ck} holds no config.json and safetensors shards")
     twin = WS.HostTwin(host_lib(Path(rec.build if rec else out / "salt_stream") / "host"))
     rng = np.random.default_rng(int.from_bytes(os.urandom(8), "little"))
-    key = os.urandom(64)
+    key = RND.derive(os.urandom(64), SALTS, {"window": "preflight"})
     for words in (1, 7, 64):
         rows = rng.integers(0, 1 << 16, size=(5, words), dtype=np.uint16)
         lr = _Leaf(3, 2, rows, SCHEMA_HM96_SHA512_ROW_V2)

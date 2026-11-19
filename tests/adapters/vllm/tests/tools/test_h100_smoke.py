@@ -124,6 +124,22 @@ def test_the_window_commit_is_the_applications_launchers_entry_off_the_card(tmp_
     assert re.search(r"benchmarks/one_stage/window_commit\.py window-commit --serve-run \"\$D\"", VERDICTS.read_text())
 
 
+def test_the_serve_makes_each_windows_record_as_window_commit_does_unless_record_0_and_its_plan_is_preflighted_first(tmp_path):
+    p, calls = run_dry(tmp_path)
+    assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
+    serve, _, commit = served(calls)
+    args = serve["argv"][1:]
+    assert [opt(args, k) for k in ("--sampling-design", "--checkpoint-dir")] == \
+        [opt(commit, k) for k in ("--sampling-design", "--checkpoint-dir")]
+    pre = [i for i, c in enumerate(calls) if c["argv"][:3] == ["-", "1", "serve-openai"]]
+    assert len(pre) == 1 and calls[pre[0]]["argv"][2:] == serve["argv"][1:], calls
+    script = (ROOT / SMOKE).read_text()
+    assert script.index("serve.preflight(opts") < script.index('"${LEASE[@]}" ||')
+    p, calls = run_dry(tmp_path / "plan", RECORD="0")
+    assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
+    assert "--sampling-design" not in served(calls)[0]["argv"]
+
+
 def test_the_launcher_refuses_the_retired_tie_and_scheme_by_name(tmp_path):
     for var in ("PEARLPLUS_TIE", "SCHEME"):
         env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "DRY": "1", var: "1" if var == "PEARLPLUS_TIE" else "pearl-plus"}
