@@ -1254,7 +1254,8 @@ def test_a_declared_runs_phi_reads_the_config_of_record_of_its_workloads_pin():
 
 def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_path, capsys):
     """A local challenger's key is at its development parameters; a gate's is its key record's, deployed only at
-    `lms.DEPLOYED`'s, and without the record no word is stated."""
+    `lms.DEPLOYED`'s, and without the record no word is stated. The challenger party's host on this machine, which
+    `verity run` hands the path prover as ``loopback:HOST:PORT``, is named a development session's, never an auditor's."""
     from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
     assert PP.ran_with("local") == ("ran with: coins local challenger; parameters development (the local challenger's LMS key "
@@ -1268,8 +1269,17 @@ def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_p
     assert PP.ran_with(gate, record(1, 20)).endswith("parameters deployed (the challenger's LMS key at W=1, H=20, its key record's)")
     assert "parameters development (the challenger's LMS key at W=4, H=10" in PP.ran_with(gate, record(4, 10))
     assert PP.ran_with(gate) == f"ran with: coins the auditor device's challenger ({gate}); parameters not stated (no challenger key record given)"
-    with pytest.raises(ValueError, match="local, or gate:USER@HOST"):
+    party = "loopback:127.0.0.1:4455"
+    assert PP.ran_with(party) == (f"ran with: coins the challenger party's host on this machine ({party}), a development "
+                                  "session's, not an auditor's; parameters development (the party's own LMS key, no key "
+                                  "record given)")
+    at_deployed = PP.ran_with(party, record(1, 20))
+    assert at_deployed.endswith("parameters development (the party's own LMS key at W=1, H=20, its key record's)")
+    assert "deployed" not in at_deployed and "auditor device" not in at_deployed
+    with pytest.raises(ValueError, match="local, loopback:HOST:PORT or gate:USER@HOST"):
         PP.ran_with("remote")
+    assert PP.main(["ran-with", "--challenger", party]) == 0
+    assert capsys.readouterr().out.strip() == PP.ran_with(party)
     (f := tmp_path / "key.json").write_text(json.dumps(record(1, 20)))
     assert PP.main(["ran-with", "--challenger", gate, "--challenger-key", str(f)]) == 0
     assert capsys.readouterr().out.strip() == PP.ran_with(gate, record(1, 20))

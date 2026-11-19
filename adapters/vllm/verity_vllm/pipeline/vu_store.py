@@ -19,7 +19,7 @@ one it cuts the stored rows.
 
 `extract(store, where=, module=)`: `where` is a Definition selector in the IR query grammar (`verity.circuits.query_ast.NameSel`:
 `Gemm_v1`, `Gemm_v1{K=2048,*}`, `Attention_v3{D=64,*}`), matched against each evaluation's Definition and statics; `module`
-keeps the units whose module is that node or below it (a module path, as `program_graph` names the nodes).  The selected
+keeps the units whose module is that node or below it (a module path).  The selected
 evaluations go through `vu_export.decompose` unchanged and are written as flat sets.
 """
 from __future__ import annotations
