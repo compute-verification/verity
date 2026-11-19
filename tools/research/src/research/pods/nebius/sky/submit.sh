@@ -136,7 +136,7 @@ PY
 fi
 # At most VY_MAX_WAITING_CELLS vLLM deployments' tasks (default 4) and VY_MAX_WAITING jobs in all (default 6) wait in Kueue: a job waiting for
 # quota still holds one of the SkyPilot controller's 8 launch slots (provision_timeout: -1), and with every slot held no other job
-# reaches Kueue. Only SkyPilot's own pods count: the dispatcher's, the lease holders' and commit-pack's Kueue Jobs hold no launch
+# reaches Kueue. Only SkyPilot's own pods count: the lease holders' Kueue Jobs hold no launch
 # slot (counting them would refuse every Sky submission). A queue it can't read doesn't block: this bounds throughput
 # loss, it guards no spend.
 wl=$(mktemp)
@@ -152,7 +152,7 @@ def waiting(w):
     st = w.get("status") or {}
     done = any(c.get("type") == "Finished" and c.get("status") == "True" for c in st.get("conditions") or [])
     return not st.get("admission") and not done
-def sky(w):   # a SkyPilot pod's workload; a batch/v1 Job's (dispatcher, holders, commit-pack) holds no launch slot
+def sky(w):   # a SkyPilot pod's workload; a batch/v1 Job's (a lease holder's) holds no launch slot
     m = w.get("metadata") or {}
     return any(o.get("kind") == "Pod" for o in m.get("ownerReferences") or []) or str(m.get("name", "")).startswith("pod-")
 pending = [w for w in items if waiting(w) and sky(w)]

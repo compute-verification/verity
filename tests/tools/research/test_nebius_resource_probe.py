@@ -229,7 +229,7 @@ def test_a_pool_report_that_does_not_parse_flags_no_gpu_and_says_so_but_a_missin
     assert capsys.readouterr().err == ""
     (tmp_path / "pool.json").write_text("not json")
     assert P.pool_flagged(tmp_path / "pool.json", T0) == set()
-    assert "unread, so no GPU counts as flagged by pool_n1 (JSONDecodeError" in capsys.readouterr().err
+    assert "unread, so no GPU counts as flagged by the pool file (JSONDecodeError" in capsys.readouterr().err
 
 
 def test_the_write_probes_kubectl_that_times_out_names_no_pod_and_says_why(monkeypatch, capsys):

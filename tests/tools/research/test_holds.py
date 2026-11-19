@@ -1,6 +1,6 @@
 """What `research status` / `inspect` say a live run got and waits on (research.holds over research.scopemem's `node`): a fake
 /proc, cgroup tree, gpu-lease directory and slot files under tmp_path, read through the program `node_readings` sends (no ssh),
-in the formats the nodes write (gpu-lease's owner and wait lines, n1-lease.json, slot.py's `.who` files and tickets)."""
+in the formats the nodes write (gpu-lease's owner and wait lines, slot.py's `.who` files and tickets)."""
 from __future__ import annotations
 
 import fcntl
@@ -8,7 +8,6 @@ import json
 import os
 import subprocess
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -21,8 +20,7 @@ SESSION = "/user.slice/user-1001.slice/session-197561.scope"
 #: a vy-nebius-2 /run/gpu-lease/0.owner, its run renamed r1
 OWNER = ("pid=40 run=r1 who=bc-1beaff8e uuid=GPU-5f1149a4-e5f5-1007-ec78-7cd350a69a4f since=2026-10-06T16:46:00Z "
          "until=2026-10-06T17:11:00Z mem=1544G timed=1 scope=gpu-lease-40 cmd=env VY_PROVERS_CPUS=160-175 vy-provers taskset -c 160-175")
-FENCE = "pid=70 run=- who=kubernetes uuid=- since=2026-10-06T11:53:08Z until=2026-10-07T11:53:08Z cmd=n1-lease-fence: not in node 1's lease pool (n1_lease.py)"
-NOW = datetime(2026, 10, 7, 3, 10, tzinfo=UTC)
+FENCE = "pid=70 run=- who=kubernetes uuid=- since=2026-10-06T11:53:08Z until=2026-10-07T11:53:08Z cmd=lease-fence: held by no run"
 
 
 def _proc(proc: Path, pid: int, cgroup: str, cpus: str) -> None:
@@ -66,8 +64,6 @@ def machine(tmp_path):
     (leases / "wait.1791335000000000000.80").write_text("pid=80 n=1 run=rX who=other since=2026-10-07T03:00:00Z mem=8G\n")
     (leases / "wait.1791335060000000000.60").write_text("pid=60 n=2 run=r2 who=lane since=2026-10-07T03:01:00Z max=30 mem=193G preempt=1\n")
     (leases / "wait.1791334000000000000.81").write_text("pid=81 n=1 run=r2 who=gone since=2026-10-07T02:40:00Z\n")   # a dead waiter's
-    (leases / "n1-lease.json").write_text(json.dumps({"t": "2026-10-07T03:09:58Z", "pool": 1, "pool_name": "node1", "blocked": None,
-                                                      "pending_holders": ["gpu-pool-x"], "waiting": [], "gpus": []}))
     (locks / "slots").write_text("a 32-63 only=trains   # train checks\nb 64-95\n")
     (locks / "check-a.lock").touch()
     (locks / "check-b.lock").touch()
@@ -119,8 +115,7 @@ def test_status_reads_every_run_on_a_machine_with_one_ssh(machine, tmp_path, mon
     assert "cpus 64-95 (affinity); its cgroup allows 0-159\n" in out
     assert "gpus GPU 0 of " + str(leases) + "  pid 40 since 2026-10-06T16:46Z until 2026-10-06T17:11Z mem 1544G timed\n" in out
     assert "slot check slot b (cores 64-95) since 2026-10-07T03:02Z\n" in out and "slot Lean slot check/0 since 2026-10-07T03:05Z\n" in out
-    assert (f"waits gpu-lease {leases}: 2 GPU(s) preemptible since 2026-10-07T03:01Z; 1 waiter(s) ahead, 2 of 4 GPUs unlocked; "
-            "pool 1 GPU(s), 1 holder(s) pending\n") in out
+    assert (f"waits gpu-lease {leases}: 2 GPU(s) preemptible since 2026-10-07T03:01Z; 1 waiter(s) ahead, 2 of 4 GPUs unlocked\n") in out
     assert "waits check slot since " in out and ": 0 ahead in line; b held (a: candidates only)\n" in out
     assert out.count("waits") == 2 and "gpus GPU 1" not in out
 
@@ -156,49 +151,3 @@ def test_a_machine_that_cant_be_reached_leaves_the_others_read(machine, tmp_path
     monkeypatch.setattr(remote, "fetch", lambda d, **_: {})
     assert main(["status", "--runs-dir", str(_control(tmp_path, machine[0])), "--refresh"]) == 0
     assert capsys.readouterr().out.count("mem  unread: reading vy-nebius-2: RuntimeError: RUNPOD_SSH_KEY_B64 not in this shell") == 2
-
-
-DESC = """
-[[workstreams]]
-name = "provers"
-node = "vy-nebius-1"
-gpus = 2
-
-[[workstreams]]
-name = "deployments-gpu"
-node = "vy-nebius-1"
-gpus = 6
-
-[policy.vy-nebius-1.lease-pool.provers]
-max = 8
-
-[policy.vy-nebius-1.lease-pool.circuits]
-dir = "/run/gpu-lease-circuits"
-queue = "deployments-gpu"
-"""
-
-
-def test_node1_limit_is_the_pool_queues_quota_unless_every_waiter_is_preemptible(tmp_path):
-    desc = tmp_path / "nebius.toml"
-    desc.write_text(DESC)
-    plain, fill = [{"n": "4"}], [{"n": "4", "preempt": "1"}]
-    assert H.n1_limit("/run/gpu-lease", 4, plain, None, NOW, desc) == (
-        "node 1's provers pool grants at most the provers queue's quota, 2 GPU(s), less its other Workloads', while a waiter isn't "
-        "--preemptible; this asks for 4, more than that")
-    assert "the deployments-gpu queue's quota, 6 GPU(s)" in H.n1_limit("/run/gpu-lease-circuits", 1, plain, None, NOW, desc)
-    assert "borrows more only while every waiter is --preemptible" in H.n1_limit("/run/gpu-lease", 4, fill, None, NOW, desc)
-    lim = "max=8 borrow=6 borrow-until=2026-10-07T12:00:00Z from=policy"
-    assert H.n1_limit("/run/gpu-lease", 4, fill, lim, NOW, desc).startswith(
-        "node 1's provers pool grants at most 8 GPU(s): the provers queue's quota 2 + borrow 6, max 8")
-    assert H.n1_limit("/run/gpu-lease", 4, plain, lim, NOW, desc).endswith("this asks for 4, more than that")
-    assert H.n1_limit("/run/gpu-lease", 4, fill, lim.replace("10-07", "10-06"), NOW, desc).startswith("node 1's provers pool grants at most 2 GPU(s)")
-    assert H.n1_limit("/run/other", 1, plain, None, NOW, desc) is None
-    assert H.n1_limit("/run/gpu-lease", 1, plain, None, NOW) is not None          # the repository's description still reads
-
-
-def test_node1_waits_name_their_limit():
-    node = {"leases": {"/run/gpu-lease": {"gpus": 8, "locked": 8, "owners": [], "limits": None, "pool": None,
-                                          "waits": [{"file": "wait.1.60", "pid": "60", "n": "1", "run": "r2", "since": "2026-10-07T03:01:00Z"}]}}}
-    (line,) = H.gpu_waits("r2", "vy-nebius-1", node, NOW)
-    assert "0 of 8 GPUs unlocked; node 1's provers pool grants at most the provers queue's quota" in line
-    assert "pool grants" not in H.gpu_waits("r2", "vy-nebius-2", node, NOW)[0]

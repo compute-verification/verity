@@ -61,8 +61,8 @@ verity-torch = { workspace = true }
 verity-machine-model = { workspace = true }
 
 [dependency-groups]
-# pyyaml: the tests of node 1's dispatcher and pack pilot (research/pods/nebius), which render Job templates with it on the
-# node's own venv; without it those test modules skip. Not a dependency of `research`, which stays stdlib only. editables:
+# pyyaml: the tests of the Job templates (research/pods/nebius/sky), which parse them with it; without it the modules that need it skip.
+# Not a dependency of `research`, which stays stdlib only. editables:
 # hatch's exact editable mode, which uv doesn't install by itself. ruff and mypy: the ruff baselines, adapters/vllm's
 # (tests/adapters/vllm/tests/lint/test_ruff.py) and the rest of the tree's (tests/lint/test_repo_ruff.py), and the integration's
 # type errors (tests/adapters/vllm/tests/lint/test_mypy.py), pinned because another version finds other things.
@@ -104,6 +104,7 @@ untraced = [
     "tests/test_merge_drivers.py",
     "tests/test_module_strings.py",
     "tests/test_no_environment_in_asserts.py",
+    "tests/test_no_machine_named_files.py",
     "tests/test_no_wall_clock.py",
     "tests/test_one_translator.py",
     "tests/test_pins.py",

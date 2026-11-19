@@ -372,11 +372,6 @@ def test_plan_takes_the_caller_from_sudo_and_passes_only_harmless_variables(proc
             VS.plan(args, environ)
     assert VS.plan(["du-bundles"], env)[0] == ["/usr/bin/find", *VS.BUNDLE_ROOTS, "-xdev", "-name", "replay_bundle_p*", "-prune",
                                                "-exec", "/usr/bin/du", "-sb", "{}", "+"]
-    with pytest.raises(VS.Refused):
-        VS.plan(["hf-ns", "BASH_ENV=/tmp/x", "--", "/workspace/n2_build.sh", "a"], env)
-    hf = VS.plan(["hf-ns", "--", "/workspace/n2_build.sh", "a"], env)[0]
-    assert hf[:4] == ["/usr/bin/unshare", "--mount", "--propagation", "private"] and hf[-6:] == [*VS.HF_BIND, str(CALLER), str(CALLER_GID),
-                                                                                               "/workspace/n2_build.sh", "a"]
     if os.geteuid() != 0:
         assert VS.main(["renice", "-n", "1", "-p", "1"]) == VS.REFUSED
 
@@ -390,7 +385,7 @@ def test_systemctl_stops_only_a_scope_whose_processes_are_all_the_callers(proc, 
         return "/x.slice/fill-timing-1.scope"
     assert VS.systemctl(["stop", "fill-timing-1.scope"], ME, show, cg, proc) == [VS.SYSTEMCTL, "stop", "fill-timing-1.scope"]
     assert VS.systemctl(["kill", "--signal=SIGTERM", "fill-timing-1.scope"], ME, show, cg, proc)[2] == "--signal=SIGTERM"
-    for args, uid in ((["stop", "fill-timing-1.scope"], ME + 1), (["stop", "vy-custody.service"], ME), (["start", "x.scope"], ME),
+    for args, uid in ((["stop", "fill-timing-1.scope"], ME + 1), (["stop", "vy-node-sweep.service"], ME), (["start", "x.scope"], ME),
                       (["stop", "--signal=KILL", "x.scope"], ME), (["kill", "--signal=SIGSYS", "x.scope"], ME),
                       (["stop", "a.scope", "b.scope"], ME)):
         with pytest.raises(VS.Refused):
@@ -1007,19 +1002,18 @@ def test_untrusted_names_every_path_or_parent_someone_but_root_can_change():
 def test_kubeconfigs_and_the_tmux_command_a_switch_back_runs():
     assert LO.kubeconfig_admin("users:\n- name: a\n  user:\n    client-certificate-data: X\n    client-key-data: Y\n")
     assert not LO.kubeconfig_admin(LO.research_kubeconfig("tok", "CA"))
-    text = (NEBIUS / "units" / "vy-n1-lease@.service").read_text()
-    cmd = LO.tmux_command(text, "vy-n1-lease@provers.service")
-    assert "vy-n1-lease@provers.env" in cmd and "%i" not in cmd and "$$" not in cmd and "cd /home/research &&" in cmd
-    assert cmd.endswith(">> /workspace/verity-guest/n1-lease-provers.log 2>&1")
-    assert (LO.unit_file("vy-n1-lease@provers.service"), LO.service_of("vy-custody.timer")) == ("vy-n1-lease@.service", "vy-custody.service")
+    text = (NEBIUS / "units" / "vy-write-probe@.service").read_text()
+    cmd = LO.tmux_command(text, "vy-write-probe@vy-nebius-1.service")
+    assert "--node vy-nebius-1" in cmd and "%i" not in cmd and "$$" not in cmd and "cd / &&" in cmd
+    assert (LO.unit_file("vy-write-probe@vy-nebius-1.service"), LO.service_of("vy-monitors.timer")) == ("vy-write-probe@.service", "vy-monitors.service")
 
 
 def test_a_switch_stops_the_tmux_loop_before_its_unit_starts_and_a_dry_run_only_says_so(tmp_path, monkeypatch):
     said: list[str] = []
-    LO.step_switch(LO.Ctx(apply=False, say=said.append), "vy-nebius-1", ["vy-gpu-stray.service"], back=False)
-    assert [s.split()[0] for s in said] == ["would:", "would:", "would:", "vy-gpu-stray.service:"] and "C-c" in said[0]
+    LO.step_switch(LO.Ctx(apply=False, say=said.append), "vy-nebius-1", ["vy-write-probe@vy-nebius-1.service"], back=False)
+    assert [s.split()[0] for s in said] == ["would:", "would:", "would:", "vy-write-probe@vy-nebius-1.service:"] and "C-c" in said[0]
     monkeypatch.setattr(LO, "UNITS", tmp_path)
-    (tmp_path / "vy-gpu-stray.service").write_text("[Service]\nExecStart=/bin/true\n")
+    (tmp_path / "vy-write-probe@.service").write_text("[Service]\nExecStart=/bin/true\n")
     log: list[list[str]] = []
     base = runner(log)
 
@@ -1029,22 +1023,11 @@ def test_a_switch_stops_the_tmux_loop_before_its_unit_starts_and_a_dry_run_only_
             return subprocess.CompletedProcess(argv, 0, "bash\n", "")
         return base(argv)
     waits: list[float] = []
-    LO.step_switch(LO.Ctx(apply=True, run=run, say=said.append), "vy-nebius-1", ["vy-gpu-stray.service"], back=False, wait=waits.append)
+    LO.step_switch(LO.Ctx(apply=True, run=run, say=said.append), "vy-nebius-1", ["vy-write-probe@vy-nebius-1.service"], back=False, wait=waits.append)
     steps = [a[5] if a[0] == "runuser" else a[1] for a in log]
     assert steps == ["has-session", "send-keys", "list-panes", "kill-session", "enable", "is-active"] and waits == []
     with pytest.raises(LO.Failed):
         LO.step_switch(LO.Ctx(apply=False, say=said.append), "vy-nebius-1", ["vy-nope.service"], back=False)
-
-
-def test_root_units_refuse_while_what_they_run_or_write_isnt_roots_alone(monkeypatch, tmp_path):
-    monkeypatch.setattr(LO, "untrusted", lambda paths: [f"{paths[0]}: owner uid 1001"])
-    with pytest.raises(LO.Failed, match="not root's alone"):
-        LO.step_root_units(LO.Ctx(apply=False, say=lambda s: None), "vy-nebius-1", back=False)
-    monkeypatch.setattr(LO, "untrusted", lambda paths: [])
-    said: list[str] = []
-    LO.step_root_units(LO.Ctx(apply=False, say=said.append), "vy-nebius-1", back=False, units=tmp_path)
-    drops = [s for s in said if LO.DROPIN in s]
-    assert len(drops) == sum(lp.root for lp in LO.SWITCH["vy-nebius-1"]) and not list(tmp_path.iterdir())
 
 
 def test_the_sudoers_step_needs_a_clean_preflight_installs_both_files_and_rolls_back(tmp_path):
@@ -1089,7 +1072,7 @@ def test_preflight_fails_each_check_on_an_unprepared_node(tmp_path):
     checks = {c.name: c for c in LO.preflight("vy-nebius-1", run, tmp_path)}
     failing = {n for n, c in checks.items() if not c.ok}
     assert {"vy-admin", "vy-admin-login", "vy-admin-session", "ubuntu-unprivileged", "py-spy", "kubeconfig", "journal-group", "allowlist",
-            "switched:vy-gpu-stray.service", "root-unit:vy-node1-dispatch.service", "tool:/usr/local/sbin/vy-sudo"} <= failing
+            "switched:vy-write-probe@vy-nebius-1.service", "tool:/usr/local/sbin/vy-sudo"} <= failing
     assert all(checks[n].fix for n in failing)
 
 
@@ -1215,7 +1198,7 @@ def test_harden_back_puts_back_only_what_the_node_has(tmp_path, monkeypatch):
 def test_the_plan_has_every_step_with_its_rollback():
     text = LO.plan_text("vy-nebius-1")
     assert [ln.split(".")[0] for ln in text.splitlines() if not ln.startswith(" ")] == [str(i) for i in range(1, 10)]
-    assert text.count("   rollback: ") == 9 and "vy-node1-dispatch.service (tmux node1-dispatch)" in text
+    assert text.count("   rollback: ") == 9 and "vy-write-probe@vy-nebius-1.service (tmux write-probe)" in text
     cpu = LO.plan_text(CPU13)
     steps = [ln.split(":")[0] for ln in cpu.splitlines() if not ln.startswith(" ")]
     assert steps == ["1. deploy", "2. vy-admin", "3. seal", "4. harden", "5. sudoers", "6. watch"], "no loop to switch, no cluster"
