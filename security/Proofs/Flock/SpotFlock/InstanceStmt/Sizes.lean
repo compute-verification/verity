@@ -181,12 +181,11 @@ theorem hdr_len (r : Run) (circ cls : String) : (jsonChars (hdrJ r circ cls)).le
   refine Nat.le_trans (obj_le (hdr_model r circ cls)) ?_
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, mem_len, str_len]
   have hk : "circuit_sha512".toList.length + "format".toList.length + "flock-circuit-inputs".toList.length +
-      "frame_v3".toList.length + "instances".toList.length + "registered".toList.length + "rows".toList.length +
+      "frame_v3".toList.length + "instances".toList.length + "rows".toList.length +
       "scheme".toList.length + "set".toList.length + "shared_rows".toList.length + "statement".toList.length +
       "units".toList.length < 2 ^ 7 := by decide +kernel
   have h1 := fv3_len r
   have h2 := units_len cls
-  have h3 : (jsonChars regHdrJ).length < 2 ^ 9 := by decide +kernel
   have h4 : (jsonChars (Json.mkObj [("i0", jn 1), ("o0", jn 2)])).length < 2 ^ 6 := by decide +kernel
   have h5 : (jsonChars (jn 2)).length < 2 := by decide +kernel
   have h6 : (jsonChars (.bool false)).length = 5 := by decide +kernel
@@ -222,7 +221,6 @@ theorem public_lt {r : Run} (hr : r.Plain) : (pubOf r (hexOf circuitHash) (hexOf
 theorem sample_size : (printJson sampleJ).toUTF8.size < 2 ^ 12 := by decide +kernel
 theorem partition_size : (printJson partObj).toUTF8.size < 2 ^ 12 := by decide +kernel
 theorem program_size : progBytes.size < 2 ^ 12 := by decide +kernel
-theorem registered_size : (printJson regJ).toUTF8.size < 2 ^ 12 := by decide +kernel
 theorem name_size : NAME.toUTF8.size < 2 ^ 12 := by decide +kernel
 
 theorem raw_fits (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : (raw r).Fits where
@@ -252,11 +250,7 @@ theorem raw_fits (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : (raw r).Fits w
   workTable := by intro _ h; cases h
   stratified := by intro _ h; cases h
   closure := by intro _ h; cases h
-  registered := by
-    intro b h
-    simp only [raw, rawOf, Option.some.injEq] at h
-    subst h
-    exact Nat.lt_trans registered_size (by decide)
+  registered := by intro _ h; cases h
   publicInputs := by intro _ h; cases h
 
 /-- **The statement decodes** to the `Raw` it encodes. -/
@@ -276,7 +270,6 @@ theorem x_small (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : (x r).length < 
   have hd := sample_size
   have hq := partition_size
   have hg := program_size
-  have hg' := registered_size
   have hs := name_size
   have hf : FlockDeploy.FORMAT.toUTF8.size < 2 ^ 12 := by decide +kernel
   simp only [x, raw, rawOf, FlockDeploy.Raw.encode, FlockDeploy.encStr, FlockDeploy.encList, FlockDeploy.encBool,
