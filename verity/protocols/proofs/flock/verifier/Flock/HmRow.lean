@@ -1145,23 +1145,35 @@ def queryTemplate (c : Circuit) : Option (String × Bool) := do
   | some "unit-class", some d => if t.startsWith "unit-class/" then some (d, true) else some (t, false)
   | _, _ => some (t, false)
 
-/-- A template query's units, derived from the verifier's own program: the program is the object's, the query applies to it,
-the circuit's template (`queryTemplate`) is one it lists, and every unit the statement claims (`indices`) is an instance of
-that template. -/
-def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
+/-- Template query `name` v`version`'s templates and ranges over the verifier's own program, read by `readDesc`: the program
+is the object's, and the object's `blocks`, where it has them, cover the population (`checkBlocksCover`). `refusal` refuses
+a query that is not a template query. -/
+def templateRangesBy {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (readDesc : ByteArray → M TemplateQuery.Desc) (refusal name : String) (version : Nat) (obj : Json)
+    (program : ByteArray) : M (Array String × Array TemplateQuery.TRange) := do
   let q := (obj.getObjVal? "query").toOption.getD Json.null
-  let name := (q.getObjValAs? String "name").toOption.getD ""
-  let version := (q.getObjValAs? Nat "version").toOption.getD 0
   let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
-    | throw s!"partition: {name} v{version} is not a template query"
+    | throw refusal
   let ts ← ts
-  let d ← TemplateQuery.Desc.parse program
+  let d ← readDesc program
   if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
     throw "partition: the verifier's program is not the one the partition object names"
   let rs ← match TemplateQuery.evaluate d ts with
     | .ok rs => pure rs
     | .error e => throw s!"partition: {e}"
   checkBlocksCover obj (TemplateQuery.population rs)
+  return (ts, rs)
+
+/-- A template query's units, derived from the verifier's own program read by `readDesc`: the program is the object's, the
+query applies to it, the circuit's template (`queryTemplate`) is one it lists, and every unit the statement claims
+(`indices`) is an instance of that template. -/
+def deriveTemplateUnitsBy {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (readDesc : ByteArray → M TemplateQuery.Desc) (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
+    M String := do
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let name := (q.getObjValAs? String "name").toOption.getD ""
+  let version := (q.getObjValAs? Nat "version").toOption.getD 0
+  let (ts, rs) ← templateRangesBy readDesc s!"partition: {name} v{version} is not a template query" name version obj program
   let some (t, cls) := queryTemplate c | throw "partition: META program_digests does not name the circuit's one template"
   if !ts.contains t then throw s!"partition: the circuit's template {t} is not one the query lists"
   let pop := TemplateQuery.population rs
@@ -1171,6 +1183,10 @@ def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indice
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
   let of := if cls then s!" (META definition of the proof-block class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}{of}"
+
+/-- `deriveTemplateUnitsBy` at the verifier's own reading of its program. -/
+def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String :=
+  deriveTemplateUnitsBy TemplateQuery.Desc.parse c obj program indices
 
 /-- `Q_word` v1's or v2's units, derived from the verifier's own program: the program is the object's, the query evaluates on
 it (`Flock.Extract`, `Flock.Qword`; v2's units are v1's), and every unit the statement claims (`indices`) is one whole
@@ -1356,24 +1372,21 @@ def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := do
            sha := ← publicDigest header pubs, population := some (pub.n, pub.digests, pub.outputs),
            tables := pub.tables.map fun t => { t with refs := proved.foldl (fun acc u => acc ++ t.refs.extract (u * np) (u * np + np)) #[] } }
 
-/-- The strata of the verifier's own program and partition object, and the population: the query applied to the program,
-its units grouped by template descriptor id (`Draw.strataOf`). Only `Q_template_instance` v0 and `Q_template_instances` v0
-define strata; `samplingDesign` names the sampling design that asks, in the refusal. -/
-private def templateStrata (samplingDesign : String) (obj : Json) (program : ByteArray) :
-    V (Array (String × Array (Nat × Nat)) × Nat) := do
+/-- The strata of the verifier's own program, read by `readDesc`, and partition object, and the population: the query applied
+to the program, its units grouped by template descriptor id (`Draw.strataOf`). Only `Q_template_instance` v0 and
+`Q_template_instances` v0 define strata; `samplingDesign` names the sampling design that asks, in the refusal. -/
+def templateStrataBy {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (readDesc : ByteArray → M TemplateQuery.Desc) (samplingDesign : String) (obj : Json) (program : ByteArray) :
+    M (Array (String × Array (Nat × Nat)) × Nat) := do
   let (name, version) ← checkPartitionObject obj
-  let q := (obj.getObjVal? "query").toOption.getD Json.null
-  let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
-    | throw s!"{samplingDesign}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
-  let ts ← ts
-  let d ← TemplateQuery.Desc.parse program
-  if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
-    throw "partition: the verifier's program is not the one the partition object names"
-  let rs ← match TemplateQuery.evaluate d ts with
-    | .ok rs => pure rs
-    | .error e => throw s!"partition: {e}"
-  checkBlocksCover obj (TemplateQuery.population rs)
+  let (_, rs) ← templateRangesBy readDesc
+    s!"{samplingDesign}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
+    name version obj program
   return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
+
+private def templateStrata (samplingDesign : String) (obj : Json) (program : ByteArray) :
+    V (Array (String × Array (Nat × Nat)) × Nat) :=
+  templateStrataBy TemplateQuery.Desc.parse samplingDesign obj program
 
 /-- The partition object's `blocks`, only once they cover the population the query derives from the verifier's own
 `program` (`templateStrata`); none where it has none. A reader of `blocks` takes them here, never from the object. -/
