@@ -29,6 +29,7 @@ challenger's binding, and its attach (`prover/wipe_served.py`) runs the whole wi
 
 from __future__ import annotations
 
+import shlex
 from collections.abc import Mapping
 from fractions import Fraction
 from typing import Any
@@ -40,7 +41,8 @@ from verity.protocols.resource_accounting.memory.pous.attester import memory_att
 from verity.protocols.resource_accounting.memory.pous.prover import workload
 from verity.protocols.resource_accounting.memory.pous.verifier import period, wipe_period
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
-from verity.protocols.resource_accounting.scheme import Charge, Lacks, Launch, Order, Reading, Scheme, register
+from verity.protocols.resource_accounting.scheme import (Charge, Executable, Lacks, Launch, Order, Reading, Scheme,
+                                                         register)
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
 #: PoUS's own term, `δscheme`: P2's ideal-model ε, `Pous.Params.εMax` = 2^-λ at λ = `Pous.Params.secParam` = 128, beside
@@ -95,7 +97,7 @@ def _wipe_reading(row: Mapping[str, Any]) -> Reading:
 
 
 POUS = register(Scheme(
-    name="pous",
+    name=CS.COMPONENT,
     messages=workload.MESSAGES,
     protocol=domains.POUS_P2_RUN,
     resource="memory",
@@ -131,7 +133,10 @@ POUS = register(Scheme(
     colocated=(),
     needs=frozenset({"store"}),
     depends=(),
-    pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
+    pieces={"prover": Launch(optional=("address", "host", "command"), development="address",
+                            entry="verity.protocols.resource_accounting.memory.pous.scheme:launch_pous",
+                            executables=(Executable("verity/protocols/resource_accounting/memory/pous/verifier/check", "pous-run-protocol"),))},
+    reads={},
     answers=Lacks("its kept session is answered by the PoUS piece's own code, not yet by functions of this package"),
     unchecked=MA.UNCHECKED,
     record="space",
@@ -159,7 +164,7 @@ def _wipe_attach(exchange: Any, ctx: Any) -> Any:
 
 
 WIPE = register(Scheme(
-    name="wipe",
+    name=WP.COMPONENT,
     protocol=domains.WIPE_PROTOCOL,
     resource="memory",
     blocks=Lacks("the wipe runs before the engine loads, outside the workload's circuit: no block of the circuit "
@@ -189,7 +194,9 @@ WIPE = register(Scheme(
     colocated=(),
     needs=frozenset(),
     depends=(),
-    pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
+    pieces={"prover": Launch(optional=("address", "host", "command"), development="address",
+                            entry="verity.protocols.resource_accounting.memory.pous.scheme:launch_wipe",
+                            executables=(Executable("verity/protocols/resource_accounting/memory/pous/attester/lean", "wipe-protocol"),))},
     answers=Lacks("its case is answered by the composite's case writer, not yet by functions of this package"),
     unchecked=MA.UNCHECKED,
     record="wipe",
@@ -205,4 +212,50 @@ WIPE = register(Scheme(
                     Lacks("not a kernel scheme")),
 ))
 
-__all__ = ["POUS", "WIPE"]
+#: the scripts' one flag for a development run's attester: on the workload's machine, under a key made for the run
+RUN_KEYS = "--run-keys"
+DEVELOPMENT = {"DEVELOPMENT": "1"}
+WIPE_SCRIPT = "benchmarks/pous/streamed_wipe/served_wipe.sh"
+POUS_SCRIPT, ONSITE_PIECES = "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh"
+ATTESTER_SCRIPT = "benchmarks/pous/run_attester.sh"
+#: served_wipe.sh's variable for each binding of the wipe's memory attester
+_WIPE = {"address": "WIPE_ADDRESS", "host": "WIPE_CHALLENGER", "command": "WIPE_COMMAND"}
+#: served_piece.py's flag for each binding of PoUS's memory attester
+_POUS = {"address": "--challenger-address", "host": "--challenger-host", "command": "--challenger-command"}
+
+
+def _wipe_hooks(cfg, params, bound, pinned):
+    """The streamed wipe of the card before the workload's engine loads (WIPE_CMD, served_wipe.sh). The key is the configuration's pin alone, on the command line, so neither the environment nor a binding gives
+    another; with no pin served_wipe.sh refuses. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
+    if "address" not in bound:
+        return {"WIPE_CMD": f'bash {WIPE_SCRIPT} "$1" "$2" "$3" {RUN_KEYS}', **DEVELOPMENT}
+    return {"WIPE_CMD": f'WIPE_KEY_SHA512={"".join(pinned)} bash {WIPE_SCRIPT} "$1" "$2" "$3"',
+            **{v: bound[k] for k, v in _WIPE.items() if k in bound}}
+
+
+def _pous_hooks(cfg, params, bound, pinned):
+    """PoUS's prover after the workload (POUS_CMD, served_piece.sh): the memory attester's timed reads answered from
+    the served weights held as P2's C* on the card, with the memory attester on the workload's machine in a development
+    run. The memory attester's key is the configuration's pin alone, on the command line; with no pin the piece
+    trusts no session. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
+    words = [*(["--trusted-sha512", *pinned] if pinned else []), *([] if "address" in bound else [RUN_KEYS]),
+             "--rounds", str(params["challenges"]),
+             *(w for k, flag in _POUS.items() if k in bound for w in (flag, bound[k]))]
+    return {"POUS_CMD": f'bash {POUS_SCRIPT} "$@"', "POUS_ARGS": shlex.join(words), "ONSITE_PIECES": ONSITE_PIECES,
+            **({} if "address" in bound else DEVELOPMENT)}
+
+
+def launch_pous(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
+    """PoUS's prover piece (its `Launch.entry`): its hooks and the scripts they run. It launches and collects, and
+    decides no verdict."""
+    return _pous_hooks, (POUS_SCRIPT, ONSITE_PIECES, ATTESTER_SCRIPT)
+
+
+def launch_wipe(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
+    """The wipe's prover piece (its `Launch.entry`): its hooks and the script they run. It launches and collects, and
+    decides no verdict."""
+    return _wipe_hooks, (WIPE_SCRIPT,)
+
+
+__all__ = ["ATTESTER_SCRIPT", "DEVELOPMENT", "ONSITE_PIECES", "POUS", "POUS_SCRIPT", "RUN_KEYS", "WIPE", "WIPE_SCRIPT",
+           "launch_pous", "launch_wipe"]

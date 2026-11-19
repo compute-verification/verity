@@ -270,7 +270,7 @@ def stage_lean_door() -> str:
     `restrict`."""
     PF.v2_executable()
     text = LEAN_DOOR.read_text().splitlines()
-    at = next(i for i, x in enumerate(text, 1) if "one-circuit: not derived yet: restrict" in x)
+    at = next(i for i, x in enumerate(text, 1) if 'HOLE_T == "restrict: ' in x)
     raise Stop(f"lean door: built; every statement refuses at Spot.OneStageZk.restrict ({LEAN_DOOR}:{at})")
 
 

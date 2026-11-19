@@ -8570,6 +8570,26 @@ def test_the_shells_hold_and_the_one_python_reader_agree_on_every_value(value):
     assert (shell.returncode == 0) is cli.hold_placement(env) is (value == "1")
 
 
+@pytest.mark.parametrize("hold", [None, "1"])
+@pytest.mark.parametrize("marker", [None, "1"])
+@pytest.mark.parametrize("given", [None, "", "1"])
+def test_the_sampled_proofs_development_challenger_makes_a_development_run_only_under_the_hold(hold, marker, given):
+    """placement.sh's `development_under_hold`, which served_verdicts.sh runs once it has sourced it: the sampled-proofs
+    hooks' PP_DEVELOPMENT_UNDER_HOLD=1 sets DEVELOPMENT=1 under VERITY_HOLD_PLACEMENT=1, and DEVELOPMENT is otherwise as
+    given."""
+    env = {"PATH": os.defpath, **{k: v for k, v in (("VERITY_HOLD_PLACEMENT", hold),
+                                                   ("PP_DEVELOPMENT_UNDER_HOLD", marker), ("DEVELOPMENT", given))
+                                  if v is not None}}
+    shell = subprocess.run(["bash", "-c", '. "$1" && development_under_hold && bash -c \'echo "${DEVELOPMENT-unset}"\'',
+                            "_", str(HERE.parents[2] / "benchmarks" / "one_stage" / "placement.sh")],
+                           env=env, capture_output=True, text=True, check=True)
+    assert shell.stdout.strip() == ("1" if hold == marker == "1" else "unset" if given is None else given)
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text().splitlines()
+    sourced = next(i for i, x in enumerate(script) if x.startswith(". ") and "/placement.sh\"" in x)
+    assert script[sourced + 1] == "development_under_hold"
+    assert not [x for x in script[:sourced] if "DEVELOPMENT" in x and not x.lstrip().startswith(("#", "FOLLOWS="))]
+
+
 def test_the_launcher_and_the_composite_read_the_hold_only_through_placement_sh():
     """Neither script defines a hold of its own or reads VERITY_HOLD_PLACEMENT inline: each sources placement.sh, and the
     launcher's preflight only checks the value's form."""
