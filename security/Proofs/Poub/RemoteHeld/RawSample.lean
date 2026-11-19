@@ -7,9 +7,10 @@ import Proofs.Flock.Claims.Sampling.Select.Bounds
 import Proofs.Spot.Sampling.Work
 import Proofs.Core.Game.Tape
 public import Proofs.Spot.Sampling.Periods
+import Proofs.Poub.RemoteHeld.Sample
 
 /-!
-# The openings' pooled bound on the raw coin: the statement, not yet a guarantee
+# The openings' pooled bound on the raw coin, proved
 
 `ResourceAccounting.Guarantees.Remote.PooledSample` bounds the wrong receipts of an accepted session when window `t`'s
 sample is `Key.subset` on the first blocks `prf t` derives from its coin, at error
@@ -21,13 +22,14 @@ key, so no distinguisher's advantage, and no rejected first block, so no `s_t/2^
 
 `PooledSampleRaw` is the bound on that draw, at error `δ` plus the receipts' binding term at the draw's openings. Its
 premises are `Live` and `Counted` as they are, and `RefusedRaw`, `Refused` read at `openedRaw`: on an accepting outcome
-every window's draw ended and each receipt it opened is correct or moved. It is an instance of the proof layer's
-monitoring-period product bound, `Spot.Sampling.Periods.prCoin_forall_prod_le` at `c = δ`: one period per window, its
-event that the window's draw lands in its correct receipts, its predictable bound `Run.bound` (fixed before the
-window's coin by `Live`), each from the proof layer's miss bound `Flock.Bridge.sampleUnits_miss_le`
-(`C(g, k)/C(U, k) ≤ (g/U)^k`); the audit's own part is the arithmetic `Sample.prod_le_of_pooled_lt` (more wrong
-receipts than `pooled δ` puts the product of the bounds at most `δ`). Until that is proved this is a statement: no lock
-record reads this file.
+every window's draw ended and each receipt it opened is correct or moved. `pooledSampleRaw` proves it as an instance of
+the proof layer's monitoring-period product bound, `Spot.Sampling.Periods.prCoin_forall_prod_le` at `c = δ`, at each
+value of the other coins (`prCoin_le_of_fst`): one period per window, its event that the window's draw lands in its
+correct receipts (`Lands`, adapted by `Live`), its bound `Run.bound` (predictable by `Live`), each window's bound from
+the proof layer's subset bound `Properties.Spot.SecurityProofs.one_bound` and `C(g, k)/C(U, k) ≤ (g/U)^k`
+(`Spot.Sampling.SamplingDesign.choose_div_le_pow`, `window_le`). The arithmetic is the keyed proof's
+`Sample.prod_le_of_pooled_lt` (more wrong receipts than `pooled δ` puts the product of the bounds at most `δ`). No lock
+record reads this file yet.
 -/
 
 @[expose] public section
@@ -118,7 +120,7 @@ theorem window_le {κ : ℕ} (U k : ℕ) (C : Finset ℕ) (hk : k ≤ U) :
 
 /-- **The receipts window `t` opens at coins `ω`**: the proof layer's draw of the window's `min(s_t, U_t)` among its
 `U_t` on its coin's bytes, none when it runs out. -/
-def openedRaw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Run n m s κ X) (t : Fin n)
+def openedRaw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : ResourceAccounting.Remote.Sample.Run n m s κ X) (t : Fin n)
     (ω : SampleCoins n κ X) : Option (Finset ℕ) :=
   match Spot.Draw.sampleUnits (.subset (D.samples t ω)) (D.size t ω) (Properties.Spot.bytesOf (coinBytes (ω.2 t))) with
   | .ok (us, _) => some us.toList.toFinset
@@ -144,13 +146,13 @@ theorem receiptSampleRead_draw (samples : ℕ) (src : ByteArray) (lengths : Arra
   rfl
 
 /-- The receipts window `t` opens by the draw on its raw coin, empty where the draw ran out (a refused close). -/
-def openings {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Run n m s κ X) (t : Fin n) (ω : SampleCoins n κ X) :
+def openings {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : ResourceAccounting.Remote.Sample.Run n m s κ X) (t : Fin n) (ω : SampleCoins n κ X) :
     Finset ℕ :=
   (openedRaw D t ω).getD ∅
 
 /-- **`Refused` at the draw on the raw coin**: on every accepting outcome every window's draw ended, and each receipt it
 opened is among the window's correct ones or moved. -/
-def RefusedRaw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Run n m s κ X)
+def RefusedRaw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : ResourceAccounting.Remote.Sample.Run n m s κ X)
     (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X) : Prop :=
   ∀ ω, T.accepts ω → ∀ t, ∃ S, openedRaw D t ω = some S ∧
     ∀ p ∈ S, p ∈ D.correct t ω ∨ R.Moved (openings D) t ω p
@@ -159,7 +161,7 @@ def RefusedRaw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
 probability that it is accepted with more wrong receipts than the record's pooled bound at `δ` is at most `δ` plus the
 receipts' binding term at the draw's openings. -/
 def PooledSampleRaw : Prop :=
-  ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (D : Run n m k κ X)
+  ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (D : ResourceAccounting.Remote.Sample.Run n m k κ X)
     (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X)
     (δ : ℝ), 0 ≤ δ → Live D → RefusedRaw D T R → Counted D T →
     T.Holds (δ + (R.binding (openings D)).toReal) fun ω => (T.incorrect ω : ℝ) ≤ D.pooled δ ω
@@ -239,5 +241,51 @@ theorem pr_lands_le {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Finty
     Spot.Sampling.Periods.prCoin_forall_prod_le (Ω := fun _ : Fin n => Pous.Bits κ)
       (fun t w => Lands D t (x, w)) (fun t w => ENNReal.ofReal (D.bound t (x, w)))
       (lands_adapted D hL x) (bound_predictable D hL x) (lands_le D hL x) c
+
+/-! ## The bound -/
+
+/-- **The openings' pooled bound on the raw coin, proved.** Off the binding event a receipt `RefusedRaw` lets through is
+correct, so an accepting outcome past the pooled bound has every window landing (`Lands`) while the bounds multiply to
+at most `δ` (`Sample.prod_le_of_pooled_lt`): at most `δ` (`pr_lands_le`), plus the binding event. -/
+theorem pooledSampleRaw : PooledSampleRaw := by
+  intro n m k κ X _ D T R δ hδ hL hR hC
+  classical
+  let B : SampleCoins n κ X → Prop := fun ω => ∃ t, ∃ p ∈ openings D t ω, R.Moved (openings D) t ω p
+  have hreal : ∀ ω, (T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ D.pooled δ ω) ∧ ¬ B ω →
+      (∀ t, Lands D t ω) ∧ ∏ t, ENNReal.ofReal (D.bound t ω) ≤ ENNReal.ofReal δ := by
+    intro ω ⟨⟨hacc, hw⟩, hb⟩
+    refine ⟨fun t => ?_, ?_⟩
+    · obtain ⟨S, hS, hp⟩ := hR ω hacc t
+      refine ⟨S, hS, fun p hpS => (hp p hpS).resolve_right fun hmv => hb ⟨t, p, ?_, hmv⟩⟩
+      simp only [openings, hS, Option.getD_some]
+      exact hpS
+    · rw [← ENNReal.ofReal_prod_of_nonneg fun t _ => Sample.bound_nonneg D t ω]
+      refine ENNReal.ofReal_le_ofReal ?_
+      refine Sample.prod_le_of_pooled_lt (fun t => D.size t ω) (fun t => D.good t ω) (fun t => D.samples t ω) hδ
+        (fun t => Sample.good_le D t ω) ?_
+      have hw' : D.pooled δ ω < T.incorrect ω := not_le.1 hw
+      have hc : (T.incorrect ω : ℝ) ≤ D.incorrect ω := by exact_mod_cast hC ω hacc
+      calc pooled n (fun t => D.size t ω) (fun t => D.samples t ω) δ = D.pooled δ ω := rfl
+        _ < D.incorrect ω := hw'.trans_le hc
+        _ = ∑ t, (((D.size t ω : ℕ) - D.good t ω : ℕ) : ℝ) := by rw [Run.incorrect, Nat.cast_sum]
+  have hsplit : Verity.Game.prCoin (fun ω => T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ D.pooled δ ω) ≤
+      Verity.Game.prCoin (fun ω => (∀ t, Lands D t ω) ∧ ∏ t, ENNReal.ofReal (D.bound t ω) ≤ ENNReal.ofReal δ) +
+        Verity.Game.prCoin B :=
+    (Verity.Game.prCoin_mono (q := fun ω => ((∀ t, Lands D t ω) ∧
+        ∏ t, ENNReal.ofReal (D.bound t ω) ≤ ENNReal.ofReal δ) ∨ B ω)
+      fun ω h => (em (B ω)).elim Or.inr fun hb => Or.inl (hreal ω ⟨h, hb⟩)).trans (Verity.Game.prCoin_or_le _ _)
+  have hle : Verity.Game.prCoin (fun ω => T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ D.pooled δ ω) ≤
+      ENNReal.ofReal δ + R.binding (openings D) :=
+    hsplit.trans (add_le_add (pr_lands_le D hL _) le_rfl)
+  have hb1 : R.binding (openings D) ≠ ⊤ :=
+    ne_top_of_le_ne_top ENNReal.one_ne_top (ResourceAccounting.Rate.Pooled.pr_le_one _)
+  unfold Trace.Holds
+  show Claims.Pr _ ≤ _
+  rw [Verity.Game.pr_eq_toReal_prCoin]
+  calc (Verity.Game.prCoin fun ω => T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ D.pooled δ ω).toReal
+      ≤ (ENNReal.ofReal δ + R.binding (openings D)).toReal :=
+        ENNReal.toReal_mono (ENNReal.add_ne_top.2 ⟨ENNReal.ofReal_ne_top, hb1⟩) hle
+    _ = δ + (R.binding (openings D)).toReal := by
+        rw [ENNReal.toReal_add ENNReal.ofReal_ne_top hb1, ENNReal.toReal_ofReal hδ]
 
 end ResourceAccounting.SecurityProofs.Remote.RawSample
