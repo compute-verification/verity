@@ -17,13 +17,6 @@ run's certificate.
 `point_for` gives the smallest such point holding a store, 256 blocks (526 KB) at least; the small point
 (`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 
-`answer_signed` is the run on the memory attester's signed setup (`verity/pous/p2/v4/signed-run`,
-`PousCheck.SignedRun`): `run.check_signed_at` in place of `tie` and `run.check_at`, its case (`case_signed`) the
-session, the setup record the session's key signed (`memory_attester.sign_setup_record`: the published outputs the
-memory attester's device was given) and the prover's openings (`openings_of`, from its table), a few megabytes at a
-served store where `case` carries the table and `C*`. It certifies nothing, and its profile says why (`SIGNED_GAPS`);
-setup's acceptance is the open premise `SETUP_ACCEPTED`, among its certificate's hypotheses.
-
 `trusted-device`'s premise, that the memory attester runs on a machine the developer doesn't control, never holds on
 the workload's machine: for a session signed under a key a committed configuration's `[[pin]]` entries give the memory
 attester (`period.json`'s `deployment`), it reads that the key matched the pins this machine was handed
@@ -39,7 +32,7 @@ import json
 import os
 import subprocess
 from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -51,20 +44,10 @@ from verity.protocols.resource_accounting.memory.pous.attester import memory_att
 from . import protocol as pous_protocol
 from . import run as R
 from .schemes import p2 as P2
-from .verifier import DIGEST_BYTES, MerkleTree, row_leaf
+from .verifier import DIGEST_BYTES
 
 PROTOCOL = "verity/pous/p2/v4/run"
 """`PousCheck.RunProtocol.ID`; a test signer's runs answer under `memory_attester.TEST_PREFIX` + it."""
-SIGNED_PROTOCOL = "verity/pous/p2/v4/signed-run"
-"""`PousCheck.SignedRun.ID`: the run on the memory attester's signed setup (`answer_signed`)."""
-SIGNED_GAPS = ("the signed run's guarantee is not proved: this check takes the memory challenger's signed setup where "
-               "the run's check reads the store",
-               "setup's check is not yet a proof, and it ran on the developer's node")
-"""`PousCheck.SignedRun.GAPS`: why the signed run certifies nothing, after the point's own gaps."""
-SETUP_ACCEPTED = ("the store at the published root is the encoding of the registered weights under the published "
-                  "commitment and salt (SetupAccepted)")
-"""`PousCheck.SignedRun.SETUP_ACCEPTED`: setup's acceptance, an open premise of the signed run, among its certificate's
-hypotheses."""
 SESSION_DOMAIN = "verity/pous-period/session/v1"
 W, C0 = 1024, 105
 """The small point's width: a 1,024-bit prime `2^w − c0` of P2's ladder, 126 payload bytes a 128-byte block."""
@@ -159,50 +142,6 @@ def tie(point: R.Point, published: R.Setup, inputs: SetupInputs) -> None:
         raise R.Refused(f"setup: {e}") from None
     if R.Setup(q.blocks, commitment, vk.root, salt) != published:
         raise R.Refused("the run's commitment is not what its setup published")
-
-
-def case_signed(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup,
-                session: R.ChallengePhaseRecord, signed_setup: mc.SignedSetupRecord,
-                openings: Sequence[R.Opening]) -> dict[str, Any]:
-    """The signed run protocol's case (`PousCheck.SignedRun`): `case`'s params and commitment, and its evidence the
-    session, the memory attester's signed setup record and one opening per round, in place of the table and the
-    setup's own inputs."""
-    params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
-    evidence = {"paths": [o.to_json() for o in openings], "session": session.to_json(), "setup": signed_setup.to_json()}
-    return {"commitment": canonical_json_bytes(published.to_json()).hex(),
-            "evidence": canonical_json_bytes(evidence).hex(), "params": params}
-
-
-def openings_of(point: R.Point, salt: bytes, digests: bytes, rounds: Sequence[mc.Round]) -> list[R.Opening]:
-    """The prover's openings for `check_signed`, from its table of `C*` (`digests`, one row digest a block): for each
-    round, its index's row and that row's leaf's path in the tree of the table's leaves under `salt`."""
-    q = point.params
-    rows = [digests[DIGEST_BYTES * i:DIGEST_BYTES * (i + 1)] for i in range(q.blocks)]
-    tree = MerkleTree([row_leaf(q, salt, i, r) for i, r in enumerate(rows)])
-    return [R.Opening(rows[r.index], tree.path(r.index)) for r in rounds]
-
-
-def profile_signed(point: R.Point) -> dict[str, Any]:
-    """`PousCheck.SignedRun.profileJson`: `profile`, its gaps the point's and then `SIGNED_GAPS`, and its certificate's
-    hypotheses, when it has a certificate, followed by `SETUP_ACCEPTED`."""
-    cert, why = gaps(point)
-    cert = None if cert is None else replace(cert, hypotheses=(*cert.hypotheses, SETUP_ACCEPTED))
-    return profile(point) | {"certificate": None if cert is None else cert.to_json(), "gaps": why + list(SIGNED_GAPS)}
-
-
-def answer_signed(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
-                  session: R.ChallengePhaseRecord, signed_setup: mc.SignedSetupRecord, openings: Sequence[R.Opening],
-                  session_id: bytes, protocol: str = SIGNED_PROTOCOL) -> dict[str, Any]:
-    """The signed run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `run.check_signed_at`, then nothing
-    certified (`eps` 0, `s_bits` 0) and `profile_signed`."""
-    digest = hashlib.sha512(canonical_json_bytes(published.to_json())).hexdigest()
-    try:
-        R.check_signed_at(point, schemes, trusted, published, session, signed_setup, openings, session_id)
-    except R.Refused as e:
-        return {"commitment": digest, "profile": None, "protocol": protocol, "public": None, "reason": str(e),
-                "verdict": "reject"}
-    return {"commitment": digest, "profile": profile_signed(point), "protocol": protocol,
-            "public": {"certified": False, "eps": "0", "s_bits": 0}, "reason": None, "verdict": "accept"}
 
 
 def answer(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
@@ -374,7 +313,7 @@ SETUP_WORKERS = 32
 CPUs each may run on (`period_prover.setup_store`; `onsite.device_key`, from `challenger_party.main`)."""
 
 
-__all__ = ["DEPLOYMENT", "NO_JUDGE", "PIN_FIELDS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS",
-           "SIGNED_PROTOCOL", "Run", "SetupInputs", "answer", "answer_signed", "case", "case_signed", "certificate",
-           "certify", "deployment", "gaps", "openings_of", "point_for", "point_of", "profile", "profile_signed",
-           "serve", "setup_case", "setup_inputs", "tie", "unjudged"]
+__all__ = ["ANSWER", "DEPLOYMENT", "DEVELOPMENT", "NO_JUDGE", "PIN_FIELDS", "PROTOCOL", "SETUP_WORKERS", "UNPINNED",
+           "Run", "SetupInputs", "answer", "case", "certificate", "certify", "decided_by", "deployment",
+           "development_of", "executables", "gaps", "point_for", "point_of", "profile", "publish", "serve",
+           "setup_case", "setup_inputs", "tie", "unjudged"]
