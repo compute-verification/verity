@@ -589,6 +589,13 @@ def _formatted(made: dict) -> bool:
     return isinstance(doc, dict) and isinstance(doc.get("registered"), dict) and "formats" in doc["registered"]
 
 
+def _noded(made: dict) -> bool:
+    """Whether the case's record declares root input nodes (`registered.nodes`), which
+    `verity.commitments.periods.interface` does not state yet and refuses, so the tenth test leaves it out."""
+    doc = json.loads(made["case"]["instance"]["record"])
+    return isinstance(doc, dict) and isinstance(doc.get("registered"), dict) and "nodes" in doc["registered"]
+
+
 def _interface(made: dict):
     """The stage at which `verity.commitments.periods.interface` refuses the case's record (`wires`, `inputs` or
     `blocks`), else None with what it reads of it: the calls `window_of_record` makes on a stated record, which
@@ -676,7 +683,8 @@ def test_a_fault_of_the_helper_is_an_error_and_no_refusal(shaped, monkeypatch):
 
 
 def test_the_reference_reads_a_record_as_the_interface_does(random_cases, shaped):
-    made = [m for m in (*random_cases, *shaped.values()) if m["case"]["spot"] is not None and not _formatted(m)]
+    made = [m for m in (*random_cases, *shaped.values()) if m["case"]["spot"] is not None and not _formatted(m)
+            and not _noded(m)]
     exact = apart = unpinned = 0
     for m in made:
         case = m["case"]
