@@ -3,6 +3,9 @@ module
 public import Definitions.Poub.Guarantees.RemoteDraw
 public import Properties.Spot.Draw
 public import Poub.Shared
+import Proofs.Flock.Claims.Sampling.Select.Bounds
+import Proofs.Spot.Sampling.Work
+import Proofs.Core.Game.Tape
 
 /-!
 # The openings' pooled bound on the raw coin: the statement, not yet a guarantee
@@ -31,10 +34,86 @@ record reads this file.
 namespace ResourceAccounting.SecurityProofs.Remote.RawSample
 
 open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Sample ResourceAccounting.Remote.Sample.Assumptions
+open scoped ENNReal
 
-/-- A `κ`-bit coin's bytes: byte `i` its bits `8i, …, 8i + 7`, the first least significant (`Pous.bitsEquiv`). -/
-def coinBytes {κ : ℕ} (c : Pous.Bits κ) : Fin (κ / 8) → Fin 256 := fun i =>
-  Fin.cast (by norm_num) (Pous.bitsEquiv 8 fun j => c ⟨8 * i + j, by have := i.isLt; have := j.isLt; omega⟩)
+/-- Bit `j` of byte `i` of a `κ`-bit coin: bit `8i + j`. -/
+def byteBit {κ : ℕ} (p : Fin (κ / 8) × Fin 8) : Fin κ :=
+  ⟨8 * p.1 + p.2, by have := p.1.isLt; have := p.2.isLt; omega⟩
+
+/-- Bytes from their bits: byte `i` is bits `(i, 0), …, (i, 7)`, the first least significant (`Pous.bitsEquiv`). -/
+def bytesEquiv (L : ℕ) : (Fin L × Fin 8 → Bool) ≃ (Fin L → Fin 256) :=
+  (Equiv.curry (Fin L) (Fin 8) Bool).trans
+    (Equiv.piCongrRight fun _ => (Pous.bitsEquiv 8).trans (finCongr (by norm_num)))
+
+/-- A `κ`-bit coin's bytes: byte `i` its bits `8i, …, 8i + 7`, the first least significant. -/
+def coinBytes {κ : ℕ} (c : Pous.Bits κ) : Fin (κ / 8) → Fin 256 :=
+  bytesEquiv (κ / 8) fun p => c (byteBit p)
+
+theorem byteBit_injective {κ : ℕ} : Function.Injective (byteBit (κ := κ)) := by
+  rintro ⟨⟨i, hi⟩, ⟨j, hj⟩⟩ ⟨⟨i', hi'⟩, ⟨j', hj'⟩⟩ h
+  simp only [byteBit, Fin.mk.injEq] at h
+  exact Prod.ext (Fin.ext (by dsimp only; omega)) (Fin.ext (by dsimp only; omega))
+
+/-- A uniform coin read through an injective map of its coordinates is uniform. -/
+theorem avg_comp_injective {I J : Type} [Fintype I] [Fintype J] [DecidableEq I] [DecidableEq J] {ι : J → I}
+    (hι : Function.Injective ι) (f : (J → Bool) → ℝ≥0∞) :
+    Verity.Game.avg (fun c : I → Bool => f fun j => c (ι j)) = Verity.Game.avg f := by
+  classical
+  let e : (I → Bool) ≃ (J → Bool) × ({i // i ∉ Set.range ι} → Bool) :=
+    (Equiv.piEquivPiSubtypeProd (· ∈ Set.range ι) fun _ => Bool).trans
+      (Equiv.prodCongr (Equiv.arrowCongr (Equiv.ofInjective ι hι).symm (Equiv.refl Bool)) (Equiv.refl _))
+  calc Verity.Game.avg (fun c : I → Bool => f fun j => c (ι j))
+      = Verity.Game.avg (fun y : (J → Bool) × ({i // i ∉ Set.range ι} → Bool) => f y.1) :=
+        Verity.Game.Tape.avg_equiv e fun y => f y.1
+    _ = Verity.Game.avg f := by
+        rw [Verity.Game.Tape.avg_prod]
+        exact congrArg Verity.Game.avg (funext fun a =>
+          Verity.Game.avg_const (C := {i // i ∉ Set.range ι} → Bool) (f a))
+
+/-- The bytes of a uniform coin are uniform. -/
+theorem prCoin_coinBytes {κ : ℕ} (P : (Fin (κ / 8) → Fin 256) → Prop) :
+    Verity.Game.prCoin (fun c : Pous.Bits κ => P (coinBytes c)) = Verity.Game.prCoin P := by
+  classical
+  unfold Verity.Game.prCoin
+  exact (avg_comp_injective (byteBit_injective (κ := κ))
+    fun d => if P (bytesEquiv (κ / 8) d) then (1 : ℝ≥0∞) else 0).trans
+    (Verity.Game.Tape.avg_equiv (bytesEquiv (κ / 8)) fun d => if P d then (1 : ℝ≥0∞) else 0)
+
+/-- **A window's bound** (piece of `Periods`' instance): the proof layer's draw of `k` of `U` on a uniform coin's bytes
+lands in `C` with probability at most `(g/U)^k`, `0` when `g < k`, `g` the receipts of `C` among the `U`: the miss bound
+`Properties.Spot.SecurityProofs.one_bound` at the receipts outside `C`, `C(g, k)/C(U, k)`, and
+`Spot.Sampling.SamplingDesign.choose_div_le_pow`. -/
+theorem window_le {κ : ℕ} (U k : ℕ) (C : Finset ℕ) (hk : k ≤ U) :
+    Verity.Game.prCoin (fun c : Pous.Bits κ => ∃ us read,
+        Spot.Draw.sampleUnits (.subset k) U (Properties.Spot.bytesOf (coinBytes c)) = .ok (us, read) ∧
+          us.toList.toFinset ⊆ C) ≤
+      ENNReal.ofReal (if k ≤ ((Finset.range U).filter (· ∈ C)).card then
+        ((((Finset.range U).filter (· ∈ C)).card : ℝ) / U) ^ k else 0) := by
+  classical
+  set W := (Finset.range U).filter (· ∉ C) with hWdef
+  have hW : W ⊆ Finset.range U := Finset.filter_subset _ _
+  have hsum : ((Finset.range U).filter (· ∈ C)).card + W.card = U := by
+    rw [hWdef]
+    simpa using Finset.card_filter_add_card_filter_not (s := Finset.range U) (p := (· ∈ C))
+  have hg : U - W.card = ((Finset.range U).filter (· ∈ C)).card := by omega
+  refine (prCoin_coinBytes (κ := κ) fun src => ∃ us read,
+      Spot.Draw.sampleUnits (.subset k) U (Properties.Spot.bytesOf src) = .ok (us, read) ∧
+        us.toList.toFinset ⊆ C).trans_le ?_
+  rw [Verity.Game.prCoin_eq_ofReal_pr]
+  refine ENNReal.ofReal_le_ofReal ?_
+  refine (Claims.Pr_mono ?_).trans (((Properties.Spot.SecurityProofs.one_bound U W hW _).1 k hk).trans ?_)
+  · rintro src ⟨us, read, h, hs⟩
+    exact ⟨us, read, h, fun u hu hmem => (Finset.mem_filter.1 hu).2 (hs (by simpa using hmem))⟩
+  rw [hg]
+  split_ifs with hkg
+  · rcases Nat.eq_zero_or_pos U with rfl | hU
+    · obtain rfl : k = 0 := by omega
+      simp
+    · have h : ((U - W.card).choose k : ℝ) / (U.choose k : ℝ) ≤ (((U - W.card : ℕ) : ℝ) / U) ^ k := by
+        exact_mod_cast NNReal.coe_le_coe.2 (Spot.Sampling.SamplingDesign.choose_div_le_pow (m := W.card) hk hU)
+      rwa [hg] at h
+  · rw [Nat.choose_eq_zero_of_lt (by omega)]
+    simp
 
 /-- **The receipts window `t` opens at coins `ω`**: the proof layer's draw of the window's `min(s_t, U_t)` among its
 `U_t` on its coin's bytes, none when it runs out. -/
