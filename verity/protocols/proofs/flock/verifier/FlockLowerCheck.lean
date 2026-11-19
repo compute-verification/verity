@@ -4,8 +4,8 @@ public import Flock.Compose
 
 /-! The `flock-lower-check` executable, a test's (`tests/verity/protocols/proofs/flock/prover/test_lean_lower.py`): a
 descriptor's Definition lowered by `Lower.lower` and its template written, every composite Definition's template `CALL`s
-held to `Lower.callBound` of its lift to bits, and the template's rows, unrolled, solved on 64 instances a lane word; or,
-under `compose`, the block's circuit file `Compose.compose` writes on that template. -/
+but the program root's held to `Lower.callBound` of its lift to bits, and the template's rows, unrolled, solved on 64
+instances a lane word; or, under `compose`, the block's circuit file `Compose.compose` writes on that template. -/
 
 @[expose] public section
 
@@ -28,12 +28,15 @@ def named (s : String) : Array (String × Nat) :=
     | [n, b] => (n, b.toNat!)
     | _ => (p, 0)).toArray
 
-/-- `compose DESC KEY NAME INS OUTS LAYOUT PROGRAM PARTITION FILE`: Definition `KEY` lowered with one 16-bit port a row
-word, and the block's file written: input rows `INS` (`name:bits`), output ports `OUTS` (`name:words`). -/
+/-- `compose DESC KEY NAME INS OUTS LAYOUT PROGRAM PARTITION DIGESTS FILE`: Definition `KEY` lowered with one 16-bit port a
+row word, and the block's file written: input rows `INS` (`name:bits`), output ports `OUTS` (`name:words`), META's
+`program_digests` the JSON object `DIGESTS`. -/
 def composeMain : List String → IO UInt32
-  | [desc, key, name, ins, outs, layout, prog, part, file] => do
+  | [desc, key, name, ins, outs, layout, prog, part, digests, file] => do
     let ins := named ins
     let outs := named outs
+    let some (.obj ds) := (Lean.Json.parse digests).toOption | do IO.eprintln "flock-lower-check compose: DIGESTS is not a JSON object"; return 2
+    let programDigests := ds.toList.filterMap fun (k, v) => match v with | .str s => some (k, s) | _ => none
     let P ← match Program.decode (← IO.FS.readBinFile desc) with
       | .ok p => pure p
       | .error e => do IO.eprintln s!"flock-lower-check compose: decode: {e}"; return 1
@@ -42,11 +45,11 @@ def composeMain : List String → IO UInt32
     let nOut := outs.foldl (· + ·.2) 0
     let out : V ByteArray := do
       let t ← Lower.lower P d (Array.replicate nIn 16) (Array.replicate nOut 16)
-      Compose.compose { name, body := .tmpl t layout, ins, outs } prog part
+      Compose.compose { name, body := .tmpl t layout, ins, outs, programDigests } prog part
     match out with
     | .ok bs => do IO.FS.writeBinFile file bs; IO.println s!"COMPOSED {name} bytes={bs.size}"; return 0
     | .error e => do IO.eprintln s!"flock-lower-check compose: {e}"; return 1
-  | _ => do IO.eprintln "usage: flock-lower-check compose DESC KEY NAME INS OUTS LAYOUT PROGRAM PARTITION FILE"; return 2
+  | _ => do IO.eprintln "usage: flock-lower-check compose DESC KEY NAME INS OUTS LAYOUT PROGRAM PARTITION DIGESTS FILE"; return 2
 
 def main (args : List String) : IO UInt32 := do
   if args.head? == some "compose" then return ← composeMain args.tail
@@ -57,12 +60,13 @@ def main (args : List String) : IO UInt32 := do
     | .error e => do IO.eprintln s!"flock-lower-check: decode: {e}"; return 1
   let nats := fun (s : String) => ((s.splitOn ",").map String.toNat!).toArray
   let Q ← match Lift.closure P ((Array.range P.defs.size).filter fun i => !(P.defs[i]!).prim) with
-    | .ok (q, _) => pure q
+    | .ok (q, f) => pure (q, f P.root)
     | .error e => do IO.eprintln s!"flock-lower-check: lift: {e}"; return 1
+  let (Q, rootQ) := Q
   let mut over := false
   for i in [0:Q.defs.size] do
     let df := Q.defs[i]!
-    if df.prim || (Lift.lift Q i).toOption.map (·.2) != some i then continue
+    if df.prim || i == P.root || i == rootQ || (Lift.lift Q i).toOption.map (·.2) != some i then continue
     match Lower.lower Q i #[max 1 df.paramLeaves] #[max 1 df.outLeaves] with
     | .ok t =>
       let calls := (t.defs.getD (t.root - 1) default).calls.size
