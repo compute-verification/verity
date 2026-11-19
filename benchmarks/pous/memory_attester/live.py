@@ -359,7 +359,8 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
                     r.roundtrip(OP_PING, 0)
                 reports = []
                 while not c.done:
-                    i = c.challenge()
+                    if (i := c.challenge()) is None:
+                        break
                     r.roundtrip(OP_CHALLENGE, i)
                     c.receive(r.view[HEADER:])
                     reports.append((r.device_ns, r.server_ns))

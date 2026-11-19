@@ -243,7 +243,8 @@ class Challenger:
         return [Send(PROVER, Message("Warmup", {"index": WARMUP_INDEX}))]
 
     def _challenge(self) -> list[Any]:
-        i = self.c.challenge()
+        if (i := self.c.challenge()) is None:
+            return self._end()
         self.phase.expect("Block")
         return [Send(PROVER, Message("Index", {"index": i}))]
 
@@ -252,6 +253,9 @@ class Challenger:
         self.c.receive(block)
         if not self.c.done:
             return [_read_clock()]
+        return self._end()
+
+    def _end(self) -> list[Any]:
         self.session = R.ChallengePhaseRecord(self.c.close(), self.c.commitment, self.c.openings())
         return [Send(PROVER, Message("End")),
                 Finish({"public_key": self.signer.public_key.hex(), "session": self.session.to_json(),

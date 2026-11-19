@@ -30,7 +30,10 @@ session has five steps:
    (`CLOCK`); each time it reads is a reading of that device (`verity.clock.Reading`), stamped into the device's log.
 4. **Challenge.** Once the fill is complete the challenger flips its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
-   `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
+   `L_{c_j}`.  The first late or wrong batch ends the session, and so does a clock that reads below its last reading
+   (`verity.clock.ClockBackwards`), `clock-backwards` (`memory_attester.CLOCK_BACKWARDS`), with no record of the
+   batch it was timing: no batch is retried, and no index is redrawn.  A clock refused at the fill's end signs the
+   fill's start as its end.
 5. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`, where the header is the
    commitment, how the session ended, the start mark and the fill's times (`close`), and the records root is the
    frame-v3-sha512 root of the batch records.  `end_message(signed)` is the end message, what the challenger hands the

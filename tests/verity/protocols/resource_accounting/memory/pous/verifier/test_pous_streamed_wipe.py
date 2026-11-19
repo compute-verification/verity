@@ -213,7 +213,8 @@ def test_the_side_serves_its_wipe_on_the_raw_clock(tmp_path, monkeypatch) -> Non
 
 def test_the_challengers_readings_are_its_devices_and_never_run_backwards():
     """Every time the challenger signs is a reading of its one device, the one registered under its signing key, and
-    stamped into that device's log; a clock that reads earlier than its last reading is refused, never signed."""
+    stamped into that device's log; a clock that reads earlier than its last reading ends the session
+    `clock-backwards`, with nothing revealed."""
     signer = ts.TestSigner(b"wipe challenger", height=2)
     clock = Clock(1_000_000)
     c = challenger(clock=clock, signer=signer)
@@ -226,8 +227,7 @@ def test_the_challengers_readings_are_its_devices_and_never_run_backwards():
     c = challenger(clock=back, server=b"server-8")
     list(c.fill(100))
     back.now -= 1
-    with pytest.raises(ValueError, match="never run backwards"):
-        c.challenge()
+    assert c.challenge() is None and c.ended == mc.CLOCK_BACKWARDS
 
 
 CERTIFICATE = b"a start certificate, as the network certifier returned it"

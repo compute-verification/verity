@@ -223,9 +223,10 @@ def test_no_collection_runs_inside_the_rounds() -> None:
         gc.enable()
 
 
-def test_a_clock_that_runs_backwards_is_refused_at_its_reading_and_signs_nothing():
-    with pytest.raises(ValueError, match="never run backwards"):
-        session(spend=lambda j: -1 if j == 2 else 20_000)
+def test_a_clock_that_runs_backwards_ends_the_session_signed_and_refused_by_name():
+    c, signed, signer = session(spend=lambda j: -1 if j == 2 else 20_000)
+    assert signed.ended == mc.CLOCK_BACKWARDS and len(signed.rounds) == 2
+    assert judge(c, signed, signer).reasons == (f"the session ended clock-backwards after 2 of {K} rounds",)
 
 
 def test_openings_must_match_the_revealed_indices():

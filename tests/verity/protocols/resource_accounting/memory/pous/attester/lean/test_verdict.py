@@ -134,7 +134,8 @@ def _honest(spends=(1, 1, 1)) -> M.Session:
                             device=Device(signer.public_key.hex(), clock, 1, 0))
     while not c.done:
         j = len(c.rounds)
-        i = c.challenge()
+        if (i := c.challenge()) is None:
+            break
         clock.now += spends[j]
         c.receive(M.block(i, 16))
     expected = tuple(mc.block_digest(M.block(i, 16)) for i in range(8))
@@ -173,6 +174,7 @@ def controls() -> dict[str, tuple[M.Session, tuple[str, ...]]]:
         "wrong digest": (M._round(s, 2, digest=lambda r: M._flip(r.digest, 3)), ("1 answers are not their blocks of C",)),
         "late": (late,
                  ("the session ended late after 2 of 3 rounds", f"1 answers are past Δ + RTT = {limit} ns")),
+        "clock backwards": (_honest(spends=[1, -5, 1]), ("the session ended clock-backwards after 1 of 3 rounds",)),
         "negative elapsed": (_signed_before_sent(late, 1),
                              ("the session ended late after 2 of 3 rounds", f"1 answers are past Δ + RTT = {limit} ns")),
         "out-of-range index": (M._round(s, 0, index=lambda r: r.index + blocks),

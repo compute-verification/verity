@@ -46,7 +46,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.clock import Device, Log, Reading, raw_ns, raw_resolution_ns, stamp
+from verity.clock import ClockBackwards, Device, Log, Reading, raw_ns, raw_resolution_ns, stamp
 from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.protocol import ProtocolDef, Start
 from verity.channel import Message, Phase, Refused
@@ -147,7 +147,7 @@ class WipeMemoryAttester:
             count = min(chunk, n - start)
             yield start, labels(self.key, start, count)
             self.filled = start + count
-        self.fill_end = stamp(self.device, self.clock_log, "fill end")
+        self._end_fill()
 
     def fill_by(self, send: Callable[[bytes, int], Any]) -> Any:
         """`fill`'s labels streamed by `send(K, N)`, which returns once it has sent the last; once only. Returns what
@@ -159,11 +159,19 @@ class WipeMemoryAttester:
         self.fill_start = stamp(self.device, self.clock_log, "fill start")
         out = send(self.key, self.params.labels)
         self.filled = self.params.labels
-        self.fill_end = stamp(self.device, self.clock_log, "fill end")
+        self._end_fill()
         return out
 
-    def challenge(self) -> tuple[int, ...]:
-        """Reveal the next batch's indices and read its send time; the coins are flipped at the first batch."""
+    def _end_fill(self) -> None:
+        """Read the fill's end; a clock that runs backwards ends the session, the fill's start signed as its end."""
+        try:
+            self.fill_end = stamp(self.device, self.clock_log, "fill end")
+        except ClockBackwards:
+            self.fill_end, self.ended = self.fill_start, mc.CLOCK_BACKWARDS
+
+    def challenge(self) -> tuple[int, ...] | None:
+        """Reveal the next batch's indices and read its send time; the coins are flipped at the first batch.  None, and
+        nothing revealed, when the clock runs backwards, which ends the session."""
         if self.fill_end is None:
             raise RuntimeError("the challenges start once the fill is complete")
         if self.ended is not None:
@@ -177,18 +185,30 @@ class WipeMemoryAttester:
         b = len(self.batches)
         first = b * self.params.batch
         idx = self.indices[first:first + self.params.batch]
-        self._open = (b, first, idx, stamp(self.device, self.clock_log, ("send", b)))
+        try:
+            send = stamp(self.device, self.clock_log, ("send", b))
+        except ClockBackwards:
+            self.ended = mc.CLOCK_BACKWARDS
+            return None
+        self._open = (b, first, idx, send)
         return idx
 
-    def receive(self, answers: bytes) -> BatchRecord:
-        """The open batch's answers, `LABEL_BYTES` an index in order: the receipt time first, then the check."""
-        receipt = stamp(self.device, self.clock_log, ("receipt", len(self.batches)))
+    def receive(self, answers: bytes) -> BatchRecord | None:
+        """The open batch's answers, `LABEL_BYTES` an index in order: the receipt time first, then the check.  None, and
+        no batch recorded, when the clock runs backwards, which ends the session."""
+        try:
+            receipt = stamp(self.device, self.clock_log, ("receipt", len(self.batches)))
+        except ClockBackwards:
+            receipt = None
         if self._open is None:
             raise RuntimeError("no batch is open")
         b, first, idx, send = self._open
         if len(answers) != LABEL_BYTES * len(idx):
             raise ValueError(f"a batch of {len(idx)} is answered with {LABEL_BYTES * len(idx)} bytes, not {len(answers)}")
         self._open = None
+        if receipt is None:
+            self.ended = mc.CLOCK_BACKWARDS
+            return None
         wrong = sum(answers[LABEL_BYTES * t:LABEL_BYTES * (t + 1)] != label(self.key, i) for t, i in enumerate(idx))
         r = BatchRecord(b, first, len(idx), send, receipt, wrong, batch_digest(idx, answers))
         self.batches.append(r)
@@ -203,7 +223,8 @@ class WipeMemoryAttester:
     def run(self, respond: Callable[[tuple[int, ...]], bytes]) -> None:
         """Drive the challenges against `respond(indices)` until the session ends."""
         while self.ended is None:
-            self.receive(respond(self.challenge()))
+            if (idx := self.challenge()) is not None:
+                self.receive(respond(idx))
 
     def close(self) -> SignedWipe:
         """Sign the ended session, once."""
@@ -248,7 +269,8 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
         if WP._read(f, 1) != WP.ACK:
             raise ConnectionError("the prover didn't acknowledge the fill")
         while c.ended is None:
-            idx = c.challenge()
+            if (idx := c.challenge()) is None:
+                break
             f.write(WP.CHALLENGE + len(idx).to_bytes(4, "big") + b"".join(i.to_bytes(8, "big") for i in idx))
             f.flush()
             c.receive(WP._read(f, sw.LABEL_BYTES * len(idx)))
@@ -370,7 +392,9 @@ class MemoryAttesterParty:
         return [Send(PROVER, Message("FillDone"))]
 
     def _challenge(self) -> list[Any]:
-        self._open = self.c.challenge()
+        if self.c.ended is not None or (idx := self.c.challenge()) is None:
+            return self._end()
+        self._open = idx
         self.phase.expect("Answer")
         return [Send(PROVER, Message("Read", {"indices": list(self._open)}))]
 
@@ -378,6 +402,9 @@ class MemoryAttesterParty:
         self.c.receive(self._answers)
         if self.c.ended is None:
             return self._after_reading(self._challenge)
+        return self._end()
+
+    def _end(self) -> list[Any]:
         self.c.close()
         return [Send(PROVER, Message("End")), *self._finish(None)]
 

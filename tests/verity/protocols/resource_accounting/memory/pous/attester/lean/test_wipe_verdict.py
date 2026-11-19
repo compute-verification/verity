@@ -141,6 +141,7 @@ def controls() -> dict[str, tuple[W.Session, tuple[str, ...]]]:
                                                 "batch 1 has 1 wrong answers")),
         "late answer": (_honest(spends=(1, LIMIT + 1, 1)), ("the session ended late after 2 of 3 batches",
                                                             f"batch 1 is past its deadline of {LIMIT} ns")),
+        "clock backwards": (_honest(spends=(1, -5, 1)), ("the session ended clock-backwards after 1 of 3 batches",)),
         "answer before its challenge": (W._batch(s, 2, receipt_ns=lambda r: r.send.ns - 1),
                                         (f"batch 2 is past its deadline of {LIMIT} ns",)),
         "answer at the deadline": (W._batch(s, 2, receipt_ns=lambda r: r.send.ns + LIMIT), ()),

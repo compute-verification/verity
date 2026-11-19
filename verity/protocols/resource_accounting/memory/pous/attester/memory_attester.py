@@ -12,8 +12,9 @@ A session has four steps:
    a coin not yet revealed leaves the device before the session's last answer is in.
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
-   `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
-   retried, and no index is resampled.
+   `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  So does a clock
+   that reads below its last reading (`verity.clock.ClockBackwards`), `clock-backwards` (`CLOCK_BACKWARDS`), with no
+   record of the round it was timing and no index revealed for it.  No round is retried, and no index is resampled.
 3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records digest)`: the header is
    the commitment's fields and how the session ended, and the records digest is the `sha512/row/v2` digest of the round
    records as one stream.  The records are witness: the prover proves things about them, and they never reach the auditor in the
@@ -90,7 +91,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
-from verity.clock import Device, Log, Reading, elapsed, stamp
+from verity.clock import ClockBackwards, Device, Log, Reading, elapsed, stamp
 from verity.commitments import hm96
 from verity.commitments.crypto import lms
 from verity.commitments.indexed import RangeIndexedDomain
@@ -126,6 +127,8 @@ TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
 """The coarsest clock the memory attester runs on: a microsecond (the network attester's 100 ms buckets are far too coarse)."""
 COMPLETE, LATE = "complete", "late"
+CLOCK_BACKWARDS = "clock-backwards"
+"""How a session ends when its device's clock reads below its last reading: signed, and refused by this name."""
 HM96 = hm96.SHA512
 LIMITS = VerificationLimits()
 
@@ -759,7 +762,8 @@ class MemoryAttester:
     `binding`, the setup's root of the `C*` it audits, on `device`, registered under `signer`'s key (module docstring).  The session's id, `coins.session`, goes into
     `log` (`SessionLog.claim`) before anything else can happen: a used id is refused.  `challenge()` reveals the next
     index and reads the send time; `receive(block)` reads the receipt time first, then hashes the block.  A late round
-    ends the session; `close()` signs it once, and only then are `commitment` and `openings()` released."""
+    ends the session, and so does a clock that runs backwards (`CLOCK_BACKWARDS`), at which `challenge()` reveals
+    nothing and returns None; `close()` signs it once, and only then are `commitment` and `openings()` released."""
 
     def __init__(self, coins: CoinTree, signer: Signer, *, log: SessionLog, limit_ns: int, block_bytes: int,
                  binding: bytes, device: Device) -> None:
@@ -792,26 +796,38 @@ class MemoryAttester:
             raise RuntimeError("the commitment is released after the session, once it is signed")
         return self._commitment
 
-    def challenge(self) -> int:
-        """Reveal round `j`'s index and read its send time; refused with a round open or the session ended."""
+    def challenge(self) -> int | None:
+        """Reveal round `j`'s index and read its send time; refused with a round open or the session ended.  None, and
+        nothing revealed, when the clock runs backwards, which ends the session."""
         if self.ended is not None:
             raise RuntimeError(f"the session has ended ({self.ended}): no round is retried and no index redrawn")
         if self._open is not None:
             raise RuntimeError("the previous round is unanswered")
         j = len(self.rounds)
-        i = self.coins.indices[j]
-        self._open = (j, i, stamp(self.device, self.clock_log, ("send", j)))
-        return i
+        try:
+            send = stamp(self.device, self.clock_log, ("send", j))
+        except ClockBackwards:
+            self.ended = CLOCK_BACKWARDS
+            return None
+        self._open = (j, self.coins.indices[j], send)
+        return self._open[1]
 
-    def receive(self, block: bytes) -> Round:
-        """The open round's answer: its receipt time, then `block_digest` of all of `block`, which must be `block_bytes`."""
-        receipt = stamp(self.device, self.clock_log, ("receipt", len(self.rounds)))
+    def receive(self, block: bytes) -> Round | None:
+        """The open round's answer: its receipt time, then `block_digest` of all of `block`, which must be `block_bytes`.
+        None, and no round recorded, when the clock runs backwards, which ends the session."""
+        try:
+            receipt = stamp(self.device, self.clock_log, ("receipt", len(self.rounds)))
+        except ClockBackwards:
+            receipt = None
         if self._open is None:
             raise RuntimeError("no round is open")
         if len(block) != self._commitment.block_bytes:
             raise ValueError(f"an answer is the whole {self._commitment.block_bytes}-byte block, not {len(block)} bytes")
         j, i, send = self._open
         self._open = None
+        if receipt is None:
+            self.ended = CLOCK_BACKWARDS
+            return None
         r = Round(j, i, send, receipt, block_digest(block))
         self.rounds.append(r)
         if not 0 <= r.elapsed_ns <= self._commitment.limit_ns:
@@ -825,7 +841,8 @@ class MemoryAttester:
         it."""
         with collector_paused():
             while not self.done:
-                self.receive(respond(self.challenge()))
+                if (i := self.challenge()) is not None:
+                    self.receive(respond(i))
         return self.close()
 
     def close(self) -> SignedSession:
@@ -916,7 +933,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 
-__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "MATCHED", "PREMISE",
+__all__ = ["CLOCK_BACKWARDS", "CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "MATCHED", "PREMISE",
            "PREMISE_BEFORE", "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
            "deployed_key", "holds", "key_tree", "pinned", "premise", "trusted_device",
            "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",

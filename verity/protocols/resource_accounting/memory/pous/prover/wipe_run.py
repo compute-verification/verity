@@ -189,7 +189,9 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
         if (sync := getattr(p, "sync", None)) is not None:
             sync()
         while c.ended is None and (stop_after is None or len(c.batches) < stop_after):
-            c.receive(p.answer(c.challenge()))
+            if (idx := c.challenge()) is None:
+                break
+            c.receive(p.answer(idx))
         signed = None if c.ended is None else c.close()
         commitment, key = c.commitment, signer.public_key
         report = {"ended": c.ended, "host": node, "reads": len(c.batches)}

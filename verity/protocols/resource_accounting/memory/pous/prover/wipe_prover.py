@@ -47,7 +47,7 @@ class Prover:
             self.store.receive(m.fields["first"], m.body)
             return []
         if m.type == "FillDone":
-            self.phase.expect("Read")
+            self.phase.expect("Read", "End")
             return [Send(CHALLENGER, Message("FillAck"))]
         if m.type == "Read":
             self.phase.expect("Read", "End")
