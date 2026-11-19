@@ -151,6 +151,82 @@ def deriveWork (k : Nat) (strata : Array (String × Array (Nat × Nat))) (table 
   if total == 0 then throw "a work law needs a population that does some work"
   return .work k (ws.map fun s => { s with k := workK k s.work s.size total s.floor })
 
+private def rangesSize (rs : Array (Nat × Nat)) : Nat := rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0
+
+/-- The amount of each proof block of template `t` in an amount table, a work table read for its work (its floor is
+not read). A template the table does not name is refused, not taken as amount 0. -/
+def amountOf (table : Array (String × Nat × Nat)) (t : String) : Except String Nat :=
+  match table.find? (·.1 == t) with
+  | some (_, a, _) => pure a
+  | none => throw s!"the amount table names no amount for template '{t}'"
+
+/-- Whether a uniform `k`-subset of `n` proof blocks, each of amount at most `c`, meets the rate `NUM/DEN`: `k = n`, or
+`k · DEN ≥ n · c · NUM`. Then a set of `t` of its proof blocks is missed with probability at most
+`(1 − k/n)^t ≤ exp(−t · c · NUM/DEN)`, and with `k = n` never. -/
+def meetsAt (num den n c k : Nat) : Bool := k == n || n * c * num ≤ k * den
+
+private def rateMiss (num den : Nat) (what : String) (n c k : Nat) : Except String Unit :=
+  if meetsAt num den n c k then pure ()
+  else throw s!"{what} misses the rate {num}/{den}: k * DEN = {k * den} < n * c * NUM = {n * c * num} (n = {n}, c = {c}, k = {k})"
+
+private def strataMeetRate (num den : Nat) (pop : Array (String × Array (Nat × Nat) × Nat)) (ss : Array Stratum) :
+    Except String Unit := do
+  if ss.size != pop.size then throw s!"the design has {ss.size} strata, not the population's {pop.size} templates"
+  for i in [0:ss.size] do
+    let s := ss[i]!
+    if (ss.extract 0 i).any (·.template == s.template) then throw s!"the design names template '{s.template}' twice"
+    let some (_, rs, c) := pop.find? (·.1 == s.template)
+      | throw s!"the design's stratum '{s.template}' is no template of the population"
+    if s.units != rs then throw s!"stratum '{s.template}': its units are not the population's units of its template"
+    if s.k > s.size then throw s!"stratum '{s.template}': k = {s.k} exceeds its {s.size} proof blocks"
+    rateMiss num den s!"stratum '{s.template}'" s.size c s.k
+
+/-- Whether the expanded design `d` over the population's strata (one per template, as `strataOf` gives them) meets the
+rate `NUM/DEN` per unit of the amount table's amount, else why not. A `stratified` or `work` design's strata must be the
+population's, one a template, each meeting `meetsAt` at its `n_s`, its `k_s` and its template's amount `c_s`; a `subset`
+design is one stratum of the whole population at the largest amount in it; a `bernoulli` design at `p = a/b` meets it
+when `a = b` or `a · DEN ≥ b · c · NUM`, `c` that largest amount, since each proof block is missed independently with
+probability `1 − p`. Then every set of proof blocks of total amount `m` is missed with probability at most
+`exp(−m · NUM/DEN)`. `DEN = 0` is refused (no rate); `NUM = 0` asks nothing, and every well-formed design meets it. A
+template of the population the table does not name is refused. The strata's `k` and a work stratum's work and floor
+are not read. -/
+def meetsRate (num den : Nat) (table : Array (String × Nat × Nat)) (strata : Array (String × Array (Nat × Nat)))
+    (d : SamplingDesign) : Except String Unit := do
+  if den == 0 then throw s!"a rate needs DEN > 0, not {num}/{den}"
+  let pop ← strata.mapM fun (t, rs) => do pure (t, rs, ← amountOf table t)
+  let n := pop.foldl (fun acc (_, rs, _) => acc + rangesSize rs) 0
+  let c := pop.foldl (fun acc (_, _, a) => max acc a) 0
+  match d with
+  | .subset k =>
+    if k > n then throw s!"a subset design of {k} exceeds the population of {n}"
+    rateMiss num den "the pooled subset" n c k
+  | .bernoulli a b =>
+    if b == 0 || a > b then throw s!"a bernoulli design's p = {a}/{b} is not a probability"
+    if a == b || b * c * num ≤ a * den then pure ()
+    else throw s!"the bernoulli design misses the rate {num}/{den}: a * DEN = {a * den} < b * c * NUM = {b * c * num} (p = {a}/{b}, c = {c})"
+  | .stratified _ ss => strataMeetRate num den pop ss
+  | .work _ ws => strataMeetRate num den pop (ws.map (·.toStratum))
+
+/-- The prover's cheapest strata at the rate `NUM/DEN`: the population's strata, each with the least `k_s` that meets
+it (`meetsAt`), `min n_s ⌈n_s · c_s · NUM / DEN⌉`. Refused as `meetsRate` refuses `DEN = 0` and a template the table
+does not name. -/
+def cheapestFor (num den : Nat) (table : Array (String × Nat × Nat)) (strata : Array (String × Array (Nat × Nat))) :
+    Except String (Array Stratum) := do
+  if den == 0 then throw s!"a rate needs DEN > 0, not {num}/{den}"
+  strata.mapM fun (t, rs) => do
+    let c ← amountOf table t
+    let n := rangesSize rs
+    pure { template := t, units := rs, k := min n ((n * c * num + den - 1) / den) }
+
+#guard
+  let pop := #[("A", #[(0, 10)]), ("B", #[(10, 14)])]
+  let table := #[("A", 3, 1), ("B", 0, 1)]
+  match cheapestFor 1 4 table pop with
+  | .ok ss =>
+    ss.map (·.k) == #[8, 0] && (meetsRate 1 4 table pop (.stratified 0 ss)).toOption.isSome
+      && (meetsRate 1 4 table pop (.stratified 0 (ss.modify 0 fun s => { s with k := 7 }))).toOption.isNone
+  | .error _ => false
+
 /-- A work table: a JSON object from template descriptor id to the PoUW work of one of its units, or to
 `{"work": w, "floor": f}` with its floor `f ≥ 1` (one when the table gives only the work). -/
 def workTableOfJson (j : Json) : Except String (Array (String × Nat × Nat)) := do
