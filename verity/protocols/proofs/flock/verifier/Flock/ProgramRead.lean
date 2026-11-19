@@ -349,7 +349,7 @@ def Stmt.setupHiddenBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
   let blocksReal := (n + c.g - 1) / c.g
   let nbl := max 3 (log2ceil (max blocksReal 1))
   let m := c.kLog + nbl
-  if c.kLog > 27 || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > 27)"
+  if c.kLog > HmRow.MAX_K_LOG || m > 35 then throw s!"m = {m}: no fast100 schedule (or k_log > {HmRow.MAX_K_LOG})"
   let pin ← HmRow.pin c
   let (da, db) := HmIn.delta c pi pin
   let regions := (← HmOut.regions c pub) ++ (← HmIn.regions c pi pub)
