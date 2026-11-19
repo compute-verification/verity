@@ -443,6 +443,65 @@ def test_the_door_proves_only_a_block_the_draw_sampled_and_refuses_an_undrawn_on
         assert why is None and derived == [want] and [f.why for f in got] == ["refused"], (why, derived)
 
 
+def _door(tmp_path: Path, monkeypatch, name: str, indices: list, draw: dict, blocks=lambda k: [(k, k + 1)]):
+    """`verify` on a proof whose public file names `indices`, each block ``k`` of the partition object `blocks(k)`, the
+    verifier answering a rejection; the derivations it asked for beside its answer."""
+    d = tmp_path / name
+    d.mkdir()
+    circuit, public = _files(d, header={"units": {"indices": indices}})
+    (d / "s").mkdir()
+    (d / "s" / "session.json").write_text("{}")
+    derived = []
+    monkeypatch.setattr(OC, "block", lambda c, partition, k: blocks(k))
+    monkeypatch.setattr(OC, "restrict", lambda c, partition, units: derived.append(units) or circuit.read_bytes())
+    monkeypatch.setattr(OC, "lower", lambda c_s: c_s)
+    monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
+    monkeypatch.setattr(PF.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "VERDICT " + json.dumps(
+        {"session": cmd[cmd.index("--session") + 1], "accepted": False, "why": "refused", "zk": True}) + "\n", ""))
+    return PF.verify(PF.Proof(circuit, public, (d / "s",)), program=RUN_ONLY, partition={"program": "p"}, draw=draw,
+                     registered=None), derived
+
+
+@pytest.mark.parametrize("indices, blocks, want", [
+    ([3, 5], lambda k: [(k, k + 1)], ("undrawn", "names units [3, 5], not exactly drawn block 3's [[3, 4]]")),
+    ([3], lambda k: [(k, k + 2)], ("undrawn", "names units [3], not exactly drawn block 3's [[3, 5]]")),
+    ([1.0], lambda k: [(k, k + 1)], ("proof", "names unit 1.0, which is no natural number")),
+    ([True], lambda k: [(k, k + 1)], ("proof", "names unit true, which is no natural number")),
+    ([3, -1], lambda k: [(k, k + 1)], ("proof", "names unit -1, which is no natural number")),
+], ids=["a unit outside the drawn block", "short of the drawn block", "a float", "a bool", "a negative"])
+def test_the_door_refuses_a_public_file_whose_units_are_not_exactly_the_drawn_blocks(tmp_path, monkeypatch, indices,
+                                                                                     blocks, want):
+    """The proof's public file names exactly the drawn block's units (`units_exactly`), each a natural number (a float or
+    a bool selects no block): its first unit in a drawn block and another outside it, a file short of the block, or a
+    unit ``1.0``, ``true`` or negative, is refused before C_S is derived or Lean runs."""
+    (got, why), derived = _door(tmp_path, monkeypatch, "p", indices, {"units": [1, 3]}, blocks)
+    assert got is None and derived == [] and why[0] == want[0] and want[1] in why[1], why
+
+
+def test_verify_names_the_drawn_block_each_proof_matched_so_each_drawn_block_has_exactly_one_proof(tmp_path,
+                                                                                                    monkeypatch):
+    """Each finding names the drawn block its proof's units are exactly (``block``): a caller holds the draw's blocks to
+    one proof each, and a second proof of block 3 in place of block 5's leaves 5 unproved and 3 proved twice."""
+    draw = {"units": [3], "closure": [5]}
+    drawn = [*draw["units"], *draw["closure"]]
+
+    def matched(proofs: dict[str, list[int]]) -> list[int]:
+        out = []
+        for name, indices in proofs.items():
+            (got, why), _ = _door(tmp_path, monkeypatch, name, indices, draw)
+            assert why is None, why
+            out += sorted({f.block for f in got})
+        return out
+
+    def one_each(blocks: list[int]) -> bool:
+        return sorted(blocks) == sorted(drawn)
+
+    honest = matched({"a": [3], "b": [5]})
+    assert honest == [3, 5] and one_each(honest)
+    twice = matched({"c": [3], "d": [3]})
+    assert twice == [3, 3] and not one_each(twice)
+
+
 NOT_ZK = {"no zk": {}, "zk false": {"zk": False}, "zk a string": {"zk": "true"}}
 
 

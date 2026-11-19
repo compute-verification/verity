@@ -15,18 +15,17 @@ registered circuit `P` (`Flock.Program.decode`) and the block's units:
   numbers them;
 * **the input ports**: the gates the units' parameter leaves name (`Flock.Program.operands` at the root) that are outside
   S, in increasing C index, each once, with its width;
-* **the output ports**: the gates the units' return leaves name (`Flock.Program.resolve` in the member's activation) that
-  are inside S, in increasing C index, each once, with its width;
+* **the output ports**: Core's `Circuit.exits S`, the gates of S that C returns or that the root reads outside S, in
+  increasing C index, each once, with its width, found from the reads' descriptions;
 * **the lift**: every primitive the units' Definitions reach, each Definition once; a gate, a constant bit or an input
   stays, and every other one is a word primitive (`isWordPrim`) and is replaced by the Boolean Definition C's Boolean map
   (`Prog.boolean`, PROTOCOL.md 4.9) names for it.
 
-The ports are the leaves the block's Definitions are bound to, so they contain Core's `Circuit.into S` and
-`Circuit.exits S`; they equal them when every parameter leaf is read inside S and every return leaf is read outside S or is
-an output.
+The input ports are the leaves the block's Definitions are bound to, so they contain Core's `Circuit.into S`, and equal it
+when every parameter leaf is read inside S.
 
-Its cost is the block's parameter and return leaves, each resolved down the call hierarchy, and the Definitions it reaches,
-each once: the descriptor and the block's boundary, never a gate of the block's interior.
+Its cost is the block's parameter leaves and its exits, each resolved down the call hierarchy, the root's reference parts,
+and the Definitions it reaches, each once: the descriptor and the block's boundary, never a gate of the block's interior.
 
 `program` is the block's Program on bits, the value `Flock.Lower.lower` takes: each word composite the units reach lifted
 as circuits' `versions.lift` lifts it (`Ty.bitType`, `bitAt`, `liftSeq`), each word primitive's node a node of its Boolean
@@ -131,27 +130,89 @@ def members (P : Prog) (units : Array Nat) : V (Array (Nat × Nat × Scope) × A
     ms := ms.push (k, m, sc)
   return (ms, S)
 
-/-- **The front of block `units`'s circuit** (the module docstring), the units in any order and each once. -/
+/-- The root nodes of C that the units are, each `(k, first member, end member)`, in increasing C index. -/
+def kept (ms : Array (Nat × Nat × Scope)) : Array (Nat × Nat × Nat) :=
+  ms.foldl (fun acc (k, m, _) => match acc.back? with
+    | some (k', m0, m1) => if k' == k && m1 == m then acc.pop.push (k, m0, m + 1) else acc.push (k, m, m + 1)
+    | none => #[(k, m, m + 1)]) #[]
+
+/-- Whether part `q` names one of the root's nodes `held` holds, read off its description. -/
+def touches (held : Nat → Bool) : Part → Bool
+  | .affine p i _ _ => !p && held i
+  | .strided p i _ _ _ _ _ => !p && held i
+  | .explicit it => it.any fun r => !r.p && held r.i
+  | .grid _ lanes => lanes.any fun l => !l.p && held l.i
+
+/-- The references of `s` at positions `keep` admits that name a leaf in `leaves` (each root node's held leaf ranges):
+a part naming no held node is passed over by its description, an affine part's leaves are cut to the ranges by
+arithmetic, and only another part naming a held node is read reference by reference. -/
+def heldReads (leaves : Std.HashMap Nat (Array (Nat × Nat))) (keep : Nat → Bool) (s : Seq) : Array Ref := Id.run do
+  let inS := fun (r : Ref) => !r.p && ((leaves[r.i]?).map (·.any fun (lo, hi) => lo ≤ r.j && r.j < hi)).getD false
+  let mut out := #[]
+  for t in [0:s.parts.size] do
+    let some q := s.parts[t]? | continue
+    let st := (s.starts[t]?).getD 0
+    if !touches leaves.contains q then continue
+    match q with
+    | .affine false i b c =>
+      for (lo, hi) in (leaves[i]?).getD #[] do
+        for j in [max b lo:min (b + c) hi] do
+          if keep (st + (j - b)) then out := out.push { p := false, i, j }
+    | q =>
+      for u in [0:q.count] do
+        let r := q.get u
+        if inS r && keep (st + u) then out := out.push r
+  return out
+
+/-- **The front of block `units`'s circuit** (the module docstring), the units in any order and each once. out(S) is
+Core's `Circuit.exits S`: the gates of S that C returns or that the root reads outside S (a node S does not hold, or a
+member outside S of a batch S holds in part), each found from the reads' descriptions (`heldReads`). -/
 def front (P : Prog) (units : Array Nat) : V Front := do
-  let root := P.defs[P.root]!
+  let some root := P.defs[P.root]? | throw "front: C's root is not one of its Definitions"
   let (members, S) ← members P units
   let mut ins := #[]
-  let mut outs := #[]
-  for (k, m, sc) in members do
-    let x := root.body.nodes[k]!
+  for (k, m, _) in members do
+    let some x := root.body.nodes[k]? | throw s!"front: root node {k} is past C's root's nodes"
     for (g, w) in ← operandsW P x m do
       if !inside S g then ins := ins.push (g, w)
-    let callee := P.defs[x.fn]!
-    let rw := callee.ret.widths
-    if callee.prim then
-      outs := outs.push (sc.off, rw.foldl (· + ·) 0)
-    else
-      for j in [0:callee.outLeaves] do
-        let g ← resolve P sc (callee.body.ret.get j)
-        let some w := rw[j]? | throw s!"root node {k}: return leaf {j} past its {rw.size} widths"
-        if inside S g then outs := outs.push (g, w)
+  let ks := kept members
+  let mut leaves : Std.HashMap Nat (Array (Nat × Nat)) := {}
+  let mut heldOf : Std.HashMap Nat (Array (Nat × Nat)) := {}
+  for (k, m0, m1) in ks do
+    let some x := root.body.nodes[k]? | throw s!"front: root node {k} is past C's root's nodes"
+    let some c := P.defs[x.fn]? | throw s!"front: root node {k} calls Definition {x.fn}, past C's Definitions"
+    let per := c.ret.leaves
+    if x.out.leaves != x.members * per then
+      throw s!"front: root node {k} returns {x.out.leaves} leaves for {x.members} members of {per}"
+    leaves := leaves.insert k (((leaves[k]?).getD #[]).push (m0 * per, m1 * per))
+    heldOf := heldOf.insert k (((heldOf[k]?).getD #[]).push (m0, m1))
+  let mut reads := heldReads leaves (fun _ => true) root.body.ret
+  for k in [0:root.body.nodes.size] do
+    let some x := root.body.nodes[k]? | continue
+    match heldOf[k]? with
+    | none => for a in x.args do reads := reads ++ heldReads leaves (fun _ => true) a.seq
+    | some hs =>
+      if x.form != .batch then continue
+      let isHeld := fun (m : Nat) => hs.any fun (m0, m1) => m0 ≤ m && m < m1
+      let nHeld := hs.foldl (fun n (m0, m1) => n + (m1 - m0)) 0
+      for i in [0:x.args.size] do
+        let some a := x.args[i]? | continue
+        match (x.axes[i]?).join with
+        | none => if nHeld < x.n then reads := reads ++ heldReads leaves (fun _ => true) a.seq
+        | some 0 =>
+          let L := match a.ty with | .array _ e => e.leaves | _ => 0
+          if L == 0 then throw s!"front: root node {k}'s argument {i} is mapped over axis 0 of no array"
+          reads := reads ++ heldReads leaves (fun t => !isHeld (t / L)) a.seq
+        | some ax => throw s!"front: root node {k}'s argument {i} is mapped over axis {ax}, which a member's cut doesn't take"
+  let mut outs := #[]
+  for r in reads do
+    let some x := root.body.nodes[r.i]? | throw s!"front: a read of root node {r.i}, past C's root's nodes"
+    let some c := P.defs[x.fn]? | throw s!"front: root node {r.i} calls Definition {x.fn}, past C's Definitions"
+    let rw := c.ret.widths
+    let some w := rw[r.j % rw.size]? | throw s!"front: root node {r.i}'s callee returns no leaves"
+    outs := outs.push (← resolve P P.rootScope r, w)
   return { ranges := S.qsort (·.1 < ·.1), ins := ← portsOf ins, outs := ← portsOf outs,
-           lift := ← lift P (members.map fun (k, _, _) => (root.body.nodes[k]!).fn) }
+           lift := ← lift P (members.map fun (k, _, _) => ((root.body.nodes[k]?).map (·.fn)).getD 0) }
 
 /-! ### The block's Program on bits -/
 
