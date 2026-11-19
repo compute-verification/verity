@@ -1171,9 +1171,9 @@ def shaped() -> list[dict]:
     def declared(shape: str):
         """`Norm`'s weights' input node shrunk to the one row every `Norm` unit reads (four leaves under `scan`),
         each `Norm` reading it at outer stride 0, or unmapped; under `scan`, `Scan`'s state reading the whole node
-        too."""
+        too; under `inner`, two rows, each `Norm` node's two members reading one each, in an inner run of both."""
         def edit(nodes: list, desc: dict) -> None:
-            size = 4 if shape == "scan" else 2
+            size = 4 if shape in ("scan", "inner") else 2
             nodes[k]["n"], nodes[k]["out"] = size, _halved(desc, nodes[k]["out"], size)
             for x in norms(nodes, desc):
                 if shape == "unmapped":
@@ -1181,21 +1181,30 @@ def shaped() -> list[dict]:
                     x["args"][1].update(type=desc["types"].index(["Array", 2, ["Value", 16]]),
                                         refs={"affine": ["n", k, 0, 2]})
                 else:
-                    x["args"][1]["refs"] = {"strided": ["n", k, 0, 2, 0, 1, 2 * x["n"]]}
+                    x["args"][1]["refs"] = {"strided": ["n", k, 0, size if shape == "inner" else 2, 0, 1, 2 * x["n"]]}
             if shape == "scan":
                 scan = [x for x in units(nodes) if desc["callees"][x["fn"]] == "LowScan_v1"][0]
                 scan["args"][0]["refs"] = {"strided": ["n", k, 0, 4, 0, 1, 4 * scan["n"]]}
         return edit
 
-    for j, (what, (shape, decls, wide, held, stage)) in enumerate(NODES.items()):
+    for j, (what, (shape, decls, wide, held, stage, steps)) in enumerate(NODES.items()):
         c = lowered(2, 3)
         if wide:
             c.params["weights/norm"] = 4
         first(f"2x3 {what}", c, 48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS)
               + len(ROW_ROLE) + len(SPLITS) + j, reroot=declared(shape), broken=stage,
               held=tuple(p for p in WEIGHTS if held or p != "weights/norm"),
-              edit=lambda d, decls=decls: d["registered"].__setitem__("nodes", [{"node": k, **x} for x in decls]))
+              edit=lambda d, decls=decls, steps=steps: _declare(d, [{"node": k, **x} for x in decls], steps))
     return out
+
+
+def _declare(d: dict, nodes: list, steps: list | None) -> None:
+    """The record `d` declaring `nodes`; with `steps`, `Norm`'s registered read of its weights stepping `steps`
+    (slowest first) over its units in pairs."""
+    d["registered"]["nodes"] = nodes
+    if steps is not None:
+        r = next(r for r in d["registered"]["reads"] if r["reader"] == "LowNorm_v1" and r["port"] == "w")
+        r.update(radix=[math.prod(r["radix"]) // 2, 2], step=steps)
 
 
 def _norm_weights(c: Circuit) -> int:
@@ -1470,16 +1479,21 @@ def case(seed: int) -> dict:
 _NORM = {"param": "weights/norm", "offset": 0}
 #: `Norm`'s weights' input node declared in `registered.nodes` (`declared`): by its shape (every `Norm` reading it at
 #: outer stride 0, unmapped, or `Scan`'s state reading it too), its declarations, whether `weights/norm` is four
-#: leaves, whether the log registers it, and the stage that refuses it, None where the form takes it
-NODES: dict[str, tuple[str, list, bool, bool, str | None]] = {
-    "a row every unit reads at outer stride 0, declared": ("mapped", [_NORM], False, True, None),
-    "a row every unit reads unmapped, declared": ("unmapped", [_NORM], False, True, None),
+#: leaves, whether the log registers it, the stage that refuses it, None where the form takes it, and the steps of
+#: `Norm`'s registered read over its units in pairs (`_declare`), None where they are the record's own
+NODES: dict[str, tuple[str, list, bool, bool, str | None, list | None]] = {
+    "a row every unit reads at outer stride 0, declared": ("mapped", [_NORM], False, True, None, None),
+    "a row every unit reads unmapped, declared": ("unmapped", [_NORM], False, True, None, None),
     "one stretch declared of two kinds": ("mapped", [_NORM, {"table": "table/weights/embed", "of": "root"}], False,
-                                          True, "nodes"),
-    "a node declared under another root": ("mapped", [{"param": "weights/query", "offset": 0}], False, True, "nodes"),
-    "a node declared at a shifted offset": ("mapped", [{**_NORM, "offset": 1}], True, True, "nodes"),
-    "a node declared registered, not in the log": ("mapped", [_NORM], False, False, "nodes"),
-    "a declared node a second port reads under another declaration": ("scan", [_NORM], True, True, "nodes"),
+                                          True, "nodes", None),
+    "a node declared under another root": ("mapped", [{"param": "weights/query", "offset": 0}], False, True, "nodes",
+                                           None),
+    "a node declared at a shifted offset": ("mapped", [{**_NORM, "offset": 1}], True, True, "nodes", None),
+    "a node declared registered, not in the log": ("mapped", [_NORM], False, False, "nodes", None),
+    "a declared node a second port reads under another declaration": ("scan", [_NORM], True, True, "nodes", None),
+    "rows read in turn by the members of an inner run, declared": ("inner", [_NORM], True, True, None, [0, 2]),
+    "rows read in turn by the members of an inner run, the read's step not theirs": ("inner", [_NORM], True, True,
+                                                                                       "nodes", [0, 1]),
 }
 
 

@@ -628,19 +628,42 @@ def slopesOf (w : Spot.Wires.Wire) : Option (Int × Int) :=
     if s % (p : Int) == 0 && digits.all (fun (q, t) => t == (q : Int) * (s / (p : Int))) then some (s / (p : Int), sr)
     else none
 
-/-- How argument `a` of root node `n` reads one input node, member by member: `(node, b, os, e)`, member `m`'s leaf
-`k < e` the node's leaf `b + m · os + k`. Only one part, affine (`os` = `e` for a batch's mapped argument) or strided
-with `e` leaves an inner run of stride 1; a batch's argument mapped on its outermost axis, each member `e` leaves, or
-unmapped, every member the whole argument (`os` = 0). -/
-def stretchOf (n : Node) (a : Arg) : Option (Nat × Int × Int × Nat) :=
+/-- A registered read's unit digits as two slopes about place `q`: `(inner, outer)`, each unit digit below `q` stepping
+its place value times `inner` and each from `q` on its place value over `q` times `outer` (none where there is no such
+digit); none where they are not, or a digit straddles `q`. -/
+def slopesAbout (w : Spot.Wires.Wire) (q : Nat) : Option (Option Int × Option Int) :=
+  let us := if w.cuts > 1 then w.pairs.drop 1 else w.pairs
+  let digits := (us.foldl (fun (acc : Nat × List (Nat × Nat × Int)) (r, s) =>
+    (acc.1 * r, if r > 1 then acc.2 ++ [(acc.1, r, s)] else acc.2)) (1, [])).2
+  let inner := digits.filter fun (p, r, _) => p * r ≤ q
+  let outer := digits.filter fun (p, r, _) => ¬ p * r ≤ q
+  let slope := fun (ds : List (Nat × Nat × Int)) (div : Nat) => match ds with
+    | [] => some none
+    | (p, _, s) :: _ =>
+      let u := (p / div : Nat)
+      if u ≥ 1 && s % (u : Int) == 0 && ds.all (fun (p', _, t) => t == ((p' / div : Nat) : Int) * (s / (u : Int)))
+      then some (some (s / (u : Int))) else none
+  if q ≥ 1 && outer.all (fun (p, _, _) => p % q == 0) then
+    match slope inner 1, slope outer q with
+    | some si, some so => some (si, so)
+    | _, _ => none
+  else none
+
+/-- How argument `a` of root node `n` reads one input node, member by member: `(node, b, q, os, e)`, member `m`'s leaf
+`k < e` the node's leaf `b + (m / q) · os + (m % q) · e + k`. Only one part, affine (`q` = 1, `os` = `e` for a batch's
+mapped argument) or strided with an inner run of stride 1 of `q · e` leaves, `q` members' in turn; a batch's argument
+mapped on its outermost axis, each member `e` leaves, or unmapped, every member the whole argument (`os` = 0). -/
+def stretchOf (n : Node) (a : Arg) : Option (Nat × Int × Nat × Int × Nat) :=
   let e := match n.form, a.dims with
     | .batch, some (d, L) => if d * L == a.seq.count then some (L, true) else none
     | .batch, none | .call, none => some (a.seq.count, false)
     | _, _ => none
   match e, a.seq.parts.toList with
-  | some (e, mapped), [.affine false i b _] => some (i, (b : Int), if mapped then (e : Int) else 0, e)
+  | some (e, mapped), [.affine false i b _] => some (i, (b : Int), 1, if mapped then (e : Int) else 0, e)
   | some (e, mapped), [.strided false i b inner os is _] =>
-    if inner == e && is == 1 then some (i, b, if mapped then os else 0, e) else none
+    if e ≥ 1 && inner % e == 0 && inner ≥ e && is == 1 && (mapped || inner == e) then
+      some (i, b, inner / e, if mapped then os else 0, e)
+    else none
   | _, _ => none
 
 /-- Whether declarations `ds` fill template `tid`'s units `[u0, u0 + M)`, every row of `port`'s `kc`: each that
@@ -670,7 +693,8 @@ within `p`, and `p` is θ (`isTheta`); declared as a table's root or domain id, 
 parameter is θ. Of each argument of a root node that reads a declared node (`overDeclared`): it is one stretch a
 member (`stretchOf`) within the node, of leaves of width `w`, its port's rows whole leaves; and the declarations that
 fill the port's rows of the node's units (`covers`) fill them all, each a registered read of `p` whose source at a
-unit's row is the node's leaf there, `o + w · (b + m · os + row · e / kc) / 16`, or, of a table's node, a table read
+unit's row is the node's leaf there, `o + w · (b + (m / q) · os + (m % q) · e + row · e / kc) / 16`, its
+unit digits split about `q` where `q` > 1 (`slopesAbout`), or, of a table's node, a table read
 of that table's root or domain id, by a unit reading the whole node in one row. -/
 def nodesHeld (T : Theta.Trusted) (P : Prog) (doc : Json) (ts : List Tmpl) (W : Spot.Wires.Wiring) (x : Inputs)
     (ns : List NodeDecl) : Bool :=
@@ -694,26 +718,38 @@ def nodesHeld (T : Theta.Trusted) (P : Prog) (doc : Json) (ts : List Tmpl) (W : 
     | none => true
     | some _ => match stretchOf (nodes[r.node]!) a with
       | none => false
-      | some (i, b, os, e) =>
+      | some (i, b, q, os, e) =>
         let nd := nodes[i]!
         let M := r.count
         let kc := W.cutsOf t.tid port
-        let lo := b + min 0 (((M : Int) - 1) * os)
-        let hi := b + max 0 (((M : Int) - 1) * os) + e
+        let Q : Int := ((M - 1) / q : Nat)
+        let lo := b + min 0 (Q * os)
+        let hi := b + max 0 (Q * os) + (((min q M - 1) * e + e : Nat) : Int)
         match Widths.homo nd.out, (ns.find? (·.node == i)).map (·.fill) with
         | some w, some (NodeFill.param p o) =>
           let L := e / kc
           let A : Int := 16 * (o : Int) + (w : Int) * b
+          let so : Int := (w : Int) * os / 16
+          let si : Int := ((w * e / 16 : Nat) : Int)
           Widths.homo pty == some w && (nodes[r.node]!).members == M && kc ≥ 1 && e % kc == 0 &&
           0 ≤ lo && hi ≤ (nd.out.leaves : Int) && A % 16 == 0 && ((w : Int) * os) % 16 == 0 && (w * L) % 16 == 0 &&
-          covers x.decls t.tid port u0 M kc fun d ua ub ra rb => match d.fill, slopesOf d.w with
-            | .read q, some (su, sr) =>
-              q == p && (ub - ua ≤ 1 || su == (w : Int) * os / 16) && (rb - ra ≤ 1 || sr == ((w * L / 16 : Nat) : Int)) &&
+          covers x.decls t.tid port u0 M kc fun d ua ub ra rb =>
+            let sr : Int := if d.w.cuts > 1 then (d.w.pairs.head?.map (·.2)).getD 0 else 0
+            let unitsOk := if q == 1 then (match slopesOf d.w with
+                | some (su, _) => ub - ua ≤ 1 || su == so
+                | none => false) else
+              (ua - d.w.start) % q == 0 && (ua - u0) % q == 0 && match slopesAbout d.w q with
+                | some (si', so') => si'.all (· == si) && so'.all (· == so)
+                | none => false
+            match d.fill with
+            | .read p' =>
+              p' == p && unitsOk && (rb - ra ≤ 1 || sr == ((w * L / 16 : Nat) : Int)) &&
                 d.w.writerAt ((ua - d.w.start) * d.w.cuts + (ra - d.w.cut0)) ==
-                  A / 16 + ((ua - u0 : Nat) : Int) * ((w : Int) * os / 16) + ((ra * (w * L / 16) : Nat) : Int)
-            | _, _ => false
+                  A / 16 + (((ua - u0) / q : Nat) : Int) * so + (((ua - u0) % q : Nat) : Int) * si +
+                    ((ra * (w * L / 16) : Nat) : Int)
+            | _ => false
         | some _, some (NodeFill.table name root) =>
-          (nodes[r.node]!).members == M && b == 0 && e == nd.out.leaves && (M == 1 || os == 0) && kc == 1 &&
+          (nodes[r.node]!).members == M && b == 0 && e == nd.out.leaves && (M == 1 || os == 0) && q == 1 && kc == 1 &&
           covers x.decls t.tid port u0 M kc fun d _ _ _ _ => match d.fill with
             | .table name' root' => name' == name && root' == root
             | _ => false

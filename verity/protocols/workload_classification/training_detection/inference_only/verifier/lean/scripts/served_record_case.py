@@ -73,7 +73,7 @@ def rechained(log: list[dict]) -> list[dict]:
 
 
 def shared(program) -> dict[int, list[tuple]]:
-    """Each root input node two rows read, with the readers of it, `(root node, argument, b, os, e)` each
+    """Each root input node two rows read, with the readers of it, `(root node, argument, b, q, os, e)` each
     (`stretch_of`): one a batch reads at outer stride 0, or two readers' stretches that meet."""
     body = program.root.body.nodes
     reads: dict[int, list[tuple]] = {}
@@ -86,9 +86,9 @@ def shared(program) -> dict[int, list[tuple]]:
                 reads.setdefault(got[0], []).append((k, i, *got[1:]))
     out = {}
     for n, rs in reads.items():
-        spans = sorted((b + min(0, (body[k].n - 1) * os), b + max(0, (body[k].n - 1) * os) + e)
-                       for k, _, b, os, e in rs)
-        if any(os == 0 and body[k].form == "batch" and body[k].n > 1 for k, _, _, os, _ in rs) or any(
+        spans = sorted((b + min(0, (body[k].n - 1) // q * os), b + max(0, (body[k].n - 1) // q * os)
+                        + min(q, body[k].n) * e) for k, _, b, q, os, e in rs)
+        if any(os == 0 and body[k].form == "batch" and body[k].n > q for k, _, _, q, os, _ in rs) or any(
                 a[1] > b[0] for a, b in zip(spans, spans[1:])):
             out[n] = rs
     return out
@@ -108,7 +108,7 @@ def declared(program, desc: dict, doc: dict) -> list[dict]:
     reg = doc.get("registered", {})
     out = []
     for n, rs in sorted(shared(program).items()):
-        k, i, b, _, _ = rs[0]
+        k, i, b, *_ = rs[0]
         tid, port, u0 = codec.descriptor_id(body[k].fn), body[k].fn.signature()[0][i][0], starts[k]
         w = ref._homo(body[n].out)
         hit = None

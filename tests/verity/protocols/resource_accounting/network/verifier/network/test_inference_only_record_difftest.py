@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 725 cases (600 random circuits,
-two in five broken in one way, 99 shaped ones, most in the shape of a served class, and 26 toys of edges) and, on each,
+`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 727 cases (600 random circuits,
+two in five broken in one way, 101 shaped ones, most in the shape of a served class, and 26 toys of edges) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -112,7 +112,7 @@ ROW_ROLE = {f"2x3 {what}": stage for what, (stage, _) in vectors.ROW_ROLE.items(
 #: the cases of one template in two root nodes, each with the stage that refuses it, None where the form takes it
 SPLITS = {f"2x3 {what}": ("templates" if short else None) for what, (_, short) in vectors.SPLITS.items()}
 #: the cases on a root input node the record declares, each with the stage that refuses it, None where the form takes it
-NODES = {f"2x3 {what}": stage for what, (*_, stage) in vectors.NODES.items()}
+NODES = {f"2x3 {what}": stage for what, (_, _, _, _, stage, _) in vectors.NODES.items()}
 
 
 @pytest.fixture(scope="module")
@@ -127,7 +127,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 725 cases and the reference's results, byte for byte as the record pins them."""
+    """All 727 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -1006,9 +1006,10 @@ def test_a_units_row_may_be_an_earlier_units_output():
 
 def test_a_root_input_node_declared_once(shaped):
     """A root input node every `Norm` unit reads, declared once in `registered.nodes` (`NODES`): taken, with the
-    accepted case's fresh bits, where every row that reads it is the declaration's at its position; refused (`nodes`)
-    where a node is declared twice, under another root, at another offset, as a parameter the log does not register,
-    or where a second port reads it under another declaration. Undeclared, the same roots are refused (`ROWS`)."""
+    accepted case's fresh bits, where every row that reads it is the declaration's at its position, its members' rows
+    in turn in an inner run among them; refused (`nodes`) where a node is declared twice, under another root, at another
+    offset, as a parameter the log does not register, where a second port reads it under another declaration, or where
+    the registered read does not step as the inner run does. Undeclared, the same roots are refused (`ROWS`)."""
     base = vectors.results(shaped["2x3 registered"]["case"])["detail"]
     for what, stage in NODES.items():
         r = vectors.results(shaped[what]["case"])

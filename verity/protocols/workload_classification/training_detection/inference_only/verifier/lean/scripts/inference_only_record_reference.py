@@ -721,10 +721,10 @@ def _homo(ty) -> int | None:
 
 
 def stretch_of(node, i: int) -> tuple | None:
-    """`Record.stretchOf`: how argument `i` of root node `node` reads one input node, `(node, b, os, e)`, member `m`'s
-    leaf `k < e` the node's leaf `b + m·os + k`; None where it is not one affine part, or one strided part with an
-    inner run of `e` leaves at stride 1, over a call's whole argument or a batch's mapped on its outermost axis, or a
-    batch's unmapped one, which every member reads whole (`os` = 0)."""
+    """`Record.stretchOf`: how argument `i` of root node `node` reads one input node, `(node, b, q, os, e)`, member
+    `m`'s leaf `k < e` the node's leaf `b + (m // q)·os + (m % q)·e + k`; None where it is not one affine part, or one
+    strided part with an inner run of `q·e` leaves at stride 1, over a call's whole argument or a batch's mapped on its
+    outermost axis, or a batch's unmapped one, which every member reads whole (`os` = 0, `q` = 1)."""
     from verity.circuits.refs import Strided
     a = node.args[i]
     e = None
@@ -744,9 +744,10 @@ def stretch_of(node, i: int) -> tuple | None:
     p = parts[0]
     mapped = node.form == "batch" and node.axes[i] is not None
     if isinstance(p, Affine):
-        return p.idx, p.base, e if mapped else 0, e
-    if isinstance(p, Strided) and p.inner == e and p.inner_stride == 1:
-        return p.idx, p.base, p.outer_stride if mapped else 0, e
+        return p.idx, p.base, 1, e if mapped else 0, e
+    if isinstance(p, Strided) and e >= 1 and p.inner % e == 0 and p.inner >= e and p.inner_stride == 1 \
+            and (mapped or p.inner == e):
+        return p.idx, p.base, p.inner // e, p.outer_stride if mapped else 0, e
     return None
 
 
@@ -766,6 +767,32 @@ def slopes_of(w: dict) -> tuple | None:
     if s % p == 0 and all(t == q * (s // p) for q, t in digits):
         return s // p, sr
     return None
+
+
+def slopes_about(w: dict, q: int) -> tuple | None:
+    """`Record.slopesAbout`: a registered read's unit digits as two slopes about place `q`, `(inner, outer)`, each
+    None where no digit is on its side; None where they are not, or a digit straddles `q`."""
+    ps = list(zip(reversed(w["radix"]), reversed(w["step"])))
+    us = ps[1:] if w["C"] > 1 else ps
+    digits, place = [], 1
+    for r, s in us:
+        if r > 1:
+            digits.append((place, r, s))
+        place *= r
+    inner = [d for d in digits if d[0] * d[1] <= q]
+    outer = [d for d in digits if d[0] * d[1] > q]
+
+    def slope(ds, div):
+        if not ds:
+            return True, None
+        u = ds[0][0] // div
+        if u >= 1 and ds[0][2] % u == 0 and all(t == (p // div) * (ds[0][2] // u) for p, _, t in ds):
+            return True, ds[0][2] // u
+        return False, None
+    if not (q >= 1 and all(p % q == 0 for p, _, _ in outer)):
+        return None
+    (oi, si), (oo, so) = slope(inner, 1), slope(outer, q)
+    return (si, so) if oi and oo else None
 
 
 def declarations(x: Inputs, wires: list[dict], cuts: dict, rec: dict) -> list[tuple]:
@@ -831,16 +858,17 @@ def nodes_held(T: dict, program, rec: dict, templates: list[Template], cuts: dic
             got = stretch_of(node, i)
             if got is None:
                 return False
-            n, b, os, e = got
+            n, b, q, os, e = got
             nd = body[n]
             w = _homo(nd.out)
             kc = int(cuts.get(tid, {}).get(port, 1))
-            lo, hi = b + min(0, (M - 1) * os), b + max(0, (M - 1) * os) + e
+            Q = (M - 1) // q
+            lo, hi = b + min(0, Q * os), b + max(0, Q * os) + (min(q, M) - 1) * e + e
             mine = []
-            for reader, q, at, units, c0, C, fill, pat in decls:
+            for reader, dport, at, units, c0, C, fill, pat in decls:
                 ua, ub = max(u0, at), min(u0 + M, at + units)
                 ra, rb = c0, min(kc, c0 + C)
-                if reader == tid and q == port and ua < ub and ra < rb:
+                if reader == tid and dport == port and ua < ub and ra < rb:
                     mine.append((fill, pat, at, c0, C, ua, ub, ra, rb))
             what = nodes[n]
             if what[0] == "param":
@@ -849,15 +877,24 @@ def nodes_held(T: dict, program, rec: dict, templates: list[Template], cuts: dic
                 if not (_homo(pty) == w and kc >= 1 and e % kc == 0 and lo >= 0 and hi <= nd.out.leaves
                         and A % 16 == 0 and (w * os) % 16 == 0 and (w * L) % 16 == 0):
                     return False
+                so, si = w * os // 16, w * e // 16
                 for fill, pat, at, c0, C, ua, ub, ra, rb in mine:
-                    sl = slopes_of(pat) if fill[0] == "read" else None
-                    if not (sl is not None and fill[1] == what[1] and (ub - ua <= 1 or sl[0] == w * os // 16)
-                            and (rb - ra <= 1 or sl[1] == w * L // 16)
+                    if fill[0] != "read":
+                        return False
+                    sr = list(reversed(pat["step"]))[0] if C > 1 else 0
+                    if q == 1:
+                        sl = slopes_of(pat)
+                        units = sl is not None and (ub - ua <= 1 or sl[0] == so)
+                    else:
+                        ab = slopes_about(pat, q)
+                        units = ((ua - at) % q == 0 and (ua - u0) % q == 0 and ab is not None
+                                 and ab[0] in (None, si) and ab[1] in (None, so))
+                    if not (fill[1] == what[1] and units and (rb - ra <= 1 or sr == w * L // 16)
                             and source(pat, (ua - at) * C + (ra - c0))
-                            == A // 16 + (ua - u0) * (w * os // 16) + ra * (w * L // 16)):
+                            == A // 16 + (ua - u0) // q * so + (ua - u0) % q * si + ra * (w * L // 16)):
                         return False
             else:
-                if not (b == 0 and e == nd.out.leaves and (M == 1 or os == 0) and kc == 1 and all(
+                if not (b == 0 and e == nd.out.leaves and (M == 1 or os == 0) and q == 1 and kc == 1 and all(
                         fill[0] == "root" and fill[1] == what[1] and (fill[2] == "root") == what[2]
                         for fill, *_ in mine)):
                     return False
