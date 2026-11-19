@@ -65,8 +65,8 @@ from verity.commitments import (
     verify_opening,
 )
 from verity.commitments.hm96 import batch
-from verity.commitments.merkle import tree_levels
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf, sha512_row_seg_digest
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
@@ -232,7 +232,7 @@ def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], salts: byte
     """``audit.commit_rows(binding, owner, values, hash=HM96, salts=...)`` of ``salts``, leaf i's at bytes
     [192 i, 192 i + 192): the caller's fresh bytes (`pouw_h1_prover.RunSalts`). The leaves are
     hashed as a registered value's are (`Hm96Domain.leaf`'s bytes): each distinct preimage's ``row-seg`` digest once,
-    every leaf's hm96 mask at once (`hm96.batch.tree_leaves`), and the frame's leaves and levels (`rowleaf.row_leaf`,
+    every leaf's hm96 mask at once (`hm96.batch.tree_leaves`), and the frame's leaves and levels (`CommitmentDomain.leaf`,
     `merkle.tree_levels`), since `MerkleTree`'s leaf by leaf took some 0.1 ms a leaf, a round's request table each round."""
     n = len(values)
     y = bytes(salts)
@@ -247,7 +247,7 @@ def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], salts: byte
         if v not in xs:
             xs[v] = sha512_row_seg_digest(v, 8 * len(v))
     hl = batch.tree_leaves(hm96.SHA512, HM96_KEY, b"".join(xs[v] for v in values), y)
-    leaves = [row_leaf(domain, i, h, SCHEMA_HM96_SHA512_ROW_SEG) for i, h in enumerate(hl)]
+    leaves = [CommitmentDomain.leaf(domain, i, i, SCHEMA_HM96_SHA512_ROW_SEG, h) for i, h in enumerate(hl)]
     return HidingTable(domain, rows, tree_levels(domain, leaves))
 
 
