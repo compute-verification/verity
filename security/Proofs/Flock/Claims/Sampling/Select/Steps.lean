@@ -179,9 +179,19 @@ theorem deriveSamplingDesign_cases (d : Program) (query samplingDesign : Json) (
       split at h
       · rename_i hr
         obtain ⟨rates, -, h⟩ := bind_eq_ok.1 h
-        obtain ⟨works, -, h⟩ := bind_eq_ok.1 h
-        obtain ⟨samplingDesign', hd, h⟩ := bind_eq_ok.1 h
-        obtain rfl := (Except.ok.inj h).symm
+        have key : ∃ works samplingDesign', Flock.Draw.deriveRated rates S works = .ok samplingDesign' ∧
+            some samplingDesign' = derived := by
+          split at h
+          · split at h
+            · obtain ⟨works, -, h⟩ := bind_eq_ok.1 h
+              obtain ⟨samplingDesign', hd, h⟩ := bind_eq_ok.1 h
+              exact ⟨works, samplingDesign', hd, Except.ok.inj h⟩
+            · obtain ⟨works, hw, -⟩ := bind_eq_ok.1 h
+              exact absurd hw (throw_ne _ _)
+          · obtain ⟨works, -, h⟩ := bind_eq_ok.1 h
+            obtain ⟨samplingDesign', hd, h⟩ := bind_eq_ok.1 h
+            exact ⟨works, samplingDesign', hd, Except.ok.inj h⟩
+        obtain ⟨works, samplingDesign', hd, rfl⟩ := key
         exact Or.inr (Or.inr ⟨S, rates, works, samplingDesign', by rw [hk]; simpa using hr, hS, rfl, hd⟩)
       split at h
       · split at h

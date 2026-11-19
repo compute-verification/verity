@@ -167,9 +167,19 @@ theorem deriveSamplingDesign_some {p : _root_.Spot.Program} {q samplingDesign : 
       split at h
       · rename_i hr
         obtain ⟨rates, -, h⟩ := bind_eq_ok.1 h
-        obtain ⟨works, -, h⟩ := bind_eq_ok.1 h
-        obtain ⟨L', hd, h⟩ := bind_eq_ok.1 h
-        cases h
+        have key : ∃ works L', Flock.Draw.deriveRated rates S works = .ok L' ∧ some L' = some L := by
+          split at h
+          · split at h
+            · obtain ⟨works, -, h⟩ := bind_eq_ok.1 h
+              obtain ⟨L', hd, h⟩ := bind_eq_ok.1 h
+              exact ⟨works, L', hd, Except.ok.inj h⟩
+            · obtain ⟨works, hw, -⟩ := bind_eq_ok.1 h
+              cases hw
+          · obtain ⟨works, -, h⟩ := bind_eq_ok.1 h
+            obtain ⟨L', hd, h⟩ := bind_eq_ok.1 h
+            exact ⟨works, L', hd, Except.ok.inj h⟩
+        obtain ⟨works, L', hd, hL⟩ := key
+        cases hL
         obtain ⟨ss, rfl, -⟩ := Flock.Draw.deriveRated_meetsRate hd
         exact Or.inr ⟨by rw [hk]; simpa using hr, rates, ss, rfl⟩
       rename_i hnr

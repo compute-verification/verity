@@ -331,7 +331,7 @@ theorem sampled_facts (h : ByteArray → ByteArray) (c : Circuit) (pop pub : Pub
     split at hp
     · (have hh := except_bind_ok hp; clear hp; obtain ⟨_, hh, -⟩ := hh)
       cases hh
-    · exact ⟨_, hp⟩
+    · exact ⟨(), hp⟩
   simp (config := { zeta := false }) only [jpR] at hp
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) proved jpA at hp
   obtain ⟨hb, hp⟩ := ite_throw_okP hp

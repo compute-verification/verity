@@ -471,12 +471,12 @@ def sampledNats (draw : Json) : Array Nat :=
 /-- The public outputs at δ, for the sampling design `samplingDesign` with its profile's sample `d` over `n` units: whether every
 verdict ran (`Record.allRan`, which `VerdictsAccept` asks only of the verdicts of record), the sampled proof blocks, the proved
 ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
-for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
+for a Bernoulli sample), and for a stratified, work or rated sampling design each template's own (`Bound.stratumBound`). -/
 def publicOf (p : Params) (e : Evidence) (samplingDesign : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
   { drawn := sampledNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
-    perTemplate := if jeq (getD samplingDesign "law") "stratified" || jeq (getD samplingDesign "law") "work" then
+    perTemplate := if ["stratified", "work", "rated"].any (jeq (getD samplingDesign "law") ·) then
       (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none,
     complete := Record.allRan e.verdicts }
 
