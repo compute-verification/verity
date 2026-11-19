@@ -136,11 +136,10 @@ def load(stage_dir: Path) -> tuple[ServedTree, ServedTree, dict]:
 
 def registered_file(prog: Program, query: dict, tree: ServedTree, x_tree: ServedTree, out_port: dict) -> dict:
     """The verifier's own `--registered` file, in Flock's `Registered.FORMAT` (`registered.READS_V2`: C gives every
-    position, so no port states its reads): `register_served`'s ports for the served trees `cs_table` and `x`, and the
-    output rows' port, so every port of the circuit is registered (`Flock.Registered.checkComplete`)."""
+    position, so no port states its reads): `register_served`'s ports for the served trees `cs_table` and `x`. The
+    output rows are C's own output tree's (`RoPEHead_v1{D=64}/o0`), which the verifier refuses to register again."""
     sr = register_served(prog, query, [tree, x_tree])
-    ports = {**sr.ports, "out": out_port}
-    return {"format": G.READS_V2, "ports": {k: {f: v for f, v in e.items() if f != "reads"} for k, e in ports.items()}}
+    return {"format": G.READS_V2, "ports": {k: {f: v for f, v in e.items() if f != "reads"} for k, e in sr.ports.items()}}
 
 
 def write_registered(doc: dict, path: Path) -> Path:
