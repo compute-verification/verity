@@ -184,9 +184,9 @@ verify its opening. -/
 def events1 (root : ByteArray) (o : Opening) : Array _root_.Poub.Session.Event :=
   #[.start 0, .receive 0 0 root none none (some 0) 1, .boundary 1, .close 0 2, .verify 0 #[o]]
 
-/-- The session's run accepts, over any registration of one block, any two coins and any root of 64 bytes whose
+/-- The session's run accepts, over any registration of one block, any first coin and any root of 64 bytes whose
 window's openings `checkWindow` accepts, and its record has one window, of one pass of one block, which drew one
-receipt. -/
+receipt, its sample's coins 64 zero bytes. -/
 theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 root : ByteArray) (hroot : root.size = 64)
     (o : Opening) (hcheck : checkWindow reg reg.digest #[] (window1 reg c0 root) #[(0, 0)] #[o] = .accept) :
     ∃ rs s, _root_.Poub.Session.run (_root_.Poub.Session.State.init params1 reg #[c0, zeros 64] #[] 0)
