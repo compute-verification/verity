@@ -75,9 +75,10 @@ theorem opensReady_of_accepted {V : Vocab d α} {T : PinnedTables} {k : Verity.R
     rw [htg, hcf, hA.count]
   have h1 := hAc.ports
   rw [hz] at h1
-  have hfl : (ZkExec.zkTags A.I).hiddenOutputs = true ∧ (ZkExec.zkTags A.I).isTmpl = false :=
+  have htm : (ZkExec.zkTags A.I).hiddenOutputs = true ∧ (ZkExec.zkTags A.I).isTmpl = true :=
     statement_zkTags hA.tags _ _
-  have hpA := (circuitOf_parse hfl.1 hfl.2 A.I.circuitFile A.I.tables).trans (Flock.Desc.parse_flat A.hD)
+  obtain ⟨c, hc, -⟩ := parseTmpl_of_parseStmt htm.2 A.hD
+  have hpA := (circuitOf_tmpl htm.1 htm.2 A.I.circuitFile A.I.tables).trans hc
   refine ⟨?_⟩
   rw [← FlockSoundness.Refine.portRoots_back hF.tables hpA, ← hcf, ← hpf]
   exact h1
