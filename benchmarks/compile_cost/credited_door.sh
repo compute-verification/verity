@@ -81,7 +81,7 @@ for v in honest dishonest; do
   challenger_start $Ov/challenger || exit 1
   PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
   timed serve-$v $B serve --zk --listen 127.0.0.1:$PORT --out $S/sessions-$v --instances $D/pub-$N.bin "${U[@]}" --pin $PIN --operator tmpl-unit \
-    --draw subset:$N --sessions 1 > $Ov/serve.log 2>&1 &
+    --draw subset:$N --sessions 1 "${TREE_FROM[@]}" > $Ov/serve.log 2>&1 &
   SP=$!
   for i in $(seq 3600); do grep -q SERVING $Ov/serve.log && break; kill -0 $SP 2>/dev/null || break; sleep 1; done
   timed prove-$v $B prove --zk --verifier 127.0.0.1:$PORT --instances $D/inst-$N.bin "${U[@]}" --runs 1 --warm 0 > $Ov/prove.txt 2> $Ov/prove.err
