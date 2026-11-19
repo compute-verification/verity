@@ -1,8 +1,8 @@
 """The scale-products source (`acquire.sources.scale_products_source`) on CPU tensors with a recording committer: its words are the circuit's
 (`ScaledMmFp8BlockSharedScale_v1` evaluated as a standalone Call, its committed interior gates `query.scale_products.slots` read in
-order, NaN payloads, infinities and subnormals included); it commits `<linear module>/scale_products` only inside the manifest site during
-a committed step and refuses a launch of another block geometry; `attach` refuses a manifest without the family, and `taps.attach`
-attaches the source exactly when the manifest names it."""
+order, NaN payloads, infinities and subnormals included); it commits `<linear module>/scale_products` only inside the plan's site during
+a committed step and refuses a launch whose products are not the plan's width; `attach` refuses a capture plan without the class, and
+`taps.attach` attaches the source exactly when the plan names it."""
 from __future__ import annotations
 
 import random
@@ -13,8 +13,6 @@ import numpy as np
 import pytest
 
 from tests.acquire.test_vocab_range_source import Recorder
-from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
-from tests.query.test_scale_products import fp8_program
 from verity_vllm.acquire.sources import call_boundary_plan as CBP
 from verity_vllm.definitions.registry import fp8
 from verity_vllm.query import scale_products as SP
@@ -28,6 +26,7 @@ from verity_vllm.acquire.sources import scale_products_source as S
 from verity_vllm.acquire.sources import taps
 
 K, N, G = 256, 384, 128
+SHARED = "ScaledMmFp8BlockSharedScale_v1"
 KB, NB = K // G, N // G
 #: x_s rows and the [N/G, K/G] w_s: NaNs of different payloads and signs, +-inf against zero, subnormal and overflowing products
 XS = [[0x7FC00001, 0x00000001], [0xFFC00000, 0x7F800000], [0x3C000000, 0x3B124925]]
@@ -65,7 +64,7 @@ def _model():
 
 def test_the_source_commits_only_inside_the_site_during_a_step():
     com = Recorder()
-    src = S.ScaleProductsSource(com, _model(), {"down_proj": {"n_blocks": NB, "k_blocks": KB}})
+    src = S.ScaleProductsSource(com, _model(), {"down_proj": NB * KB})
     launches = []
 
     def launch(*a):
@@ -88,20 +87,36 @@ def test_the_source_commits_only_inside_the_site_during_a_step():
     name, t = com.acquired[0]
     assert name == f"down_proj/{SP.MEMBER}" and torch.equal(t.view(torch.int32), S.products(torch, xs, ws).view(torch.int32))
     enter(None, ())
-    fn(None, None, None, xs[:, :1], ws[:1])                     # not the manifest's block geometry
-    assert len(com.acquired) == 1 and len(com.errors) == 1 and len(launches) == 5
+    fn(None, None, None, xs[:, :1], ws[:1])                     # products of another width than the plan's
+    fn(None, None, None, xs[:, :1], ws)                         # the plan's width, activation scales of another K/G
+    assert len(com.acquired) == 1 and len(com.errors) == 2 and len(launches) == 6
     assert src.extra_step_bytes({}, None)["per_token_bytes"] == 4 * NB * KB
 
 
-def test_attach_refuses_a_manifest_without_the_family_and_taps_attach_it_when_named():
+def _plan(width=NB * KB, member=SP.MEMBER):
+    """The plan classes (`capture_plan.of_build`) of a row with one block-scaled FP8 linear."""
+    return [{"op_path": "down_proj", "member": "0", "capture": "module_output", "width": N, "dtype": "bf16", "definitions": [SHARED]},
+            {"op_path": "down_proj", "member": member, "capture": "scale_products", "width": width, "dtype": "f32", "definitions": [SHARED]}]
+
+
+def test_the_sites_are_the_plans_scale_products_classes():
+    assert S.sites(_plan()) == {"down_proj": NB * KB} and S.sites(_plan()[:1]) == {}
+    with pytest.raises(ValueError, match="down_proj/products is a scale_products class and not the member scale_products"):
+        S.sites(_plan(member="products"))
+    with pytest.raises(ValueError, match=r"down_proj is named at two widths \(6, 4\)"):
+        S.sites([*_plan(), _plan(width=4)[1]])
+
+
+def test_attach_refuses_a_plan_without_the_class_and_taps_attach_it_when_named():
     com = Recorder()
-    assert S.attach(com, False, {}, ("a",)) == (("a",), None)
-    with pytest.raises(SystemExit):
-        S.attach(com, True, {"identities": []}, ("a",))
-    plain, shared = (_v2_manifest(fp8_program(s), taps=(SP.POLICY,)) for s in (False, True))
-    # the quant's x_q/x_s are Q_word call boundaries, the call-boundary source's (tests/acquire/test_call_boundary_source.py)
-    plain, shared = ({**m, "identities": [r for r in m["identities"] if r["family"] != CBP.FAMILY]} for m in (plain, shared))
-    assert taps.attach(com, plain, ("a",), taps.TapSources()) == ("a",) and com.sources == []
-    assert taps.attach(com, shared, ("a",), taps.TapSources()) == ("a", SP.FAMILY)
-    assert [s.sites for s in com.sources] == [SP.manifest_sites(shared)]
-    assert taps.attach(com, shared, ("a",), taps.TapSources(), explicit_classes=True) == ("a",)
+    com.model = _model()
+    assert S.attach(com, False, [], ("a",)) == (("a",), None)
+    for plan in ([], _plan()[:1], _plan(member="products")):
+        with pytest.raises(SystemExit) as e:
+            S.attach(com, True, plan, ("a",))
+        assert e.value.code == 3 and com.sources == []
+    assert taps.attached(_plan()[:1]) == [] and taps.attach(com, _plan()[:1], ("a",)) == ("a",) and com.sources == []
+    assert taps.attached(_plan()) == [S.ScaleProductsSource.short_name]
+    assert taps.attach(com, _plan(), ("a",)) == ("a", CBP.SCALE_PRODUCTS)
+    assert [s.sites for s in com.sources] == [{"down_proj": NB * KB}]
+    assert taps.attach(com, _plan(), ("a",), explicit_classes=True) == ("a",)

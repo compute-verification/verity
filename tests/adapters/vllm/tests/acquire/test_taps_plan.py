@@ -11,7 +11,6 @@ from verity_vllm.acquire.sources import int8_source as I8
 from verity_vllm.acquire.sources import taps as TAPS
 
 ADD = _class("model.norm/add", "0", "call_boundary", 16, "bf16", "Add16_v1")
-PRODUCTS = _class("model.layers.0.mlp.down_proj", "scale_products", "scale_products", 4, "f32", "ScaledMmFp8BlockSharedScale_v1")
 
 
 def test_the_plans_int8_classes_attach_the_int8_source_and_add_its_capture_class():
@@ -38,11 +37,9 @@ def test_an_int8_call_boundary_is_the_int8_sources_and_any_other_is_the_call_bou
     assert CB.unattached(plan, ()) == [f"{QUANT_OP}/{m}: claimed by int8, a source the Commit does not attach" for m in "01"]
 
 
-@pytest.mark.parametrize(("extra", "why"), [(ADD, "model.norm/add/0: a call boundary no attached source claims"),
-                                            (PRODUCTS, "model.layers.0.mlp.down_proj/scale_products: scale products")])
-def test_a_class_no_source_acquires_refuses_the_commit_by_name(monkeypatch, extra, why):
+def test_a_call_boundary_no_source_claims_refuses_the_commit_by_name(monkeypatch):
     com, said = _Committer(), []
     monkeypatch.setattr(TAPS.logger, "error", lambda fmt, *a: said.append(fmt % a))
     with pytest.raises(SystemExit) as e:
-        TAPS.attach(com, [*_plan(), extra], ("module_output",), model=_Model())
-    assert e.value.code == 3 and com.sources == [] and why in said[0]
+        TAPS.attach(com, [*_plan(), ADD], ("module_output",), model=_Model())
+    assert e.value.code == 3 and com.sources == [] and "model.norm/add/0: a call boundary no attached source claims" in said[0]
