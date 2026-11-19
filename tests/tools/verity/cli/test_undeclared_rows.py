@@ -108,6 +108,31 @@ def test_an_entry_is_the_declarations_alone_and_nothing_a_node_sets_overrides_it
     assert launched() == before
 
 
+def test_the_attesters_piece_is_its_declarations_and_neither_the_tables_former_names_nor_a_node_replace_it(
+        monkeypatch) -> None:
+    """The network attester's piece is its scheme's `launch_attester` with network-period and network-rows of its
+    Lake package: the table's former ``attester_entry``, ``_attester_piece`` and ``ATTESTER_PIECE``, and the
+    variables served_verdicts.sh reads the piece's commands from, set to another, change none of it."""
+    from verity.protocols.resource_accounting.network import scheme as NS
+
+    def piece() -> tuple:
+        p = T._pieces(T.MANIFESTS["network-attester"])[T.WORKERS]
+        return p.hooks.__code__, p.scripts, p.executables
+
+    before = piece()
+    package = "verity/protocols/resource_accounting/network/verifier/lean"
+    assert before == (NS._attester_hooks.__code__, (NS.ATTESTER_PIECE,),
+                      tuple(schemes.get("network-attester").pieces[T.WORKERS].executables))
+    assert [(e.package, e.target) for e in before[2]] == [(package, "network-period"), (package, "network-rows")]
+    other = T.Launcher(lambda cfg, params, bound, pinned: {"CERTIFIER_PERIOD_CMD": "evil"}, ("evil.py",))
+    for name, value in (("attester_entry", lambda declaration: other), ("_attester_piece", other.hooks),
+                        ("ATTESTER_PIECE", "evil.py"), ("ATTESTER_LAUNCHER", other)):
+        monkeypatch.setattr(T, name, value, raising=False)
+    for var in ("CERTIFIER_CMD", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD", "CERTIFIER_FRONT"):
+        monkeypatch.setenv(var, "/tmp/evil")
+    assert piece() == before
+
+
 def test_an_entry_that_gives_no_hooks_is_refused_by_name() -> None:
     with pytest.raises(ValueError, match="gives .* not its hooks and scripts"):
         T._launcher("x", T.PROVER, Launch(entry="builtins:str", executables=()), None)

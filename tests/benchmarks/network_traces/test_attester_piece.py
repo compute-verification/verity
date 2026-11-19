@@ -1698,6 +1698,32 @@ def test_the_local_tunnel_relays_each_listen_port_to_its_own(monkeypatch):
         CP.main(["relay", "--listen", "1", "--to", "2", "--listen", "3"])
 
 
+@pytest.mark.parametrize("step", ["piece", "chain", "period"])
+def test_no_flag_names_an_executable_and_the_piece_builds_only_its_declared_ones(step, tmp_path, monkeypatch, capsys):
+    """``--lean`` and ``--rows`` are refused by name, and `lean_exe` builds only network-period and network-rows of
+    the network attester's declaration (`Launch.executables`), in its own package."""
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+
+    args = [str(tmp_path), str(K), str(tmp_path), *([] if step == "piece" else [str(tmp_path)])]
+    for flag in ("--lean", "--rows"):
+        with pytest.raises(SystemExit) as e:
+            CP.parser().parse_args([step, *args, f"{flag}=/tmp/other"])
+        assert e.value.code == 2 and f"unrecognized arguments: {flag}=/tmp/other" in capsys.readouterr().err
+    built = []
+
+    def executable(name: str, package: Path) -> Path:
+        built.append((name, package))
+        raise V.LeanError(f"not built: {name}")
+    monkeypatch.setattr(V, "executable", executable)
+    declared = CP.schemes.get("network-attester").pieces["workers"].executables
+    for e in declared:
+        with pytest.raises(CP.NotRun, match=f"not built: {e.target}"):
+            CP.lean_exe(e.target)
+    with pytest.raises(CP.NotRun, match="other is no executable the network attester declares"):
+        CP.lean_exe("other")
+    assert built == [(e.target, ROOT / e.package) for e in declared]
+
+
 def test_the_launchers_scan_class_is_v3cs_setup_in_scan_zk():
     """The network attester's launcher's `SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as
     served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's
