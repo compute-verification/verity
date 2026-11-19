@@ -183,11 +183,18 @@ def _bind(D, inputs: list) -> reference._TableTrace:
     return t
 
 
+@functools.lru_cache(maxsize=4)
+def _decode(text: str):
+    """`codec.decode_program` of a descriptor's JSON, once per descriptor: a request's descriptor carries its Boolean bodies,
+    megabytes for a sampler or table primitive, and the sampled ports send one descriptor with many inputs."""
+    return codec.decode_program(json.loads(text), REGISTRY)
+
+
 def python_answer(desc: dict, inputs: list) -> dict:
     """What the Lean evaluator must answer: the oracle's outputs over the root's nodes that are not input nodes, or a
     refusal."""
     try:
-        D = codec.decode_program(copy.deepcopy(desc), REGISTRY)
+        D = _decode(json.dumps(desc))
         for f in D.defs.values():
             if isinstance(f, PrimitiveDefinition) and not _in_scope(f):
                 raise ValueError(f"primitive {f.id}: not implemented by the Lean evaluator")
@@ -540,7 +547,7 @@ def _decoded(value: dict, field: str):
     if not (isinstance(value, dict) and set(value) == {"program", field} and isinstance(value["program"], dict)):
         raise DT.Reject(f"input: a program object and {field}")
     try:
-        return codec.decode_program(copy.deepcopy(value["program"]), REGISTRY)
+        return _decode(json.dumps(value["program"]))
     except (ValueError, KeyError, TypeError, IndexError) as e:
         raise DT.Reject(f"{type(e).__name__}: {e}") from None
 
