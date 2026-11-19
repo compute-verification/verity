@@ -72,3 +72,7 @@ root = "FlockReadTmpl"
 [[lean_exe]]
 name = "flock-compose-check"
 root = "FlockComposeCheck"
+
+[[lean_exe]]
+name = "flock-lower-check"
+root = "FlockLowerCheck"
