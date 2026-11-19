@@ -48,9 +48,10 @@ def Prog.BoolMapOk (P : Prog) : Prop :=
   (∀ k v, P.boolean[k]? = some v →
     ∃ w < P.defs.size, P.index[k]? = some w ∧ (P.defs[w]!).key = k ∧ isWordPrim (P.defs[w]!).prim k = true)
 
-/-- **`decode`'s Boolean map (§4.9).** On an accepted descriptor, the Program's Boolean map is §4.9's. -/
+/-- **`decode`'s Boolean map (§4.9).** On an accepted descriptor whose root reads no input node at another width
+(`Body.recut`, which every reader of a gate refuses), the Program's Boolean map is §4.9's. -/
 def DecodeBoolean : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → P.BoolMapOk
+  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → P.BoolMapOk
 
 /-- **`BodyAgrees`**: each primitive of `P` with a Boolean Definition in `P`'s own map (`Prog.bodyOf?`) evaluates as
 that Definition. -/
@@ -58,9 +59,10 @@ def BodyAgrees (P : Prog) : Prop :=
   ∀ p < P.defs.size, ∀ b, (P.defs[p]!).prim = true → P.bodyOf? (P.defs[p]!).key = some b →
     Prog.evalBool P p = Prog.evalBool P b
 
-/-- **`DecodeBodyAgrees`**: every Program `decode` accepts has `BodyAgrees`. `P.BoolMapOk` alone does not give it:
-it also reads that a primitive's id is its key and no primitive is a gate family member spelt otherwise (`misspelt`). -/
+/-- **`DecodeBodyAgrees`**: every Program `decode` accepts whose root reads no input node at another width has
+`BodyAgrees`. `P.BoolMapOk` alone does not give it: it also reads that a primitive's id is its key and no primitive is a
+gate family member spelt otherwise (`misspelt`). -/
 def DecodeBodyAgrees : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → BodyAgrees P
+  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → BodyAgrees P
 
 end Flock.Program

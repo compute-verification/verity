@@ -18,8 +18,8 @@ in any call, an `In(...)` whose kind isn't a literal (or is passed positionally 
 computed `kind=`, and a
 `{"kind": "position"}` dict (a port as `PortTypes.from_json` reads it). A flagged place not named in `ALLOWED` fails, and so
 does an entry that matches nothing any more. A descriptor decoded by `codec.decode_program` carries its ports as data;
-PoUW never takes a prover's descriptor (`Traced.check_descriptor`, `Compiled.check_descriptor` compare its digest with
-the verifier's own build)."""
+PoUW never takes a prover's descriptor (`Compiled.check_descriptor` compares its digest with the verifier's own
+build)."""
 
 from __future__ import annotations
 

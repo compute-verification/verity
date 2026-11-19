@@ -32,7 +32,7 @@ open InferenceOnlyVerifier.Properties.SecurityProofs
 open BodiesOk (DM st_bind st_pure st_get st_liftV st_discard Inv Pre pre_refl pre_trans specs go_inv decode_steps)
 open DecodeKeys (Kept Keys of_triple kept_fuel getDef_idx go_kept formOf)
 open private getDef composite staticFns decodeAll decodeBodies extendReach primEntries DecState DecState.defs
-  DecState.index DecState.busy Desc Desc.ddefs liftV from Circuits.Program
+  DecState.index DecState.busy Desc Desc.ddefs liftV from Circuits.Descriptor
 
 /-! ## Maps and sets built by folds -/
 
@@ -224,10 +224,10 @@ theorem getDef_run (desc : Desc) (fid : String) {s s' : DecState} {r : Nat}
     Base desc s' ∧ Pre (DecState.defs s) (DecState.defs s') ∧ (DecState.index s')[fid]? = some r ∧
       r < (DecState.defs s').size := by
   obtain ⟨i1, p1, r1⟩ := (specs _).1 _ _ _ _ _ h hb.2
-  have hk := of_triple ((kept_fuel Flock.Steps.FUEL).1 desc fid (fun _ => False)) h hb.1
+  have hk := of_triple ((kept_fuel Flock.Steps.FUEL false).1 desc fid (fun _ => False)) h hb.1
   obtain ⟨m, hm⟩ := fuel_succ
   rw [hm] at h
-  have hi := of_triple (getDef_idx m (kept_fuel m).2.2 desc fid _) h hb.1
+  have hi := of_triple (getDef_idx m (kept_fuel m false).2.2 desc fid _) h hb.1
   exact ⟨⟨hk, i1⟩, p1, hi, r1⟩
 
 /-- An index entry outlives a step that keeps `Keys` and only appends Definitions. -/
@@ -469,16 +469,18 @@ theorem mem_primEntries {kv : Array (String × Lean.Json)} {k : String} {d : Lea
 
 /-- **What `decode` guarantees of its primitives**: the Boolean map (`Prog.BoolMapOk`), and every primitive keyed by
 its id, no gate family member spelt otherwise (`misspelt`), and each gate of §9's signature. -/
-theorem decode_facts (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
+theorem decode_facts (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     P.BoolMapOk ∧ ∀ w < P.defs.size, (P.defs[w]!).prim = true →
       (P.defs[w]!).id = (P.defs[w]!).key ∧ misspelt (P.defs[w]!).key = false ∧
         ∀ g, gateKind? (P.defs[w]!).key = some g →
           (P.defs[w]!).params = g.signature.1 ∧ (P.defs[w]!).ret = g.signature.2 := by
   obtain ⟨kv, desc, rootId, programFn, bm, root, s0, st, st1, st2, pairs, hdd, hgo, hd0, hi0', -, -, -, hall, hbk, hbod,
-    hd, hi, -, hbo⟩ := decode_steps bytes P h
-  have hk0 := of_triple (go_kept _ _ _) hgo (DecodeKeys.kept_empty desc hd0 hi0')
+    hd, hi, -, hbo⟩ := decode_steps bytes P h hr
+  have hk0 := of_triple (go_kept _ _ _ false) hgo (DecodeKeys.kept_empty desc hd0 hi0')
   obtain ⟨hi0, -⟩ := go_inv _ _ _ _ _ _ hgo
-    ⟨fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i), fun k v hk => absurd hk (by rw [hi0']; simp)⟩
+    ⟨fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i), fun k v hk => absurd hk (by rw [hi0']; simp),
+      fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i)⟩
   obtain ⟨hb1, hp1, hall'⟩ := decodeAll_run desc _ hall ⟨hk0, hi0⟩
   obtain ⟨hmiss, hextra⟩ := booleanKeys_ok hbk
   have hw : ∀ p ∈ pairs, ∃ wi, (DecState.index st1)[p.1]? = some wi := fun p hp => by
@@ -576,7 +578,7 @@ theorem decode_facts (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     exact booleanKeys_sig hbk _ (by rw [getElem!_pos (DecState.defs st1) w hjlt]; exact Array.getElem_mem hjlt) hprim
 
 /-- **`decode` guarantees the Boolean map (`DecodeBoolean`).** -/
-theorem decode_boolean : DecodeBoolean := fun bytes P h => (decode_facts bytes P h).1
+theorem decode_boolean : DecodeBoolean := fun bytes P h hr => (decode_facts bytes P h hr).1
 
 /-! ## `decode_body_agrees` -/
 
@@ -702,8 +704,8 @@ theorem fuel_stable (P : Prog) (hB : ∀ k, isBooleanPrim k = true → P.bodyOf?
 
 /-- **`decode` guarantees `BodyAgrees` (`DecodeBodyAgrees`).** -/
 theorem decode_body_agrees : DecodeBodyAgrees := by
-  intro bytes P h p hp b hprim hb
-  obtain ⟨⟨hmap, hkeys⟩, hids⟩ := decode_facts bytes P h
+  intro bytes P h hr p hp b hprim hb
+  obtain ⟨⟨hmap, hkeys⟩, hids⟩ := decode_facts bytes P h hr
   have hidx := (DecodeKeys.decode_keys bytes P h).2 p hp
   have hb0 := hb
   unfold Prog.bodyOf? at hb0

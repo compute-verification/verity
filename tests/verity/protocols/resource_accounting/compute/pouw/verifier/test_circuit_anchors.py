@@ -12,7 +12,7 @@ import pytest
 import circuit_fixtures as F
 import pouw_regions_vectors as RV
 from verity.commitments.crypto.blake3 import blake3, keyed
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import ncp2, pc8, traced_as
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import ncp2, pc8
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import reference as R
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.anchors import (ANCHORED, Anchors, Ledger, Receipt, SaltWindows, public_ports, region_bytes,
                                                         region_words)
@@ -23,15 +23,6 @@ SHAPE = ncp2.Shape(32, 64, 32)
 
 def _anchors(call: R.Call) -> Anchors:
     return Anchors(call.salt, call.forward, call.layer, call.site, call.weight, tuple(call.rowids), tuple(call.colids))
-
-
-def test_the_verifier_builds_the_anchored_inputs():
-    """From its own anchors, the verifier's inputs are exactly the reference call's."""
-    call = F.call(32, 64, 32)
-    t = traced_as("ncp-v2-shift24", 32, 64, 32)
-    args = call.args()
-    assert t.call_args(_anchors(call), *args[:6]) == args
-    assert t.weight_args(_anchors(call), call.weight_args()[0]) == call.weight_args()
 
 
 def test_a_prover_s_anchored_inputs_must_be_the_verifier_s():
