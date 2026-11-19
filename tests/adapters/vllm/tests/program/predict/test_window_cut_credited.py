@@ -106,9 +106,20 @@ def test_the_credited_block_is_the_tile_with_its_bit_ports():
     params, ret = b.program.fn.signature()
     width = 32 * (TM * K + TN * K + TM * N + 2 * TM * TN + 2 + TM + 1024) + 8 * (96 + 32 * (TN + 2 * K))
     assert [(t.n, t.elem.w) for _p, t in params] == [(width, 1)]
-    assert {R._binding(b.bits, g) for g in b.inputs} == {R.REGISTRATION}
+    assert {R._Gates(b.D).binding(g) for g in b.inputs} == {R.REGISTRATION}
     assert [(t.n, t.elem.w) for t in ret.fields] == [(64 * 8 + 1, 1)]
     assert [n.fn.id for n in b.program.root.body.nodes if n.form == "call"] == [core.id]
+
+
+@pytest.mark.slow
+def test_the_credited_cut_is_the_cut_by_a_pass_over_C():
+    """The credited block's ports from the descriptor (`restrict.front`) are the exact boundary a pass over C finds
+    (`restrict.ports`), each at C on bits' width and binding, so its bytes are today's. Slow: the pass over C on bits, about
+    five minutes and 27 GiB; the one check of the cut on a block of the σ form, where every gate of C is a bit gate."""
+    _program, _part, _c, b = credited()
+    assert (list(b.inputs), list(b.outputs)) == R.ports(b.bits, b.words)
+    gates = R._Gates(b.D)
+    assert all(gates.of(g) == (b.bits.width[g], R._binding(b.bits, g)) for g in b.inputs + b.outputs)
 
 
 @pytest.mark.slow

@@ -296,6 +296,16 @@ def test_the_word_level_ports_are_the_boundary_the_partition_gives(name, units):
     assert list(b.outputs) == sorted({g for u in mine for g in tp.outputs(u)} & (read_outside | set(program.circuit.root_outputs())))
 
 
+@pytest.mark.parametrize("name,units", _cases())
+def test_the_ports_from_the_descriptor_are_the_boundary_by_a_pass_over_C(name, units):
+    """`restrict`'s ports, read from the units' interface (`front`, no pass over C), are the exact boundary a pass over C
+    finds (`ports`), each port at C on bits' width and binding: the block is today's, byte for byte."""
+    _program, _c, bits, _p, b = _setup(name, units)
+    assert (list(b.inputs), list(b.outputs)) == R.ports(bits, b.words)
+    gates = R._Gates(bits.D)
+    assert all(gates.of(g) == (bits.width[g], R._binding(bits, g)) for g in b.inputs + b.outputs)
+
+
 def test_the_bit_rule_is_one_function():
     assert R.split(16) == tuple(range(16))
     _, _, bits = chain()
