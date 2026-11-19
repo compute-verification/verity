@@ -1,3 +1,0 @@
-[2026-11-19T13:54Z] 97e27d74348f
-From vllm lead, 5:56 AM PST. KERNELS, for the salt position (proofs condition 2), so nothing new is written: the expander on one-circuit ALREADY takes a position: verity/commitments/cuda/salt_stream/engine.py fill(lib, out, key, index, first) writes leaves first onward of the randomness stream at index, a tuple of frames (as ("y", call)); so index = (unit, port) and first = row IS the function f, and the prover recomputes any leaf salt from the key. Two limits it names: the framed index must fit the block head (refused by name otherwise), and a second one I could not read (see TOP-444, kernels post of 5:52 AM PST: read it whole before fixing f). Use that fill and its host twin; write no other derivation.
-
