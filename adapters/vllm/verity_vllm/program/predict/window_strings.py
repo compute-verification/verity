@@ -6,6 +6,8 @@ rows. `HostTwin` computes the card's strings on the processor."""
 from __future__ import annotations
 
 import json
+import os
+import random
 import sys
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -22,7 +24,7 @@ from verity.commitments.rowleaf import (
 
 from .window_plan import stage
 
-__all__ = ["Device", "HostTwin", "acquired", "leaf_strings", "strings_of"]
+__all__ = ["Device", "HostTwin", "acquired", "block_of", "leaf_strings", "strings_of"]
 
 INST = hm96.SHA512
 KEY = INST.default_key
@@ -112,6 +114,21 @@ def host_strings(rows: np.ndarray, lb: int, ys: np.ndarray) -> np.ndarray:
     return np.frombuffer(out, dtype=np.uint8).reshape(len(rows), BC_BYTES)
 
 
+def block_of(com: Any) -> Callable[[int, str], tuple[Any, int]]:
+    """``block(step, name)`` over committer ``com``'s retained blocks (`window_plan.stage`'s): the step's block, a uint8
+    tensor, and the member's offset in it (on the card where the member was staged there, else in its step's stream)."""
+    from verity_vllm.commit.opened import meta_by_name
+
+    def block(step: int, name: str) -> tuple[Any, int]:
+        m = meta_by_name(com._layouts[step], name)
+        if m is None:
+            raise ValueError(f"step {step} commits no member {name}")
+        dev = int(getattr(m, "dev_off", -1))
+        return com._gpu_blocks[step][0], dev if dev >= 0 else int(m.stream_off)
+
+    return block
+
+
 def acquired(plan: Any, block: Callable[[int, str], tuple[Any, int]], ports: Collection) -> dict[tuple[str, str], dict[int, Any]]:
     """By each of ``ports`` (template id, output) a served node feeds (`Plan.feeds`), its acquired units' rows where they are
     committed (`stage`), by unit."""
@@ -128,9 +145,9 @@ def leaf_strings(leaf_rows: Mapping[tuple[str, str], Any], key: Any, hasher: Any
     """Each `leaf_rows` port's salts and strings (`Window.close`'s ``strings``) under ``key``: a unit in ``staged`` hashed
     by ``hasher`` from its acquired row, every other unit on the host from its recorded row (`LeafRows.rows`); a port of a
     schema other than ``hm96-sha512/row/v2``, which the kernel's row hash is, refused by name. -> the strings and their cost:
-    units hashed where acquired and on the host, and the host's seconds."""
+    units hashed where acquired and on the host, and each one's seconds."""
     out: dict[tuple[str, str], tuple[bytes, bytes]] = {}
-    cost = {"acquired": 0, "host": 0, "host_s": 0.0}
+    cost = {"acquired": 0, "acquired_s": 0.0, "host": 0, "host_s": 0.0}
     for k, lr in leaf_rows.items():
         if lr.schema != SCHEMA_HM96_SHA512_ROW_V2:
             raise ValueError(f"strings: {k} is {lr.schema}, and the row hash computes {SCHEMA_HM96_SHA512_ROW_V2}'s strings alone")
@@ -141,7 +158,9 @@ def leaf_strings(leaf_rows: Mapping[tuple[str, str], Any], key: Any, hasher: Any
         fed = staged.get(k, {})
         at = [i for i, u in enumerate(units) if u in fed]
         if at:
+            t0 = time.perf_counter()
             bc[at] = hasher.host(hasher.strings(hasher.rows([fed[units[i]] for i in at], _stride(lb)), lb, ys[at]))
+            cost["acquired_s"] += time.perf_counter() - t0
         if rest := [i for i, u in enumerate(units) if u not in fed]:
             t0 = time.perf_counter()
             r = np.zeros((len(rest), lb), dtype=np.uint8)
@@ -150,17 +169,31 @@ def leaf_strings(leaf_rows: Mapping[tuple[str, str], Any], key: Any, hasher: Any
             cost["host_s"] += time.perf_counter() - t0
         cost["acquired"], cost["host"] = cost["acquired"] + len(at), cost["host"] + len(rest)
         out[k] = (hy.tobytes(), bc.tobytes())
-    cost["host_s"] = round(cost["host_s"], 3)
+    cost["host_s"], cost["acquired_s"] = round(cost["host_s"], 3), round(cost["acquired_s"], 3)
     return out, cost
 
 
-def strings_of(win: Any, key: Any, hasher: Any, plan: Any = None,
-               block: Callable[[int, str], tuple[Any, int]] | None = None) -> dict[tuple[str, str], tuple[bytes, bytes]]:
-    """`leaf_strings` of ``win``'s `leaf_rows`, the units ``plan`` feeds staged from ``block``; prints one
-    ``WINDOW-STRINGS`` line, its cost."""
+def strings_of(win: Any, key: Any, hasher: Any, plan: Any = None, block: Callable[[int, str], tuple[Any, int]] | None = None,
+               *, twin: HostTwin | None = None, sample: int = 0,
+               cost: dict[str, Any] | None = None) -> dict[tuple[str, str], tuple[bytes, bytes]]:
+    """`leaf_strings` of ``win``'s `leaf_rows`, the units ``plan`` feeds staged from ``block``; given ``twin``, up to
+    ``sample`` ports with acquired units, drawn from the OS, recomputed whole by it from host copies of the same rows and
+    compared byte for byte. Prints one ``WINDOW-STRINGS`` line, its cost and the comparison, also into ``cost``."""
     lrs = win.leaf_rows()
     staged = acquired(plan, block, lrs) if plan is not None and block is not None else {}
-    strings, cost = leaf_strings(lrs, key, hasher, staged)
-    sys.stderr.write("WINDOW-STRINGS " + json.dumps({"ports": len(strings), **cost}) + "\n")
+    strings, got = leaf_strings(lrs, key, hasher, staged)
+    got = {"ports": len(strings), "where": type(hasher).__name__, **got}
+    if twin is not None and sample:
+        fed = sorted(k for k in staged if k in lrs)
+        pick = random.Random(os.urandom(16)).sample(fed, min(sample, len(fed)))
+        t0 = time.perf_counter()
+        host = {k: {u: hasher.host(r) for u, r in staged[k].items()} for k in pick}
+        again, _ = leaf_strings({k: lrs[k] for k in pick}, key, twin, host)
+        unequal = [list(k) for k in pick if again[k] != strings[k]]
+        got["twin"] = {"ports": len(pick), "of": len(fed), "units": sum(len(host[k]) for k in pick), "equal": not unequal,
+                       "unequal": unequal[:4], "s": round(time.perf_counter() - t0, 3)}
+    if cost is not None:
+        cost.update(got)
+    sys.stderr.write("WINDOW-STRINGS " + json.dumps(got) + "\n")
     sys.stderr.flush()
     return strings

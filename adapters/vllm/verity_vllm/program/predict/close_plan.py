@@ -5,6 +5,8 @@ port's source and the served rows each reads where they are committed."""
 from __future__ import annotations
 
 import json
+import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -13,6 +15,7 @@ from verity_vllm.pipeline import advice as ADV
 
 from . import window_circuit as WC
 from .build import Unexpressible
+from .close_record import Record
 from .window_plan import Plan
 
 
@@ -28,11 +31,12 @@ class ClosePlan:
 
     def __init__(self, out: Path, cls: Any, *, registered: Any = None, compiler: Any = None, grain: Any = None,
                  flush: Callable[[], Any] | None = None, registered_roots: dict[str, str] | None = None,
-                 hf_config: str | None = None) -> None:
-        self.out, self.cls, self.registered, self.compiler = Path(out), cls, registered, compiler
+                 hf_config: str | None = None, record: Record | None = None) -> None:
+        self.out, self.cls, self.registered, self.compiler, self.record = Path(out), cls, registered, compiler, record
         self.grain = grain if grain is not None else WC._GRAIN
         self.flush, self.registered_roots, self.hf_config = flush, registered_roots, hf_config
         self.held: dict[int, tuple[Any, Any, Plan | None]] = {}
+        self.unregistered: str | None = None
 
     def _registered(self) -> Any:
         if self.registered is None:
@@ -44,10 +48,16 @@ class ClosePlan:
         return self.registered
 
     def __call__(self, window: int, binding: Any = None) -> dict[str, Any]:
+        t0 = time.perf_counter()
         if self.flush is not None:
             self.flush()
         if self.compiler is None:
             self.compiler = ADV.registered_compiler()
+        if self.record is not None and self.registered_roots is None and self.unregistered is None:
+            try:
+                self.registered_roots = self.record.roots(self._registered(), self.out)
+            except Exception as e:  # noqa: BLE001  (no record without the weights' registration; the plans go on)
+                self.unregistered = f"weights registration: {type(e).__name__}: {e}"[:500]
         rep = ADV.write(self.out, self.out / "advice", window=window, compiler=self.compiler,
                         registered_roots=self.registered_roots)
         for key in ("pending", "refused"):
@@ -62,18 +72,36 @@ class ClosePlan:
                                                named=binding is not None)
         except (Unexpressible, ValueError) as e:
             return {**got, "refused": f"{type(e).__name__}: {e}"[:500]}
+        lowered = time.perf_counter()
         if binding is None:
             self.held[window] = (compiled, low, None)
             return {**got, "templates": len(low.circuit.templates), "units": sum(k for _, k in low.circuit.templates)}
-        plan = Plan(low, served_slots(low, self.cls, compiled, binding, self.out / "windows" / f"w{window}"))
+        reader = None
+        if self.record is not None:
+            from verity_vllm.commit.opened import OpenedReader
+
+            reader = OpenedReader(binding.com, binding.rc)
+        served = served_slots(low, self.cls, compiled, binding, self.out / "windows" / f"w{window}", reader)
+        plan = Plan(low, served)
         self.held[window] = (compiled, low, plan)
-        return {**got, **plan.describe()}
+        got = {**got, **plan.describe(), "seconds": {"lower": round(lowered - t0, 3), "plan": round(time.perf_counter() - lowered, 3)}}
+        if self.record is not None:
+            try:
+                if self.unregistered is not None:
+                    raise ValueError(self.unregistered)
+                got["record"] = self.record.make(self, window, compiled, low, plan, served, binding)
+            except Exception as e:  # noqa: BLE001  (a window whose record fails says so; the server goes on)
+                got["record"] = {"error": f"{type(e).__name__}: {e}"[:500]}
+            sys.stderr.write("WINDOW-RECORD " + json.dumps({"window": window, **got["record"]}) + "\n")
+            sys.stderr.flush()
+        return got
 
 
-def served_slots(low: Any, cls: Any, compiled: Any, binding: Any, builds: Path) -> list[Any]:
+def served_slots(low: Any, cls: Any, compiled: Any, binding: Any, builds: Path, reader: Any = None) -> list[Any]:
     """Each of ``low``'s Programs' `window_rows.Served`, in Program order: the request whose slot its anchor and lane name (slot
     k the window's k-th request, `window_class.takes`'s placement), read through its Program's index (`ProgramIndex` over the
-    Build written under ``builds``) and the window's binding map, from its first step."""
+    Build written under ``builds``) and the window's binding map, from its first step; its values read through ``reader``
+    (`commit.opened.OpenedReader`), else located alone."""
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.check.replay.opening import CommittedStore
     from verity_vllm.query.manifest import format as MF
@@ -84,7 +112,7 @@ def served_slots(low: Any, cls: Any, compiled: Any, binding: Any, builds: Path) 
 
     units = [u for u in compiled.requests if u is not None]
     slot_of = {(cls.anchor(k), cls.lane(k)): k for k in range(cls.slots)}
-    store = CommittedStore.of_record(binding.bmap, lambda *_: None, binding.aliases)
+    store = CommittedStore.of_record(binding.bmap, reader if reader is not None else lambda *_: None, binding.aliases)
     dirs: dict[str, str] = {}
     out = []
     for P in low.programs:

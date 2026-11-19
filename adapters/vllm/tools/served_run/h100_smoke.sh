@@ -63,10 +63,13 @@ say() { echo "$1"; [ "$DRY" = 1 ] || echo "$1" > "$OUT/smoke.txt"; }
 RELEASE=${RELEASE:-$(tr -d - < /proc/sys/kernel/random/uuid)}
 LOAD=(adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODEL" --fixed "$SLOTS" --window-steps "$OUTPUTS"
   --prompt-range "$PROMPT:$PROMPT" --release "$RELEASE" --seed 1 --out "$SR/load.jsonl")
+REC_ARGS=()  # RECORD=0: each window's close plans its circuit and makes no record
+[ "${RECORD:-1}" = 0 ] || REC_ARGS=(--sampling-design "$LAW" --checkpoint-dir "$SNAP")
 SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision bfloat16
   --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens "$MNBT" --window-steps "$OUTPUTS"
   --row-build "$PRED" --window-requests "$SLOTS" --window-class "$CLASS" --max-num-seqs "$SLOTS"
   --max-model-len "$((PROMPT + OUTPUTS))" --window-gb 4 --disk-floor-gb 5 --seal-hold-gb 8
+  ${REC_ARGS[@]+"${REC_ARGS[@]}"}
   --protocols-config '{"network-attester": {"order": "release-order"}}')
 LEASE=(gpu-lease 1 --wait --max-min "$LEASE_MIN" --mem-gb "$LEASE_MEM_GB" -- bash "$TREE/$SELF" card)
 WREG=$D/weights_registration.json DREG=$D/deployment-registration.json VW=$SR/window
@@ -76,6 +79,32 @@ window_commit_of() {  # WC: window $1's commit as its class circuit's units, ser
     --sampling-design "$LAW" --out "$VW")
 }
 
+plan_lines() {  # the serve's close of window $K as plans.jsonl holds it: its plan, its strings and its record
+  "$PY" - "$D/plans.jsonl" "$K" "$SR/window-commit.json" <<'EOF'
+import json, sys
+from pathlib import Path
+from verity_vllm import messages as M
+f, k, wc = Path(sys.argv[1]), int(sys.argv[2]), Path(sys.argv[3])
+got = [p for p in (json.loads(b) for b in (M.lines(f, "Run") if f.is_file() else [])) if p.get("window") == k]
+p = got[-1] if got else {"error": "no plan line"}
+why = p.get("refused") or p.get("error") or p.get("pending")
+print(f"WINDOW-PLAN window {k}: " + (f"none, {str(why)[:160]}" if why else f"units {p.get('units')}, feeds {p.get('feeds')}, fed rows {p.get('fed_rows')}, seconds {json.dumps(p.get('seconds'))}"))
+r = p.get("record") or {"error": "no record"}
+if "error" in r:
+    print(f"WINDOW-STRINGS window {k}: none\nWINDOW-RECORD window {k}: none, {str(r['error'])[:200]}")
+    sys.exit(0)
+s, t = r["strings"], r["strings"].get("twin") or {}
+print(f"WINDOW-STRINGS window {k}: {s['ports']} ports, card ({s['where']}) {s['acquired']} units in {s['acquired_s']} s, host "
+      f"{s['host']} units in {s['host_s']} s; twin on {t.get('ports')} of {t.get('of')} fed ports ({t.get('units')} units): "
+      + ("EQUAL" if t.get("equal") else f"NOT EQUAL {t.get('unequal')}"))
+wc = json.loads(wc.read_text()) if wc.is_file() and wc.stat().st_size else None
+vs = "no window-commit to compare" if wc is None else (
+    f"{'equal to' if (r['members'], r['population']) == (wc.get('members'), wc.get('population')) else 'NOT equal to'} "
+    f"window-commit's {wc.get('members')}, {wc.get('population')}")
+print(f"WINDOW-RECORD window {k} at the serve's close: members {r['members']}, population {r['population']} ({vs}); "
+      f"seconds {json.dumps(r['seconds'])}")
+EOF
+}
 if [ "$DRY" != 1 ] && [ -d "${RESEARCH_RUN_DIR:-}" ]; then  # SR holds the keys and salts: custody's statement names it private
   "$PY" - "$RESEARCH_RUN_DIR/private-paths.json" "$SR" <<'EOF'
 import json, os, pathlib, sys
@@ -91,6 +120,16 @@ if [ "${1:-}" != card ]; then  # the row's Build of record, which the serve bind
   [ "$(sha256sum < "$WL" | cut -c1-64)" = "$want" ] || { say "SMOKE FAILED workload: $WL is not SHA256SUMS's"; exit 1; }
   (cd adapters/vllm && "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW" --out "$PRED") > "$SR/predict.log" 2>&1 \
     || { say "SMOKE FAILED predict ($SR/predict.log)"; exit 1; }
+  # the close's plan and record as far as they build before the serve (serve.preflight), before the lease
+  (cd adapters/vllm && CUDA_VISIBLE_DEVICES= "$PY" - "$DRY" "${SERVE[@]}" <<'EOF'
+import json, os, sys
+from verity_vllm.pipeline import cli
+from verity_vllm.program.predict import serve
+opts = cli.parse(sys.argv[2], sys.argv[3:], environ=os.environ)
+print("PLAN PREFLIGHT PASSED: " + json.dumps(serve.preflight(opts, card=sys.argv[1] != "1")))
+EOF
+  ) > "$SR/preflight.log" 2>&1 || { tail -3 "$SR/preflight.log"; say "SMOKE REFUSED plan preflight ($SR/preflight.log)"; exit 3; }
+  tail -1 "$SR/preflight.log"
 fi
 if [ "$DRY" = 1 ]; then
   "$PY" - "${SERVE[@]}" <<'EOF'
@@ -165,9 +204,13 @@ for w in sorted(Path(sys.argv[1]).glob("w*")):
 print(f"SMOKE SEALED AND OPENED window {w.name} with no card visible: {r.commitment}, run root {bytes(r.run.run_root).hex()[:16]}")
 EOF
 ) || { say "SMOKE FAILED open: the sealed bundle against its record ($D/windows)"; exit 1; }
-"$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$SNAP" --out "$WREG" \
-  --deployment-record "$DREG" > "$SR/weights_registration.log" 2>&1 \
-  || { say "$said; SMOKE FAILED weights-registration ($SR/weights_registration.log)"; exit 1; }
+if [ -s "$WREG" ]; then  # the serve's first close registered the weights (close_record.Record.roots)
+  said+="; WEIGHTS REGISTRATION the serve's, made at its first close"
+else
+  "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$SNAP" --out "$WREG" \
+    --deployment-record "$DREG" > "$SR/weights_registration.log" 2>&1 \
+    || { say "$said; SMOKE FAILED weights-registration ($SR/weights_registration.log)"; exit 1; }
+fi
 CA=$("$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
   | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])") \
   || { say "$said; SMOKE FAILED compiler (prove_path.py compiler)"; exit 1; }
@@ -178,15 +221,15 @@ K=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" -
 (cd adapters/vllm && "$PY" -m verity_vllm.pipeline.cli advice "$D" --window "$K" --cap "$CAP" $CA --weights-of-record "$WREG" \
   --out "$D/advice/.w$K") > "$SR/advice.log" 2>&1 \
   || { say "$said; SMOKE FAILED advice of window $K ($SR/advice.log)"; exit 1; }
-if [ -d "$D/advice/w$K" ]; then  # the serve's close compiled its circuit from this advice; its docket binds no weights of record
+if [ -d "$D/advice/w$K" ]; then  # the serve's close compiled its circuit from this advice, and its record is bound to its opening
   cmp -s "$D/advice/.w$K/w$K/private/advice.bin" "$D/advice/w$K/private/advice.bin" \
     || { say "$said; SMOKE FAILED advice of window $K: not the advice the serve's close committed ($D/advice)"; exit 1; }
-  rm -rf "$D/advice/w$K"
+  rm -rf "$D/advice/serve-w$K" && mv "$D/advice/w$K" "$D/advice/serve-w$K"
 fi
 mv "$D/advice/.w$K/w$K" "$D/advice/w$K"
 window_commit_of "$K"
 timeout -k 1m "$WC_TIMEOUT" "$PY" "${WC[@]}" > "$SR/window-commit.json" 2> "$SR/window-commit.err" \
-  || { say "$said; SMOKE FAILED window-commit of window $K, exit $? ($SR/window-commit.err)"; exit 1; }
+  || { e=$?; say "$said"$'\n'"$(plan_lines)"$'\n'"SMOKE FAILED window-commit of window $K, exit $e ($SR/window-commit.err)"; exit 1; }
 mkdir -p "$OUT/window"
 cp "$VW/registration.json" "$VW/circuit.json" "$OUT/window/" && cp "$DREG" "$OUT/"
 said+="; $("$PY" - "$SR/window-commit.err" "$VW/registration.json" "$K" "$CLASS" <<'EOF'
@@ -199,15 +242,5 @@ print(f"WINDOW-COMMIT window {k} class {cls}: reads {o.get('reads')}, failed {o.
       f"units served {u['served']}, computed {u['computed']}, evaluated {u['evaluated']}; registration {DD.digest(json.load(open(reg)))}")
 EOF
 )" || { say "$said; SMOKE FAILED counts: no WINDOW-ROWS line or registration ($SR/window-commit.err)"; exit 1; }
-said+="; $("$PY" - "$D/plans.jsonl" "$K" <<'EOF'
-import json, sys
-from pathlib import Path
-from verity_vllm import messages as M
-f, k = Path(sys.argv[1]), int(sys.argv[2])
-got = [p for p in (json.loads(b) for b in (M.lines(f, "Run") if f.is_file() else [])) if p.get("window") == k]
-p = got[-1] if got else {"error": "no plan line"}
-why = p.get("refused") or p.get("error") or p.get("pending")
-print(f"WINDOW-PLAN window {k}: " + (f"none, {str(why)[:160]}" if why else f"units {p.get('units')}, feeds {p.get('feeds')}, fed rows {p.get('fed_rows')}"))
-EOF
-)"
+said+=$'\n'"$(plan_lines)"
 say "$said"

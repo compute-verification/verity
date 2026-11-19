@@ -610,7 +610,7 @@ class CommitWindows:
                 view = view_of(c.com)
                 bmap, binding = binding_of(view, rc, self.out / "windows" / f"w{c.window}", request_rows)
                 with self._lock:
-                    self._bindings[c.window] = SimpleNamespace(bmap=bmap, aliases=view.aliases)
+                    self._bindings[c.window] = SimpleNamespace(bmap=bmap, aliases=view.aliases, com=c.com, rc=rc)
             kw = dict(rec=rec, reqs=reqs, request_rows=request_rows, tokens=tokens, sampling={}, extras=self._extras_of(c.com, rc),
                       binding=binding, **self.seal)
             if c.off_loop:
