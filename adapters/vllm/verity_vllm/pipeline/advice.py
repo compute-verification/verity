@@ -268,7 +268,8 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
     is held to, and the tokens a cache hit's sources are read from).  ``carry`` makes it a served Commit window's
     (`window_advice`): what the last window left (`Built.left`; ``()`` for a window that opens on an idle engine), each
     request it must carry and each it may that has a row here coming first, held to its state; and a request may end the window
-    unfinished, its record then the Commit record's.  Without it the trace is a whole session's, every request finished.  Either
+    unfinished, its record then the Commit record's, and a request the trace records sampling at a temperature but 0 is
+    refused.  Without it the trace is a whole session's, every request finished.  Either
     way a request its client aborted before it was ever scheduled is dropped (`Built.dropped`)."""
     window = carry is not None
     ids = {row[0] for r in recs if r["kind"] == "step" for row in r["rows"]}
@@ -282,6 +283,9 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
                 continue
             if q is not None:
                 raise ValueError(f"request {r['request']} arrives twice")
+            if window and (r.get("sampling") or {}).get("temperature", 0) != 0:
+                raise ValueError(f"request {r['request']} samples at temperature {r['sampling']['temperature']!r}, and a served "
+                                 "window's Program is greedy (window_class.GREEDY): its advice says no sampled request yet")
             reqs[r["request"]] = _Req(r["request"], int(r["prompt_len"]))
     tokens = {rid: rec["prompt_ids"] + rec["output_ids"] for rid, rec in io.items()} if io is not None else None
     block = next((int(r["config"].get("block_size") or 1) for r in recs if r["kind"] == "header" and "config" in r), 1)

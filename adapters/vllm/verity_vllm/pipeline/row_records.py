@@ -541,13 +541,13 @@ def applicable_taps(path: str, ck: Any) -> list[str]:
 
 def tap_source_args(taps: list[str], env: Any) -> list[str]:
     """The Commit's tap source flags (`acquire.sources.taps.TapSources`) of the applicable taps."""
-    args = {"norm_tap": ["--norm-tap-so", env.norm_tap_so], "router_tap": ["--router-tap-so", env.router_tap_so], "vocab_tap": ["--vocab-range"]}
-    return [a for t in taps for a in args[t]]
+    args = {"router_tap": ["--router-tap-so", env.router_tap_so], "vocab_tap": ["--vocab-range"]}
+    return [a for t in taps for a in args.get(t, [])]
 
 
 def missing_tap_build(taps: list[str], env: Any) -> str:
     """Why the row cannot run its applicable taps: a tap build that is not on disk ("" when every one is)."""
-    for t, so, script in (("norm_tap", env.norm_tap_so, "pod_norm_tap.sh"), ("router_tap", env.router_tap_so, "pod_router_tap.sh")):
+    for t, so, script in (("router_tap", env.router_tap_so, "pod_router_tap.sh"),):
         if t in taps and not os.path.isfile(so):
             return f"{t.upper()}=1 and the manifest names its family, but the tap .so is missing: {so} (ops/{script}, run by ops/pod_bootstrap.sh)"
     return ""

@@ -73,8 +73,6 @@
     {"file": "tests/properties/glm53_dsa_capture_gpu.py", "kind": "arg-type", "symbol": "gpu", "detail": ""},
     {"file": "tests/properties/glm53_dsa_capture_gpu.py", "kind": "misc", "symbol": "phase_logits", "detail": ""},
     {"file": "tests/properties/glm53_dsa_capture_gpu.py", "kind": "no-redef", "symbol": "prefill_calls", "detail": ""},
-    {"file": "tests/properties/norm_tap_exactness_gpu.py", "kind": "union-attr", "symbol": "check_source", "detail": ""},
-    {"file": "tests/properties/norm_tap_exactness_gpu.py", "kind": "union-attr", "symbol": "check_triton", "detail": ""},
     {"file": "tests/properties/sigmoid_router_capture_gpu.py", "kind": "arg-type", "symbol": "run", "detail": "", "count": 2},
     {"file": "tests/protocols/pouw_h1_gpu.py", "kind": "arg-type", "symbol": "fill", "detail": "", "count": 2},
     {"file": "tests/protocols/pouw_h1_gpu.py", "kind": "index", "symbol": "fill", "detail": "", "count": 3},

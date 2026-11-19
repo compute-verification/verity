@@ -243,10 +243,13 @@ def test_an_expert_map_or_a_second_call_is_refused(monkeypatch) -> None:
 def test_the_blocks_call_boundaries_are_claimed_and_attached_on_a_rank() -> None:
     rows = align_rows(3, M * TOPK)
     assert [CB.claimed(r) for r in rows] == [None, None, "moe_align", "moe_align", None]
-    man = {"ranks": 8, "identities": rows}
-    assert "moe_align" in taps.attached(man) and CB.unattached(man, taps.attached(man)) == []
-    assert "moe_align" not in taps.attached({"ranks": 1, "identities": rows})
-    assert not CB.manifest_sites(man)
+    assert not CB.manifest_sites({"ranks": 8, "identities": rows})
+    # the capture plan's road attaches no align source: a plan class of the blocks is no source's, and `taps.attach` refuses it
+    cls = {"op_path": "model.layers.3.ffn/align", "member": "0", "capture": "call_boundary", "width": 1, "dtype": "i32",
+           "definitions": ["MoeAlignBlocks_v1"]}
+    assert CB.claimed(cls) is None and CB.sites([cls]) == [cls] and taps.attached([cls]) == []
+    with pytest.raises(SystemExit):
+        taps.attach(types.SimpleNamespace(sources=[]), [cls], ())
 
 
 def test_the_match_capture_records_the_witness_the_commit_commits(monkeypatch, tmp_path) -> None:

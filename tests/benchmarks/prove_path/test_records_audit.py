@@ -55,7 +55,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import gemm as BG
-from verity.commitments.periods import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS, wiring as WI
 
 
 def fixed(w, seed: int = 0) -> dict[str, bytes]:
@@ -310,7 +310,8 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
     assert RA.leak_count(silu, (), 1687)["other_inputs"] == 2_097_152 and RA.leak_count(silu, (), 1687)["bound"] == "vacuous"
     m0, m1 = mine.members
     x = 16 * dict(m0.rows)["x"]
-    got = RA.leak_count([replace(m0, wired=(("x", "o0", (0, 1, 2, 3)),)), replace(m1, tables=(("x", 3),))], [f"{TID}/wrow"], 0)
+    got = RA.leak_count([replace(m0, wired=(WI.Wired("x", TID, "o0", 0, (4,), 0, (1,)),)), replace(m1, tables=(("x", 3),))],
+                        [f"{TID}/wrow"], 0)
     assert (got["wired"], got["inputs"]) == (4 * x, 5 * per_unit + 2 * x)
     assert got["other_inputs"] == got["inputs"] - 4 * x and got["external"] == 5 * x
 

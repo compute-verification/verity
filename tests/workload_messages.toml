@@ -14,18 +14,8 @@ writers = [
 readers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "\"\\$PRED/predicted\\.json\"|--predicted \"\\$PRED\"|--pred \"\\$PRED\"|\"\\$D\" \"\\$PRED\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_compare.py", find = "\"--pred\"" },
-]
-
-[[message]]
-type = "Circuit"
-second = true
-today = "`--required-manifest FILE`: the values the Commit must acquire for the row's Programs"
-writers = [
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--required-manifest \"\\$PRED/manifest\\.json\"" },
-]
-readers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "option\\(\"--required-manifest\"" },
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_seal.py", find = "required_manifest" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "option\\(\"--row-build\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_row.py", find = "PR\\.FILE, \"Circuit\"" },
 ]
 
 [[message]]
@@ -249,9 +239,9 @@ readers = [
 
 [[message]]
 type = "RequestProgram"
-today = "the run's request Programs (`windows/w<K>/build_request_*/` with `descriptor.json.gz`, `instances.json.gz`, `result.json`, and `manifest.json`, `compiled.json`), by `tools/advice_compile.py RUN --window K`"
+today = "the run's request Programs (`windows/w<K>/build_request_*/` with `descriptor.json.gz`, `instances.json.gz`, `result.json`, and `programs.json`, `compiled.json`), by `tools/advice_compile.py RUN --window K`"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/tools/advice_compile.py", find = "M\\.write\\(out / \"(manifest|compiled)\\.json\"" },
+    { lane = "vllm", file = "adapters/vllm/tools/advice_compile.py", find = "M\\.write\\(out / \"(programs|compiled)\\.json\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "tools/advice_compile\\.py \"\\$D\" --window \"\\$K\"" },
 ]
 readers = [

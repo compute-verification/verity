@@ -747,8 +747,8 @@ def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     taps = R.applicable_taps(man, r.ck_)
     assert taps == ["norm_tap"]
     cmd = r.commit_cmd(taps)
-    assert cmd[cmd.index("--norm-tap-so") + 1] == r.env.norm_tap_so and "--router-tap-so" not in cmd and "--vocab-range" not in cmd
-    assert R.missing_tap_build(taps, r.env).startswith("NORM_TAP=1 and the manifest names its family, but the tap .so is missing")
+    assert "--norm-tap-so" not in cmd and "--router-tap-so" not in cmd and "--vocab-range" not in cmd
+    assert R.missing_tap_build(taps, r.env) == ""
     assert R.applicable_taps(_tap_manifest(tmp_path / "bare.json"), r.ck_) == [] and R.missing_tap_build([], r.env) == ""
     assert R.applicable_taps(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == []
 

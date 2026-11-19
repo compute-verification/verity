@@ -1,7 +1,5 @@
-"""run.sh's single-GPU Commit (``PP_LLAMA``) is of the row ``LROW`` names, the bf16 RTX PRO 6000 B4 row unless it names
-another, and its workload is the stored one of that name, in whichever stored-workload directory's SHA256SUMS lists it:
-the served run's for the bf16 row, the integration's for the int8 H200 row `a5_llama1b_h200.sh` leaves. A name neither
-lists is refused before anything is written, as an art: row dir is."""
+"""run.sh's served arm refuses a window absent from this node before any build, settles its forged partition before the
+builds, says in a line which arm PP_ONLY leaves out, and outside a research run writes under the clone."""
 from __future__ import annotations
 
 import json
@@ -9,64 +7,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 RUN_SH = Path(__file__).resolve().parents[3] / "benchmarks" / "prove_path" / "run.sh"
 REPO = RUN_SH.parents[2]
-BF16 = "llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager"
-INT8_H200 = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
-
-
-def lookup() -> str:
-    """run.sh's lines from ``LROW=`` through the refusal's ``fi``."""
-    lines = RUN_SH.read_text().splitlines()
-    i = next(k for k, line in enumerate(lines) if line.startswith("LROW="))
-    j = next(k for k in range(i, len(lines)) if lines[k].startswith("fi"))
-    return "\n".join(lines[i:j + 1]) + "\n"
-
-
-@pytest.mark.parametrize(("row", "workload"), [
-    (None, f"adapters/vllm/tools/served_run/workloads/{BF16}.json"),
-    (INT8_H200, f"adapters/vllm/workloads/{INT8_H200}.json"),
-])
-def test_a_rows_workload_is_the_stored_one_of_its_name(row, workload):
-    env = ["env", "-u", "LROW", "-u", "PP_TP", "-u", "PP_SERVE_RUN", "PP_LLAMA=/row", *([f"LROW={row}"] if row else [])]
-    got = subprocess.run([*env, "bash", "-c", lookup() + 'echo "$LWL"'], cwd=REPO, capture_output=True, text=True)
-    assert got.returncode == 0, got.stdout + got.stderr
-    assert got.stdout.strip() == workload
-
-
-def test_a_row_no_stored_workload_names_is_refused_before_anything_is_written(tmp_path):
-    unset = [a for v in ("PP_TP", "PP_SERVE_RUN", "PP_SERVE_ROWS", "OUT") for a in ("-u", v)]
-    got = subprocess.run(["env", *unset, f"RESEARCH_RUN_DIR={tmp_path}", f"PP_LLAMA={tmp_path}",
-                          f"LROW={INT8_H200.replace('h200', 'b300')}", "bash", str(RUN_SH)],
-                         cwd=REPO, capture_output=True, text=True)
-    assert got.returncode == 2
-    assert "no stored workload of that name" in got.stdout and "give LROW the row id of PP_LLAMA's Commit" in got.stdout
-    assert list(tmp_path.iterdir()) == []
 
 
 def run_sh(tmp_path: Path, **env: str) -> subprocess.CompletedProcess:
-    unset = [a for v in ("PP_TP", "PP_SERVE_RUN", "PP_SERVE_ROWS", "PP_LLAMA", "PP_SERVE_STANDIN", "LROW", "OUT") for a in ("-u", v)]
+    unset = [a for v in ("PP_TP", "PP_SERVE_RUN", "PP_SERVE_ROWS", "OUT") for a in ("-u", v)]
     out = tmp_path / "out"
     out.mkdir(exist_ok=True)
     return subprocess.run(["env", *unset, f"RESEARCH_RUN_DIR={out}", *(f"{k}={v}" for k, v in env.items()), "bash", str(RUN_SH)],
                           cwd=REPO, capture_output=True, text=True)
-
-
-def test_a_row_dir_row_run_made_is_refused_before_any_build_naming_the_served_arm(tmp_path):
-    """A row dir whose Builds are `verity-vllm row run`'s declared Programs (``build_request_LP11_T8``) holds none of I2's
-    (``build_request_LP11_T8_greedy_s…``): the single-GPU arm refuses it before the install and the builds, and names the
-    served arm; a row dir that isn't there is refused there too."""
-    rows = tmp_path / "rows"
-    for shape in ("LP11_T8", "LP123_T19"):
-        (rows / f"build_request_{shape}").mkdir(parents=True)
-    got = run_sh(tmp_path, PP_LLAMA=str(rows), LROW=INT8_H200)
-    assert got.returncode == 8, got.stdout + got.stderr
-    assert "cannot be proved by the single-GPU arm" in got.stdout and "served arm instead (PP_SERVE_RUN" in got.stdout
-    assert list((tmp_path / "out").iterdir()) == []
-    got = run_sh(tmp_path, PP_LLAMA=str(tmp_path / "gone"), LROW=INT8_H200)
-    assert got.returncode == 8 and "no row dir on this node" in got.stdout
 
 
 def test_a_served_window_absent_from_this_node_is_refused_before_any_build(tmp_path):
@@ -101,12 +51,11 @@ def _lines(first: str, last: str) -> list[str]:
 def test_the_served_arms_forged_partition_is_settled_before_any_build(tmp_path):
     """A served window of steps 1 to 2 has no unit at step 24: the served arm's forged partition is derived from the honest
     one, or a given one outside its steps is refused (exit 8, the fix named), after the install and before the builds,
-    where its commit would raise only after the honest arm ran. The single-GPU arm's defaults are unchanged."""
+    where its commit would raise only after the honest arm ran."""
     text = RUN_SH.read_text()
     assert text.index("forged-partition --honest") < min(text.index("lake build"), text.index("60-circuit.sh"))
     assert text.index("PY=$REPO/.venv/bin/python") < text.index("forged-partition --honest")
     assert 'run $1-forged "$src" - $O/forged-partition.json' in text
-    assert 'run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24}' in text
     snippet = "\n".join(_lines("PLAIN=(); SAMPLING_DESIGN=", "fi"))
     part = REPO / "benchmarks/prove_path"
 

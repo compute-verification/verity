@@ -33,13 +33,6 @@ from verity_vllm.engine import hooks
 from verity_vllm.protocols.pouw.h1_hooks import expert_names
 
 
-class _EveryStep(dict):
-    """`Int8Source`'s names at each engine step (its ``_at``, the targets): step 0's at every step."""
-
-    def get(self, key: Any, default: Any = None) -> Any:
-        return dict.get(self, 0, default)
-
-
 class H1Source(Int8Source):
     """`Int8Source` at H1's linears: a named module's site under its module's forward, and each routed expert's under its
     call (``experts``, name -> `ExpertSite`)."""
@@ -49,7 +42,7 @@ class H1Source(Int8Source):
         super().__init__(com, model, sites, [])
         # the modules whose forward opens their site's scope; an expert's call opens its own (`_scoped`)
         self.modules = sorted(modules)
-        self.quant, self._at, self.experts = sites, _EveryStep(self._at), dict(experts)
+        self.experts = dict(experts)
 
     def install(self) -> None:
         super().install()
@@ -104,10 +97,10 @@ def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int]) -> Co
     """H1's tap, a new `CommitTap`, on the Commit already serving ``model`` (serve-openai's rows-sha512
     collector, `pipeline.serve_seal.committer`), in place of a Commit of its own (`attach`): the step's input ids are its
     step-input port's (`served_record.StepInputPort`) and each of H1's ``layers``' x_q and s_a are its int8 source's
-    (`Int8Source`, the bench row's manifest's sites, under their op paths), so H1's A tables are tied to the values the
+    (`Int8Source`, the bench row's capture plan's sites, under their op paths), so H1's A tables are tied to the values the
     served window commits. ValueError when the Commit has no port or no int8 source, when ``layers`` hold a routed
-    expert (only H1's own source acquires those), or when the source doesn't acquire some linear at each engine step of
-    ``steps``, the window's. ``tap.untap()`` removes it."""
+    expert (only H1's own source acquires those), or when the source doesn't acquire some linear (its sites are every
+    engine step's, so ``steps``, the window's, name none it lacks). ``tap.untap()`` removes it."""
     sources = list(getattr(com, "sources", ()))
     src = next((s for s in sources if isinstance(s, Int8Source) and not isinstance(s, H1Source)), None)
     if not any(isinstance(s, StepInputPort) for s in sources):
@@ -118,9 +111,9 @@ def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int]) -> Co
     if experts:
         raise ValueError(f"H1's linears hold {len(experts)} routed experts, {sorted(experts)[:2]}: the served Commit's int8 "
                          "source acquires no expert's site")
-    if missing := [(e, m) for e in steps for m in modules if (e, m) not in src.quant]:
-        raise ValueError(f"the Commit's int8 source acquires {len(missing)} of H1's (engine step, linear) sites nowhere, "
-                         f"{missing[:3]}: its manifest names no Int8RowQuant_v1 site there")
+    if missing := [m for m in modules if (0, m) not in src.quant]:
+        raise ValueError(f"the Commit's int8 source acquires {len(missing)} of H1's linears nowhere, {missing[:3]}: its "
+                         "capture plan names no Int8RowQuant site there")
     tap = CommitTap()
     names = set(modules)
     tap.port = PORT_NAMES[0]
