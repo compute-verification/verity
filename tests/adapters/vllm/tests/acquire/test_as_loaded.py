@@ -7,7 +7,6 @@ and a composer the TP driver cannot hand to its ranks through the RPC (it pickle
 from __future__ import annotations
 
 import hashlib
-import pickle
 import types
 
 import numpy as np
@@ -29,7 +28,6 @@ from tests.check.test_weights_of_record_routed_experts import _program
 from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.replay.opening import model_weights_provider
-from verity_vllm.pipeline.tp import commit as TPC
 from verity_vllm.program.frontend import marlin_moe_leaf as mml
 from verity_vllm.protocols import WeightsView
 
@@ -136,9 +134,3 @@ def test_a_model_without_a_marlin_layer_is_its_own_weights(vllm_mxfp4):
     assert AL.attach_rank(model, world=WORLD, rank=RANK, composer=None) == (model, None)
 
 
-def test_the_tp_driver_hands_every_rank_the_composer_of_record_through_the_rpc():
-    assert TPC.weights_as_loaded(None) is None
-    pin = {"checkpoint_dir": "/ck", "checkpoints_manifest": "/ck/checkpoints.json", "model": "test/dsv4", "program_dirs": {}}
-    sent = pickle.loads(pickle.dumps(TPC.weights_as_loaded(pin)))
-    assert sent.func is AL.attach_rank and sent.keywords["composer"].func is WR.rank_composer
-    assert sent.keywords["composer"].keywords == {"checkpoint_dir": "/ck", "checkpoints_manifest": "/ck/checkpoints.json", "model": "test/dsv4"}

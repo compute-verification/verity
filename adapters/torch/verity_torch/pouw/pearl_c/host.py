@@ -112,12 +112,20 @@ class PassSalts:
         self.key: Key | None = None
         self.next, self.open = 0, True
 
+    def check(self) -> None:
+        """Refuses (`SaltsRefused`) where a fill would be refused, without taking a leaf."""
+        with self.lock:
+            self._refuse()
+
+    def _refuse(self) -> None:
+        if not self.open:
+            raise SaltsRefused("NO_OPEN_PASS", "the pass has ended and dropped its key: begin a pass")
+        if self.pid != os.getpid():
+            raise SaltsRefused("OTHER_PROCESS", "a forked process fills no salts of its parent's pass: begin a pass")
+
     def take(self, n: int) -> tuple[Key, int]:
         with self.lock:
-            if not self.open:
-                raise SaltsRefused("NO_OPEN_PASS", "the pass has ended and dropped its key: begin a pass")
-            if self.pid != os.getpid():
-                raise SaltsRefused("OTHER_PROCESS", "a forked process fills no salts of its parent's pass: begin a pass")
+            self._refuse()
             if self.key is None:
                 self.key = derive(os.urandom(32), SALT_STREAM, {})
             first = self.next

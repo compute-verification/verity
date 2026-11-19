@@ -1358,13 +1358,6 @@ private def templateStrata (samplingDesign : String) (obj : Json) (program : Byt
     V (Array (String × Array (Nat × Nat)) × Nat) :=
   templateStrataBy TemplateQuery.Desc.parse samplingDesign obj program
 
-/-- The partition object's `blocks`, only once they cover the population the query derives from the verifier's own
-`program` (`templateStrata`); none where it has none. A reader of `blocks` takes them here, never from the object. -/
-def blocksOf (obj : Json) (program : ByteArray) : V (Option (Array (Nat × Nat))) := do
-  let some b := (obj.getObjVal? "blocks").toOption | pure none
-  discard <| templateStrata "blocks" obj program
-  blocksIn (some b)
-
 /-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population. -/
 def stratifiedSamplingDesign (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.SamplingDesign × Nat) := do
   let (strata, population) ← templateStrata "stratified" obj program

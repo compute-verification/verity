@@ -62,7 +62,7 @@ def _program(c: bytes):
 def _partition(d: Path, template: str):
     """The served partition with the template's first unit a block of its own, and that block's index."""
     from verity.circuits import partition_object as PO
-    p = d / f"partition-{hashlib.sha256(template.encode()).hexdigest()[:16]}.json"
+    p = d / f"partition-levels-{hashlib.sha256(template.encode()).hexdigest()[:16]}.json"
     if p.exists():
         j = json.loads(p.read_text())
         return j["partition"], j["k"], j["u"], j["population"]
@@ -72,7 +72,7 @@ def _partition(d: Path, template: str):
     tp = PO.TemplatePartition(program, query)
     u = next(a for _k, t, a, n in tp.ranges if t == template and n)
     blocks = [b for b in ((0, u), (u, u + 1), (u + 1, tp.population)) if b[0] < b[1]]
-    part = PO.build(json.loads(c), query, blocks)
+    part = PO.build(json.loads(c), query, [blocks])
     k = blocks.index((u, u + 1))
     p.write_text(json.dumps({"partition": part, "k": k, "u": u, "population": tp.population}))
     return part, k, u, tp.population
@@ -116,6 +116,16 @@ def _bits(widths: list[int], values: list[int]) -> list[int]:
 def _words16(bits: list[int], words: int) -> list[int]:
     bits = bits + [0] * (16 * words - len(bits))
     return [sum(bits[16 * w + j] << j for j in range(16)) for w in range(words)]
+
+
+def _split_outs(meta: dict, row: list[int]) -> dict:
+    """The output row ``row`` as `FC.write`'s ``outs``: each META out port's words, unpadded, in port order."""
+    import numpy as np
+    out, at = {}, 0
+    for nm, w in meta["out_ports"]:
+        out[nm] = np.asarray([row[at:at + w]], dtype=np.uint16)
+        at += w
+    return out
 
 
 def stage(d: Path, template: str, seed: int = 7) -> dict:
@@ -245,7 +255,7 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     iset = SimpleNamespace(name=f"served-{u}", subcircuit=SimpleNamespace(id=fn.id, inputs=[], outputs=[]))
     FC.write(text, iset, 0, 1, s / "inst-1.bin", s / "pub-1.bin", indices=[u], tables=tables,
              refs={p: [0] for p in reads}, share_rows=True, salts=salts, registered=registered,
-             outs={"o0": np.asarray([orow], dtype=np.uint16)})
+             outs=_split_outs(meta, orow))
     (s / "unit.tmpl").write_text(FC.template_of(text))
     (s / "partition.json").write_text(json.dumps(part))
     (s / "program.json").write_bytes(c)

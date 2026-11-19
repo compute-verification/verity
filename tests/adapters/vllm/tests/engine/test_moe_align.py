@@ -8,10 +8,8 @@ writes the total, 0 pairs included; and, where Triton is installed, the kernels 
 pairs in Triton's interpreter, in a pytest of their own (`moe_align_interpreter_cases.py`)."""
 from __future__ import annotations
 
-import ast
 import importlib
 import importlib.util
-import inspect
 import os
 import random
 import subprocess
@@ -263,18 +261,6 @@ def test_register_arms_and_the_distribution_declares_it_as_a_vllm_plugin(monkeyp
     target = project["entry-points"]["vllm.general_plugins"]["verity_moe_align"]
     module, _, attr = target.partition(":")
     assert importlib.import_module(module) is moe_align and attr == "register"
-
-
-def test_it_is_armed_at_import_by_every_rank_and_by_the_driver_before_it_builds():
-    from verity_vllm.engine import build
-    from verity_vllm.pipeline.tp import rank_worker
-
-    top = ast.parse(inspect.getsource(moe_align)).body
-    assert any(isinstance(n, ast.Expr) and ast.unparse(n) == "arm()" for n in top)
-    assert any(isinstance(n, ast.ImportFrom) and n.module == "verity_vllm.engine" and "moe_align" in {a.name for a in n.names}
-               for n in ast.parse(inspect.getsource(rank_worker)).body)
-    src = inspect.getsource(build.build_engine)
-    assert src.index("moe_align.arm()") < src.index("hooked(lambda: LLM(**kw))")
 
 
 def test_refuses_what_vllms_op_cannot_take():

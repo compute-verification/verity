@@ -548,7 +548,7 @@ def test_each_records_subcommand_runs_its_own_function_with_its_options(tmp_path
         (["capture", "r1", "--property", PROP], [("capture", ("r1", [PROP]), {})], f"{PROP}=art:p"),
         (["show"], [("index", (), {})], json.dumps({ROW: "art:rec"}, indent=1, sort_keys=True)),
         (["show", ROW], [("record", (ROW,), {})], json.dumps({"config": {"row": ROW}}, indent=1, sort_keys=True)),
-        (["fetch", ROW, "--to", str(tar), "--rank", "1"], [("bundle", (ROW, tar, [1]), {"part": None})], str(tar)),
+        (["fetch", ROW, "--to", str(tar), "--rank", "0"], [("bundle", (ROW, tar, [0]), {"part": None})], str(tar)),
         (["staged", REPO, "abc", "--at", "2026-01-01T00:00:00Z", "--ref", "r1", "--by", "circuits"],
          [("staged", (REPO, "abc"), {"at": "2026-01-01T00:00:00Z", "ref": "r1", "by": "circuits"})], "staged"),
         (["programs", ROW, "--part", "workload", "--bundle", str(tar)],
@@ -562,6 +562,12 @@ def test_each_records_subcommand_runs_its_own_function_with_its_options(tmp_path
         assert circuit_db.main(cli.parse("records", argv, {})) == 0
         assert calls == want, argv
         assert capsys.readouterr().out.rstrip("\n") == printed, argv
+
+
+@pytest.mark.parametrize("argv", [["fetch", ROW, "--to", "t.tar", "--rank", "1"], ["programs", ROW, "--rank", "0", "--rank", "3"]])
+def test_a_rank_past_0_is_refused_by_name(argv):
+    with pytest.raises(UsageError, match=r"the multi-GPU model is not served: --rank \[\d\]"):
+        circuit_db.main(cli.parse("records", argv, {}))
 
 
 # What each reader makes of a document that leaves an optional field out, or holds it null or empty.
