@@ -68,7 +68,7 @@ The kernel runs most of `decode` on a closed text, and the walk's rules are the 
 namespace Flock.Program.Closed
 
 open Lean (Json JsonNumber)
-open private DecState from Circuits.Program
+open private DecState from Circuits.Descriptor
 
 /-- The characters of `programEmpty`. -/
 @[expose] public def emptyChars : List Char :=

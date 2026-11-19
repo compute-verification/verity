@@ -63,7 +63,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.circuits.library import TABLES
 
@@ -148,18 +148,28 @@ def verifier_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
 
 
 @functools.cache
-def executable() -> Path:
-    """`lake build verity-verify-proof`, once per process, under `BUILD_LOCK`; the executable's path."""
+def built(package: Path, target: str) -> Path:
+    """`lake build <target>` in ``package``, once per process for each, under `BUILD_LOCK`; the executable's path."""
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
-            p = subprocess.run(["lake", "build", EXE], cwd=PACKAGE, capture_output=True, text=True)
+            p = subprocess.run(["lake", "build", target], cwd=package, capture_output=True, text=True)
         except FileNotFoundError:
-            raise LeanError(f"lake is not on the PATH, so {EXE} in {PACKAGE} cannot be built") from None
+            raise LeanError(f"lake is not on the PATH, so {target} in {package} cannot be built") from None
     if p.returncode != 0:
-        raise LeanError(f"lake build {EXE} in {PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
-    return PACKAGE / ".lake" / "build" / "bin" / EXE
+        raise LeanError(f"lake build {target} in {package} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
+    return package / ".lake" / "build" / "bin" / target
+
+
+def executable() -> Path:
+    """`verity-verify-proof`, built (`built`)."""
+    return built(PACKAGE, EXE)
+
+
+def lower_executable() -> Path:
+    """`flock-lower-check`, built (`built`): the door's lowering of C_S (`one_circuit.lower`)."""
+    return built(PACKAGE, OC.LOWER_EXE)
 
 
 def file_sha512(path: Path) -> str:
@@ -484,6 +494,7 @@ def drawn_block(program: bytes, partition: Mapping[str, Any], draw: Mapping[str,
 def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None,
            strata: Sequence[tuple[str, Sequence[Sequence[int]]]] | None = None,
+           inputs: Callable[[int], Any] | None = None,
            ) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by Flock's Lean verifier against the verifier's own `program` (C, its
     descriptor's bytes), `partition` and `registered` file (theta's registration; None only for a program that reads no
@@ -492,8 +503,10 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
     derived from C and the partition (`one_circuit.restrict`), never `proof`'s own circuit file; the findings in session
     order, each naming that block (``block``), and None, or None and the refusal (``registered``: `registered` is None
     and the program reads registered values, `reads_registered`; ``undrawn``: the proof is of a block `draw` did not
-    sample, or its public file's units are not exactly the drawn block's; ``circuit``: C and the
-    partition give no drawn block or no C_S of it, or its base circuit is not derived yet, `one_circuit.lower`;
+    sample, or its public file's units are not exactly the drawn block's; ``inputs``: `inputs`, a scheme's reading of
+    the drawn block's public inputs from its committed records, called with the drawn block's
+    index, raises a ValueError; ``circuit``: C and the partition give no drawn block or no C_S of it, or Lean's
+    lowering of C_S refuses, `one_circuit.lower`;
     ``proof``: a file is missing or the
     verifier's answer is not one verdict a session naming the
     partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
@@ -519,16 +532,21 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
     k, units = drawn_block(program, partition, draw, proof.public)
     if k is None:
         return None, units
+    if inputs is not None:
+        try:
+            inputs(k)
+        except ValueError as e:
+            return None, ("inputs", f"drawn block {k}: {e}")
     try:
         derived = OC.restrict(program, partition, units)
-    except (OC.NotDerived, OC.Refused) as e:
+    except OC.Refused as e:
         return None, ("circuit", str(e))
     if not (proof.public.is_file() and proof.sessions and all((s / "session.json").is_file() for s in proof.sessions)):
         return None, ("proof", "the statement's proof files are not a public file and at least one session directory "
                                "holding its session.json")
     try:
-        base = OC.lower(derived)
-    except OC.NotDerived as e:
+        base = OC.lower(derived, partition, lower_executable)
+    except (OC.NotDerived, OC.Refused) as e:
         return None, ("circuit", str(e))
     name = statement()
     with tempfile.TemporaryDirectory(prefix="verity-proofs-") as d:
@@ -582,19 +600,9 @@ V2 = ONE_STAGE_PROTOCOL_V2
 V2_EXE = "spot-one-stage-zk"
 
 
-@functools.cache
 def v2_executable() -> Path:
-    """`lake build spot-one-stage-zk`, once per process, under `BUILD_LOCK`; the executable's path."""
-    BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
-    with open(BUILD_LOCK, "a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        try:
-            p = subprocess.run(["lake", "build", V2_EXE], cwd=V2_PACKAGE, capture_output=True, text=True)
-        except FileNotFoundError:
-            raise LeanError(f"lake is not on the PATH, so {V2_EXE} in {V2_PACKAGE} cannot be built") from None
-    if p.returncode != 0:
-        raise LeanError(f"lake build {V2_EXE} in {V2_PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
-    return V2_PACKAGE / ".lake" / "build" / "bin" / V2_EXE
+    """`spot-one-stage-zk`, built (`built`)."""
+    return built(V2_PACKAGE, V2_EXE)
 
 
 def order_why(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any]) -> str | None:

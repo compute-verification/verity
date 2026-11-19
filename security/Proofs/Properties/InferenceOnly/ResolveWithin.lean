@@ -52,9 +52,9 @@ theorem under_off (P : Prog) (U : Scope) : ∀ sc, Good P sc → Under U sc → 
       omega
 
 /-- A walk of resolution that ends within its fuel is the resolution. -/
-theorem resolve_of_run (P : Prog) {n : ℕ} (hn : n ≤ Flock.Steps.FUEL) {sc : Scope} {r : Ref} {b : ℕ}
-    (h : Flock.Steps.run "scope resolution" (resolveStep P) n (sc, r) = .ok b) : resolve P sc r = .ok b :=
-  Flock.Steps.run_mono hn h
+theorem resolve_of_run (P : Prog) (hrc : (P.defs[P.root]!).body.recut = #[]) {n : ℕ} (hn : n ≤ Flock.Steps.FUEL) {sc : Scope}
+    {r : Ref} {b : ℕ} (h : Flock.Steps.run "scope resolution" (resolveStep P) n (sc, r) = .ok b) : resolve P sc r = .ok b :=
+  (Flock.Program.resolve_eq hrc sc r).trans (Flock.Steps.run_mono hn h)
 
 section
 variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
@@ -143,7 +143,7 @@ theorem step_where (B : ℕ) (s : Scope × Ref) (x) (hs : Inv P B s) (h : resolv
 /-- **A walk of resolution that starts under `U` ends in `U` or leaves through a parameter of `U`.** From a state under
 `U` that resolves below `B`, the gate the walk ends at is no earlier than `U` starts and before `B`, or it is the gate a
 leaf of one of `U`'s parameters resolves to. -/
-theorem run_within (U : Scope) (B : ℕ) :
+theorem run_within (hrc : (P.defs[P.root]!).body.recut = #[]) (U : Scope) (B : ℕ) :
     ∀ (n : ℕ), n ≤ Flock.Steps.FUEL → ∀ (s : Scope × Ref) (b : ℕ), Inv P B s → Under U s.1 →
       Flock.Steps.run "scope resolution" (resolveStep P) n s = .ok b →
       (U.off ≤ b ∧ b < B) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
@@ -162,7 +162,7 @@ theorem run_within (U : Scope) (B : ℕ) :
       have hs' := (step_ok P hroot hB hL B s _ hs hx).2 s' rfl
       rcases (step_where P hB B s _ hs hx).2 s' rfl with
         ⟨-, d, off, k, m, hc⟩ | ⟨hp, parent, d, off, k, m, hsc, hc⟩
-      · refine run_within U B n (by omega) s' b hs' ?_ h'
+      · refine run_within hrc U B n (by omega) s' b hs' ?_ h'
         rw [hc]
         exact Or.inr hu
       · by_cases hU : s.1 = U
@@ -173,7 +173,7 @@ theorem run_within (U : Scope) (B : ℕ) :
           have hb : i < (P.defs[sc.d]!).body.params.size ∧ j < ((P.defs[sc.d]!).body.params[i]!).2.leaves :=
             hs.2.1.1 hp'
           rw [hU'] at hb
-          exact Or.inr ⟨i, j, hb.1, hb.2, resolve_of_run P hn h⟩
+          exact Or.inr ⟨i, j, hb.1, hb.2, resolve_of_run P hrc hn h⟩
         · have hup : Under U parent := by
             rw [hsc] at hu hU
             have hu' : U = .child parent d off k m ∨ Under U parent := hu
@@ -181,10 +181,10 @@ theorem run_within (U : Scope) (B : ℕ) :
             · exact absurd hu'.symm hU
             · exact hu'
           rcases hc with hc | ⟨off', m', hc⟩
-          · refine run_within U B n (by omega) s' b hs' ?_ h'
+          · refine run_within hrc U B n (by omega) s' b hs' ?_ h'
             rw [hc]
             exact hup
-          · refine run_within U B n (by omega) s' b hs' ?_ h'
+          · refine run_within hrc U B n (by omega) s' b hs' ?_ h'
             rw [hc]
             exact Or.inr hup
 
@@ -193,8 +193,8 @@ theorem ret_within (U : Scope) (hU : Good P U) (t : ℕ) (ht : t < (P.defs[U.d]!
     (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
     (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
       j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b :=
-  run_within P hroot hB hL U _ Flock.Steps.FUEL (Nat.le_refl _) _ b
-    (down_ok P hroot hB hL _ U hU (Nat.le_refl _) t ht) (under_refl U) h
+  run_within P hroot hB hL (Flock.Program.resolve_recut (good_base P hU) h) U _ Flock.Steps.FUEL (Nat.le_refl _) _ b
+    (down_ok P hroot hB hL _ U hU (Nat.le_refl _) t ht) (under_refl U) (Flock.Program.resolve_run h)
 
 /-- **An operand of a gate inside an activation is an earlier gate of the activation or a leaf of one of its
 parameters.** Node `k` of an activation `sc` under `U`, calling a primitive: every operand `operands` gives its member
@@ -220,8 +220,8 @@ theorem operands_within (U : Scope) (sc : Scope) (hg : Good P sc) (hu : Under U 
         else t) := by
     split <;> simp only [memberRef_eq]
   rw [hr] at hres
-  exact run_within P hroot hB hL U _ Flock.Steps.FUEL (Nat.le_refl _) _ a
-    (start_ok P hroot hB hL sc hg k hk _ (hargs i _ hidx)) hu hres
+  exact run_within P hroot hB hL (Flock.Program.resolve_recut (good_base P hg) hres) U _ Flock.Steps.FUEL (Nat.le_refl _) _ a
+    (start_ok P hroot hB hL sc hg k hk _ (hargs i _ hidx)) hu (Flock.Program.resolve_run hres)
 
 /-- **An operand of a gate the walk locates from inside `U` is an earlier gate of `U` or a leaf of one of its
 parameters.** `Prog.gate`'s walk for `g`, from an activation under `U` that holds `g`: it stays under `U`, and the
@@ -401,7 +401,7 @@ theorem gate_within {k m : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
   have hgood : Good P (P.child P.rootScope k m) :=
     good_child P (parent := P.rootScope) (by show Good P (.top P.root 0 none); unfold Good; exact ⟨rfl, rfl, rfl⟩)
       hk rfl hc hm rfl
-  unfold Prog.gate at h
+  rw [Prog.gate_of (Prog.gate_recut h)] at h
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h
@@ -423,7 +423,8 @@ end
 theorem ret_within_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (U : Scope) (hU : Good P U) (t : ℕ)
     (ht : t < (P.defs[U.d]!).body.ret.count) {b : ℕ}
-    (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
+    (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
       j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
   obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec

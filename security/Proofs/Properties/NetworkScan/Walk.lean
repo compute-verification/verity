@@ -35,7 +35,7 @@ namespace Properties.NetworkScan
 gates of that activation, or a gate a reference of one of node `k`'s arguments resolves to from the root. -/
 def MemberReads : Prop :=
   ∀ (bytes : ByteArray) (P : Flock.Program.Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
-    InferenceOnlyVerifier.Desc.bodiesLaidOut P = true →
+    InferenceOnlyVerifier.Desc.bodiesLaidOut P = true → (P.defs[P.root]!).body.recut = #[] →
     ∀ k < (P.defs[P.root]!).body.nodes.size, ∀ m < ((P.defs[P.root]!).body.nodes[k]!).members,
       (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false →
       ((P.defs[P.root]!).body.nodes[k]!).form ≠ .scan →
@@ -328,7 +328,7 @@ theorem gate_below {k m g p : ℕ} {ops : Array ℕ} {sc : Scope} (hk : k < (P.d
     (Below.child Below.self) hA).2
   rw [child_d, rootScope_off, rootScope_d, Nat.zero_add] at hAin
   have hrg : g < (P.defs[P.root]!).gates := by omega
-  unfold Prog.gate at h
+  rw [Prog.gate_of (Prog.gate_recut h)] at h
   have hng : ¬ (g ≥ (P.defs[P.root]!).gates) := by omega
   simp only [hng, ite_false, bind, Except.bind] at h
   have hF : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega
@@ -402,7 +402,7 @@ end
 
 /-- **The walk lemma.** -/
 theorem memberReads : MemberReads := by
-  intro bytes P hdec hov hbl k hk m hm hc hf g p ops sc hgate hg1 hg2 a ha
+  intro bytes P hdec hov hbl hrc k hk m hm hc hf g p ops sc hgate hg1 hg2 a ha
   obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
   obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
@@ -412,8 +412,8 @@ theorem memberReads : MemberReads := by
     exact BodiesOk.body_ok P hok sc.d (hS sc.d hSd hpd).1
   obtain ⟨-, hL, -, -⟩ := Walk.bodiesLaidOut_spec P hbl
   obtain ⟨r, hinv', hb, hres⟩ := gate_below P ⟨hr, hrp⟩ hB hL hk hm hc hg1 hg2 hgate a ha
-  rcases run_below P ⟨hr, hrp⟩ hB hL (k := k) (m := m) rfl hf _ _ _ hinv' hb hres with h | ⟨i, t, ht, n', hn', h⟩
+  rcases run_below P ⟨hr, hrp⟩ hB hL (k := k) (m := m) rfl hf _ _ _ hinv' hb (Flock.Program.resolve_run hres) with h | ⟨i, t, ht, n', hn', h⟩
   · exact Or.inl h
-  · exact Or.inr ⟨i, t, ht, Flock.Steps.run_mono hn' h⟩
+  · exact Or.inr ⟨i, t, ht, (Flock.Program.resolve_eq hrc _ _).trans (Flock.Steps.run_mono hn' h)⟩
 
 end Properties.NetworkScan.WalkProof
