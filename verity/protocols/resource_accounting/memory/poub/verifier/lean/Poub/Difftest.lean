@@ -26,7 +26,8 @@ reads (`pooled`, `Poub.Pooled`), and `ledger.gamma`'s γ terms (`gamma`, `Poub.G
 so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `Poub.Schedule`).
 `p2.py`'s P2 store (`Poub.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
 and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); and a whole P2 session as
-`p2_parties.py` runs it (`p2_session`, `Poub.P2Session`), on the registration file's bytes and the prover's lines.
+`p2_parties.py` runs it (`p2_session`, `Poub.P2Session`), on the registration file's bytes and the prover's lines,
+and the reading of a line under it (`p2_line_json`, `P2Session.lineJsonOf`, `p2_parties.line_json`).
 The span's check (`Poub.Span`): on a session run to its samples, the rows the verifier derives for each sample
 (`span_public`), the window decided on public files taken as accepted (`span_held`), and decided from the statements
 the proof system's audit must accept (`span`).
@@ -794,6 +795,12 @@ def p2SessionFn (j : Json) : V Json := do
     s := s'
   pure (Json.mkObj [("held", held.json), ("results", .arr results), ("answer", P2Session.answer held s)])
 
+/-- `P2Session.lineJsonOf` on `{"line"}`, a line's bytes without its newline (lowercase hex): the JSON it reads, or a
+refusal. -/
+def p2LineJsonFn (j : Json) : V Json := do
+  let some v := P2Session.lineJsonOf (← hex j "line") | throw "not a line's JSON as the prover alone reads it"
+  pure v
+
 /-- The session `j` gives (`sessionFn`'s input) run through its events by `Session.run`, and its window `t`. -/
 private def sampledRun (j : Json) : V (Session.State × Int) := do
   let reg ← registrationOf (← J.get j "registration" "input")
@@ -855,6 +862,6 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn), ("gamma", gammaFn),
   ("named_bits", namedBitsFn),
   ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn),
-  ("p2_session", p2SessionFn), ("span_public", spanPublicFn), ("span_held", spanHeldFn), ("span", spanFn)]
+  ("p2_session", p2SessionFn), ("p2_line_json", p2LineJsonFn), ("span_public", spanPublicFn), ("span_held", spanHeldFn), ("span", spanFn)]
 
 end Poub.Difftest
