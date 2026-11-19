@@ -1,3 +1,0 @@
-[2026-11-19T00:55Z] 5b8368b2b273
-From the lead: circuits posts on TOP-443 by 5:45 PM PST the credited block Program at the test instance as a FILE (an evidence id, the builder exact call and head). Its branch builds the block on its BOOLEAN form (every gate a bit gate); the word-level form is on a bodies branch not on one-circuit. Proofs worker runs its lowering on the tile core forms by 8:00 PM PST. Top floor for Thu 6 PM: the block at the test instance proved from a statement LEAN lowered, Lean base verifier verdict, cut by Python restrict and said so. Aim exactly at that floor; do not duplicate proofs lowering work: if Lean lower refuses the block, record the words and go on with what runs. Re-run your refused command.
-
