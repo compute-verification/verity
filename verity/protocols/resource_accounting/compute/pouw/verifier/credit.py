@@ -220,6 +220,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
+from verity.circuits import codec
 from verity.circuits.codec import _checked_refs
 from verity.circuits.defs import _Widths
 from verity.circuits.refs import Coll, Concat, refs_from_json
@@ -358,8 +359,8 @@ LEAF_UNIT = {LL.LANE: "PouwH1LaneZy_v1", LL.COMBINE: "PouwH1Combine_v1"}
 ZY_UNIT = "PouwH1TileZy_v1"
 DESCRIPTOR_HEX = ("the window's descriptor is not the bytes of the circuit its proofs were verified against in "
                   "lowercase hex (its canonical JSON without annotations, the bytes program_digest hashes)")
-#: the descriptor schema `layout_of` reads
-SCHEMA = domains.IR_DESCRIPTOR
+#: the descriptor schema `layout_of` reads: the decoder's (`codec.SCHEMA`, Lean's `Flock.Program.SCHEMA`)
+SCHEMA = codec.SCHEMA
 #: h1window's Program function, `h1window.PouwH1Window`, and its record's bindings in order
 WINDOW_FN = "PouwH1Window_v3"
 RECORD = ("TILES", "LINEARS", "CALLS", "M", "PREFIX")
@@ -373,7 +374,7 @@ SHARED_J10R = (*SHARED, "call", "blocks")
 TILE_K_STEP = 32
 TILE_K_LIMIT = 1 << 17
 _INPUT = re.compile(r"(?:Registered)?Input[1-9][0-9]*_v1")
-DESCRIPTOR_FORM = ("the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, "
+DESCRIPTOR_FORM = (f"the window's descriptor is not a {SCHEMA} descriptor in canonical JSON (keys sorted, "
                    "compact, ASCII: the bytes program_digest hashes) with its callees, definitions, program function and "
                    "root")
 NOT_WINDOW = ("the window's circuit is not an H1 window: its program function is not PouwH1Window_v3{TILES=…,LINEARS=…,"
@@ -441,7 +442,7 @@ LIVE_STATEMENTS_FORM = ("the window's live evidence is not {descriptor, statemen
                         "lowercase hex and a list of {circuit, public, round, sessions}, each round's live@<s> proof "
                         "files: the paths of its circuit file and its public file, and its sessions' directories (at "
                         "least one)")
-LIVE_DESCRIPTOR_FORM = ("the window's live descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON "
+LIVE_DESCRIPTOR_FORM = (f"the window's live descriptor is not a {SCHEMA} descriptor in canonical JSON "
                         "with its callees, definitions, program function and root")
 NOT_LIVE = ("the window's live circuit is not a live Program: its program function is not PouwLiveWindow_v2{T=…,S=…,"
             "PREFIX=…}, each binding canonical JSON, T and S positive integers and PREFIX a string "
