@@ -74,7 +74,6 @@ refuses a clock coarser than a microsecond (`CLOCK_RESOLUTION_NS`).
 
 from __future__ import annotations
 
-import fcntl
 import gc
 import hashlib
 import json
@@ -90,6 +89,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
+from verity.attested import Attested, AttestedLog, LogRefused
 from verity.commitments import hm96
 from verity.commitments.crypto import lms
 from verity.commitments.indexed import RangeIndexedDomain
@@ -594,19 +594,15 @@ def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental:
     raise ValueError(f"no certificate of {scheme.name} covers k = {k} within {limit_ns} ns ({why})")
 
 
-class SessionLogError(RuntimeError):
-    """A refusal to open a session: its log is missing or unreadable, or the session's id is already in it."""
+SessionLogError = LogRefused
+DEVICE = "memory-attester"
+"""The key the memory attester's logs hold its readings under."""
 
 
-_SESSION_ID = re.compile(rb"[0-9a-f]{64}")
-
-
-class SessionLog:
-    """The session ids a memory attester has used, in a file of its own (never in its signer's key directory) that
-    fails closed.  The file is `SESSION_LOG`'s line, then one used id a line in lowercase hex.  Opening refuses a log that
-    is missing or unreadable: a first line that is not `SESSION_LOG`, a line that is not an id, an id twice, or a last
-    line cut short.  `claim` takes the file's lock, reads it again, refuses an id already in it and appends the id,
-    fsynced, before it returns.  Nothing here rewrites or truncates the file, and `create` refuses one that exists.
+class SessionLog(AttestedLog):
+    """The session ids a memory attester has used, its `AttestedLog` of `SESSION_LOG` in a file of its own (never in its
+    signer's key directory), an entry an id with no reading. `claim` refuses an id already in it and appends the id,
+    fsynced, before it returns.
 
     One session an id rests on the host keeping this file as written: it is never restored from a snapshot, a backup or
     another older copy, and the memory attester is never restarted onto host-held state older than the sessions it
@@ -615,131 +611,54 @@ class SessionLog:
     of the state the device keeps there."""
 
     def __init__(self, path: str | os.PathLike) -> None:
-        self.path = Path(path)
-        self._read()
+        super().__init__(path, SESSION_LOG, (32,), lambda e: e.data, DEVICE)
 
     @staticmethod
     def create(path: str | os.PathLike) -> None:
         """A new log, with no id used; refused when the file exists."""
-        _create_log(Path(path), SESSION_LOG, "a session log")
-
-    def _read(self) -> frozenset[bytes]:
-        lines = _lines(self.path)
-        ids = lines[1:-1]
-        if (lines[0] != SESSION_LOG.encode() or lines[-1] != b""
-                or not all(_SESSION_ID.fullmatch(x) for x in ids) or len(set(ids)) != len(ids)):
-            raise SessionLogError(f"{self.path}: unreadable (not a {SESSION_LOG} log of distinct ids, each on a whole line)")
-        return frozenset(bytes.fromhex(x.decode()) for x in ids)
+        AttestedLog.create(path, SESSION_LOG)
 
     def __contains__(self, session: bytes) -> bool:
-        return session in self._read()
+        return self.find(session) is not None
 
     def claim(self, session: bytes) -> None:
         """Record `session` as used, fsynced, before this returns; refused when it is already used."""
         if len(session) != 32:
             raise ValueError("a session id is 32 bytes")
-
-        def refuse() -> str | None:
-            if session in self._read():
-                return f"session {session.hex()} is in {self.path}: the memory attester runs one session under an id"
-            return None
-
-        _append(self.path, session.hex().encode() + b"\n", refuse)
+        self.append(Attested((), session), f"session {session.hex()} is in {self.path}: the memory attester runs one "
+                    "session under an id")
 
 
 SALT_BYTES = SALT_BITS // 8
-_SALT_ENTRY = re.compile(rb"([0-9a-f]{128}) ([0-9a-f]{128}) ([0-9a-f]{%d})" % (2 * SALT_BYTES))
 
 
-class SaltLog:
-    """The setup salts a memory attester has sampled, one an audit, in a file of its own beside its `SessionLog` that
-    fails closed as that log does. The file is `SALT_LOG`'s line, then one entry a line: the audit's 64-byte binding, the
-    64-byte commitment to `W` the salt was sampled after, and the salt, each in lowercase hex. `record` takes the file's
-    lock, reads it again, refuses an audit already in it and appends the entry, fsynced, before it returns, so an audit
-    has one salt and a retry never resamples one. On the deployed party an audit's session id is derived from its binding,
-    commitment and salt (`challenger_session.session_id`), so the `SessionLog` refuses its second session. It rests
-    on `trusted-device` as the session log does: its host never restores an earlier copy of it."""
+class SaltLog(AttestedLog):
+    """The setup salts a memory attester has sampled, one an audit, its `AttestedLog` of `SALT_LOG` beside its
+    `SessionLog`: an entry is shown the audit's 64-byte binding and the 64-byte commitment to `W` the salt was sampled
+    after, and its data is the salt. `record` refuses an audit already in it and appends the entry, fsynced, before it
+    returns, so an audit has one salt and a retry never resamples one. On the deployed party an audit's session id is
+    derived from its binding, commitment and salt (`challenger_session.session_id`), so the `SessionLog` refuses its
+    second session. It rests on `trusted-device` as the session log does."""
 
     def __init__(self, path: str | os.PathLike) -> None:
-        self.path = Path(path)
-        self._read()
+        super().__init__(path, SALT_LOG, (64, 64, SALT_BYTES), lambda e: e.shown[0], DEVICE)
 
     @staticmethod
     def create(path: str | os.PathLike) -> None:
         """A new log, with no salt sampled; refused when the file exists."""
-        _create_log(Path(path), SALT_LOG, "a salt log")
-
-    def _read(self) -> dict[bytes, tuple[bytes, bytes]]:
-        lines = _lines(self.path)
-        entries = [_SALT_ENTRY.fullmatch(x) for x in lines[1:-1]]
-        if (lines[0] != SALT_LOG.encode() or lines[-1] != b"" or not all(entries)
-                or len({m[1] for m in entries}) != len(entries)):
-            raise SessionLogError(f"{self.path}: unreadable (not a {SALT_LOG} log of one entry an audit, each on a whole "
-                                  "line)")
-        return {bytes.fromhex(m[1].decode()): (bytes.fromhex(m[2].decode()), bytes.fromhex(m[3].decode()))
-                for m in entries}
+        AttestedLog.create(path, SALT_LOG)
 
     def get(self, audit: bytes) -> tuple[bytes, bytes] | None:
         """The commitment and salt logged under `audit`, or None."""
-        return self._read().get(audit)
+        e = self.find(audit)
+        return None if e is None else (e.shown[1], e.data)
 
     def record(self, audit: bytes, commitment: bytes, salt: bytes) -> None:
         """Log `salt`, sampled after `commitment` for `audit`, fsynced, before this returns; refused when the audit has one."""
         if (len(audit), len(commitment), len(salt)) != (64, 64, SALT_BYTES):
             raise ValueError(f"an audit's binding and a commitment to W are 64 bytes, a salt {SALT_BYTES}")
-
-        def refuse() -> str | None:
-            if audit in self._read():
-                return (f"audit {audit.hex()} has its salt in {self.path}: the memory attester draws one salt an audit, "
-                        "and a retry never redraws it")
-            return None
-
-        _append(self.path, f"{audit.hex()} {commitment.hex()} {salt.hex()}\n".encode(), refuse)
-
-
-def _create_log(p: Path, header: str, what: str) -> None:
-    try:
-        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        raise SessionLogError(f"{p} exists: {what} is never made again") from None
-    try:
-        os.write(fd, header.encode() + b"\n")
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-    d = os.open(p.parent, os.O_RDONLY)
-    try:
-        os.fsync(d)
-    finally:
-        os.close(d)
-
-
-def _lines(path: Path) -> list[bytes]:
-    try:
-        return path.read_bytes().split(b"\n")
-    except FileNotFoundError:
-        raise SessionLogError(f"{path}: missing") from None
-    except OSError as e:
-        raise SessionLogError(f"{path}: unreadable ({type(e).__name__})") from None
-
-
-def _append(path: Path, line: bytes, refuse: Callable[[], str | None]) -> None:
-    """`line` appended to the log at `path`, fsynced, under its lock, unless `refuse()` (read under the lock) says why not."""
-    try:
-        fd = os.open(path, os.O_WRONLY | os.O_APPEND)
-    except FileNotFoundError:
-        raise SessionLogError(f"{path}: missing") from None
-    except OSError as e:
-        raise SessionLogError(f"{path}: unwritable ({type(e).__name__})") from None
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        if (why := refuse()) is not None:
-            raise SessionLogError(why)
-        if os.write(fd, line) != len(line):
-            raise SessionLogError(f"{path}: a short write")
-        os.fsync(fd)
-    finally:
-        os.close(fd)
+        self.append(Attested((audit, commitment), salt), f"audit {audit.hex()} has its salt in {self.path}: the memory "
+                    "attester draws one salt an audit, and a retry never redraws it")
 
 
 def coin_key(raw: bytes) -> bytes:

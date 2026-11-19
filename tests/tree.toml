@@ -152,6 +152,14 @@ path = "verity/errors.py"
 means = "the shared exception classes"
 
 [[tree]]
+path = "verity/clock.py"
+means = "a device's clock readings: the reading, its tick, the elapsed bound and a clock's resolution"
+
+[[tree]]
+path = "verity/attested.py"
+means = "a device's log of attester's entries (Core's `Attested`), in a file of its own that fails closed"
+
+[[tree]]
 path = "verity/ports.py"
 means = "a loopback port the OS has free"
 
