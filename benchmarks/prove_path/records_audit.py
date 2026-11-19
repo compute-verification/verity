@@ -95,19 +95,19 @@ them out of an audit (its summary says so), for a run of several audits of one c
 With ``--negative-workers N`` a5's negatives that ask the verifier again run N at a time, each in a worker process
 forked from the audit (`a5.NegativeWorkers`); the summary's ``negative_workers`` is each one's own seconds and memory.
 
+``audit``: each member's circuit is the door's (`a5.door_circuit`: `one_circuit.block`, `.restrict` and `.lower` by
+``--lower``, `flock-lower-check`), the file Lean's `restrict` derives from C and the partition; a member whose block the
+door refuses has none, and a drawn unit of it is a failed proof (the summary's ``unlowered`` and ``failed_drawn``).
 ``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
-cache before the timed audit (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment the audit then runs in, since
-the cache's key covers both; the audit with ``--compose-cache`` then composes none. An audit given no cache says so at
-once and runs the warm itself into its ``--out``'s ``compose-cache``, ``--jobs`` at a time (`compose_first`); either way
-each template's line is printed as it finishes and kept in ``--out``'s ``composed.jsonl``. An audit's time quoted with the cache
-quotes the warm's beside it. A compose keeps only its record (META, pin, class, size, seconds, peak), its text hashed as it
-is rendered, and the audit composes in full after its sample only the sampled members' templates, each held to its record's
-pin; ``--keep-circuits`` keeps every circuit's text in the cache. Neither starts a compose, and the warm stops, where the
-cache's file system would have less than ``--min-free-gb`` free.
+cache (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment a5 then runs in, since the cache's key covers both;
+each template's line is printed as it finishes and kept in ``--out``'s ``composed.jsonl``. A compose keeps only its
+record (META, pin, class, size, seconds, peak), its text hashed as it is rendered; ``--keep-circuits`` keeps every
+circuit's text in the cache. The warm starts no compose, and stops, where the cache's file system would have less than
+``--min-free-gb`` free.
 
     records_audit.py audit --window DIR --sampling-design L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server \\
-        --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
+        --lower flock-lower-check --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
         [--compose-cache DIR] [--jobs N] [--keep-circuits] [--min-free-gb G] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER] \\
         [--lean-workers N] [--audit-mem-gb G] [--negative-workers N]
@@ -1136,7 +1136,7 @@ def audit(a: argparse.Namespace) -> int:
                     advice=(bound or {}).get("advice") or w.get("advice"), compilers=compilers, opening=opening, repo=repo,
                     output=json.loads(output.read_text()) if compiled["ok"] else None)
     window_s = round(time.time() - t0, 2)
-    compose_first(a, sets, mine, out)
+    a.door_lower = Path(a.lower)
     more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
@@ -1253,22 +1253,6 @@ def warm(a: argparse.Namespace) -> int:
     return 0
 
 
-def compose_first(a: argparse.Namespace, sets: dict, mine: Any, out: Path) -> None:
-    """Before the audit's coins, every template `a5.warm` composes, into ``a.compose_cache`` or, with none given, ``out``'s own
-    ``compose-cache``, ``a.jobs`` at a time within ``a.audit_mem_gb``: each one's row printed as it finishes and kept in
-    ``out``'s `COMPOSED`, so a limit never ends the composing silent."""
-    import a5 as A5
-
-    n = len(A5.warm_todo(sets, mine))
-    if not a.compose_cache:
-        a.compose_cache = str(out / "compose-cache")
-        how = "one at a time" if a.jobs <= 1 else f"{a.jobs} at a time into {a.compose_cache}"
-        print(f"COMPOSE composing {n} templates {how}: no compose cache was given; run the warm first, or pass --jobs",
-              flush=True)
-    (out / COMPOSED).unlink(missing_ok=True)
-    A5.warm(a, sets, mine, a.jobs, a.audit_mem_gb, compose_rows(out / COMPOSED), min_free_gib=a.min_free_gb)
-
-
 def main(argv: list[str] | None = None) -> int:
     import a5 as A5
 
@@ -1292,6 +1276,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
+    p.add_argument("--lower", required=True, help="the door's `flock-lower-check`, which lowers each member's block (`a5.door_circuit`)")
     p.add_argument("--zk-server", required=True)
     p.add_argument("--gpus", type=A5.cards, help="as a5's --gpus: the proof server's cards, their indices comma-separated "
                    "(0,1), as nvidia-smi numbers them; default the CPU")

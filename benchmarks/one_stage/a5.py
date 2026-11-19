@@ -238,7 +238,7 @@ import a5_memo as AM  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, descriptor_chunks, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Session, Statement  # noqa: E402
@@ -252,6 +252,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     docket as R,
     verifier as V,
 )  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.commitments.periods import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
@@ -681,6 +682,17 @@ def circuit_of(path: Path, made: dict, read: set[Path]) -> FI.FlockCircuit:
     return FI.flock_circuit(path.read_bytes())
 
 
+def door_circuit(c: bytes, part: dict, k: int, st_dir: Path, lower: Path) -> tuple[Path, dict, FI.FlockCircuit]:
+    """Member ``k``'s circuit as the door derives it from C's bytes ``c`` and the partition ``part`` (`one_circuit.block`,
+    `.restrict`, `.lower` by ``lower``, `flock-lower-check`), the file Lean's `restrict` derives too, written under
+    ``st_dir``; `one_circuit.Refused` or `.NotDerived` where the door refuses the block."""
+    text = OC.lower(OC.restrict(c, part, OC.block(c, part, k)), part, lambda: lower)
+    circuit = st_dir / "circuit.txt"
+    circuit.write_bytes(text)
+    circ = FI.flock_circuit(text)
+    return circuit, {"pin": circ.pin, "class_sha512": circ.cls}, circ
+
+
 def held(path: Path, circ: FI.FlockCircuit, read: set[Path]) -> None:
     """The circuit at ``path`` is the one staging took off compose's line (``circ``: its META, pin and class), read whole once:
     ``read`` holds the circuits already read."""
@@ -915,6 +927,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     roots = {r["port"]: r for r in rec["roots"]}
     form = member_form(mine, rec)
     members, publics, checks, composed, programs_ok, kept, read, makes = [], {}, {}, {}, {}, {}, set(), {}
+    door = getattr(a, "door_lower", None)
+    c_bytes = b"".join(descriptor_chunks(program)) if door else b""
+    unlowered: dict[int, dict] = {}     # by member: the door's refusal to lower its block (`one_circuit.lower`)
     t_stage = time.time()
     for k, m in enumerate(mine.members):
         own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
@@ -928,7 +943,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         st_dir = out / f"m{k}"
         st_dir.mkdir(parents=True, exist_ok=True)
         t = time.time()
-        if m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
+        if door:
+            try:
+                circuit, made, circ = door_circuit(c_bytes, part, k, st_dir, door)
+            except (OC.Refused, OC.NotDerived) as e:
+                unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": f"{type(e).__name__}: {e}"[:600]}
+                print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
+                continue
+        elif m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
             circuit, made, circ = composed[m.template]
         elif own:
             circuit = st_dir / "circuit.txt"
@@ -1072,6 +1094,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         counts[m.template] = counts.get(m.template, 0) + sum(1 for u in local if m.base + u in drawn_units)
         if local:
             drawn.append((mm, local))
+    failed_drawn: dict[str, int] = {}     # a drawn unit of a block the door wouldn't lower: a failed proof, not resampled
+    for k, u in unlowered.items():
+        hit = sum(1 for x in D.proved(union_sample) if u["base"] <= x < u["base"] + u["n"])
+        if hit:
+            failed_drawn[u["template"]] = failed_drawn.get(u["template"], 0) + hit
+    summary.update(unlowered={str(k): u for k, u in unlowered.items()}, failed_drawn=failed_drawn)
     archived: dict = {}     # the window's files, archived once for every Lean verify (`a0.archive_put`)
     for mm in members:
         mm["st"]["archived"] = archived
@@ -1402,8 +1430,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary["negative_workers"] = workers.timing()
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and result.get("registered_reads", {"ok": True})["ok"] and all(summary["negatives"].values()) \
-        and all(c["ok"] for c in summary.get("challengers", {}).values())
-    shown = {x: summary.get(x) for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives")}
+        and all(c["ok"] for c in summary.get("challengers", {}).values()) and not failed_drawn
+    shown = {x: summary.get(x) for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives", "failed_drawn")}
     if "challengers" in summary:
         shown["challengers"] = {x: c["ok"] for x, c in summary["challengers"].items()}
     if "coins" in summary:
