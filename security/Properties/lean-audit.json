@@ -1003,6 +1003,13 @@
    "due": "2026-11-30"
   }
  },
+ "open_seed": {
+  "Properties.Flock.Circuit.Chain": {
+   "issue": "LEAN-335",
+   "due": "2026-12-18",
+   "owner": "@lean"
+  }
+ },
  "ids": {
   "Claims.ExpectedCR": "ecr/sha-512",
   "Claims.StrictBirthday": "cr/sha-512",

@@ -211,7 +211,6 @@
   "Proofs.Properties.Verity.Sampled.Charge",
   "Proofs.Properties.Verity.Sampled.CouplingAt",
   "Proofs.Properties.Verity.Sampled.CountsLayout",
-  "Proofs.Properties.Verity.Sampled.Event",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
@@ -345,7 +344,6 @@
   "Proofs.Flock.SpotFlock.RunsAs.Statements",
   "Proofs.Flock.SpotFlock.HeldOfReads",
   "Proofs.Flock.SpotFlock.ReadsCheck",
-  "Proofs.Properties.Verity.SampledTwo.MemberChecks",
   "Proofs.Properties.Verity.Sampled.Record.PartCong",
   "Proofs.Properties.Verity.Sampled.Record.PartSame",
   "Proofs.Properties.Verity.Sampled.Record.ReadsSame",
@@ -354,7 +352,6 @@
   "Proofs.Properties.Verity.SampledTwo.AtStmt",
   "Proofs.Properties.Verity.SampledTwo.DrawRoots",
   "Proofs.Flock.SpotFlock.HeldOfDesc",
-  "Proofs.Properties.Verity.SampledTwo.RoundsRise",
   "Proofs.Properties.Verity.SampledTwo.PrefixFixed",
   "Proofs.Properties.Verity.SampledTwo.SessionAsk",
   "Proofs.Properties.Verity.SampledTwo.SessionReplay",
@@ -452,7 +449,11 @@
   "Proofs.Properties.Verity.SampledTwo.FormRecords": "left out of the build (PRF-642) with `AddressFacts.RowOf`, which it needs: round 2 reads a registered-reads entry's own `reads`, which a file the session accepts never holds, while the session checks the reads `Registered.withPositions` derives from C; it is rebuilt when round 2 is blocks of C through the door",
   "Proofs.Properties.Verity.SampledTwo.FormRounds": "left out of the build (PRF-642) with `AddressFacts.RowOf`, which it needs: round 2 reads a registered-reads entry's own `reads`, which a file the session accepts never holds, while the session checks the reads `Registered.withPositions` derives from C; it is rebuilt when round 2 is blocks of C through the door",
   "Proofs.Properties.Verity.SampledTwo.FormVerdicts": "left out of the build (PRF-642) with `AddressFacts.RowOf`, which it needs: round 2 reads a registered-reads entry's own `reads`, which a file the session accepts never holds, while the session checks the reads `Registered.withPositions` derives from C; it is rebuilt when round 2 is blocks of C through the door",
-  "Proofs.Properties.Verity.SampledTwo.StmtsRound": "left out of the build (PRF-642) with `AddressFacts.RowOf`, which it needs: round 2 reads a registered-reads entry's own `reads`, which a file the session accepts never holds, while the session checks the reads `Registered.withPositions` derives from C; it is rebuilt when round 2 is blocks of C through the door"
+  "Proofs.Properties.Verity.SampledTwo.StmtsRound": "left out of the build (PRF-642) with `AddressFacts.RowOf`, which it needs: round 2 reads a registered-reads entry's own `reads`, which a file the session accepts never holds, while the session checks the reads `Registered.withPositions` derives from C; it is rebuilt when round 2 is blocks of C through the door",
+  "Proofs.Properties.Verity.SampledTwo.RoundsRise": "red until PRF-644 (owner proofs, due 2026-11-23): RoundsRise at line 780 reads the session statement's tags as the circuit statement's, which the template statement no longer is",
+  "Proofs.Properties.Verity.SampledTwo.MemberChecks": "red until PRF-644 (owner proofs, due 2026-11-23): MemberChecks.statement_circuit and its use at line 87 reads the session statement's tags as the circuit statement's, which the template statement no longer is",
+  "Proofs.Properties.Verity.Sampled.Record.Nums": "red until PRF-644 (owner proofs, due 2026-11-23): Record.Nums.stmtTags_sess reads the session statement's tags as the circuit statement's, which the template statement no longer is",
+  "Proofs.Properties.Verity.Sampled.Event": "red until PRF-644 (owner proofs, due 2026-11-23): Event.statement_zkTags reads the session statement's tags as the circuit statement's, which the template statement no longer is"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
