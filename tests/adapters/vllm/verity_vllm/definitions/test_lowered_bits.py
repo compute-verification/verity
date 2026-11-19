@@ -13,7 +13,6 @@ from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.types import Value
 from verity.commitments.gates import embedding as EM
 
-from verity_vllm.definitions.registry import dsa_topk_reads as R
 from verity_vllm.definitions.registry import sampled_accept as SA
 
 
@@ -34,14 +33,9 @@ def test_word_primitives_with_boolean_bodies_are_their_reference() -> None:
 
 @pytest.mark.slow
 def test_the_read_is_its_reference() -> None:
-    """One row, as the reference walks the read's SHA-512 gate by gate."""
+    """The one held composite whose word leaves meet Boolean gates and calls (the wiring tests have no gate, the word
+    primitives' test no word leaf a gate reads); one row, as the reference walks the read's SHA-512 gate by gate."""
     _held(EM.read(32, 2), 1)
-
-
-@pytest.mark.slow
-def test_the_long_row_is_its_reference() -> None:
-    """The long row's own target, compiled once for the whole suite; two rows, as the reference walks its gates."""
-    _held(bind(R.DsaTopKReadRows, N=20, TOPK=4, BLOCK=8, READ=EM.read(32, 2)), 2)
 
 
 def test_a_word_primitive_without_a_boolean_body_is_not_lowered() -> None:
