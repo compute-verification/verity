@@ -1994,7 +1994,7 @@ class Stream:
         many dockets without a final outcome as it may (`open`, `ready`), when it is late, when a window's `counts`
         aren't at least one instance for each of its templates and N in all, or a single proof block's stream is given any
         (`population`), when the rule's rate sampling design
-        samples none or more than N proof blocks or a stratified rate's strata don't apply (`rate`, `selection_sampling_design`, before
+        samples none or more than the program's proof blocks or a stratified rate's strata don't apply (`rate`, `selection_sampling_design`, before
         R1-R8) or a work rate's strata or work table don't apply (`rate`, `selection_table`, R1-R8 then reading its table),
         when either check fails, or, after both,
         when the sampling design is `bernoulli` at any p (`bernoulli`, `BERNOULLI`), when the program's proof blocks read stratum by stratum
@@ -2020,7 +2020,8 @@ class Stream:
                                                [P.template_id(t) for t in self.templates]}).verdict
             if v.ok:
                 try:
-                    sampling_design = selection_sampling_design(self.spec.selection, n, selection_sizes(self.spec.selection, program, self.query))
+                    sampling_design = selection_sampling_design(self.spec.selection, P.units(program, self.query),
+                                                                selection_sizes(self.spec.selection, program, self.query))
                 except Refused as r:
                     v = r.verdict
             if v.ok:

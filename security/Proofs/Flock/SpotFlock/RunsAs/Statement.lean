@@ -97,8 +97,8 @@ which the run does not read. -/
 structure HeldMatches (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) : Prop where
   first : ∃ n rule samplingDesign workTable resolved,
     Spot.nat? (Spot.getD i.record "population") = some n ∧
-    i.rule.over n (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
-    rule.samplingDesignOver n = .ok samplingDesign ∧
+    i.rule.over (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query).sum (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
+    rule.samplingDesignOver (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query).sum = .ok samplingDesign ∧
     i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
     Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
     h.reg.first = ⟨{ i.params.verifier with samplingDesign, workTable }, resolved, i.closure⟩

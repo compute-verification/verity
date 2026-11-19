@@ -106,20 +106,19 @@ def designCount : Core.SamplingDesign → Nat
   | .work k _ => k
   | .bernoulli _ => 0
 
-/-- **A level** as the auditor fixes it before any coin (`Verity.Level`): its name, and the design that draws its
-blocks, over their number; none where that design has no profile. -/
+/-- **A level** as the auditor fixes it before any coin (`Verity.Level`): its name, its registered partition's number
+of blocks, and the design that draws them; none where that design has no profile. -/
 structure Level where
   name : String
-  design : Nat → Option Core.SamplingDesign
+  size : Nat
+  design : Option Core.SamplingDesign
 
-/-- Level `l`'s entry in an accept's profile, and how many of its blocks are sampled: the commitment's record's
-`population` blocks under its `partition`, drawn under `l`'s design. None where the record names no population or the
-design has no profile. -/
+/-- Level `l`'s entry in an accept's profile, and how many of its blocks are sampled: its `size` blocks under the
+commitment's record's `partition`, drawn under `l`'s design. None where the design has no profile. -/
 def Level.entry (l : Level) (c : OneStage.Commitment) : Option (Core.Level × Nat) := do
-  let n ← nat? (getD c.record "population")
-  let draw ← l.design n
+  let draw ← l.design
   let partition := match getD c.record "partition" with | .str s => s | _ => ""
-  pure ({ name := l.name, query := some partition, size := n, draw := some draw }, designCount draw)
+  pure ({ name := l.name, query := some partition, size := l.size, draw := some draw }, designCount draw)
 
 /-- `o`'s accept with level `l`'s entry (`Level.entry`) before its profile's own levels, coarse to fine. -/
 def Level.atop (c : OneStage.Commitment) (l : Level) :
@@ -144,16 +143,17 @@ theorem Level.atop_accept {c : OneStage.Commitment} {l : Level}
   | reject s => simp [Level.atop] at h
   | undecided s => simp [Level.atop] at h
 
-/-- Two levels' coarse level: the replay blocks, at the first stage's sampling design as the run of record derives it
-(`Select.Rule.samplingDesignOver`, `Draw.derive`). -/
-def outer (p : SampledTwo.Params) : Level where
-  name := BOUNDARY_LEVEL
-  design n := do
-    let v := p.boundary.verifier
-    let rule ← p.rule.over n (Select.strataSizes v.program v.query)
-    let design ← (rule.samplingDesignOver n).toOption
-    let table ← (p.rule.tableOver v.program v.query v.workTable).toOption
-    Record.profileSample (← (Draw.derive v.program v.query design table).toOption)
+/-- Two levels' coarse level: the boundary program's replay blocks (`Select.strataSizes`), at the first stage's
+sampling design as the run of record derives it over them (`Select.Rule.samplingDesignOver`, `Draw.derive`). -/
+def outer (p : SampledTwo.Params) : Level :=
+  let v := p.boundary.verifier
+  let n := (Select.strataSizes v.program v.query).sum
+  { name := BOUNDARY_LEVEL, size := n
+    design := do
+      let rule ← p.rule.over n (Select.strataSizes v.program v.query)
+      let design ← (rule.samplingDesignOver n).toOption
+      let table ← (p.rule.tableOver v.program v.query v.workTable).toOption
+      Record.profileSample (← (Draw.derive v.program v.query design table).toOption) }
 
 /-- The refusal of an accept whose profile lists `got` levels where the parameters name `n`. -/
 def LEVELS_PROFILE (n got : Nat) : String :=
@@ -260,8 +260,8 @@ private def interiorProfile : Core.Integrity :=
   { programs := #[], prescribed := #[], linked := false, covered := #[], delta := ⟨1, 2⟩, drawn := #[("unit", 2)],
     levels := #[{ name := "unit", query := none, size := 4, draw := some (.subset 2) }] }
 private def twoLevelProfile : Core.Integrity :=
-  match Level.atop { record := Json.mkObj [("population", Json.num 6), ("partition", "p")], digest := ByteArray.empty }
-      { name := BOUNDARY_LEVEL, design := fun _ => some (.subset 3) } (.accept ⟨#[], #[], 0, none, true⟩ interiorProfile) with
+  match Level.atop { record := Json.mkObj [("partition", "p")], digest := ByteArray.empty }
+      { name := BOUNDARY_LEVEL, size := 6, design := some (.subset 3) } (.accept ⟨#[], #[], 0, none, true⟩ interiorProfile) with
   | .accept _ prof => prof
   | _ => interiorProfile
 #guard twoLevelProfile.levels.map (·.name) == #[BOUNDARY_LEVEL, "unit"]

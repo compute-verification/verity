@@ -74,13 +74,13 @@ def namesOf (v : Spot.Docket.Verifier) : Names :=
   ⟨(v.ports.map (·.1)).toList, (v.registered.map (·.1)).toList⟩
 
 /-- **The boundary registration the first stage samples on**, as `Run.run` hands it to `Select.select`: the verifier's
-copies with the sampling design the rule expands over the boundary record's population and the work table it expands, the resolved
+copies with the sampling design the rule expands over the boundary program's units and the work table it expands, the resolved
 rule (`Select.resolve`) and the closure map; none where any of them is refused. -/
 def firstOf (i : Spot.Run.Input) : Option Reg := do
   let v := i.params.verifier
   let n ← Spot.nat? (Spot.getD i.record "population")
-  let rule ← i.rule.over n (Spot.Select.strataSizes v.program v.query)
-  let samplingDesign ← (rule.samplingDesignOver n).toOption
+  let rule ← i.rule.over (Spot.Select.strataSizes v.program v.query).sum (Spot.Select.strataSizes v.program v.query)
+  let samplingDesign ← (rule.samplingDesignOver (Spot.Select.strataSizes v.program v.query).sum).toOption
   let workTable ← (i.rule.tableOver v.program v.query v.workTable).toOption
   let resolved ← (Spot.Select.resolve i.rule v.program v.query).toOption
   pure ⟨{ v with samplingDesign := samplingDesign, workTable := workTable }, resolved, i.closure⟩

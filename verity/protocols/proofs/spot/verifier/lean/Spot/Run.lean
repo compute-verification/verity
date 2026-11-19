@@ -4,10 +4,10 @@ whose selection rule `Select.Rule` reads: what the challenger holds once a deliv
 check the stream ran on it, in the stream's order.
 
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
-  the rule's rate over it and the program's strata (`Select.Rule.over`, `Select.strataSizes`: `rate`, a count of none or
-  more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate sampling design
+  the rule's rate over the program's units under the query (its strata's sizes' sum, which `Slots.popOk` holds the
+  population to) and its strata (`Select.Rule.over`, `Select.strataSizes`: `rate`, a count of none or more than the units) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate sampling design
   whose strata or table don't apply), then R1–R8 (`Docket.check`) against the challenger's copies under the sampling design the rule names over
-  that population (`Select.Rule.samplingDesignOver`, whatever sampling design the copies carry) and that work table, a `bernoulli` sampling
+  those units (`Select.Rule.samplingDesignOver`, whatever sampling design the copies carry) and that work table, a `bernoulli` sampling
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
@@ -377,8 +377,9 @@ def run (i : Input) : V Json := do
   if !pub.codes.isEmpty then return refused "register" pub.codes
   let some n := nat? (getD i.record "population") | return refused "register" #["population"]
   if n == 0 then return refused "register" #["population"]
-  let some rule := i.rule.over n (Select.strataSizes v.program v.query) | return refused "register" #["rate"]
-  let samplingDesign ← rule.samplingDesignOver n
+  let some rule := i.rule.over (Select.strataSizes v.program v.query).sum (Select.strataSizes v.program v.query)
+    | return refused "register" #["rate"]
+  let samplingDesign ← rule.samplingDesignOver (Select.strataSizes v.program v.query).sum
   let .ok workTable := i.rule.tableOver v.program v.query v.workTable | return refused "register" #["rate"]
   let v := { v with samplingDesign, workTable }
   let codes := Docket.check i.record v

@@ -90,8 +90,8 @@ theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j) :
     ∃ (n : ℕ) (rule : Spot.Select.Rule) (samplingDesign : Json) (workTable : Option Json) (resolved : Spot.Select.Rule)
         (draw : Json) (rest : Array ℕ) (read : ℕ),
       Spot.nat? (Spot.getD i.record "population") = some n ∧
-      i.rule.over n (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
-      rule.samplingDesignOver n = .ok samplingDesign ∧
+      i.rule.over (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query).sum (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
+      rule.samplingDesignOver (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query).sum = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
         .ok workTable ∧
       ¬(!(Spot.Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
@@ -273,8 +273,8 @@ theorem accepted_registered {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : J
     ∃ (n : ℕ) (rule : Spot.Select.Rule) (samplingDesign : Json) (workTable : Option Json) (resolved : Spot.Select.Rule)
         (draw : Json) (rest : Array ℕ) (read : ℕ) (ns : Array ℕ),
       Spot.nat? (Spot.getD i.record "population") = some n ∧
-      i.rule.over n (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
-      rule.samplingDesignOver n = .ok samplingDesign ∧
+      i.rule.over (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query).sum (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
+      rule.samplingDesignOver (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query).sum = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
         .ok workTable ∧
       (Spot.Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty = true ∧

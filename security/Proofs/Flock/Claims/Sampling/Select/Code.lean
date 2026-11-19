@@ -123,9 +123,10 @@ with its `draw` and `read` those of `Select.select` under `Select.resolve`'s rul
 theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
-    ∃ n rule samplingDesign workTable, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over n
+    ∃ n rule samplingDesign workTable, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over
+        (Select.strataSizes i.params.verifier.program i.params.verifier.query).sum
         (Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
-      rule.samplingDesignOver n = .ok samplingDesign ∧
+      rule.samplingDesignOver (Select.strataSizes i.params.verifier.program i.params.verifier.query).sum = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
       ¬(!(Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
       ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧

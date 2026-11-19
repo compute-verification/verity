@@ -83,9 +83,10 @@ listing that sample as its `draw` before whatever the second stage's audit adds.
 private theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
-    ∃ n rule samplingDesign workTable, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over n
+    ∃ n rule samplingDesign workTable, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over
+        (Select.strataSizes i.params.verifier.program i.params.verifier.query).sum
         (Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
-      rule.samplingDesignOver n = .ok samplingDesign ∧
+      rule.samplingDesignOver (Select.strataSizes i.params.verifier.program i.params.verifier.query).sum = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
       ¬(!(Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
       ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧
@@ -117,8 +118,8 @@ theorem run_sample {i : Spot.Run.Input} {run : Json} (h : Spot.Run.run i = .ok r
     (ha : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true) :
     ∃ n rule samplingDesign workTable derived resolved draw rest read,
       nat? (getD i.record "population") = some n ∧
-      i.rule.over n (Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
-      rule.samplingDesignOver n = .ok samplingDesign ∧
+      i.rule.over (Select.strataSizes i.params.verifier.program i.params.verifier.query).sum (Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
+      rule.samplingDesignOver (Select.strataSizes i.params.verifier.program i.params.verifier.query).sum = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
       Draw.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧
       Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
@@ -166,8 +167,8 @@ theorem accepted_secondSamplingDesign {p : Params} {c : OneStage.Commitment} {ξ
         .accept pub prof ∧
       ∃ j₁ n rule samplingDesign₁ workTable derived resolved draw rest read, readBack c.record = .ok j₁ ∧
         nat? (getD j₁ "population") = some n ∧
-        p.rule.over n (Select.strataSizes p.boundary.verifier.program p.boundary.verifier.query) = some rule ∧
-        rule.samplingDesignOver n = .ok samplingDesign₁ ∧
+        p.rule.over (Select.strataSizes p.boundary.verifier.program p.boundary.verifier.query).sum (Select.strataSizes p.boundary.verifier.program p.boundary.verifier.query) = some rule ∧
+        rule.samplingDesignOver (Select.strataSizes p.boundary.verifier.program p.boundary.verifier.query).sum = .ok samplingDesign₁ ∧
         p.rule.tableOver p.boundary.verifier.program p.boundary.verifier.query p.boundary.verifier.workTable =
           .ok workTable ∧
         Draw.derive p.boundary.verifier.program p.boundary.verifier.query samplingDesign₁ workTable = .ok derived ∧
