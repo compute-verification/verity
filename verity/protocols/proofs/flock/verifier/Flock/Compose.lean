@@ -27,12 +27,14 @@ inductive Body where
 
 /-- A block for the file: its unit `body`, whose input group is one 16-bit leaf per input word in `ins`' order and whose
 output group is one 16-bit leaf per output word in `outs`' order; `ins` are the input rows (name, length in bits), `outs`
-the output ports (name, u16 words). -/
+the output ports (name, u16 words); `programDigests`, META's `program_digests` when not empty: the template the units are
+instances of, by its descriptor id, which a template query's partition reads (`HmRow.circuitTemplate`). -/
 structure Block where
   name : String
   body : Body
   ins : Array (String × Nat)
   outs : Array (String × Nat)
+  programDigests : List (String × String) := []
   deriving Inhabited
 
 def SLOT_LOG : Nat := 18
@@ -221,7 +223,9 @@ def compose (b : Block) (programSha512 partitionDigest : String) : V ByteArray :
     ("dummy", Json.mkObj [("bc", Json.arr (bcs.map (str ∘ hexOf))), ("outputs", nats u.zero)]),
     ("leaf_scheme", Tags.leafSchemeHm96Os), ("mask_log", nat MASK_LOG),
     ("per_vu", Json.mkObj [("unit", nat 1), (SHA_NET, nat nSha), (HM_NET, nat nHm)]),
-    ("lookups", Json.mkObj []), ("wires", Json.arr wires), ("program_sha512", str programSha512),
+    ("lookups", Json.mkObj []), ("wires", Json.arr wires)] ++
+    (if b.programDigests.isEmpty then [] else [("program_digests", Json.mkObj (b.programDigests.map fun (k, v) => (k, str v)))]) ++
+    [("program_sha512", str programSha512),
     ("partition", Json.mkObj [("rule", str PARTITION_V1), ("digest", str partitionDigest)])] ++ u.extra)
   return (s!"{u.tags.fileFormat} {b.name}\nMETA {← canon mj}\n" ++ u.text ++ rowNets.get).toUTF8
 
