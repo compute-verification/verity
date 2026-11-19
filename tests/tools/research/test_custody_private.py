@@ -223,20 +223,20 @@ def test_a_runs_statement_refuses_its_names_and_its_private_directories(tmp_path
     secret = _write(priv, "secret.bin", b"s")
     _write(d, "out/schedule.jsonl", b"p")
     _write(d, "out/capture/a.bin", b"c")
-    _write(d, "out/draws.3.jsonl.gz", b"i")
+    _write(d, "out/coins.3.jsonl.gz", b"i")
     _write(d, "out/note/capture", b"a file, not a directory")
     (d / "out" / "held").symlink_to(secret)
-    _stated(d, [str(priv)], ["schedule.jsonl", "capture/", "draws.*.jsonl*"])
+    _stated(d, [str(priv)], ["schedule.jsonl", "capture/", "coins.*.jsonl*"])
     rep = CU.runner_publish(d, _custody_dir(tmp_path, FIXTURE_RID, vault), sleep=lambda s: None, tries=1)
     assert rep["preserved"], rep.get("error")
     err = capsys.readouterr().err
     assert ("custody REFUSED 4 private file(s), not uploaded and left on this machine: out/capture/a.bin (private-paths.json: name "
-            "capture/), out/draws.3.jsonl.gz (private-paths.json: name draws.*.jsonl*), out/held (private-paths.json: inside "
+            "capture/), out/coins.3.jsonl.gz (private-paths.json: name coins.*.jsonl*), out/held (private-paths.json: inside "
             + str(priv) + ") and 1 more") in err
     marker = json.loads((d / CU.MARKER).read_text())["refused"]
     assert {r["path"]: r["rule"] for r in marker} == {"out/capture/a.bin": "private-paths.json: name capture/",
                                                       "out/held": f"private-paths.json: inside {priv}",
-                                                      "out/draws.3.jsonl.gz": "private-paths.json: name draws.*.jsonl*",
+                                                      "out/coins.3.jsonl.gz": "private-paths.json: name coins.*.jsonl*",
                                                       "out/schedule.jsonl": "private-paths.json: name schedule.jsonl"}
     assert all("owner" not in r for r in marker), "a statement's rule has no lane owner"
     kept, _, _ = CU.choose(d)
