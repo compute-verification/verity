@@ -196,7 +196,9 @@ UNDECLARED: dict[str, tuple[Component, str, Mapping[str, Launch]]] = {c.name: (c
                channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                          Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
                needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)), "work",
-     {WORKERS: Launch(binds=("gate", "peer", "key-sha512"), optional=("main-file",), entry="served_table:pouw_entry")}),
+     {WORKERS: Launch(binds=("gate", "peer", "key-sha512"), optional=("main-file",), entry="served_table:pouw_entry",
+                      executables=(Executable("verity/protocols/resource_accounting/compute/pouw/verifier/lean/check",
+                                              "pouw-verifier-difftest"),))}),
 )}
 #: every component the served window's record has a row for: each undeclared one's, and each declared scheme's whose
 #: ``record`` names its row (a scheme with no row, an experimental one or a session's own, is no component here)

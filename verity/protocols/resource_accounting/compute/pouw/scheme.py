@@ -32,7 +32,8 @@ from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
 from verity.protocol import VERIFIER
-from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Launch, Order, Scheme, Term, register
+from verity.protocols.resource_accounting.scheme import (Block, Charge, Executable, Lacks, Launch, Order, Scheme, Term,
+                                                             register)
 
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
@@ -525,7 +526,10 @@ PEARL_PLUS = register(Scheme(
     depends=(),
     pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"), development="gate",
                               starts=("gate", "peer", "lane", "key-sha512", "main-file"),
-                              starts_optional=("lane", "main-file"))},
+                              starts_optional=("lane", "main-file"), entry="served_table:pearlplus_entry",
+                              executables=(Executable(
+                                  "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus",
+                                  "pouw-pearlplus"),))},
     answers=Lacks("has no piece that answers outside an exchange"),
     # until the salt and sample sessions' signature pin is in Lean
     unchecked={"coins-signatures-checked-by-the-auditor":
