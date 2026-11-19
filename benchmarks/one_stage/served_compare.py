@@ -66,8 +66,8 @@ def checkpoint_config(pred: Path) -> Path:
     kept = pred / CONFIG_COPY
     if kept.is_file():
         return kept
-    named = read_json(pred / "predicted.json").get("config")
-    if named and Path(named).is_file():
+    named = predicted(pred).config
+    if Path(named).is_file():
         return Path(named)
     raise ValueError(f"{pred} keeps no {CONFIG_COPY}, and its predicted.json names a checkpoint config that is not on this "
                      f"node ({named}): give --pred a dir that holds its predicted.json and, as {CONFIG_COPY}, the config "
@@ -146,9 +146,17 @@ def phi(fields: Mapping[str, Any], served: Mapping[str, Any], declared: Mapping[
             "templates": len(served["templates"]), "values": len(served["params"])}
 
 
+def predicted(pred: Path) -> Any:
+    """PRED's predicted row record (`verity_vllm.records.predicted_row`), refused (ValueError) where it is another schema's."""
+    from verity_vllm.records import predicted_row as PR
+
+    path = pred / PR.FILE
+    return PR.PredictedRow.of(read_json(path), str(path))
+
+
 def build(pred: Path, of_record: str) -> dict[str, Any]:
     """BUILD: PRED's predicted.json names the workload digest `of_record`."""
-    got = read_json(pred / "predicted.json").get("workload_digest")
+    got = predicted(pred).workload_digest
     return {"ok": got == of_record, "names": got, "of_record": of_record}
 
 

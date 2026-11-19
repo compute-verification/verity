@@ -1824,7 +1824,8 @@ rc=$?
   || { say "PREDICT-ROW $ROW_ID refused $(failed "$rc" "$LOGS/predict_row.err")"; stop predict 17; }
 cp "$PRED/predicted.json" "$OUT/"
 say "PREDICT-ROW $ROW_ID: $(cut -c1-600 "$OUT/predict_row.json")"
-CONFIG=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["config"])' "$PRED/predicted.json")
+CONFIG=$("$PY" -c 'import json, sys; from verity_vllm.records.predicted_row import PredictedRow; print(PredictedRow.of(json.load(open(sys.argv[1])), sys.argv[1]).config)' "$PRED/predicted.json" 2> "$LOGS/predicted_row.err") \
+  || { say "PREDICT-ROW $ROW_ID: its predicted.json is not predict row's record $(failed 1 "$LOGS/predicted_row.err")"; stop predict 17; }
 # the config the Build was predicted from, kept beside it for the served compare (served_compare.py's CONFIG_COPY): the
 # path predicted.json names is in this run's tree, which a run's own clone takes with it, and a kept serve dir is
 # compared again after that
@@ -1858,9 +1859,10 @@ seal() {
 import json, os, sys
 from pathlib import Path
 from verity_vllm.pipeline import deferred_rows as DR
+from verity_vllm.records import predicted_row as PR
 d, pred, held = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
-predicted = json.loads((pred / "predicted.json").read_text())
-b_of_record = predicted["compiler"]["digest"]
+predicted = PR.PredictedRow.of(json.loads((pred / PR.FILE).read_text()), str(pred / PR.FILE))
+b_of_record = predicted.compiler["digest"]
 serve = json.loads((d / "serve.json").read_text())
 seals = [json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if x.strip()] if (d / "seals.jsonl").exists() else []
 sealed_ok = bound_ok = bool(seals)
@@ -1905,7 +1907,7 @@ os.umask(0o077)
 held.write_text("".join(x + "\n" for x in lines))
 print(f"SEALED: every closed window's row dir committed under rows-sha512 (committer {', '.join(sorted(committers)) or 'none'}) "
       f"and its replay bundle opened: {'PASS' if sealed_ok else 'FAIL'}")
-print(f"B-OF-RECORD: every sealed record binds predict row's compiler ({predicted['compiler']['name']}, "
+print(f"B-OF-RECORD: every sealed record binds predict row's compiler ({predicted.compiler['name']}, "
       f"{b_of_record[:16]}…): {'PASS' if bound_ok else 'FAIL'}")
 print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} (scheme {serve.get('scheme')}, precision {serve.get('precision')}"
       + (f"; {'; '.join(sorted(why))}" if why else "") + "; each window's lines in the serve dir's private/seal.txt)")

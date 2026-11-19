@@ -50,6 +50,7 @@ import itertools
 import json
 import os
 import re
+import runpy
 import shlex
 import shutil
 import signal
@@ -4639,15 +4640,15 @@ def test_under_pouw_pearlplus_the_challenger_peer_takes_its_default_only_where_t
 
 
 @pytest.mark.parametrize("there", [True, False])
-def test_the_run_keeps_the_builds_checkpoint_config_beside_its_predicted_json(tmp_path, there):
+def test_the_run_keeps_the_builds_checkpoint_config_beside_its_predicted_json(tmp_path, there, predicted_row):
     """`predict row`'s predicted.json names its checkpoint config where the run's tree has it, and a run's own clone goes
     when it ends. So step 0 copies the config beside predicted.json (served_compare.py's CONFIG_COPY), where the served
     compare reads it, on this run and on a kept serve dir afterwards; a config it can't copy stops the run there. Here
-    `predict row` writes a predicted.json naming CONFIG_NAMED, and `predict compare` then fails."""
+    `predict row` writes its record naming the config, and `predict compare` then fails."""
     venv = tmp_path / "toy-venv" / "bin"
     _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n'
                              'if [ "$1 $2 $3 $4" = "-m verity_vllm.pipeline.cli predict row" ]; then\n'
-                             '  mkdir -p "$8" && printf \'{"config": "%s"}\' "$CONFIG_NAMED" > "$8/predicted.json"; echo "{}"; exit 0\n'
+                             '  mkdir -p "$8" && cp "$PREDICTED_DOC" "$8/predicted.json"; echo "{}"; exit 0\n'
                              'fi\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && exit 9\n'
                              f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
     (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
@@ -4656,7 +4657,8 @@ def test_the_run_keeps_the_builds_checkpoint_config_beside_its_predicted_json(tm
     if there:
         named.parent.mkdir()
         named.write_text('{"hidden_size": 2048}')
-    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", CONFIG_NAMED=str(named),
+    doc = predicted_row(tmp_path / "doc", config=str(named)) / "predicted.json"
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", PREDICTED_DOC=str(doc),
                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}")
     kept = tmp_path / "serve" / "predicted" / "checkpoint_config.json"
     if there:
@@ -4667,6 +4669,54 @@ def test_the_run_keeps_the_builds_checkpoint_config_beside_its_predicted_json(tm
             f"PREDICT-ROW row: its checkpoint config {named} can't be kept beside predicted.json, where the served "
             "compare reads it", "STOP at predict (exit 17)"], lines
         assert not kept.exists()
+
+
+def _seal_body() -> str:
+    """served_verdicts.sh's seal step, the Python it runs over the serve dir."""
+    text = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    start = text.index("<<'EOF'", text.index("\nseal() {"))
+    return text[text.index("\n", start) + 1:text.index("\nEOF\n", start)]
+
+
+@pytest.mark.parametrize("binds, ok", [("of-record", True), ("another", False), ("v1", None)])
+def test_b_of_record_holds_each_sealed_record_to_predict_rows_compiler(tmp_path, monkeypatch, capsys, predicted_row,
+                                                                      binds, ok):
+    """B-OF-RECORD reads the compiler from predict row's record in a Build dir with no manifest and holds each sealed
+    window's record (`served_window.compiler`) to it; a predicted.json of the record's first version is refused, naming
+    its schema. The bundle's opening (`deferred_rows.of_record`) stands in: vllm's seal tests cover what it binds."""
+    from types import SimpleNamespace
+
+    from verity_vllm.pipeline import deferred_rows as DR
+
+    pred = predicted_row(tmp_path / "predicted")
+    if binds == "v1":
+        (pred / "predicted.json").write_text(json.dumps({"schema": "verity-vllm/predicted-row/v1", "program_digest": "ab" * 64,
+                                                         "manifest_digest": "cd" * 64}))
+    bound = predicted_row.compiler | ({"digest": "c1" * 64} if binds == "another" else {})
+    (d := tmp_path / "serve").mkdir()
+    (d / "serve.json").write_text(json.dumps({"scheme": "rows-sha512", "precision": "int8_exact"}))
+    (d / "seals.jsonl").write_text(json.dumps({"window": 0}) + "\n")
+    (c := d / "windows" / "w0" / "commit").mkdir(parents=True)
+    (c / "verdict.json").write_text(json.dumps({"commit_scheme": "rows-sha512", "run_root": "ee" * 64,
+                                                "replay_deferred": {"bundles": [{"path": "b"}]}}))
+    (c / "runs.jsonl").write_text(json.dumps({"commit": {"commit_scheme": "rows-sha512", "committer": "x"}}) + "\n")
+    (d / "private").mkdir()
+    monkeypatch.setattr(DR, "of_record", lambda path, where: SimpleNamespace(
+        bundle={"manifest_sha256": "0" * 64, "manifest": {"files": []}}, commitment="rows-sha512",
+        ctx={"served_window": {"compiler": bound}}))
+    monkeypatch.setattr(sys, "argv", ["-", str(d), str(pred), str(d / "private" / "seal.txt")])
+    (seal := tmp_path / "seal.py").write_text(_seal_body())
+    if ok is None:
+        with pytest.raises(ValueError, match="schema"):
+            runpy.run_path(str(seal), run_name="__main__")
+        return
+    with pytest.raises(SystemExit) as e:
+        runpy.run_path(str(seal), run_name="__main__")
+    out = capsys.readouterr().out.splitlines()
+    assert e.value.code == (0 if ok else 1) and out[1] == (
+        f"B-OF-RECORD: every sealed record binds predict row's compiler ({predicted_row.compiler['name']}, "
+        f"{predicted_row.compiler['digest'][:16]}…): {'PASS' if ok else 'FAIL'}"), out
+    assert ("binds another compiler than predict row's" in out[2]) is not ok
 
 
 @pytest.mark.parametrize("extra, refused", [

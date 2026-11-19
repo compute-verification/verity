@@ -105,11 +105,22 @@ def test_cut_takes_ws_b_rows_of_the_weights_the_cuts_calls_read_and_no_other_val
     assert v["values"] == len(w["registered"])
 
 
-def test_build_holds_pred_to_the_rows_build_of_record(tmp_path):
-    """BUILD: predict row's predicted.json names the row's Build of record, its workload digest."""
-    (tmp_path / "predicted.json").write_text(json.dumps({"workload_digest": WORKLOAD}))
-    assert SC.build(tmp_path, WORKLOAD)["ok"] is True
-    assert SC.build(tmp_path, "ef" * 64) == {"ok": False, "names": WORKLOAD, "of_record": "ef" * 64}
+def test_build_holds_pred_to_the_rows_build_of_record(tmp_path, predicted_row):
+    """BUILD: predict row's record in a Build dir with no manifest names the row's Build of record, its workload digest."""
+    pred = predicted_row(tmp_path / "predicted", workload_digest=WORKLOAD)
+    assert not (pred / "manifest.json").exists()
+    assert SC.build(pred, WORKLOAD)["ok"] is True
+    assert SC.build(pred, "ef" * 64) == {"ok": False, "names": WORKLOAD, "of_record": "ef" * 64}
+
+
+def test_build_refuses_a_predicted_json_that_is_not_predict_rows_record(tmp_path, capsys):
+    """A predicted.json of the record's first version (a Program digest and a manifest digest, no compiler) is no Build
+    of record: BUILD fails naming the schema, and no field of it is read."""
+    (pred := tmp_path / "predicted").mkdir()
+    (pred / "predicted.json").write_text(json.dumps({"schema": "verity-vllm/predicted-row/v1", "program_digest": WORKLOAD,
+                                                     "manifest_digest": "cd" * 64, "workload_digest": WORKLOAD}))
+    with pytest.raises(ValueError, match="schema"):
+        SC.build(pred, WORKLOAD)
 
 
 @pytest.mark.parametrize("differs", [None, "revision", "circuit"])
@@ -150,12 +161,12 @@ def test_at_revision_takes_a_revision_the_manifests_pin_of_the_rows_model_and_re
         SC.at_revision(row, "ab" * 20)
 
 
-def test_the_compare_takes_its_revision_and_its_lines_name_both(tmp_path, monkeypatch, capsys):
+def test_the_compare_takes_its_revision_and_its_lines_name_both(tmp_path, monkeypatch, predicted_row, capsys):
     """--revision reaches the lowering; PHI's line names the revision served, the one compared and the row's own, and the
     last line, the one the record names, says the serve is at another revision than the row's workload declares."""
     revisions: list = []
     fields = {**FIELDS, "revision": ["r2" * 6, "r2" * 6], "row_revision": "r1" * 6}
-    rc, out = _main(tmp_path, monkeypatch, revision="r2" * 6, revisions=revisions, fields=fields)
+    rc, out = _main(tmp_path, monkeypatch, predicted_row, revision="r2" * 6, revisions=revisions, fields=fields)
     lines = capsys.readouterr().out.splitlines()
     assert rc == 0 and revisions == ["r2" * 6], lines
     assert lines[0].endswith(f"; revision served {'r2' * 6}…, compared with {'r2' * 6}…, the row's workload declaring "
@@ -165,7 +176,7 @@ def test_the_compare_takes_its_revision_and_its_lines_name_both(tmp_path, monkey
         f"declares {'r1' * 6}…: PHI, BUILD and CUT PASS; B-OF-RECORD is the seal's)")
 
 
-def _main(tmp_path: Path, monkeypatch, declared: str = "ee" * 64, config: bool = True,
+def _main(tmp_path: Path, monkeypatch, predicted_row, declared: str = "ee" * 64, config: bool = True,
           written: tuple[dict, dict] | None = None, kept: str | None = None,
           lowered: list[str] | None = None, revision: str | None = None, revisions: list | None = None,
           fields: dict | None = None) -> tuple[int, Path]:
@@ -186,14 +197,13 @@ def _main(tmp_path: Path, monkeypatch, declared: str = "ee" * 64, config: bool =
     monkeypatch.setattr(SC, "lowered_facts", lowered_facts)
     (serve := tmp_path / "serve").mkdir()
     (serve / "serve.json").write_text(json.dumps({"model": "m", "revision": "r"}))
-    (pred := tmp_path / "predicted").mkdir()
     cfg = tmp_path / "tree" / "config.json"
+    pred = predicted_row(tmp_path / "predicted", workload_digest=WORKLOAD, config=str(cfg))
     if config:
         cfg.parent.mkdir()
         cfg.write_text("{}")
     if kept is not None:
         (pred / SC.CONFIG_COPY).write_text(kept)
-    (pred / "predicted.json").write_text(json.dumps({"workload_digest": WORKLOAD, "config": str(cfg)}))
     (w := serve / "pearlplus" / "w7" / "registration.json").parent.mkdir(parents=True)
     w.write_text(_w(tmp_path, "exact").read_text() if written is None else json.dumps(written[0]))
     out = tmp_path / "out"
@@ -203,10 +213,10 @@ def _main(tmp_path: Path, monkeypatch, declared: str = "ee" * 64, config: bool =
     return rc, out
 
 
-def test_the_compare_says_each_verdict_and_ends_on_the_line_the_record_names(tmp_path, monkeypatch, capsys):
+def test_the_compare_says_each_verdict_and_ends_on_the_line_the_record_names(tmp_path, monkeypatch, predicted_row, capsys):
     """Each verdict's line, then the SERVED-COMPARE line the record names, kept in served_compare.json beside the two
     circuits' facts."""
-    rc, out = _main(tmp_path, monkeypatch)
+    rc, out = _main(tmp_path, monkeypatch, predicted_row)
     lines = capsys.readouterr().out.splitlines()
     assert rc == 0 and [x.split(":")[0] for x in lines] == ["PHI", "BUILD", "CUT", "SERVED-COMPARE"]
     assert all(x.endswith(": PASS") for x in lines[:3]), lines
@@ -216,10 +226,10 @@ def test_the_compare_says_each_verdict_and_ends_on_the_line_the_record_names(tmp
     assert json.loads((out / "circuit_facts.json").read_text()) == {"served": _facts(), "declared": _facts()}
 
 
-def test_the_compare_passes_cut_on_w_as_its_writer_writes_it(tmp_path, monkeypatch, capsys):
+def test_the_compare_passes_cut_on_w_as_its_writer_writes_it(tmp_path, monkeypatch, predicted_row, capsys):
     """The compare as the harness runs it, on W as `pearl_c.window.record` writes it today for a circuit cut at its pass's
     calls: CUT passes and says how many of W's values are weights' B rows, which the circuit never reads."""
-    rc, _out = _main(tmp_path, monkeypatch, written=_written())
+    rc, _out = _main(tmp_path, monkeypatch, predicted_row, written=_written())
     lines = capsys.readouterr().out.splitlines()
     assert rc == 0, lines
     assert lines[2].endswith(" registers 11 values and the circuit reads 8 Pearl+ values; 3 more are weights' B rows, which "
@@ -227,10 +237,10 @@ def test_the_compare_passes_cut_on_w_as_its_writer_writes_it(tmp_path, monkeypat
                              f"{SCHEME}, word bits [32]): PASS"), lines
 
 
-def test_a_circuit_the_row_lowers_otherwise_is_not_equal_and_cut_holds_w_to_the_served_one(tmp_path, monkeypatch,
+def test_a_circuit_the_row_lowers_otherwise_is_not_equal_and_cut_holds_w_to_the_served_one(tmp_path, monkeypatch, predicted_row,
                                                                                             capsys):
     """A row whose declared φ lowers another circuit fails PHI, and CUT still holds W to the circuit the serve lowers."""
-    rc, _out = _main(tmp_path, monkeypatch, declared="ff" * 64)
+    rc, _out = _main(tmp_path, monkeypatch, predicted_row, declared="ff" * 64)
     lines = capsys.readouterr().out.splitlines()
     assert rc == 1 and "is not row row-1's declared φ, differing in circuit (" in lines[0], lines
     assert lines[0].endswith(": FAIL") and lines[2].endswith(": PASS"), lines
@@ -239,13 +249,13 @@ def test_a_circuit_the_row_lowers_otherwise_is_not_equal_and_cut_holds_w_to_the_
 
 @pytest.mark.parametrize("config", [False, True])
 def test_a_kept_serve_dir_is_compared_again_from_its_copy_of_the_config_once_the_serving_tree_is_gone(
-        tmp_path, monkeypatch, capsys, config):
+        tmp_path, monkeypatch, predicted_row, capsys, config):
     """predicted.json names its checkpoint config inside the serving run's tree, which goes when the run ends. A serve dir
     kept after that is compared again from the copy its Build's dir keeps (`CONFIG_COPY`): the lowering reads the copy,
     every verdict passes and PHI's keeps the copy's SHA-256. Where the named path is still a file, in a tree that may
     have moved on since, the copy is read all the same."""
     lowered: list[str] = []
-    rc, out = _main(tmp_path, monkeypatch, config=config, kept='{"hidden_size": 2048}', lowered=lowered)
+    rc, out = _main(tmp_path, monkeypatch, predicted_row, config=config, kept='{"hidden_size": 2048}', lowered=lowered)
     lines = capsys.readouterr().out.splitlines()
     assert (tmp_path / "tree").exists() is config
     assert rc == 0 and all(x.endswith(": PASS") for x in lines[:3]) and lines[-1].startswith("SERVED-COMPARE: EQUAL"), lines
@@ -255,16 +265,16 @@ def test_a_kept_serve_dir_is_compared_again_from_its_copy_of_the_config_once_the
         "file": str(copy), "sha256": hashlib.sha256(b'{"hidden_size": 2048}').hexdigest()}
 
 
-def test_a_build_with_no_copy_is_lowered_at_the_config_its_predicted_json_names(tmp_path, monkeypatch, capsys):
+def test_a_build_with_no_copy_is_lowered_at_the_config_its_predicted_json_names(tmp_path, monkeypatch, predicted_row, capsys):
     lowered: list[str] = []
-    rc, _out = _main(tmp_path, monkeypatch, lowered=lowered)
+    rc, _out = _main(tmp_path, monkeypatch, predicted_row, lowered=lowered)
     assert rc == 0 and lowered == [str(tmp_path / "tree" / "config.json")], capsys.readouterr().out
 
 
-def test_a_pred_with_no_copy_naming_no_config_here_fails_phi_and_cut_naming_why(tmp_path, monkeypatch, capsys):
+def test_a_pred_with_no_copy_naming_no_config_here_fails_phi_and_cut_naming_why(tmp_path, monkeypatch, predicted_row, capsys):
     """A Build's dir that keeps no copy of its checkpoint config and whose predicted.json names one that isn't on this
     node lowers nothing: PHI says so, naming both and what to give, and CUT has no circuit to hold W to."""
-    rc, _out = _main(tmp_path, monkeypatch, config=False)
+    rc, _out = _main(tmp_path, monkeypatch, predicted_row, config=False)
     lines = capsys.readouterr().out.splitlines()
     pred = tmp_path / "predicted"
     assert rc == 1 and lines[0] == (

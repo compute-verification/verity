@@ -291,7 +291,7 @@ STUB_PY = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$ARGV_LOG"
 case "$*" in
   "-c "*) echo 0123456789abcdef ;;
-  *" serve-openai "*) echo "SERVE-OPENAI listening on 127.0.0.1"; exec tail -f /dev/null ;;
+  *" serve-openai "*) printf '%s\\0' "$@" > "$ARGV_LOG.serve"; echo "SERVE-OPENAI listening on 127.0.0.1"; exec tail -f /dev/null ;;
   *serve_load.py*) echo "[serve-load] fixed: 4/4 ok, prompts 32…32 tokens" ;;
   *"served_overhead.py metrics"*) echo '{}' ;;
 esac
@@ -317,6 +317,20 @@ def _stock(tmp_path: Path, *args: str, **env: str) -> tuple[subprocess.Completed
 def _argv(lines: list[str], what: str) -> list[str]:
     (line,) = [x for x in lines if what in x]
     return line.split()
+
+
+def test_served_stock_sh_serves_under_predict_rows_record_in_a_build_with_no_manifest(tmp_path, predicted_row):
+    """serve-openai takes the argv served_stock.sh launches it with, and its row check (`serve_row.row_refusal`) passes on
+    a Build dir holding predict row's record and no manifest."""
+    from verity_vllm.pipeline import cli, serve_row
+
+    pred = predicted_row(tmp_path / "predicted")
+    p, _ = _stock(tmp_path, "reps", PRED=str(pred))
+    assert p.returncode == 0, p.stdout + p.stderr
+    argv = (tmp_path / "argv.log.serve").read_text().split("\0")[:-1]
+    opts = cli.parse("serve-openai", argv[argv.index("serve-openai") + 1:], environ={})
+    assert opts.row_build == str(pred) and serve_row.row_refusal(opts.row_build, predicted_row.compiler) is None
+    assert "not this tree's" in serve_row.row_refusal(opts.row_build, predicted_row.compiler | {"digest": "c1" * 64})
 
 
 def test_served_stock_sh_with_fixed_serves_the_records_fixed_load_and_window_steps(tmp_path):
