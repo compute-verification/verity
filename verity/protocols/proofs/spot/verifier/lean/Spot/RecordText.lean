@@ -283,11 +283,17 @@ def NO_REGISTERED : Json :=
   Json.mkObj [("params", Json.mkObj []), ("tables", Json.arr #[]), ("reads", Json.arr #[]), ("roots", Json.arr #[]),
     ("openings", Json.arr #[])]
 
-/-- Whether `reg` is an object of `registered`'s keys: the five of `REGISTERED`, and any of `values`, `histories` and
-`formats` beside them. -/
+/-- The keys `registered` may hold beside the five of `REGISTERED`. -/
+def OPTIONAL : List String := ["values", "histories", "formats", "nodes"]
+
+/-- Every selection of `ks`, in order. -/
+def choices : List String → List (List String)
+  | [] => [[]]
+  | k :: ks => (choices ks).flatMap fun c => [c, k :: c]
+
+/-- Whether `reg` is an object of `registered`'s keys: the five of `REGISTERED`, and any of `OPTIONAL` beside them. -/
 def registeredKeys (reg : Json) : Bool :=
-  [[], ["values"], ["histories"], ["formats"], ["values", "histories"], ["values", "formats"], ["histories", "formats"],
-    ["values", "histories", "formats"]].any fun more => keyed reg (more ++ REGISTERED)
+  (choices OPTIONAL).any fun more => keyed reg (more ++ REGISTERED)
 
 /-- The text's row formats, its `registered.formats`: `null` where it states none. -/
 def formatsOf (doc : Json) : Json := valueAt (valueAt doc "registered") "formats"
@@ -335,6 +341,45 @@ def historiesOf (reg : Json) : Option (List String) :=
       if keyed h HISTORY || keyed h ("capacity" :: HISTORY) then stringAt h "name" else none
     | .ok _ => none
   names.filter fun ns => ns.eraseDups.length == ns.length && ns.all fun n => !(namesOf reg).contains n
+
+/-- What the record declares a root input node to hold: registered parameter `param`'s 16-bit leaves from leaf
+`offset` on, or table `name`'s root (`root`), else its domain id. -/
+inductive NodeFill where
+  | param (param : String) (offset : Nat)
+  | table (name : String) (root : Bool)
+  deriving BEq, Inhabited, Repr
+
+/-- A declaration of root input node `node` (its index in the root's body). -/
+structure NodeDecl where
+  node : Nat
+  fill : NodeFill
+  deriving Inhabited, Repr
+
+def NODE_PARAM : List String := ["node", "param", "offset"]
+def NODE_TABLE : List String := ["node", "table", "of"]
+
+/-- **The record's root input nodes**, its `registered.nodes`, `{node, param, offset}` or `{node, table, of}` each,
+`of` `root` or `domain`: none where it states none. Refused (`nodes`) where an entry is of neither shape, or two
+declare one node. Whether each is an input node, and what it names exists, is the check's to hold. -/
+def nodesOf (doc : Json) : Except String (List NodeDecl) := do
+  let ns ← match valueAt (valueAt doc "registered") "nodes" with
+    | .null => pure #[]
+    | .arr ns => pure ns
+    | _ => throw "nodes"
+  let ds ← ns.toList.mapM fun n => do
+    let some node := nat? (valueAt n "node") | throw "nodes"
+    if keyed n NODE_PARAM then
+      match stringAt n "param", nat? (valueAt n "offset") with
+      | some p, some o => pure { node, fill := .param p o }
+      | _, _ => throw "nodes"
+    else if keyed n NODE_TABLE then
+      match stringAt n "table", stringAt n "of" with
+      | some t, some "root" => pure { node, fill := .table t true }
+      | some t, some "domain" => pure { node, fill := .table t false }
+      | _, _ => throw "nodes"
+    else throw "nodes"
+  if (ds.map (·.node)).eraseDups.length != ds.length then throw "nodes"
+  return ds
 
 /-- The record's declarations of what fills its units' rows, each refused (`inputs`) unless it is well formed for
 the templates `ts` and the cuts of `W`, and unless no two declarations, the wires of `W` among them, fill one row.
@@ -574,6 +619,16 @@ def Inputs.declares (x : Inputs) : Fill → Option Declared
 /-- What the declarations `x` declare the row `r` to hold: `declares` of what fills it (`fillAt`). -/
 def Inputs.declared (x : Inputs) (r : Row) : Option Declared := (fillAt x.decls r).bind x.declares
 
+/-- What the declarations `x` declare the row `r` to hold, where it is a registered read or a table read, with the bit
+of it the row starts at: a read's source leaf, 16 bits a leaf; a table read's 0. None for every other row: an
+opening's ports are its own unit's, never one value two rows share. -/
+def Inputs.declaredAt (x : Inputs) (r : Row) : Option (Declared × Nat) :=
+  (x.decls.find? fun d => (d.w.indexOf r.tid r.unit r.port r.row).isSome).bind fun d =>
+    match d.fill, d.w.indexOf r.tid r.unit r.port r.row, x.declares d.fill with
+    | .read _, some i, some dd => if 0 ≤ d.w.writerAt i then some (dd, 16 * (d.w.writerAt i).toNat) else none
+    | .table _ _, _, some dd => some (dd, 0)
+    | _, _, _ => none
+
 /-- **A unit's block, of the record's text**: the slot of template `tid`'s unit `u`, by the Program's templates
 (`templatesOf`) and the text's inference entries (`gridsOf`); none where either refuses, or the record has no such
 unit. -/
@@ -615,6 +670,16 @@ def declared (P : Prog) (doc : Json) (r : Row) : Option Declared :=
   match templatesOf P doc, wiring P doc with
   | .ok ts, .ok W => match inputsOf ts W doc with
     | .ok x => x.declared r
+    | .error _ => none
+  | _, _ => none
+
+/-- **What the record's text declares a row to hold, and where**: `declared`'s registered read or table read of the
+row `r`, with the bit of it the row starts at (`Inputs.declaredAt`); none for every other row, and where one of the
+readers refuses. -/
+def declaredAt (P : Prog) (doc : Json) (r : Row) : Option (Declared × Nat) :=
+  match templatesOf P doc, wiring P doc with
+  | .ok ts, .ok W => match inputsOf ts W doc with
+    | .ok x => x.declaredAt r
     | .error _ => none
   | _, _ => none
 

@@ -53,8 +53,9 @@ record first, and the digest of the run's own record. `params` is not read.
    calls a composite keyed as an input id (`RecordText.keyedAsInput`); or a template's parameter is not whole
    16-bit words, an output has no bit, or two of its ports share a name. A template's rows are its Definition's
    parameters, one row a parameter, and its outputs the fields of its return type (`RecordText.templatesOf`).
-7. `own-rows`: the root hands some unit a row that is not input gates of its own (`ownRows`, "Rows of its own"
-   below).
+7. `nodes`, `own-rows`: the record's root input nodes (`registered.nodes`) are malformed or one is declared twice
+   (`RecordText.nodesOf`); else the root hands some unit a row that is not input gates of its own, but of an input
+   node the record declares (`ownRows`, "Rows of its own" below).
 8. `wires`: the record's wiring is refused (`RecordText.wiring`: the text's cuts as SPOT's reader reads them, and
    the wires the Program's root states, `Spot.Edges.edgesOf`), or SPOT's check refuses it (`Spot.Wires.check`).
 9. `leaf-widths`: some wire's row holds bits its writer's output lacks; or a leaf of some wire's writer does not lie
@@ -65,6 +66,8 @@ record first, and the digest of the run's own record. `params` is not read.
 11. `formats`: a registered parameter's leaf width (`RecordText.widthOf`: its format's, 16 without one) is not the one
     the registration log registers it in, or the run's own record registers it under another root than it commits or
     in other than its bits (`formatsHeld`, "Formats" below). So a record with no `formats` key can be refused here.
+    `nodes`: a root input node the record declares, or a row that reads one, is not as `nodesHeld` holds it ("Rows
+    of its own" below).
 12. `blocks`: the record's inference entries do not tile every template's units, each with one slot digit of the
     class's radix (`RecordText.gridsOf`).
 13. `reader-layout`, then `reader-roles` (`rolesOf`, "The layout" below): a pinned template that an opening or a table
@@ -84,6 +87,14 @@ every argument of a root node that is no input node is runs of leaves of the roo
 argument over its members, and no two runs share a leaf. A leaf of an input node is one gate, and a batch that maps
 an argument hands each member its own stretch of it, so every unit's every row is then input gates no other row has.
 A root of any other form is refused: the form reads no row it cannot show to be the unit's own.
+
+An input node handed to many rows (a weight every unit of a scan reads, a table's root) is one value, and the record
+declares it once, of the node (`registered.nodes`): a registered parameter's leaves from a 16-bit leaf on, or a
+table's root or domain id. Every row that reads it then has the node's declaration at the row's own position, and
+`ownRows` passes over its parts as it passes over an edge. The stage `nodes` (`nodesHeld`) holds each such node to be
+θ, and each row that reads it to be declared by the record as a read of that parameter whose source is the node's
+leaf the row starts at, or as that table's read, so no two rows that share a gate are declared two ways. A node the
+record does not declare keeps the rule above; so do an opening's ports, a unit's own.
 
 ## Wires whole
 
@@ -338,13 +349,21 @@ def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
     closed := defn.params.toList.zipIdx.filterMap fun ((name, ty), i) =>
       if Widths.homo ty == some 1 && !on.contains i then some name else none }
 
+/-- Whether part `q` is an affine or strided part over a root node of `declared`. -/
+def overDeclared (declared : List Nat) : Part → Bool
+  | .affine false i _ _ | .strided false i _ _ _ _ _ => declared.contains i
+  | _ => false
+
 /-- **Every unit's rows are its own input gates** (the module docstring's "Rows of its own"), read from the root's
 body: every part of an argument of a root node that is no input node, but a part reading another such node's outputs
 (a grid, in every lane; an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is runs of leaves of the root's input nodes (affine
 parts and no other; an input node a primitive or a batch of one, a leaf a gate), a batch maps every argument over its
-members (each has the `dims` resolution reads a member's leaves by), and no two runs, of one argument or of two,
-share a leaf. It costs the root's argument parts, sorted. -/
-def ownRows (P : Prog) : Bool :=
+members (each has the `dims` resolution reads a member's leaves by, but an argument over a declared node, which
+every member may read whole), and no two runs, of one argument or of two,
+share a leaf. A part over a root node of `declared` (the record's `registered.nodes`), affine or strided, is
+passed over here as an edge is: the stage `nodes` holds its rows to the node's one declaration (`nodesHeld`). It
+costs the root's argument parts, sorted. -/
+def ownRows (P : Prog) (declared : List Nat) : Bool :=
   let nodes := (P.defs[P.root]!).body.nodes
   let units := nodes.toList.filter fun n => !Desc.isInputNode P n
   let edge := fun (q : Part) => match q with
@@ -352,7 +371,8 @@ def ownRows (P : Prog) : Bool :=
     | .explicit it => it.any fun r => !r.p && (nodes[r.i]?.map fun n => !Desc.isInputNode P n).getD false
     | .grid _ lanes => lanes.all fun l => !l.p && (nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
     | _ => false
-  let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
+  let parts := units.flatMap fun n => n.args.toList.flatMap fun a =>
+    a.seq.parts.toList.filter fun q => !edge q && !overDeclared declared q
   let runs := parts.filterMap fun
     | .affine false i base count =>
       if (nodes[i]?.map fun n => Desc.isInputNode P n && (n.form == .prim || n.form == .batch)).getD false then
@@ -360,7 +380,8 @@ def ownRows (P : Prog) : Bool :=
       else none
     | _ => none
   let sorted := (runs.filter fun r => r.2.2 > 0).mergeSort fun a b => a.1 < b.1 || (a.1 == b.1 && a.2.1 ≤ b.2.1)
-  units.all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) &&
+  units.all (fun n => n.form != .batch || n.args.all fun a =>
+      a.dims.isSome || a.seq.parts.any (overDeclared declared)) &&
     runs.length == parts.length &&
     (sorted.zip sorted.tail).all fun (a, b) => a.1 != b.1 || a.2.1 + a.2.2 ≤ b.2.1
 
@@ -368,9 +389,10 @@ def ownRows (P : Prog) : Bool :=
 def OWN_ROWS : String :=
   "the root hands a unit a row that is not input gates of its own. Every part of an argument of a root node that " ++
   "is no input node reads another such node's outputs or is affine runs of leaves of the root's input nodes, a " ++
-  "batch maps every argument over its members, and no leaf is handed to two rows. Fix the Program, not the " ++
-  "record: build its root as templates over input nodes of their own or other templates' outputs, each input " ++
-  "leaf handed once."
+  "batch maps every argument over its members, and no leaf is handed to two rows but a leaf of an input node the " ++
+  "record declares once, in registered.nodes. Fix the Program or the record: build its root as templates over " ++
+  "input nodes of their own or other templates' outputs, each input leaf handed once; or declare each input node " ++
+  "that is handed to more than one row in registered.nodes, {node, param, offset} or {node, table, of}."
 
 /-- A port's leaf width as a refusal names it. -/
 def widthName : Option Nat → String
@@ -419,7 +441,8 @@ def unwhole (ts : List Tmpl) (ls : List Leaves) (wires : List Spot.Wires.Wire) :
 /-! ## The record, as far as its templates -/
 
 /-- The instance and the trusted input, read as far as the record's templates: the instance, the Program, the trusted
-input, the record, its templates (`RecordText.templatesOf`) and their leaves (`leavesOf`). -/
+input, the record, its templates (`RecordText.templatesOf`), their leaves (`leavesOf`) and the root input nodes the
+record declares (`RecordText.nodesOf`). -/
 structure Front where
   i : Instance
   P : Prog
@@ -427,6 +450,7 @@ structure Front where
   doc : Json
   ts : List Tmpl
   leaves : List Leaves
+  nodes : List NodeDecl := []
 
 /-- Stages 1 to 7 of the module docstring, as far as `own-rows`. -/
 def front (j tr : Json) : Except String Front := do
@@ -444,9 +468,10 @@ def front (j tr : Json) : Except String Front := do
   if Theta.strAt (Theta.getD run "window") "circuit" !=
       some (Flock.hexOf (Flock.Sha512.hash i.record.toUTF8)) then throw "run-circuit"
   let ts ← templatesOf P doc
-  if !ownRows P then throw "own-rows"
+  let nodes ← nodesOf doc
+  if !ownRows P (nodes.map (·.node)) then throw "own-rows"
   let passed := passedOn P
-  return { i, P, T, doc, ts, leaves := ts.map (leavesOf P passed) }
+  return { i, P, T, doc, ts, leaves := ts.map (leavesOf P passed), nodes }
 
 /-! ## Blocks -/
 
@@ -589,6 +614,117 @@ def formatsHeld (T : Theta.Trusted) (doc : Json) (params : List (String × Nat))
       | some (rows, words, wordBits) => wordBits == b && rows * words * b == 16 * leaves
       | none => false
     | none => !hasFormat doc p || isTheta T leaves b p
+
+/-- A registered read's sources as slopes, `(per reader unit, per row)`, where they are affine in its units and
+rows: each unit digit's step is its place value among the unit digits times one slope. None where they are not. -/
+def slopesOf (w : Spot.Wires.Wire) : Option (Int × Int) :=
+  let ps := w.pairs
+  let (sr, us) := if w.cuts > 1 then ((ps.head?.map (·.2)).getD 0, ps.drop 1) else (0, ps)
+  let digits := (us.foldl (fun (acc : Nat × List (Nat × Int)) (r, s) =>
+    (acc.1 * r, if r > 1 then acc.2 ++ [(acc.1, s)] else acc.2)) (1, [])).2
+  match digits with
+  | [] => some (0, sr)
+  | (p, s) :: _ =>
+    if s % (p : Int) == 0 && digits.all (fun (q, t) => t == (q : Int) * (s / (p : Int))) then some (s / (p : Int), sr)
+    else none
+
+/-- How argument `a` of root node `n` reads one input node, member by member: `(node, b, os, e)`, member `m`'s leaf
+`k < e` the node's leaf `b + m · os + k`. Only one part, affine (`os` = `e` for a batch's mapped argument) or strided
+with `e` leaves an inner run of stride 1; a batch's argument mapped on its outermost axis, each member `e` leaves, or
+unmapped, every member the whole argument (`os` = 0). -/
+def stretchOf (n : Node) (a : Arg) : Option (Nat × Int × Int × Nat) :=
+  let e := match n.form, a.dims with
+    | .batch, some (d, L) => if d * L == a.seq.count then some (L, true) else none
+    | .batch, none | .call, none => some (a.seq.count, false)
+    | _, _ => none
+  match e, a.seq.parts.toList with
+  | some (e, mapped), [.affine false i b _] => some (i, (b : Int), if mapped then (e : Int) else 0, e)
+  | some (e, mapped), [.strided false i b inner os is _] =>
+    if inner == e && is == 1 then some (i, b, if mapped then os else 0, e) else none
+  | _, _ => none
+
+/-- Whether declarations `ds` fill template `tid`'s units `[u0, u0 + M)`, every row of `port`'s `kc`: each that
+meets them is one `ok` takes on the units `[ua, ub)` and rows `[ra, rb)` it shares with them, and they cover as many
+rows as there are (no two declarations fill one row: `RecordText.inputsOf`). -/
+def covers (ds : List Decl) (tid port : String) (u0 M kc : Nat) (ok : Decl → Nat → Nat → Nat → Nat → Bool) : Bool :=
+  let mine := ds.filterMap fun d =>
+    let ua := max u0 d.w.start
+    let ub := min (u0 + M) (d.w.start + d.w.readerUnits)
+    let ra := d.w.cut0
+    let rb := min kc (d.w.cut0 + d.w.cuts)
+    if d.w.reader == tid && d.w.port == port && ua < ub && ra < rb then some (d, ua, ub, ra, rb) else none
+  mine.all (fun (d, ua, ub, ra, rb) => ok d ua ub ra rb) &&
+    (mine.map fun (_, ua, ub, ra, rb) => (ub - ua) * (rb - ra)).sum == M * kc
+
+/-- The root's ranges `rs`, each with its first unit among its template's units. -/
+def withStarts (rs : Array Flock.TemplateQuery.TRange) : List (Flock.TemplateQuery.TRange × Nat) :=
+  (rs.toList.foldl (fun (acc : List (String × Nat) × List (Flock.TemplateQuery.TRange × Nat)) r =>
+    let b := (acc.1.lookup r.template).getD 0
+    ((r.template, b + r.count) :: acc.1.filter (·.1 != r.template), acc.2 ++ [(r, b)])) ([], [])).2
+
+/-- **Each root input node the record declares is declared once, and every row that reads it has that declaration,
+at its position** (the module docstring's `nodes`), of the Program `P`, its templates `ts`, the wiring's cuts `W`,
+the declarations `x` and the record's root input nodes `ns`. Of each declared node: it is an input node, a primitive
+or a batch of one, of leaves of one width `w`; declared as registered parameter `p` from 16-bit leaf `o`, it lies
+within `p`, and `p` is θ (`isTheta`); declared as a table's root or domain id, it is 512 bits and the table's
+parameter is θ. Of each argument of a root node that reads a declared node (`overDeclared`): it is one stretch a
+member (`stretchOf`) within the node, of leaves of width `w`, its port's rows whole leaves; and the declarations that
+fill the port's rows of the node's units (`covers`) fill them all, each a registered read of `p` whose source at a
+unit's row is the node's leaf there, `o + w · (b + m · os + row · e / kc) / 16`, or, of a table's node, a table read
+of that table's root or domain id, by a unit reading the whole node in one row. -/
+def nodesHeld (T : Theta.Trusted) (P : Prog) (doc : Json) (ts : List Tmpl) (W : Spot.Wires.Wiring) (x : Inputs)
+    (ns : List NodeDecl) : Bool :=
+  let nodes := (P.defs[P.root]!).body.nodes
+  let thetaOf := fun (p : String) => match x.params.lookup p with
+    | some leaves => isTheta T leaves (widthOf doc p) p
+    | none => false
+  let nodeOk := fun (d : NodeDecl) => match nodes[d.node]? with
+    | some nd =>
+      Desc.isInputNode P nd && (nd.form == .prim || nd.form == .batch) &&
+      match Widths.homo nd.out, d.fill with
+      | some w, NodeFill.param p o => match x.params.lookup p with
+        | some leaves => 16 * o + w * nd.out.leaves ≤ 16 * leaves && thetaOf p
+        | none => false
+      | some w, NodeFill.table name _ => w * nd.out.leaves == 512 &&
+        ((x.tables.find? (·.name == name)).map fun t => thetaOf t.param).getD false
+      | none, _ => false
+    | none => false
+  let argOk := fun (r : Flock.TemplateQuery.TRange) (u0 : Nat) (t : Tmpl) (a : Arg) (port : String) (pty : Ty) =>
+    match a.seq.parts.toList.find? (overDeclared (ns.map (·.node))) with
+    | none => true
+    | some _ => match stretchOf (nodes[r.node]!) a with
+      | none => false
+      | some (i, b, os, e) =>
+        let nd := nodes[i]!
+        let M := r.count
+        let kc := W.cutsOf t.tid port
+        let lo := b + min 0 (((M : Int) - 1) * os)
+        let hi := b + max 0 (((M : Int) - 1) * os) + e
+        match Widths.homo nd.out, (ns.find? (·.node == i)).map (·.fill) with
+        | some w, some (NodeFill.param p o) =>
+          let L := e / kc
+          let A : Int := 16 * (o : Int) + (w : Int) * b
+          Widths.homo pty == some w && (nodes[r.node]!).members == M && kc ≥ 1 && e % kc == 0 &&
+          0 ≤ lo && hi ≤ (nd.out.leaves : Int) && A % 16 == 0 && ((w : Int) * os) % 16 == 0 && (w * L) % 16 == 0 &&
+          covers x.decls t.tid port u0 M kc fun d ua ub ra rb => match d.fill, slopesOf d.w with
+            | .read q, some (su, sr) =>
+              q == p && (ub - ua ≤ 1 || su == (w : Int) * os / 16) && (rb - ra ≤ 1 || sr == ((w * L / 16 : Nat) : Int)) &&
+                d.w.writerAt ((ua - d.w.start) * d.w.cuts + (ra - d.w.cut0)) ==
+                  A / 16 + ((ua - u0 : Nat) : Int) * ((w : Int) * os / 16) + ((ra * (w * L / 16) : Nat) : Int)
+            | _, _ => false
+        | some _, some (NodeFill.table name root) =>
+          (nodes[r.node]!).members == M && b == 0 && e == nd.out.leaves && (M == 1 || os == 0) && kc == 1 &&
+          covers x.decls t.tid port u0 M kc fun d _ _ _ _ => match d.fill with
+            | .table name' root' => name' == name && root' == root
+            | _ => false
+        | _, _ => false
+  ns.all nodeOk &&
+  match Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (ts.map (·.tid)).toArray with
+  | .ok rs => (withStarts rs).all fun (r, u0) => match ts.find? (·.tid == r.template) with
+    | some t => (nodes[r.node]!).args.toList.zip (P.defs[t.defn]!).params.toList |>.all fun (a, (port, pty)) =>
+      argOk r u0 t a port pty
+    | none => false
+  | .error _ => ns.isEmpty
 
 /-- The pin of template `tid`'s Definition, where the policy pins it: its closure digest in the Program whose
 descriptor is `desc` (`DefinitionDigest.closureDigest`), where that is among `pins`. -/
@@ -752,6 +888,7 @@ def finish (f : Front) (pin : String → Option String) : Except String Case := 
   if (unwhole f.ts f.leaves wired.wires).isSome then throw "leaf-widths"
   let x ← inputsOf f.ts W f.doc
   if !formatsHeld f.T f.doc x.params then throw "formats"
+  if !nodesHeld f.T f.P f.doc f.ts W x f.nodes then throw "nodes"
   let (S, grids) ← gridsOf f.ts f.doc
   let pins ← rolesOf f.P f.ts pin x
   let gridsAt := fun (tid : String) => (grids.lookup tid).getD []

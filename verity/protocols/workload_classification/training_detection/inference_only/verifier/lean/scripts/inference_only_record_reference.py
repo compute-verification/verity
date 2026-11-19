@@ -89,6 +89,8 @@ TABLE_READ = {"reader", "port", "table", "of", "at", "units"}
 #: an opening's keys; it may declare its `row` beside them
 OPENING = {"reader", "table", "key", "ports", "verdict", "at", "units"}
 INGRESS = {"reader", "port", "at", "units", "step"}
+NODE_PARAM = {"node", "param", "offset"}
+NODE_TABLE = {"node", "table", "of"}
 #: `Record.Kind`: what an input row of a unit is classed as, each row exactly one. `inside`: a wire fills it
 #: from a writer of its own block. `theta`: a registered read of θ, a table read of a table over θ, or a port of an
 #: opening held against such a table (`held`). The rest are fresh (`FRESH`): `cross_wires`, a wire that is not inside;
@@ -248,9 +250,10 @@ def refused(code: str, message: str) -> Malformed:
 #: `Record.OWN_ROWS`
 OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Every part of an argument of a root node that "
             "is no input node reads another such node's outputs or is affine runs of leaves of the root's input nodes, a "
-            "batch maps every argument over its members, and no leaf is handed to two rows. Fix the Program, not the "
-            "record: build its root as templates over input nodes of their own or other templates' outputs, each input "
-            "leaf handed once.")
+            "batch maps every argument over its members, and no leaf is handed to two rows but a leaf of an input node the "
+            "record declares once, in registered.nodes. Fix the Program or the record: build its root as templates over "
+            "input nodes of their own or other templates' outputs, each input leaf handed once; or declare each input node "
+            "that is handed to more than one row in registered.nodes, {node, param, offset} or {node, table, of}.")
 
 
 RECUT_UNREAD = ("the Program reads an input node in leaves of part of its leaf width (`refs.recut`), and the record "
@@ -258,13 +261,14 @@ RECUT_UNREAD = ("the Program reads an input node in leaves of part of its leaf w
                 "each input at the leaf width its reader reads.")
 
 
-def own_rows(program, form_only: bool = False) -> None:
+def own_rows(program, declared=(), form_only: bool = False) -> None:
     """The Lean's `ownRows` (`own-rows`). The rule, restated: every part of an argument of a root node that is no input
     node, but a part reading another such node's outputs (a grid, in every lane; an edge), is affine runs of leaves of the root's input nodes
-    (each a primitive or a batch), a batch maps every argument over its members, and no two runs, of one argument or of
-    two, share a leaf. Then, unless `form_only`, what the rule stands for, leaf by leaf: every leaf of every parameter
-    of every unit that no edge fills, resolved through the root (`layout.resolve_gate`), is an input gate, and no gate
-    is two of them."""
+    (each a primitive or a batch), a batch maps every argument over its members but one over a declared node, and no two runs, of one argument or of
+    two, share a leaf; a part over a root node of `declared` (`nodes_of`) passed over as an edge is. Then, unless
+    `form_only`, what the rule stands for, leaf by leaf: every leaf of every parameter of every unit that no edge and
+    no declared node fills, resolved through the root (`layout.resolve_gate`), is an input gate, and no gate is two of
+    them."""
     from verity.circuits.cut import member_refs
     from verity.circuits.layout import Scope, resolve_gate
     from verity.circuits.parts import n_members
@@ -285,9 +289,11 @@ def own_rows(program, form_only: bool = False) -> None:
         return (isinstance(p, Affine) and p.space == "n" and 0 <= p.idx < len(nodes) and is_input(nodes[p.idx].fn)
                 and nodes[p.idx].form in ("primitive", "batch"))
     units = [(k, node) for k, node in enumerate(nodes) if not is_input(node.fn)]
-    parts = [p for _, node in units for a in node.args for p in _parts(a.refs) if not edge(p)]
+    parts = [p for _, node in units for a in node.args for p in _parts(a.refs) if not edge(p) and not _over(p, declared)]
     runs = sorted((p.idx, p.base, p.count) for p in parts if run(p) and p.count > 0)
-    if any(node.form == "batch" and None in node.axes for _, node in units) or not all(map(run, parts)) \
+    unmapped = any(node.form == "batch" and ax is None and not any(_over(p, declared) for p in _parts(a.refs))
+                   for _, node in units for a, ax in zip(node.args, node.axes))
+    if unmapped or not all(map(run, parts)) \
             or any(a[0] == b[0] and a[1] + a[2] > b[1] for a, b in zip(runs, runs[1:])):
         raise refused("own-rows", OWN_ROWS)
     if form_only:
@@ -301,7 +307,7 @@ def own_rows(program, form_only: bool = False) -> None:
                 refs = member_refs(node.args[i], node.axes[i] if node.form == "batch" else None, m)
                 for leaf in range(ty.leaves):
                     r = refs[leaf]
-                    if r[0] == "n" and not is_input(nodes[r[1]].fn):
+                    if r[0] == "n" and (not is_input(nodes[r[1]].fn) or r[1] in declared):
                         continue
                     gate, prim = resolve_gate(unit, ("p", i, leaf))
                     if not is_input(prim) or gate in seen:
@@ -530,7 +536,7 @@ class Inputs:
         for i, w in enumerate(wires):
             put(w["reader"], w["port"], ((u, r) for u, r, _ in entries(w)), ("wire", i))
         reg = rec.get("registered", {"params": {}, "tables": [], "reads": [], "roots": [], "openings": []})
-        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values", "formats", "histories"}
+        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values", "formats", "histories", "nodes"}
                 and isinstance(reg["params"], dict) and all(_nat(v) and v >= 1 for v in reg["params"].values())
                 and isinstance(reg["reads"], list)):
             raise Malformed("inputs")
@@ -679,6 +685,203 @@ def formats_held(T: dict, rec: dict, params: dict) -> bool:
     return True
 
 
+def nodes_of(rec: dict) -> dict[int, tuple]:
+    """`RecordText.nodesOf`: the record's root input nodes (`registered.nodes`), by node, each `("param", p, offset)`
+    or `("table", name, root)`; none where it states none. `nodes` unless each is `{node, param, offset}` or
+    `{node, table, of}`, `of` `root` or `domain`, and no node is declared twice."""
+    reg = rec.get("registered")
+    ns = reg.get("nodes") if isinstance(reg, dict) else None
+    if ns is None:
+        return {}
+    if not isinstance(ns, list):
+        raise Malformed("nodes")
+    out: dict[int, tuple] = {}
+    for n in ns:
+        if not (isinstance(n, dict) and _nat(n.get("node"))):
+            raise Malformed("nodes")
+        if set(n) == NODE_PARAM and isinstance(n["param"], str) and _nat(n["offset"]):
+            what = ("param", n["param"], n["offset"])
+        elif set(n) == NODE_TABLE and isinstance(n["table"], str) and n["of"] in ("root", "domain"):
+            what = ("table", n["table"], n["of"] == "root")
+        else:
+            raise Malformed("nodes")
+        if n["node"] in out:
+            raise Malformed("nodes")
+        out[n["node"]] = what
+    return out
+
+
+def _over(p, declared) -> bool:
+    """`Record.overDeclared`: an affine or strided part over a root node of `declared`."""
+    from verity.circuits.refs import Strided
+    return isinstance(p, (Affine, Strided)) and p.space == "n" and p.idx in declared
+
+
+def _homo(ty) -> int | None:
+    ws = ty.width_set()
+    return next(iter(ws)) if len(ws) == 1 else None
+
+
+def stretch_of(node, i: int) -> tuple | None:
+    """`Record.stretchOf`: how argument `i` of root node `node` reads one input node, `(node, b, os, e)`, member `m`'s
+    leaf `k < e` the node's leaf `b + m·os + k`; None where it is not one affine part, or one strided part with an
+    inner run of `e` leaves at stride 1, over a call's whole argument or a batch's mapped on its outermost axis, or a
+    batch's unmapped one, which every member reads whole (`os` = 0)."""
+    from verity.circuits.refs import Strided
+    a = node.args[i]
+    e = None
+    if node.form == "batch" and node.axes[i] is not None:
+        t = a.type
+        for _ in range(node.axes[i]):
+            t = t.elem if isinstance(t, Array) else None
+            if t is None:
+                return None
+        if isinstance(t, Array) and t.n * t.elem.leaves == a.type.leaves:
+            e = t.elem.leaves
+    elif node.form in ("call", "batch"):
+        e = a.type.leaves
+    parts = _parts(a.refs)
+    if e is None or len(parts) != 1 or parts[0].space != "n":
+        return None
+    p = parts[0]
+    mapped = node.form == "batch" and node.axes[i] is not None
+    if isinstance(p, Affine):
+        return p.idx, p.base, e if mapped else 0, e
+    if isinstance(p, Strided) and p.inner == e and p.inner_stride == 1:
+        return p.idx, p.base, p.outer_stride if mapped else 0, e
+    return None
+
+
+def slopes_of(w: dict) -> tuple | None:
+    """`Record.slopesOf`: a registered read's sources as slopes `(per reader unit, per row)`, where each unit digit's
+    step is its place value among the unit digits times one slope; None where they are not."""
+    ps = list(zip(reversed(w["radix"]), reversed(w["step"])))
+    sr, us = (ps[0][1], ps[1:]) if w["C"] > 1 else (0, ps)
+    digits, place = [], 1
+    for r, s in us:
+        if r > 1:
+            digits.append((place, s))
+        place *= r
+    if not digits:
+        return 0, sr
+    p, s = digits[0]
+    if s % p == 0 and all(t == q * (s // p) for q, t in digits):
+        return s // p, sr
+    return None
+
+
+def declarations(x: Inputs, wires: list[dict], cuts: dict, rec: dict) -> list[tuple]:
+    """`RecordText.Inputs.decls` as rectangles, `(reader, port, at, units, c0, cuts, what, pattern)` each: the wires,
+    the registered reads, the table reads, each opening's ports and ingress."""
+    def k(tid: str, p: str) -> int:
+        return int(cuts.get(tid, {}).get(p, 1))
+    out = [(w["reader"], w["port"], w["at"], math.prod(w["radix"]) // w["C"], w["c0"], w["C"], ("wire", i), w)
+           for i, w in enumerate(wires)]
+    out += [(r["reader"], r["port"], r["at"], math.prod(r["radix"]) // r["C"], r["c0"], r["C"], ("read", r["param"]), r)
+            for r in x.reads]
+    out += [(r["reader"], r["port"], r["at"], r["units"], 0, k(r["reader"], r["port"]), ("root", r["table"], r["of"]), None)
+            for r in x.roots]
+    out += [(o["reader"], p, o["at"], o["units"], 0, k(o["reader"], p), ("opening", i), None)
+            for i, o in enumerate(x.openings) for p in o["ports"]]
+    out += [(g["reader"], g["port"], g["at"], g["units"], 0, k(g["reader"], g["port"]), ("ingress",), None)
+            for g in rec.get("ingress", [])]
+    return out
+
+
+def nodes_held(T: dict, program, rec: dict, templates: list[Template], cuts: dict, x: Inputs, decls: list[tuple],
+               nodes: dict[int, tuple], form_only: bool = False) -> bool:
+    """`Record.nodesHeld`, restated: each declared node an input node of one width, within its θ parameter or 512 bits
+    of a θ table; each argument that reads one a single stretch (`stretch_of`) within it, its rows filled, every one,
+    by registered reads of the parameter whose slopes and corner are the node's (`slopes_of`), or by that table's
+    reads, by a unit reading the whole node in one row. Then, unless `form_only`, what it stands for, row by row:
+    every row of every unit that reads a declared node is filled by the node's declaration, at the 16-bit leaf where
+    the row's first leaf lies in it."""
+    from verity.circuits.cut import member_refs
+    body = program.root.body.nodes
+
+    def theta_of(p: str) -> bool:
+        return p in x.params and theta(T, x.params, p, width_of(rec, p))
+    for k, what in nodes.items():
+        if not 0 <= k < len(body):
+            return False
+        nd = body[k]
+        w = _homo(nd.out)
+        if not (is_input(nd.fn) and nd.form in ("primitive", "batch") and w is not None):
+            return False
+        if what[0] == "param":
+            if not (what[1] in x.params and 16 * what[2] + w * nd.out.leaves <= 16 * x.params[what[1]]
+                    and theta_of(what[1])):
+                return False
+        elif not (w * nd.out.leaves == 512 and what[1] in x.tables and theta_of(x.tables[what[1]]["param"])):
+            return False
+    by = {t.tid: t for t in templates}
+    starts: dict[str, int] = {}
+    for k, node in enumerate(body):
+        if is_input(node.fn):
+            continue
+        tid = codec.descriptor_id(node.fn)
+        M = node.n if node.form == "batch" else 1
+        u0 = starts.get(tid, 0)
+        starts[tid] = u0 + M
+        params = node.fn.signature()[0]
+        for i, (port, pty) in enumerate(params):
+            if not any(_over(p, nodes) for p in _parts(node.args[i].refs)):
+                continue
+            got = stretch_of(node, i)
+            if got is None:
+                return False
+            n, b, os, e = got
+            nd = body[n]
+            w = _homo(nd.out)
+            kc = int(cuts.get(tid, {}).get(port, 1))
+            lo, hi = b + min(0, (M - 1) * os), b + max(0, (M - 1) * os) + e
+            mine = []
+            for reader, q, at, units, c0, C, fill, pat in decls:
+                ua, ub = max(u0, at), min(u0 + M, at + units)
+                ra, rb = c0, min(kc, c0 + C)
+                if reader == tid and q == port and ua < ub and ra < rb:
+                    mine.append((fill, pat, at, c0, C, ua, ub, ra, rb))
+            what = nodes[n]
+            if what[0] == "param":
+                L = e // kc
+                A = 16 * what[2] + w * b
+                if not (_homo(pty) == w and kc >= 1 and e % kc == 0 and lo >= 0 and hi <= nd.out.leaves
+                        and A % 16 == 0 and (w * os) % 16 == 0 and (w * L) % 16 == 0):
+                    return False
+                for fill, pat, at, c0, C, ua, ub, ra, rb in mine:
+                    sl = slopes_of(pat) if fill[0] == "read" else None
+                    if not (sl is not None and fill[1] == what[1] and (ub - ua <= 1 or sl[0] == w * os // 16)
+                            and (rb - ra <= 1 or sl[1] == w * L // 16)
+                            and source(pat, (ua - at) * C + (ra - c0))
+                            == A // 16 + (ua - u0) * (w * os // 16) + ra * (w * L // 16)):
+                        return False
+            else:
+                if not (b == 0 and e == nd.out.leaves and (M == 1 or os == 0) and kc == 1 and all(
+                        fill[0] == "root" and fill[1] == what[1] and (fill[2] == "root") == what[2]
+                        for fill, *_ in mine)):
+                    return False
+            if sum((ub - ua) * (rb - ra) for *_, ua, ub, ra, rb in mine) != M * kc:
+                return False
+            if form_only:
+                continue
+            for m in range(M):
+                refs = member_refs(node.args[i], node.axes[i] if node.form == "batch" else None, m)
+                for row in range(kc):
+                    first = refs[row * (e // kc)]
+                    held = x.fill.get((tid, port), {}).get((u0 + m, row))
+                    if first[:2] != ("n", n):
+                        return False
+                    if what[0] == "param":
+                        r = next((pat for fill, pat, at, c0, C, *_ in mine if fill == ("read", what[1])
+                                  and at <= u0 + m < at + math.prod(pat["radix"]) // C and c0 <= row < c0 + C), None)
+                        if held != ("read", what[1]) or r is None or 16 * source(
+                                r, (u0 + m - r["at"]) * r["C"] + row - r["c0"]) != 16 * what[2] + w * first[2]:
+                            return False
+                    elif held != ("root", what[1], "root" if what[2] else "domain"):
+                        return False
+    return True
+
+
 def layout(t: Template) -> dict | None:
     """The Lean's `layoutOf`: template `t`'s roles by position, or None where it has no layout. It has one with
     at least six input rows, the second and the third of 32 words each, the first named unlike the fourth, fifth and
@@ -742,7 +945,7 @@ def front(inst, tr, form_only: bool = False) -> tuple:
     if not (isinstance(window, dict) and window.get("circuit") == hashlib.sha512(i["record"].encode()).hexdigest()):
         raise Malformed("run-circuit")
     templates = templates_of(program, rec, digest)
-    own_rows(program, form_only)
+    own_rows(program, nodes_of(rec), form_only)
     return i, program, desc, rec, T, templates
 
 
@@ -767,6 +970,8 @@ def expand(inst, tr, form_only: bool = False) -> dict:
     x = Inputs(templates, cuts, wires, rec)
     if not formats_held(T, rec, x.params):
         raise Malformed("formats")
+    if not nodes_held(T, program, rec, templates, cuts, x, declarations(x, wires, cuts, rec), nodes_of(rec), form_only):
+        raise Malformed("nodes")
     slots, slot = slots_of(templates, rec)
     by = {t.tid: t for t in templates}
     inside = [all(slot[w["reader"]][u] == slot[w["writer"]][v] for u, _, v in entries(w)) for w in wires]
