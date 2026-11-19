@@ -10,8 +10,8 @@ BODY_FAMILIES = (r"TopPMaskWordx\d+_v2",)
 
 def _boolean_roots() -> list[Any]:
     """The keep word on bits at V = 2, and its keep words at the smallest and the registered split count. Each is over the
-    suite's gate limit (`targets.MAX_GATES`), so each holds a ``digests`` pin; the tests hold V = 2, 16 and 300 to the word
-    (`tests/adapters/vllm/tests/program/test_boolean_topp_mask_word.py`)."""
+    suite's gate limit (`targets.MAX_GATES`) and bound at no served V, so none holds a pin; the tests hold V = 2, 16 and 300 to
+    the word (`tests/adapters/vllm/tests/program/test_boolean_topp_mask_word.py`)."""
     from verity.circuits.defs import bind
 
     from verity_vllm.definitions.registry import boolean_topp_mask_word as BTM
