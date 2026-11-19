@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING, Any
 
-from verity.circuits.defs import bind
+from verity.circuits.defs import REGISTRY, bind
 from verity.protocols.resource_accounting import scheme as schemes
 
 from verity_vllm import messages
@@ -31,8 +31,12 @@ from verity_vllm.definitions.registry import boolean_io_shell as BIO
 B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
 #: the port whose layout the state row is, looked up on the declared scheme that has it (`messages.declaring`)
 PORT = "scan-state"
+#: the scheme's ports of the network attester's ingress rows and of the rows it released
+INGRESS, RELEASED = "ingress", "released"
 if TYPE_CHECKING:
     SCAN_STATE: str
+    INGRESS_ROWS: str
+    RELEASED_ROWS: str
 
 
 @dataclass(frozen=True)
@@ -56,15 +60,30 @@ class Scan:
     def K(self) -> int:
         return self.layout.counts["K"]
 
+    @property
+    def start(self) -> Any:
+        """The scan's start unit (`IngressScanStart`) at the class: its ``sin`` the state a window starts from."""
+        return bind(REGISTRY[_port(PORT).definition], **self.shape)
+
+    @property
+    def bucket(self) -> Any:
+        """The scan's ingress bucket (`IngressScanBucket`) at the class: its ``row`` the network attester's ingress row."""
+        return bind(REGISTRY[_port(INGRESS).definition], **self.shape)
+
+    @property
+    def egress(self) -> Any:
+        """The scan's egress bucket (`EgressBucket`) at the class: its ``o1`` the row the network attester released."""
+        return bind(REGISTRY[_port(RELEASED).definition], **schemes.layout(messages.declaring(PORT), RELEASED, self.shape).counts)
+
 
 @cache
-def _port() -> schemes.Port:
-    return next(p for p in messages.declaring(PORT).ports if p.name == PORT)
+def _port(name: str) -> schemes.Port:
+    return next(p for p in messages.declaring(PORT).ports if p.name == name)
 
 
 def __getattr__(name: str) -> str:
-    if name == "SCAN_STATE":
-        return _port().value
+    if (port := {"SCAN_STATE": PORT, "INGRESS_ROWS": INGRESS, "RELEASED_ROWS": RELEASED}.get(name)) is not None:
+        return _port(port).value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -96,4 +115,4 @@ def bridge(scan: Scan, prompt: int) -> Any:
                 LP=at["fields"], MAX=at["max_tokens"], IDS=at["ids"])
 
 
-__all__ = ["PORT", "SCAN_STATE", "Scan", "bridge", "scan_class", "words"]
+__all__ = ["INGRESS", "INGRESS_ROWS", "PORT", "RELEASED", "RELEASED_ROWS", "SCAN_STATE", "Scan", "bridge", "scan_class", "words"]
