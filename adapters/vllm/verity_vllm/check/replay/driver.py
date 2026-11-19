@@ -87,6 +87,7 @@ from verity_vllm.check.replay.linkage import (
 )
 from verity_vllm.check.replay.opening import (
     CommittedStore,
+    alias_table,
     bound_identity,
     model_weights_provider,
 )
@@ -644,7 +645,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     `worker_peak` (bytes): the forked pool is fitted after the prewarm to the cgroup's memory (`fit_pool`, recorded as
     `evaluator.memory`), and a pick too large for it is refused (PoolDoesNotFit); None forks the workers asked for."""
     t_start = time.perf_counter()
-    store = CommittedStore.of_record(bmap, committed, manifest)                 # reads through the manifest's alias table
+    store = CommittedStore.of_record(bmap, committed, alias_table(manifest))
     arrivals = arrivals or {}
     entries = bmap.get("entries")                                               # as the store reads them: a map that states none binds nothing
     ranks = sorted({int(bound_identity(e).get("rank", 0) or 0) for e in (entries if entries else [])}) or [0]

@@ -236,7 +236,7 @@ def _store(d, s, opened: bool = False):
 
     r = DR.of_record(s["bundle"], str(d))
     bmap = json.loads((d / "commit" / "binding_map_p0.json").read_text())
-    return r, bmap, CommittedStore.of_record(bmap, OpenedReader(r.store, r.run) if opened else (lambda *_a: None), r.manifest)
+    return r, bmap, CommittedStore.of_record(bmap, OpenedReader(r.store, r.run) if opened else (lambda *_a: None), r.aliases)
 
 
 def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
