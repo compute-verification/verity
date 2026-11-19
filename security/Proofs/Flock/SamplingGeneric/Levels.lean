@@ -5,6 +5,7 @@ public import Proofs.Core.LevelsProofBlocks
 public import Proofs.Core.Game.Basic
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Flock.Claims.Sampling.Session
+public import Proofs.Flock.SamplingGeneric.LevelsKS
 
 /-!
 # The one statement over levels at one level and at two
@@ -24,11 +25,13 @@ Here its relation and claims are read at one level and at two, where core's leve
   `Compiled.KS` and `Compiled.KSReg` (`Compiled.ks_of_liftLev`, `Compiled.ksReg_of_liftLev`).
 * `CompiledTwo.liftLev`: a compiled two-stage verifier at two levels, its levels the ones `LevelsRealizeTwo` gives,
   its replay partition the top partition and its replay sample the first level's (`CompiledTwo.upperOf`). It meets the
-  contract at levels where it meets `CompiledTwo.Sessions` (`CompiledTwo.sessions_liftLev`), and its claims at levels
+  contract at levels where it meets `CompiledTwo.Sessions` and its proof blocks fit in its outer budget
+  (`CompiledTwo.sessions_liftLev`), and its claims at levels
   give `CompiledTwo.KS` and `CompiledTwo.KSRegTwo` (`CompiledTwo.ks_of_liftLev`, `CompiledTwo.ksRegTwo_of_liftLev`).
 * `compilerKS_of_lev`, `compilerKSReg_of_lev`, `compilerKSTwo_of_lev`, `compilerKSRegTwo_of_lev`: so
   `CompilerKSLev` and `CompilerKSRegLev` give `CompilerKS` and `CompilerKSReg` where one level realizes the claims
-  designs, and `CompilerKSTwo` and `CompilerKSRegTwo` where two levels realize the two-stage designs.
+  designs, and `CompilerKSTwo`'s and `CompilerKSRegTwo`'s conclusions where two levels realize the two-stage designs,
+  at a verifier with `nPU ≤ nOut`.
 -/
 
 @[expose] public section
@@ -252,13 +255,15 @@ theorem sessions_liftLev (hreal : LevelsRealizeOne) {H : Msg → Msg} {L : Compi
   samples x s Pt Lv hp hq hLv _ := by
     obtain ⟨hs, htop, -, hm⟩ := liftLev_levels hLv
     have h1 : Lv.levels.length = 1 := htop
-    refine ⟨fun _ B hB => ?_, fun l l' rest he => ?_, fun j l' _ hj => ?_, fun lm _ h2 => ?_⟩
+    refine ⟨fun _ B hB => ?_, fun l l' rest he => ?_, fun j l' _ hj => ?_, fun lm _ h2 => ?_, fun _ => ?_⟩
     · obtain ⟨esc, h0, hle, hEx⟩ := S.draws x s Pt hp hq hs B hB
       exact ⟨esc, h0, hle, (hm B hB).symm ▸ hEx⟩
     · rw [he] at h1
       simp at h1
     · omega
     · omega
+    · rw [h1]
+      rfl
   unions x _ _ _ _ _ _ _ := S.unions x
   slots := S.slots
   shared := S.shared
@@ -289,10 +294,26 @@ theorem rlev_liftLev_iff (hreal : LevelsRealizeOne) {H : Msg → Msg} {L : Compi
   · rintro ⟨s, Pt, Lv, hp, hq, hLv, hι⟩
     exact ⟨s, Pt, hp, hq, (rlev_one_iff (liftLev_levels hLv).2.2.2 δ w).1 hι⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem mid_liftLev (L : Compiled Coin A) (x : Msg) : L.liftLev.mid x = 0 := by
+  unfold CompiledLev.mid
+  cases hp : L.liftLev.parse x with
+  | none => rfl
+  | some s =>
+    cases hq : L.liftLev.partition s with
+    | none => simp [hq]
+    | some Pt =>
+      cases hl : L.liftLev.levels s Pt with
+      | none => simp [hq, hl]
+      | some Lv =>
+        have h1 : Lv.levels.length = 1 := (liftLev_levels hl).2.1
+        simp [hq, hl, h1]
+
 /-- **KS at levels at one level gives `Compiled.KS`.** -/
 theorem ks_of_liftLev (hreal : LevelsRealizeOne) {H : Msg → Msg} {L : Compiled Coin A} (h : L.liftLev.KS H) :
     L.KS H := fun δ hδ =>
-  ksLinOn_of (fun _ hx => scope_liftLev hreal hx) (fun _ hx w => rlev_liftLev_iff hreal hx δ w) (h δ hδ)
+  ksLinOn_of (fun _ hx => scope_liftLev hreal hx) (fun _ hx w => rlev_liftLev_iff hreal hx δ w)
+    (CompiledLev.ks_E_of_ks L.liftLev L.mid_liftLev h δ hδ)
 
 /-- **The committed form at levels at one level gives `Compiled.KSReg`.** -/
 theorem ksReg_of_liftLev (hreal : LevelsRealizeOne) {H : Msg → Msg} {L : Compiled Coin A}
@@ -452,8 +473,8 @@ theorem escCell_empty (k : ℕ) (X : Finset ℕ) : escCell (∅ : Finset ℕ).ca
 
 omit [Nonempty Coin] in
 /-- **`L` at two levels meets the contract at levels** where it meets `CompiledTwo.Sessions`. -/
-theorem sessions_liftLev (hreal : LevelsRealizeTwo) {H : Msg → Msg} {L : CompiledTwo Coin A} (S : L.Sessions H) :
-    L.liftLev.Sessions H where
+theorem sessions_liftLev (hreal : LevelsRealizeTwo) {H : Msg → Msg} {L : CompiledTwo Coin A} (S : L.Sessions H)
+    (hpu : ∀ x, L.nPU x ≤ L.nOut x) : L.liftLev.Sessions H where
   samples x s Pt Lv hp hq hLv _ := by
     classical
     obtain ⟨d, hd, hs, -, -, -, l₁, l₂, hL, h₁, h₂⟩ := liftLev_levels hLv
@@ -461,7 +482,7 @@ theorem sessions_liftLev (hreal : LevelsRealizeTwo) {H : Msg → Msg} {L : Compi
     have hhd : ∀ a : Finset (Finset (Fin Pt.blocks.length)), [a].headD ∅ = a := fun _ => rfl
     have hld : ∀ a : Finset (Finset (Fin Pt.blocks.length)), [a].getLastD ∅ = a := fun _ => rfl
     refine ⟨fun h1 => absurd h1 (by rw [hL]; simp), fun l l' rest he T => ?_,
-      fun j l' _ hj => absurd hj (by rw [hL]; simp), fun lm hlm _ r X => ?_⟩
+      fun j l' _ hj => absurd hj (by rw [hL]; simp), fun lm hlm _ r X => ?_, fun r => ?_⟩
     · rw [hL] at he
       obtain ⟨rfl, -⟩ := List.cons.inj he
       simp only [hup, hhd]
@@ -498,12 +519,14 @@ theorem sessions_liftLev (hreal : LevelsRealizeTwo) {H : Msg → Msg} {L : Compi
       · intro ρ hρ
         rw [Finset.mem_filter, Finset.mem_range] at hρ
         exact h₂ ρ hρ.1 hρ.2.2 X
+    · rw [hup, hL]
+      rfl
   unions x s Pt Lv hp hq hLv _ := by
     classical
     obtain ⟨d, hd, hs, -⟩ := liftLev_levels hLv
-    obtain ⟨hf, hi⟩ := S.unions x s Pt d hp hq hd hs
+    obtain ⟨-, hi⟩ := S.unions x s Pt d hp hq hd hs
     rw [top_liftLev hd]
-    refine ⟨hf, fun Ω P ω r e hacc => le_trans ?_ (hi Ω P ω r e hacc)⟩
+    refine ⟨hpu x, fun Ω P ω r e hacc => le_trans ?_ (hi Ω P ω r e hacc)⟩
     rw [upper_liftLev hp hd Pt r]
     show ((upperOf Pt d (L.replaySample x r)).biUnion id).card ≤ _
     refine Finset.card_le_card_of_injOn Fin.val ?_ fun a _ b _ h => Fin.ext h
@@ -558,10 +581,26 @@ theorem rlev_liftLev_iff (hreal : LevelsRealizeTwo) {H : Msg → Msg} {L : Compi
     rw [top_liftLev hd] at hι
     exact ⟨s, Pt, d, hp, hq, hd, (rlev_two_iff hm δ w).1 hι⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem mid_liftLev (L : CompiledTwo Coin A) (x : Msg) : L.liftLev.mid x = 0 := by
+  unfold CompiledLev.mid
+  cases hp : L.liftLev.parse x with
+  | none => rfl
+  | some s =>
+    cases hq : L.liftLev.partition s with
+    | none => simp [hq]
+    | some Pt =>
+      cases hl : L.liftLev.levels s Pt with
+      | none => simp [hq, hl]
+      | some Lv =>
+        obtain ⟨d, -, -, -, -, -, l₁, l₂, hL, -⟩ := liftLev_levels hl
+        simp [hq, hl, hL]
+
 /-- **KS at levels at two levels gives `CompiledTwo.KS`.** -/
 theorem ks_of_liftLev (hreal : LevelsRealizeTwo) {H : Msg → Msg} {L : CompiledTwo Coin A} (h : L.liftLev.KS H) :
     L.KS H := fun δ hδ =>
-  ksLinOn_of (fun _ hx => scope_liftLev hreal hx) (fun _ hx w => rlev_liftLev_iff hreal hx δ w) (h δ hδ)
+  ksLinOn_of (fun _ hx => scope_liftLev hreal hx) (fun _ hx w => rlev_liftLev_iff hreal hx δ w)
+    (CompiledLev.ks_E_of_ks L.liftLev L.mid_liftLev h δ hδ)
 
 /-- **The committed form at levels at two levels gives `CompiledTwo.KSRegTwo`.** -/
 theorem ksRegTwo_of_liftLev (hreal : LevelsRealizeTwo) {H : Msg → Msg} {L : CompiledTwo Coin A}
@@ -630,14 +669,18 @@ theorem compilerKSReg_of_lev (hreal : LevelsRealizeOne) (h : CompilerKSRegLev) :
     (Compiled.sessions_liftLev hreal hS))
 
 
-/-- **`CompilerKSLev` at two levels is `CompilerKSTwo`**, where two levels realize the two-stage designs. -/
-theorem compilerKSTwo_of_lev (hreal : LevelsRealizeTwo) (h : CompilerKSLev) : CompilerKSTwo :=
-  fun Coin _ _ _ A L H hA hB hS => CompiledTwo.ks_of_liftLev hreal (h Coin A L.liftLev H hA hB
-    (CompiledTwo.sessions_liftLev hreal hS))
+/-- **`CompilerKSLev` at two levels gives `CompilerKSTwo`'s conclusion**, where two levels realize the two-stage
+designs, at a compiled two-stage verifier whose proof blocks fit in its outer budget (`nPU ≤ nOut`). -/
+theorem compilerKSTwo_of_lev (hreal : LevelsRealizeTwo) (h : CompilerKSLev) (Coin : Type) [Fintype Coin]
+    [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A) (H : Msg → Msg) (hA : A.KS H)
+    (hB : L.commit.Binds H) (hS : L.Sessions H) (hpu : ∀ x, L.nPU x ≤ L.nOut x) : L.KS H :=
+  CompiledTwo.ks_of_liftLev hreal (h Coin A L.liftLev H hA hB (CompiledTwo.sessions_liftLev hreal hS hpu))
 
-/-- **`CompilerKSRegLev` at two levels is `CompilerKSRegTwo`**, where two levels realize the two-stage designs. -/
-theorem compilerKSRegTwo_of_lev (hreal : LevelsRealizeTwo) (h : CompilerKSRegLev) : CompilerKSRegTwo :=
-  fun Coin _ _ _ A L H hA hB hS => CompiledTwo.ksRegTwo_of_liftLev hreal (h Coin A L.liftLev H hA hB
-    (CompiledTwo.sessions_liftLev hreal hS))
+/-- **`CompilerKSRegLev` at two levels gives `CompilerKSRegTwo`'s conclusion**, where two levels realize the
+two-stage designs, at a compiled two-stage verifier whose proof blocks fit in its outer budget (`nPU ≤ nOut`). -/
+theorem compilerKSRegTwo_of_lev (hreal : LevelsRealizeTwo) (h : CompilerKSRegLev) (Coin : Type) [Fintype Coin]
+    [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A) (H : Msg → Msg) (hA : A.KS H)
+    (hB : L.commit.Binds H) (hS : L.Sessions H) (hpu : ∀ x, L.nPU x ≤ L.nOut x) : L.KSRegTwo H :=
+  CompiledTwo.ksRegTwo_of_liftLev hreal (h Coin A L.liftLev H hA hB (CompiledTwo.sessions_liftLev hreal hS hpu))
 
 end Claims.SamplingGeneric

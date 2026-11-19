@@ -365,6 +365,18 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem γLev_eq (L : CompiledLev Coin A) (x : Msg) (h : L.mid x = 0) : L.γLev x = L.γ x := by
   simp only [γLev, h, Compiled.γ]
 
+/-- **`CompiledLev.KS` with no middle levels is KS at `Compiled.E`**, along `coinsLev`. -/
+theorem ks_E_of_ks {H : Msg → Msg} (L : CompiledLev Coin A) (hm : ∀ x, L.mid x = 0) (h : L.KS H) (δ : ℝ)
+    (hδ : 0 ≤ δ) :
+    KSLinOn H L.V L.Scope (RLev H L.commit L.parse L.partition L.levels L.top δ) L.E (L.κ δ) L.γ (fun _ => 1)
+      (Bext H L.V L.E) := by
+  have h' := KSLinOn_of_equiv (E := L.Elev) (E' := L.E) (fun x _ => (L.coinsLev x (hm x)).symm)
+    (fun x _ r₀ c => (L.Elev_ext_coinsLev x (hm x) r₀ _).symm.trans
+      (congrArg (L.Elev.ext x r₀) ((L.coinsLev x (hm x)).apply_symm_apply c))) (h δ hδ)
+  intro x hx Ω _ _ P
+  rw [← L.κLev_eq δ x (hm x), ← L.γLev_eq x (hm x)]
+  exact h' x hx Ω P
+
 /-- **`CompiledLev.KS` at one level**, at the extractor with one wait per level: `ks_one` along `coinsLev`. -/
 theorem ks_one_lev {H : Msg → Msg} {L : CompiledLev Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
     (hS : L.Sessions H) (δ : ℝ) (hδ : 0 ≤ δ) :
