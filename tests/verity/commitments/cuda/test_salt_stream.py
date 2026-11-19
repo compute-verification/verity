@@ -1,5 +1,5 @@
-"""``sha512_stream``'s fill against ``verity.commitments.randomness``: its host twin, built by the host's C++ compiler, writes
-the listed stream's blocks bit for bit (the pinned vectors, ``Key.stream`` and ``Key.block``) at every head length a
+"""``salt_stream``'s fill against ``verity.commitments.randomness``: its host twin, built by the host's C++ compiler, and on
+a card the device library write the listed stream's blocks bit for bit (the pinned vectors, ``Key.stream`` and ``Key.block``) at every head length a
 block takes in one compression, three compressions a leaf, and refuses a longer head or a counter past 2^64 by name."""
 from __future__ import annotations
 
@@ -13,20 +13,20 @@ import cuda_build
 import numpy as np
 import pytest
 
-from verity.commitments.cuda.sha512_stream import engine as E
+from verity.commitments.cuda.salt_stream import engine as E
 from verity.commitments.randomness import Key, derive
 
 ROOT = Path(__file__).resolve().parents[4]
-SOURCE = ROOT / "verity/commitments/cuda/sha512_stream/stream_host.cpp"
+SOURCE = ROOT / "verity/commitments/cuda/salt_stream/stream_host.cpp"
 VECTORS = json.loads((ROOT / "tests/verity/commitments/randomness/vectors.json").read_text())
 KEY = Key(bytes(range(32)))
 #: the device library's build cache, the adapter's
-BUILD = Path.home() / ".cache" / "verity" / "sha512_stream"
+BUILD = Path.home() / ".cache" / "verity" / "salt_stream"
 
 
 @pytest.fixture(scope="module")
 def lib(tmp_path_factory: pytest.TempPathFactory) -> ctypes.CDLL:
-    return E.bind(cuda_build.host_lib(SOURCE, (), tmp_path_factory.mktemp("host") / "sha512_stream.so"))
+    return E.bind(cuda_build.host_lib(SOURCE, (), tmp_path_factory.mktemp("host") / "salt_stream.so"))
 
 
 def _blocks(key: Key, index, first: int, leaves: int) -> bytes:
@@ -170,10 +170,12 @@ def _card_fill(device: ctypes.CDLL, key: Key, index, first: int, leaves: int) ->
 @card
 @pytest.mark.parametrize("leaves, first", [(1, 0), (32, 7), (4096, 123456), (753664, 0), (32, E.LEAVES_MAX - 32)],
                          ids=["one", "decode-call", "prefill-call", "1b-tiles-at-8192", "last"])
-def test_the_card_writes_the_host_twins_bytes(lib, device, leaves, first):
+def test_the_card_writes_the_streams_bytes(device, leaves, first):
     """The sizes Pearl+ fills: a decode call's rows, a prefill's, Llama 3.2 1B's tiles of a pass at m = 8192, and the last
-    leaves a key's stream holds."""
-    assert _card_fill(device, KEY, ("y", 4095), first, leaves) == _fill(lib, KEY, ("y", 4095), first, leaves)
+    leaves a key's stream holds: `Key.stream`'s bytes, or `Key.block`'s past the prefix `Key.stream` can compute."""
+    want = (KEY.stream(("y", 4095), 192 * (first + leaves))[192 * first:] if first < 1 << 20
+            else _blocks(KEY, ("y", 4095), first, leaves))
+    assert _card_fill(device, KEY, ("y", 4095), first, leaves) == want
 
 
 @card

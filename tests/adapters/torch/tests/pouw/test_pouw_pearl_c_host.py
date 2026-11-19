@@ -4,7 +4,7 @@ its own and makes no ring; a take no ring has room for waits for a give, and eve
 taken inside inference mode take copies outside it.  The copies that land in the arena on a card are the e2e's.  And a
 pass's hm96 salts (`fresh_into`, `PassSalts`): the next leaves of its own keyed stream, its key drawn at its first fill and
 dropped at its end, a fill after it or in a forked process refused by name, one card fill on the caller's stream with no
-host bytes, and every fill in `verity_torch` naming its run's current pass; the card's bytes are `sha512_stream`'s card
+host bytes, and every fill in `verity_torch` naming its run's current pass; the card's bytes are `salt_stream`'s card
 tests'.
 """
 from __future__ import annotations
@@ -198,7 +198,7 @@ class _CardBytes:
 
 
 def test_on_a_card_one_fill_launch_on_the_given_stream_else_the_current_one(keys, monkeypatch):
-    """No host bytes: one `sha512_stream` fill of the pass's next leaves, on raw stream `raw` where given, else the
+    """No host bytes: one `salt_stream` fill of the pass's next leaves, on raw stream `raw` where given, else the
     device's current stream (`_stream`), each block's message held to its one length, 87 bytes."""
     import torch
     dev, log, fills, salts = torch.device("cuda", 0), [], [], PH.PassSalts()

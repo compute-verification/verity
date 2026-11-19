@@ -131,7 +131,7 @@ is a one-time pad on `M·y`, which is why the direct bound above is tighter.
   from fresh operating-system bytes for the one unit it salts, a step, a pass or a registration, and used for no other. Hiding is
   then computational, and no better than the key's 256 bits: it rests on the named assumption that this stream under a uniform
   key passes as uniform bytes (`KeyedUniform` in the Lean), one term for each key. Every block of the stream at one index hashes
-  a message of one fixed length (`sha512_stream.message_bytes`), which the card's fill asserts.
+  a message of one fixed length (`salt_stream.message_bytes`), which the card's fill asserts.
 
 A salt made on a host is of the first kind. On a card, where salts of the first kind would be drawn by the host and carried over,
 gigabytes a step at served sizes, a salt may be of the second kind, computed by one shared expander. Nothing else salts a leaf: not

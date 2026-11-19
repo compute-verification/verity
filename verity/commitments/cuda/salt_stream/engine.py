@@ -93,7 +93,7 @@ def host_lib(build: Path) -> ctypes.CDLL:
     cxx = next((c for c in ("g++", "c++", "clang++") if shutil.which(c)), None)
     if cxx is None:
         raise RuntimeError("no C++ compiler on the path")
-    return _build(build, cxx, HOST_SOURCES, CFLAGS, "libsha512_stream_host.so")
+    return _build(build, cxx, HOST_SOURCES, CFLAGS, "libsalt_stream_host.so")
 
 
 @cache
@@ -104,7 +104,7 @@ def device_lib(build: Path, arch: str, nvcc: str | None = None) -> ctypes.CDLL:
     if tool is None:
         raise RuntimeError("no nvcc given or on the path")
     return _build(build, tool, DEVICE_SOURCES, (*NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"),
-                  "libsha512_stream_cuda.so")
+                  "libsalt_stream_cuda.so")
 
 
 def message_bytes(index: Index) -> int:

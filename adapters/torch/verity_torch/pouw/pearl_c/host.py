@@ -22,7 +22,7 @@ from typing import Any, ClassVar
 
 import numpy as np
 from verity.commitments import RangeIndexedDomain
-from verity.commitments.cuda.sha512_stream import engine as SX
+from verity.commitments.cuda.salt_stream import engine as SX
 from verity.commitments.merkle import domain_message
 from verity.commitments.randomness import Key, derive
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
@@ -61,8 +61,8 @@ _finisher: tuple[int, ThreadPoolExecutor] | None = None    # the thread `behind`
 _copiers: dict[tuple[int, int | None], Any] = {}           # each (process, device)'s `_Copies`
 #: the domain the pass's salt stream's key is derived under (`verity.commitments.randomness.derive`), and the stream's index
 SALT_STREAM, SALT_INDEX = "verity/pearl-c/hm96-salts/v1", "s"
-#: where the card's salt fill (`sha512_stream`) is built
-FILL_BUILD = Path.home() / ".cache" / "verity" / "sha512_stream"
+#: where the card's salt fill (`salt_stream`) is built
+FILL_BUILD = Path.home() / ".cache" / "verity" / "salt_stream"
 #: the bytes SHA-512 hashes for every block of every pass's salts: one length, whatever the key or counter
 SALT_MESSAGE_BYTES = 87
 if HM96_SALT != SX.LEAF_BYTES:
@@ -139,7 +139,7 @@ def _fill_lib_at(index: int) -> ctypes.CDLL:
 
 
 def fill_lib(device: Any) -> ctypes.CDLL:
-    """The card's salt fill (`sha512_stream`) for CUDA device `device`, built at the first call, loaded once a process."""
+    """The card's salt fill (`salt_stream`) for CUDA device `device`, built at the first call, loaded once a process."""
     import torch
     return _fill_lib_at(device.index if device.index is not None else torch.cuda.current_device())
 

@@ -319,7 +319,7 @@ paths = [
 
 [[place]]
 paths = [
-    "verity/commitments/cuda/sha512_stream",
+    "verity/commitments/cuda/salt_stream",
 ]
 loads = [
     "verity/commitments",
