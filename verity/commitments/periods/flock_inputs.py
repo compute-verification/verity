@@ -154,7 +154,7 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
     units = {"vus_per_block": G, "units_per_vu": meta["units_per_vu"], "indices": idx, "blocks": [idx[b:b + G] for b in range(0, n, G)],
              "classes": [c.cls] * n}
     head = {"format": M0_FORMAT, "statement": meta.get("statement", M0_STATEMENT), "scheme": SCHEME,
-            "set": f"served/{rec['window']['run']}/m{k}", "subcircuit": meta["unit"], "range": [0, n], "instances": n,
+            "set": f"served/{rec['window']['run']}/m{k}", "subcircuit": meta.get("unit"), "range": [0, n], "instances": n,
             "circuit_sha512": c.pin, "units": units, "frame_v3": mem["frame_v3"], "rows": True}
     if mem.get("shared_rows"):
         head["shared_rows"] = mem["shared_rows"]
