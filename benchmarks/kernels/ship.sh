@@ -52,7 +52,7 @@ ship_cuda() {
 ship_cubin_flags() {
   local gencode
   gencode=$(python3 "$ROOT/benchmarks/kernels/machine.py" gencode "$1") || exit 1
-  . "$ROOT/benchmarks/kernels/cubin_flags.sh"
+  . "$ROOT/verity/protocols/resource_accounting/compute/pouw/prover/kernels/cubin_flags.sh"
   cubin_flags "$gencode" || exit 1
 }
 
