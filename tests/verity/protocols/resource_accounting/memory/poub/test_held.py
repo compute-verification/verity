@@ -33,6 +33,9 @@ class Exchange:
     def compute_with(self, name, kernel):
         pass
 
+    def release(self, name, value, restore):
+        pass
+
     def emit(self, event):
         for fn in self.subscribers[event.hook]:
             fn(event)
