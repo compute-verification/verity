@@ -1617,7 +1617,6 @@
     {"file": "security/Proofs/Properties/Challenger/Withheld.lean", "count": 5},
     {"file": "security/Proofs/Properties/Core/Period.lean", "count": 4},
     {"file": "security/Proofs/Properties/NetworkPeriod.lean", "count": 79},
-    {"file": "security/Proofs/Properties/NetworkPeriod/Fails.lean", "count": 5},
     {"file": "security/Proofs/Properties/NetworkScan.lean", "count": 3},
     {"file": "security/Proofs/Properties/NetworkScan/Accept.lean", "count": 3},
     {"file": "security/Proofs/Properties/NetworkScan/Causal.lean", "count": 3},

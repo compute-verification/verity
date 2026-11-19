@@ -525,9 +525,11 @@ def _build(D: DecodedProgram, words: Sequence[tuple[int, int]], ins: list[int], 
         P._BODY_LOOKUP[:] = saved
 
 
-def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]], bits: Bits | None = None) -> Block:
-    """`compact (restrict C S)` for S the gates of ``units`` (module docstring: the index, the block and the object)."""
-    D = program(c) if bits is None else bits.D
+def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]], bits: Bits | None = None,
+             D: DecodedProgram | None = None) -> Block:
+    """`compact (restrict C S)` for S the gates of ``units`` (module docstring: the index, the block and the object);
+    ``D``: C decoded, when the caller holds it."""
+    D = D if D is not None else program(c) if bits is None else bits.D
     words = unit_gates(D, partition, units)
     ins, outs = front(D, words)
     prog = _build(D, words, ins, outs)

@@ -51,7 +51,6 @@
   "Proofs.Properties.Certifier.Registered",
   "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkPeriod",
-  "Proofs.Properties.NetworkPeriod.Fails",
   "Proofs.Properties.NetworkScan",
   "Proofs.Properties.Spot",
   "Proofs.Properties.Spot.Halt",

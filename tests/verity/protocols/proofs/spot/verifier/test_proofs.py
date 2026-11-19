@@ -141,8 +141,8 @@ def test_the_mirror_of_the_ks_form_refuses_what_lean_refuses(tmp_path, form, wan
 def _derived(monkeypatch, circuit: Path) -> None:
     """C_S, which `verify` derives from C and the partition (`one_circuit.restrict`), taken to be `circuit`'s bytes:
     these tests are of what `verify` does with a verdict, whatever the derivation."""
-    monkeypatch.setattr(OC, "restrict", lambda c, partition, units: circuit.read_bytes())
-    monkeypatch.setattr(OC, "block", lambda c, partition, k: [(0, 1)])
+    monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: circuit.read_bytes())
+    monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: [(0, 1)])
     monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
 
 
@@ -428,8 +428,8 @@ def test_the_door_proves_only_a_block_the_draw_sampled_and_refuses_an_undrawn_on
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
     derived = []
-    monkeypatch.setattr(OC, "block", lambda c, partition, k: [(k, k + 1)])
-    monkeypatch.setattr(OC, "restrict", lambda c, partition, units: derived.append(units) or circuit.read_bytes())
+    monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: [(k, k + 1)])
+    monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: derived.append(units) or circuit.read_bytes())
     monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
     verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused", "zk": True}
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
@@ -454,8 +454,8 @@ def _door(tmp_path: Path, monkeypatch, name: str, indices: list, draw: dict, blo
     (d / "s").mkdir()
     (d / "s" / "session.json").write_text("{}")
     derived = []
-    monkeypatch.setattr(OC, "block", lambda c, partition, k: blocks(k))
-    monkeypatch.setattr(OC, "restrict", lambda c, partition, units: derived.append(units) or circuit.read_bytes())
+    monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: blocks(k))
+    monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: derived.append(units) or circuit.read_bytes())
     monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe: c_s)
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "VERDICT " + json.dumps(
@@ -481,15 +481,83 @@ def test_the_door_holds_the_drawn_blocks_inputs_to_the_schemes_reading_of_its_re
     assert why is None and asked == [3, 3] and [f.block for f in got] == [3], (why, asked)
 
 
-def test_the_doors_lowering_of_a_partition_of_no_one_template_is_a_named_hole():
-    """`one_circuit.lower` is Lean's lowering of C_S's one template (``Q_template_instance``): a partition of no one
-    template is the hole ``lower``, refused before any executable is built."""
+def test_the_doors_lowering_of_a_partition_of_no_template_query_is_a_named_hole():
+    """`one_circuit.lower` is Lean's lowering of C_S's template under a template query: a partition of another query is
+    the hole ``lower``, refused before any executable is built."""
     def never():
         raise AssertionError("built an executable for a partition the lowering does not cover")
 
-    for partition in ({"program": "p"}, {"program": "p", "query": {"name": "Q_all", "params": {"template": "T"}}}):
-        with pytest.raises(OC.NotDerived, match="lower : C_S of a partition that names no one template"):
+    for partition in ({"program": "p"}, {"program": "p", "query": {"name": "Q_all", "params": {"template": "T"}}},
+                      {"program": "p", "query": {"name": "Q_template_instances", "params": {"templates": "T"}}}):
+        with pytest.raises(OC.NotDerived, match="lower : C_S of a partition that is no template query"):
             OC.lower(b"{}", partition, never)
+
+
+def _two_templates(*counts: int) -> tuple[bytes, dict, list[str]]:
+    """C of `counts[i]` units of the i-th of two Boolean templates (XOR of two bits, of three), in that order, its
+    ``Q_template_instances`` partition object with one unit a block, and the templates' ids."""
+    from verity.circuits import codec
+    from verity.circuits import partition_object as PO
+    from verity.circuits.boolean import BIT, xor_gate
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.population import wired_population_program
+    from verity.circuits.types import Array
+    ts = [bind(CompositeDefinition(f"DoorLowerXor{n}", 0, (), lambda S, n=n: ((("x", Array(n, BIT)),), BIT),
+                                   lambda B, S, x, n=n: B.call(xor_gate(n), x), register=False)) for n in (2, 3)]
+    ts = [(t, m) for t, m in zip(ts, counts) if m]
+    ids = [codec.descriptor_id(t) for t, _ in ts]
+    program, query = wired_population_program(ts, {"templates": [[tid, m] for tid, (_, m) in zip(ids, ts)]})
+    c = b"".join(codec.descriptor_chunks(program))
+    return c, PO.build(json.loads(c), query, [[(u, u + 1) for u in range(sum(counts))]]), ids
+
+
+def test_the_doors_lowering_takes_c_s_template_from_its_root_under_a_query_of_many_templates(tmp_path):
+    """Under ``Q_template_instances`` the template lowered is the one C_S's root calls: Lean's lowering is called on
+    it, with the partition's digest; a C_S whose root calls two templates, and one whose template the partition's query
+    does not list, are refused before any executable is built."""
+    from verity.circuits import partition_object as PO
+    c, part, ids = _two_templates(2, 2)
+    exe = tmp_path / "lower"
+    exe.write_text(f"#!{sys.executable}\nimport json, sys\nopen(sys.argv[-1], 'w').write(json.dumps(sys.argv[1:]))\n")
+    exe.chmod(0o755)
+    for u, tid in ((1, ids[0]), (2, ids[1])):
+        argv = json.loads(OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, lambda: exe))
+        assert argv[0] == "compose" and argv[2:4] == [tid, f"unit/{tid}"], argv
+        assert argv[7:9] == [part["program"], PO.digest(part)], argv
+
+    def never():
+        raise AssertionError("built an executable for a C_S the door refuses")
+
+    with pytest.raises(OC.Refused, match="C_S's root calls .*, and a block's units are instances of one template"):
+        OC.lower(OC.restrict(c, part, [(1, 3)]), part, never)
+    _, only_first, _ = _two_templates(2, 0)
+    with pytest.raises(OC.Refused, match="is not one the partition's query lists"):
+        OC.lower(OC.restrict(c, part, [(2, 3)]), only_first, never)
+
+
+def test_a_drawn_block_of_a_partition_of_many_templates_is_in_range_and_its_blocks_cover_c():
+    """`one_circuit.block` under ``Q_template_instances``: a block index past the partition's blocks, and blocks that end
+    short of C's population, are refused."""
+    c, part, _ = _two_templates(2, 2)
+    assert OC.block(c, part, 3) == [(3, 4)]
+    with pytest.raises(OC.Refused, match="no block 4 among the partition's 4"):
+        OC.block(c, part, 4)
+    with pytest.raises(OC.Refused, match="end at 3, not at C's population 4"):
+        OC.block(c, PO.build(json.loads(c), part["query"], [[(0, 1), (1, 3)]]), 0)
+
+
+@lean
+@pytest.mark.slow
+def test_leans_lowering_takes_a_block_of_a_partition_of_many_templates():
+    """Lean's lowering (`flock-lower-check compose`, the door's executable) on a block of each template of a
+    ``Q_template_instances`` partition: a templated circuit of that template, bound to the partition."""
+    from verity.circuits import partition_object as PO
+    c, part, ids = _two_templates(2, 2)
+    for u, tid in ((0, ids[0]), (3, ids[1])):
+        text = OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, PF.lower_executable).decode()
+        head, meta = text.split("\n", 2)[:2]
+        assert head.startswith("flock-circuit/tmpl") and f"unit/{tid}" in head, head
+        assert PO.digest(part) in meta and tid in meta, meta[:400]
 
 
 @pytest.mark.parametrize("indices, blocks, want", [
@@ -610,8 +678,8 @@ def test_a_members_own_units_are_refused_and_its_block_is_the_partitions():
 def test_the_door_refuses_at_the_base_arguments_lowering_of_c_s(tmp_path, monkeypatch):
     """C_S derived, the door stops where the base argument takes no Boolean block circuit (`one_circuit.lower`)."""
     circuit, public = _files(tmp_path)
-    monkeypatch.setattr(OC, "block", lambda c, partition, k: [(0, 1)])
-    monkeypatch.setattr(OC, "restrict", lambda c, partition, units: b"C_S")
+    monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: [(0, 1)])
+    monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: b"C_S")
     monkeypatch.setattr(PF, "executable", _never)
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
