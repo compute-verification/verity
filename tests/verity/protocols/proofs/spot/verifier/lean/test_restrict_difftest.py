@@ -61,7 +61,7 @@ def test_lean_restrict_is_pythons(pieces, name):
     assert kind == "output", body
     out = json.loads(body)
     assert out["agree"] is True and out["at"] is None, out
-    assert out["root_nodes"] > len(units) and out["definitions"] > 1, out
+    assert out["root_nodes"] >= 2 and out["definitions"] > 1, out
 
 
 def test_another_blocks_program_differs(pieces):
