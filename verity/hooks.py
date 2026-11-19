@@ -279,27 +279,26 @@ class Front(Protocol):
     def summary(self) -> Mapping[str, Any]: ...
 
 
-#: what an `AdmitInput` says: ``hold`` the inputs until its ``gate`` starts each (a window's boundary), or ``refuse``
-#: its ``input``, answered with ``why``
+#: what an `AdmitInput` says: ``hold`` the inputs until the scheme's gate starts each (a window's boundary), or
+#: ``refuse`` its ``input``, answered with ``why``
 ADMITS = ("hold", "refuse")
 
 
 @dataclass(frozen=True)
 class AdmitInput:
-    """A scheme's word on admitting inputs (`ADMITS`). A hold starts an input when its ``gate`` starts it and ends when
-    the gate opens; a refusal is filed at any time, serving included."""
+    """A scheme's word on admitting inputs (`ADMITS`). A hold starts an input when the scheme's `Gate` starts it and
+    ends when the gate opens; the gate is a capability the scheme files with it (``exchange.hold(name, gate)``), not
+    part of the entry. A refusal is filed at any time, serving included."""
 
     admit: str
-    gate: Gate | None = None
     input: str | None = None
     why: str = ""
 
     def __post_init__(self) -> None:
         if self.admit not in ADMITS:
             raise ValueError(f"AdmitInput admits by one of {ADMITS}, not {self.admit!r}")
-        if (self.admit == "hold") != (self.gate is not None) or (self.admit == "refuse") != (self.input is not None):
-            raise ValueError(f"AdmitInput {self.admit!r}: a hold names a gate and no input, a refusal an input and no "
-                             f"gate (gate {self.gate!r}, input {self.input!r})")
+        if (self.admit == "refuse") != (self.input is not None):
+            raise ValueError(f"AdmitInput {self.admit!r}: a refusal names its input, a hold none (input {self.input!r})")
 
 
 class Route(Protocol):

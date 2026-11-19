@@ -21,9 +21,8 @@ def test_hook_types_hold_no_tensor_type() -> None:
 
 
 def test_a_memory_change_and_an_admission_say_one_thing_each() -> None:
-    gate = object()
-    assert H.AdmitInput("hold", gate).gate is gate and H.AdmitInput("refuse", input="i", why="w").why == "w"
-    for bad in (lambda: H.AdmitInput("start"), lambda: H.AdmitInput("hold"), lambda: H.AdmitInput("refuse", gate),
+    assert H.AdmitInput("hold").input is None and H.AdmitInput("refuse", input="i", why="w").why == "w"
+    for bad in (lambda: H.AdmitInput("start"), lambda: H.AdmitInput("hold", input="i"), lambda: H.AdmitInput("refuse"),
                 lambda: H.MemoryChanged("moved", (1,)), lambda: H.MemoryChanged("registered", (1,)),
                 lambda: H.MemoryChanged("written", (1, 2)), lambda: H.MemoryChanged("freed")):
         with pytest.raises(ValueError):

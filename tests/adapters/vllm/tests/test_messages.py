@@ -237,8 +237,8 @@ def test_exchange_starts_through_every_gate_and_holds():
             return bool(self.held)
 
     ex, g1, g2, started = M.Exchange(), Gate(), Gate(), []
-    ex.request("a", H.AdmitInput("hold", g1))
-    ex.request("b", H.AdmitInput("hold", g2))
+    ex.hold("a", g1)
+    ex.hold("b", g2)
     ex.start("in-0", lambda: started.append("in-0"))
     assert ex.pending() and not started
     g1.held.pop()()

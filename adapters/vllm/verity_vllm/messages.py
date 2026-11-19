@@ -62,6 +62,8 @@ class Exchange:
     def __init__(self) -> None:
         self.subscribers: dict[str, list[tuple[str, Subscriber, tuple[type, ...] | None]]] = {h: [] for h in H.HOOKS}
         self.requests: list[tuple[str, H.Request]] = []
+        #: the gates of the schemes' holds (`hold`), the one filed first outermost
+        self.gates: list[tuple[str, H.Gate]] = []
         #: the kernels schemes compute due blocks with (`compute_with`), the one filed first outermost
         self.kernels: list[tuple[str, H.Kernel]] = []
         #: the routes schemes answer on the workload's server (`serve`): path -> (scheme, route)
@@ -185,6 +187,12 @@ class Exchange:
             raise Refused(name, f"files {kind} after serving began (step {self._step}); file it before the first step")
         self.requests.append((name, request))
 
+    def hold(self, name: str, gate: H.Gate) -> None:
+        """Scheme ``name`` holds the inputs until ``gate`` starts each (`AdmitInput` ``hold``, filed with it), inside
+        the gates filed before it; filed before the first step."""
+        self.request(name, H.AdmitInput("hold"))
+        self.gates.append((name, gate))
+
     def compute_with(self, name: str, kernel: H.Kernel) -> None:
         """Scheme ``name`` computes every due block with ``kernel``, inside the kernels filed before it; filed before
         the first step."""
@@ -213,9 +221,6 @@ class Exchange:
 
     def _filed[R](self, kind: type[R]) -> list[tuple[str, R]]:
         return [(n, r) for n, r in self.requests if isinstance(r, kind)]
-
-    def _held(self) -> list[H.AdmitInput]:
-        return [r for _, r in self._filed(H.AdmitInput) if r.admit == "hold"]
 
     def answer(self, declared: H.Declared) -> bool:
         """Answer every request before an engine is built: `Refused` under the first refused scheme's name, with all
@@ -254,13 +259,13 @@ class Exchange:
     def unheard(self) -> Iterator[None]:
         """No scheme hears the block's pass, which is never a record (the learn-only warm-up): its events reach no
         subscriber, its inputs start at once and its blocks are the workload's own."""
-        subscribers, requests, kernels = self.subscribers, self.requests, self.kernels
-        self.subscribers, self.kernels = {h: [] for h in H.HOOKS}, []
+        subscribers, requests, kernels, gates = self.subscribers, self.requests, self.kernels, self.gates
+        self.subscribers, self.kernels, self.gates = {h: [] for h in H.HOOKS}, [], []
         self.requests = [(n, r) for n, r in requests if not (isinstance(r, H.AdmitInput) and r.admit == "hold")]
         try:
             yield
         finally:
-            self.subscribers, self.requests, self.kernels = subscribers, requests, kernels
+            self.subscribers, self.requests, self.kernels, self.gates = subscribers, requests, kernels, gates
 
     def compute(self, due: H.BlockDue, original: Callable[[Mapping[str, H.Handle] | None], H.Handle]) -> H.Handle:
         """A due block's output: emitted to ``blocks``' subscribers, then computed by the filed kernels, the workload's
@@ -281,23 +286,23 @@ class Exchange:
         return bool(self.kernels)
 
     def start(self, input: str, start: Callable[[], None]) -> None:
-        """Start ``input`` once every gate a hold filed (`AdmitInput`) starts it; with none, now."""
-        for r in reversed(self._held()):
-            start = (lambda g, s: lambda: g.add(input, s))(r.gate, start)
+        """Start ``input`` once every gate a hold filed (`hold`) starts it; with none, now."""
+        for _, gate in reversed(self.gates):
+            start = (lambda g, s: lambda: g.add(input, s))(gate, start)
         start()
 
     def pending(self) -> bool:
         """Whether a gate holds an input not yet started."""
-        return any(r.gate.pending() for r in self._held())
+        return any(gate.pending() for _, gate in self.gates)
 
     def ready(self, due: H.StepDue) -> bool:
         """Whether step ``due.step`` may run: every gate is asked, and may start inputs."""
-        return all([r.gate.ready(due) for r in self._held()])
+        return all([gate.ready(due) for _, gate in self.gates])
 
     def open(self, why: str) -> None:
         """Every gate starts what it holds, and every later input at once."""
-        for r in self._held():
-            r.gate.open(why)
+        for _, gate in self.gates:
+            gate.open(why)
 
     def route(self, path: str) -> tuple[str, H.Route] | None:
         """The scheme serving ``path`` (`serve`) and its answer, None when none does."""
