@@ -226,4 +226,19 @@ def oRows (root : ByteArray) : Option Nat :=
 #guard oRows reg2.root == none
 #guard oRows (node dom 0 0 (lf 0 (bc 2)) (lf 1 (bc 1))) == some 0
 
+-- a file of the first version, whose ports state their reads, is refused by the door's reader by its format's name
+def statedJ : Json := Json.mkObj [("format", Json.str "verity/registered-reads/v1"),
+  ("ports", Json.mkObj [("x", portJ (fieldTree (wkey 19) 0) [("reads", toJson ((List.range 8).map some))])])]
+#guard match ofJson statedJ with
+  | .error e => e == s!"registered reads: not a {FORMAT} file"
+  | .ok _ => false
+-- a port that states reads, handed to the door's setup anyway, reads where C puts it on every road `withPositions`
+-- takes (a row of in(S), a registered value, an output row), or is refused: never at its stated reads
+def stated (p : Registered.Port) : Registered.Port := { p with readsRel := #[some 6, some 6], readsFrom := 1 }
+#guard ((treeReads prog #[19] 0 (stated x)).toOption.map fun r => (r.readsRel, r.readsFrom)) == some (#[some 0], 19)
+#guard ((OneCircuit.pos regP #[0, 1] (stated theta)).toOption.map fun r => (r.readsRel, r.readsFrom)) ==
+  some (#[some 1, some 2], 0)
+#guard outRel outC regP 0 #[0, 1] (stated o0) == some (#[some 0, some 1], 0)
+#guard (OneCircuit.pos regP #[2] (stated theta)).toOption.isNone
+
 end Flock.Test.WiredPorts
