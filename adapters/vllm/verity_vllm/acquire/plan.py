@@ -33,6 +33,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.records import capture as CP
 from verity_vllm.commit.committer.flush_points import (
     GATHER_FLUSH_LEAVES,
     PRE_FLUSH_LEAVES,
@@ -291,8 +292,6 @@ def values_of_plan(classes: Iterable[Mapping[str, Any]]) -> list[ValuePlan]:
 
 def _capture_sites(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[AcquisitionSite], list[dict[str, str]]]:
     """The legal sites of a plan class, by its capture class."""
-    from verity_vllm.program.predict import capture_plan as CP
-
     rt: RuntimeTree = corr.runtime
     call = {"op_path": v.op_path, "output_member": v.output_member}
     module = corr.owning_module(call)
@@ -330,8 +329,6 @@ def _slot_label(rs: ReturnSlot | None) -> str:
 
 def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[AcquisitionSite], list[dict[str, str]]]:
     """The legal sites of one Value class and the refused candidates (each with its reason).  Structure only."""
-    if v.capture:
-        return _capture_sites(v, corr)
     rt: RuntimeTree = corr.runtime
     call = {"op_path": v.op_path, "output_member": v.output_member}
     module = corr.owning_module(call)
@@ -580,7 +577,7 @@ def plan_of_values(values: list[ValuePlan], correspondence: AcquireCorrespondenc
                    tables: Mapping[str, Any] | None = None) -> AcquisitionPlan:
     """The plan of `values` over `correspondence` (`acquisition_plan`'s)."""
     for v in values:
-        legal, refused = sites_of(v, correspondence)
+        legal, refused = (_capture_sites if v.capture else sites_of)(v, correspondence)
         v.sites, v.rejected = legal, refused
         chosen, why = choose(legal, v)
         v.chosen = chosen

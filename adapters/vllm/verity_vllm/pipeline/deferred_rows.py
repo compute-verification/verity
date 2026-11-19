@@ -65,7 +65,7 @@ def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | 
     _rows, row, _verdict, store, run = CPU.of_record(b, bdir.parent, awaiting=False)
     if ctx.get("served_window"):
         return SimpleNamespace(bundle=b, ctx=ctx, bdir=bdir, out=bdir.parent, pair=int(ctx["pair"]), row=row, store=store, run=run,
-                               commitment=store.commit_scheme, manifest=None, aliases=ctx.get("op_path_aliases") or {},
+                               commitment=store.commit_scheme, manifest=None, aliases=ctx.get("op_path_aliases", {}),
                                loaded={}, digests={}, programs={}, program_dirs={},
                                arrivals={str(q["request_id"]): int(q["arrive_step"]) for q in ctx["requests"]})
     o = SimpleNamespace(row_dir=row_dir, replay_workers=None, required_manifest=required_manifest)
