@@ -53,7 +53,8 @@ lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchai
 @functools.cache
 def lowered(member: str) -> bytes:
     """The member's circuit file: its block's C_S, lowered by Lean (`one_circuit.lower`)."""
-    return OC.lower(OC.restrict(DESCRIPTOR, PARTITION, UNITS[member]), PARTITION, PF.lower_executable)
+    return OC.lower(OC.restrict(DESCRIPTOR, PARTITION, UNITS[member]), PARTITION, PF.lower_executable,
+                    cut=OC.cuts(DESCRIPTOR, PARTITION))
 
 
 def header(member: str, **changes) -> dict:
@@ -155,10 +156,11 @@ def test_a_run_of_accepted_sessions_credits_each_members_units_and_names_no_refu
     credited the units of its member's public file its record drew; the run is no verdict, and it names no refusal
     for the audit above it."""
     w = Window(tmp_path)
-    seen = []
+    seen, circuits = [], []
 
     def verdict(st: M.Statement) -> dict:
         seen.append(st)
+        circuits.append(PF.file_sha512(st.circuit))
         return accepting(st)
     run, refused = w.run(verdict)
     assert refused is None and run.all and run.proved == (1, 2, 4), refused
@@ -166,7 +168,8 @@ def test_a_run_of_accepted_sessions_credits_each_members_units_and_names_no_refu
         ("s0", True, (1,), PARTITION["program"]), ("s1", True, (2, 4), PARTITION["program"])]
     assert run.all and M.run_reason(run, refused) is None
     ms = w.params["proofs"]["members"]
-    assert [PF.file_sha512(st.circuit) for st in seen] == [w.circuit(A), w.circuit(B)]
+    # C_S is derived under a directory the run holds only while it runs
+    assert circuits == [w.circuit(A), w.circuit(B)]
     assert [PF.file_sha512(st.public) for st in seen] == [ms[A]["public"], ms[B]["public"]]
     assert all(json.loads(st.program) == w.params["program"] and st.partition == PARTITION and st.registered is None
                and [n for n, _ in st.reps] == ["circuit.rep0.bin"] for st in seen)

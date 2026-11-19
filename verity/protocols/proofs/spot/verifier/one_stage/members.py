@@ -239,14 +239,15 @@ def _count(m: Mapping[str, Any]) -> int:
     return sum(hi - lo for lo, hi in m["units"])
 
 
-def _block(name: str, m: Mapping[str, Any], descriptor: bytes, partition: Mapping[str, Any]) -> list[tuple[int, int]]:
+def _block(name: str, m: Mapping[str, Any], descriptor: bytes, partition: Mapping[str, Any],
+           decoded: OC.Decoded | None = None) -> list[tuple[int, int]]:
     """Member ``name``'s units, its block of the partition object's ``blocks`` (`one_circuit.block`). Lean's parse
     refuses the parameters of a member handed units of its own or naming a block the object lacks
     (`OneStageZk.membersOf`), so those raise `Outside` with Lean's ``params:`` reason."""
     if "units" in m:
         raise Outside(f"params: proofs: member {name}: {UNITS_HANDED}")
     try:
-        return OC.block(descriptor, partition, m["block"])
+        return OC.block(descriptor, partition, m["block"], decoded)
     except OC.Refused as e:
         raise Outside(f"params: proofs: member {name}: partition: {e}") from None
 
@@ -687,7 +688,7 @@ def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], u
 
 def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes, partition: Mapping[str, Any],
            strata: Any, slice_: Mapping[str, Any], form: Form,
-           derived: Path) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
+           derived: Path, decoded: OC.Decoded | None = None) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
     """`OneStageZk.Member.files`: the member `name`'s circuit file, C_S as `OneStageZk.restrict` derives it
     (`one_circuit.restrict`, then `one_circuit.lower`), written under `derived`, and public files and its own lookup
     tables, the blobs' pinned tables its circuit looks up (`proofs.own_tables`, `OneStageZk.ownTables`), read as
@@ -696,7 +697,9 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
     looks up is none of its."""
     try:
         try:
-            c = OC.lower(OC.restrict(descriptor, partition, m["units"]), partition, PF.lower_executable)
+            decoded = decoded or OC.Decoded(descriptor)
+            c = OC.lower(OC.restrict(descriptor, partition, m["units"], decoded), partition, PF.lower_executable,
+                         cut=OC.cuts(descriptor, partition, decoded))
         except (OC.NotDerived, OC.Refused) as e:
             raise _Refused(f"restrict: {e}") from None
         circuit = derived / f"{hashlib.sha512(c).hexdigest()}.txt"
@@ -795,17 +798,18 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
     if P.program_sha512(program) != params["partition"].get("program"):
         raise Outside("the program is not the one the parameters' partition object names")
     descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
-    ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"])} for name, m in ms.items()}
+    decoded = OC.Decoded(descriptor)
+    ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"], decoded)} for name, m in ms.items()}
     _apart(ms)
     with tempfile.TemporaryDirectory(prefix="verity-members-cs-") as derived:
         return _members_run(params, record, evidence, blobs, ms, sts, descriptor, program, verify, verdict, form,
-                            Path(derived))
+                            Path(derived), decoded)
 
 
 def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any],
                  blobs: Mapping[str, Path], ms: dict[str, Any], sts: list[Any], descriptor: bytes, program: Program,
                  verify: Ch.Verify, verdict: Callable[[Statement], Mapping[str, Any]], form: Form,
-                 derived: Path) -> tuple[Run | None, str | None]:
+                 derived: Path, decoded: OC.Decoded | None = None) -> tuple[Run | None, str | None]:
     try:
         held = _held(ms, sts)
         if [s["name"] for st in sts for s in st["sessions"]] != evidence["sessions"]:
@@ -830,7 +834,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
             strata = e
         files = {name: _files(name, m, blobs, descriptor, params["partition"], strata,
                               {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form,
-                              derived)
+                              derived, decoded)
                  for name, m in ms.items()}
         findings: list[PF.Finding] = []
         for st, name in zip(sts, held):

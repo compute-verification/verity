@@ -41,7 +41,6 @@ from verity.protocols.proofs.spot.verifier.one_stage import members as M, one_ci
 from verity.circuits import partition_object as PO
 from verity.commitments import hm96
 
-from holes import waits_on
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
@@ -314,7 +313,6 @@ def _block(public: Path, partition: dict) -> int:
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_the_honest_session_is_accepted_by_cores_own_verifier_run_at_its_shared_rows(fx):
     """The honest session's sample is `DRAWN` (the record's `unit_draw`), and its verdict names the partition's program and
     the registered root; its shared-row public file is in the form `SampledKSLiveV5` covers, so the verifier accepts it
@@ -375,7 +373,6 @@ def _pointed(fx: Path) -> str:
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_a_ref_pointed_at_another_units_rows_is_refused_at_its_registered_port(fx):
     """Every port of the fixture's circuit is registered (`REGISTERED_ROOTS`), so the session's verifier holds each
     instance's ref to the row at the position its unit's read names (`Flock.Registered.check`): a sampled proof block's input ref
@@ -700,7 +697,6 @@ def _tampered(fx: Path, to: Path, rehash: bool) -> Path:
 @lean
 @pytest.mark.slow
 @pytest.mark.parametrize("rehash", [False, True], ids=["record-kept", "record-rehashed"])
-@waits_on("restrict", "lower")
 def test_tampered_proof_bytes_are_rejected_by_the_verifier_itself(fx, tmp_path, rehash):
     """One bit of the first rep's proof flipped: with the record's proof digest kept the verifier refuses the file the
     record doesn't bind, and with it rewritten to the flipped bytes it refuses the proof itself. Either way the finding is
@@ -713,7 +709,6 @@ def test_tampered_proof_bytes_are_rejected_by_the_verifier_itself(fx, tmp_path, 
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_missing_proof_files_are_refused(fx, tmp_path):
     st = fx / "stage"
     got, why = PF.verify(PF.Proof(st / "circuit.txt", st / "pub-32.bin", (tmp_path / "none",)),
@@ -740,7 +735,6 @@ def _same(v1, v2):
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
     """The v2 audit (`Spot.OneStageZk`) runs `verity-verify-proof verify --zk`'s one-stage path inside its own Lean, on
     the files as blobs: on the honest session (accepted at its shared rows, proving its sampled proof blocks), a session
@@ -760,7 +754,6 @@ def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_an_accepted_session_of_another_population_is_rejected(fx):
     """Under a docket of 31 units, the honest session that the verifier accepts on its public file of 32 is
     rejected with `population_why`'s reason: its file's unit 31 is no slot of the docket's."""
@@ -772,7 +765,6 @@ def test_an_accepted_session_of_another_population_is_rejected(fx):
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_a_registration_whose_partition_disagrees_with_the_circuit_file_is_refused_by_the_v2_audit(fx):
     """A docket whose partition object asks the fixture's program for its `Q_call` units at X = 16, the RoPE
     heads' calls (2048 of them, `partition.strata`), rather than the 32 template instances the circuit file holds: the

@@ -107,7 +107,7 @@ from verity.circuits.population import mixed_population_program, wired_populatio
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, array_of, as_grid, concat, lane_bounds, record_of, refs_from_json, spell, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
-from verity.commitments.periods.edges import INPUT_ID
+from verity.circuits.edges import INPUT_ID
 
 HERE = Path(__file__).resolve().parent
 
