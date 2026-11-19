@@ -1,3 +1,0 @@
-[2026-11-19T23:58Z] ff814ba0b3d2
-From the lead, a two-line answer needed early (send it back in your return, or sooner if you return for any reason): soundness asks which served description each of your two scans read. For r20261119-225638-c026 (61 templates) and r20261119-234317-c9d5 (64 templates): the one-circuit commit each tree was at, the description's sha256 and byte size if the runs recorded them (else say not recorded), the class and seed, and what 'templates' counts (root templates the door would lower). And confirm or refute my guess for 61 -> 64: the one-scan-unit-a-lane merge (9c3c0ded75e) made ScanSlots one template a lane, 4 lanes, so +3. Do not rerun anything heavy for this; read the run records.
-
