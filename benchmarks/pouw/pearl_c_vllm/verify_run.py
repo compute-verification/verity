@@ -28,7 +28,8 @@
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
   forms, with the first tile and every ``--cross-check``-th after it, in the sample's order, replayed on the scalar reference
   too).  `tests/benchmarks/pouw/test_pearl_c_vllm.py` holds this to `audit`'s own verdict.
-- **The served y**, where a call commits it (`served_y`, the manifest's ``y``): an accepted tile's real rows of y open against
+- **The served y**, which every call with a credited cell commits (`served_y`, the manifest's ``y``; one that commits none
+  is refused at load, ``a credited call commits no y root``): an accepted tile's real rows of y open against
   its root, each holds a word for every column of the tile (the opening doesn't bind a row's length: one that ends before
   the tile's columns is refused, ``the opened row holds N words``), and each of the tile's words must be the unscale of
   the tile's checked U (`pearl_c_u.y`, the kernels' epilogue), so the y that leaves the linear is the one the credited
@@ -334,6 +335,8 @@ def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, man: 
         reason = "the records are not the ones whose root the pass published"
     if reason is not None:
         raise ValueError(reason)
+    if bad := next((r for u, r in zip(man["matmuls"], records) if "y" not in u and sum(credited_cells(scheme, r))), None):
+        raise ValueError(f"matmul {bad.matmul.index}: a credited call commits no y root")
     c = man["commitment"]
     transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]),
                             ())

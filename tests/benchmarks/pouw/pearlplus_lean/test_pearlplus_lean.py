@@ -312,6 +312,21 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u(exe, tmp_path):
     assert "the prover's files don't open its y: ValueError: " in same(exe, [path])["reason"]
 
 
+def test_a_credited_call_that_commits_no_y_root(exe, tmp_path):
+    """A call with a credited cell whose manifest names no y is refused at load on both sides, before the coin, since the
+    tile check ties U to y only where y is committed. One with no credited cell (weight 1's excluded row 20 takes all its
+    columns) commits none and is read: its exclusion tile is opened and passes, with no y to hold it to."""
+    path = T.proved_pass(tmp_path / "credited", H100)[0]
+    index = json.loads(path.read_text())["matmuls"][1]["index"]
+    edit(path, lambda m: m["matmuls"][1].pop("y"))
+    got = same(exe, [path])
+    assert got["verdict"] == "reject" and got["source"] is None and got["verdicts"] == []
+    assert got["reason"] == f"ValueError: matmul {index}: a credited call commits no y root"
+    path = T.proved_pass(tmp_path / "uncredited", H100, bad_b=20)[0]
+    edit(path, lambda m: m["matmuls"][1].pop("y"))
+    assert same(exe, [path], 16)["verdict"] == "accept"
+
+
 def test_a_served_y_row_that_ends_before_its_tiles_columns(exe, tmp_path):
     """A prover's own y whose last real row is short (`short_y`: the rows file cut, the tree and root over the row as it
     is, so it opens), on a row whose unscale is +0 at every column (`zero_a`: its A row is zero, so it is excluded and its
