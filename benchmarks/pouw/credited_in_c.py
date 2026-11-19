@@ -9,7 +9,7 @@ a reader of the linear takes by wire: the residual add of each row of y and the 
 `Bf16AddRow_v1`), C's output. y is no value C holds. No unit fits one proof block whole, so C is laid
 (`verity.circuits.laying.lay`) under the composer's limit (`fits`, `verity_flock.circuit.unit_block`'s rule on a block's
 ports and ANDs): each unit opens into its noise's seed, lines and Gram rows and its wired core
-(`pearl_plus_credited.cut`), each one proof block, and the credited blocks are the wired cores. A drawn core's outputs are
+(`pearl_plus_credited.cut`), each one proof block, and each tile is credited over all its blocks. A drawn core's outputs are
 registered as the record its reader holds them to: its digest and y under hiding salts, its ``ok`` (one u16) as 1 under
 public salts. The noise is seeded by the
 epoch's salt and W's registered root: the stager forms its tiles under them, and the verifier's side fills the public row
@@ -18,9 +18,9 @@ registered roots from that row, which every staged file's roots must equal; the 
 root to the supplied functions (`pouw.pearlplus.salt/v1`, `registered.root/v1`).
 ``stage`` evaluates C on an honest linear and stages a dishonest proof of the drawn tile (``--bad``: ``y``, its claimed y
 a word other than the one it computes; ``cert``, a certificate word other than the prover's; ``filler``, a nonzero word
-in its filler row; each claiming the honest outputs), places the units' amounts
-(`resource_accounting.scheme.credited` over the laid C's strata, `PEARL_PLUS.blocks`' cost on the template's statics),
-draws one credited block, cuts it (`restrict`), lowers it by the door (`one_circuit.lower`), and finds each of its input
+in its filler row; each claiming the honest outputs), places each laid block in its tile and each tile's amount
+(`scheme.laid_tiles` over the laid C's strata, `tile_macs` on the tile's statics), draws one block of the wired cores'
+stratum, cuts it (`restrict`), lowers it by the door (`one_circuit.lower`), and finds each of its input
 rows' writers in C: a row C wires from more than one writer unit (the core's fa and fb, K lines; g, 32 Gram rows) is no
 one writer's output field, which Lean's registered reads refuse (`Flock.Registered.treeReads`, ``FIELD_WHY``) unless the
 lowering cuts it into one row a writer (``p#j``, `Flock.OneCircuit.io`), and the door's lowering cuts none, so the stage
@@ -315,7 +315,6 @@ def stage(a) -> int:
     from verity.circuits.program import input_id
     from verity.circuits.ops.rows import Bf16AddRow
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-    from verity.protocols.resource_accounting import scheme as RS
     from verity.protocols.resource_accounting.compute.pouw import scheme as PS
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
     from verity.commitments import registered_value as RV
@@ -359,21 +358,20 @@ def stage(a) -> int:
     phase("lay", descriptor_bytes=len(c), population=population)
 
     strata = PQ.strata(program, part["query"])
-    credited = sorted(RS.credited([PS.PEARL_PLUS], strata))
-    decoded = R.program(c)
-    (block,) = PS.PEARL_PLUS.blocks
-    amounts = {u: block.cost(decoded.defs[tid].bindings) for tid, rs in strata for lo, hi in rs for u in range(lo, hi)
-               if u in credited}
-    rec["amounts"] = {"strata": [[tid, rs] for tid, rs in strata], "credited": credited, "amount": amounts,
-                      "tile_macs": [PS.tile_macs(tl.core.bindings) for tl in ln.tiles]}
+    tiles = PS.laid_tiles(ln.program, program, strata)
+    rec["amounts"] = {"strata": [[tid, rs] for tid, rs in strata],
+                      "tiles": [{"index": tl.index, "gates": tl.gates, "amount": tl.amount, "blocks": len(tl.blocks),
+                                 "kinds": dict(tl.kinds)} for tl in tiles]}
     print("AMOUNTS " + json.dumps(rec["amounts"]), flush=True)
-    assert len(credited) == units and [amounts[u] for u in credited] == rec["amounts"]["tile_macs"]
+    assert [tl.amount for tl in tiles] == [PS.tile_macs(tl.core.bindings) for tl in ln.tiles]
 
     coin = os.urandom(64)
-    block_no = credited[int.from_bytes(hashlib.sha512(coin).digest(), "little") % len(credited)]
-    index = credited.index(block_no)
-    rec["draw"] = {"coin": coin.hex(), "block": block_no, "tile": index, "amount": amounts[block_no],
-                   "of": "one block uniformly of the credited ones, whose amounts are equal"}
+    (cores,) = [[u for lo, hi in rs for u in range(lo, hi)] for tid, rs in strata if tid == descriptor_id(core)]
+    block_no = cores[int.from_bytes(hashlib.sha512(coin).digest(), "little") % len(cores)]
+    (index,) = [tl.index for tl in tiles if block_no in tl.blocks]
+    rec["draw"] = {"coin": coin.hex(), "block": block_no, "tile": index, "amount": tiles[index].amount,
+                   "of": "one block uniformly of the wired cores' stratum, the block this stage stages; its tile is "
+                         "credited its amount only when every stratum it has a block in passed (credited_tiles)"}
     print("DRAW " + json.dumps(rec["draw"]), flush=True)
     blk = OC.block(c, part, block_no)
     b = R.restrict(c, part, blk)
@@ -421,7 +419,7 @@ def stage(a) -> int:
                          np.asarray(good["r"] if a.reader else [[0] * n] * m, dtype=np.int64))
     rec["evaluate"] = {"of": "C on its words (`evaluate_batch` of its root before laying, whose gates the laid C keeps): "
                               "each unit's (digest, y, ok) and the reader's rows",
-                       "drawn": {"rows": drawn.rows, "real": drawn.real, "credited": amounts[block_no]},
+                       "drawn": {"rows": drawn.rows, "real": drawn.real, "credited": tiles[index].amount},
                        "honest_ok": [g[-1] for g in got_h], "dishonest_ok": [g[-1] for g in got_d],
                        "y": y_rows, "y_is_the_served_y": y_rows == served,
                        "reader_reads_y_by_wire": z_h == add.reshape(m, n).tolist() if a.reader else None,

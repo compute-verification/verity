@@ -1,11 +1,12 @@
 """Pearl+ as a resource scheme (`verity.protocols.resource_accounting.scheme`), registered as ``pearl-plus``.
 
 Its verifier is `verity/pouw/pearl-plus/v1` (`verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean`). In C, a credited
-linear is its grid's units of `PearlPlusTileCoreWords_v3` (`prover.circuit.pearl_plus_credited`), which write its y. C's
-laying opens each into its noise's units and one `PearlPlusTileCoreWired_v1`, the tile's core on its words and that noise by
-wire, each one proof block where it fits whole (K = 256; not the served K = 2048, `pearl_plus_credited`'s docstring); the
-core's block costs its credited MACs (`tile_macs`): its real rows × TN × K, its statics TR, TN and K, since the core forms
-every word of the linear's depth K and holds its filler rows to zero.
+linear is its grid's units of `PearlPlusTileCoreWords_v3` (`prover.circuit.pearl_plus_credited`), which write its y; its
+block (`TILE`) is the tile, which costs its credited MACs (`tile_macs`): its real rows × TN × K, its statics TR, TN and K,
+since the tile forms every word of the linear's depth K and holds its filler rows to zero. C's laying opens each tile into
+many proof blocks of many templates (its noise's units and its core, the core itself opened at the served K = 2048), and the
+credit is per tile (soundness's ruling, TOP-445): `laid_tiles` gives each laid block its tile by a public rule from the
+laying, and `credited_tiles` credits a tile its amount only when every one of its blocks is in a stratum whose draw passed.
 
 On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
 workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
@@ -24,11 +25,11 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
 from verity import hooks as H
@@ -106,6 +107,88 @@ def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int,
     by_tile = {(at[b.id[0]] + b.record, b.rows[0], b.cols[0]): b for b in blocks}
     return [by_tile[(pos, tile.rows[0], tile.cols[0])]
             for pos, tile in draw(scheme, [r for records in passes for r in records], key, t)]
+
+
+#: a credited tile's template in C before C is laid (`prover.circuit.pearl_plus_credited.PearlPlusTileCoreWords`): its
+#: statics are the tile's, and `tile_macs` of them is what the tile is credited
+TILE = "PearlPlusTileCoreWords_v3"
+#: `laid_tiles`' refusals: the laid C's strata number blocks other than its root units, one template each, on which the
+#: stratified bound rests; a root unit of the laid C lies partly inside a tile's gates, so the rule places it in no tile
+BLOCK_NOT_UNIT = "tile-block-not-unit"
+TILE_STRADDLES = "tile-straddles"
+
+
+@dataclass(frozen=True)
+class LaidTile:
+    """A credited tile of C as C's laying lays it: ``index`` its place among C's tiles in C's root order, ``gates`` its
+    gates [lo, hi) in C, ``amount`` its credited MACs (`tile_macs` on its template's statics, public in C before any
+    coin), ``blocks`` the laid C's proof blocks whose gates lie in its gates, and ``kinds`` its m_s: its blocks in each
+    stratum, by the stratum's descriptor id."""
+
+    index: int
+    gates: tuple[int, int]
+    amount: int
+    blocks: tuple[int, ...]
+    kinds: Mapping[str, int]
+
+
+def laid_tiles(program: Any, laid: Any, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> list[LaidTile]:
+    """C's credited tiles, ``program``'s root units of `TILE`, each with the proof blocks of ``laid`` (C as
+    `verity.circuits.laying.lay` lays it) that it holds, by a public rule from the laying: since laying keeps C's gates in
+    C's order, a laid root unit is the tile's whose gates in C hold its gates, and no tile's where none do. ``strata`` are
+    the laid C's (`verity.circuits.partition_query.strata` under its template-instance query): their blocks must be its
+    root units, each of the one template its stratum names (`BLOCK_NOT_UNIT`), and no unit may lie partly in a tile
+    (`TILE_STRADDLES`)."""
+    import bisect
+
+    from verity.circuits import laying as LY
+    from verity.circuits import partition_object as PO
+
+    before, after = PO.TemplatePartition(program, LY.query(program)), PO.TemplatePartition(laid, LY.query(laid))
+    of: list[str | None] = [None] * after.population
+    for tid, rs in strata:
+        for lo, hi in rs:
+            if not 0 <= lo <= hi <= after.population or any(of[lo:hi]):
+                raise ValueError(f"{BLOCK_NOT_UNIT}: stratum {tid}'s blocks [{lo}, {hi}) are not among the laid C's "
+                                 f"{after.population} root units, each in one stratum")
+            of[lo:hi] = [tid] * (hi - lo)
+    if wrong := next(((a, tid) for _k, tid, a, n in after.ranges if of[a:a + n] != [tid] * n), None):
+        raise ValueError(f"{BLOCK_NOT_UNIT}: the laid C's root unit {wrong[0]} is one {wrong[1]}, and the strata place "
+                         f"block {wrong[0]} in {of[wrong[0]]}: a block is one root unit of its stratum's template")
+    nodes = program.root.body.nodes
+    tiles = [(a + m, nodes[k].fn) for k, tid, a, n in before.ranges if tid == TILE or tid.startswith(TILE + "{")
+             for m in range(n)]
+    spans = [before.gates(u) for u, _fn in tiles]
+    starts, edges = [lo for lo, _hi in spans], {g for span in spans for g in span}
+    held: list[list[int]] = [[] for _ in tiles]
+    root = laid.root.body
+    for k, _tid, a, n in after.ranges:
+        g, at = root.nodes[k].fn.gates, root.offsets[k]
+        for m in range(n):
+            lo, hi = at + m * g, at + (m + 1) * g
+            i = bisect.bisect_right(starts, lo) - 1
+            if i >= 0 and lo < spans[i][1] and hi <= spans[i][1] and (lo < hi or spans[i][0] < lo):
+                held[i].append(a + m)
+            elif (i >= 0 and lo < spans[i][1]) or (i + 1 < len(spans) and spans[i + 1][0] < hi) or \
+                    (lo == hi and lo in edges):
+                raise ValueError(f"{TILE_STRADDLES}: the laid C's root unit {a + m}, gates [{lo}, {hi}), lies partly "
+                                 "in a tile's gates, or holds none at a tile's edge")
+    out = []
+    for i, ((_u, fn), span, blocks) in enumerate(zip(tiles, spans, held)):
+        kinds: dict[str, int] = {}
+        for b in blocks:
+            kinds[of[b]] = kinds.get(of[b], 0) + 1
+        out.append(LaidTile(i, span, tile_macs(fn.bindings), tuple(blocks), MappingProxyType(kinds)))
+    return out
+
+
+def credited_tiles(tiles: Sequence[LaidTile], strata: Sequence[tuple[str, Sequence[Sequence[int]]]],
+                   failed: Collection[int]) -> list[LaidTile]:
+    """The tiles credited (soundness's ruling, TOP-445): a tile is credited its whole ``amount``, declared before the coin,
+    only when every one of its blocks is in a stratum whose draw passed, ``failed`` the drawn blocks whose proofs
+    failed; a stratum with one failed block credits no tile holding a block of it, its other tiles included."""
+    spoiled = {tid for tid, rs in strata if any(lo <= b < hi for b in failed for lo, hi in rs)}
+    return [t for t in tiles if spoiled.isdisjoint(t.kinds)]
 
 
 #: Its settings (`Scheme.settings`), each a default of its type: ``kernel`` the kernel's library (required on a served
@@ -557,7 +640,7 @@ PEARL_PLUS = register(Scheme(
     messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass", "H1Registration")),
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
-    blocks=(Block("PearlPlusTileCoreWired_v1", tile_macs),),
+    blocks=(Block(TILE, tile_macs),),
     assumptions=("Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1",),
     log=(Order("weightsRoot", "pouw/salt"), Order("commitment", "pouw/draw")),
     charges=(Charge("inert-work", "rho"), Charge("sample", "epsilon"), Charge("over-bound-tiles", "over_cap_draws"),
