@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Properties.InferenceOnly.BodiesOk.Composite
-public import Proofs.Properties.InferenceOnly.BodiesOk.Decode
+public import Proofs.Properties.Flock.Decoder.Composite
+public import Proofs.Properties.Flock.Decoder.Decode
 public import Std.Tactic.Do
 import Batteries.Tactic.OpenPrivate
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal

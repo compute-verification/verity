@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Properties.InferenceOnly.BodiesOk.Decode
+public import Proofs.Properties.Flock.Decoder.Decode
+public import InferenceOnlyVerifier.Desc
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -18,7 +19,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Properties.InferenceOnly.BodiesOk
-import Proofs.Properties.InferenceOnly.BodiesOk.Basic
+import Proofs.Properties.Flock.Decoder.Basic
 
 /-!
 # What `ReadsExact` reads of the decoder and of `BodiesOk`

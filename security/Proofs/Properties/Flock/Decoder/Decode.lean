@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Properties.InferenceOnly.BodiesOk.Nonneg
-public import Proofs.Properties.InferenceOnly.BodiesOk.Node
+public import Proofs.Properties.Flock.Decoder.Nonneg
+public import Proofs.Properties.Flock.Decoder.Node
 import Batteries.Tactic.OpenPrivate
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
@@ -20,7 +20,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Properties.InferenceOnly.BodiesOk.Basic
+import Proofs.Properties.Flock.Decoder.Basic
 import Std.Data.HashMap.Lemmas
 
 /-!
