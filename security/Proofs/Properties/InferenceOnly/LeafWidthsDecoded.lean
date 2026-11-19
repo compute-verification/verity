@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.InferenceOnly.DecodeKeys
+public import Proofs.Properties.Flock.Decoder.DecodeKeys
 public import Proofs.Properties.InferenceOnly.LeafWidthsBody
 
 /-!
