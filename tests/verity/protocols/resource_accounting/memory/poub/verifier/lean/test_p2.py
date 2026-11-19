@@ -751,7 +751,7 @@ def json_text(draw, depth: int = 3) -> str:
     for _ in range(draw(st.integers(0, 3))):
         again = names and draw(st.integers(0, 3)) == 0
         names.append(draw(st.sampled_from(names)) if again else
-                     draw(st.text(st.sampled_from("ab\"\\é\U0001F600"), min_size=1, max_size=3)))
+                     draw(st.text(st.sampled_from("ab\"\\é\N{GRINNING FACE}"), min_size=1, max_size=3)))
     keys = ['"' + "".join(spelled(c, draw) for c in k) + '"' for k in names]
     members = [k + w() + ":" + w() + draw(json_text(depth - 1)) for k in keys]
     return "{" + w() + ("," + w()).join(members) + w() + "}"
