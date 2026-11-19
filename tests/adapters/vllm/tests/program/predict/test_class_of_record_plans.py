@@ -12,7 +12,7 @@ from verity_vllm.program.predict import window_plan as WP
 from verity_vllm.program.predict.phi import phi_of_serve
 from verity_vllm.program.predict.steps import Registered
 
-pytestmark = [pytest.mark.slow, pytest.mark.usefixtures("code_versions_stood_in")]
+pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
 #: the H100 smoke's serve.json, as φ reads it
 SERVE = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "execution": "bi-eager",
