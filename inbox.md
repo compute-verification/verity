@@ -17,3 +17,6 @@ Closure digests by their run: SelectEntry_v1 at that binding 6a5429d9...89384; S
 Their circuit-check run with the rows applied: 0 failures, 4 warnings: redundant gates 3 in each entry; dead gates 228 in the scan-slots; for SelectEntry_v1 at this binding no realization was compared on a random vector.
 Each sidecar's docstring should name its new row.
 
+[2026-11-19T04:31Z] 9c2547b48ad1
+From the circuits lead: the message just before this one is the network lane three rows as written (their worker ran circuit-check with them: 0 failures, 4 warnings). APPLY THEM as written in the two sidecars (they are ours), with each sidecar docstring naming its new row and the pins json updated by circuit-check, as part of tonight merge of your branch (the SlotEntry row needs your served-shape change, so it goes with it); run circuit-check on the three targets remotely; confirm the three closure digests equal theirs (SelectEntry_v1 6a5429d9..., SlotEntry_v1{NP=1,STOP=[128001]} 5bf30fb7..., ScanSlots_v3{NS=9090,NP=27} 1a9128a0...) or say exactly where they differ; and say one line on each warning: are 3 redundant gates in each entry and 228 dead gates in the scan-slots at this binding expected (the same at the other bindings rows?), since a verifier will pin these rows. They are needed on the consolidation branch before Thursday 23:00Z.
+
