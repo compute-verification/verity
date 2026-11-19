@@ -55,15 +55,20 @@ def pub (p0 p1 : List Nat) (tag : Nat := 1) (value : String := "h1/a") : Public 
     n := 2, digests := ((p0 ++ p1).map (bc tag)).toArray, outputs := #[], sha := .empty,
     tables := some { counts := #[p0.length, p1.length], starts := #[0, p0.length], refs := #[0, 0, 1, 1] } }
 
-/-- The verifier's `--registered` file: ports `a0` and `a1` both of `h1/a`, unit `u` reading rows `2u` and `2u + 1`. -/
+/-- The verifier's `--registered` file: ports `a0` and `a1` both of `h1/a`. -/
 def file (words : Nat := 32) : Json :=
-  let port (reads : List Nat) := Json.mkObj [("value", Json.str "h1/a"), ("root", Json.str (hexOf (root 1))),
+  let port := Json.mkObj [("value", Json.str "h1/a"), ("root", Json.str (hexOf (root 1))),
     ("leaves", Lean.toJson (4 : Nat)), ("words", Lean.toJson words), ("domain", Json.str (hexOf dom)),
-    ("row_schema", Json.str v2), ("reads", Lean.toJson reads)]
-  Json.mkObj [("format", Json.str Registered.FORMAT), ("ports", Json.mkObj [("a0", port [0, 2]), ("a1", port [1, 3])])]
+    ("row_schema", Json.str v2)]
+  Json.mkObj [("format", Json.str Registered.FORMAT), ("ports", Json.mkObj [("a0", port), ("a1", port)])]
+
+/-- The reads `Registered.withPositions` derives from the verifier's program: unit `u` reads rows `2u` and `2u + 1`,
+`a0` the first and `a1` the second. -/
+def derived (own : Array Registered.Port) : Array Registered.Port :=
+  own.mapIdx fun i q => { q with readsRel := #[some i, some (i + 2)] }
 
 def run (p : Public) (f : Json := file) : Except String Unit := do
-  Registered.check circuit p (some (← Registered.ofJson f)) true
+  Registered.check circuit p (some (derived (← Registered.ofJson f))) true
 
 def passes (p : Public) (f : Json := file) : Bool := (run p f).toBool
 

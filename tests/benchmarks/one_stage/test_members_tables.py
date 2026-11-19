@@ -3,7 +3,7 @@ form (`members.check`) and on the Python run of it (`members.members_run`): neit
 answer as they do without it. A member is held to its own circuit's tables among the blobs (`OneStageZk.ownTables`),
 so a pinned table none of them looks up is read by no member.
 
-The window is the verifier's own tests' (`test_members_twin.Audit`: two members of stand-in files, the sessions' trees
+The window is the verifier's own tests' (`test_members_twin.Audit`: two members of stand-in public files, the sessions' trees
 on a challenger session), audited with a statement of its second member alone. v2 finds a blob by the SHA-512 of its
 bytes, so the table is ``rcp`` itself, which the prover's `ir_lower.write_tables` writes and the verifier's suite does
 not load: that is why this row is here. The other way, a circuit that looks up a table the blobs lack, is that suite's
@@ -21,15 +21,17 @@ from verity_flock import ir_lower as IL
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests/verity/protocols/proofs/spot/verifier/lean"))
 import test_members_twin as TW
+from holes import waits_on
 
 #: slow: it runs v2's executable, which the first test to need it builds
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
 
+@waits_on("restrict", "lower")
 def test_blobs_holding_a_table_no_circuit_looks_up_are_not_refused_for_it(tmp_path):
     """The audit's statement is of the second member alone, and neither member's circuit looks up a table. With
-    ``rcp``'s table among the blobs, Lean and the Python run get as far as the first member's circuit, a stand-in that
-    does not parse, as the same play does without the table: the table is none of a member's own
+    ``rcp``'s table among the blobs, Lean and the Python run get as far as the first member's circuit, C_S
+    (`one_circuit.restrict`), as the same play does without the table: the table is none of a member's own
     (`OneStageZk.ownTables`), so no member's statement refuses for it."""
     a = TW.Audit("members-tables-held", opened=(TW.B,))
     assert [st["member"] for st in a.evidence["proofs"]["statements"]] == [TW.B]

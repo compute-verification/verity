@@ -19,7 +19,7 @@
                 them all are a choice (sel), and an IMNMX.64 when one of its four forms picks it (found).
 
    A value is the vector of a word at NP points, W bits a point, packed W*NP <= 64 bits, so W = 32 is the full word at two
-   points (fold_wide32.py): a program that writes the pair everywhere writes it at the points, so none found is none at
+   points: a program that writes the pair everywhere writes it at the points, so none found is none at
    any NP. stdin:
      W NP NI
      name v_1 .. v_NP              (NI lines: the inputs)

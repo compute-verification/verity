@@ -101,7 +101,7 @@ class Run:
                                        self.tmp / f"tie-{sample.docket.order}", **kw)
 
     def decide(self, w, sample, delivered, inputs, head=None):
-        return self.tie.outcome(self.stream, sample, delivered, circuit_sha512=standin.circuit_sha512(delivered),
+        return self.tie.outcome(self.stream, sample, delivered,
                                 inputs=inputs, releases=self.served.releases,
                                 head=self.cells[w].head if head is None else head, opening=self.cells[w])
 
@@ -152,7 +152,7 @@ def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_
     assert reads["ports"]["o0"][TS.KNOWN_KEY]["rows"] == [[1]] * run.tie.T
     assert {p: reads["ports"][p]["reads"] for p in TS.PORTS} == {p: list(range(run.tie.T)) for p in TS.PORTS}
     assert run.tie.registered(head, lanes[1:]) is None and run.tie.registered(head, None) is None
-    kw = {"circuit_sha512": standin.circuit_sha512(delivered), "program": run.tie.program,
+    kw = {"program": run.tie.program,
           "partition": run.tie.partition}
     findings, refused = standin.lean(delivered.proof, registered=reads, **kw)
     assert refused is None and run.tie.proved(findings)
@@ -174,7 +174,7 @@ def test_an_output_0_or_rows_under_fresh_salts_fail_the_registered_reads(tmp_pat
     lanes = run.tie.lanes(forged, SERVED.releases, 0)
     assert 0 in [run.tie.outputs(r, ln) for r, ln in zip(run.cells[0].rows, lanes)]
     _, delivered = run.prove(0, forged, words={u: 1 for u in range(4)})
-    kw = {"circuit_sha512": standin.circuit_sha512(delivered), "program": run.tie.program,
+    kw = {"program": run.tie.program,
           "partition": run.tie.partition}
     findings, refused = standin.lean(delivered.proof, registered=run.tie.registered(run.cells[0].head, lanes), **kw)
     assert refused is None and not findings[0].accepted and "port o0: table row" in findings[0].why
@@ -274,7 +274,7 @@ def test_an_outcome_on_other_inputs_in_the_clear_or_late_is_refused(tmp_path):
     assert run.round(0, inputs).accepted
     sample, delivered = run.prove(1, inputs)
     assert run.stream.deliver(sample, delivered.sessions()) is None
-    verdict = run.tie.verify(sample, delivered, circuit_sha512=standin.circuit_sha512(delivered), inputs=inputs,
+    verdict = run.tie.verify(sample, delivered, inputs=inputs,
                              releases=SERVED.releases, head=run.cells[1].head)
     assert verdict["accepted"]
     outcome = run.stream.outcome(sample, {TS.VERIFIER: {**verdict, "decided_by": "clear"}}, run.tie.statement(sample),
@@ -360,7 +360,7 @@ def test_a_head_of_another_window_is_refused(tmp_path):
     assert not run.decide(0, sample, delivered, inputs, head=run.cells[1].head).accepted
     other = WR.Cells.commit(LINK, Direction.INGRESS, 0, run.cells[0].rows, run.cells[0].wiring, PARAMS,
                             hashlib.sha512(b"another session").digest(), run.cells[0].salts)
-    assert not run.tie.verify(sample, delivered, circuit_sha512=standin.circuit_sha512(delivered), inputs=inputs,
+    assert not run.tie.verify(sample, delivered, inputs=inputs,
                               releases=SERVED.releases, head=other.head)["accepted"]
 
 

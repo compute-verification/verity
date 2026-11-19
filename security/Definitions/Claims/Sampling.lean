@@ -333,7 +333,7 @@ structure Query where
   params : Msg
 
 /-- **The sampling statement**: the program (named by its digest; both parties hold it), as its descriptor's canonical
-bytes (`desc`, `verity-ir/descriptor/v1`, which a template query reads) and its gates (`prog`, the descriptor
+bytes (`desc`, `verity-ir/descriptor/v2`, which a template query reads) and its gates (`prog`, the descriptor
 flattened), the partition query, the sampling design, and the roots the trace is committed under. -/
 structure AuditStatement where
   desc : Msg

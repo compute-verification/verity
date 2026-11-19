@@ -78,7 +78,7 @@ theorem opensOwn_of_ready {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ) (hc : m.
   obtain ⟨-, pubO, hO, hnO⟩ := Flock.Bridge.parse_of_parsedOf hc.parsed
   have hn : m.pub.n = m.n := (Flock.Bridge.loadPublic_inOut m.hpub hO).1.symm.trans hnO
   have hw : m.fileRead.circuit.w g = 1 :=
-    w_ofAudit ((checked_circuit m hc).trans (Flock.Bridge.circuitOf_eq m.D m.hU m.n)) g
+    w_toCircuit ((checked_circuit m hc).trans (Flock.Bridge.circuitOf_eq m.D m.hU m.n)) g
   have hL : Commit.Loads m.D m.n m.pi m.pub m.I := ⟨m.ht, m.hTags, m.hD, m.hpub, hn, hc.distinct⟩
   exact opensPlace_of_ready (r := m.fileRead) hc.noPublic hL hr m.hD m.hpub hn hN g hw hop hv
 

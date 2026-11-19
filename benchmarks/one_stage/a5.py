@@ -1508,10 +1508,10 @@ def case_written(out: Path) -> dict:
     return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
 
 
-def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
+def case_v2(case: dict, sessions: Sequence[str], *, proof, public: str, registered: dict | None,
             tables: Sequence[Path]) -> dict:
-    """v1's ``case`` as `Spot.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
-    public file's SHA-512 as the caller took it, and the verifier's registered file), the evidence with its
+    """v1's ``case`` as `Spot.OneStageZk` reads it: the params with ``proofs`` (the public file's SHA-512 as the
+    caller took it, and theta's registered file; the circuit file is C_S, which v2 derives), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables its circuit looks up (`proofs.circuit_lookups`,
     which v2 holds them to), which onsite reads after the evidence (`compose.onsite_check`). v2 holds the public file's
@@ -1530,12 +1530,12 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
     return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(),
-            "params": {**case["params"], "proofs": {"circuit": circuit, "public": public, "registered": registered}}}
+            "params": {**case["params"], "proofs": {"public": public, "registered": registered}}}
 
 
 def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> dict:
     """v1's ``case`` in `Spot.OneStageZk`'s per-member form, for a window of several `members` (`proofs.Member`, every
-    one of the window's): the params with ``proofs`` the members, each with its circuit and public files' digests, taken
+    one of the window's): the params with ``proofs`` the members, each with its public file's digest, taken
     when it was staged before the sample, its registered file, its units and its circuit's ``vus_per_block``; the
     evidence with its ``verdicts`` replaced by the statements, one for each member with a session, in the members' order
     (`proofs.members_v2`), each session under the name v1's ``sessions`` gives it, its ``session.json``'s SHA-512; and
@@ -1650,7 +1650,7 @@ def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     st, n = mm["st"], mm["m"].n
     reads = st.get("registered_file")
     return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin", session_dirs(sdir)),
-            "circuit": mm["pin"], "public": st["public"], "registered": json.loads(reads.read_text()) if reads else None,
+            "public": st["public"], "registered": json.loads(reads.read_text()) if reads else None,
             "tables": looked_up_tables(st["dir"])}
 
 
@@ -1695,8 +1695,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
             return f"member {m.key}'s circuit names no vus_per_block (its META's: {g!r})"
         sessions = session_dirs(sdirs[m.key]) if m.key in sdirs else ()
         reads = st.get("registered_file")
-        out.append(PF.Member(m.key, PF.Proof(mm["circuit"], st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
-                             st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
+        out.append(PF.Member(m.key, PF.Proof(mm["circuit"], st["dir"] / f"pub-{m.n}.bin", sessions), st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
         tables.update((f.name, f) for f in looked_up_tables(mm["circuit"].parent) if f.name not in tables)
     return {"members": out, "tables": [tables[x] for x in sorted(tables)]}
 
