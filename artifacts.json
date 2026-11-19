@@ -181,16 +181,15 @@
   "art:3b4e100e16ec5f11bccadf73cab4d002d370ffe50815ac9eb4f3d37cbd36ec57": "tests/adapters/vllm/verity_vllm/definitions/fixtures/fa2_train_bwd_sm120.npz",
   "art:ed3b2d968923fe39be309d15f9e2c41cae215ff4fcce40590131b9f0b02a2d52": "tests/verity/protocols/compose/verifier/lean/fixtures/sampled-two-case",
   "art:9606d9658bc4fa470a1041657128bcb6acd171c98866a253ae07e8b8ef534d9a": "tests/adapters/vllm/tests/observe/fixtures/glm53_tp8_fp8_ds_mla.rank0.jsonl.gz",
-  "toys": {
-    "tests/benchmarks/one_stage/fixtures/bundle-window": "the prover's store of a seeded two-linear MLP's window on two made-up tokens, with its tampered twin; no checkpoint and no request",
-    "tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate": "witness files of two recursion runs of a toy circuit at 2 instances, on generated values",
-    "tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner": "a recorded prover session and its private part for the recursion's inner shape at 16 instances, a toy circuit on generated values",
-    "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins": "a recorded recursive session's salts and private part at 64 instances, a toy circuit on generated values"
-  },
   "art:7458391214a64fd498d7aa9db36460de928fe67a3de7ffe3e2ea1e465333284d": "tests/verity/circuits/count_vectors.jsonl",
   "art:85b39907e7d0a079f4a17f2f2cad00865d09285b442269d11cbaa7184131bf48": "tests/verity/circuits/format_vectors.json",
   "art:645e79087871accb66c8502db2a02cf17735c5115c74cde24a527a81269359d3": "tests/verity/circuits/qcall_vectors.json",
   "art:f1830872b1c7ea92a2a7133812f2f25d821e67d7ac14bcf1b5953a7973104198": "tests/verity/circuits/qword_vectors.json",
+  "toys": {
+    "tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate": "witness files of two recursion runs of a toy circuit at 2 instances, on generated values",
+    "tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner": "a recorded prover session and its private part for the recursion's inner shape at 16 instances, a toy circuit on generated values",
+    "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins": "a recorded recursive session's salts and private part at 64 instances, a toy circuit on generated values"
+  },
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
