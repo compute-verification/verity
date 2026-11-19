@@ -32,7 +32,7 @@ PROBE
   echo "__device__ inline unsigned mix(unsigned x) { return x * 2654435761u + 1u; }" > "${places[i]}/${includes[i]}"
 done
 # a ship's cubin flags (cubin_flags.sh), less ptxas's report
-. "$(dirname "${BASH_SOURCE[0]}")/cubin_flags.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/cubin_flags.sh"
 cubin_flags "$gencode" || exit 1
 flags=(); for f in "${FLAGS[@]}"; do case $f in -Xptxas|-v) ;; *) flags+=("$f") ;; esac; done
 for cc in "$CUDA/bin/nvcc" "$SHIP_NVCC"; do
