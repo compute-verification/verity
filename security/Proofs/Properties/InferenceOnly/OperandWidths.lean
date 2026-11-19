@@ -20,7 +20,7 @@ reads a node's references to later nodes as no source, so they may name leaves o
 
 @[expose] public section
 
-namespace FlockSoundness.OperandWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.OperandWidths
 
 open Flock.Program Flock.OfProgram
 open InferenceOnlyVerifier.Properties.SecurityProofs
@@ -348,4 +348,4 @@ theorem gate_operand_bits (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok
     (ops.toList.map (widthAt P)).sum ≤ ((P.defs[p]!).params.toList.flatMap fun q => q.2.widths.toList).sum :=
   sum_le_of_forall₂ (gate_operand_widths bytes P h hov hr g p ops hg)
 
-end FlockSoundness.OperandWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.OperandWidths

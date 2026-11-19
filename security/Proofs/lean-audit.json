@@ -416,7 +416,7 @@
   "Proofs.Properties.Flock.Nets",
   "Proofs.Properties.Flock.EvalBool",
   "Proofs.Properties.Flock.Circuit.Inline",
-  "Proofs.Properties.Flock.Circuit.OperandWidths",
+  "Proofs.Properties.InferenceOnly.OperandWidths",
   "Proofs.Properties.Flock.DecodeBoolean",
   "Proofs.Core.QSortPerm",
   "Proofs.Properties.Verity.Sampled.MemberForm.Ranges",
