@@ -156,6 +156,7 @@ class Writer:
 
 
 CIRCUITS_TESTS, VLLM_PROGRAM_TESTS = "tests/verity/circuits/", "tests/adapters/vllm/tests/program/"
+POUW_PROVER_TESTS = "tests/verity/protocols/resource_accounting/compute/pouw/prover/"
 WRITERS = (
     *(Writer(CIRCUITS_TESTS + f, CIRCUITS_TESTS + m) for f, m in (
         ("boolean_vectors.json", "test_boolean.py"),
@@ -170,6 +171,7 @@ WRITERS = (
     Writer(VLLM_PROGRAM_TESTS + "data/sampling_split_digests.json", VLLM_PROGRAM_TESTS + "test_sampling_split.py"),
     Writer("tests/tools/verity/circuit_check/fixtures/split/prims_serve.json",
            "tests/tools/verity/circuit_check/test_split_prims_serve.py"),
+    Writer(POUW_PROVER_TESTS + "fixtures/pearl_plus_public_row.json", POUW_PROVER_TESTS + "test_pearl_plus_public_row.py"),
 )
 #: the directories whose every test module with a ``--write`` is a `Writer`'s (`tests/test_pins.py`)
 WRITER_DIRS = (CIRCUITS_TESTS, VLLM_PROGRAM_TESTS)
