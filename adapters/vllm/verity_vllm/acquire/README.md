@@ -11,7 +11,7 @@ Value acquisition: how a served run's values reach the Commit. The package's doc
   `schedule_of_workload` and the command `verity-vllm compiled`. `fa2_plane_classes` gives `LayoutPolicy`,
   `StepSequences`, `attention_impls_of_record`, `check_step`, `counts_by_layer`, `declarations_from_attention_impls`
   and `uniform_rule`. `gate` gives `call_boundaries_line`, `call_boundaries_of` and the command `verity-vllm gate`.
-  `h1_commit` gives `tap`, and `RankCommit`, which PoUW's H1 names by its dotted path. `inductor_templates` gives
+  `h1_commit` gives `tap`. `inductor_templates` gives
   `TEMPLATE`, `Template`, `Unmodelled`, `holes`, `instantiate`, `kernel_sources` and `source_sha256`. `install` gives
   `IncompletePlan`, `OccurrenceSink`, `apply_plan_to_committer` and `install_from_plan`. `plan` gives
   `analytic_table_of_buffer`. `served` gives `assemble`, `build`, `probe_routes` and its constant for the static

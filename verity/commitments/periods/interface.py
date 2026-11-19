@@ -1682,7 +1682,7 @@ class Circuit:
         if self.blocks is None:
             return None
         built = self.program()
-        return self.blocks.doc(sum(self.units.values()), PO.digest(PO.build(*built, partition_blocks(self, cap, built))))
+        return self.blocks.doc(sum(self.units.values()), PO.digest(PO.build(*built, [partition_blocks(self, cap, built)])))
 
     @functools.cached_property
     def _ids(self) -> tuple[str, ...]:
@@ -1770,7 +1770,7 @@ def members(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | N
 
 
 def partition_blocks(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | None = None) -> list[list[int]]:
-    """The partition object's ``blocks`` (`partition_object`) of the period's members (`members`: cut over the order's
+    """The one level of the partition object's ``blocks`` (`partition_object`) of the period's members (`members`: cut over the order's
     ranges, at every wire's and registered read's ends, and at ``cap``): each member's units [base, base + n) in the
     population's order."""
     return [[m.base, m.base + m.n] for m in members(circuit, cap, built)]
@@ -2319,7 +2319,7 @@ def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
     program, query = circuit.program()
-    part = PO.build(program, query, partition_blocks(circuit, cap, (program, query)))
+    part = PO.build(program, query, [partition_blocks(circuit, cap, (program, query))])
     sts, seg = {}, seg_ports(circuit.registered)
     for fn, tid in zip((f for f, _ in circuit.templates), circuit.ids):
         i, o = unit_rows(fn, circuit.cuts.get(tid), seg.get(tid, ()))

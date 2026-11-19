@@ -31,6 +31,7 @@ from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
 from verity_torch.pouw.pearl_c import ends as ENDS
 from verity_torch.pouw.pearl_c import host as PH
+from verity_torch.pouw.pearl_c import passes as PP
 from verity_torch.pouw.pearl_c import served_y_device as SYD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
@@ -63,7 +64,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import salt as P
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger, CoinCommitment
 from verity.protocols.resource_accounting.compute.pouw.verifier.credit import passes_distinct
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, DomainError, Matmul, Shape, call_place
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
@@ -327,50 +328,88 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
     assert run.end() == {"units": 1, "base": 0, "tiles": 0, "hashing": False, "schedule": "serial"}
 
 
-def test_passes_number_their_calls_across_the_epoch(device_run):
-    """Each pass's calls continue the execution phase's indices (`pouw_pass.call_index`), its buffers positional: three calls, then
-    two in the next pass take 3 and 4.  A check that repeats a pass from its index (`begin`'s ``at``) shares its indices,
-    and the pass after continues past every index the execution phase has used, never from the repeat's end; so does a call after
-    `finish`."""
-    make, _, weights, *_ = device_run
+def test_a_calls_index_is_its_round_and_its_position_and_no_caller_chooses_one(device_run):
+    """A call's index is its place (`passes.call_index`): its pass's round among the epoch's passes with calls times
+    `ROUND_CALLS`, plus its position in the pass.  Three calls, then two in the next pass, take round 1's positions 0 and 1;
+    a pass without a call takes no round.  A call after an ended pass is refused by name (`NO_OPEN_PASS`) before it
+    takes a round or a base, until a `begin`; `finish` ends a pass with calls and leaves a fresh open one.
+    A caller's own index is refused by name, at `begin` and at `repeat_at`, and the keys a call uploads carry the derived
+    index."""
+    make, kernel, weights, roots, salt = device_run
     run = make()
     x = torch.randn(16, 1024).to(torch.bfloat16)
     for w in (0, 1, 0):
         run.gemm(w, x, weights[w], None)
+    assert [u.index for u in run.cur.matmuls] == [0, 1, 2]
     first = run.end_pass()
+    assert run.cur.base is None and run.rounds() == 1
     for w in (1, 0):
         run.gemm(w, x, weights[w], None)
-    assert first["base"] == 0 and [u.index for u in run.cur.matmuls] == [3, 4] and run.cur.base == 3
+    assert first["base"] == 0 and [u.index for u in run.cur.matmuls] == [PP.ROUND_CALLS, PP.ROUND_CALLS + 1]
+    sh = run._shape(16, 256, 1024)
+    assert PPDR._bytes(sh.keys[:168]) == PPDR.call_keys(salt, roots[0], PP.ROUND_CALLS + 1, 16, run.tree_hash)
     second = run.end_pass()
-    assert second["base"] == 3 and run.epoch_calls() == 5
-    run.begin(at=0)
-    run.gemm(0, x, weights[0], None)
-    assert [u.index for u in run.cur.matmuls] == [0]
-    run.repeat_at = 3
+    assert second["base"] == PP.ROUND_CALLS and run.rounds() == 2
     run.end_pass()
-    assert run.cur.base == 3 and run.repeat_at is None
-    run.end_pass()
-    assert run.cur.base == 5
+    run.begin()
+    assert run.rounds() == 2 and "base" not in run.end()
+    for at in (0, 2 * PP.ROUND_CALLS, PP.ROUND_CALLS + 1):
+        with pytest.raises(ValueError, match="which the device derives and no caller chooses"):
+            run.begin(at=at)
+        with pytest.raises(ValueError, match="repeat_at.*no caller chooses"):
+            run.repeat_at = at
+    assert run.repeat_at is None and run.rounds() == 2 and not hasattr(run, "epoch_calls") and not hasattr(run, "pass_base")
+    with pytest.raises(PH.SaltsRefused, match="NO_OPEN_PASS") as refused:
+        run.gemm(1, x, weights[1], None)
+    assert refused.value.name == "NO_OPEN_PASS" and run.rounds() == 2 and run.cur.base is None and not run.cur.matmuls
+    run.begin()
     run.gemm(1, x, weights[1], None)
     run.finish()
-    assert run.cur.base is None and run.epoch_calls() == 6
+    assert run.cur.base is None and run.rounds() == 3
+    run.begin()
     run.gemm(0, x, weights[0], None)
-    assert run.cur.base == 6 and [u.index for u in run.cur.matmuls] == [6]
+    assert run.cur.base == 3 * PP.ROUND_CALLS and [u.index for u in run.cur.matmuls] == [3 * PP.ROUND_CALLS]
 
 
-def test_the_epochs_call_at_2_to_the_32_is_refused_on_the_device(device_run):
-    """A call whose index would reach `pearl_c.CALL_RANGE` (2^32, the row seed's range) raises before it runs, naming the
-    fix: the execution phase ends and the install takes a new salt."""
+def test_twins_give_a_pass_the_same_indices_salt_and_keys(device_run):
+    """What a check that runs a pass twice does in place of a chosen index: each on a twin of the run
+    (`PearlCDeviceRun.twin`), a device run of its own over the same install at the run's hashing, whose rounds number from
+    0 whatever the run's have reached, so the two passes' calls have the same places, salt and keys."""
+    make, _, weights, *_ = device_run
+    x = torch.randn(16, 1024).to(torch.bfloat16)
+    run = make(hashing=False)
+    for w in (0, 1):
+        run.gemm(w, x, weights[w], None)
+    run.end_pass()
+    got = []
+    for _ in range(2):
+        twin = run.twin()
+        for w in (1, 0):
+            twin.gemm(w, x, weights[w], None)
+        got.append(([u.index for u in twin.cur.matmuls], twin.salt, twin.hashing, PPDR._bytes(twin._shape(16, 256, 1024).keys[:168])))
+        twin.finish()
+    assert got[0] == got[1] and got[0][:3] == ([0, 1], run.salt, False) and run.rounds() == 1
+
+
+def test_the_epochs_last_round_is_its_last_and_a_rounds_calls_stay_inside_it(device_run):
+    """An epoch holds `EPOCH_ROUNDS` rounds, so every index is below `protocol.CALL_RANGE` (2^32, the row seed's range):
+    the last round's first call has index 2^32 - `ROUND_CALLS`, and a call of the round after raises before it runs,
+    naming the fix: the execution phase ends and the install takes a new salt.  A round's position never reaches
+    `ROUND_CALLS`."""
     make, kernel, weights, *_ = device_run
+    assert PP.ROUND_CALLS * PP.EPOCH_ROUNDS == C.CALL_RANGE and PP.ROUND_CALLS == PPD.CALL_CAPACITY
     run = make()
     x = torch.randn(16, 1024).to(torch.bfloat16)
-    run.begin(at=C.CALL_RANGE - 1)
+    run._rounds = PP.EPOCH_ROUNDS - 1
     run.gemm(0, x, weights[0], None)
-    assert [u.index for u in run.cur.matmuls] == [C.CALL_RANGE - 1]
+    assert [u.index for u in run.cur.matmuls] == [C.CALL_RANGE - PP.ROUND_CALLS]
+    run.end_pass()
     kernel.dev.log.clear()
-    with pytest.raises(RuntimeError, match="2\\^32 calls.*reinstall under a new salt"):
+    with pytest.raises(RuntimeError, match="rounds.*2\\^32 calls.*reinstall under a new salt"):
         run.gemm(1, x, weights[1], None)
-    assert not kernel.dev.log and len(run.cur.matmuls) == 1
+    assert not kernel.dev.log
+    with pytest.raises(RuntimeError, match="would pass its 65536 calls"):
+        PP.call_index(make(), PP.ROUND_CALLS + 1)
 
 
 def test_a_pass_screens_at_most_its_flag_rows(device_run):
@@ -770,8 +809,9 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
     for i, (p, step) in enumerate(zip(passes, steps)):
         man = json.loads(Path(p["manifest"]).read_text())
         mans.append(man)
-        assert p["base"] == 2 * i
-        assert [(u["index"], u["weight"], u["real_rows"]) for u in man["matmuls"]] == [(2 * i + j, w, m) for j, (w, m) in enumerate(step)]
+        assert p["base"] == PP.ROUND_CALLS * i
+        assert [(u["index"], u["weight"], u["real_rows"]) for u in man["matmuls"]] == [
+            (PP.ROUND_CALLS * i + j, w, m) for j, (w, m) in enumerate(step)]
         assert man["commitment"] == {"root": p["transcript_root"], "count": p["tiles"]} and sorted(man["weights"]) == ["0", "1"]
     assert passes_distinct(mans) is None
     for f in ("weights/0.rows.bf16", "weights/0.tree", "weights/1.rows.bf16", "weights/1.tree"):
@@ -784,7 +824,7 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
 #: `_retained_files`' digest of the three steps below as the retention path wrote them when each call's copies, its record,
 #: y's root and the pass's files and manifest were all waited for in its step, under Pearl+'s kernel scheme
 #: (``pearl-c-h100-v1-h3``), every fresh salt `seeded_device_salts`'
-RETAINED_DIGEST = "5ab93ab77cd0f996a83ffcce36a8ac89ec0f8df4175c930caaa9b6b747c6751f"
+RETAINED_DIGEST = "16837623d625907f37e5ab18ca09160501095583d8f5dfc596a6a6302cd2c737"
 
 
 def _retained_files(root: Path) -> dict[str, str]:
@@ -893,7 +933,7 @@ def test_an_attached_pearl_plus_after_its_first_step_holds_the_run_the_harness_g
     served.step()
     run = served.scheme.run
     assert isinstance(run, cls) and isinstance(run.schedule.name, str) and run.omit == frozenset()
-    assert all(callable(getattr(run, f)) for f in ("begin", "end", "gemm", "poison", "epoch_calls"))
+    assert all(callable(getattr(run, f)) for f in ("begin", "end", "gemm", "poison", "rounds"))
     assert isinstance(run.details, dict) and run.scheme is not None
     assert {w: x.tensor.data_ptr() for w, x in run.weights.items()} == {w: t.data_ptr() for w, t in weights.items()}
     assert run.commits["weights_root"] == run.epoch.weights_root.hex() and "registration" in run.commits
@@ -1115,7 +1155,7 @@ def kept_leaves(d, tree: MerkleTree, schema: str = ROW_SCHEMA) -> list[bytes]:
     return [d.leaf(i, i, schema, tree.open(i).value) for i in range(tree.domain.count)]
 
 
-def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
+def proved_pass(tmp_path: Path, scheme: str, round_: int = 0, key: bytes | None = None,
                 live: int | None = None, seed: int = 11, spike: float | None = None, bad_b: int | None = None,
                 tile: tuple[int, int] = (16, 16), zero_a: int | None = None,
                 load: tuple[int, int] | None = None, k: int = 128, filler: int | None = None):
@@ -1127,8 +1167,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     sampled tile is over its own cap, which the sampling design and verify_run both reject.  On the h100 record (Hopper's
     14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits one flagged atom-word
     (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
-    The calls have the execution phase's indices `indices`, and every pass built here is of the one execution phase (the same weights, salts and
-    salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt execution phase
+    The pass is round `round_` of the execution phase, its two calls at their places (`protocol.call_place`), and every
+    pass built here is of the one execution phase (the same weights, salts and salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt execution phase
     `live`'s root over the weights' root (`live_coin`), and the manifest names that execution phase (``pass_index``).  `seed` samples
     the rows: under another, the weights are others, and so is the salt the one coin gives them.  With `spike`, credited
     row 9 of the first call holds one entry `spike` times its every-8th entries' RMS (ρ's positions), off them.  With
@@ -1158,7 +1198,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
         a0[zero_a] = 0
     if filler is not None:
         a0[real, 0] = filler
-    i0, i1 = indices
+    i0, i1 = call_place(round_, 0), call_place(round_, 1)
     acts = {i0: a0, i1: bf16_words(rng, m1, k)}
     if load:
         acts[i1][real:] = 0
@@ -1480,24 +1520,25 @@ def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
     return d
 
 
-def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_index(tmp_path):
-    """Two honest passes of one execution phase whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
-    both, so the run is refused (``repeated-call``) before any pass is replayed, whether served.json or ``--manifest``
-    names them."""
-    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (1, 2))))
+def test_served_passes_verify_refuses_a_pass_whose_calls_are_not_at_its_place(tmp_path):
+    """Two honest passes of one execution phase, both proved as round 0 (calls 0 and 1): the second is the run's round 1,
+    whose calls' places are 2^16 and 2^16 + 1, so its call 0's seeds, noise and tickets are the first's and the run is
+    refused (``call-place``, `verify_run.passes_placed`) before any pass is replayed, whether served.json or
+    ``--manifest`` names them."""
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0])[0] for name in ("a", "b"))
     assert json.loads(a.read_text())["salt"] == json.loads(b.read_text())["salt"]
     for d, more in ((_serve_dir(tmp_path, [a, b]), ()), (a.parent, ("--manifest", str(a), "--manifest", str(b)))):
         rc, doc, answer = served_verify(d, tmp_path / d.name / "verify.json", *more)
-        assert rc == 1 and answer["verdict"] == "reject" and "verdicts" not in doc and doc["refused"][0] == "repeated-call"
-        assert "passes 0 and 1 both hold call index 1" in doc["refused"][1]
+        assert rc == 1 and answer["verdict"] == "reject" and "verdicts" not in doc and doc["refused"][0] == VR.CALL_PLACE
+        assert "pass 1's call 0 holds index 0, not its place 65536 (round 1, position 0)" in doc["refused"][1]
         assert [x.split(" sha256:")[0].split(":", 1)[1] for x in doc["passes"]] == [str(a), str(b)]
 
 
 @pytest.mark.slow
 def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
-    """Two honest passes of one execution phase numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: one sample over
+    """Two honest passes of one execution phase at their places, rounds 0 and 1, as the device numbers a serve's passes: one sample over
     both, each pass's exclusion tile opened, accepted, its MACs over both (a test instance's, credited nothing)."""
-    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], s)[0] for name, s in (("a", 0), ("b", 1)))
     rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json")
     assert rc == 0 and answer["verdict"] == "accept" and "refused" not in doc
     assert answer["profile"]["exclusion_tiles"] == 2 and len(answer["public"]["passes"]) == 2
@@ -1509,8 +1550,7 @@ def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
 def test_verify_passes_reads_a_test_instance_only_as_one_and_a_runs_passes_of_one_salt(tmp_path):
     """A test instance's pass (k_min 32, at 16 x 16 tiles or at the served 64 x 64) is refused as a served run's, whose
     instance is k_min 1,024 at 64 x 64, and accepted as a test instance's, crediting nothing.  Passes of two salts (other
-    weights under the one coin) are refused, though each holds calls 0 and 1: `passes_distinct` holds call indices apart
-    per salt."""
+    weights under the one coin) are refused, though each holds its calls at its place."""
     a = proved_pass(tmp_path / "a", PROMOTED[0])[0]
     wide = proved_pass(tmp_path / "wide", PROMOTED[0], tile=(64, 64))[0]
     for path, tile in ((a, 16), (wide, 64)):
@@ -1523,7 +1563,7 @@ def test_verify_passes_reads_a_test_instance_only_as_one_and_a_runs_passes_of_on
         work = test["answer"]["public"]["work"]
         assert test["answer"]["verdict"] == "accept" and work["credited"] == 0 < work["macs"], test["line"]
     coins, source = published(a), b"verifier" * 4
-    b = proved_pass(tmp_path / "b", PROMOTED[0], seed=12)[0]
+    b = proved_pass(tmp_path / "b", PROMOTED[0], 1, seed=12)[0]
     assert json.loads(a.read_text())["salt"] != json.loads(b.read_text())["salt"]
     for kw in ({}, {"test_instance": True}):
         two = VR.verify_passes([a, b], 3, 1, "test", coins, source, **kw)
@@ -1555,7 +1595,7 @@ def test_served_passes_verify_credits_the_timed_call_its_passes_less_the_runs_wh
     alone (`served_passes.timed_credit`): the run's credited MACs less the warm-up pass's credited cells' MACs at (1 − ρ),
     rounded up, so the run's deduction for ε falls wholly on the timed pass."""
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
-    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], s)[0] for name, s in (("a", 0), ("b", 1)))
     served = {"run": RUN, "passes": [{"pass": 0, "timed": False, "units": 2, "tiles": 4, "manifest": str(a)},
                                      {"pass": 1, "timed": True, "units": 2, "tiles": 4, "manifest": str(b)}]}
     work = VR.credit_at_assumption([VR.load(x, published(x)) for x in (a, b)], SP.DRAWS, Fraction(1, 100))
@@ -2125,7 +2165,7 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     (a serve's declaration.json) W's header names the file's day and declaration digest and is otherwise that record, tied
     to the same passes; the flag without ``--window-record`` is a usage error, and a file that states no day leaves no W."""
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
-    warm, a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
+    warm, a, b = (proved_pass(tmp_path / name, PROMOTED[0], s)[0] for name, s in (("w", 0), ("a", 1), ("b", 2)))
     d = _serve_dir(tmp_path, [warm, a, b])
     served = json.loads((d / "served.json").read_text())
     served["passes"] = [{**served["passes"][0], "timed": False}, {"pass": 1, "units": 0, "tiles": 0},
@@ -2241,7 +2281,7 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
     ``retain`` and ``volunteer`` refuse once the coin is flipped, and a retention changed behind them is refused
     (``after-coin``) before any replay, whichever way it changed."""
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
-    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], s)[0] for name, s in (("a", 0), ("b", 1)))
     d = _serve_dir(tmp_path, [a, b])
     vol = tmp_path / "volunteer.json"
     for passes, why in (([{"manifest": str(a), "ok": True, "left": []}], "did not finish before the coin"),
@@ -2470,14 +2510,14 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
 @pytest.mark.slow
 def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes_over_the_dropped_rounds(tmp_path):
     """With round 0 dropped before the coin, W over both rounds ties the retained pass at its round 1, its dropped round's
-    entries crediting nothing; without the drop those entries are a call the run doesn't hold, and the pass at round 0
-    misses its own."""
-    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    entries crediting nothing; without the drop those entries are a call the run doesn't hold, and at round 0 the pass's
+    calls are not at their places (`passes_placed`)."""
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], s)[0] for name, s in (("a", 0), ("b", 1)))
     coins, w = published(b), window_record(a, b)
     r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=[1], dropped=(0,), test_instance=True)
     assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"]["tables"] == 6, r["line"]
     for rounds, dropped, why in (([1], (), "W registers pearl-a/0/0, no call of the run's"),
-                                 ([0], (1,), "W's pearl-a/0/0: its root")):
+                                 ([0], (1,), "call-place: pass 0's call 0 holds index 65536, not its place 0")):
         r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=rounds, dropped=dropped, test_instance=True)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
@@ -2508,9 +2548,11 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path, monkeypatch):
     same words, the class's alone (`off_load`), which name no round, call or count of the passes'.  A class is read only
     beside the execution phase record."""
     cls = (2, 8, 2)
-    a = proved_pass(tmp_path / "a", PROMOTED[0], (0, 1), load=(16, 16))[0]
-    b = proved_pass(tmp_path / "b", PROMOTED[0], (2, 3), load=(2, 16))[0]
-    wide = proved_pass(tmp_path / "wide", PROMOTED[0], (4, 5), load=(2, 32))[0]
+    a = proved_pass(tmp_path / "a", PROMOTED[0], 0, load=(16, 16))[0]
+    b = proved_pass(tmp_path / "b", PROMOTED[0], 1, load=(2, 16))[0]
+    wide = proved_pass(tmp_path / "wide", PROMOTED[0], 1, load=(2, 32))[0]
+    b0, a1, b2 = (proved_pass(tmp_path / n, PROMOTED[0], s, load=rows)[0]
+                  for n, s, rows in (("b0", 0, (2, 16)), ("a1", 1, (16, 16)), ("b2", 2, (2, 16))))
     coins, w = published(a), window_record(a, b)
 
     def run(paths, window=w, **kw):
@@ -2537,9 +2579,9 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path, monkeypatch):
         r = run(paths, window_class=cls, **kw)
         assert r["answer"]["verdict"] == "accept" and r["tie"]["load"] == [2, 8, 2], r["line"]
     off = [([a, b], w, (2, 8, 3), {}), ([a, b], w, (2, 8, 1), {}), ([a, b], w, (4, 4, 2), {}), ([a, b], w, (2, 4, 2), {}),
-           ([a, b], w, (1, 16, 2), {}), ([b, a], window_record(b, a), cls, {}),
+           ([a, b], w, (1, 16, 2), {}), ([b0, a1], window_record(b0, a1), cls, {}),
            ([a, wide], window_record(a, wide), cls, {}), ([a], w, cls, {"rounds": [0], "dropped": (1, 2)}),
-           ([b], window_record(a, a, b), cls, {"rounds": [2], "dropped": (0, 1)})]
+           ([b2], window_record(a, a, b2), cls, {"rounds": [2], "dropped": (0, 1)})]
     for paths, window, c, kw in off:
         r = run(paths, window, window_class=c, **kw)
         assert (r["answer"]["verdict"], r["answer"]["reason"]) == ("reject", f"ValueError: {VR.off_load(c)}"), (c, r["line"])
@@ -2666,7 +2708,7 @@ def test_a_tie_refuses_two_passes_that_commit_one_weight_under_two_roots(tmp_pat
     """W registers each weight's B rows once, so a tie over passes whose execution phases commit weight 0 under two roots (other
     weights, seed 12) has no one entry to hold them to.  `verify_passes` never gets here (one salt is one weights root,
     checked before the tie), so the tie is called directly."""
-    a, b = proved_pass(tmp_path / "a", PROMOTED[0])[0], proved_pass(tmp_path / "b", PROMOTED[0], (2, 3), seed=12)[0]
+    a, b = proved_pass(tmp_path / "a", PROMOTED[0])[0], proved_pass(tmp_path / "b", PROMOTED[0], 1, seed=12)[0]
     passes = [VR.load(x, published(x)) for x in (a, b)]
     assert passes[0].epoch.weight_roots[0] != passes[1].epoch.weight_roots[0]
     with pytest.raises(ValueError, match="pass 1 commits weight 0's B rows under another root or shape than an earlier"):
@@ -2692,7 +2734,7 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
     """The manifests of a served run of the run of record's size, one a round of class `RECORD_CLASS`'s fixed load
     (`window_class.PearlTables`: round 0 every slot's prompt, 128 rows, and each later round a row a slot, 4 rows of the 16
     its A commits), each calling `LLAMA32_1B`'s 64 cut linears at their real (n, k), weight 4·layer + linear and call
-    index 64·round + call: 4 passes, 256 calls, 64 weights, the served instance of the run of record's scheme (`H100_SCHEME`, 64 x 64
+    index its place (`protocol.call_place`, round and call): 4 passes, 256 calls, 64 weights, the served instance of the run of record's scheme (`H100_SCHEME`, 64 x 64
     tiles), one execution phase under one salt coin, no row excluded.
 
     Each root is an hm96 root over seeded fake row digests and salts, not over rows: the tree of the real number of leaves
@@ -2725,7 +2767,7 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
     for r in range(outputs):
         real = slots * prompt if r == 0 else slots
         m = -(-real // PPD.ROW_ALIGN) * PPD.ROW_ALIGN
-        work = Workload(tuple(Matmul(len(shapes) * r + c, Shape(m, k, n), c) for c, (n, k) in shapes.items()))
+        work = Workload(tuple(Matmul(call_place(r, c), Shape(m, k, n), c) for c, (n, k) in shapes.items()))
         epoch = Epoch.start(work, committed, *coins)
         splits = {w: PW.Split(k) for w, (_, k) in shapes.items()}
         records = [PW.UnitRecord(u, real, u.shape.k) for u in work.matmuls]
@@ -4054,7 +4096,7 @@ def test_eager_calls_leave_every_filler_row_zero_as_m_moves_within_a_shape(devic
 
 def test_each_calls_a_root_lands_at_its_position_and_its_keys_take_the_epochs_index(device_run):
     """Two steps of the same three calls: each call's A root lands at its position in its pass's buffer, and its keys are
-    those of its index in the execution phase, so the second step's calls are 3, 4 and 5 and share no keys with the first's."""
+    those of its place in the execution phase, so the second step's calls are round 1's positions 0, 1 and 2 and share no keys with the first's."""
     make, _, weights, roots, salt = device_run
     run = make()
     for step in range(2):
@@ -4066,10 +4108,10 @@ def test_each_calls_a_root_lands_at_its_position_and_its_keys_take_the_epochs_in
             run.gemm(w, torch.randn(8, 1024).to(torch.bfloat16), weights[w], None)
             size = run._pipe(w, sh)[0].size["tree_a"]
             assert PPDR._bytes(run.roots_buf[64 * i:64 * (i + 1)]) == PPDR._bytes(tree[size - 64:size])
-            assert PPDR._bytes(sh.keys[:168]) == PPDR.call_keys(salt, roots[w], 3 * step + i, 16, run.tree_hash)
-        assert [u.index for u in run.cur.matmuls] == [3 * step, 3 * step + 1, 3 * step + 2]
+            assert PPDR._bytes(sh.keys[:168]) == PPDR.call_keys(salt, roots[w], PP.ROUND_CALLS * step + i, 16, run.tree_hash)
+        assert [u.index for u in run.cur.matmuls] == [PP.ROUND_CALLS * step + i for i in range(3)]
         run.end_pass()
-    assert run.cur.base == run.epoch_calls() == 6
+    assert run.cur.base is None and run.rounds() == 2
 
 
 def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_path):

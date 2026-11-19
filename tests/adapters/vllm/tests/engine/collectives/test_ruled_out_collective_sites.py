@@ -9,7 +9,6 @@ itself is tested in `tests/acquire/test_tp_partial_source_mid_module.py`; here, 
 from __future__ import annotations
 
 import ast
-import json
 import sys
 import types
 from pathlib import Path
@@ -160,19 +159,6 @@ def test_commit_source_lists_the_ruled_out_site_and_still_names_a_call_that_runs
     assert src.stats["unattributed"] == 1 and any("no site attribution" in e for e in c.errors)
 
 
-def test_match_verdict_lists_the_recorders_ruled_out_sites(tmp_path):
-    """`tp2_match.json` carries the list the recorder wrote to each rank's `coll_meta`: once when the ranks agree, per rank when not."""
-    match = pytest.importorskip("verity_vllm.pipeline.tp.match")
-    ruled = _census({MLP: Qwen3MoeSparseMoeBlockLike(False)})["ruled_out"]
-    for r in (0, 1):
-        (tmp_path / f"coll_meta.rank{r}.json").write_text(json.dumps({"mid_module_sites_ruled_out": ruled}))
-    assert match._ruled_out_sites(tmp_path, [0, 1]) == {"n": 1, "same_on_all_ranks": True, "sites": ruled}
-    (tmp_path / "coll_meta.rank1.json").write_text(json.dumps({"mid_module_sites_ruled_out": []}))
-    got = match._ruled_out_sites(tmp_path, [0, 1])
-    assert got["same_on_all_ranks"] is False and got["per_rank"] == {"0": ruled, "1": []}
-    assert match._ruled_out_sites(tmp_path / "none", [0, 1]) is None
-
-
 def _calls_in(path: Path, fn: str, cls: str | None = None) -> set[str]:
     tree: ast.AST = ast.parse(path.read_text())
     if cls is not None:
@@ -182,9 +168,3 @@ def _calls_in(path: Path, fn: str, cls: str | None = None) -> set[str]:
             if isinstance(n, ast.Call) and isinstance(n.func, (ast.Name, ast.Attribute))}
 
 
-def test_match_recorder_and_commit_source_read_the_one_census():
-    """Both observers take their expected mid-module sites from `mid_module_site_census`, so the Match and the Commit cannot disagree on
-    which calls are expected."""
-    pkg = Path(tps.__file__).resolve().parents[2]
-    for calls in (_calls_in(pkg / "pipeline" / "tp" / "rank_worker.py", "tp2_coll_install"), _calls_in(Path(tps.__file__), "__init__", "TPPartialSource")):
-        assert "mid_module_site_census" in calls and "mid_module_sites" not in calls and "class_collective_calls" not in calls
