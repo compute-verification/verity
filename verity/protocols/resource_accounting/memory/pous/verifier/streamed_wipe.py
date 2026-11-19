@@ -70,7 +70,7 @@ from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.scheme import DIGEST_BYTES
 from verity.commitments.randomness import derive
 
-from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import SCHEMES, Verify
+from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import SCHEMES, Verify, _sha512
 
 PROTOCOL = "verity-pous/streamed-wipe/v2"
 KEY_DOMAIN = "verity/pous/streamed-wipe-labels/v1"
@@ -106,13 +106,6 @@ DEPLOYED_K = 74_000
 def raw_clock_ns() -> int:
     """A reading of `CLOCK`, the raw monotonic clock, in ns: what a `WipeMemoryAttester` reads unless a clock is injected."""
     return time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)
-
-
-def _sha512(*parts: bytes) -> bytes:
-    h = hashlib.sha512()
-    for p in parts:
-        h.update(p)
-    return h.digest()
 
 
 def wipe_key(secret: bytes, server: bytes, session: bytes) -> bytes:
