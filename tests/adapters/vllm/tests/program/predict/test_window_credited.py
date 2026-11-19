@@ -190,11 +190,21 @@ def test_on_honest_values_every_tile_is_ok_writes_the_schemes_y_and_its_readers_
     ok, ys, bad, split, readers = [], [], [], [], set()
     splits: set[int] = set()
 
+    width: dict[int, int | None] = {}
+
+    def read(i: int, bits: int | None) -> np.ndarray:
+        if bits is None or not (width.get(i) or 0) > bits:
+            return vals[i]
+        shift = np.arange(width[i] // bits, dtype=np.uint64) * np.uint64(bits)
+        return ((vals[i][:, None] >> shift) & np.uint64((1 << bits) - 1)).reshape(-1)
+
     def gather(node: Any) -> list[np.ndarray]:
-        return [np.concatenate([vals[i][lo:hi] for _s, i, lo, hi in runs(a.refs)]).reshape(node.n, -1) for a in node.args]
+        return [np.concatenate([read(i, t.homogeneous_width())[lo:hi] for _s, i, lo, hi in runs(a.refs)]).reshape(node.n, -1)
+                for a, (_p, t) in zip(node.args, node.fn.signature()[0])]
 
     for k, node in enumerate(prog.root.body.nodes):
         if is_input(node.fn):
+            width[k] = sig[names[len(at)]].homogeneous_width()
             at[names[len(at)]] = k
             vals.append(np.asarray(inputs[names[len(at) - 1]], dtype=np.uint64).reshape(-1))
             continue
