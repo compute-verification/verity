@@ -1,7 +1,7 @@
 # circuit-check
 
-circuit-check is the test a circuit passes before anything uses it. It takes a circuit (a Definition, a subcircuit
-template, a served workload's request Program) and runs it against its reference on edge and random inputs: every
+circuit-check is the test a circuit passes before anything uses it. It takes a circuit (a Definition or a subcircuit
+template) and runs it against its reference on edge and random inputs: every
 realization of it, its kernels and its Boolean lowering included, must equal the reference bit for bit. It also checks
 the circuit's declared port intervals, its redundant and dead gates, and whether it fits a Flock proof block.
 
@@ -26,7 +26,7 @@ each read, and `--check` checks them; `--update-pins` with `--check` re-pins tho
 ## Failures, warnings and the cache
 
 It exits 1 when a check fails, and names each failure (`FAIL NAME`). Redundant and dead gates are warnings with counts
-(`--fail-on-warnings` makes them fail), as is a Definition over the partition's cost target of 5,000,000 gates
+(`--fail-on-warnings` makes them fail), as is a Definition over the partition's cost target of 5,000,000 gates whose return type is past the widest size class
 (`partition/over-cost-target`, `Options.partition_max_gates`), a served Call or not: the cost target bounds no proof, and
 `block` holds what is proved to Flock's range of 2^27 bits. Each realization is compared on at least 2 random vectors while the reference's work
 on those the floor adds stays within 10M gate evaluations: a lowering on random vectors added after the all-edge ones, a
@@ -55,6 +55,5 @@ catalog doesn't reach.
 
 circuit-check imports `verity` and Flock, and no integration. A package under `adapters/` registers itself by a
 sidecar of its own module (`<package>/__init__.circuit-check.py`), and then its sidecars are found like `verity`'s. What
-a check needs of the integration is in that sidecar: the frontend vocabularies' kinds (`_vocabulary_roots`) and the
-reader of a request Program (`request_program`). A split is read the same way, by the reader the sidecar beside
+a check needs of the integration is in that sidecar: the frontend vocabularies' kinds (`_vocabulary_roots`). A split is read the same way, by the reader the sidecar beside
 `verity_flock.struct_slots` defines (`struct_slots_split`), so `structural_slots.py` imports nothing of Flock.

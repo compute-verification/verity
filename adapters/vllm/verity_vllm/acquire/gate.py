@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.acquire.plan import AcquisitionPlan, acquisition_plan
+from verity_vllm.acquire.plan import AcquisitionPlan, acquisition_plan, plan_of_capture
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import taps
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
@@ -25,6 +25,8 @@ from verity_vllm.correspondence.reader_for_acquire import (
     RuntimeTree,
 )
 from verity_vllm.log import write
+from verity_vllm.query.manifest.format import identity_rows
+from verity_vllm.records.capture import CALL_BOUNDARY
 from verity_vllm.records.schema_ids import CALL_BOUNDARIES_GATE_SCHEMA
 
 CALL_BOUNDARIES_SCHEMA = CALL_BOUNDARIES_GATE_SCHEMA
@@ -38,20 +40,51 @@ def run(manifest: Mapping[str, Any], rt: RuntimeTree) -> AcquisitionPlan:
     return acquisition_plan(manifest, AcquireCorrespondence(rt, wrapper_prefix=prefix, aliases=aliases))
 
 
+def run_plan(classes: Sequence[Mapping[str, Any]], rt: RuntimeTree) -> AcquisitionPlan:
+    """The acquisition plan of a capture plan's classes (`capture_plan.of_build`) off `rt`, its shared instances aliased by the tree."""
+    return plan_of_capture(classes, AcquireCorrespondence(rt, aliases=rt.aliases()))
+
+
 def call_boundaries(manifest: Mapping[str, Any], *roots: str | None) -> dict[str, Any]:
     """Does every `call_boundaries` identity of `manifest` have a source the row's Commit attaches (`taps.attached`)?  One no source
-    claims must be covered by the call-boundary source's host plan over the Build dirs under `roots` (`call_boundary_source.plan_of`,
-    what its `attach` refuses the Commit without); a claimed one must name an attached source.  The record: the counts, the attached
-    sources and the identities without one, named."""
-    return call_boundaries_of(manifest, CB.plan_of(manifest, *roots) if CB.manifest_sites(manifest) else None)
+    claims must be covered by the call-boundary source's host plan over the Build dirs under `roots` (`host_plan`, what its `attach`
+    refuses the Commit without); a claimed one must name an attached source.  The record: the counts, the attached sources and the
+    identities without one, named."""
+    return call_boundaries_of(manifest, host_plan(manifest, *roots))
+
+
+def class_of_identity(r: Mapping[str, Any]) -> dict[str, Any]:
+    """A `call_boundaries` identity as a capture-plan class (`capture_plan.of_build`'s keys), the form the sources' claims
+    (`call_boundary_source.claimed`) read."""
+    return {"op_path": str(r["op_path"]), "member": str(r.get("output_member", "out")), "capture": CALL_BOUNDARY,
+            "definitions": [str(r.get("spec", ""))]}
+
+
+def classes_of_identities(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return [class_of_identity(r) for r in identity_rows(manifest) if r.get("family") == CB.FAMILY]
+
+
+def claimant(r: Mapping[str, Any]) -> str | None:
+    """The source that claims `call_boundaries` identity ``r``: by the row (a TP rank's sources read its rows) or by its class (the
+    plan's sources read classes)."""
+    return CB.claimed(r) or CB.claimed(class_of_identity(r))
+
+
+def host_plan(manifest: Mapping[str, Any], *roots: str | None) -> Plan | None:
+    """The call-boundary source's host plan over the identities no source claims (`claimant`), or None when there is none."""
+    evaluated = [r for r in identity_rows(manifest) if r.get("family") != CB.FAMILY or claimant(r) is None]
+    unclaimed = {**manifest, "identities": evaluated}
+    return CB.plan_of(unclaimed, *roots) if CB.manifest_sites(unclaimed) else None
 
 
 def call_boundaries_of(manifest: Mapping[str, Any], plan: Plan | None) -> dict[str, Any]:
     """`call_boundaries` of `manifest` with its host plan given (None when it names no identity the call-boundary source evaluates)."""
-    on = taps.attached(manifest)
-    rows = manifest.get("identities")
-    ids = sum(1 for r in (rows if rows else []) if r.get("family") == CB.FAMILY)
-    uncovered, unattached = (plan.uncovered if plan else []), CB.unattached(manifest, on)
+    rows = [r for r in identity_rows(manifest) if r.get("family") == CB.FAMILY]
+    on = [*taps.attached([class_of_identity(r) for r in rows]), *([CB.CallBoundarySource.short_name] if plan and plan.covered else [])]
+    ids = len(rows)
+    uncovered = plan.uncovered if plan else []
+    unattached = [f"{r['op_path']}/{r.get('output_member', 'out')}: claimed by {s}, a source the Commit does not attach" for r in rows
+                  if (s := claimant(r)) is not None and s not in on]
     return {"schema": CALL_BOUNDARIES_SCHEMA, "pass": not uncovered and not unattached, "identities": ids,
             "claimed": ids - (plan.identities if plan else 0), "covered": plan.covered if plan else 0, "uncovered": len(uncovered),
             "unattached": len(unattached), "sources": on, "program_dirs": dict(plan.program_dirs) if plan else {},

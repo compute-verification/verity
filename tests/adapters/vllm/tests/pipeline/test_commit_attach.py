@@ -164,12 +164,12 @@ def test_the_required_classes_are_the_engine_s_attention_s_with_the_manifest_s_h
         monkeypatch: pytest.MonkeyPatch, fa: int | None, family: str | None, classes: tuple[str, ...]) -> None:
     asked: list[tuple[Any, Any]] = []
 
-    def attention_hidden(required_manifest: Any, model: Any) -> Record:
-        asked.append((required_manifest, model))
+    def attention_hidden(model: Any) -> Record:
+        asked.append(model)
         return {"family": family}
     monkeypatch.setattr(HS, "attention_hidden", attention_hidden)
     assert CA.classes_of_record({"identities": []}, "the model", fa) == (classes, family)
-    assert asked == [({"identities": []}, "the model")] and (family is None or family in classes)
+    assert asked == ["the model"] and (family is None or family in classes)
 
 
 @pytest.mark.parametrize("cli, classes", [(False, ("module_outputs",)), (True, CLASSES)])
@@ -179,7 +179,7 @@ def test_a_manifest_that_names_no_hidden_identity_attaches_no_hidden_source(tmp_
     got = attach(com, options(hidden_so=TAP), manifest(instance_outputs=8), tmp_path, cli=cli, family=FA2)
     assert steps.named("hidden") == [] and com.sources == []
     assert (got.required_classes, got.hidden_required, got.moe_attached) == (classes, False, False)
-    assert steps.named("taps")[0][3] == classes, "the taps see the classes without the hidden one, unless they were given"
+    assert steps.named("taps") == [], "the rows' route attaches no taps"
     assert said() == [
         ("INFO [delta] hidden source NOT attached: the required-value manifest names no fa2_hidden_m1_stream / fa3_hidden_m1_stream identity "
          f"(families ['instance_outputs']); required classes {list(classes)}"), NO_RECORD, NO_PLAN]
@@ -208,8 +208,7 @@ def test_the_hidden_source_is_built_for_the_engine_s_attention_and_its_bounded_t
     got = attach(com, options(hidden_so=TAP, tap_cap_mb=64, out=str(tmp_path)), required, tmp_path, family=FA2)
     (src,) = com.sources
     assert steps.calls[:2] == [("setting", "VERITY_FA2_TAP_CAP_MB", "64"),
-                               ("hidden", com, TAP, {"ns": "verity_fa2_matReq", "flash_attn_version": 2, "fa2_cls": None, "fa3_cls": None,
-                                                     "manifest": required})]
+                               ("hidden", com, TAP, {"ns": "verity_fa2_matReq", "flash_attn_version": 2, "fa2_cls": None, "fa3_cls": None})]
     assert src.built["so"] == TAP and src.telemetry_path == str(tmp_path / "fa2_tap_windows.jsonl")
     assert (got.required_classes, got.hidden_required) == (CLASSES, True)
     assert said() == [
@@ -225,7 +224,7 @@ def test_the_hidden_source_takes_the_committer_s_own_classes_and_the_namespace_g
     attach(com, options(hidden_so=TAP, hidden_ns="ns"), None, tmp_path, cli=True, fa=3)
     assert steps.named("setting") == [], "no bound was given, so none is set"
     assert steps.named("hidden") == [("hidden", com, TAP, {"ns": "ns", "flash_attn_version": 3, "fa2_cls": "the native FA2 source",
-                                                           "fa3_cls": "the native FA3 source", "manifest": None})]
+                                                           "fa3_cls": "the native FA3 source"})]
     assert com.sources[0].telemetry_path == "unset", "with no out dir the telemetry path is left as built"
     assert said() == [f"INFO [delta] hidden source attached: {TAP} -> committer stub (UnboundedSource, engine FA3)",
                       "INFO [delta] fa2 tap bound: 0 MiB (OFF: unbounded per-geometry buffers); telemetry unset", NO_PLAN]
@@ -240,13 +239,16 @@ def test_without_a_manifest_and_without_given_classes_or_a_hidden_family_no_hidd
     assert said() == [NO_PLAN, NO_RECORD, NO_PLAN]
 
 
-def test_the_taps_are_attached_for_the_manifest_and_the_classes_they_return_are_the_commit_s(tmp_path: Path,
-                                                                                            monkeypatch: pytest.MonkeyPatch) -> None:
-    steps, com, required = Acquisition(monkeypatch, tapped=("norm_scales",)), committer(), manifest(instance_outputs=8)
-    got = attach(com, options(program_dir="/programs/b1", programs_root="/programs"), required, tmp_path, cli=True, cb_plan="the plan")
-    assert steps.named("taps") == [("taps", com, required, CLASSES, "the taps' options",
-                                    {"explicit_classes": True, "programs": ("/programs/b1", "/programs"), "call_boundary_plan": "the plan"})]
-    assert got.required_classes == CLASSES + ("norm_scales",)
+def test_the_rows_route_attaches_no_taps_and_refuses_a_manifest_naming_a_tap_family_by_name(tmp_path: Path,
+                                                                                           monkeypatch: pytest.MonkeyPatch,
+                                                                                           said: Lines) -> None:
+    steps, com = Acquisition(monkeypatch, tapped=("norm_scales",)), committer()
+    got = attach(com, options(), manifest(instance_outputs=8), tmp_path, cli=True)
+    assert steps.named("taps") == [] and got.required_classes == CLASSES
+    said()
+    refused(lambda: attach(committer(), options(), manifest(instance_outputs=8, norm_scales=4), tmp_path, cli=True))
+    assert said()[-1] == ("ERROR [delta] REFUSE: the rows' route attaches no taps, and the manifest names norm_scales: `taps.attach` "
+                          "takes the capture plan of the row's Build (serve-openai --row-build)")
 
 
 @pytest.mark.parametrize("mode, line", [

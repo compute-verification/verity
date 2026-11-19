@@ -29,8 +29,7 @@ def test_the_engine_schedules_as_the_flag_says_and_a_row_specialized_for_the_oth
     row's Build declares the scheduler its workload Program models (``build_workload/workload_program.json``'s
     ``applicability.engine.async_scheduling``): a row without the declaration, or declaring the other scheduler than the
     flag, is refused before the model loads, and an engine that resolved another value (or none) is refused by name."""
-    (man := tmp_path / "manifest.json").write_text("{}")
-    base = ["--model", "m", "--revision", "r", "--required-manifest", str(man)]
+    base = ["--model", "m", "--revision", "r", "--row-build", str(tmp_path)]
     opts, on = (cli.parse("serve-openai", base + more, environ={}) for more in ([], ["--async-scheduling"]))
     assert (opts.async_scheduling, on.async_scheduling) == (False, True)
     assert so.engine_options(opts)["async_scheduling"] is False and so.engine_options(on)["async_scheduling"] is True
@@ -79,7 +78,7 @@ def test_async_scheduling_serves_with_the_commit_on_or_off(tmp_path):
     learn-only warm-up learns the async steps' plans as it does the synchronous ones' (``serve_async_commit_gpu.py`` holds
     the two schedulers' roots equal on an H200)."""
     man = predicted.row(tmp_path)
-    base = ["--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path)]
+    base = ["--model", "m", "--revision", "r", "--row-build", str(man), "--out", str(tmp_path), "--window-class", "8,256,256"]
     on, bare, off = (cli.parse("serve-openai", base + more, environ={})
                      for more in (["--async-scheduling"], ["--async-scheduling", "--no-commit"], []))
     assert (on.commit, on.async_scheduling, bare.commit) == (True, True, False)

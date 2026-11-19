@@ -257,8 +257,8 @@ def listed(demo: str) -> tuple[str, ...]:
 
 
 #: an application's own workload values over the shared defaults, each of whose listed schemes then states its declared
-#: `Scheme.tie` over its parameters' defaults; remote and onsite both serve the tie, and onsite_network_front only the
-#: front's load
+#: `Scheme.tie` over its parameters' defaults; remote and onsite both serve Pearl+ untied at this workload, and
+#: onsite_network_front only the front's load
 _TIED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
          "precision": "bfloat16", "slots": 4, "window-steps": 2, "load": "fixed"}
 DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED, "onsite_network_front": {"load": "front"}}

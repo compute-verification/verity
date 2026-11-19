@@ -30,21 +30,17 @@ rests on one.
 Network attestation under arbitrary vLLM usage proves a served run's step proof blocks after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system samples
 proof blocks on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
-`prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
-Commit period of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
+`prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`) or a closed Commit period of a
+`verity-vllm serve-openai` run (`--serve-run`, TP1, the one single-GPU run): the prover commits the advice under hiding rows (a
 served execution phase's the server committed) and each rank's execution phase over the compiler's Programs for it, and the verifier audits each
 rank through the one-stage audit's per-rank `service.Stream` on a challenger's coins (`--challenger local` by default in
 `run.sh`, `../one_stage/a5.py`); the verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
-deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir on the node (`PP_LLAMA`, of the row `LROW` names, the bf16
-RTX PRO 6000 B4 row by default; its workload the stored one of that name) or on a served execution phase
-(`PP_SERVE_RUN`), with one forged run that must be refused. Row dirs and serve runs are the node's own, never fetched from the
+deferred TP Commit (`PP_TP`) or on a served execution phase (`PP_SERVE_RUN`), with one forged run that must be
+refused. Row dirs and serve runs are the node's own, never fetched from the
 store, since their bundles and requests hold request values. The docstrings say how.
 
-The single-GPU arm proves only a Commit made under I2's Programs, whose Builds (`build_request_<shape>_<policy>*`) are in its
-row dir. A row dir `verity-vllm row run` made (`../one_stage/a5_llama1b_h200.sh`'s among them) can't be proved by it: its
-Commit is under the row's declared Programs, and I2's request Programs end in their length rule (`steps.stop_of`). `run.sh`
-refuses such a row dir before any build. The way to prove such a row is a serve-openai run's sealed execution phase, the served arm,
-which reads the serve run's own records and never a row dir's Builds. On the node holding the serve dir `D` (for
+The served arm reads the serve run's own records and the sealed execution phase's row dir, whose Builds of I2's Programs
+and `programs.json` `advice_compile.py RUN --window K` writes there. On the node holding the serve dir `D` (for
 `../one_stage/served_verdicts.sh`, `/dev/shm/vllm-servedproof/<run id>`), with `K` the execution phase it picked (its `window`):
 
 ~~~bash
@@ -270,10 +266,7 @@ The proof block closes the named gap: the advice is never opened, and the verifi
 - **The compiler**, with ℓ = `CAP_BITS` (1 MiB) unless `--cap-bits` gives another:
   - on a TP Commit, `Capped` over `advice_windows.Traced`: the Build's Programs of record, refused unless they are of record.
     On a declared run it emits exactly what a correct compiler emits. I2 doesn't compile a TP rank's Programs yet.
-  - on a single-GPU Commit, `Capped` over `I2Compiler`: I2's `predict.steps.compile_steps` (v0) on the advice, under φ from the
-    workload's declared inputs (`score.phi_of`: its row id, the served workload file, refused unless its digest is the record's, and
-    the checkpoint's `config.json`), with each request's prompt and sampling from the record. Its digest names I2's code
-    (`code_identity`: `verity` and `verity_vllm` as git lists them, docs and ignored build outputs aside), φ, the seed and ℓ.
+  - on a served execution phase, `Capped` over `I2Compiler`: I2's `predict.steps.compile_steps` (v0) on the advice.
     A Program's body is read from the Build dir whose `result.json` names I2's digest, refused where none does, and held to
     that digest (`build_of`): recomputed from its `descriptor.json.gz`, with every recorded digest and every
     `instances.json.gz` row held to it, so a Build whose body was swapped under its old `result.json` is refused. No Program
@@ -281,22 +274,19 @@ The proof block closes the named gap: the advice is never opened, and the verifi
     the verifier (`audit`, and the compile command `circuit`) reads them only from its own Build of each Program, which its
     own compile writes with the names vLLM's trace of it gives (`compile_steps(named=True)`, `naming.write_build`,
     `own_builds`; no vLLM, and `--vllm-python` is ignored) into `--builds` (default `OUT/builds`, never under the row dir),
-    each held to I2's digest. The prover's Builds are its row dir's. The audit summary's `i2` holds I2's Programs beside the
-    Build's `build_request_LP*` digests.
-  - on a served execution phase, the same over φ of the served engine as vllm's registered compiler compiles under (`phi_of_serve`:
+    each held to I2's digest. The prover's Builds are its row dir's. It runs under φ of the served engine as vllm's registered compiler compiles under (`phi_of_serve`:
     `serve.json`'s model, revision, target profile and execution label, the checkpoint's `config.json`), the public default
     seed (`registered_seed`: `engine.served_seed.DEFAULT_SEED`; a run whose `serve.json` records another or none is refused,
     as vllm's registered compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
     fields its ingress record says it brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named
     as `verity-vllm advice` names it and runs the server's code (`served_identity`: `compile_steps` by module path, its
     digest over `source_identity.code_identity`, which covers `adapters/vllm` and `verity`), so the audit runs on a tree
-    whose two are the server's. Its digest is the single-GPU one (`I2Compiler.digest`) with that code in place of this
-    tree's: it covers φ (`serve.json`'s model and revision, that pin's `config.json`, the target and the execution), the
+    whose two are the server's. Its digest (`I2Compiler.digest`) covers φ (`serve.json`'s model and revision, that pin's `config.json`, the target and the execution), the
     default seed, ℓ and the transfer gates, so a `serve.json` whose model, revision, target or execution differs from the
     one the advice was registered under names another compiler, refused before the sample (`serve_check`'s `compiler`), and
     one recording another default seed is refused outright (`registered_seed`). `prove_path.py compiler --serve-run DIR`
-    prints the binding's compiler. I2's Programs are held to the ones vllm's registered compiler wrote into the row dir
-    (`manifest.json`, by I1 id).
+    prints the binding's compiler. I2's compiler and Programs are held to the ones vllm's registered compiler wrote into the
+    row dir (`programs.json`: its docket's compiler, and each request's Program by I1 id), refused without that file.
 - **A served execution phase** binds the root serve-openai published: the advice is committed once, by the server, and the prover
   commits it under the published binding. Before any commit and before the sample (folded into the source check a5
   gates the sample on), `serve_check` holds the published records to the verifier's own and refuses by name: another execution phase
@@ -305,8 +295,7 @@ The proof block closes the named gap: the advice is never opened, and the verifi
   (`run_root`), a docket naming another Commit (`commit`), and a carried request that doesn't follow from the close of
   the execution phase before (`follows`: the advice is read as `window_advice`'s, and its carried requests are held to that execution phase's
   close, opened under its docket, naming the request and what doesn't follow: its order, a request dropped with outputs
-  still to keep, its record, or a counter of its state). Its negatives run beside the audit's. `serve-standin`
-  lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its execution phases.
+  still to keep, its record, or a counter of its state). Its negatives run beside the audit's.
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served execution phase) reads only
   what an integration hands Verity (`verity.commitments.periods.interface`): the execution phase's `circuit.json`, which its docket binds
   by SHA-512; the registered compiler and the advice's root and length; the docket and the committed values; and the
@@ -329,10 +318,9 @@ The proof block closes the named gap: the advice is never opened, and the verifi
   Its negatives after the audit record run one after another, or `--negative-workers` at a time, each in a worker process
   forked from the audit with its own Lean verifier process, started only while its memory estimate, read then, fits
   (`a5.NegativeWorkers`); the negatives' file is the same either way, and nothing is retried.
-- **A single-GPU execution phase** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
-  `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
-  prover's Programs come from `--row-dir` and the verifier's from its own compile, and the Build manifest falls back to
-  `<row dir>/manifest.json`, checked against the record's sha256.
+- **A served execution phase's window** is a stand-in of its sealed Commit's `rows-sha512` run root (`stand_in1`, held by
+  `source1`), as `deferred_rows.from_bundle` writes one: the prover's Programs come from `--row-dir` and the verifier's from
+  its own compile.
 - **The advice** is I1's canonical encoding. A declared run's comes from its workload (`advice_windows.advice_of_workload`), a
   served run's from its step trace.
 - **The opening** is the named gap above. `run.sh` keeps neither the advice nor its opening in `$OUT`.

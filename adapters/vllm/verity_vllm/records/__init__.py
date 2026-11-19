@@ -37,8 +37,8 @@ is defaulted.  The package imports nothing else from `verity_vllm`, so every sta
   `of` refuses an unknown field and `dump` writes it.
 * `pearl_served` -- a Pearl+ served run's document's schema id (`verity-pouw/pearl-c-served-passes/v1`, ``served.json``) and
   nothing else: its readers read it as the dict it is.
-* `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v1`, ``predicted.json``): the Build of record the
-  ahead-of-time compiler wrote and its manifest's sha256, as ``predict compare --predicted`` reads it; its `of` refuses an
+* `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v2`, ``predicted.json``): the Build of record the
+  ahead-of-time compiler wrote and the registered compiler it binds, as ``predict compare --predicted`` reads it; its `of` refuses an
   unknown field and `dump` writes it back.
 * `boundary_commit` -- a served window's boundary commitment of one size class (`verity-vllm/boundary-rows/v1`,
   ``commit.json``): its layout, each value's root and the index's leaf, as the class's registration and a recommit from the
