@@ -12,8 +12,8 @@ Every fact cites the vLLM source that hard-codes it (`provenance`: file:line @ d
   * `derive` -- a value computed from the configuration the way vLLM computes it (Gemma-2's `normalizer = sqrt(H)`; Pythia's rotary width).
 `rules` are the `analytic.config_of` family rules (QKV bias, default rope theta, per-head q/k norm); for the families `analytic.FAMILY_RULES`
 already lists they MUST agree (`tests/test_profiles_generic.py` pins that), the others (`gpt_neox`, `qwen3_moe`) are passed as `family_rules`.
-`arch` selects the constructor class in `profiles.generic` (`dense`, `dense-ln`, `moe`, `dsa-moe`; `mhc-moe` has no κ constructor and only
-`predict.dsv4` reads it); `params` are the architecture's vLLM parameter names that the base Llama map (`vllm_d9105ea80_sm89_eager._LAYER_FIELDS`)
+`arch` selects the constructor class in `profiles.generic` (`dense`, `dense-ln`, `moe`, `dsa-moe`; `mhc-moe` has no constructor
+and `build_program` refuses it); `params` are the architecture's vLLM parameter names that the base Llama map (`vllm_d9105ea80_sm89_eager._LAYER_FIELDS`)
 does not know, per weights-Record field.
 """
 from __future__ import annotations
