@@ -127,7 +127,9 @@ def _subst(refs: Any, look: Callable[[str, int], Any]) -> Any:
             todo.extend(reversed(p.parts))
             continue
         if isinstance(p, Affine):
-            out.append(look(p.space, p.idx).slice(p.base, p.base + p.count))
+            t = look(p.space, p.idx)
+            out.append(p if isinstance(t, Affine) and (t.space, t.idx, t.base) == (p.space, p.idx, 0)
+                       else t.slice(p.base, p.base + p.count))
             continue
         if isinstance(p, Strided) and isinstance(t := look(p.space, p.idx), Affine):
             out.append(Strided(t.space, t.idx, t.base + p.base, p.inner, p.outer_stride, p.inner_stride, p.count))
@@ -217,39 +219,45 @@ class Measure:
         k, m = self.units[u]
         node = self.root.nodes[k]
         for x, ax in zip(node.args, node.axes if node.form == "batch" else (None,) * len(node.args)):
+            rw = x.type.homogeneous_width()
             if ax is None:
-                yield from self._refs(x.refs)
+                yield from self._refs(x.refs, None, rw)
             elif ax == 0:
                 L = x.type.elem.leaves
-                yield from self._refs(x.refs.slice(m * L, (m + 1) * L))
+                yield from self._refs(x.refs.slice(m * L, (m + 1) * L), None, rw)
             else:
-                yield from self._refs(x.take(ax, m).refs)
+                yield from self._refs(x.take(ax, m).refs, None, rw)
 
-    def _refs(self, refs: Any, owner: int | None = None) -> Iterator[tuple[int, int, int, str, int | None]]:
+    def _refs(self, refs: Any, owner: int | None = None,
+              rw: int | None = None) -> Iterator[tuple[int, int, int, str, int | None]]:
         todo = [refs]
         while todo:
             p = todo.pop()
             if isinstance(p, Concat):
                 todo.extend(p.parts)
             elif isinstance(p, Affine):
-                yield from self._leaves(p.idx, p.base, p.base + p.count, owner)
+                yield from self._leaves(p.idx, p.base, p.base + p.count, owner, rw)
             elif isinstance(p, Strided) and p.outer_stride == 0 and p.inner_stride == 0:
-                yield from self._leaves(p.idx, p.base, p.base + 1, owner)
+                yield from self._leaves(p.idx, p.base, p.base + 1, owner, rw)
             elif isinstance(p, Strided) and p.inner_stride == 1:
                 for q in range(-(-p.count // p.inner)):
                     b = p.base + q * p.outer_stride
-                    yield from self._leaves(p.idx, b, b + min(p.inner, p.count - q * p.inner), owner)
+                    yield from self._leaves(p.idx, b, b + min(p.inner, p.count - q * p.inner), owner, rw)
             elif isinstance(p, Grid):
                 todo.extend(p.lane_parts())
             else:
                 for _s, i, j in p:
-                    yield from self._leaves(i, j, j + 1, owner)
+                    yield from self._leaves(i, j, j + 1, owner, rw)
 
-    def _leaves(self, k: int, lo: int, hi: int, owner: int | None) -> Iterator[tuple[int, int, int, str, int | None]]:
+    def _leaves(self, k: int, lo: int, hi: int, owner: int | None,
+                rw: int | None = None) -> Iterator[tuple[int, int, int, str, int | None]]:
         node, off = self.root.nodes[k], self.root.offsets[k]
         fn, first = node.fn, self.first.get(k)
         if isinstance(fn, PrimitiveDefinition):
             inp = input_id(fn.id)
+            if inp and rw and _width(fn) > rw:
+                q = _width(fn) // rw
+                lo, hi = lo // q, -(-hi // q)
             if first is None or owner is not None:
                 yield (off + lo, off + hi, _width(fn), inp[0] if inp else RUN, owner)
             else:

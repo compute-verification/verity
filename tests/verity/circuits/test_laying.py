@@ -9,11 +9,12 @@ from verity.circuits import boolean as BL
 from verity.circuits import laying as LY
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
-from verity.circuits.codec import descriptor_chunks
+from verity.circuits.codec import descriptor_chunks, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate_region
+from verity.circuits.population import wired_population_program
 from verity.circuits.program import Program, input_id
-from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.refs import Affine, Strided, array_of, tuple_of
 from verity.circuits.types import Array, Tuple
 
 A4 = Array(4, BL.BIT)
@@ -68,6 +69,16 @@ def with_s(binding: str) -> Program:
                    supplied={"s": MARK} if binding == "supplied" else {})
 
 
+@functools.cache
+def recut(n: int) -> Program:
+    tid = descriptor_id(U)
+    rec = {"templates": [[tid, n]],
+           "registered": {"params": {"w": 2}, "formats": {"w": {"word_bits": 4}}, "tables": [], "roots": [], "openings": [],
+                          "reads": [{"reader": tid, "port": "k", "param": "w", "at": 0, "radix": [n], "base": 1, "step": [0]}]}}
+    w = wired_population_program([(U, n)], rec)[0]
+    return Program(w.fn, registered=("w",), annotations=w.annotations)
+
+
 def ands(limit):
     return lambda ins, outs, n: n <= limit
 
@@ -105,6 +116,16 @@ def test_laying_keeps_a_supplied_input_supplied_with_its_mark():
     assert ids == [nd.fn.id for nd in P0.root.body.nodes if input_id(nd.fn.id)] and ids[-1] == "SuppliedInput1_v1"
     assert [input_id(i)[0] for i in ids].count("supplied") == 1
     assert [g.prim.id for g in P0.circuit.gates()] == [g.prim.id for g in P1.circuit.gates()]
+
+
+@pytest.mark.parametrize("n", [1, 4])
+def test_a_unit_reading_a_registered_input_in_narrower_leaves_is_laid_and_measured_in_the_inputs_leaves(n):
+    P0, P1 = recut(n), LY.lay(recut(n), ands(4))
+    assert len(P1.root.body.nodes) > len(P0.root.body.nodes)
+    parts = [x.refs for nd in P1.root.body.nodes for x in nd.args]
+    assert {r.base for r in parts if isinstance(r, (Affine, Strided)) and (r.space, r.idx) == ("n", 0)} == {16}
+    m = LY.Measure(P1, LY.query(P1))
+    assert {r for rs in m.reads for r in rs if r[3] == "registration"} == {(4, 5, 4, "registration")}
 
 
 def test_the_measure_reads_a_supplied_input_as_a_port_of_its_own_binding_as_it_reads_a_registered_one():
