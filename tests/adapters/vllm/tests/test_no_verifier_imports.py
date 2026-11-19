@@ -35,7 +35,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         ),
         "verity_vllm/pipeline/serve_day.py": ("registration.verifier.registration",),
         "verity_vllm/pipeline/serving_rows.py": ("proofs.spot.verifier.service",),
-        "verity_vllm/protocols/pouw/h1_ranks.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
         "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
     },
     "network-accounting": {},

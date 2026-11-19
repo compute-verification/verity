@@ -1,9 +1,6 @@
 {
   "rule": "lane text in prose (tests/lint/test_repo_lane_text.py)",
   "entries": [
-    {"file": "tests/adapters/vllm/tests/program/predict/test_node_window_reads.py", "count": 1},
-    {"file": "adapters/vllm/verity_vllm/program/predict/class_window.py", "count": 15},
-    {"file": "adapters/vllm/verity_vllm/program/predict/node_window_join.py", "count": 1},
     {"file": "tests/benchmarks/one_stage/test_served_pearlplus_lean.py", "count": 2},
     {"file": "benchmarks/pouw/pearl_c_vllm/served_passes.py", "count": 1},
     {"file": "benchmarks/pouw/pearl_c_vllm/verify_run.py", "count": 1},
