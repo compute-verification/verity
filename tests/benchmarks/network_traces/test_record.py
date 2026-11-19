@@ -356,6 +356,7 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
     first request is admitted, and `meta.json` records the freeze: the count the recorder read once, after its one
     freeze and before that request. The count is compared with no later reading: it falls whenever a frozen object
     is freed."""
+    monkeypatch.delenv("VERITY_BENCH_TRIAL", raising=False)
     now, handlers, evict_at, order, reached = [100.0], {}, [math.inf], [], []
 
     def clock():
