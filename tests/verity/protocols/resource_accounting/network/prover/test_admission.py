@@ -16,17 +16,23 @@ RUN = "ab"
 
 
 class Exchange:
-    """The adapter's exchange as a scheme sees it: ``request(name, request)``, ``serve(name, path, route)``,
-    ``start_beside(name, process, readers)`` and ``subscribe(name, hook, fn)`` returning the removal."""
+    """The adapter's exchange as a scheme sees it: ``request(name, request)``, ``hold(name, gate)``,
+    ``serve(name, path, route)``, ``start_beside(name, process, readers)`` and ``subscribe(name, hook, fn)`` returning
+    the removal."""
 
     def __init__(self) -> None:
         self.requests: list[tuple[str, Any]] = []
         self.routes: list[tuple[str, str, Any]] = []
+        self.gates: list[tuple[str, Any]] = []
         self.besides: list[tuple[str, str, tuple[str, ...]]] = []
         self.subscribers: list[tuple[str, str, Callable[[Any], None]]] = []
 
     def request(self, name: str, request: Any) -> None:
         self.requests.append((name, request))
+
+    def hold(self, name: str, gate: Any) -> None:
+        self.requests.append((name, H.AdmitInput("hold")))
+        self.gates.append((name, gate))
 
     def serve(self, name: str, path: str, route: Any) -> None:
         self.routes.append((name, path, route))
@@ -54,7 +60,7 @@ def test_tick_builds_the_gate_and_the_frontend_and_files_both_under_the_name():
     ex = Exchange()
     assert a.install(ex, "n") is a
     [(n0, gate)] = ex.requests
-    assert n0 == "n" and gate == H.AdmitInput("hold", a.gate)
+    assert n0 == "n" and gate == H.AdmitInput("hold") and ex.gates == [("n", a.gate)]
     assert ex.routes == [("n", NA.WATERMARK_PATH, a.front.serve_watermark)]
     assert ex.subscribers == [("n", "steps", a.gate.on)]
 
@@ -81,7 +87,8 @@ def test_without_submit_the_gate_alone_reads_its_records_from_pull():
     assert a.front is None and a.gate.pull is pull and a.gate.log == records.append and a.gate.hold_s == 1.0
     ex = Exchange()
     a.install(ex, "n")
-    assert ex.requests == [("n", H.AdmitInput("hold", a.gate))] and ex.subscribers == [("n", "steps", a.gate.on)]
+    assert ex.requests == [("n", H.AdmitInput("hold"))] and ex.gates == [("n", a.gate)]
+    assert ex.subscribers == [("n", "steps", a.gate.on)]
 
 
 def test_release_order_makes_the_frontend_alone_and_files_nothing():
@@ -137,7 +144,7 @@ def test_the_schemes_attach_installs_the_admission_its_context_configures_else_s
     a = NETWORK_ATTESTER.attach(ex, {"settings": {"order": "tick", "hold_ms": 1000, **TICK}, "submit": q.append,
                                      "abort": q.append, "take": q.append, "source": "--admit"})
     assert type(a) is NA.Admitter and a.installed and a.front.take == q.append
-    assert ex.requests[0] == (NETWORK_ATTESTER.name, H.AdmitInput("hold", a.gate))
+    assert ex.gates == [(NETWORK_ATTESTER.name, a.gate)]
     ex = Exchange()
     assert NETWORK_ATTESTER.attach(ex, {}) is None and not ex.requests
     assert ex.besides == [(NETWORK_ATTESTER.name, ID_RELAY, READERS)]

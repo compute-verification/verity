@@ -102,6 +102,9 @@ class _Exchange:
     def request(self, name: str, request: object) -> None:
         self.filed.append((name, request))
 
+    def hold(self, name: str, gate: object) -> None:
+        self.filed.append((name, gate))
+
     def serve(self, name: str, path: str, route: object) -> None:
         self.filed.append((name, path))
 

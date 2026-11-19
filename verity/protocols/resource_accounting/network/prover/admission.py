@@ -353,7 +353,7 @@ class TickGate:
         ``name`` (the network attester's declaration's by default), and subscribe it to the ``steps`` hook; returns
         the subscription's removal."""
         name = name or scheme_name()
-        exchange.request(name, H.AdmitInput("hold", self))
+        exchange.hold(name, self)
         return exchange.subscribe(name, "steps", self.on)
 
     def add(self, key: str, start: Callable[[], None]) -> None:
