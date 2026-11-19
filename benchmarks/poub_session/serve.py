@@ -292,6 +292,7 @@ def backend_class(serving):
 def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) -> None:
     import sheets
 
+    from verity.protocols.resource_accounting.memory.poub.verifier import audit
     from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier
 
     sock, _ = lsock.accept()
@@ -300,7 +301,7 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
     try:
         v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=sheets.figures(a.figures_node),
                               source=os.urandom(32), windows=a.windows,
-                              window_ns=a.window_ns, samples=a.samples, delta=2.0 ** -40, jitter_ns=10 ** 9,
+                              window_ns=a.window_ns, samples=a.samples, delta=audit.DELTA, jitter_ns=10 ** 9,
                               clock=clock, log=lambda m: None, lifetime=a.lifetime)
         v.register()
         out["verifier"] = v.session(0, v.allowance(v.ping(4)), None)

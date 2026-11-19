@@ -152,7 +152,7 @@ def test_a_refresh_session_is_refused_outside_an_honest_or_kv_session_over_a_bac
     p = prover.ProverSide.__new__(prover.ProverSide)
     p.backend, p.ahead = backend(), None
     with pytest.raises(ValueError, match="re-keys by appends"):
-        prover.ProverSide.session(p, {"k": 0, "windows": 2, "lifetime": 2, "refresh": True}, "skip", 0.0)
+        prover.ProverSide.session(p, {"k": 0, "windows": 2, "samples": 6, "lifetime": 2, "refresh": True}, "skip", 0.0)
 
 
 def test_an_origin_is_named_on_the_wire_as_the_append_message_carries_it_and_read_back():

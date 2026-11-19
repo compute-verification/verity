@@ -139,7 +139,7 @@ theorem sclose_spec {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s'
       t.toNat + 1 = min (t.toNat / g * g + g) s.params.windows ∧
       (∀ j, j < t.toNat / g * g → (dr s.windows j).isSome) ∧
       (∀ u ∈ grp g t.toNat, s.params.minPasses ≤ s.windows[u]!.roots.size) ∧
-      receiptSample s.digest (t.toNat / g) s.coins[s.params.windows + t.toNat / g]! s.params.samples
+      receiptSample s.params.samples s.coins[s.params.windows + t.toNat / g]!
         (sampleLengths g s (t.toNat / g)) = some sampled ∧
       s' = { s with windows := ((grp g t.toNat).foldl (sampleStep sampled now)
         (finalize (grp g t.toNat) s.windows, 0)).1 }) := by
@@ -159,7 +159,7 @@ theorem sclose_spec {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s'
     have hm := ‹¬t.toNat + 1 ≠ min (t.toNat / g * g + g) s.params.windows›
     have hord := ‹¬((s.windows.extract 0 (t.toNat / g * g)).any fun x => x.drawn.isNone) = true›
     have hfew := ‹∀ (u : Nat), List.find? _ _ = some u → False›
-    have hdraws := ‹receiptSample _ _ _ _ _ = some _›
+    have hdraws := ‹receiptSample _ _ _ = some _›
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at hb
     have hm' : t.toNat + 1 = min (t.toNat / g * g + g) s.params.windows := by simpa using hm
     have hlen : (List.foldl (fun acc u => acc ++ Array.map (fun x => x.length)

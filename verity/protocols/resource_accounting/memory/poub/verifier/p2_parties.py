@@ -86,6 +86,7 @@ from typing import Any, BinaryIO
 from verity.channel import Body, Message, Schema
 from verity.party import Finish, Identity, Received, Send, Timer
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Start, Starter
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
@@ -126,9 +127,9 @@ SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 *
 four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
 δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13, which leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not
 assumed)."""
-DELTA = 2.0 ** -40
-"""PoUB-P2's δ, its own (`P2Session.DELTA`): each window's profile δ and the pooled bound's.  It is not PoUB's
-`audit.DELTA`, and not at an error of 2^-100."""
+DELTA = float(WINDOW_DELTA)
+"""PoUB-P2's δ, the proof system's per-window δ (`profile.WINDOW_DELTA`, 2^-40; `P2Session.DELTA` in the Lean): each
+window's profile δ and the pooled bound's.  It is not PoUB's `audit.DELTA`, and not at an error of 2^-100."""
 REFUSED = {"refused": True}
 DISAGREEMENT = "disagreement"
 #: The samples a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
@@ -388,17 +389,19 @@ class Books:
     the clock each event sets (`period._Held`), and each event's result as the Lean writes it (`Difftest.resultJ`), a
     call the session refuses `REFUSED`. A root or openings line is read as `P2Session` reads it: a line out of form
     rejects the session `malformed` at the window filling (`fail`), and `why` says what was out of form. `released` is
-    the coin the last event released: a start's or a boundary's challenge, or a close's openings coin."""
+    the coin the last event released: a start's or a boundary's challenge, or a close's sample's coins."""
 
     def __init__(self, params: audit.Params, registration: p2.Registration, coins_: C.SessionCoins, plan: Plan,
                  not_before_ns: int) -> None:
         self.clock, self.plan = P._Held(), plan
         self.s = audit.AuditRun(params, registration, None, coins_, not_before_ns=not_before_ns, clock=self.clock)
         self.released: C.LiveOpening | None = None
+        self.sample: bytes | None = None
+        """A close's: its sample's coins, whole, when the close released them."""
         self.why: str | None = None
 
     def _at(self, now: int, call: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-        self.clock.now, self.released = now, None
+        self.clock.now, self.released, self.sample = now, None, None
         try:
             return call()
         except audit.SessionError:
@@ -432,10 +435,11 @@ class Books:
 
     def close(self, t: int, now: int) -> dict[str, Any]:
         def call() -> dict[str, Any]:
-            n = len(self.s.coins.opened(C.OPENINGS))
+            c = t // self.s.params.groups_per_coin
+            had = self.s.coins.sample_bytes(c)
             out = self.s.close(t)
-            opened = self.s.coins.opened(C.OPENINGS)
-            self.released = opened[-1] if len(opened) > n else None
+            got = self.s.coins.sample_bytes(c)
+            self.sample = got if had is None else None
             return verdict_json(out) if isinstance(out, audit.Verdict) else {"draws": [list(d) for d in out]}
         return self._at(now, call)
 
@@ -503,7 +507,8 @@ class Twin:
         except (ConnectionError, ValueError, KeyError, TypeError) as e:
             raise _Refused(f"{DISAGREEMENT}: the Lean verifier takes the request, the Python refuses it: "
                            f"{type(e).__name__}: {e}") from None
-        coins_ = C.local(registration.digest, 0, params.windows, P._Stream(secret, registration.node))
+        coins_ = C.local(registration.digest, 0, params.windows, P._Stream(secret, registration.node),
+                         samples=params.samples)
         return cls(lean, got["session"], Books(params, registration, coins_, plan, not_before_ns), request,
                    not_before_ns)
 
@@ -524,9 +529,11 @@ class Twin:
         return got
 
     def _event(self, t: int, event: dict[str, Any], mine: dict[str, Any]) -> dict[str, Any]:
-        c = self.books.released
-        coin = None if c is None else C.coin(c).hex()
-        self.log.append({"coin": None if c is None else c.coin.hex(), "event": event, "op": "p2_event"})
+        c, sample = self.books.released, self.books.sample
+        whole = sample if sample is not None else None if c is None else c.coin
+        coin = sample if sample is not None else None if c is None else C.coin(c)
+        self.log.append({"coin": None if whole is None else whole.hex(), "event": event, "op": "p2_event"})
+        coin = None if coin is None else coin.hex()
         got = self._ask({"op": "p2_event", "session": self.k, "event": event, "coin": coin})
         return self._settle(t, event["kind"], got, mine)
 

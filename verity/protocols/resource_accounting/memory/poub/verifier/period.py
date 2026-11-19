@@ -21,7 +21,7 @@ Every call to the session is an event of the verifier's log with the clock readi
 the registration are the core case (`case`) that `Poub.Protocol` replays. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s `q_bytes` is the
 receipts not shown wrong, the receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a
-`BLOCK_BYTES` block each, at `eps = 2^-101 + ⌈W/g⌉·s/2^64`, the session's openings coins at its `samples` s each, as
+`BLOCK_BYTES` block each, at `eps = 2^-101 + ⌈W/g⌉·s/2^64`, the session's samples' coins at its `samples` s each, as
 the Lean's `certify` computes them: at least the sample term of the bound
 `Properties.Poub.Subprotocol.LineHeldAtSubprotocol` proves (`PublishedEps`), not the openings a session made,
 min(s, U) of a sample's U receipts, which can be fewer.
@@ -67,7 +67,7 @@ def payloads(store: bytes) -> list[bytes]:
 
 def eps(windows: int, groups_per_coin: int, samples: int) -> Fraction:
     """`Poub.Protocol.eps`: δ + ⌈W/g⌉·s/2^64 for a session of W `windows`, g `groups_per_coin` and s `samples`."""
-    return DELTA + Fraction(C.openings_coins(windows, groups_per_coin) * samples, 2 ** 64)
+    return DELTA + Fraction(C.draws(windows, groups_per_coin) * samples, 2 ** 64)
 
 
 def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -181,7 +181,8 @@ def opened(reg: audit.Registration, coins: bytes, clock: Callable[[], int], *, n
     """The verifier's session over the store `reg` registers, on `clock`, its challenger's coins flipped from `coins`."""
     params = audit.Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=passes, window_ns=window_ns,
                           codec=reg.codec, receipt=reg.receipt, rows=reg.rows)
-    challenger = C.local(reg.digest, 0, windows, _Stream(coins, reg.node), clock=lambda: clock() / 1e9)
+    challenger = C.local(reg.digest, 0, windows, _Stream(coins, reg.node), samples=samples,
+                         clock=lambda: clock() / 1e9)
     return audit.AuditRun(params, reg, None, challenger, not_before_ns=not_before, clock=clock)
 
 
@@ -189,10 +190,15 @@ def case_of(s: audit.AuditRun, events: Sequence[dict[str, Any]]) -> dict[str, An
     """The core case `Poub.Protocol` replays: session `s`'s registration, every coin its challenger committed to
     (each one it didn't release opened now), its log `events` and its parameters."""
     params, challenger = s.params, s.coins
-    committed = []
-    for label, n in ((C.CHALLENGE, params.windows), (C.OPENINGS, C.openings_coins(params.windows))):
-        got = {o.index: o for o in challenger.opened(label)}
-        committed += [C.coin(got[j] if j in got else challenger.challenger.open(label, j, b"")) for j in range(n)]
+    got = {(o.label, o.index): o for label in (C.CHALLENGE, C.SAMPLE) for o in challenger.opened(label)}
+
+    def raw(label: str, j: int) -> bytes:
+        return (got[label, j] if (label, j) in got else challenger.challenger.open(label, j, b"")).coin
+
+    m = challenger.m
+    committed = [raw(C.CHALLENGE, j)[:C.COIN_BYTES] for j in range(params.windows)]
+    committed += [b"".join(raw(C.SAMPLE, j) for j in range(d * m, (d + 1) * m))
+                  for d in range(C.draws(params.windows, params.groups_per_coin))]
     p = {"deadline_ns": params.deadline_ns, "deferred": params.deferred, "lifetime": params.lifetime,
          "min_passes": params.min_passes, "pace": None, "samples": params.samples, "window_ns": params.window_ns,
          "windows": params.windows}

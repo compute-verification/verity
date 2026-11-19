@@ -73,12 +73,12 @@ class Lean:
         self.lean.call({"op": "init", "source": SOURCE.hex(), "registry": audit.Registry().to_json(), "chunk": 64})
         got = self.lean.call(lv.register_request(NODE, N, reg.payload_root, P512, reg.receipt, reg.rows, bytes(32)))
         assert got == {"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}
-        params = audit.Params(blocks=N, deadline_ns=DEADLINE_NS, windows=WINDOWS, samples=10**6, delta=1e-6,
+        params = audit.Params(blocks=N, deadline_ns=DEADLINE_NS, windows=WINDOWS, samples=1024, delta=1e-6,
                               window_ns=WINDOW_NS, codec=P512, lifetime=LIFETIME)
         named = {"refresh": True, "fresh_slots": FRESH} if refresh else {}
         assert self.lean.call({"op": "session", "node": NODE.hex(), "params": lv.params_json(params) | named,
                                "coins": None, "append_coins": [], "not_before_ns": 0, "index": 0}) == {"session": 0}
-        self.coins = coins.local(reg.digest, 0, WINDOWS, Entropy(b"coins"),
+        self.coins = coins.local(reg.digest, 0, WINDOWS, Entropy(b"coins"), samples=params.samples,
                                  **({"appends": Schedule(N, LIFETIME, WINDOWS, FRESH).total} if refresh else {}))
         self.now, self.latest, self.checks = 0, reg.digest, 0
 
@@ -174,7 +174,7 @@ def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None
             "released": t + 1 if t + 1 < WINDOWS else None}
     verdicts = []
     for t in range(WINDOWS):
-        coin = coins.coin(lean.coins.openings(t, passes[t, PASSES - 1].root))
+        coin = lean.coins.sample(t, passes[t, PASSES - 1].root)
         drew = lean.event({"kind": "close", "t": t}, coin, at=CLOSE_NS + t)
         opened = [prover.open(passes[t, i], q) for i, q in drew["draws"]]
         verdicts.append(lean.verdict(t, [tamper(s, o) if tamper else o for o in opened]))

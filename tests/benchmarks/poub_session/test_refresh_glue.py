@@ -69,7 +69,7 @@ def test_with_refresh_unset_no_message_and_no_result_holds_the_word(sent):
     assert [h["type"] for h in sent].count("session") == 2
     assert "refresh" not in json.dumps(sent) and "refresh" not in json.dumps(rs)
     assert "fresh_slots" not in json.dumps(sent) and "fresh_slots" not in json.dumps(rs)
-    assert [set(h) for h in sent if h["type"] == "session"] == [{"type", "k", "windows", "lifetime", "pace"}] * 2
+    assert [set(h) for h in sent if h["type"] == "session"] == [{"type", "k", "windows", "samples", "lifetime", "pace"}] * 2
 
 
 def test_a_session_set_to_refresh_on_a_tree_whose_parameters_hold_none_is_refused_before_it_starts(monkeypatch, sent):

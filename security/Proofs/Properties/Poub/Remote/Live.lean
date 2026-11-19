@@ -121,7 +121,7 @@ theorem close_W {s : State} {c a : Array ByteArray} {t : Int} {now : Nat} {r : R
   all_goals
     simp only [Bool.false_eq_true, ↓reduceIte] at hres
     cases h₁
-    rw [hc _ rfl, ‹receiptSample _ _ _ _ _ = some _›] at hres
+    rw [hc _ rfl, ‹receiptSample _ _ _ = some _›] at hres
     cases hres
     rfl
 

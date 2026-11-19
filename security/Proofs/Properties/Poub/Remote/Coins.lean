@@ -203,7 +203,7 @@ theorem close_coins {s : State} {c : Array ByteArray} {t : Int} {now : Nat} {r :
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at hb
     have ht : t.toNat < s.windows.size := by omega
     cases h₁
-    rw [hc t.toNat (by simp [sampledOf, ht, Array.getElem_modify]), ‹receiptSample _ _ _ _ _ = some _›] at hres
+    rw [hc t.toNat (by simp [sampledOf, ht, Array.getElem_modify]), ‹receiptSample _ _ _ = some _›] at hres
     cases hres
     rfl
 
