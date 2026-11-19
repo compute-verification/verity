@@ -35,8 +35,7 @@ def _no_run_result(monkeypatch):
 @pytest.fixture(autouse=True)
 def _poow_named(monkeypatch):
     """`served_verdicts.sh` requires POUW named, and Pearl+ is the one scheme left: a test that runs it without POUW
-    runs it under POUW=pearlplus with Pearl+'s coins in-process (no gate command), and one that sets POUW itself
-    keeps its own."""
+    runs it under POUW=pearlplus, and one that sets POUW itself keeps its own."""
     import subprocess
 
     run = subprocess.run
@@ -44,7 +43,7 @@ def _poow_named(monkeypatch):
     def named(argv, *a, **kw):
         env = kw.get("env")
         if isinstance(argv, (list, tuple)) and any(str(x).endswith("served_verdicts.sh") for x in argv) and isinstance(env, dict):
-            kw["env"] = {"POUW": "pearlplus", "PEARLC_CHALLENGER_GATE": "", **env}
+            kw["env"] = {"POUW": "pearlplus", **env}
         return run(argv, *a, **kw)
 
     monkeypatch.setattr(subprocess, "run", named)
