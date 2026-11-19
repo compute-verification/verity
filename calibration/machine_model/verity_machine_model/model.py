@@ -10,7 +10,6 @@ from that epoch), so a new epoch adds a file and closes older lines in theirs.
 from __future__ import annotations
 
 import csv
-import math
 import re
 import tomllib
 from dataclasses import dataclass, field
@@ -34,13 +33,7 @@ STATUSES = ("measured", "ASSUMED", "provisional", "joint", "datasheet")
 @dataclass(frozen=True)
 class Model:
     cycle_u: float                      # u in one SMSP-cycle (R*)
-    honest_real: float                  # u of real time a MAC for the honest kernel
-    cuda: tuple[str, ...]               # the CUDA lane kinds ρ binds, in constraint order
-    honest: dict[str, float]            # the honest GEMM's program a MMA
-    adopted: str                        # the design whose cheapest attack is the margin
-    rho: float
-    tie: float
-    x_min: float
+    cuda: tuple[str, ...]               # the CUDA lane kinds, in constraint order
     epochs: tuple[str, ...]
     current: str = ""                   # the device's current vector
     uniform_forms: tuple[str, ...] | None = None   # the lane classes with a uniform-datapath form; None: every one
@@ -110,13 +103,8 @@ def u_of(cycle_u: float, rate: str, noise: str, cycles: str, u: str) -> float:
 
 
 def model(data: Path = DATA) -> Model:
-    """A device directory (`data/devices/sm_NN/`) that no vector is solved on leaves out what only `solve` reads: the
-    honest kernel's u a MAC, the price LP's `[lp]`, `[honest]` and `adopted` (NaN and empty here)."""
     t = tomllib.loads((data / "model.toml").read_text())
-    c, lp = t["constants"], t.get("lp", {})
-    return Model(cycle_u=c["cycle_u"], honest_real=c.get("honest_real", math.nan), cuda=tuple(t["cuda"]),
-                 honest=dict(t.get("honest", {})), adopted=t.get("adopted", ""), rho=lp.get("rho", math.nan),
-                 tie=lp.get("tie", math.nan), x_min=lp.get("x_min", math.nan), epochs=tuple(t["epochs"]),
+    return Model(cycle_u=t["constants"]["cycle_u"], cuda=tuple(t["cuda"]), epochs=tuple(t["epochs"]),
                  current=t["current"],
                  uniform_forms=tuple(t["uniform_forms"]) if "uniform_forms" in t else None)
 

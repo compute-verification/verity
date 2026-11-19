@@ -118,7 +118,7 @@ def test_census_lines_are_well_formed():
 def test_one_value_per_kind_and_row_at_each_epoch(epoch):
     c = census(M, epoch)   # raises on two lines for one kind and row
     assert all(u > 0 for v in c.values() for u in v.values())
-    assert set(M.honest) <= set(c) and "MMA" in c
+    assert "MMA" in c
 
 
 def test_u_of():
