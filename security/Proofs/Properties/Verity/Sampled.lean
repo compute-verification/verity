@@ -674,6 +674,33 @@ def samplingDesignAt (v : _root_.Spot.Docket.Verifier) (n : ℕ) : Flock.V Flock
   let derived ← _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
   pure (derived.getD (← _root_.Spot.Draw.flockSamplingDesign samplingDesignJ n))
 
+/-- **v2's parameters in `θ`**, as `ParamsAt` reads them, where they decode (`paramsOf_eq`). -/
+def paramsOf (θ : ByteArray) : Option _root_.Spot.OneStageZk.Params :=
+  match _root_.Core.canonicalJson θ >>= _root_.Core.Composition.decodeParams with
+  | .error _ => none
+  | .ok ps =>
+    match ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) with
+    | none => none
+    | some x =>
+      match _root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson with
+      | .ok (.inl p) => some p
+      | _ => none
+
+theorem paramsOf_eq {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (h : ParamsAt θ p) :
+    paramsOf θ = some p := by
+  obtain ⟨ps, hps, x, hx, hp⟩ := h
+  simp only [paramsOf, hps, hx, hp]
+
+/-- **The circuit file at the parameters `θ`, as deployed**: the one the door derives from their C, partition and block
+(`Own.circuitFile`); the empty file where it refuses or `θ` holds no v2 parameters. -/
+def circuitFileOf (θ : ByteArray) : ByteArray :=
+  ((paramsOf θ).bind fun p => p.own.circuitFile.toOption).getD .empty
+
+/-- The circuit file the door derives at v2's parameters in `θ` is `circuitFileOf θ`. -/
+theorem circuitFileOf_eq {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p) {b : ByteArray}
+    (hb : p.own.circuitFile = .ok b) : circuitFileOf θ = b := by
+  simp only [circuitFileOf, paramsOf_eq hp, Option.bind, hb, Except.toOption, Option.getD_some]
+
 /-- **`A` is the session v2 sets up on the parameters `θ` and the committed files `F`**: v2's parameters in the
 composite's (`ParamsAt`), which name no members, so the session is the one statement's (`single`, `OneStatement`; a
 window of members is `Window`'s), with the verifier's partition object and program as verity-verify-proof's inputs, the sampling design the sample
@@ -769,38 +796,11 @@ structure DigestsAt (V : Vocab d α) (T : PinnedTables) (θ : ByteArray) : Prop 
     V.publicDigest θ = some fun i => dg.data.getD i.val 0
   tables : ∀ F, (V.read θ F).first.tables = pinnedTables T (circuitFileOf θ)
 
-/-- **v2's parameters in `θ`**, as `ParamsAt` reads them, where they decode (`paramsOf_eq`). -/
-def paramsOf (θ : ByteArray) : Option _root_.Spot.OneStageZk.Params :=
-  match _root_.Core.canonicalJson θ >>= _root_.Core.Composition.decodeParams with
-  | .error _ => none
-  | .ok ps =>
-    match ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) with
-    | none => none
-    | some x =>
-      match _root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson with
-      | .ok (.inl p) => some p
-      | _ => none
-
-theorem paramsOf_eq {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (h : ParamsAt θ p) :
-    paramsOf θ = some p := by
-  obtain ⟨ps, hps, x, hx, hp⟩ := h
-  simp only [paramsOf, hps, hx, hp]
-
 /-- **The digest a hex digest names**: its bytes, where `Flock.unhex` decodes it, as `DigestsAt` reads them. -/
 def digestOf (s : String) : Option Hash.Digest :=
   match Flock.unhex s with
   | .ok dg => some fun i => dg.data.getD i.val 0
   | .error _ => none
-
-/-- **The circuit file at the parameters `θ`, as deployed**: the one the door derives from their C, partition and block
-(`Own.circuitFile`); the empty file where it refuses or `θ` holds no v2 parameters. -/
-def circuitFileOf (θ : ByteArray) : ByteArray :=
-  ((paramsOf θ).bind fun p => p.own.circuitFile.toOption).getD .empty
-
-/-- The circuit file the door derives at v2's parameters in `θ` is `circuitFileOf θ`. -/
-theorem circuitFileOf_eq {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p) {b : ByteArray}
-    (hb : p.own.circuitFile = .ok b) : circuitFileOf θ = b := by
-  simp only [circuitFileOf, paramsOf_eq hp, Option.bind, hb, Except.toOption, Option.getD_some]
 
 /-- **The circuit file's digest at the parameters `θ`, as deployed**: the SHA-512 of the circuit file the door
 derives from their C, partition and block (`Own.circuitFile`); none where it refuses. -/
