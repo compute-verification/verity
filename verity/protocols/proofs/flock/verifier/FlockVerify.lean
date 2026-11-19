@@ -1753,6 +1753,27 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
     IO.println s!"TEMPLATEQUERY {line.compress}"
   return 0
 
+/-- `partition-object FILE...`: a partition object's form (`HmRow.checkPartitionObject`) for each case `{"object"}`, and
+with `"descriptor"` (the program's bytes as a string) its `blocks` as a reader gets them (`HmRow.blocksOf`), or the
+refusal. One `PARTITIONOBJECT` line per file. -/
+def partitionObjectCmd (paths : List String) : IO UInt32 := do
+  for path in paths do
+    let text ← try IO.FS.readFile path catch _ => pure ""
+    let res : V Lean.Json := do
+      let j ← match Flock.JsonParse.parse text with | .ok j => pure j | .error e => throw s!"not JSON: {e}"
+      let obj := (j.getObjVal? "object").toOption.getD Lean.Json.null
+      discard <| HmRow.checkPartitionObject obj
+      let some d := (j.getObjValAs? String "descriptor").toOption | return Lean.Json.mkObj []
+      let bs ← HmRow.blocksOf obj d.toUTF8
+      return Lean.Json.mkObj [("blocks", match bs with
+        | some ps => Lean.Json.arr (ps.map fun (lo, hi) => Lean.toJson #[lo, hi])
+        | none => Lean.Json.null)]
+    let line := match res with
+      | .ok r => (r.setObjVal! "file" (Lean.Json.str path)).setObjVal! "ok" (Lean.Json.bool true)
+      | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+    IO.println s!"PARTITIONOBJECT {line.compress}"
+  return 0
+
 /-- `cut-check FILE...`: `check_cut` (the invariant on one Call's cut against its graph, and the width rule) on each case, one
 `CUTCHECK` line per file; a case with `"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count. -/
 def cutCheckCmd (paths : List String) : IO UInt32 := do
@@ -1972,6 +1993,7 @@ def main (args : List String) : IO UInt32 := do
   | "sigma-check" :: rest => Flock.Sigma.cmd rest
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
+  | "partition-object" :: paths => partitionObjectCmd paths
   | "net-check" :: paths => netCheckCmd paths
   | "draw" :: rest => sampleCmd rest
   | "draw-test" :: path :: rest => sampleTest path rest
