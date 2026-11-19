@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Pearl+'s credited block (`credited_door.py`) proved and verified on a CPU node, on the proofs lane's road
 # (`test_lean_lower`'s run r20261119-002119-8067): Lean's flock-lower-check, flock-tmpl-unit and verity-verify-proof and
-# the CPU flock-circuit built once per source; credited_door.py stages OUT/honest and OUT/dishonest; each is placed
-# (flock-tmpl-unit), its statement built, proved over a live loopback session (`flock-circuit serve --zk`, the Rust
-# verifier) and its session verified by Lean (`verity-verify-proof verify --zk`). SIZE=K,TM,TN,N (256,1,1,1).
-# research run --on auto --cwd source --wait --mem-gb 64 --cpus 16 --timeout 120 -- bash benchmarks/compile_cost/credited_door.sh
+# the CPU flock-circuit built once per source; `credited_door.py stage` stages OUT/honest and OUT/dishonest on the
+# verifier's draw, every row registered; each is placed (flock-tmpl-unit), its statement built, proved over a live
+# loopback session (`flock-circuit serve --zk`, the Rust verifier) and its session verified by Lean (`verity-verify-proof
+# verify --zk --registered`, the honest one also on a registered file naming another unit's root); `credited_door.py door`
+# then verifies both through `proofs.verify`. SIZE=K,TM,TN,N (256,1,1,1).
+# research run --on auto --cwd source --wait --mem-gb 64 --cpus 16 --timeout 180m -- bash benchmarks/compile_cost/credited_door.sh
 set -uxo pipefail
 SIZE=${SIZE:-256,1,1,1}
 export TU_PINNED=slot RAYON_NUM_THREADS=$(nproc)
@@ -65,11 +67,12 @@ challenger_built || exit 1
 $UV sync -q --all-packages --extra torch-cpu || exit 4
 export PATH=$W/py/bin:$PATH
 wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] && [ -x $FW_BIN ] && [ -x $LOW_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
-( unset PYTHONPATH; timed stage $UV run -q python benchmarks/compile_cost/credited_door.py --size $SIZE --lower $LOW_BIN --out $S ${PYLOWER:+--python-lower} ) > $O/stage.txt 2>&1
-src=$?; cat $O/time-stage.txt 2>/dev/null; grep -h '^PHASE\|^BITS\|^LOWER\|^STAGE' $O/stage.txt | cut -c1-3000
+( unset PYTHONPATH; timed stage $UV run -q python benchmarks/compile_cost/credited_door.py stage --size $SIZE --lower $LOW_BIN --out $S ) > $O/stage.txt 2>&1
+src=$?; cat $O/time-stage.txt 2>/dev/null; grep -h '^DRAW\|^PHASE\|^BITS\|^LOWER\|^STAGE' $O/stage.txt | cut -c1-3000
 cp $S/stage.json $O/ 2>/dev/null
 [ $src = 0 ] || { tail -c 4000 $O/stage.txt; exit 5; }
 N=1
+DOOR=()
 for v in honest dishonest; do
   D=$S/$v; Ov=$O/$v; mkdir -p $Ov
   rm -rf $CHALLENGER_WORK/challenger
@@ -91,9 +94,14 @@ for v in honest dishonest; do
   challenger_end $Ov/challenger; echo "$v challenger exit $?"
   SESS=$(dirname $(ls -1 $S/sessions-$v/*/session.json | LC_ALL=C sort | tail -1)) || { tail -20 $Ov/serve.log; continue; }
   challenger_audit $Ov/challenger $SESS
-  timed lean-$v $LEAN_BIN verify --zk --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $D/pub-$N.bin --tables $D/tables \
-    --partition $D/partition.json --program $D/program.json --session $SESS > $Ov/lean.log 2>&1
-  echo "$v lean rc $?"; cat $O/time-lean-$v.txt; grep -h '^VERDICT' $Ov/lean.log | head -1 | cut -c1-1500; tail -3 $Ov/lean.log | cut -c1-600
-  cp $D/partition.json $D/unit.tmpl $Ov/; sha512sum $D/circuit.txt $D/unit.tmpl > $Ov/sha512.txt
+  DOOR+=(--session $v $SESS)
+  for r in registered $([ $v = honest ] && echo registered-wrong); do
+    timed lean-$v-$r $LEAN_BIN verify --zk --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $D/pub-$N.bin --tables $D/tables \
+      --partition $D/partition.json --program $D/program.json --registered $D/$r.json --session $SESS > $Ov/lean-$r.log 2>&1
+    echo "$v $r lean rc $?"; cat $O/time-lean-$v-$r.txt; grep -h '^VERDICT' $Ov/lean-$r.log | head -1 | cut -c1-1500; tail -3 $Ov/lean-$r.log | cut -c1-600
+  done
+  cp $D/partition.json $D/unit.tmpl $D/registered*.json $D/draw.json $Ov/; sha512sum $D/circuit.txt $D/unit.tmpl > $Ov/sha512.txt
 done
+( unset PYTHONPATH; timed door $UV run -q python benchmarks/compile_cost/credited_door.py door --lower $LOW_BIN --lean $LEAN_BIN --out $S "${DOOR[@]}" ) > $O/door.txt 2>&1
+echo "door rc $?"; cat $O/time-door.txt 2>/dev/null; grep -h '^DOOR' $O/door.txt | cut -c1-2500; tail -c 3000 $O/door.txt | grep -v '^DOOR'
 ls -la $S/circuit.txt; [ $(stat -c %s $S/circuit.txt 2>/dev/null || echo 0) -lt 200000000 ] && cp $S/circuit.txt $O/; true

@@ -55,6 +55,19 @@ def test_the_door_rows_are_the_blocks_port():
     assert [(words[k // 16] >> (k % 16)) & 1 for k in range(513)] == out
 
 
+def test_the_drawn_block_fixes_the_tiles_public_rows():
+    """The verifier's draw over a one-call run is the run's one credited block at the test instance, and the tile staged
+    on it carries the drawn unit, rows and col bit for bit (`drawn_bits`, from the block alone)."""
+    core = WK.credited_product(CD.SCHEME, K, TM, TN, N)
+    block, index = CD.draw(K, TM, TN, N, bytes(64))
+    assert (index, block.size, block.unit, block.rows, block.col) == (0, (K, TM, TN, N), 7, (0,), 0)
+    args, _ref = CD.tile(K, TM, TN, N, block=block)
+    bits = dict(CD.port_bits(core, args))
+    assert CD.drawn_bits(core, block) == {p: bits[p] for p in CD.DRAWN}
+    other = CD.drawn_bits(core, CD.SimpleNamespace(unit=block.unit + 1, rows=block.rows, col=block.col))
+    assert other["unit"] != bits["unit"]
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_CREDITED_DOOR"),
                     reason="VERITY_VLLM_CREDITED_DOOR=1: restricts the credited block (about 5 minutes and 27 GiB) and "
