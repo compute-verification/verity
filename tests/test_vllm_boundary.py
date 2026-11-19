@@ -79,7 +79,6 @@ ALLOWED = {
                                          "rank under CUDA graphs",
     "benchmarks/spot_proved/tree_allreduce.py": "proofs: the TP all-reduce summed in software over vLLM's CUDA "
                                                 "communicator, as the serving node's multimem tree reduced it",
-    "benchmarks/spot_proved/discover.py": "proofs: a rehearsal of the capture on a GLM-5.3 vllm.LLM with dummy weights",
     "benchmarks/route_capture/route_capture_plugin.py": "proofs: a general plugin recording each served step's launch-shape "
                                                         "class and kernels",
     "tests/benchmarks/route_capture/test_plugin.py": "proofs: the route capture's plugin on stand-ins for vLLM's model "
