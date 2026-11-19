@@ -76,7 +76,7 @@ def test_an_int8_row_quant_call_boundary_is_claimed_by_the_int8_source_the_commi
     assert taps.attached(G.classes_of_identities(man)) == ["int8"]
     rec = G.call_boundaries(man, str(tmp_path))
     assert rec["pass"] is True and (rec["identities"], rec["claimed"], rec["covered"], rec["uncovered"]) == (n + 1, 1, n, 0)
-    assert rec["sources"] == ["int8"]
+    assert rec["sources"] == ["int8", "call_boundary"]
 
 
 def test_a_claim_naming_an_attached_source_passes(tmp_path, monkeypatch):
