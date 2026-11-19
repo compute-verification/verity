@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -81,6 +82,40 @@ def test_a_unit_that_starts_no_block_is_refused():
         pytest.skip("the chain's first block is one unit")
     got = lean(c, part, lo + 1)
     assert got.returncode == 1 and f"no block of the partition starts at unit {lo + 1}" in got.stdout
+
+
+def _e(n: int) -> dict:
+    """`Spot.OneStageZk.E3` / `E2047`: E(x : Array n (Value 1), y : Value 1) = (x, Not y), one instance."""
+    v1, a = ["Value", 1], ["Array", n, ["Value", 1]]
+    r = ["Tuple", [a, v1]]
+    return {"annotations": {}, "boolean": {}, "callees": ["Input1_v1", "Not_v1", "E_v1"], "definitions": {
+        "E_v1": {"bindings": {}, "form": "composite", "id": "E_v1", "body": {
+            "nodes": [{"args": [{"refs": {"affine": ["p", 1, 0, 1]}, "type": 0}], "fn": 1, "form": "primitive", "out": 0}],
+            "params": [["x", a], ["y", v1]], "ret": {"concat": [{"affine": ["p", 0, 0, n]}, {"affine": ["n", 0, 0, 1]}]},
+            "ret_type": r}},
+        "Input1_v1": {"form": "primitive", "id": "Input1_v1", "params": [], "ret": v1},
+        "Not_v1": {"form": "primitive", "id": "Not_v1", "params": [["a", v1]], "ret": v1},
+        "Root[EProg_v1]_v1": {"bindings": {}, "form": "composite", "id": "Root[EProg_v1]_v1", "body": {
+            "nodes": [{"args": [], "axes": [], "fn": 0, "form": "batch", "n": n, "out": 1},
+                      {"args": [], "fn": 0, "form": "primitive", "out": 0},
+                      {"args": [{"refs": {"affine": ["n", 0, 0, n]}, "type": 1}, {"refs": {"affine": ["n", 1, 0, 1]}, "type": 0}],
+                       "fn": 2, "form": "call", "out": 2}],
+            "params": [], "ret": {"affine": ["n", 2, 0, n + 1]}, "ret_type": r}}},
+        "program_fn": "EProg_v1", "root": "Root[EProg_v1]_v1", "schema": "verity-ir/descriptor/v2", "types": [v1, a, r]}
+
+
+@pytest.mark.parametrize("n", [3, 2047])
+def test_a_row_not_whole_words_is_refused_by_both(n):
+    """A parameter not whole u16 words: the one-stage path lays each row from a word while the lowering lays the leaves
+    one after another, so `y` would be read from x's padding. Lean's C_S and the door's refuse it with one text."""
+    desc = _e(n)
+    c = json.dumps(desc, sort_keys=True, separators=(",", ":")).encode()
+    part = PO.build(desc, PO.template_instance_query("E_v1"), [[(0, 1)]])
+    why = f"lower: C_S's template E_v1: input row x of {n} bits {OC.NOT_WHOLE}"
+    with pytest.raises(OC.Refused, match=re.escape(why)):
+        OC.lower(OC.restrict(c, part, OC.block(c, part, 0)), part, PF.lower_executable, cut=OC.cuts(c, part))
+    got = lean(c, part, 0)
+    assert got.returncode == 1 and why in got.stdout, got.stdout
 
 
 def _ports(text: bytes) -> list[list]:
