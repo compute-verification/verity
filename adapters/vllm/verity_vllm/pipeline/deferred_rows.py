@@ -25,6 +25,7 @@ from typing import Any
 
 from verity.commitments.scheme import DIGEST_BYTES
 from verity_vllm.check.replay.index import ProgramIndex
+from verity_vllm.check.replay.opening import alias_table
 from verity_vllm.config import option
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import cpu_replay as CPU
@@ -56,7 +57,7 @@ def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | 
     picks only: refused.  The Definitions the Build bound are not held to this tree's: no row is evaluated here, and the one-stage
     proof is over the verifier's own template.  A served window's bundle (`serve_seal.seal_window`) names no Programs: its
     Programs are the registered compiler's for the window's advice, so it opens with none (``programs`` empty, each request's
-    arrival its first step in the window), and ``manifest`` None: a served window seals no alias table, so every op path names itself."""
+    arrival its first step in the window), ``manifest`` None and ``aliases`` the shared instances' table the window sealed (`records.runtime_tree.RuntimeTree.aliases`)."""
     b = RB.open_bundle(bundle)
     ctx, bdir = b["context"], Path(b["path"])
     if ctx.get("slim"):
@@ -64,7 +65,7 @@ def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | 
     _rows, row, _verdict, store, run = CPU.of_record(b, bdir.parent, awaiting=False)
     if ctx.get("served_window"):
         return SimpleNamespace(bundle=b, ctx=ctx, bdir=bdir, out=bdir.parent, pair=int(ctx["pair"]), row=row, store=store, run=run,
-                               commitment=store.commit_scheme, manifest=None,
+                               commitment=store.commit_scheme, manifest=None, aliases=ctx.get("op_path_aliases", {}),
                                loaded={}, digests={}, programs={}, program_dirs={},
                                arrivals={str(q["request_id"]): int(q["arrive_step"]) for q in ctx["requests"]})
     o = SimpleNamespace(row_dir=row_dir, replay_workers=None, required_manifest=required_manifest)
@@ -75,7 +76,7 @@ def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | 
     loaded, digs = C2.programs_of_record(site, rl, definitions=False)
     arrivals, _moved = C2.arrivals(site, rl)
     return SimpleNamespace(bundle=b, ctx=ctx, bdir=bdir, out=bdir.parent, pair=int(ctx["pair"]), row=row, store=store, run=run,
-                           commitment=store.commit_scheme, manifest=man, loaded=loaded, digests=digs,
+                           commitment=store.commit_scheme, manifest=man, aliases=alias_table(man), loaded=loaded, digests=digs,
                            programs={k: v["instances"] for k, v in loaded.items()},
                            program_dirs={k: v.get("dir") for k, v in loaded.items()}, arrivals=arrivals)
 
@@ -145,7 +146,7 @@ def from_bundle(bundle: str | os.PathLike, row_dir: str, partition_file: str, ou
     committer = {"from": "replay bundle", "pair": r.pair, "source": r.ctx.get("code")}
     return SRW.after_commit(str(out_dir), partition_file=partition_file, programs=r.programs, bmap=bmap,
                             committed=OpenedReader(r.store, r.run), weights=weights,
-                            manifest=r.manifest if isinstance(r.manifest, dict) else None, run_root=r.run.run_root,
+                            aliases=r.aliases, run_root=r.run.run_root,
                             row=(r.ctx.get("args") or {}).get("label"), arrivals=r.arrivals, program_dirs=r.program_dirs,
                             digests=r.digests, committer=committer, workers=workers,
                             stand_in=stand_in(bytes(r.run.run_root).hex(), r.commitment), tables=tables)

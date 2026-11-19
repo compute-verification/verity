@@ -2,10 +2,11 @@
 
 `committer` builds the server's committer, rows-sha512's (``--scheme``), the declared Commit of record's
 (`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
-acquisition over the row's capture plan (`program.predict.window_rows.captured` over the registered compiler's slot
-Programs) and the row's Build of record (``--row-build``, ``verity-vllm predict row``'s, `serve_row`): the attention hidden tap
-(``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the plan's hook sets. The serve builds no capture plan at its
-start yet, so `committer` refuses by name (`NO_PLAN`). Then `served_record.StepInputPort` (each step's
+acquisition over the row's capture plan (`program.predict.capture_plan.captured` over the registered compiler's slot
+Programs) of the row's Build of record (``--row-build``, ``verity-vllm predict row``'s, `serve_row`), built at the serve's start:
+the sources of the values no module returns (`commit_attach.attach_of_plan`) and the plan's hook sets, a shared module's k-th
+call bound as its k-th path (`RuntimeTree.aliases`, sealed as the context's ``op_path_aliases``), and the arena sized from the
+window class of record (`arena_envelope`). Then `served_record.StepInputPort` (each step's
 stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port network attestation's
 served-rows tie's Definition reads; no proof of it runs, so today the rows registered at serve time are the
 prover's word) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
@@ -65,7 +66,7 @@ from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import serve_release as SL
 from verity_vllm.pipeline.serve_guard import GB
-from verity_vllm.pipeline.serve_row import row_refusal
+from verity_vllm.pipeline.serve_row import programs_root_of, row_refusal
 
 ROWS = step_rows.NAME
 #: the token budget's floor under rows-sha512: the step-input port's ids fill whole ``step_rows.ROW_BYTES`` rows
@@ -101,11 +102,23 @@ def scheme_refusal(opts: Any) -> str | None:
     return None
 
 
-#: why the served Commit can't start: what its acquisition and its seal's binder read is the row's capture plan, which the
-#: serve doesn't build at its start
-NO_PLAN = ("the served Commit's acquisition (hidden tap, taps, MoE source, promoted inputs, hook sets) and its seal's binder read "
-           "the row's capture plan (`window_rows.captured` over the registered compiler's slot Programs), which serve-openai "
-           "doesn't build at its start yet: serve with --no-commit")
+def committer_args(opts: Any) -> SimpleNamespace:
+    """What `pipeline.commit.make_committer` and `pipeline.commit_attach.attach_of_plan` read of the serve's options."""
+    from verity_vllm.acquire.sources.taps import TapSources
+
+    return SimpleNamespace(arena_mb=0, profile_hooks=False, pinned_populate_threads=None, commit_scheme=opts.scheme,
+                           programs_root=programs_root_of(opts), program_dir=None, out=opts.out,
+                           tap_sources=TapSources(norm_tap_so=opts.norm_tap_so), moe_source="off", required_classes=None)
+
+
+def arena_envelope(opts: Any, cls: Any) -> dict[str, Any]:
+    """The workload envelope the committer's arena is sized from (`size_arena`): the window class ``cls``'s public bounds (a
+    `window_class.WindowClass`: its slots a step, each of at most its prompt, its positions a sequence), under the engine's own
+    limits, one new token a decode step."""
+    batch = min(int(opts.max_num_seqs), cls.slots)
+    tokens = min(int(opts.max_num_batched_tokens), batch * cls.prompt)
+    return {"batch": batch, "max_prompt": cls.prompt, "max_new": 1, "max_num_batched_tokens": tokens,
+            "max_model_len": min(int(opts.max_model_len), cls.positions + 1)}
 
 
 def target_of(model: Any = None, async_scheduling: bool = False) -> dict[str, Any]:
@@ -134,11 +147,59 @@ def seal_of(opts: Any) -> dict[str, Any]:
 
 
 def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
-    """The server's committer over ``llm`` under ``opts.scheme`` (module docstring), refused unless the scheme may commit
-    (`scheme_refusal`), and then, until the serve builds the row's capture plan, by name (`NO_PLAN`)."""
+    """The server's committer over ``llm`` under ``opts.scheme`` (module docstring), its run ``label:<run id>``, refused unless the
+    scheme may commit (`scheme_refusal`) and it retains on the host (the served record is read back from there). Its capture
+    plan is the row's Build of record's (`capture_plan.rows_of_build` for the seal's binder, `capture_plan.of_build` for the
+    acquisition, whose prompt ids the step-input port carries), and its arena is sized from the window class of record."""
     if why := scheme_refusal(opts):
         raise UsageError(why)
-    raise UsageError(f"--scheme {opts.scheme}: {NO_PLAN}")
+    from verity_vllm import settings
+    from verity_vllm.commit.committer.host_retention import retain_exclude_families
+    from verity_vllm.commit.served_record import SamplerInputsSource
+    from verity_vllm.engine.handle import engine_of, model_runner
+    from verity_vllm.pipeline import commit as C, commit_attach as CA
+    from verity_vllm.pipeline.advice import registered_compiler
+    from verity_vllm.program.predict import capture_plan as CP
+    from verity_vllm.program.predict.window_class import CLASS_OF_RECORD
+
+    run_id = f"{label}:{opts.run_id}"
+    rows, classes, args = CP.rows_of_build(opts.row_build), CP.of_build(opts.row_build), committer_args(opts)
+    eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model, vllm_config=engine_of(llm.vllm).vllm_config,
+                          cp={"repo": llm.pin.model, "revision": llm.pin.revision})
+    spec = opts.retention.retain_exclude
+    if spec:
+        settings.put("VERITY_RETAIN_EXCLUDE", spec)
+    com = C.make_committer(DECLARED_COMMITTER, eng, args, run_id)
+    if spec and set(getattr(com, "retain_exclude", ())) != retain_exclude_families(spec):
+        raise RuntimeError(f"--retain-exclude {spec}: the committer {com.name} excludes {sorted(getattr(com, 'retain_exclude', ()))}")
+    if com.commit_scheme != opts.scheme:
+        raise RuntimeError(f"--scheme {opts.scheme}: the committer {com.name} commits {com.commit_scheme}")
+    if com.retain != "host":
+        raise UsageError(f"VERITY_RETAIN={com.retain}: the served record is read back from the values retained on the host")
+    att = CA.attach_of_plan(com, eng, args, [c for c in classes if c["capture"] != CP.INPUT_IDS], Path(opts.out) / "acquisition",
+                            kind=DECLARED_COMMITTER)
+    com.capture_plan, com.op_path_aliases = rows, {k: list(v) for k, v in att.runtime.aliases().items()}
+    here = registered_compiler()
+    com.compiler = {"name": here.name, "digest": here.digest}   # the row's, `row_refusal` held it to this tree's
+    try:
+        com.attach_source(StepInputPort(com, int(opts.max_num_batched_tokens)))
+    except ValueError as e:
+        raise UsageError(str(e)) from None
+    com.attach_source(SamplerInputsSource(com))
+    com.arena_sizing_record = com.size_arena(arena_envelope(opts, CLASS_OF_RECORD), hidden_m1=False)
+    if getattr(com, "windowed", False):
+        com.window_ring = com.enable_windows(com.arena_sizing_record)     # windowed staging's ring replaces the per-step blocks
+    if opts.retention.retain == "device":
+        if not callable(getattr(com, "enable_device_pool", None)) or not getattr(com, "windowed", False):
+            raise UsageError(f"--retain device: the committer {com.name} is not the windowed collector")
+        com.device_pool_record = com.enable_device_pool(int(opts.retention.retain_device_gb * (1 << 30)))
+    if opts.seal:
+        com.register_weights()           # the weights tree every sealed window's bundle carries (hashed as VERITY_WEIGHTS_HASH says)
+    from verity_vllm.pipeline.match_capture import dump_cos_sin
+
+    (private := Path(opts.out) / "private").mkdir(exist_ok=True)
+    dump_cos_sin(llm, private)
+    return com
 
 
 def window_requests(rows: Mapping[int, Sequence[tuple]], name_of: Callable[[str], str | None],
@@ -166,9 +227,10 @@ def window_requests(rows: Mapping[int, Sequence[tuple]], name_of: Callable[[str]
     return list(reqs.values()), request_rows
 
 
-def served_binder(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], sources: Sequence[Any] = ()) -> Any:
+def served_binder(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], sources: Sequence[Any] = (),
+                  aliases: Mapping[str, Sequence[Any]] | None = None) -> Any:
     """The `query.manifest.bind.Binder` of a served window's ``steps``: the identities one engine step of the bench row's
-    Programs commits (each member of each row of its capture plan, `window_rows.captured`, each (op_path, member, row) once, in
+    Programs commits (each member of each row of its capture plan, `capture_plan.captured`, each (op_path, member, row) once, in
     the plan's order), at every step, with the committing sources' ports. A served step batches requests at any step of their
     own, and a module's output at a step is one identity whatever the requests in it; the binding map splits it between them
     (`binding.build_binding_map`'s request rows). With a `served_record.StepInputPort` among the sources, its tensors bind as
@@ -176,20 +238,24 @@ def served_binder(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], sourc
     from verity_vllm.commit.served_record import StepInputPort
     from verity_vllm.query.manifest.bind import source_ports
 
-    return served_binder_of(plan, steps, source_ports(sources), any(isinstance(s, StepInputPort) for s in sources))
+    return served_binder_of(plan, steps, source_ports(sources), any(isinstance(s, StepInputPort) for s in sources), aliases)
 
 
-def served_binder_of(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], ports: Mapping[str, Any], has_port: bool) -> Any:
-    """`served_binder` given the sources' merged ports (`bind.source_ports`) and whether a step-input port is among them."""
+def served_binder_of(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], ports: Mapping[str, Any], has_port: bool,
+                     aliases: Mapping[str, Sequence[Any]] | None = None) -> Any:
+    """`served_binder` given the sources' merged ports (`bind.source_ports`) and whether a step-input port is among them. A
+    shared instance's path (``aliases``, `RuntimeTree.aliases`) binds as its first path's call of its index."""
     from verity_vllm.query.manifest.bind import Binder
 
     one: dict[tuple[str, str, int], dict[str, Any]] = {}
+    shared = {str(k): (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()}
     for d in plan:
-        for m, _width, _dtype in d["members"]:
-            key = (str(d["op_path"]), str(m), int(d.get("row", 0)))
-            one.setdefault(key, {"op_path": key[0], "output_member": key[1], "invocation": key[2]})
+        op, k = shared.get(str(d["op_path"]), (str(d["op_path"]), 0))
+        for j, (m, _width, _dtype) in enumerate(d["members"]):
+            key = (op, str(m), k)
+            one.setdefault(key, {"op_path": key[0], "output_member": key[1], "invocation": key[2], "position": [j]})
     placed = [{**r, "identity": None, "request_id": "*", "step": None, "engine_step": int(s), "rank": 0} for s in steps for r in one.values()]
-    binder = Binder.of_manifest({"identities": placed, "requests_declared": []}, rank=0, ports=dict(ports))
+    binder = Binder(placed, rank=0, ports=dict(ports))
     if has_port:
         binder.rebind.update(port_identities(plan))
     return binder
@@ -306,6 +372,7 @@ class SealView:
     retain: str | None
     plan: Sequence[Mapping[str, Any]] | None
     compiler: Mapping[str, str] | None
+    aliases: Mapping[str, Sequence[Any]]
     port: dict[str, Any] | None
     ports: Mapping[str, Any]
     has_port: bool
@@ -323,7 +390,7 @@ def view_of(com: Any) -> SealView:
     plan, sources = getattr(com, "capture_plan", None), getattr(com, "sources", None) or ()
     return SealView(program_digest=bytes(com.program_digest), chunk=com.chunk, layouts=com._layouts, name=com.name,
                     scheme=com.commit_scheme, retain=getattr(com, "retain", None), plan=plan,
-                    compiler=getattr(com, "compiler", None), port=port_of(com),
+                    compiler=getattr(com, "compiler", None), aliases=getattr(com, "op_path_aliases", None) or {}, port=port_of(com),
                     ports=source_ports(sources) if plan is not None else {},
                     has_port=any(isinstance(s, StepInputPort) for s in sources), rows=served_rows(com),
                     positions=functools.partial(port_positions, com), unretained=functools.partial(SD.not_retained, com))
@@ -345,7 +412,7 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
     plan = v.plan
     port = v.port
     with gc_paused():
-        binder = served_binder_of(plan, sorted(v.layouts), v.ports, v.has_port) if plan is not None else None
+        binder = served_binder_of(plan, sorted(v.layouts), v.ports, v.has_port, v.aliases) if plan is not None else None
         bmap = B.build_binding_map(v.layouts, rc.steps, rc.run_root, pd, request_rows=request_rows, chunk=v.chunk,
                                    weight_registration=rc.weight_registration, binder=binder, padded=PORT_NAMES if port is not None else ())
         aliased = port_identities(plan) if binder is not None and port is not None else {}
@@ -377,7 +444,7 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
     args = {k: None for k in RB.ARGS} | {"label": label, "retain": v.retain}
     ctx = {"pair": 0, "arm": "instrumented", "committer": v.name, "run_root": rc.run_root.hex(), "code": code, "args": args,
            "requests": reqs, "sampling": dict(sampling), "tokens": {k: list(t) for k, t in tokens.items()}, "stop_of_record": None,
-           "ids_full": None, "retention": v.retain, "declaration": None,
+           "ids_full": None, "retention": v.retain, "declaration": None, "op_path_aliases": {k: list(a) for k, a in v.aliases.items()},
            "required_classes": [], "min_openings": 0, "vc_result": None, "engine_of_record": dict(engine_of_record or {}), "slim": None,
            "served_window": {"schema": SERVED_WINDOW, "window": rec.get("window"), "run_id": rec.get("run_id"), "commit_scheme": scheme,
                              "programs": "none sealed: the registered compiler's Programs for the window's advice",

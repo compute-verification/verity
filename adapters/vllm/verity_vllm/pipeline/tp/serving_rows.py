@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import config as C
+from verity_vllm.check.replay.opening import alias_table
 from verity_vllm.config import option
 from verity_vllm.pipeline.tp import run_root as RT
 from verity_vllm.records.schema_ids import TP_SERVING_ROWS_SCHEMA
@@ -137,7 +138,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
     try:
         res = SRW.after_commit(str(Path(request["dir"]) / f"rank{rank}"), partition_file=request["partition"], programs=p.progs, bmap=st["bmap"],
                                committed=OC.OpenedReader(st["com"], rc), weights=SR.model_weights_provider(st["weights"], p.index.prefix),
-                               manifest=RR.manifest_of_rank(st.get("manifest_doc"), rank), run_root=run_of(bytes.fromhex(tp["tp_run_root"]), rank),
+                               aliases=alias_table(RR.manifest_of_rank(st.get("manifest_doc"), rank)), run_root=run_of(bytes.fromhex(tp["tp_run_root"]), rank),
                                run=request.get("run"), row=request.get("row"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                                committer=request.get("committer"), tables=EX.of_request(request.get("tables"), rank),
                                workers=1,   # vLLM's TP workers are daemonic: no process pool under them
@@ -222,7 +223,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
         weights = CPU.provider(words, p.index.prefix, set())
     tp = {"world": world, "rank": rank, "tp_run_root": rec["tp_run_root"], "run_root": c["run_root"], "root_tag": rec["root_tag"]}
     res = SRW.after_commit(str(out_dir), partition_file=str(partition_file), programs=p.progs, bmap=bmap, committed=OC.OpenedReader(store, run),
-                           weights=weights, manifest=RR.manifest_of_rank(man, rank), run_root=run_of(bytes.fromhex(rec["tp_run_root"]), rank),
+                           weights=weights, aliases=alias_table(RR.manifest_of_rank(man, rank)), run_root=run_of(bytes.fromhex(rec["tp_run_root"]), rank),
                            row=ctx.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": pair, "source": ctx.get("code")}, workers=workers, tp=tp,
                            index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp),

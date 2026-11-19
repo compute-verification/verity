@@ -63,13 +63,13 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
 )
 
-from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.definitions.numerics.rows import ROWS
 from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.query.manifest import format as RM
 
 from . import scan_state as SS
+from .capture_plan import NODE, captured
 from .window_builder import WEIGHTS, _spans
 from .window_circuit import Lowered, WindowClass
 
@@ -272,25 +272,6 @@ def _op(d: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
     return str(d["op_path"]), tuple(str(m[0]) for m in d["members"])
 
 
-def captured(pi: Any, rid: str = "") -> list[dict[str, Any]]:
-    """The capture plan of a slot Program (its `ProgramIndex`): the rows the window commits, each with its op path and members
-    as the slot Programs' naming gives them (`ProgramIndex.describe`), a function of the registered compiler alone. A check row
-    (`check_rows`) is not served and is left out; any other row with no committed member is refused by name."""
-    checks = {i for _what, i, _lo, _hi in check_rows(pi)}
-    rows = []
-    for r in pi.rows:
-        d = pi.describe(r)
-        if d is None or not d["members"]:
-            if int(r["i"]) in checks:
-                continue
-            raise ValueError(f"{rid}: row {r['i']} ({r['spec']}) has no committed member")
-        rows.append({**d, "spec": r["spec"]})
-    return rows
-
-
-#: a call boundary's op path: its module, then its fx node, its op counted over the request (`naming`: ``row_quant``,
-#: ``row_quant_1``, ...)
-_NODE = re.compile(r"(.+)/(.+?)(?:_\d+)?")
 
 
 def _respelt(rows: Sequence[Mapping[str, Any]], store: Any, rid: str, arrive: int) -> dict[tuple[int, str], str]:
@@ -303,7 +284,7 @@ def _respelt(rows: Sequence[Mapping[str, Any]], store: Any, rid: str, arrive: in
     want: dict[tuple[int, str], set[str]] = {}
     for d in rows:
         want.setdefault((int(d["step"]), str(d["op_path"])), set()).update(str(m[0]) for m in d["members"])
-    node = {key: x.groups() for key in want if (x := _NODE.fullmatch(key[1]))}
+    node = {key: x.groups() for key in want if (x := NODE.fullmatch(key[1]))}
     alone = Counter((s, g) for (s, _op), g in node.items())
     out = {}
     for (s, op), members in want.items():
@@ -311,7 +292,7 @@ def _respelt(rows: Sequence[Mapping[str, Any]], store: Any, rid: str, arrive: in
         e, g = arrive + s, node.get((s, op))
         if g is None or alone[(s, g)] != 1 or store.resolve(op) != (op, 0) or all(store.has(rid, e, op, m) for m in members):
             continue
-        same = [o for o in store.ops(rid, e) if (x := _NODE.fullmatch(o)) and x.groups() == g]
+        same = [o for o in store.ops(rid, e) if (x := NODE.fullmatch(o)) and x.groups() == g]
         if len(same) == 1 and store.resolve(same[0]) == (same[0], 0) and all(store.has(rid, e, same[0], m) for m in members):
             out[(s, op)] = same[0]
     return out
@@ -727,5 +708,5 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *
                              window=window)
 
 
-__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "captured", "positions", "scan_slots",
+__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "scan_slots",
            "state_value"]

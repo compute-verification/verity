@@ -141,7 +141,7 @@ class SealProcess:
         port, fams = SS.port_of(com), sorted(getattr(com, "retain_exclude", None) or ())
         view = {"program_digest": bytes(com.program_digest), "chunk": com.chunk, "name": com.name,
                 "scheme": com.commit_scheme, "retain": getattr(com, "retain", None),
-                "plan": plan, "compiler": getattr(com, "compiler", None),
+                "plan": plan, "compiler": getattr(com, "compiler", None), "aliases": getattr(com, "op_path_aliases", None) or {},
                 "port": port, "ports": source_ports(sources) if plan is not None else {},
                 "has_port": any(isinstance(s, StepInputPort) for s in sources), "rows": served_rows(com)}
         rec = kw["rec"]
