@@ -123,6 +123,20 @@ def test_a_windows_rows_arent_kept_unless_asked():
     assert got.salts[-1] == ref.salts[2] and got.salts[1:] == list(ref.salts[1:])
 
 
+@pytest.mark.parametrize("n,w,schema,binding", [(1, 1, G.SCHEMA_V2, {}), (5, 1026, G.SCHEMA_V2, {"window": WINDOW}),
+                                                (33, 3072, G.SCHEMA_V2, {"session": "s-1"}), (3, 511, G.SCHEMA_SEG, {}),
+                                                (5, 513, G.SCHEMA_SEG, {"window": WINDOW}), (3, 2100, G.SCHEMA_SEG, {})])
+def test_the_commitments_registered_value_is_this_ones_numpy_path(n, w, schema, binding, monkeypatch):
+    """`rows.registered` gives this module's NumPy path's bytes for the same rows and salts: strings, levels, entry."""
+    monkeypatch.setattr(NR, "MODE", "numpy")
+    words = np.random.default_rng(n * 31 + w).integers(0, 1 << 16, (n, w), dtype=np.uint16)
+    ys = _ys(n)
+    got, ref = CS.registered(PROGRAM, "v", words, ys, keep_rows=True, schema=schema, **binding), NR.commit(
+        PROGRAM, "v", words, ys, True, schema=schema, **binding)
+    assert got.bcs == ref.bcs and got.levels == ref.levels and got.entry() == ref.entry()
+    assert list(got.salts) == list(ref.salts) and list(got.rows) == list(ref.rows)
+
+
 @pytest.mark.parametrize("words", [np.zeros((0, 4), np.uint16), np.zeros((2, 0), np.uint16), np.zeros((2, 3), np.int32),
                                    np.zeros(4, np.uint16)])
 def test_a_value_of_no_rows_or_not_u16_words_is_refused(words):

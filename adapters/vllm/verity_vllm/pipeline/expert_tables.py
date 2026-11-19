@@ -120,9 +120,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
     each table committed at the rank's program ``digest`` under fresh salts, and those salts (192 bytes a row, in row order); an
     embedding shard's over ``vocab``, the whole vocabulary's rows and the rank's first token."""
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-        registered_commit,
-    )
+    from verity.commitments.periods.rows import registered as registered_commit
 
     def rows(b: int, what: str, n: int) -> np.ndarray:
         if what == "vocab":

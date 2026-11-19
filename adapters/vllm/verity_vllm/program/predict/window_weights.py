@@ -36,9 +36,7 @@ from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 from verity.commitments import registered_value as RV
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-    registered_commit,
-)
+from verity.commitments.periods.rows import registered as registered_commit
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import CHECKPOINTS
@@ -126,8 +124,7 @@ def _table_words(f: dict[str, Any], served: Any) -> np.ndarray:
 def weight_value(program: str, param: str, words: Any, salts: bytes | None = None, keep_rows: bool = False) -> RV.Registered:
     """Weight parameter ``param``'s registered value: its rows (``words`` in rows of its width) committed as core's
     `registered_value.Registered` commits ``hm96-sha512/row/v2`` rows, or a table's ``hm96-sha512/row-seg/v1`` rows (the leaves
-    its opening reads in-circuit, `gates.embedding`), with `pouw.h1.registered.commit` (on the GPU where this process has
-    one) under ``program``, the weights record's program digest, row j under ``salts``' 192 bytes j (the registration's,
+    its opening reads in-circuit, `gates.embedding`), with `rows.registered` under ``program``, the weights record's program digest, row j under ``salts``' 192 bytes j (the registration's,
     `salt_file`), or fresh OS bytes: a hiding commitment, so its root says nothing of the weight to anyone without the
     salts, a verifier holding a candidate checkpoint included. ``keep_rows``: hold the rows (a window's committer, which
     opens them)."""

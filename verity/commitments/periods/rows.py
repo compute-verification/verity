@@ -640,6 +640,93 @@ def _row_strings(rows: np.ndarray, ys: bytes, schema: str) -> bytes:
     return b"".join(b[i * 64:(i + 1) * 64] + _copy_update(salt_h, ys[i * SALT_BYTES:(i + 1) * SALT_BYTES]) for i in range(m))
 
 
+class Salts(Sequence):
+    """A registered value's salts, the n given salts concatenated (``data``): item j is bytes [192 j, 192 j + 192); `at`
+    gathers many at once."""
+
+    def __init__(self, data: bytes, n: int) -> None:
+        self.data, self.n = bytes(data), int(n)
+        if len(self.data) != SALT_BYTES * self.n:
+            raise ValueError(f"{len(self.data)} bytes of salts for {self.n} rows, not {SALT_BYTES} a row")
+
+    def __len__(self) -> int:
+        return self.n
+
+    def __getitem__(self, j: Any) -> Any:
+        if isinstance(j, slice):
+            return [self[i] for i in range(*j.indices(self.n))]
+        if not -self.n <= j < self.n:
+            raise IndexError(j)
+        j %= self.n
+        return self.data[SALT_BYTES * j:SALT_BYTES * (j + 1)]
+
+    def at(self, positions: Sequence[int] | np.ndarray) -> bytes:
+        """Items ``positions`` (each in [0, n)) concatenated."""
+        at = np.asarray(positions, dtype=np.int64)
+        if at.size and (int(at.min()) < 0 or int(at.max()) >= self.n):
+            raise IndexError(f"a position outside the value's {self.n} rows")
+        return np.frombuffer(self.data, np.uint8).reshape(self.n, SALT_BYTES)[at].tobytes()
+
+
+class KeptRows(Sequence):
+    """A registered value's rows: item j row j's words as ints (a slice, the words ``(·, W)`` u16; `at`, any rows' words),
+    when kept; else every read refused, the prover rebuilding them from what it keeps."""
+
+    def __init__(self, words: np.ndarray | None, n: int) -> None:
+        self.words, self.n = words, int(n)
+
+    def __len__(self) -> int:
+        return self.n
+
+    def __getitem__(self, j: Any) -> Any:
+        if isinstance(j, slice):
+            return self._kept()[j]
+        return tuple(int(v) for v in self._kept()[j])
+
+    def at(self, positions: Sequence[int] | np.ndarray) -> np.ndarray:
+        """Rows ``positions`` (each in [0, n)) as their words ``(·, W)`` u16, gathered at once."""
+        at = np.asarray(positions, dtype=np.int64)
+        if at.size and (int(at.min()) < 0 or int(at.max()) >= self.n):
+            raise IndexError(f"a position outside the value's {self.n} rows")
+        return self._kept()[at]
+
+    def _kept(self) -> np.ndarray:
+        if self.words is None:
+            raise LookupError("this registered value's rows aren't kept here: the prover rebuilds them from its own")
+        return self.words
+
+
+def registered_strings(words: np.ndarray, ys: bytes, dom: CommitmentDomain,
+                       schema: str = SCHEMA_HM96_SHA512_ROW_V2) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+    """`registered_value.Registered.commit`'s ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 under the salts
+    ``ys`` (192 bytes a row) and its domain ``dom``, from the words' bytes."""
+    bc = _row_strings(words, ys, schema)
+    bcs = tuple(bc[BC_BYTES * j:BC_BYTES * (j + 1)] for j in range(len(bc) // BC_BYTES))
+    return bcs, tree_levels(dom, [RV.leaf(dom, j, s, schema) for j, s in enumerate(bcs)])
+
+
+def registered(program: str, value: str, words: np.ndarray, ys: bytes, *, keep_rows: bool = False,
+               schema: str = SCHEMA_HM96_SHA512_ROW_V2, **binding: Any) -> RV.Registered:
+    """`registered_value.Registered.commit(program, value, rows, salts, schema=schema, **binding)` of ``words`` ``(n, W)``
+    u16 under ``ys``, n salts concatenated, each used once, with the same strings, tree and entry; its rows are held
+    (`KeptRows`) only with ``keep_rows``, its salts as the bytes given (`Salts`). ``binding``: the domain's ``window``,
+    ``produced`` or ``session``."""
+    if schema not in BIT_ROW_SCHEMAS:
+        raise ValueError(f"rows of {schema!r}: one of {BIT_ROW_SCHEMAS}")
+    words = np.asarray(words)
+    if words.ndim != 2 or not words.shape[0] or not words.shape[1] or words.dtype != np.uint16:
+        raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
+    n, w = (int(d) for d in words.shape)
+    ys = bytes(ys)
+    if len(ys) != SALT_BYTES * n or len({ys[SALT_BYTES * j:SALT_BYTES * (j + 1)] for j in range(n)}) != n:
+        raise ValueError(f"one {SALT_BYTES}-byte salt per row, never reused")
+    dom = RV.domain(program, value, w, n, RV.WORD_BITS, **binding)
+    bcs, lv = registered_strings(words, ys, dom, schema)
+    return RV.Registered(program=program, value=value, words=w, word_bits=RV.WORD_BITS,
+                         rows=KeptRows(np.ascontiguousarray(words) if keep_rows else None, n), salts=Salts(ys, n),
+                         bcs=bcs, levels=lv, schema=schema, **binding)
+
+
 def _string_port(dom: CommitmentDomain, strings: bytes, schema: str, first: int = 0) -> dict[str, Any]:
     """`_chunk`'s port of rows whose ``b || c`` are given (``strings``, concatenated) from its rank ``first``."""
     return {"kind": "string", "count": dom.count, "domain": dom, "strings": bytes(strings), "schema": schema, "first": first}

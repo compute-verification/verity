@@ -54,9 +54,7 @@ from verity.commitments import registered_value as RV
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-    registered_commit,
-)
+from verity.commitments.periods.rows import registered as registered_commit
 
 from verity_vllm.check.capture_plan import NODE, captured
 from verity_vllm.definitions.numerics.rows import ROWS
