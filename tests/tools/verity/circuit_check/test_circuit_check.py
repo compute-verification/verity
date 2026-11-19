@@ -144,6 +144,13 @@ def _without_the_catalog(monkeypatch) -> None:
     monkeypatch.setattr(TG, "call_families", lambda found=None: pytest.fail("call_families was asked"))
 
 
+def test_a_target_of_a_body_family_is_made_by_its_binding_file_alone(monkeypatch):
+    """A Definition no id names alone, of a family a binding file's `BODY_FAMILIES` holds, is that file's target: naming it
+    builds that file's roots, never the catalog."""
+    _without_the_catalog(monkeypatch)
+    assert TG.definition("GatherE4m3x256_v2").id == "GatherE4m3x256_v2"
+
+
 @pytest.mark.slow
 def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, catalog):
     """`is_call` decides without the catalog by a superset of the Boolean Calls (`boolean_call_candidates`, the Boolean table's

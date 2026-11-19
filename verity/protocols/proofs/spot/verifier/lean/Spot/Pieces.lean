@@ -865,8 +865,9 @@ template's), the verifier's own copies of the interior registration's values it 
 (`supplied`, `SecondStage.suppliedOf?`), and the names of those it pinned or holds to an earlier record (`fixed`), each
 null for none, the templates the auditor's params record as table reads with their tables' rows (`reads`, `{template:
 V}`, null for none), the registered tables they pin (`tables`, `{parameter: entry}`, `Run.pinnedTables`, null for
-none), the words of the rows each wire joins (`widths`, `replayWidths`', null for none), and the statements, null for
-none. The wired key's switch is `SecondStage.WIRED_KEY`'s: no input sets it. -/
+none), the words of the rows each wire joins (`widths`, `replayWidths`', null for none), the terms the interior
+registration's own entries were held to (`held`, `{program, window, fixed}`, `SecondStage.Held`, null for none), and the
+statements, null for none. The wired key's switch is `SecondStage.WIRED_KEY`'s: no input sets it. -/
 def secondOwn (j : Json) : V (SecondStage.Own × Option (Array Json)) := do
   let .arr ss := getD j "sample" | throw "sample is not a list"
   let some sample := ss.mapM nat? | throw "sample is not a list of replay blocks"
@@ -940,11 +941,20 @@ def secondOwn (j : Json) : V (SecondStage.Own × Option (Array Json)) := do
     | ws => match SecondStage.widthsOf? ws with
       | some ws => pure ws
       | none => throw "widths is null or a list of {template, port, reads, writes}, two strings and two naturals"
+  let held ← match getD j "held" with
+    | .null => pure none
+    | h => match getD h "program", getD h "window", getD h "fixed" with
+      | .str p, w, .arr fs =>
+        match (match w with | .null => some none | .str r => some (some r) | _ => none),
+            fs.mapM (fun v => match v with | .str x => some x | _ => none) with
+        | some w, some fs => pure (some ({ program := p, window := w, fixed := fs } : SecondStage.Held))
+        | _, _ => throw "held is null or {program, window, fixed}: a string, a string or null, a list of strings"
+      | _, _, _ => throw "held is null or {program, window, fixed}: a string, a string or null, a list of strings"
   let own : SecondStage.Own :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
       boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts,
       verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns, supplied, fixed, reads,
-      tables, widths }
+      tables, widths, held }
   return (own, stmts)
 
 /-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.checkAny`). -/

@@ -252,9 +252,10 @@ def _lift(fam: str) -> None:
 def definition(spec: str) -> Any:
     """The registered Definition ``spec`` names, bound to the statics its id writes (`_static`: a Definition-valued one by its
     own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way; a composite's lift, `_lift`, the
-    one a body calling it binds), or else the suite's target of that id: a Definition that only tracing the catalog's roots
-    registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one whose id writes a dict static as its digest, such as
-    `gf2k.GfResiduals`'s schema."""
+    one a body calling it binds), or else, of a family a binding file's `BODY_FAMILIES` holds, that file's target of that id
+    (`sidecar_targets`, without the catalog), or else the suite's target of that id: a Definition that only tracing the
+    catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one whose id writes a dict static as its
+    digest, such as `gf2k.GfResiduals`'s schema."""
     from verity.circuits.call_scope import specialization
 
     load_registries()
@@ -269,6 +270,12 @@ def definition(spec: str) -> Any:
             raise KeyError(spec)
         fn = specialization(fam, statics)
     except KeyError:
+        from . import sidecars as SC
+
+        if (mod := SC.body_family(fam)) is not None:
+            path = str(SC.discover()[mod]["py"])
+            if (fn := {**sidecar_targets(path)[0], **sidecar_dropped(path)}.get(spec.strip())) is not None:
+                return fn
         fn = suite().get(spec.strip())
         if fn is None:
             raise

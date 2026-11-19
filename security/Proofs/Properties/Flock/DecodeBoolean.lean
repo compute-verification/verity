@@ -1,7 +1,7 @@
 module
 
 public import Properties.Flock.DecodeBoolean
-public import Proofs.Properties.InferenceOnly.DecodeKeys
+public import Proofs.Properties.Flock.Decoder.DecodeKeys
 public import Proofs.Properties.Flock.EvalBool.Fuel
 public import Std.Tactic.Do
 import Batteries.Tactic.OpenPrivate

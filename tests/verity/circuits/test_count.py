@@ -1,6 +1,6 @@
 """`count`: a circuit's Boolean gate count from its own Boolean bodies, held to the census of the circuit lifted to bits, on
 the periods' chain and three small Definitions; and `count_vectors.jsonl`, the vectors Lean's count reads
-(`uv run python tests/verity/circuits/test_count.py --write` rewrites them)."""
+(`uv run python tools/check/pins.py --write tests/verity/circuits/count_vectors.jsonl` rewrites them)."""
 from __future__ import annotations
 
 import json
@@ -22,7 +22,8 @@ from verity.circuits.types import Array, Tuple, Value
 from verity.commitments.periods import interface as I
 
 PATH = Path(__file__).parent / "count_vectors.jsonl"
-REWRITE = "the count's vectors differ: a change meant to move them rewrites them (module docstring)"
+REWRITE = ("the count's vectors differ: a change meant to move them rewrites them with "
+           "`uv run python tools/check/pins.py --write tests/verity/circuits/count_vectors.jsonl`")
 F32 = Value(32)
 BIT = Value(1)
 ADD = REGISTRY["F32Add_v2"]
