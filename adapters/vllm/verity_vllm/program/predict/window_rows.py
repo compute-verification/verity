@@ -782,6 +782,33 @@ def _cut(spans: Sequence[tuple[int, int, Any, int]], lo: int, hi: int) -> tuple[
     return tuple(out)
 
 
+def stage(feed: Feed, block: Callable[[int, str], tuple[Any, int]]) -> Any:
+    """``feed``'s rows as the row hash reads them, a ``(rows, stride)`` uint8 tensor, the stride the row's ``2·words`` bytes
+    rounded up to 16 and zero past them: each span's bytes sliced from its step's retained block (``block(step, name)``: the
+    block, a uint8 tensor, and the member's offset in its step's stream), its elements, unsigned words of their committed
+    width, taken at the port's ``bits``, on the block's device and with no copy to the host."""
+    import torch
+
+    from verity_vllm.check.replay.opening import _ITEMSIZE
+
+    signed = {1: torch.uint8, 2: torch.int16, 4: torch.int32, 8: torch.int64}
+    parts = []
+    for s in feed.spans:
+        blk, off = block(s.step, s.name)
+        b, size = blk[off + s.lo:off + s.hi], _ITEMSIZE[s.dtype]
+        if size * 8 != s.bits:
+            x = b.contiguous().view(signed[size]).to(signed[s.bits // 8])
+            b = (x & ((1 << 8 * size) - 1) if size * 8 < s.bits else x).contiguous().view(torch.uint8)
+        parts.append(b)
+    n = 2 * feed.words
+    flat = torch.cat(parts) if parts else torch.empty(0, dtype=torch.uint8)
+    if flat.numel() != feed.rows * n:
+        raise ValueError(f"{feed.tid} unit {feed.unit} {feed.out}: {flat.numel()} bytes for {feed.rows} rows of {n}")
+    out = flat.new_zeros((feed.rows, -(-n // 16) * 16))
+    out[:, :n] = flat.view(feed.rows, n)
+    return out
+
+
 def _elements(words: np.ndarray, width: int) -> np.ndarray:
     """``(n, words)`` u16 words as ``width``-bit elements, the same little-endian bytes (`interface.words`' inverse)."""
     return np.ascontiguousarray(words, dtype=np.uint16).view(f"<u{width // 8}")
@@ -820,4 +847,4 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *
 
 
 __all__ = ["COMPUTED", "EVALUATED", "FORMS", "Feed", "Plan", "Rows", "SERVED", "SOURCES", "Served", "Slot", "Span", "positions", "scan_slots",
-           "state_value"]
+           "stage", "state_value"]

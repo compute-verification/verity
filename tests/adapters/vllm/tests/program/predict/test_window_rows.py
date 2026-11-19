@@ -15,6 +15,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
+import torch
 import pytest
 from verity.commitments import domains as DM
 from verity.circuits.codec import descriptor_id
@@ -529,15 +530,15 @@ def _located(store, prefix: str = ""):
         a = store.get((step, op, m))
         if a is None:
             return None, f"no {op}/{m} at step {step}"
-        return Located(step, f"{prefix}{op}/{m}", lo * a.itemsize, hi * a.itemsize, a.dtype.str), ""
+        return Located(step, f"{prefix}{op}/{m}", lo * a.itemsize, hi * a.itemsize, f"uint{8 * a.itemsize}"), ""
     return locate
 
 
 def test_a_plan_is_the_rows_sources_and_feeds_each_served_row_from_where_it_is_committed(window):
     """`Plan`, from the lowering and each slot's served record with no value read, gives every unit the source `Rows` gives
     it, and each run of rows a served node fills is the committed bytes it names, cut at the port's row width: the words
-    `Rows` puts there. A slot with no ``where`` (a stand-in) is computed throughout, and a served record with no ``locate``
-    is refused by name."""
+    `Rows` puts there, which `stage` lays out from the retained blocks as the row hash reads them. A slot with no ``where``
+    (a stand-in) is computed throughout, and a served record with no ``locate`` is refused by name."""
     low, _f, tables, weights, slots = window
     served, got, held = [], [], {}
     for k, s in enumerate(slots):
@@ -549,11 +550,15 @@ def test_a_plan_is_the_rows_sources_and_feeds_each_served_row_from_where_it_is_c
     plan = WR.Plan(low, served)
     assert all(np.array_equal(plan.source[t], filled.source[t]) for t in filled.source)
     assert plan.describe()["units"] == filled.counts()["units"] and filled.counts()["units"]["served"] > 0
-    fed = 0
+    fed, blocks = 0, {key: torch.from_numpy(np.ascontiguousarray(a).view(np.uint8).reshape(-1)) for key, a in held.items()}
     for f in plan.feeds:
-        words = np.concatenate([np.frombuffer(held[(x.step, x.name)].view(np.uint8)[x.lo:x.hi].tobytes(), x.dtype)
+        want = filled.outs[f.tid][int(f.out[1:])][f.unit:f.unit + f.rows]
+        words = np.concatenate([np.frombuffer(held[(x.step, x.name)].view(np.uint8)[x.lo:x.hi].tobytes(), f"<u{int(x.dtype[4:]) // 8}")
                                 .astype(f"<u{x.bits // 8}").view("<u2") for x in f.spans])
-        assert np.array_equal(words, filled.outs[f.tid][int(f.out[1:])][f.unit:f.unit + f.rows].reshape(-1)), f
+        assert np.array_equal(words, want.reshape(-1)), f
+        rows = WR.stage(f, lambda step, name: (blocks[(step, name)], 0)).numpy()
+        assert rows.shape == (f.rows, -(-2 * f.words // 16) * 16) and not rows[:, 2 * f.words:].any()
+        assert np.array_equal(np.ascontiguousarray(rows[:, :2 * f.words]).view("<u2"), want.reshape(f.rows, f.words)), f
         fed += f.rows
     assert fed == plan.describe()["fed_rows"] > 0
 
