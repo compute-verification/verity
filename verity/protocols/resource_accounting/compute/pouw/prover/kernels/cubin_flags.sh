@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# Sourced: a shipped cubin's nvcc command line, stated once (ship.sh's ship_cubin_flags and ship_probe.sh read it; a
-# build that ships a cubin sources it too).
+# Sourced: a shipped cubin's nvcc command line, stated once (the Pearl-C trees' build.sh, the ship frame's ship_cubin_flags and
+# ship_probe.sh source it).
 #
 # cubin_flags GENCODE sets FLAGS for the -gencode value GENCODE, which the caller reads from the target's architecture
 # file (machine.py gencode): no FTZ, fast-math, FMA contraction or approximate division or square root, and no line

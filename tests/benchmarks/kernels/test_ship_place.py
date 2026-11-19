@@ -23,10 +23,11 @@ import pytest
 
 FRAME = Path(__file__).resolve().parents[3] / "benchmarks" / "kernels"
 #: the frame's files, which keep their place under a copy's root (ship.sh finds the root from its own)
-FRAME_FILES = ("ship.sh", "ship_nvcc.sh", "ship_probe.sh", "ship_clock.c", "cubin_flags.sh")
+FRAME_FILES = ("ship.sh", "ship_nvcc.sh", "ship_probe.sh", "ship_clock.c")
 ROOT = FRAME.parents[1]
 #: what the frame's `machine.py gencode` reads, which a copy holds where the tree does
-MACHINE_FILES = ("benchmarks/kernels/machine.py", "benchmarks/harness/verity_bench", "tools/config/verity_config",
+MACHINE_FILES = ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/cubin_flags.sh",
+                 "benchmarks/kernels/machine.py", "benchmarks/harness/verity_bench", "tools/config/verity_config",
                  "verity/__init__.py", "verity/channel.py", "verity/device.py", "verity/errors.py",
                  "calibration/hardware/cards", "calibration/hardware/architectures")
 
