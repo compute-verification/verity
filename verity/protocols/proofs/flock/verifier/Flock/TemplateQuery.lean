@@ -37,7 +37,7 @@ structure Desc where
   callees : Array String
   defs : Array (String × DDef)
   root : String
-  /-- `program_sha512`: SHA-512 of the canonical descriptor without `annotations` -/
+  /-- `program_sha512`: the program digest (`Program.programDigestWith`) -/
   sha512 : ByteArray
   deriving Inhabited
 
@@ -55,7 +55,8 @@ def Desc.isInputNode (d : Desc) (x : DNode) : Bool :=
   let id := d.callees.getD x.fn ""
   isInput id && (d.def? id).any (·.prim)
 
-/-- `Desc.parse` in a verdict monad `M`, the program's SHA-512 by `sha512` (`Flock.With.Setup` runs it on the hash oracle). -/
+/-- `Desc.parse` in a verdict monad `M`, the program digest hashed by `sha512` (`Flock.With.Setup` runs it on the hash
+oracle). -/
 def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
     (bytes : ByteArray) : M Desc := do
   let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
@@ -64,9 +65,6 @@ def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Monad
     | .error e => throw s!"program: not JSON: {e}"
   if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v2" then
     throw "program: not a verity-ir/descriptor/v2 descriptor"
-  let bare := match j with
-    | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
-    | x => x
   let callees ← match j.getObjVal? "callees" with
     | .ok (.arr a) => a.mapM fun c => match c.getStr? with | .ok s => pure s | .error _ => throw "program: a callee is not a string"
     | _ => throw "program: callees"
@@ -87,7 +85,7 @@ def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Monad
     | _ => throw "program: definitions"
   let some root := (j.getObjValAs? String "root").toOption | throw "program: root"
   if (defs.find? (·.1 == root)).isNone then throw "program: the root is not a definition"
-  return { callees, defs, root, sha512 := ← sha512 (← canon bare).toUTF8 }
+  return { callees, defs, root, sha512 := ← Program.programDigestWith sha512 j }
 
 def Desc.parse (bytes : ByteArray) : V Desc := Desc.parseWith (fun b => pure (Sha512.hash b)) bytes
 
