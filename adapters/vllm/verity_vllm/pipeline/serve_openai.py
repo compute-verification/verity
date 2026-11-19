@@ -204,6 +204,9 @@ class Options:
                                  "CUSTOM); pin: the pin's engine profile; bfloat16: the pin's profile at dtype bfloat16, "
                                  "unquantized (Pearl+'s)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
+    window_class: str | None = option("--window-class", default=None,
+                                      help="S,P,O: the window class the application declares (S slots, each of at most P prompt ids and O outputs); the "
+                                         "Commit's arena is sized from it alone, and the engine admits no more")
     max_model_len: int = option("--max-model-len", type=int, default=512)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048, help="tokens a step schedules")
     prefix_caching: bool = option("--prefix-caching", action="boolean_optional", default=False, help="serve with vLLM's prefix cache")

@@ -98,6 +98,9 @@ class Options:
                             "turns (an instruct model's own EOS ends its answers); plain: the questions and filler as plain text")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     max_model_len: int = option("--max-model-len", type=int, default=2048)
+    window_class: str | None = option("--window-class", default=None,
+                                      help="S,P,O: the window class the application declares (S slots, each of at most P prompt ids and O outputs); the "
+                                         "Commit's arena is sized from it alone, and the engine admits no more")
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048)
     chunked_prefill: bool = option("--chunked-prefill", action="boolean_optional", default=True,
                                    help="--no-chunked-prefill: the scheduler holds a prefill that doesn't fit the step instead of cutting it")
@@ -133,7 +136,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which, 
     if not opts.row_build:
         raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS}: pass --row-build DIR, DIR the row's Build "
                          "of record (`verity-vllm predict row --row ROW --out DIR`), and the row's --hidden-so, --norm-tap-so")
-    if why := RW.row_refusal(opts.row_build):
+    if why := RW.row_refusal(opts.row_build) or SS.class_refusal(opts):
         raise UsageError(why)
     if which("ninja") is None:
         raise UsageError("the rows-sha512 committer JIT-builds its kernels with ninja, which is not on PATH: put the environment's "

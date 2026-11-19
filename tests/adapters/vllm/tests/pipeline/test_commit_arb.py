@@ -139,7 +139,8 @@ def test_it_commits_under_serve_openais_rows_sha512_committer_and_needs_the_rows
     """commit-arb's Commit is serve-openai's rows-sha512 one (`serve_seal.committer`), never SHA-256: without the row's Build of
     record predict wrote, or ninja for its kernels, it is refused before the model loads, and the committer refuses it too."""
     def parse(*more: str) -> CA.Options:
-        return cli.parse("commit-arb", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
+        return cli.parse("commit-arb", ["--model", "m", "--revision", "r", "--out", str(tmp_path), "--window-class", "8,1024,1024",
+                                        *more], environ={})
 
     with pytest.raises(UsageError, match="under rows-sha512: pass --row-build DIR"):
         CA.preflight(parse(), which=lambda _: "/v/bin/ninja")

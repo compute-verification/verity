@@ -169,8 +169,8 @@ def test_every_precision_registers_the_verity_int8_method_before_the_engine(prec
 
 def test_preflight_refuses_a_commit_without_ninja_before_the_model_loads(tmp_path):
     man = predicted.row(tmp_path)
-    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--row-build", str(man), "--out", str(tmp_path)],
-                     environ={})
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--row-build", str(man), "--out", str(tmp_path),
+                                      *CLASS], environ={})
     with pytest.raises(cli.UsageError, match=r"ninja is\) on PATH, or pass --no-commit$"):
         so.preflight(opts, which=lambda _: None)
     so.preflight(opts, which=lambda _: "/v/bin/ninja")
@@ -265,7 +265,7 @@ def test_the_served_commit_is_rows_sha512_alone(tmp_path):
     """rows-sha512 is the one served scheme: a committing run is refused before the model loads until it names its bench
     row's Build of record, and by the committer before it builds anything; vllm-v1 (SHA-256) is no longer a choice."""
     def parse(*more: str) -> so.Options:
-        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *CLASS, *more], environ={})
 
     def refusal(opts: so.Options) -> str | None:
         try:
@@ -278,6 +278,15 @@ def test_the_served_commit_is_rows_sha512_alone(tmp_path):
     assert parse().scheme == ss.ROWS == "rows-sha512" and ss.SCHEMES == (ss.ROWS,)
     assert "pass --row-build DIR" in refusal(parse())
     assert refusal(parse("--row-build", str(man))) is None and refusal(parse("--no-commit")) is None
+    bare = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), "--row-build", str(man)],
+                     environ={})
+    assert "sizes the Commit's arena from the window class the application declares: pass --window-class S,P,O" in refusal(bare)
+    assert "is not S,P,O[,LANES,EVERY]" in refusal(parse("--row-build", str(man), "--window-class", "4,27"))
+    assert refusal(parse("--row-build", str(man), "--window-class", "4,27,2")) == (
+        "--window-class 4,27,2 bounds a step at 4 sequences of 29 positions, and the engine admits 8 of 512: pass "
+        "--max-num-seqs 4 --max-model-len 29")
+    assert refusal(parse("--row-build", str(man), "--window-class", "4,27,2", "--max-num-seqs", "4", "--max-model-len",
+                         "29")) is None
     with pytest.raises(cli.UsageError, match="pass --row-build DIR"):
         ss.committer(parse(), llm=None)
     with pytest.raises(SystemExit):
@@ -289,7 +298,7 @@ def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path
     Build's), another schema's, or a record binding another compiler than this tree's is refused before the model loads,
     committing or not; the Build is the dir itself (no --programs-root)."""
     def parse(*more: str) -> so.Options:
-        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *CLASS, *more], environ={})
 
     def refusal(*more: str) -> str | None:
         try:
@@ -314,8 +323,6 @@ def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path
     assert RW.programs_root_of(opts) == str(row.resolve())
     with pytest.raises(SystemExit):
         parse("--row-build", str(row), "--programs-root", str(traced))
-    with pytest.raises(SystemExit):
-        parse("--required-manifest", str(row / "manifest.json"))
 
 
 def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512_commit(tmp_path):
@@ -323,7 +330,7 @@ def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512
     values no reader of a sealed window opens; anything else, and a run with no rows-sha512 Commit, is refused before the model
     loads, and by the committer before it builds anything."""
     man = predicted.row(tmp_path)
-    rows = ("--model", "m", "--revision", "r", "--row-build", str(man), "--out", str(tmp_path))
+    rows = ("--model", "m", "--revision", "r", "--row-build", str(man), "--out", str(tmp_path), *CLASS)
 
     def refusal(*more: str, environ: dict[str, str] | None = None) -> str | None:
         try:
@@ -1025,6 +1032,7 @@ def test_top_p_below_one_is_refused_naming_the_gap(tmp_path, top_p):
 
 # ---------------------------------------------------------------------------------------------------------------- served rows
 
+CLASS = ("--window-class", "8,256,256")
 ENGINE = {"max_num_seqs": 8, "max_num_batched_tokens": 2048, "max_model_len": 512, "num_gpu_blocks": 64, "block_size": 16}
 
 
