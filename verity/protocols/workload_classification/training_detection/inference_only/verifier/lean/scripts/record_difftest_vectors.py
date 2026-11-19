@@ -968,9 +968,10 @@ def shaped() -> list[dict]:
     taken with the served shape's verdict, and with the record one unit short of their sum, refused (`templates`).
 
     Then `Norm`'s weights' input node shrunk to the one row every `Norm` unit reads, and declared in
-    `registered.nodes` (`NODES`, `declared`): read at outer stride 0 or unmapped, as `weights/norm` from its first
-    leaf, it is taken. Declared of two kinds, under another registered parameter, at a shifted offset, as a parameter
-    the log does not register, or with `Scan`'s state reading it under its own reads, it is refused (`nodes`)."""
+    `registered.nodes` (`NODES`, `declared`): read at outer stride 0, unmapped, or two rows in turn by an inner run
+    of members, as `weights/norm` from its first leaf, it is taken. Declared of two kinds, under another registered
+    parameter, at a shifted offset, as a parameter the log does not register, with `Scan`'s state reading it under its
+    own reads, or with a registered read that does not step as the inner run does, it is refused (`nodes`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
