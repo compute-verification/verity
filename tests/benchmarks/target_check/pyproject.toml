@@ -1,0 +1,8 @@
+# The target check's arithmetic (benchmarks/target_check): missable amount, rate and picker against brute force over
+# every subset on tiny designs, and the census tables' invariants.
+[tool.pytest.ini_options]
+testpaths = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+inputs = ["benchmarks/target_check", "benchmarks/spot_figures/cards/workload.glm-5.3.json"]
