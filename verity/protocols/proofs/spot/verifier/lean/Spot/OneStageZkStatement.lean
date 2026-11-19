@@ -332,6 +332,7 @@ def rootStep (ts : Std.HashSet String) (acc : Std.HashMap String (Array Json)) (
     V (Std.HashMap String (Array Json)) := do
   let .str port := getD r "port" | throw "roots: a root of the registration names no port"
   if port == TABLE_PORT then throw ROW_TABLES
+  if Flock.Registered.isFreshValue port then return acc
   match (splitsOf port).filter fun x => acc.contains x.1 with
   | [(name, bare)] =>
     pure (acc.modify name (·.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"),
@@ -400,6 +401,10 @@ def OWN_FIELD (name field : String) : String :=
   s!"roots: the member {name} holds a root of its own at {field}, a field its template has a window's tree of: a " ++
     "member reads its template's field at the window's one tree, which every wire into the field reads"
 
+/-- The refusal of a member named `input` (`rootsOf`), whose roots would read as run input nodes' trees. -/
+def INPUT_MEMBER : String :=
+  "roots: a member is named input: a root input/n<w> is the window's tree of run input node w, no member's"
+
 /-- The refusal of a member `name` that is another member's template (`rootsOf`). -/
 def NAME_TEMPLATE (name : String) : String :=
   s!"roots: the member {name}'s name is another member's template: a root {name}/<field> would read both as the " ++
@@ -425,13 +430,15 @@ with its template's fields' trees at its fields, of which it holds no root of it
 member's (`Member.slice`). A registration of two members or more has no name every such root's port reads as, and
 refuses (`NOT_ONE_MEMBER`). A function of the record alone, fixed before any coin. -/
 def publicPorts (rec : Json) : V (Array (String × Json)) := do
-  let rs := match getD rec "roots" with | .arr rs => rs | _ => #[]
+  let rs := (match getD rec "roots" with | .arr rs => rs | _ => #[]).filter fun r =>
+    !(match getD r "port" with | .str p => Flock.Registered.isFreshValue p | _ => false)
+  let rec' := rec.setObjVal! "roots" (.arr rs)
   let ports := rs.toList.filterMap fun r => match getD r "port" with | .str p => some p | _ => none
-  if ports.all fun p => (splitsOf p).isEmpty then return Record.byPort rec
+  if ports.all fun p => (splitsOf p).isEmpty then return Record.byPort rec'
   let ts := templatesOf (ports.filterMap fun p => (templateOf p).map (·.1))
   let some n := commonMember (ports.filter fun p => !(templateOf p).any (ts.contains ·.1)) | throw NOT_ONE_MEMBER
   let acc ← rs.foldlM (rootStep ts) (({} : Std.HashMap String (Array Json)).insert n #[])
-  let ft := fieldTreesOf ts rec
+  let ft := fieldTreesOf ts rec'
   ownFieldsHeld ft n (acc.getD n #[])
   return Record.byPort (Json.mkObj [("roots", .arr (ownFieldsOf ft n (acc.getD n #[])))])
 
@@ -447,9 +454,11 @@ def rootsByPort (rec : Json) : Std.HashMap String Json :=
 def COMMITTED : String := "committed/"
 
 /-- The record's port of the tree a registered port `q` opens: `<port>` for a port read as `committed/<port>`
-(`COMMITTED`); none for a registered value's port. -/
+(`COMMITTED`), and `input/n<w>` for run input node `w`'s tree (`Flock.Registered.isFreshValue`), which the record holds
+once for the window, by node; none for a registered value's port. -/
 def treePortOf (q : Flock.Registered.Port) : Option String :=
-  if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString else none
+  if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString
+  else if Flock.Registered.isFreshValue q.value then some q.value else none
 
 /-- Whether `v` is a field tree's name `<template>/o<j>` (`Flock.Registered.fieldTree`), the value `treeReads`
 holds a wired row of in(S) to. -/
@@ -690,7 +699,7 @@ def readsOf : Option Json → V Reads
     let own ← Flock.Registered.ofJson j
     let known ← Flock.Registered.knownOf j
     Flock.Registered.checkKnownAll own known
-    pure ⟨some own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j), ← Flock.Registered.paramsOf j⟩
+    pure ⟨some own, known, ← Flock.Registered.paramsOf j⟩
 
 /-- The refusal of registered reads at the sample's units alone: not written. -/
 def SAMPLED_READS : String :=
@@ -1030,31 +1039,35 @@ def checkOneAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evid
 
 /-! ## The per-member form (module docstring, **per member**) -/
 
-/-- The ranges ascend from `at_`: each `[lo, hi)` holds a unit and starts at or after the end of the one before. -/
-def ascending : Nat → List (Nat × Nat) → Bool
-  | _, [] => true
-  | at_, (lo, hi) :: rs => decide (at_ ≤ lo) && decide (lo < hi) && ascending hi rs
+/-- The refusal of a member whose parameters hand it units: its units are its block of the partition object's. -/
+def UNITS_HANDED : String :=
+  "units: a member's units are its block of the partition object's blocks, never the parameters' own"
+
+/-- The refusal of member `name`'s block where the partition object names no blocks, or no block `k` among its `n`. -/
+def NO_BLOCK (name : String) : Option (Nat × Nat) → String
+  | none => s!"proofs: member {name}: partition: E_BLOCKS: the partition object names no blocks"
+  | some (k, n) => s!"proofs: member {name}: partition: E_BLOCKS: no block {k} among the partition's {n}"
 
 /-- The per-member form's `members`, on the program and the partition `shared` every member's statement reads: each a
 nonempty name with exactly its keys, its circuit and public files' digests and registered file as the one statement's
-(`committedOf`), its units ranges `[lo, hi)` of naturals, ascending (`ascending`), its circuit's units a proof block
-positive, and no unit in two members' ranges. -/
+(`committedOf`), its `block` an index into the partition object's `blocks` (`Flock.HmRow.blocksOf`, which hold them to
+C's population), whose range is its units, its circuit's units a proof block positive, and no unit in two members'
+ranges. A member handed `units` is refused by name (`UNITS_HANDED`), and a block the partition lacks by `NO_BLOCK`. -/
 def membersOf (shared : Own) (j : Json) : V (Array Member) := do
   let .obj _ := j
-    | throw "proofs: members is not an object from a member's name to its files, its units and its vus_per_block"
+    | throw "proofs: members is not an object from a member's name to its files, its block and its vus_per_block"
+  let bs ← (Flock.HmRow.blocksOf shared.partition shared.program).mapError ("proofs: " ++ ·)
   let ms ← (entries j).mapM fun (name, m) => do
     if name.isEmpty then throw "proofs: a member's name is empty"
-    exactly m #["public", "registered", "units", "vus_per_block"] s!"member {name}"
+    if (field? m "units").isSome then throw s!"proofs: member {name}: {UNITS_HANDED}"
+    exactly m #["public", "registered", "block", "vus_per_block"] s!"member {name}"
     let (pub, registered) ← committedOf m
-    let some units := (Draw.ranges? (getD m "units")).bind fun rs =>
-        rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
-      | throw s!"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
-    if !ascending 0 units.toList then
-      throw s!"proofs: member {name}'s units are not ascending, each range after the one before"
+    let some k := nat? (getD m "block") | throw s!"proofs: member {name}'s block is not a natural number"
     let some g := (nat? (getD m "vus_per_block")).filter (0 < ·)
       | throw s!"proofs: member {name}'s vus_per_block is not a positive natural number"
-    pure ({ name, units, g,
-            own := { shared with pub := pub, registered := registered, first := (units[0]?.map (·.1)).getD 0 } } :
+    let some bs := bs | throw (NO_BLOCK name none)
+    let some u := bs[k]? | throw (NO_BLOCK name (some (k, bs.size)))
+    pure ({ name, units := #[u], g, own := { shared with pub := pub, registered := registered, first := u.1 } } :
       Member)
   if ms.isEmpty then throw "proofs: members names no member"
   let rs := (ms.foldl (fun acc m => acc ++ m.units) #[]).qsort (·.1 < ·.1)
@@ -1076,20 +1089,19 @@ runs for `membersOf` (`membersOf_eq_membersOfApart`). Compiled as one function, 
 quadratic in the members; with the loop apart, the parse takes time linear in them. -/
 def membersOfApart (shared : Own) (j : Json) : V (Array Member) := do
   let .obj _ := j
-    | throw "proofs: members is not an object from a member's name to its files, its units and its vus_per_block"
+    | throw "proofs: members is not an object from a member's name to its files, its block and its vus_per_block"
+  let bs ← (Flock.HmRow.blocksOf shared.partition shared.program).mapError ("proofs: " ++ ·)
   let ms ← (entries j).mapM fun (name, m) => do
     if name.isEmpty then throw "proofs: a member's name is empty"
-    exactly m #["public", "registered", "units", "vus_per_block"] s!"member {name}"
+    if (field? m "units").isSome then throw s!"proofs: member {name}: {UNITS_HANDED}"
+    exactly m #["public", "registered", "block", "vus_per_block"] s!"member {name}"
     let (pub, registered) ← committedOf m
-    let some units := (Draw.ranges? (getD m "units")).bind fun rs =>
-        rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
-      | throw s!"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
-    if !ascending 0 units.toList then
-      throw s!"proofs: member {name}'s units are not ascending, each range after the one before"
+    let some k := nat? (getD m "block") | throw s!"proofs: member {name}'s block is not a natural number"
     let some g := (nat? (getD m "vus_per_block")).filter (0 < ·)
       | throw s!"proofs: member {name}'s vus_per_block is not a positive natural number"
-    pure ({ name, units, g,
-            own := { shared with pub := pub, registered := registered, first := (units[0]?.map (·.1)).getD 0 } } :
+    let some bs := bs | throw (NO_BLOCK name none)
+    let some u := bs[k]? | throw (NO_BLOCK name (some (k, bs.size)))
+    pure ({ name, units := #[u], g, own := { shared with pub := pub, registered := registered, first := u.1 } } :
       Member)
   if ms.isEmpty then throw "proofs: members names no member"
   unitsApart ((ms.foldl (fun acc m => acc ++ m.units) #[]).qsort (·.1 < ·.1)) ms
@@ -1261,6 +1273,7 @@ def rootsOf (ms : Array Member) (rec : Json) : V (Std.HashMap String (Array Json
   let .arr rs := getD rec "roots" | throw "roots: the registration's roots are not a list"
   let ts := templatesOf (ms.toList.map (·.name))
   if let some m := ms.find? (ts.contains ·.name) then throw (NAME_TEMPLATE m.name)
+  if ms.any (·.name == "input") then throw INPUT_MEMBER
   let acc ← rs.foldlM (rootStep ts) (ms.foldl (fun acc m => acc.insert m.name #[]) {})
   let ft := fieldTreesOf ts rec
   ms.forM fun m => ownFieldsHeld ft m.name (acc.getD m.name #[])

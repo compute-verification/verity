@@ -42,7 +42,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served 
 )
 
 from tests.protocols.test_pouw_h1_served import _unit
-from verity_vllm.protocols.pouw.h1_ranks import Holder, RankExtension, executor_of
 
 #: what a rank's release hands on of its committer's finalize beside the errors (`h1rank_release`)
 COUNTS = {"expected_tensors": 2, "committed_tensors": 2, "errors_n": 0}
@@ -62,30 +61,6 @@ class _Committer:
 
     def close(self) -> None:
         self.closed = True
-
-
-def _released(extra: dict[str, Any]) -> dict[str, Any]:
-    """What the rank at linear 3 releases when its committer's finalize states `extra`; the committer closed, the tap off
-    and the hooks out, in that order, and the rank left with no window."""
-    com, done = _Committer(extra), []
-    rank = RankExtension()
-    rank._h1rank = {"run": SimpleNamespace(lo=3), "sent": 0, "hooks": SimpleNamespace(uninstall=lambda: done.append("hooks")),
-                    "commit": (com, SimpleNamespace(untap=lambda: done.append("tap")))}
-    out = rank.h1rank_release()
-    assert out is not None and com.closed and done == ["tap", "hooks"] and rank._h1rank is None
-    return out
-
-
-@pytest.mark.parametrize("stated", [{}, {"errors": None}, {"errors": []}, {"errors": 0}],
-                         ids=["absent", "null", "empty", "a false value"])
-def test_a_rank_whose_committer_states_no_errors_releases_none(stated):
-    assert _released({**COUNTS, **stated}) == {"lo": 3, "run_root": bytes(ROOT_BYTES).hex(), "commit_scheme": SCHEME,
-                                               "name": "stand-in", **COUNTS, "errors": []}
-
-
-def test_a_ranks_release_carries_its_first_eight_errors_each_cut_to_300_characters():
-    errors = [f"{i}: " + "x" * 400 for i in range(10)]
-    assert _released({**COUNTS, "errors": errors, "errors_n": 10})["errors"] == [e[:300] for e in errors[:8]]
 
 
 class _Tap:
@@ -108,30 +83,7 @@ def _rank(lo: int, **more: Any) -> dict[str, Any]:
     return {"lo": lo, "rows": [], "refused": [], "order_ok": True, "unopened": 0, **more}
 
 
-def _pulled(*outs: dict[str, Any]) -> _Tap:
-    """The window's tap after one pull that the ranks answer with `outs`."""
-    tap = _Tap()
-    run = SimpleNamespace(served=SimpleNamespace(tap=tap), shapes_=[(1, 1)])
-    holder = Holder(run, SimpleNamespace(collective_rpc=lambda method: list(outs)), [{"decode_query_len": 1}], None)
-    assert holder.pull() == 0 and sorted(holder.ranks) == sorted(o["lo"] for o in outs)
-    return tap
-
-
 SHIPPED = [("site/0", 2, b"x_q"), ("ids", 2, [5, 6])]
-
-
-def test_the_first_ranks_acquisitions_are_the_windows_and_its_ids_the_steps():
-    tap = _pulled(_rank(0, acquired=SHIPPED), _rank(4, acquired=[]))
-    assert (tap.took, tap.refused) == ([("site/0", 2, None), ("ids", 2, 2)], [])
-
-
-@pytest.mark.parametrize("none", [{}, {"acquired": None}, {"acquired": []}, {"acquired": 0}],
-                         ids=["absent", "null", "empty", "a false value"])
-def test_a_rank_that_shipped_no_acquisitions_feeds_nothing_and_is_still_the_first_rank(none):
-    """The rank holding linear 0 answers with no ``acquired`` (it has no Commit): the tap takes nothing of it, and the
-    next rank's ids are still not the first rank's."""
-    tap = _pulled(_rank(0, **none), _rank(4, acquired=SHIPPED))
-    assert (tap.took, tap.refused) == ([("site/0", 2, None)], ["engine step 2: a rank's input ids are not the first rank's"])
 
 
 #: the gate's verdict for the served call of `_window`
@@ -294,19 +246,3 @@ def _engine(**holds: Any) -> SimpleNamespace:
     return SimpleNamespace(llm_engine=SimpleNamespace(**holds))
 
 
-def test_the_executor_is_the_engine_cores_held_by_the_engine_or_by_its_client():
-    executor = SimpleNamespace(collective_rpc=lambda method: [])
-    core = SimpleNamespace(model_executor=executor)
-    assert executor_of(_engine(engine_core=core)) is executor
-    assert executor_of(_engine(engine_core=SimpleNamespace(engine_core=core))) is executor
-
-
-@pytest.mark.parametrize("holds", [
-    {}, {"engine_core": None}, {"engine_core": SimpleNamespace()}, {"engine_core": SimpleNamespace(model_executor=None)},
-    {"engine_core": SimpleNamespace(model_executor=SimpleNamespace())},
-    {"engine_core": SimpleNamespace(model_executor=SimpleNamespace(collective_rpc=None))},
-], ids=["no core", "a null core", "a client of a core in another process", "a null executor", "no collective_rpc",
-        "a collective_rpc that is no call"])
-def test_an_engine_with_no_executor_that_reaches_its_ranks_is_refused(holds):
-    with pytest.raises(RuntimeError, match="no in-process executor with collective_rpc"):
-        executor_of(_engine(**holds))

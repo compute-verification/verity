@@ -3,7 +3,8 @@
 **C's index, the one that names things.** C's gates are its descriptor's word-level gates, numbered by PROTOCOL.md §6's
 layout of its root: bodies laid out in node order, recursively; a primitive node is one gate, a call node its callee's gates,
 a batch's members (a scan's iterations) consecutive in member order, each its callee's gates, a batch of a primitive one gate
-a member. An input node (`Input<w>_v1`, or `RegisteredInput<w>_v1` for a registered value) is a primitive node of the root,
+a member. An input node (`Input<w>_v1`, `RegisteredInput<w>_v1` for a registered value, `SuppliedInput<w>_v1` for a supplied
+one) is a primitive node of the root,
 one gate a member, at its node's place. A gate has its primitive's width. This index, and only it, names a block (`words`),
 a boundary (in(S) and out(S): `inputs`, `outputs`) and a leaf; `Block.to_c_gate` maps the block's descriptor gates into it.
 Units, and a partition's blocks, are counted in the population's own order (`TemplatePartition`), not in gates.
@@ -11,7 +12,7 @@ Units, and a partition's blocks, are counted in the population's own order (`Tem
 **C on bits, for a statement and a count only.** It never names a block, a boundary or a leaf. It numbers the bits of C's
 gates, gate by gate in C's index order: gate g's bit gates come after every bit gate of
 the gates before g (`Bits.base`), and are, in place:
-- an input gate of w bits, of either binding: w one-bit input gates of that binding, bit j at offset `split(w)[j]`, which is
+- an input gate of w bits, of any binding: w one-bit input gates of that binding, bit j at offset `split(w)[j]`, which is
   j (least significant bit first);
 - a gate of the Boolean profile (`And<n>_v1`, `Xor<n>_v1`, `Not_v1`, `Const1[0x0]_v1`, `Const1[0x1]_v1`): itself;
 - any other primitive's gate: the gates of its Boolean body (the descriptor's `boolean` map, §4.9) in the body's own §6
@@ -570,9 +571,11 @@ def _build(D: DecodedProgram, words: Sequence[tuple[int, int]], ins: list[int], 
         P._BODY_LOOKUP[:] = saved
 
 
-def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]], bits: Bits | None = None) -> Block:
-    """`compact (restrict C S)` for S the gates of ``units`` (module docstring: the index, the block and the object)."""
-    D = program(c) if bits is None else bits.D
+def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]], bits: Bits | None = None,
+             D: DecodedProgram | None = None) -> Block:
+    """`compact (restrict C S)` for S the gates of ``units`` (module docstring: the index, the block and the object);
+    ``D``: C decoded, when the caller holds it."""
+    D = D if D is not None else program(c) if bits is None else bits.D
     words = unit_gates(D, partition, units)
     ins, outs = front(D, words)
     prog = _build(D, words, ins, outs)
@@ -607,5 +610,5 @@ def evaluate(text: bytes, inputs: Sequence[int]) -> list[int]:
     return [v[int(next(it).split()[1])] for _ in range(O)]
 
 
-__all__ = ["Bits", "Block", "FORMAT", "REGISTRATION", "RUN", "Refused", "WIRE", "evaluate", "listing_of", "program", "restrict",
+__all__ = ["Bits", "Block", "FORMAT", "REGISTRATION", "RUN", "Refused", "SUPPLIED", "WIRE", "evaluate", "listing_of", "program", "restrict",
            "split", "unit_gates"]

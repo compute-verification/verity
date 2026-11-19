@@ -5,9 +5,10 @@ emitted first and in parameter order as `batch(Input<w>, n)` nodes, then the pro
 input values as its arguments. The input gates are the canonical references of the prescribed inputs.
 
 A parameter is bound per run (`Input<w>_v1`: a request's data and parameters, such as tokens, temperature, top-p and
-Philox positions) or at registration (`RegisteredInput<w>_v1`: what the program brings, such as weights, a norm's epsilon,
-the attention scale, a softcap and the program's tables). `Program(fn, registered=names)` names the parameters bound at
-registration. Both are inputs: the program holds neither's value.
+Philox positions), at registration (`RegisteredInput<w>_v1`: what the program brings, such as weights, a norm's epsilon,
+the attention scale, a softcap and the program's tables), or supplied (`SuppliedInput<w>_v1`: a value the verifier computes
+by a public function, PROTOCOL.md §5.4). `Program(fn, registered=names, supplied=marks)` names the parameters bound at
+registration and the supplied ones, each with its mark. All three are inputs: the program holds none's value.
 
 `Program(fn, theta=names)` names the parameters that are the model's weights, whatever their binding time. Their input nodes
 are listed in `annotations["theta"]`, outside every digest, and their leaves have origin ``theta`` in the port facts
@@ -23,6 +24,7 @@ from collections.abc import Mapping
 from typing import Any, Callable
 
 from . import ports
+from .supplied import SUPPLIED, SUPPLIED_ID
 from .defs import Body, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from .layout import Circuit
 from .refs import Coll, coll_concat, runs as ref_runs
@@ -34,12 +36,10 @@ _INPUT_PRIMS: dict[tuple[str, int], PrimitiveDefinition] = {}
 INPUT_ID = re.compile(r"^Input([1-9][0-9]*)_v1$")
 #: the ids that denote `RegisteredInput<w>`: a node is a registered-input node exactly when its callee's id matches
 REGISTERED_ID = re.compile(r"^RegisteredInput([1-9][0-9]*)_v1$")
-#: the ids that denote `SuppliedInput<w>`: a node is a supplied-input node exactly when its callee's id matches (§5.4)
-SUPPLIED_ID = re.compile(r"^SuppliedInput([1-9][0-9]*)_v1$")
 
 RUN = "run"
 REGISTRATION = "registration"
-SUPPLIED = "supplied"
+BINDINGS = (RUN, REGISTRATION, SUPPLIED)
 
 #: the catalog's lookup of a word primitive's one Boolean Definition (`register_boolean_bodies`), which `Program` calls at
 #: build; a decoder never calls it, as the descriptor holds every body
@@ -126,12 +126,12 @@ def input_id(fid: str) -> tuple[str, int] | None:
 
 
 def input_prim(w: int, binding: str = RUN) -> PrimitiveDefinition:
-    """`Input<w>` (``run``) or `RegisteredInput<w>` (``registration``): a zero-operand gate whose value is prescribed (asserted
-    equal to the claimed input), never held by the program."""
+    """`Input<w>` (``run``), `RegisteredInput<w>` (``registration``) or `SuppliedInput<w>` (``supplied``): a zero-operand
+    gate whose value is prescribed (asserted equal to the claimed input), never held by the program."""
     key = (binding, w)
     p = _INPUT_PRIMS.get(key)
     if p is None:
-        if binding not in (RUN, REGISTRATION, SUPPLIED):
+        if binding not in BINDINGS:
             raise ValueError(f"an input is bound per {RUN!r}, at {REGISTRATION!r} or {SUPPLIED!r}, not {binding!r}")
 
         def _no_eval(*_a: int) -> int:
@@ -169,7 +169,9 @@ def _lower_input(B: Builder, t: Type, name: str, binding: str = RUN) -> Coll:
 
 class Program:
     """`Program(fn)` where `fn` is a fully-bound `SpecializedDefinition` (or a static-free `CompositeDefinition`).
-    `registered`: the names of `fn`'s parameters bound at registration; every other parameter is bound per run. `theta`: the
+    `registered`: the names of `fn`'s parameters bound at registration; `supplied`: the supplied ones, each name to its mark
+    (`supplied`, PROTOCOL.md §5.4; None where only the kind is known, which a decoder refuses); every other parameter
+    is bound per run. `theta`: the
     names of `fn`'s parameters that are the model's weights. `annotations["theta"]` is the Program's own (their input nodes):
     one passed in, which may name another layout's nodes, is dropped. `boolean`: each word primitive's one Boolean Definition
     (`boolean_map`), computed once here; a Program with a word primitive that has none is refused (`NoBooleanBody`).
@@ -180,13 +182,13 @@ class Program:
                  registered: tuple[str, ...] | list[str] | frozenset[str] = (),
                  strict: Callable[[Any], dict] | None = None,
                  theta: tuple[str, ...] | list[str] | frozenset[str] = (),
-                 supplied: Mapping[str, Mapping[str, Any]] | None = None) -> None:
+                 supplied: Mapping[str, Mapping[str, Any] | None] | tuple[str, ...] | list[str] = ()) -> None:
         if isinstance(fn, CompositeDefinition):
             fn = bind(fn)
         if not fn.complete:
             raise TypeError(f"program function {fn.id} is not fully bound")
         names = [n for n, _t in fn.signature()[0]]
-        supplied = {n: dict(m) for n, m in (supplied or {}).items()}
+        supplied = dict(supplied) if isinstance(supplied, Mapping) else dict.fromkeys(supplied)
         for what, given in (("register", registered), ("mark theta", theta), ("supply", supplied)):
             unknown = sorted(set(given) - set(names))
             if unknown:
@@ -194,9 +196,10 @@ class Program:
         self.fn = fn
         self.annotations: dict[str, Any] = {k: v for k, v in (annotations or {}).items() if k != "theta"}
         if both := sorted(set(registered) & set(supplied)):
-            raise ValueError(f"program function {fn.id}: {both} registered and supplied; a parameter has one binding time")
+            raise ValueError(f"program function {fn.id}: {both} both registered and supplied")
         self.bindings: tuple[str, ...] = tuple(REGISTRATION if n in set(registered) else SUPPLIED if n in supplied else RUN
                                                for n in names)
+        self.supplied: dict[str, Mapping[str, Any] | None] = {n: supplied[n] for n in names if n in supplied}
         self.theta: tuple[str, ...] = tuple(n for n in names if n in set(theta))
         self.root = _lower_root(fn, self.bindings, frozenset(theta), supplied)
         if self.root.theta:
@@ -241,7 +244,7 @@ class Program:
 
 def _lower_root(fn: SpecializedDefinition, bindings: tuple[str, ...] | None = None,
                 theta: frozenset[str] = frozenset(),
-                supplied: Mapping[str, Mapping[str, Any]] | None = None) -> SpecializedDefinition:
+                supplied: Mapping[str, Mapping[str, Any] | None] | None = None) -> SpecializedDefinition:
     params, ret = fn.signature()
     B = Builder((), ret)
     bindings = bindings or (RUN,) * len(params)
@@ -249,7 +252,8 @@ def _lower_root(fn: SpecializedDefinition, bindings: tuple[str, ...] | None = No
     for (name, t), when in zip(params, bindings):
         k = len(B.nodes)
         input_colls.append(_lower_input(B, t, name, when))
-        inputs.append([name, len(B.nodes) - k, *([dict((supplied or {})[name])] if when == SUPPLIED else [])])
+        mark = (supplied or {}).get(name) if when == SUPPLIED else None
+        inputs.append([name, len(B.nodes) - k, *([dict(mark)] if mark is not None else [])])
     theta_nodes = frozenset(k for (name, _t), c in zip(params, input_colls) if name in theta for _s, k, _a, _b in ref_runs(c.refs))
     out = fn.defn.body(B, fn.S(), *input_colls)
     body = B.finish(out)

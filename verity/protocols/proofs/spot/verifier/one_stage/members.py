@@ -68,8 +68,9 @@ from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.challenger.coins import DRAW_FORM
 
-from . import closing as CL, docket as DK, one_circuit as OC, partition as P, proofs as PF
+from . import closing as CL, docket as DK, one_circuit as OC, partition as P, proofs as PF, registered as G
 from verity.commitments import registered_value as RV
+from verity.commitments.domains import REGISTERED_READS_V2
 from .proofs import V2_EXE, LeanError, v2_executable
 
 #: the exit of the v2 executable's ``check`` by its verdict (`Core.BlobProtocol.main`)
@@ -137,7 +138,7 @@ def unwired_why(port: str) -> str:
             "output field: a wired port reads its writer's output field's tree")
 
 
-#: `OneStageZk.provedHeld`'s refusal
+#: `OneStageZk.UNITS_HANDED`
 UNITS_HANDED = "units: a member's units are its block of the partition object's blocks, never the parameters' own"
 PROVED_UNITS = "the units the sessions proved are not the evidence's proved_units"
 #: the heads of the two refusals `Flock.KsScope.checkOf` and the scope (`Flock.ProvedScope.checkOf`) word alike, of
@@ -149,6 +150,8 @@ Form = Callable[[Path, Path, Sequence[tuple[str, Path]]], "str | None"]
 _HEX = frozenset("0123456789abcdef")
 #: the value a registered port reads a committed tree of the registration as, ``committed/<port>`` (`rows.own_value`)
 COMMITTED = "committed/"
+#: `OneStageZk.INPUT_MEMBER`
+INPUT_MEMBER = "roots: a member is named input: a root input/n<w> is the window's tree of run input node w, no member's"
 
 
 def wired_tree_why(name: str, port: str) -> str:
@@ -237,14 +240,24 @@ def _count(m: Mapping[str, Any]) -> int:
 
 
 def _block(name: str, m: Mapping[str, Any], descriptor: bytes, partition: Mapping[str, Any]) -> list[tuple[int, int]]:
-    """Member ``name``'s units, its block of the partition object's ``blocks`` (`one_circuit.block`); a member whose
-    parameters hand it units of its own is refused."""
+    """Member ``name``'s units, its block of the partition object's ``blocks`` (`one_circuit.block`). Lean's parse
+    refuses the parameters of a member handed units of its own or naming a block the object lacks
+    (`OneStageZk.membersOf`), so those raise `Outside` with Lean's ``params:`` reason."""
     if "units" in m:
-        raise _Refused(f"member {name}: {UNITS_HANDED}")
+        raise Outside(f"params: proofs: member {name}: {UNITS_HANDED}")
     try:
         return OC.block(descriptor, partition, m["block"])
     except OC.Refused as e:
-        raise _Refused(f"member {name}: partition: {e}") from None
+        raise Outside(f"params: proofs: member {name}: partition: {e}") from None
+
+
+def _apart(ms: Mapping[str, Any]) -> None:
+    """`OneStageZk.membersOf`'s last check: no unit in two members' units, the first overlap of the ranges sorted by
+    start refused as Lean's parse refuses the parameters."""
+    rs = sorted((u for m in ms.values() for u in m["units"]), key=lambda u: u[0])
+    for prev, r in zip(rs, rs[1:]):
+        if r[0] < prev[1]:
+            raise Outside(f"params: proofs: unit {r[0]} is in two members' units: a unit is one member's")
 
 
 def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dict[str, Any], list[Any]]:
@@ -376,7 +389,10 @@ def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) ->
 
 def _ports(name: str, registered: Mapping[str, Any]) -> list[dict[str, Any]]:
     """A registered file's ports by the fields `classHeld` compares, in the file's order; `Outside` where one is not
-    read."""
+    read. A file of another format is refused by name, as `Flock.Registered.portsOf` refuses it."""
+    form = registered.get("format")
+    if type(form) is str and form != REGISTERED_READS_V2:
+        raise _Refused(f"member {name}: registered reads: not a {REGISTERED_READS_V2} file")
     ports = registered.get("ports")
     if not (isinstance(ports, dict) and ports):
         raise Outside(f"member {name}: its registered file names no ports")
@@ -452,7 +468,8 @@ def _own_fields(ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]], name:
 
 def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
     """`OneStageZk.treePortsHeld`: every port of a member's registered file that opens a committed tree, a value
-    ``committed/<port>``, is the record's root of it, its root, domain and leaf count (`OneStageZk.portTreeHeld`); a
+    ``committed/<port>`` or a run input node's ``input/n<w>``, is the record's root of it, its root, domain and leaf
+    count (`OneStageZk.portTreeHeld`); a
     port whose value is a field tree's name refuses first (`wired_tree_why`)."""
     roots = record.get("roots")
     by_port = {r["port"]: r for r in (roots if isinstance(roots, list) else ())
@@ -464,7 +481,7 @@ def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
             value = e["value"]
             if not value.startswith(COMMITTED) and _field_tree_name(value):
                 raise _Refused(wired_tree_why(name, port))
-            t = value[len(COMMITTED):] if value.startswith(COMMITTED) else None
+            t = value[len(COMMITTED):] if value.startswith(COMMITTED) else value if G.is_fresh_value(value) else None
             if t is None:
                 continue
             r = by_port.get(t)
@@ -491,6 +508,8 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
     ts = _templates(ms)
     if (n := next((n for n in ms if n in ts), None)) is not None:
         raise _Refused(DK.name_template(n))
+    if "input" in ms:
+        raise _Refused(INPUT_MEMBER)
     out: dict[str, list[dict[str, Any]]] = {name: [] for name in ms}
     for r in roots:
         port = r.get("port") if isinstance(r, dict) else None
@@ -498,6 +517,8 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
             raise _Refused("roots: a root of the registration names no port")
         if port == TABLE_PORT:
             raise _Refused(ROW_TABLES)
+        if G.is_fresh_value(port):
+            continue
         mine = [(port[:i], port[i + 1:]) for i, c in enumerate(port) if c == "/" and port[:i] in out]
         if not mine:
             if port not in out and (t := _template_of(port)) is not None and t[0] in ts:
@@ -770,8 +791,9 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
     if P.program_sha512(program) != params["partition"].get("program"):
         raise Outside("the program is not the one the parameters' partition object names")
     descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
+    ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"])} for name, m in ms.items()}
+    _apart(ms)
     try:
-        ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"])} for name, m in ms.items()}
         held = _held(ms, sts)
         if [s["name"] for st in sts for s in st["sessions"]] != evidence["sessions"]:
             raise _Refused("the statements' sessions are not the evidence's sessions, in order")

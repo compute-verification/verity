@@ -297,10 +297,11 @@ def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (r
         throw s!"registered reads: port {reg.name}: unit {u} reads position {positions.getD (ref t np p i) 0}, and the verifier's program reads {want}"
       | _ => throw s!"registered reads: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
 
-/-- Definition `fn` of `P` is an input bound at registration (`RegisteredInput<w>_v1`). -/
+/-- Definition `fn` of `P` is an input the prover does not choose: bound at registration (`RegisteredInput<w>_v1`) or
+supplied by the verifier (`SuppliedInput<w>_v1`, PROTOCOL.md §5.4), whose port opens a root the verifier computes. -/
 def regDef (P : Program.Prog) (fn : Nat) : Bool :=
   match P.defs[fn]? with
-  | some f => f.prim && f.binding == some Program.REGISTRATION
+  | some f => f.prim && (f.binding == some Program.REGISTRATION || f.binding == some Program.SUPPLIED)
   | none => false
 
 /-- The root's nodes of `P`. -/
@@ -308,6 +309,35 @@ def rootNodes (P : Program.Prog) : Array Program.Node := ((P.defs[P.root]?).map 
 
 /-- Root node `k` of `P` is a registered input. -/
 def regNode (P : Program.Prog) (k : Nat) : Bool := ((rootNodes P)[k]?).any (regDef P ·.fn)
+
+def runDef (P : Program.Prog) (fn : Nat) : Bool :=
+  match P.defs[fn]? with
+  | some f => f.prim && f.binding == some Program.RUN
+  | none => false
+
+/-- Root node `k` of `P` is an input bound per run: no registered value, its rows a fresh input of the units reading them. -/
+def runNode (P : Program.Prog) (k : Nat) : Bool := ((rootNodes P)[k]?).any (runDef P ·.fn)
+
+/-- The one value holding run input node `w`'s rows. Every port that reads any of them names it, so they are committed
+once, in one tree, each row a leaf, at the position C gives (`OneCircuit.pos`). -/
+def freshValue (w : Nat) : String := s!"input/n{w}"
+
+/-- Whether `v` is `freshValue w` for some node `w`: a name reserved for a run input node's tree. -/
+def isFreshValue (v : String) : Bool :=
+  let d := (v.drop 7).toString
+  v.startsWith "input/n" && !d.isEmpty && d.all Char.isDigit && freshValue d.toNat! == v
+
+/-- The refusal of a port `name` of role `role` registered as `v`, a run input node's tree's name (`isFreshValue`). -/
+def RESERVED_WHY (role name v : String) : String :=
+  s!"registered reads: {role} {name} is registered as {v}, a run input node's tree: that name is the node's alone"
+
+/-- The first value two of `ps` name with another root, domain or row count: a value is one commitment. -/
+def splitValue? : List Port → Option String
+  | [] => none
+  | p :: qs =>
+    if qs.any fun q => q.value == p.value && (q.root != p.root || q.domain != p.domain || q.leaves != p.leaves) then
+      some p.value
+    else splitValue? qs
 
 /-- A port's template parameter (`PARAM_KEY`) as its name and, for `name[i]`, row `i` of an array of rows. -/
 def paramRow (param : String) : String × Option Nat :=
@@ -325,7 +355,8 @@ namespace OneCircuit
 
 open Registered (regNode paramRow)
 
-/-- Member `m` of root node `k` reads its parameter `param` (`paramRow`) at a registered input node's row: the node
+/-- Member `m` of root node `k` reads its parameter `param` (`paramRow`) at an input node's row, a registered input or a
+run input (`runNode`): the node
 the row (its leaf over the row's leaves) and the row's leaves, from the argument's part holding the member's row (`Program.laneWire`).
 A form with no closed form here (an explicit part, a row across parts or lanes) is refused by name. -/
 def regRow (P : Program.Prog) (k m : Nat) (param : String) : V (Nat × Nat × Nat) := do
@@ -355,7 +386,8 @@ def regRow (P : Program.Prog) (k m : Nat) (param : String) : V (Nat × Nat × Na
   let (w, leaf, _, _) ← match Program.laneWire run lanes (x - s0) 0 len 1 with
     | .ok v => pure v
     | .error _ => throw (notDerived s!"pos : {ctx}: a row of no lane's run (an explicit part, or across lanes)")
-  if !regNode P w then throw s!"{ctx}: member {m} reads root node {w}, which is no registered input"
+  if !(regNode P w || Registered.runNode P w) then
+    throw s!"{ctx}: member {m} reads root node {w}, which is no registered input and no run input"
   if len == 0 || leaf % len != 0 then throw s!"{ctx}: member {m} reads leaf {leaf} of node {w}, off its rows of {len}"
   return (w, leaf / len, len)
 
@@ -363,7 +395,8 @@ def regRow (P : Program.Prog) (k m : Nat) (param : String) : V (Nat × Nat × Na
 `reg` each unit of `indices` reads at `reg`'s parameter (`regRow`), a function of C (`P`): the registered input node's
 leaf over the row's leaves, the leaf order of its tree. Every unit reads one node, whose rows are `reg.leaves`. Its
 work is the statement's units, each found from the root's nodes and its argument's parts. The code's Core
-`RegisteredCircuit.pos`, restricted to registered values. -/
+`RegisteredCircuit.pos`, restricted to input nodes. A run input node `w` is read from its one tree `freshValue w`, and
+a registered one under any other name. -/
 def pos (P : Program.Prog) (indices : Array Nat) (reg : Registered.Port) : V Registered.Port := do
   let ns := HmLinks.nodes P
   let param := if reg.param.isEmpty then reg.name else reg.param
@@ -376,10 +409,14 @@ def pos (P : Program.Prog) (indices : Array Nat) (reg : Registered.Port) : V Reg
     if node.any (· != w) then
       throw s!"registered reads: port {reg.name}: units read registered nodes {node.getD 0} and {w}, and a port is one value"
     if node.isNone then
+      if regNode P w && reg.value.startsWith "input/" then
+        throw s!"registered reads: port {reg.name}: C's node {w} is a registered input, read at its registered root, and the port names the fresh input {reg.value}"
+      if Registered.runNode P w && reg.value != Registered.freshValue w then
+        throw s!"registered reads: port {reg.name}: C's node {w} is a run input, its rows committed once, in {Registered.freshValue w}, and the port names {reg.value}"
       let wn := (Registered.rootNodes P)[w]!
       let rows := (P.defs[wn.fn]!).outLeaves * wn.members / len
       if rows != reg.leaves then
-        throw s!"registered reads: port {reg.name}: {reg.value} holds {reg.leaves} rows, and C's registered node {w} {rows}"
+        throw s!"registered reads: port {reg.name}: {reg.value} holds {reg.leaves} rows, and C's input node {w} {rows}"
     node := some w
     rel := rel.set! (u - first) (some r)
   return { reg with readsRel := rel, readsFrom := first }
@@ -393,14 +430,14 @@ open Lean (Json)
 /-- The name of the one tree holding template `t`'s output field `j`, in every root, domain and file. -/
 def fieldTree (t : String) (j : Nat) : String := s!"{t}/o{j}"
 
-/-- Row `reg` of in(S)'s layout (`OneCircuit.io`, its first parameter leaf `lo`) at the statement's units `indices`,
+/-- The whole-output form `treeReads` extends to output fields, kept beside it: row `reg` of in(S)'s layout (`OneCircuit.io`, its first parameter leaf `lo`) at the statement's units `indices`,
 from the verifier's program `P`: each unit reads the leaf of its writer (`HmLinks.writerOf`) in the writer
 template's output tree (`HmLinks.treeLeaf`), and `reg` must be that tree (`fieldTree`), one for every unit: a row of
 in(S) with a root of its own, or of another tree, is refused by name. A writer of more than one output field is
 refused: the row reads its writer's whole output (`HmLinks.checkUnit`). Where no unit of `indices` has a writer, the
 row is an ordinary input row and `reg` is returned unread. Its work is the statement's units, each found from the
 root body's nodes. -/
-def treeReads (P : Program.Prog) (indices : Array Nat) (lo : Nat) (reg : Port) : V Port := do
+def treeReadsWhole (P : Program.Prog) (indices : Array Nat) (lo : Nat) (reg : Port) : V Port := do
   let ns := HmLinks.nodes P
   let body := (P.defs[P.root]!).body
   let first := indices.foldl min (indices.getD 0 0)
@@ -414,8 +451,53 @@ def treeReads (P : Program.Prog) (indices : Array Nat) (lo : Nat) (reg : Port) :
     let fs := Program.fieldsOf (P.defs[body.nodes[k]!.fn]!).ret
     if fs.length != 1 then
       throw s!"registered reads: row {reg.name} of in(S) reads unit {v} of {t}, of {fs.length} output fields, and a row reads its writer's whole output, one field's tree"
+    if isFreshValue reg.value then throw (RESERVED_WHY "row of in(S)" reg.name reg.value)
     if reg.value != fieldTree t 0 then
       throw s!"registered reads: row {reg.name} of in(S) is committed as {reg.value}, and C wires it from {fieldTree t 0}: a crossing wire is committed once, in its writer's output field's tree, and the reader's row opens that tree by path"
+    rel := rel.set! (u - first) (some leaf)
+    wired := wired + 1
+  if wired == 0 then return reg
+  if wired != indices.size then
+    throw s!"registered reads: row {reg.name} of in(S): {wired} of the statement's {indices.size} units read it from a writer, and a row is one tree's"
+  return { reg with readsRel := rel, readsFrom := first }
+
+/-- The refusal of row `name` of in(S) whose unit `u` reads leaves of unit `v` (of template `t`, `n` output fields) that
+are no one output field of it, whole and in order. -/
+def FIELD_WHY (name : String) (u v : Nat) (t : String) (n : Nat) : String :=
+  s!"registered reads: row {name} of in(S): unit {u} reads leaves of unit {v} of {t} that are no one of its {n} output fields, whole and in order: a row reads one output field's tree, at the positions C gives"
+
+/-- Row `reg` of in(S)'s layout (`OneCircuit.io`, its parameter leaves `[lo, hi)`) at the statement's units `indices`,
+from the verifier's program `P`: each unit's leaves are one output field `j` of its writer (`HmLinks.writerOf`,
+`HmLinks.fieldRead`, from C's edges and the writer template's return type), read at the writer's leaf
+(`HmLinks.treeLeaf`) of that field's tree, and `reg` must be that tree (`fieldTree t j`), the same field for every unit:
+a row that is no one field whole (`FIELD_WHY`), of two fields across the units, with a root of its own, or of another
+tree, is refused by name. A single-field writer's whole output is its field 0. Where no unit of `indices` has a writer,
+the row is an ordinary input row and `reg` is returned unread. Its work is the statement's units, each found from the
+root body's nodes. -/
+def treeReads (P : Program.Prog) (indices : Array Nat) (lo hi : Nat) (reg : Port) : V Port := do
+  let ns := HmLinks.nodes P
+  let body := (P.defs[P.root]!).body
+  let first := indices.foldl min (indices.getD 0 0)
+  let mut rel : Array (Option Nat) := Array.replicate (indices.foldl max 0 + 1 - first) none
+  let mut wired := 0
+  let mut field : Option Nat := none
+  for u in indices do
+    let some v ← HmLinks.writerOf P ns u lo | continue
+    let some (t, leaf) := HmLinks.treeLeaf P ns v
+      | throw s!"registered reads: row {reg.name} of in(S): unit {u}'s writer {v} is outside the program's units"
+    let some (k, m) := HmLinks.unitAt ns v | throw s!"registered reads: row {reg.name} of in(S): unit {v} is no unit"
+    let some (ku, mu) := HmLinks.unitAt ns u | throw s!"registered reads: row {reg.name} of in(S): unit {u} is no unit"
+    let ops ← Program.operands P P.rootScope (body.nodes[ku]!) mu
+    let og ← HmLinks.outGates P k m
+    let some j := HmLinks.fieldRead P og (ops.extract lo hi) k
+      | throw (FIELD_WHY reg.name u v t (Program.fieldsOf (P.defs[body.nodes[k]!.fn]!).ret).length)
+    if let some j' := field then
+      if j' != j then
+        throw s!"registered reads: row {reg.name} of in(S): the statement's units read fields {j'} and {j} of their writers, and a row is one tree's"
+    field := some j
+    if isFreshValue reg.value then throw (RESERVED_WHY "row of in(S)" reg.name reg.value)
+    if reg.value != fieldTree t j then
+      throw s!"registered reads: row {reg.name} of in(S) is committed as {reg.value}, and C wires it from {fieldTree t j}: a crossing wire is committed once, in its writer's output field's tree, and the reader's row opens that tree by path"
     rel := rel.set! (u - first) (some leaf)
     wired := wired + 1
   if wired == 0 then return reg
@@ -430,6 +512,7 @@ so `reg` must be that tree and each unit reads its own leaf in it by `HmLinks.tr
 a reader of the field. An output of several fields in fewer rows, a row of another width or offset, a port registered
 as another value and a unit of another template are refused by name. -/
 def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (reg : Port) : V Port := do
+  if isFreshValue reg.value then throw (RESERVED_WHY "output row" reg.name reg.value)
   let some (t, _) := HmRow.queryTemplate c
     | throw s!"registered reads: output row {reg.name}: the circuit names no template of C (META program_digests)"
   let some f := (rootNodes P).findSome? fun x => (P.defs[x.fn]?).filter (·.key == t)
@@ -459,11 +542,14 @@ def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (r
 
 /-- The verifier's registered reads `own` with every port's reads derived at the statement's circuit `c` and public file
 `pub` from C, the verifier's program `program`: an output row (a port past `HmOut.nIn c`) by `outReads`, a row of in(S)
-(`OneCircuit.io`) by `treeReads`, a registered value's by `OneCircuit.pos`; without the program every port is refused. -/
+(`OneCircuit.io`) by `treeReads`, a registered value's or a run input's by `OneCircuit.pos`; without the program every
+port is refused, and so is a value named under two roots, domains or row counts (`splitValue?`). -/
 def withPositions (c : Circuit) (pub : Public) (program : Option ByteArray) (own : Option (Array Port)) :
     V (Option (Array Port)) := do
   let some own := own | return none
   let some b := program | throw "registered reads: a port's reads are derived from C, the verifier's program (--program)"
+  if let some v := splitValue? own.toList then
+    throw s!"registered reads: value {v} is registered under two roots, domains or row counts, and a value is one commitment every port reading it opens"
   let P ← Program.decode b
   let indices ← unitIndices pub
   let rows ← OneCircuit.io c P
@@ -475,8 +561,8 @@ def withPositions (c : Circuit) (pub : Public) (program : Option ByteArray) (own
 where
   ins (c : Circuit) (P : Program.Prog) (indices : Array Nat) (rows : Array (Nat × Nat × Nat)) (reg : Port) : V Port :=
     match rows.find? fun (p, _, _) => (c.ports.getD p default).name == reg.name with
-    | some (_, lo, _) => do
-      let r ← treeReads P indices lo reg
+    | some (_, lo, hi) => do
+      let r ← treeReads P indices lo hi reg
       if r.readsRel.isEmpty then OneCircuit.pos P indices reg else pure r
     | none => OneCircuit.pos P indices reg
 
@@ -507,7 +593,7 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
 callee in (`TemplateQuery.Desc`, the descriptor as the template queries read it). A node reads a registered input exactly
 when its callee is one of these, wherever it sits. -/
 def programInputs (d : TemplateQuery.Desc) : Array String :=
-  d.callees.filter fun id => (Program.inputId? id).map (·.1) == some Program.REGISTRATION
+  d.callees.filter fun id => (Program.inputId? id).any fun (b, _) => b == Program.REGISTRATION || b == Program.SUPPLIED
 
 /-- **A program that reads a registered value is verified only against registered roots** (`Flock.HmRow`): with the
 verifier's own program (`program`, `--program`), a statement whose program has a `RegisteredInput<w>_v1` callee

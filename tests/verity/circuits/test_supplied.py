@@ -114,14 +114,15 @@ def test_every_function_reads_only_public_things():
 
 #: the Lean registry: each function a supplied input may name has its body there, and a function exists when it has one
 LEAN_REGISTRY = Path(__file__).parents[3] / "verity/protocols/proofs/spot/verifier/lean/Spot/Supplied.lean"
-#: a function's name as the Lean registry spells it: a string literal of the name, as in `supplied.FUNCTIONS`
-LEAN_NAME = re.compile(r'"([a-z0-9_]+(?:\.[a-z0-9_]+)+/v[1-9][0-9]*)"')
+#: a function's body in the Lean registry: an arm of `Supplied.body`'s match on the function's name
+LEAN_BODY = re.compile(r'^  \| "([a-z0-9_]+(?:\.[a-z0-9_]+)+/v[1-9][0-9]*)" =>', re.M)
 #: the functions the Lean registry has no body of yet; each strict failure below is one to take off this list
-NO_LEAN_BODY = frozenset(S.FUNCTIONS)
+NO_LEAN_BODY = frozenset({"pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1",
+                          "poub.read.pass_seed/v1", "poub.read.pass_root/v1"})
 
 
 def _lean_names() -> set[str]:
-    return set(LEAN_NAME.findall(LEAN_REGISTRY.read_text()))
+    return set(LEAN_BODY.findall(LEAN_REGISTRY.read_text()))
 
 
 @pytest.mark.parametrize("name", [pytest.param(n, marks=pytest.mark.xfail(strict=True, reason="no Lean body yet"))

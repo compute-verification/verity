@@ -76,6 +76,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     hello as H,
     hidden_sample as HD,
     link_points as LP,
+    members as M,
     partition as P,
     produced as PD,
     proofs as PF,
@@ -232,7 +233,7 @@ SETUPS = [Setup(PN.population_program(PAIR, n), P.template_instance_query(PAIR.i
     Setup(call_program((0, 2, 0, 3)), PO.query()), Setup(call_program((1, 2, 3)), PO.call_query(8))]
 #: `SETUPS[3]` with a partition object naming its proof blocks, one unit each: the door derives the drawn block's circuit
 #: from them (`one_circuit.block`), and refuses an object naming none.
-BLOCKED = Setup(SETUPS[3].program, SETUPS[3].query, blocks=[(u, u + 1) for u in range(SETUPS[3].population)])
+BLOCKED = Setup(SETUPS[3].program, SETUPS[3].query, blocks=[[(u, u + 1) for u in range(SETUPS[3].population)]])
 
 
 def _registered_program(name: str, n: int, extra, registered) -> Program:
@@ -554,7 +555,7 @@ def decode_params(j) -> dict:
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
     keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler",
-                               "certified", "verdicts", "window_values")
+                               "certified", "verdicts", "window_values", "coins", "released")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -615,6 +616,11 @@ def decode_params(j) -> dict:
             G.sources(j["supplied"])
         except ValueError as e:
             raise D.Reject(str(e)) from None
+    try:
+        G.marked_rows(PROGRAMS[sha], j["registered"] or {}, G.sources(j.get("supplied", {})), j.get("coins"),
+                      j.get("released"), len(j["log"]))
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
     if "pinned" in j:
         if not isinstance(j["pinned"], dict):
             raise D.Reject("pinned roots are not an object")
@@ -733,7 +739,8 @@ def _docket_verdict(p: dict, rec) -> Verdict:
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
-                   compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"), verdicts=p.get("verdicts"))
+                   compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"), verdicts=p.get("verdicts"),
+                   coins=p.get("coins"), released=p.get("released"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -746,7 +753,7 @@ def _caller_verdict(p: dict, rec) -> Verdict:
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    day=p.get("day"), declarations=p.get("declarations"), seed_salt=p.get("seed_salt"),
                    pool=p.get("pool"), compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"),
-                   verdicts=p.get("verdicts"))
+                   verdicts=p.get("verdicts"), coins=p.get("coins"), released=p.get("released"))
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
@@ -2908,14 +2915,16 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tm
     """`proofs.members_v2` writes v2's per-member form of ``proofs`` for a window of several members, and
     `OneStageZk`'s parsers read what it wrote (`proofs.members_parsed`, the executable's ``members``:
     `membersParamsOfJson`, `membersEvidenceOf`, `membersHeld`, `sampledHeld`), on an audit v1 accepts: every member
-    with its files' digests, its units and its ``vus_per_block``, and a statement for each member with a session, in
+    with its files' digests, its units (its block of the partition object's ``blocks``) and its ``vus_per_block``,
+    and a statement for each member with a session, in
     the members' order, each a member the evidence's ``proved_units`` hold a unit of. The command's line says
     ``parsed, not checked`` and names no verdict. The audit's check reads the same case in the form and rejects it at
     the first check that fails: the stand-in sessions' records name no coin tree the challenger's release log shows.
     What the parsers refuse the command refuses with their reason: statements out of the members'
     order, a statement of two sessions, of a member the parameters don't name or of a member the sample holds no unit
     of, v1's ``sessions`` other than the statements', and either file in the one statement's form."""
-    rec, _, base, params = _audit_v1_accepts(SETUPS[3], "v2-members", server)
+    blocked = Setup(SETUPS[3].program, SETUPS[3].query, blocks=[[(0, 2), (2, 4), (4, 5)]])
+    rec, _, base, params = _audit_v1_accepts(blocked, "v2-members", server)
 
     def member(k: int, name: str, lo: int, hi: int, *sessions: str) -> PF.Member:
         at = tmp_path / f"m{k}"
@@ -2976,9 +2985,14 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tm
     assert why(e=e2 | {"proofs": one}) == "evidence: the keys of the evidence's proofs are not statements"
     assert why(p=params | {"proofs": {"public": ms[0].public_sha512, "registered": None}}) == (
         "params: the keys of proofs are not members")
-    again = pm["members"] | {"z/c0": {**pm["members"][ms[0].name], "units": [[1, 2]]}}
+    again = pm["members"] | {"z/c0": pm["members"][ms[0].name]}
     assert why(p=params | {"proofs": {"members": again}}) == (
-        "params: proofs: unit 1 is in two members' units: a unit is one member's")
+        "params: proofs: unit 0 is in two members' units: a unit is one member's")
+    handed = pm["members"] | {ms[1].name: {**pm["members"][ms[1].name], "units": [[2, 4]]}}
+    assert why(p=params | {"proofs": {"members": handed}}) == f"params: proofs: member {ms[1].name}: {M.UNITS_HANDED}"
+    past = pm["members"] | {ms[1].name: {**pm["members"][ms[1].name], "block": 3}}
+    assert why(p=params | {"proofs": {"members": past}}) == (
+        f"params: proofs: member {ms[1].name}: partition: E_BLOCKS: no block 3 among the partition's 3")
     with pytest.raises(ValueError, match="exactly one session"):
         PF.members_v2([member(3, f"{PAIR.id}/c1", 5, 6, "a", "b")])
     with pytest.raises(ValueError, match="two members have one name"):
@@ -4143,7 +4157,8 @@ PUBLIC_PORTS = D.Port(PIECES, "public_ports", public_ports, st.one_of(
     st.builds(lambda m, ps, x: {"record": {"roots": _roots([f"{m}/{p}" for p in ps], x)}}, MEMBER_NAMES,
               st.lists(OWN_PORTS, min_size=1, max_size=4), st.integers(0, 63)),
     st.builds(lambda ps, x: {"record": {"roots": _roots(ps, x)}}, st.lists(st.one_of(
-        OWN_PORTS, st.builds("{}/{}".format, MEMBER_NAMES, OWN_PORTS), st.sampled_from(["row-table", "row-table/s0/t"]),
+        OWN_PORTS, st.builds("{}/{}".format, MEMBER_NAMES, OWN_PORTS),
+        st.sampled_from(["row-table", "row-table/s0/t", "input/n3", "input/n03", "input/n3/x"]),
         st.builds("{}/{}".format, st.sampled_from(["T{K=1}", "A", "B"]), st.sampled_from(["o0", "x"]))),
         min_size=1, max_size=4), st.integers(0, 63)),
     JSON), package=PACKAGE)

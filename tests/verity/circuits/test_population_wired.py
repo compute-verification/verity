@@ -191,6 +191,23 @@ def test_a_wire_between_leaves_of_two_widths_is_refused():
         wired_population_program([(A, 1), (G, 1)], rec)
 
 
+def _opened(*runs):
+    return {"templates": [[IA, 2]], "wires": [], "external": [f"{IA}/x"],
+            "registered": {"params": {}, "tables": [], "reads": [], "roots": [],
+                           "openings": [{"reader": IA, "table": "t", "key": "x", "ports": ["k"], "verdict": "o0", "at": at,
+                                         "units": n} for at, n in runs]}}
+
+
+def test_a_tables_openings_are_one_parameter_each_openings_units_after_the_one_befores():
+    one = wired_population_program([(A, 2)], _opened((0, 2)))[0]
+    two = wired_population_program([(A, 2)], _opened((1, 1), (0, 1)))[0]
+    assert one.fn.signature() == two.fn.signature() and [n for n, _ in two.fn.signature()[0]] == ["t/k", "0.x"]
+    x, k = [1, 2, 3, 4], [100, 200, 300, 400]
+    assert evaluate(two.fn, k[2:] + k[:2], x) == evaluate(one.fn, k, x)
+    with pytest.raises(ValueError, match="filled twice"):
+        wired_population_program([(A, 2)], _opened((0, 2), (1, 1)))
+
+
 @pytest.mark.parametrize("w", [16, 32])
 def test_word_bits_and_bits_word_are_each_others_inverse_bit_i_leaf_i(w):
     x = 0x8001 | 0x5A << 4

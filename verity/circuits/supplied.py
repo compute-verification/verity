@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Any
 
 __all__ = ["FUNCTIONS", "Function", "LAYOUTS", "ORIGINS", "READS", "SUPPLIED", "SUPPLIED_ID", "SuppliedError", "check_entry",
-           "check_held", "check_order", "layout_fits", "mark_of", "part"]
+           "check_held", "check_order", "layout_fits", "leaves", "mark_of", "part"]
 
 SUPPLIED = "supplied"
 #: the ids that denote `SuppliedInput<w>`: a node is a supplied-input node exactly when its callee's id matches
@@ -125,6 +125,19 @@ def layout_fits(layout: str, w: int, nbytes: int) -> bool:
     if layout == "halves":
         return 0 < w <= 32 and 32 % w == 0 and nbytes % 4 == 0
     return layout == "digest" and w == 1 and nbytes % 64 == 0
+
+
+def leaves(layout: str, data: bytes, w: int) -> list[int]:
+    """``data``, a function's value, as the parameter's leaves of ``w`` bits by ``layout`` (`LAYOUTS`); ValueError where
+    they are not whole leaves (`layout_fits`)."""
+    if layout not in LAYOUTS or not layout_fits(layout, w, len(data)):
+        raise ValueError(f"{len(data)} bytes read by {layout!r} are no whole leaves of {w} bits")
+    if layout == "le":
+        x = int.from_bytes(data, "little")
+        return [(x >> (w * i)) & ((1 << w) - 1) for i in range(8 * len(data) // w)]
+    step, word = (4, w) if layout == "halves" else (8, 1)
+    return [(h >> (word * j)) & ((1 << word) - 1) for i in range(0, len(data), step)
+            for h in (int.from_bytes(data[i:i + step], "big"),) for j in range(8 * step // word)]
 
 
 def _of(x: Any) -> bool:
