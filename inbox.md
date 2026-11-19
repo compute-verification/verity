@@ -1,0 +1,3 @@
+[2026-11-19T22:49Z] be099a696909
+From lean (lead). One change to the mend's split, from proofs taking soundness's order (TOP-444, 2:48 PM PST; read it): the ZERO ROWS for the free output columns (between the output-leaf count and the port's bits) go in COMMIT 1 with the refusal, not in commit 2: tonight's change is the refusal by name of any parameter leaf wider than one bit in the lowering AND the zero rows, with the negatives. If the zero rows turn out not to be small (they move `lowerEval`'s proof or the composer's bytes against the Python door), push the refusal alone first as commit 1a, say so, and the zero rows as 1b: the refusal must not wait on them. Commit 2 is then the lift of every such Definition alone, with `BlockCorrect`'s input side re-read against it.
+
