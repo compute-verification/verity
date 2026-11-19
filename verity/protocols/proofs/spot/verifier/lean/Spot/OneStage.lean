@@ -629,10 +629,8 @@ def coveredDesign : Flock.Draw.SamplingDesign → V Flock.Draw.SamplingDesign
 
 /-- The sample the coins `src` give over `population` units under the expanded `samplingDesign` (`Select.select`'s for a sampling design rule):
 its units, and the number of bytes of `src` it read. A Bernoulli sampling design is refused (`coveredDesign`). -/
-def sampledFrom (v : Docket.Verifier) (samplingDesign : Json) (population : Nat) (src : ByteArray) : V (Array Nat × Nat) := do
-  let derived ← if Draw.rated v.samplingDesign then pure none
-    else Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
-  let l ← coveredDesign (derived.getD (← Draw.flockSamplingDesign samplingDesign population))
+def sampledFrom (_v : Docket.Verifier) (samplingDesign : Json) (population : Nat) (src : ByteArray) : V (Array Nat × Nat) := do
+  let l ← coveredDesign (← Draw.flockSamplingDesign samplingDesign population)
   Draw.sampleUnits l population src
 
 /-- Why the sample is not the one the coins `src` give under `samplingDesign` (`sampledFrom`), every coin opened read; none when it is. -/

@@ -255,11 +255,17 @@ def derive(program: Program, query: Mapping[str, Any], sampling_design: Mapping[
     return {"law": "work", "k": k, "strata": out}
 
 
+#: Lean `Spot.Draw.COUNTS_AWAIT_THEIR_CLAIM`: the refusal of a rated design whose counts are not the default's
+COUNTS_AWAIT_THEIR_CLAIM = ("the rated design's counts are not the default's (rateK): a design's own counts wait on the "
+                            "claim that reads them")
+
+
 def agreed(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any],
            table: Mapping[str, Any] | None, registered: Any) -> dict[str, Any]:
-    """The sampling design the verifier agrees to for the registered design (Lean `Spot.Draw.agreed`): under a rated law,
-    `registered` when it is `derive`'s rated expansion at its own k_s, byte for byte, and those k_s meet every rate with
-    the floor (`meets_rate`); else `derive`'s expansion, which the caller holds `registered` to. Raises `ValueError`."""
+    """The one design R1, the sample's coins and its draw read (Lean `Spot.Draw.agreed`): under a rated law, `registered`
+    when it is `derive`'s rated expansion at its own k_s, byte for byte, those k_s meet every rate with the floor
+    (`meets_rate`), and they are the default's (`COUNTS_AWAIT_THEIR_CLAIM`); else `derive`'s expansion, which the caller
+    holds `registered` to. Raises `ValueError`."""
     if sampling_design.get("law") != "rated":
         return derive(program, query, sampling_design, table)
     mine = derive(program, query, sampling_design, table)
@@ -276,6 +282,8 @@ def agreed(program: Program, query: Mapping[str, Any], sampling_design: Mapping[
         raise ValueError("the rated design is not the population's strata at the verifier's rates and amounts")
     if (why := meets_rate(rated_entries(sampling_design), at)) is not None:
         raise ValueError(why)
+    if at != mine["strata"]:
+        raise ValueError(COUNTS_AWAIT_THEIR_CLAIM)
     return dict(registered)
 
 

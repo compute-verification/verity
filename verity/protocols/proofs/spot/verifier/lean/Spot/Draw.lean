@@ -64,10 +64,16 @@ def sameSamplingDesign (a b : Json) : Bool := jeq a b
 /-- Whether `samplingDesign` is a rated law. -/
 def rated (samplingDesign : Json) : Bool := jeq (getD samplingDesign "law") "rated"
 
-/-- `draw.agreed`: the sampling design the verifier agrees to for the registered design `registered`. Under a rated law,
-`registered` itself when it is the verifier's rated expansion (`deriveSamplingDesign`: the population's strata at the
-verifier's rates and amounts) at its own `k_s`, byte for byte, and those `k_s` meet every rate with the floor
-(`Flock.Draw.meetsRate`); else `derive`'s expansion, which the caller holds `registered` to. -/
+/-- `draw.COUNTS_AWAIT_THEIR_CLAIM`: the refusal of a rated design whose counts are not the default's (`rateK`); a
+registered design's own counts wait on the claims' case that reads them. -/
+def COUNTS_AWAIT_THEIR_CLAIM : String :=
+  "the rated design's counts are not the default's (rateK): a design's own counts wait on the claim that reads them"
+
+/-- `draw.agreed`, the one design R1, the sample's coins and its draw read: the sampling design the verifier agrees to
+for the registered design `registered`. Under a rated law, `registered` itself when it is the verifier's rated expansion
+(`deriveSamplingDesign`: the population's strata in its order, at the verifier's rates and amounts) at its own `k_s`,
+byte for byte, those `k_s` meet every rate with the floor (`Flock.Draw.meetsRate`), and they are the default's
+(`COUNTS_AWAIT_THEIR_CLAIM`); else `derive`'s expansion, which the caller holds `registered` to. -/
 def agreed (p : Program) (query samplingDesign : Json) (table : Option Json) (registered : Json) : V Json := do
   if !rated samplingDesign then return ← derive p query samplingDesign table
   let some (.rated rates ms) ← deriveSamplingDesign p query samplingDesign table | throw "a rated law's expansion"
@@ -80,6 +86,7 @@ def agreed (p : Program) (query samplingDesign : Json) (table : Option Json) (re
   if !sameSamplingDesign registered (Flock.Draw.SamplingDesign.rated rates at_).toJson then
     throw "the rated design is not the population's strata at the verifier's rates and amounts"
   if let .error why := Flock.Draw.meetsRate rates at_ then throw why
+  if at_ != ms then throw COUNTS_AWAIT_THEIR_CLAIM
   return registered
 
 /-- `draw.samplingDesign_of`: the sampling design a sample names. -/
