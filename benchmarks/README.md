@@ -13,7 +13,7 @@ and write, and the index of every directory.
 says. In a fresh clone, `uv sync --all-packages --extra torch-cpu` makes the environment every runner here runs in,
 and `uv run verity bench NAME [ARGS]` runs one. What each measures is its row in the index below, and its runner's
 header gives its machine, its arguments and what it writes. These are the directories that have one, with a runner's
-subcommands or defaults in parentheses: `attester_load`, `bool_build_cost`, `certifier_term`, `codec_tensor` (the
+subcommands or defaults in parentheses: `attester_load`, `certifier_term`, `codec_tensor` (the
 tensor-core wide-word codec on one GPU), `compile_cost`, `compute`, `dsa_topk`, `exfiltration`, `flock_s8_block`, `inference_only`, `landing`, `lean_unread_gate`
 (`--against REV`, its guard), `memory`, `network_traces`, `numerical` (one of
 `verity_numerical`'s tools by name; `numerical judge` compares two results under the proof campaign's contract), `overhead` (`points`, `run`,
@@ -370,7 +370,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `unit_walk/` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds a statement at each width (lane groups a pass), distance asked ahead and pool size, with and without its row vectors kept, every walk's packed words held to the first's | maintained |
 | `spot_proved/` | a replayed served step's values proved: one replayed step of a recorded replay block captured per TP rank under CUDA graphs, staged as each sampled type's proof blocks, and audited one stage end to end by the Lean verifier | maintained |
 | `flock_s8_block/` | Flock `--zk`'s price for a proof block of adjacent cells of one int8 GEMM output row, on one GPU node and on the CPU | maintained |
-| `unit_block/` | a word primitive's Boolean version built as one Flock proof block: the select's slot alone and with its rows' openings, against the 2^27 block | maintained |
 | `prove/` | `verity bench prove`, the one command for a proof system's prover on a workload: per block type the blocks proved per token and the ms per block, and the prover GPUs per serving GPU, from the store's labelled records | maintained |
 | `proof_throughput/` | the proof blocks a second Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size and the number of provers at once | maintained |
 | `commitments/` | the commitment schemes' cost: hashing leaves and building the tree, hiding leaves per row, and serving's per-step row tables | maintained |
@@ -392,7 +391,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `bool_build_cost/` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule | maintained |
 | `compile_cost/` | what compiling a class-G window's Programs costs (`predict.steps.compile_steps`, GLM-5.3 at TP8 on one rank): wall time and peak RSS, by phase, its digests held to their pins | maintained |
 | `../calibration/circuit_properties/` | structural properties of a Boolean circuit's counted operations, measured exactly: fan-out, fan-in, their count and s_× | maintained |
 | `route_capture/` | what a model executes when served: every engine step's launch-shape class under CUDA-graph serving and the kernels of each class's first steps, and the (route, statics) pairs those steps need that class G's registered Definitions don't cover, with their owners | maintained |
