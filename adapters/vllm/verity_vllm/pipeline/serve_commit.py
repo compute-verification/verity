@@ -198,8 +198,6 @@ class CommitWindows:
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
                  request_cap: int = 0, arm: Any = None, release: Any = None,
                  coins: SeedCoins | None = None, plan: Callable[[int, Any], dict[str, Any]] | None = None) -> None:
-        if plan is not None and arm is not None:
-            raise ValueError("a window's close plan commits its advice, and an arm's tie commits its own: give one")
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
         self.coins = coins if coins is not None else SeedCoins()
         self.seed_coin: dict[str, Any] | None = None      # the open window's seed coin (`SeedCoins.record`)
