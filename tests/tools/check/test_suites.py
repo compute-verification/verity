@@ -14,6 +14,8 @@ from pathlib import Path
 import pytest
 
 HERE = (Path(__file__).resolve().parents[3] / "tools" / "check")
+#: the read tracer's directory, which a Python a test starts in the suite's environment keeps on its PYTHONPATH
+TRACER = str(HERE / "guard" / "child")
 
 
 def _suites(monkeypatch, root: Path):
@@ -187,9 +189,9 @@ def test_a_python_that_imports_the_trees_packages_from_another_checkout_is_named
         _member(root, "tools/check", "check", None, build=False)
     S = _suites(monkeypatch, tree)
     pkgs = {"verity-pous": "protocols/pous", "check": "tools/check"}
-    env = dict(os.environ, PYTHONPATH=str(other / "protocols" / "pous"))
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([TRACER, str(other / "protocols" / "pous")]))
     assert S.foreign(pkgs, env) == f"verity_pous from {other / 'protocols' / 'pous' / 'verity_pous' / '__init__.py'}"
-    env["PYTHONPATH"] = str(tree / "protocols" / "pous")
+    env["PYTHONPATH"] = os.pathsep.join([TRACER, str(tree / "protocols" / "pous")])
     assert S.foreign(pkgs, env) is None
 
 
@@ -203,9 +205,9 @@ def test_every_declared_package_is_probed_whatever_its_name_and_one_that_wont_im
     S = _suites(monkeypatch, tree)
     pkgs = {"catalog": "catalog", "archive": "archive"}
     assert S.importable(pkgs) == {"archive_old": "archive", "catalog": "catalog"}
-    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(other / "catalog" / "src"), str(tree / "archive" / "python")]))
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([TRACER, str(other / "catalog" / "src"), str(tree / "archive" / "python")]))
     assert S.foreign(pkgs, env) == f"catalog from {other / 'catalog' / 'src' / 'catalog' / '__init__.py'}"
-    env["PYTHONPATH"] = str(tree / "catalog" / "src")
+    env["PYTHONPATH"] = os.pathsep.join([TRACER, str(tree / "catalog" / "src")])
     assert S.foreign(pkgs, env) == "archive_old from nowhere (not importable)"
 
 

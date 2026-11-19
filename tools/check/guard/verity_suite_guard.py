@@ -118,13 +118,17 @@ def _audit(event: str, args: tuple) -> None:
         if _forked is not None:
             _forked.seen(event, args, _current, _test)
         return
+    if _tracer is None or _tracer.busy:
+        return
     try:
-        hits = _tracer.trace(event, args) if _tracer is not None else []
+        hits = _tracer.trace(event, args, _current)
     except (TypeError, ValueError):
         hits = []
     for kind, rel in hits:
         if kind == "X":
             _untraced.setdefault(_current, set()).add(rel)
+        elif kind == "S":
+            _tracer.write(kind, _current, rel, _test)
         elif kind == "O":
             _outside.setdefault(rel, _current)
         else:

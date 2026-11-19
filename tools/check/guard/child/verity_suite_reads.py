@@ -14,7 +14,9 @@ It also traces what a per-test key narrowed to the files the tests use (`suites.
 - `L` a repository directory listed (`os.listdir`, `os.scandir`: imports, `glob`, `pkgutil` list what they search);
 - `X` a program started that this tracer won't see into, so what it reads is unknown: anything but a machine probe (`PROBES`),
   a Python that loads this tracer (the suite's PYTHONPATH, `VERITY_SUITE_READS` and a test module in `VERITY_SUITE_MODULE`,
-  and no `-I`, `-E` or `-S`), or one of the suite's declared build outputs (`VERITY_SUITE_PROGRAMS`, `given`).
+  and no `-I`, `-E` or `-S`), or one of the suite's declared build outputs (`VERITY_SUITE_PROGRAMS`, `given`);
+- `S` a Python started in the suite's environment while a test module is collected or run, with no copy of this tracer on its
+  PYTHONPATH (`refused`): the repository line that started it and its command, which `suites.py` holds to `STRIPPED`.
 
 A declared build output (a Lean executable) reads what its arguments name and what it derives from them, and nothing else of the
 repository, so its start is traced as `F` reads instead: each argument (or `--flag=` value) that names a repository path, a file
@@ -35,11 +37,41 @@ _PYTHON = re.compile(r"^python(\d+(\.\d+)?)?$")
 PROBES = frozenset({"uname", "true", "false", "nproc", "getconf", "hostname", "id", "whoami", "ldconfig", "lscpu", "nvidia-smi"})
 #: more files than this under a declared output's argument: traced as a program no tracer sees into, not file by file
 GIVEN_MAX = 5000
+_GUARDED = ("-p", "verity_suite_guard")
 
 
 def _source(path: str) -> str:
     m = _PYC.match(path)
     return os.path.join(m.group(1), f"{m.group(2)}.py") if m else path
+
+
+def _python(argv) -> bool:
+    exe = os.fsdecode(argv[0])
+    return bool(_PYTHON.match(os.path.basename(exe)) or os.path.realpath(exe) == os.path.realpath(sys.executable))
+
+
+def _isolated(argv) -> bool:
+    """Whether a Python's flags (-I, -E or -S) keep it from loading `sitecustomize` off PYTHONPATH."""
+    for a in (os.fsdecode(a) for a in argv[1:] if isinstance(a, (str, bytes))):
+        if a in ("-c", "-m") or not a.startswith("-") or a.startswith("--"):
+            return False
+        if set(a[1:]) & set("IES"):
+            return True
+    return False
+
+
+def _env(env):
+    return os.environ if env is None else {os.fsdecode(k): os.fsdecode(v) for k, v in env.items()}
+
+
+def _guarded(env) -> bool:
+    return all(env.get(k) for k in ("VERITY_SUITE_READS", "VERITY_SUITE_MODULE", "VERITY_SUITE_ROOT"))
+
+
+def _on_path(env) -> bool:
+    """Whether a copy of this tracer is on ``env``'s PYTHONPATH, whose `sitecustomize` loads it."""
+    return any(os.path.isfile(os.path.join(p, "verity_suite_reads.py")) for p in env.get("PYTHONPATH", "").split(os.pathsep) if p)
+
 
 class Reads:
     def __init__(self, env=os.environ):
@@ -103,20 +135,34 @@ class Reads:
         """Whether a program started with ``argv`` (and ``env``, None when inherited) is a Python that traces itself here."""
         if not argv:
             return False
-        exe = os.fsdecode(argv[0])
-        if os.path.basename(exe) in PROBES:
+        if os.path.basename(os.fsdecode(argv[0])) in PROBES:
             return True
-        flags = [os.fsdecode(a) for a in argv[1:] if isinstance(a, (str, bytes))]
-        if not (_PYTHON.match(os.path.basename(exe)) or os.path.realpath(exe) == os.path.realpath(sys.executable)):
-            return False
-        for a in flags:
-            if a in ("-c", "-m") or not a.startswith("-") or a.startswith("--"):
-                break
-            if set(a[1:]) & set("IES"):
-                return False
-        env = os.environ if env is None else {os.fsdecode(k): os.fsdecode(v) for k, v in env.items()}
-        return (all(env.get(k) for k in ("VERITY_SUITE_READS", "VERITY_SUITE_MODULE", "VERITY_SUITE_ROOT"))
-                and self.here.rstrip("/") in [os.path.realpath(p) for p in env.get("PYTHONPATH", "").split(os.pathsep) if p])
+        env = _env(env)
+        return _python(argv) and not _isolated(argv) and _guarded(env) and _on_path(env)
+
+    def refused(self, argv, env, module: str) -> str | None:
+        """``site command`` for a Python started with ``argv`` while test module ``module`` is collected or run that runs in the
+        suite's environment with no copy of this tracer on its PYTHONPATH, so what it reads is outside every key; None for any
+        other program. The site is the innermost repository line on the stack that started it (``module`` when none is). A suite
+        run (`-p verity_suite_guard`) is guarded by its own report; a Python started outside any test module (``module`` "*": an
+        xdist worker) is the guard's."""
+        if module == "*" or not _python(argv) or _isolated(argv) or _GUARDED in zip(argv[1:], argv[2:]):
+            return None
+        env = _env(env)
+        if not _guarded(env) or _on_path(env):
+            return None
+        cmd = " ".join(" ".join(os.fsdecode(a) for a in argv if isinstance(a, (str, bytes))).split())
+        return f"{self._site() or module} `{cmd[:400]}{'...' if len(cmd) > 400 else ''}`"
+
+    def _site(self) -> str | None:
+        guard = os.path.join(os.path.dirname(self.here.rstrip("/")), "")
+        f = sys._getframe(1)
+        while f is not None:
+            path = os.path.realpath(f.f_code.co_filename)
+            if path.startswith(self.inside) and not path.startswith((*self.prefix, guard)):
+                return f"{os.path.relpath(path, self.root)}:{f.f_lineno}"
+            f = f.f_back
+        return None
 
     def given(self, argv, cwd) -> list[str] | None:
         """The repository files (from the root) a declared build output started with ``argv`` in ``cwd`` reads, [] for `lake build`
@@ -151,8 +197,9 @@ class Reads:
                 return None
         return sorted(files)
 
-    def trace(self, event: str, args: tuple) -> list[tuple[str, str]]:
-        """(`F`, path), (`L`, directory), (`O`, path) or (`X`, program) for an audit event."""
+    def trace(self, event: str, args: tuple, module: str = "*") -> list[tuple[str, str]]:
+        """(`F`, path), (`L`, directory), (`O`, path), (`X`, program) or (`S`, site and command) for an audit event while test
+        module ``module`` is collected or run."""
         if event in ("open", "ctypes.dlopen"):
             if args and isinstance(args[0], (str, bytes, os.PathLike)) and (p := self.traced(os.fsdecode(args[0]))):
                 return [("F", p)]
@@ -171,7 +218,8 @@ class Reads:
             if self.seeable(argv, env):
                 return []
             if (files := self.given(argv, cwd)) is None:
-                return [("X", os.fsdecode(argv[0]) if argv else "?")]
+                site = self.refused(argv, env, module) if argv else None
+                return [("X", os.fsdecode(argv[0]) if argv else "?"), *([("S", site)] if site else [])]
             return [("F", f) for f in files] + [("O", f) for f in files if self.outside(os.path.join(self.root, f))]
         elif event in ("os.system", "os.spawn"):
             return [("X", event)]
@@ -206,13 +254,13 @@ class Reads:
             if (hit := self.classify(path)) is not None:
                 self.write(hit[0], module, hit[1], test if hit[0] == "O" else "")
         try:
-            hits = self.trace(event, args)
+            hits = self.trace(event, args, module)
         except (TypeError, ValueError):
             hits = []
         for kind, rel in hits:
             if (kind, module, rel) not in self.sent:
                 self.sent.add((kind, module, rel))
-                self.write(kind, module, rel, test if kind == "O" else "")
+                self.write(kind, module, rel, test if kind in ("O", "S") else "")
 
     def install(self) -> None:
         """Trace this process (a child a test started): every open, attributed to the module it inherited."""
