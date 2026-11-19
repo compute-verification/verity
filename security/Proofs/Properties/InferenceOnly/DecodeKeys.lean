@@ -16,12 +16,11 @@ body's return type.
 
 The decoder (`getDef`, `composite`, `staticFns`) is walked once, as Hoare triples proved by `mvcgen` and read back at an
 `.ok` result (`of_triple`). `composite_step` and `staticFns_step` hold of any property of the decoder's state that
-`getDef` and `staticFns` keep one fuel lower, for one descriptor, so another fact about the state needs no second walk
-(`FlockSoundness.DecodeBoolean.src_fuel` is one). `decode_kept` reads `decode`'s steps from `BodiesOk.decode_steps`,
-through `go_kept`, `decodeAll_kept` and `decodeBodies_kept`. `kept_fuel` is the
-induction on the fuel for `Kept`: the keys (`Keys`), the return types (`Rets`) and the names that stay busy. A name is
-busy from `composite`'s mark to `getDef`'s push and a busy name has no index entry, so the push finds no earlier
-Definition with its key.
+`getDef` and `staticFns` keep one fuel lower, for one descriptor. `decode_kept` reads `decode`'s steps from
+`BodiesOk.decode_steps`, through `go_kept`, `decodeAll_kept` and `decodeBodies_kept`. `kept_fuel` is the induction on
+the fuel for `Kept`: the keys (`Keys`), the return types (`Rets`), the names that stay busy, and each primitive's entry
+of `definitions` (`Src`, which `FlockSoundness.DecodeBoolean` reads). A name is busy from `composite`'s mark to
+`getDef`'s push and a busy name has no index entry, so the push finds no earlier Definition with its key.
 -/
 
 @[expose] public section
@@ -136,24 +135,55 @@ def Rets (s : DecState) : Prop :=
   ∀ i, i < (DecState.defs s).size → ((DecState.defs s)[i]!).prim = false →
     ((DecState.defs s)[i]!).body.retType = ((DecState.defs s)[i]!).ret
 
-/-- What the decoder keeps while the names of `B` are being decoded: `Keys`, `Rets`, and each name of `B` busy. -/
-def Kept (B : String → Prop) (s : DecState) : Prop :=
-  Keys s ∧ Rets s ∧ ∀ k, B k → (DecState.busy s).contains k = true
+/-- The form a definition entry declares (`getDef`'s `form`). -/
+def formOf (d : Lean.Json) : String := (d.getObjValAs? String "form").toOption.getD ""
 
-private theorem kept_congr (B : String → Prop) (s s' : DecState) (hd : DecState.defs s' = DecState.defs s)
-    (hi : DecState.index s' = DecState.index s) (hb : DecState.busy s' = DecState.busy s) (h : Kept B s) :
-    Kept B s' := by
-  unfold Kept Keys Rets
+/-- Each primitive Definition decoded so far is keyed by an entry of `definitions` of form `primitive`. -/
+def Src (desc : Desc) (s : DecState) : Prop :=
+  ∀ i < (DecState.defs s).size, ((DecState.defs s)[i]!).prim = true →
+    ∃ d, (Desc.ddefs desc)[((DecState.defs s)[i]!).key]? = some d ∧ formOf d = "primitive"
+
+theorem src_push {desc : Desc} {s s' : DecState} {defn : Defn} (h : Src desc s)
+    (hd : DecState.defs s' = (DecState.defs s).push defn)
+    (hn : defn.prim = true → ∃ d, (Desc.ddefs desc)[defn.key]? = some d ∧ formOf d = "primitive") :
+    Src desc s' := by
+  intro i hi hp
+  rw [hd] at hi hp ⊢
+  simp only [Array.size_push] at hi
+  rcases Nat.lt_succ_iff_lt_or_eq.1 hi with hi | rfl
+  · rw [BodiesOk.getElem!_push_lt _ _ hi] at hp ⊢
+    exact h i hi hp
+  · rw [BodiesOk.getElem!_push_eq] at hp ⊢
+    exact hn hp
+
+/-- What the decoder keeps while the names of `B` are being decoded: `Keys`, `Rets`, each name of `B` busy, and
+`Src`. -/
+def Kept (desc : Desc) (B : String → Prop) (s : DecState) : Prop :=
+  Keys s ∧ Rets s ∧ (∀ k, B k → (DecState.busy s).contains k = true) ∧ Src desc s
+
+private theorem kept_congr (desc : Desc) (B : String → Prop) (s s' : DecState)
+    (hd : DecState.defs s' = DecState.defs s) (hi : DecState.index s' = DecState.index s)
+    (hb : DecState.busy s' = DecState.busy s) (h : Kept desc B s) : Kept desc B s' := by
+  unfold Kept Keys Rets Src
   rw [hd, hi, hb]
   exact h
 
+/-- The decoder's first state, with no Definition and no index entry, has `Kept` with no name busy. -/
+theorem kept_empty (desc : Desc) {s : DecState} (hd : DecState.defs s = #[]) (hi : DecState.index s = ∅) :
+    Kept desc (fun _ => False) s := by
+  have hn : ∀ i, ¬ i < (DecState.defs s).size := fun i => by rw [hd]; exact Nat.not_lt_zero i
+  refine ⟨⟨fun k v h => ?_, fun i h => absurd h (hn i), fun k _ => ?_⟩, fun i h => absurd h (hn i),
+    fun _ h => h.elim, fun i h => absurd h (hn i)⟩
+  · rw [hi] at h; exact absurd h (by simp)
+  · rw [hi]; simp
+
 /-- Marking a name without an index entry busy keeps `Kept`, with that name among the busy ones. -/
-private theorem kept_busy {B : String → Prop} {s s1 : DecState} {fid : String} (h : Kept B s)
+private theorem kept_busy {desc : Desc} {B : String → Prop} {s s1 : DecState} {fid : String} (h : Kept desc B s)
     (hnone : (DecState.index s)[fid]? = none)
     (hd : DecState.defs s1 = DecState.defs s) (hi : DecState.index s1 = DecState.index s)
-    (hb : DecState.busy s1 = (DecState.busy s).insert fid) : Kept (fun k => B k ∨ k = fid) s1 := by
-  obtain ⟨⟨k1, k2, k3⟩, hr, hB⟩ := h
-  refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩
+    (hb : DecState.busy s1 = (DecState.busy s).insert fid) : Kept desc (fun k => B k ∨ k = fid) s1 := by
+  obtain ⟨⟨k1, k2, k3⟩, hr, hB, hs⟩ := h
+  refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_, by unfold Src; rw [hd]; exact hs⟩
   · rw [hd, hi]; exact k1
   · rw [hd, hi]; exact k2
   · intro k hk
@@ -172,15 +202,16 @@ private theorem kept_busy {B : String → Prop} {s s1 : DecState} {fid : String}
 
 /-- `getDef`'s push of a Definition keyed `fid`, a name without an index entry, keeps `Keys` and `Rets`, and the names
 of `B` busy when none of them is `fid`. -/
-private theorem kept_push {B : String → Prop} {s s' : DecState} {defn : Defn} {fid : String} (hk : Keys s)
-    (hr : Rets s) (hnone : (DecState.index s)[fid]? = none)
+private theorem kept_push {desc : Desc} {B : String → Prop} {s s' : DecState} {defn : Defn} {fid : String}
+    (hk : Keys s) (hr : Rets s) (hs : Src desc s)
+    (hn : defn.prim = true → ∃ d, (Desc.ddefs desc)[defn.key]? = some d ∧ formOf d = "primitive") (hnone : (DecState.index s)[fid]? = none)
     (hsub : ∀ k, B k → (DecState.busy s).contains k = true ∧ k ≠ fid) (hkey : defn.key = fid)
     (hret : defn.prim = false → defn.body.retType = defn.ret)
     (hd : DecState.defs s' = (DecState.defs s).push defn)
     (hi : DecState.index s' = (DecState.index s).insert fid (DecState.defs s).size)
-    (hb : DecState.busy s' = (DecState.busy s).erase fid) : Kept B s' := by
+    (hb : DecState.busy s' = (DecState.busy s).erase fid) : Kept desc B s' := by
   obtain ⟨k1, k2, k3⟩ := hk
-  refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩
+  refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_, src_push hs hd hn⟩
   · intro k v hv
     rw [hi, Std.HashMap.getElem?_insert] at hv
     rw [hd, Array.size_push]
@@ -238,49 +269,55 @@ private theorem none_of {o : Option Nat} (h : ∀ i, o = some i → False) : o =
   | some i => exact (h i rfl).elim
 
 /-- `getDef`'s push of a primitive, in the words of `getDef`'s own conditions. -/
-private theorem push_prim {B : String → Prop} {s s' : DecState} {fid : String} {o : Option Nat} {defn : Defn}
-    (h : Kept B s) (ho : (DecState.index s)[fid]? = o) (hno : ∀ i, o = some i → False)
-    (hb : ¬ (DecState.busy s).contains fid = true) (hkey : defn.key = fid) (hprim : defn.prim = true)
-    (hd : DecState.defs s' = (DecState.defs s).push defn)
+private theorem push_prim {desc : Desc} {B : String → Prop} {s s' : DecState} {fid : String} {o : Option Nat}
+    {defn : Defn} {d : Lean.Json}
+    (h : Kept desc B s) (ho : (DecState.index s)[fid]? = o) (hno : ∀ i, o = some i → False)
+    (hb : ¬ (DecState.busy s).contains fid = true) (hdd : (Desc.ddefs desc)[fid]? = some d)
+    (hf : ((d.getObjValAs? String "form").toOption.getD "" == "primitive") = true) (hkey : defn.key = fid)
+    (hprim : defn.prim = true) (hd : DecState.defs s' = (DecState.defs s).push defn)
     (hi : DecState.index s' = (DecState.index s).insert fid (DecState.defs s).size)
-    (hb' : DecState.busy s' = (DecState.busy s).erase fid) : Kept B s' :=
-  kept_push h.1 h.2.1 (ho.trans (none_of hno)) (fun k hk => ⟨h.2.2 k hk, fun e => hb (e ▸ h.2.2 k hk)⟩) hkey
+    (hb' : DecState.busy s' = (DecState.busy s).erase fid) : Kept desc B s' :=
+  kept_push h.1 h.2.1 h.2.2.2 (fun _ => ⟨d, by rw [hkey]; exact hdd, eq_of_beq hf⟩) (ho.trans (none_of hno))
+    (fun k hk => ⟨h.2.2.1 k hk, fun e => hb (e ▸ h.2.2.1 k hk)⟩) hkey
     (fun hp => absurd (hprim.symm.trans hp) (by decide)) hd hi hb'
 
 /-- `composite`'s mark, in the words of `getDef`'s own conditions. -/
-private theorem busy_pre {B : String → Prop} {s : DecState} {fid : String} {o : Option Nat}
-    (h : Kept B s) (ho : (DecState.index s)[fid]? = o) (hno : ∀ i, o = some i → False) (s1 : DecState)
+private theorem busy_pre {desc : Desc} {B : String → Prop} {s : DecState} {fid : String} {o : Option Nat}
+    (h : Kept desc B s) (ho : (DecState.index s)[fid]? = o) (hno : ∀ i, o = some i → False) (s1 : DecState)
     (hd : DecState.defs s1 = DecState.defs s) (hi : DecState.index s1 = DecState.index s)
-    (hb : DecState.busy s1 = (DecState.busy s).insert fid) : Kept (fun k => B k ∨ k = fid) s1 :=
+    (hb : DecState.busy s1 = (DecState.busy s).insert fid) : Kept desc (fun k => B k ∨ k = fid) s1 :=
   kept_busy h (ho.trans (none_of hno)) hd hi hb
 
 /-- `getDef`'s push of what `composite` returned: `fid` is still busy there, so it has no index entry. -/
-private theorem push_comp {B : String → Prop} {s0 s s' : DecState} {fid : String} {defn : Defn}
-    (h0 : Kept B s0) (hb : ¬ (DecState.busy s0).contains fid = true)
-    (h : Kept (fun k => B k ∨ k = fid) s ∧ defn.key = fid ∧ defn.prim = false ∧ defn.body.retType = defn.ret)
+private theorem push_comp {desc : Desc} {B : String → Prop} {s0 s s' : DecState} {fid : String} {defn : Defn}
+    (h0 : Kept desc B s0) (hb : ¬ (DecState.busy s0).contains fid = true)
+    (h : Kept desc (fun k => B k ∨ k = fid) s ∧ defn.key = fid ∧ defn.prim = false ∧
+      defn.body.retType = defn.ret)
     (hd : DecState.defs s' = (DecState.defs s).push defn)
     (hi : DecState.index s' = (DecState.index s).insert fid (DecState.defs s).size)
-    (hb' : DecState.busy s' = (DecState.busy s).erase fid) : Kept B s' :=
-  kept_push h.1.1 h.1.2.1 (h.1.1.2.2 fid (h.1.2.2 fid (Or.inr rfl)))
-    (fun k hk => ⟨h.1.2.2 k (Or.inl hk), fun e => hb (e ▸ h0.2.2 k hk)⟩) h.2.1 (fun _ => h.2.2.2) hd hi hb'
+    (hb' : DecState.busy s' = (DecState.busy s).erase fid) : Kept desc B s' :=
+  kept_push h.1.1 h.1.2.1 h.1.2.2.2 (fun hp => absurd (h.2.2.1.symm.trans hp) (by decide))
+    (h.1.1.2.2 fid (h.1.2.2.1 fid (Or.inr rfl)))
+    (fun k hk => ⟨h.1.2.2.1 k (Or.inl hk), fun e => hb (e ▸ h0.2.2.1 k hk)⟩) h.2.1 (fun _ => h.2.2.2) hd hi hb'
 
 /-- `composite` at fuel `n` keeps `Kept`: from a state that has it once `fid` is busy, it ends in a state that has it,
 and what it returns is a composite keyed `fid` that returns its body's return type. -/
 def CompositeKept (n : Nat) : Prop :=
   ∀ (desc : Desc) (fid : String) (d : Lean.Json) (form id : String) (B : String → Prop),
     ⦃fun s => ⌜∀ s1, DecState.defs s1 = DecState.defs s → DecState.index s1 = DecState.index s →
-        DecState.busy s1 = (DecState.busy s).insert fid → Kept B s1⌝⦄
+        DecState.busy s1 = (DecState.busy s).insert fid → Kept desc B s1⌝⦄
       (composite n desc fid d form id : DM Defn)
-    ⦃⇓? defn s => ⌜Kept B s ∧ defn.key = fid ∧ defn.prim = false ∧ defn.body.retType = defn.ret⌝⦄
+    ⦃⇓? defn s => ⌜Kept desc B s ∧ defn.key = fid ∧ defn.prim = false ∧ defn.body.retType = defn.ret⌝⦄
 
 /-- **`getDef` keeps `Kept`** when `composite` does one fuel lower. -/
 theorem getDef_step (n : Nat) (hc : CompositeKept n) (desc : Desc) (fid : String) (B : String → Prop) :
-    ⦃fun s => ⌜Kept B s⌝⦄ (getDef (n + 1) desc fid : DM Nat) ⦃⇓? _ s => ⌜Kept B s⌝⦄ := by
+    ⦃fun s => ⌜Kept desc B s⌝⦄ (getDef (n + 1) desc fid : DM Nat) ⦃⇓? _ s => ⌜Kept desc B s⌝⦄ := by
   have hc' := fun desc d form id => hc desc fid d form id (fun k => B k ∨ k = fid)
   unfold getDef
   mvcgen [hc', liftV_spec, throw_spec, -Spec.throw_Except]
   all_goals first
-    | exact push_prim (by assumption) (by assumption) (by assumption) (by assumption) rfl rfl rfl rfl rfl
+    | exact push_prim (by assumption) (by assumption) (by assumption) (by assumption) (by assumption)
+        (by assumption) rfl rfl rfl rfl rfl
     | exact busy_pre (by assumption) (by assumption) (by assumption)
     | exact push_comp (by assumption) (by assumption) (by assumption) rfl rfl rfl
 
@@ -288,9 +325,9 @@ theorem getDef_step (n : Nat) (hc : CompositeKept n) (desc : Desc) (fid : String
 `CompositeKept` says. -/
 theorem kept_fuel (n : Nat) :
     (∀ (desc : Desc) (fid : String) (B : String → Prop),
-      ⦃fun s => ⌜Kept B s⌝⦄ (getDef n desc fid : DM Nat) ⦃⇓? _ s => ⌜Kept B s⌝⦄) ∧
+      ⦃fun s => ⌜Kept desc B s⌝⦄ (getDef n desc fid : DM Nat) ⦃⇓? _ s => ⌜Kept desc B s⌝⦄) ∧
     (∀ (desc : Desc) (v : Lean.Json) (B : String → Prop),
-      ⦃fun s => ⌜Kept B s⌝⦄ (staticFns n desc v : DM Unit) ⦃⇓? _ s => ⌜Kept B s⌝⦄) ∧
+      ⦃fun s => ⌜Kept desc B s⌝⦄ (staticFns n desc v : DM Unit) ⦃⇓? _ s => ⌜Kept desc B s⌝⦄) ∧
     CompositeKept n := by
   induction n with
   | zero =>
@@ -304,16 +341,28 @@ theorem kept_fuel (n : Nat) :
   | succ n ih =>
     obtain ⟨hg, hs, hc⟩ := ih
     exact ⟨fun desc fid B => getDef_step n hc desc fid B,
-      fun desc v B => staticFns_step n (Kept B) desc (fun g => hg desc g B) (fun v => hs desc v B) v,
-      fun desc fid d form id B => composite_step n (Kept B) desc (kept_congr B) (fun g => hg desc g B)
+      fun desc v B => staticFns_step n (Kept desc B) desc (fun g => hg desc g B) (fun v => hs desc v B) v,
+      fun desc fid d form id B => composite_step n (Kept desc B) desc (kept_congr desc B) (fun g => hg desc g B)
         (fun v => hs desc v B) fid d form id⟩
+
+/-- **`getDef` returns the place the index gives its key.** -/
+theorem getDef_idx (n : Nat) (hc : CompositeKept n) (desc : Desc) (fid : String) (B : String → Prop) :
+    ⦃fun s => ⌜Kept desc B s⌝⦄ (getDef (n + 1) desc fid : DM Nat)
+    ⦃⇓? r s => ⌜(DecState.index s)[fid]? = some r⌝⦄ := by
+  have hc' := fun desc d form id => hc desc fid d form id (fun k => B k ∨ k = fid)
+  unfold getDef
+  mvcgen [hc', liftV_spec, throw_spec, -Spec.throw_Except]
+  all_goals first
+    | simp
+    | exact busy_pre (by assumption) (by assumption) (by assumption)
+    | assumption
 
 /-! ## What `decode` returns -/
 
 /-- `decode`'s `go` keeps `Kept`, with no name busy: the root, then the functions the program record names, each by
 `getDef`. -/
 theorem go_kept (desc : Desc) (rootId programFn : String) :
-    ⦃fun s => ⌜Kept (fun _ => False) s⌝⦄
+    ⦃fun s => ⌜Kept desc (fun _ => False) s⌝⦄
       (do
         let r ← getDef Flock.Steps.FUEL desc rootId
         forIn (recordFunctionIds programFn) PUnit.unit fun f __s =>
@@ -322,63 +371,49 @@ theorem go_kept (desc : Desc) (rootId programFn : String) :
               pure (ForInStep.yield PUnit.unit)
             else pure (ForInStep.yield PUnit.unit)
         pure r : DM Nat)
-    ⦃⇓? _ s => ⌜Kept (fun _ => False) s⌝⦄ := by
+    ⦃⇓? _ s => ⌜Kept desc (fun _ => False) s⌝⦄ := by
   have hg := fun f => (kept_fuel Flock.Steps.FUEL).1 desc f (fun _ => False)
   mvcgen [hg, discard_eq] invariants
-    · ⇓? _ s => ⌜Kept (fun _ => False) s⌝
+    · ⇓? _ s => ⌜Kept desc (fun _ => False) s⌝
 
 /-- `decodeAll`, the decoding of the primitives and the Boolean map's bodies, keeps `Kept` with no name busy. -/
 theorem decodeAll_kept (desc : Desc) (fs : Array String) :
-    ⦃fun s => ⌜Kept (fun _ => False) s⌝⦄ (decodeAll desc fs : DM Unit) ⦃⇓? _ s => ⌜Kept (fun _ => False) s⌝⦄ := by
+    ⦃fun s => ⌜Kept desc (fun _ => False) s⌝⦄ (decodeAll desc fs : DM Unit) ⦃⇓? _ s => ⌜Kept desc (fun _ => False) s⌝⦄ := by
   have hg := fun f => (kept_fuel Flock.Steps.FUEL).1 desc f (fun _ => False)
   unfold decodeAll
   mvcgen [hg, discard_eq] invariants
-    · ⇓? _ s => ⌜Kept (fun _ => False) s⌝
+    · ⇓? _ s => ⌜Kept desc (fun _ => False) s⌝
 
 /-- `decodeBodies`, the decoding and checking of the Boolean map's bodies, keeps `Kept` with no name busy. -/
 theorem decodeBodies_kept (desc : Desc) (rootKey : String) (pairs : Array (String × String)) :
-    ⦃fun s => ⌜Kept (fun _ => False) s⌝⦄ (decodeBodies desc rootKey pairs : DM Unit)
-    ⦃⇓? _ s => ⌜Kept (fun _ => False) s⌝⦄ := by
+    ⦃fun s => ⌜Kept desc (fun _ => False) s⌝⦄ (decodeBodies desc rootKey pairs : DM Unit)
+    ⦃⇓? _ s => ⌜Kept desc (fun _ => False) s⌝⦄ := by
   have hg := fun f => (kept_fuel Flock.Steps.FUEL).1 desc f (fun _ => False)
   unfold decodeBodies
   mvcgen [hg, liftV_spec, throw_spec, -Spec.throw_Except] invariants
-    · ⇓? _ s => ⌜Kept (fun _ => False) s⌝
+    · ⇓? _ s => ⌜Kept desc (fun _ => False) s⌝
 
 /-- **What `decode` returns**: the Definitions and the index of a decoder state that has `Kept`. -/
 theorem decode_kept (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
-    ∃ st, P.defs = DecState.defs st ∧ P.index = DecState.index st ∧ Kept (fun _ => False) st := by
-  obtain ⟨_, _, _, _, _, _, _, _, _, st2, _, -, hgo, hd0, hi0, -, -, -, hall, -, hbod, hd, hi, -, -⟩ :=
+    ∃ desc st, P.defs = DecState.defs st ∧ P.index = DecState.index st ∧ Kept desc (fun _ => False) st := by
+  obtain ⟨_, desc, _, _, _, _, _, _, _, st2, _, -, hgo, hd0, hi0, -, -, -, hall, -, hbod, hd, hi, -, -⟩ :=
     BodiesOk.decode_steps bytes P h
-  refine ⟨st2, hd, hi, of_triple (decodeBodies_kept _ _ _) hbod
-    (of_triple (decodeAll_kept _ _) hall (of_triple (go_kept _ _ _) hgo ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩))⟩
-  · intro k v h
-    rw [hi0] at h
-    exact absurd h (by simp)
-  · intro i h
-    rw [hd0] at h
-    exact absurd h (Nat.not_lt_zero i)
-  · intro k h
-    rw [hi0]
-    simp
-  · intro i h
-    rw [hd0] at h
-    exact absurd h (Nat.not_lt_zero i)
-  · intro k h
-    exact h.elim
+  exact ⟨desc, st2, hd, hi, of_triple (decodeBodies_kept _ _ _) hbod
+    (of_triple (decodeAll_kept _ _) hall (of_triple (go_kept _ _ _) hgo (kept_empty desc hd0 hi0)))⟩
 
 /-- **The keys of a decoded Program**: its index sends a key to the place of the Definition that has it, and each
 Definition's key to its own place. -/
 theorem decode_keys (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     (∀ k v, P.index[k]? = some v → v < P.defs.size ∧ (P.defs[v]!).key = k) ∧
       ∀ i < P.defs.size, P.index[(P.defs[i]!).key]? = some i := by
-  obtain ⟨st, hd, hi, hk, -, -⟩ := decode_kept bytes P h
+  obtain ⟨_, st, hd, hi, hk, -⟩ := decode_kept bytes P h
   rw [hd, hi]
   exact ⟨hk.1, hk.2.1⟩
 
 /-- **A composite Definition of a decoded Program returns its body's return type.** -/
 theorem decode_ret (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     ∀ d < P.defs.size, (P.defs[d]!).prim = false → (P.defs[d]!).body.retType = (P.defs[d]!).ret := by
-  obtain ⟨st, hd, -, -, hr, -⟩ := decode_kept bytes P h
+  obtain ⟨_, st, hd, -, -, hr, -⟩ := decode_kept bytes P h
   rw [hd]
   exact hr
 
