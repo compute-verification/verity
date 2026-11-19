@@ -5,6 +5,13 @@ from __future__ import annotations
 from typing import Any, Callable
 
 
+def handed_packages() -> tuple[str, ...]:
+    """The modules whose circuits circuit-check is handed and names none of: PoUW's four Pearl-C tile modules, whose sidecars
+    hand their circuits as the catalog's do."""
+    pouw = "verity.protocols.resource_accounting.compute.pouw.prover.circuit"
+    return tuple(f"{pouw}.pearl_c_{m}" for m in ("call", "forming", "noise", "tile"))
+
+
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """TileRead at a 2 x 2 tile of K = 160 on the H100's atom (two promotion windows, the last short) and a 1 x 2 tile of one
     whole window on sm_120's, each reaching its cell and chain; the unscale at 2 x 2 with and without the bias; each word

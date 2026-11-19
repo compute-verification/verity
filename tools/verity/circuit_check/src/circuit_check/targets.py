@@ -342,8 +342,8 @@ HOOKS = {
     "made_on_demand": "the Boolean version of a word Definition made on demand, by its id, or None",
     "boolean_version": "the Boolean version of a word Definition, and the error it raises for one that has none",
     "lift_composite": "the lift of a registered composite Definition",
-    "handed_packages": "the packages and modules, dotted, whose circuits circuit-check is handed and names none of "
-                       "(`tests/test_handed_names.py`)",
+    "handed_packages": "the packages and modules, dotted, whose circuits circuit-check is handed and names none of, the "
+                       "union of every sidecar's that defines it (`tests/test_handed_names.py`)",
 }
 _HANDS: dict[str, Any] = {}
 #: the hooks a catalog may hand none of: then the table is empty, and every check that would read it fails or warns by name

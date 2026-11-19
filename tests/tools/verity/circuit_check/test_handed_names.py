@@ -1,8 +1,8 @@
 """circuit-check's package (its code and its data) names no circuit of the catalog it is handed and imports no integration.
 
-The handed packages are the packages and modules the catalog's sidecar hands by name (`targets.HOOKS`' ``handed_packages``):
-the served Definitions' package and PoUW's four Pearl-C tile modules.  A name of the handed catalog, in any file of the package
-and in any file's path, is
+The handed packages are the packages and modules the sidecars that define `targets.HOOKS`' ``handed_packages`` hand by
+name: the served Definitions' package (the catalog's) and PoUW's four Pearl-C tile modules (its tile sidecar's).  A name of
+the handed catalog, in any file of the package and in any file's path, is
 
 - the id of a Definition the registries register whose module (`sidecars.owner`) is in a handed package, as a whole word
   (``Foo_v1`` in ``Foo_v1{N=4}`` too);
@@ -39,9 +39,10 @@ class Found(NamedTuple):
 
 
 def handed_packages() -> tuple[str, ...]:
-    """The packages and modules the catalog's sidecar hands by name, refused when it hands none or a top level."""
-    pkgs = tuple(TG._handed("handed_packages")())
-    assert pkgs and all("." in p for p in pkgs), f"the catalog's sidecar hands {pkgs}: a package below a top level each"
+    """The packages and modules every sidecar that defines ``handed_packages`` hands by name, refused when they hand none or
+    a top level."""
+    pkgs = tuple(p for _mod, side in SC.handing("handed_packages") for p in side.handed_packages())
+    assert pkgs and all("." in p for p in pkgs), f"the sidecars hand {pkgs}: a package below a top level each"
     return pkgs
 
 
