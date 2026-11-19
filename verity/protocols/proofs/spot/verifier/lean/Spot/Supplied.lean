@@ -3,6 +3,7 @@ module
 public import Circuits.Program
 public import Flock.ZkServer
 public import Spot.Registered
+meta import Circuits.Program
 
 /-!
 Supplied values (`one_stage/registered.py`'s `supplied_root`): a registered value the verifier fills itself, from what it
@@ -388,15 +389,15 @@ def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coi
       | none => throw "released is an object of a place by supplied function"
     | _ => throw "released is an object of a place by supplied function"
   let reads := rows.foldl (fun acc (_, rs) => rs.foldl (fun acc r => r.foldl (fun acc (k, n) =>
-      let at? := if k == "value" || k == "port" then some records
+      let place? := if k == "value" || k == "port" then some records
         else if k == "position" && records > 0 then some (records - 1) else none
-      match at? with
+      match place? with
       | none => acc
-      | some at =>
+      | some place =>
         let name := if k == "position" then "log" else n
         match acc.find? (·.1 == name) with
-        | some (_, b) => (acc.filter (·.1 != name)).push (name, max at b)
-        | none => acc.push (name, at)) acc) acc) (#[] : Array (String × Nat))
+        | some (_, b) => (acc.filter (·.1 != name)).push (name, max place b)
+        | none => acc.push (name, place)) acc) acc) (#[] : Array (String × Nat))
   let fns := (marked.foldl (fun l (_, m) => if coins.any (·.1 == m.fn) && !l.contains m.fn then l ++ [m.fn] else l)
     ([] : List String)).mergeSort (· ≤ ·)
   for f in fns do
