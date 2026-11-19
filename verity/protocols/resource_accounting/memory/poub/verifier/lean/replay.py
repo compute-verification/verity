@@ -149,7 +149,9 @@ def registration_of(reg: dict) -> dict:
 
 
 def _synthetic(label: bytes, n: int) -> str:
-    return hashlib.sha512(label).digest()[:n].hex()
+    if n <= 64:
+        return hashlib.sha512(label).digest()[:n].hex()
+    return b"".join(hashlib.sha512(label + i.to_bytes(4, "big")).digest() for i in range(-(-n // 64)))[:n].hex()
 
 
 def pace_json(session: dict) -> dict | None:
@@ -222,7 +224,9 @@ def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
     start = seen[0]["released_ns"]
     events = [{"kind": "start", "now": start}] + [e for *_, e in sorted(timed, key=lambda x: x[:4])]
     case = {"registration": registration_of(reg), "not_before_ns": start, "append_coins": [],
-            "coins": [_synthetic(b"replay coin %d" % j, 32) for j in range(W + coins.openings_coins(W, g))],
+            "coins": [_synthetic(b"replay coin %d" % j, 32) for j in range(W)]
+            + [_synthetic(b"replay sample %d" % d, coins.RAW_BYTES * coins.sample_coins(session["samples"], g))
+               for d in range(coins.draws(W, g))],
             "events": events,
             "params": {"deadline_ns": session["allowance_ns"], "deferred": False, "lifetime": lifetime,
                        "min_passes": 1, "pace": pace_json(session), "samples": session["samples"],
@@ -258,8 +262,8 @@ def held(session: dict, verdict: dict) -> tuple[bool, str]:
         return False, f"replayed {r['failure']} at window {r['window']}, where the record has {recorded(session)}"
     if verdict["drawn"] != want:
         return False, f"drew {verdict['drawn']}, the record {want}"
-    if session.get("accepted") and len(want) != coins.openings_coins(W, g):
-        return False, f"an accepted session with {len(want)} of {coins.openings_coins(W, g)} samples taken"
+    if session.get("accepted") and len(want) != coins.draws(W, g):
+        return False, f"an accepted session with {len(want)} of {coins.draws(W, g)} samples taken"
     if session.get("accepted"):
         return True, "every draw drawn, as many as recorded"
     return True, "no rejection in what the record keeps; its failure is in what it doesn't"

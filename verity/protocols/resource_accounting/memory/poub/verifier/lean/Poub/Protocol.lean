@@ -18,14 +18,14 @@ No composite lists it: onsite's bandwidth component is `Poub.P2Protocol.protocol
 (`Difftest.sessionFn`):
 
 * params `{"not_before_ns": n, "params": {...}}`: the session's parameters (`Difftest.sessionOf`'s, its windows a
-  sample's openings coin `groups_per_coin` g among them) and the verifier's clock floor. The check refuses what no
+  sample's sample's coins `groups_per_coin` g among them) and the verifier's clock floor. The check refuses what no
   property of the code covers (`sessionOf`): a session at one window in flight (the pace's `in_flight` 1, `Flight`), so
   what it replays is `Shared.run g` (`Session.run` at g = 1), which `Properties.Poub.Shared` and the memory line
   are stated on;
 * the commitment: the registration (`Difftest.registrationOf`: node, blocks, payload root, codec seed, codec, receipt
   kind, `bind`, layout, rows), which the prover's payload root fixed before any coin; its digest `Registration.digest`;
 * the evidence `{"append_coins": [hex, …], "coins": [hex, …], "events": [...]}`: the verifier's log of the session, its
-  coins (W challenges and W openings coins, then the append coins in the order sampled) and every event it took with
+  coins (W challenges and ⌈W/g⌉ samples' coins, each whole, then the append coins in the order sampled) and every event it took with
   its clock's reading. The log is the verifier's own, as PoUS's `trusted` keys are: it never comes from the prover;
 * the check: the session replayed through the verifier. It rejects with the failure that rejected the session, or
   when the parameters or the log don't decode, as the difftest's port refuses; it is undecided while the session runs
@@ -88,7 +88,7 @@ def decodeEvidence (b : ByteArray) : V Evidence := do
   keys j ["append_coins", "coins", "events"] "evidence"
   pure ⟨← J.get j "append_coins" "evidence", ← J.get j "coins" "evidence", ← J.arr j "events" "evidence"⟩
 
-/-- The session the log replays: its parameters, its windows a sample's openings coin (`groups_per_coin` g,
+/-- The session the log replays: its parameters, its windows a sample's coins (`groups_per_coin` g,
 `Difftest.perCoinOf`), its coins, append coins and clock floor as `Difftest.sessionOf` reads them, and its events as
 `Difftest.eventOf` reads them. It refuses the one form no property of the code covers, one window in flight (the pace's
 `in_flight` 1, `Flight`), the one where `Flight.run f g` is not `Shared.run g` (`Flight.run_two`). -/
@@ -125,15 +125,15 @@ structure Public where
 
 def Public.toJson (p : Public) : Json := Json.mkObj [("eps", .str p.eps.toString), ("q_bytes", natJ p.qBytes)]
 
-/-- `⌈W/g⌉`: the openings coins of a session of `params.windows` windows sampled `g` a coin (`coins.openings_coins`), one
-a window at g ≤ 1, as `Properties.Poub.Line.Node.samples`. -/
-def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
+/-- `⌈W/g⌉`: the samples of a session of `params.windows` windows sampled `g` together (`coins.draws`), one a window
+at g ≤ 1, as `Properties.Poub.Line.Node.samples`. -/
+def draws (params : Session.Params) (g : Nat) : Nat :=
   if g ≤ 1 then params.windows else (params.windows + g - 1) / g
 
 /-- The error an accepted session's `q_bytes` holds at: `DELTA + ⌈W/g⌉·s/2^64`, the pooled bound's δ and at least the
 samples' rejection at the session's `samples` s a sample. -/
 def eps (params : Session.Params) (g : Nat) : Rat :=
-  DELTA + ((openingsCoins params g * params.samples : Nat) : Rat) / (2 ^ 64 : Nat)
+  DELTA + ((draws params g * params.samples : Nat) : Rat) / (2 ^ 64 : Nat)
 
 /-- What an accepted session certifies (module docstring), with its profile. -/
 def certify (params : Session.Params) (g : Nat) (sm : Session.Summary) : Public × Json :=
