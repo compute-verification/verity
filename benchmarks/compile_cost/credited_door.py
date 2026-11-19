@@ -185,7 +185,7 @@ def reads(program, partition, bits: dict[str, list[int]], roots: dict[str, str],
 def stage(a) -> int:
     k, tm, tn, n = map(int, a.size.split(","))
     from verity.circuits import restrict as R
-    from verity.circuits.codec import descriptor_chunks, descriptor_id
+    from verity.circuits.codec import descriptor_chunks
     from verity.circuits.evaluation import evaluate_bits
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
     from verity_flock import circuit as FC
@@ -209,7 +209,7 @@ def stage(a) -> int:
     program, part = WK.credited(SCHEME, k, tm, tn, n)
     c = b"".join(descriptor_chunks(program))
     core = WK.credited_product(SCHEME, k, tm, tn, n)
-    key = descriptor_id(core)
+    key = part["query"]["params"]["template"]
     door_draw = {"units": [index]}
     units = OC.block(c, part, index)
     phase("program", descriptor_bytes=len(c), block_units=units)
@@ -302,8 +302,8 @@ def door(a) -> int:
     for the calls."""
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.circuits import restrict as R
     from verity.protocols.resource_accounting.compute.pouw import scheme as PS
-    from verity_vllm.program.predict import window_cut as WK
     os.environ[PF.TMPL_SWITCH] = "1"
     PF.executable = lambda: Path(a.lean)
     PF.lower_executable = lambda: Path(a.lower)
@@ -322,29 +322,44 @@ def door(a) -> int:
     k, tm, tn, n = map(int, a.size.split(","))
     scheme, passes = run(k, tm, tn, n)
     blocks = PS.credited_blocks(scheme, passes)
-    tr = WK.credited_product(SCHEME, k, tm, tn, n).bindings["TR"]
+    key = partition["query"]["params"]["template"]
+    tr = R.program(program).defs[key].bindings["TR"]
 
-    def inputs(i: int):
-        return PS.drawn_inputs(passes, blocks[i], tr)
+    def inputs(tr_: int = tr, **record):
+        """`drawn_inputs` on the run's records, the drawn block's record changed by ``record`` (a record that
+        declares a kept width, an excluded or a voluntary row the core can't cover)."""
+        def given(i: int):
+            b = blocks[i]
+            p = [list(x) for x in passes]
+            p[b.id[0]][b.record] = dataclasses.replace(p[b.id[0]][b.record], **record)
+            return PS.drawn_inputs(p, b, tr_)
+        return given
 
-    def call(tag: str, reads_name: str, tr_: int | None = None) -> None:
+    def call(tag: str, reads_name: str, case: str, given) -> dict:
         d = a.out / tag
         t0 = time.perf_counter()
-        given = inputs if tr_ is None else (lambda i: PS.drawn_inputs(passes, blocks[i], tr_))
-        found, refusal = PF.verify(PF.Proof(d / "circuit.txt", d / "pub-1.bin", tuple(map(Path, a.session[tag]))),
+        found, refusal = PF.verify(PF.Proof(d / "circuit.txt", d / "pub-1.bin", tuple(map(Path, a.session.get(tag, ())))),
                                    program=program, partition=partition, draw=draw_,
                                    registered=json.loads((d / reads_name).read_text()), inputs=given)
-        print("DOOR " + json.dumps({"proof": tag, "registered": reads_name, "tr": tr if tr_ is None else tr_,
-                                    "wall_s": round(time.perf_counter() - t0, 2), "peak_gib": _peak_gib(),
-                                    "refusal": refusal, "findings": [dataclasses.asdict(f) for f in found or []]},
-                                   default=str), flush=True)
+        rec = {"case": case, "proof": tag, "registered": reads_name, "wall_s": round(time.perf_counter() - t0, 2),
+               "peak_gib": _peak_gib(), "refusal": refusal, "findings": [dataclasses.asdict(f) for f in found or []]}
+        print("DOOR " + json.dumps(rec, default=str), flush=True)
+        return rec
 
-    call("honest", "registered.json")
-    call("dishonest", "registered.json")
+    honest = call("honest", "registered.json", "honest", inputs())
+    call("dishonest", "registered.json", "dishonest", inputs())
     for name in ("registered-wrong.json", "registered-wrong-out.json", "registered-named-out.json",
                  "registered-no-out.json"):
-        call("honest", name)
-    call("honest", "registered.json", tr_=tr + 1)
+        call("honest", name, name.removesuffix(".json"), inputs())
+    call("honest", "registered.json", "real-rows", inputs(tr + 1))
+    call("honest", "registered.json", "kept-width", inputs(k_kept=k - 1))
+    call("honest", "registered.json", "excluded-row", inputs(excluded_a=tuple(blocks[0].rows)))
+    call("honest", "registered.json", "voluntary-row", inputs(voluntary_a=tuple(blocks[0].rows)))
+    if honest["refusal"] is None and honest["findings"] and all(f["accepted"] for f in honest["findings"]):
+        print(f"ACCEPT the door accepts the credited block's core alone ({key}), at the test instance K,TM,TN,N = "
+              f"{a.size} and one level (the drawn block's own proof, no proof composed over it); the accept binds the core's "
+              f"ports to their registered rows and nothing above them: not to the tile's leaf in the run's "
+              f"commitments, nor to the transcript root", flush=True)
     return 0
 
 

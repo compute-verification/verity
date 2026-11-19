@@ -5,8 +5,11 @@
 # verifier's draw, every row registered; each is placed (flock-tmpl-unit), its statement built, proved over a live
 # loopback session (`flock-circuit serve --zk`, the Rust verifier) and its session verified by Lean (`verity-verify-proof
 # verify --zk --registered`, the honest one also on registered files naming another unit's root, a wrong output root, an
-# output row registered under a name of the caller's, and no output row o1); `credited_door.py door` then verifies them
-# through `proofs.verify`. SIZE=K,TM,TN,N (256,1,1,1).
+# output row registered under a name of the caller's, and no output row o1), and two forged proofs Lean must reject: the
+# honest session against the dishonest statement, whose y differs (forged-y), and the honest statement against a copy of
+# the honest session with one byte of its largest proof file flipped (forged-byte); `credited_door.py door` then
+# verifies them through `proofs.verify`, with the drawn block's record refused by `drawn_inputs` for each rule it
+# checks. SIZE=K,TM,TN,N (256,1,1,1).
 # research run --on auto --cwd source --wait --mem-gb 64 --cpus 16 --timeout 180m -- bash benchmarks/compile_cost/credited_door.sh
 set -uxo pipefail
 SIZE=${SIZE:-256,1,1,1}
@@ -101,8 +104,19 @@ for v in honest dishonest; do
       --partition $D/partition.json --program $D/program.json --registered $D/$r.json --session $SESS > $Ov/lean-$r.log 2>&1
     echo "$v $r lean rc $?"; cat $O/time-lean-$v-$r.txt; grep -h '^VERDICT' $Ov/lean-$r.log | head -1 | cut -c1-1500; tail -3 $Ov/lean-$r.log | cut -c1-600
   done
+  if [ $v = honest ]; then
+    X=$S/dishonest; FS=$S/forged-session; rm -rf $FS; cp -r $SESS $FS
+    FB=$(ls -S $FS/*.bin | head -1)
+    python3 -c 'import sys; p = sys.argv[1]; b = bytearray(open(p, "rb").read()); i = len(b) // 2; print(f"FORGED {p.rsplit(chr(47), 1)[-1]} byte {i} of {len(b)}: {b[i]:#04x} -> {b[i] ^ 1:#04x}"); b[i] ^= 1; open(p, "wb").write(b)' $FB
+    for f in forged-y forged-byte; do
+      if [ $f = forged-y ]; then P=$X; E=$SESS; else P=$D; E=$FS; fi
+      timed lean-$f $LEAN_BIN verify --zk --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $P/pub-$N.bin --tables $P/tables \
+        --partition $D/partition.json --program $D/program.json --registered $P/registered.json --session $E > $Ov/lean-$f.log 2>&1
+      echo "$f lean rc $?"; cat $O/time-lean-$f.txt; grep -h '^VERDICT' $Ov/lean-$f.log | head -1 | cut -c1-1500; tail -3 $Ov/lean-$f.log | cut -c1-600
+    done
+  fi
   cp $D/partition.json $D/unit.tmpl $D/registered*.json $D/draw.json $Ov/; sha512sum $D/circuit.txt $D/unit.tmpl > $Ov/sha512.txt
 done
 ( unset PYTHONPATH; timed door $UV run -q python benchmarks/compile_cost/credited_door.py door --size $SIZE --lower $LOW_BIN --lean $LEAN_BIN --out $S "${DOOR[@]}" ) > $O/door.txt 2>&1
-echo "door rc $?"; cat $O/time-door.txt 2>/dev/null; grep -h '^DOOR' $O/door.txt | cut -c1-2500; tail -c 3000 $O/door.txt | grep -v '^DOOR'
+echo "door rc $?"; cat $O/time-door.txt 2>/dev/null; grep -h "^DOOR\|^ACCEPT" $O/door.txt | cut -c1-2500; tail -c 3000 $O/door.txt | grep -v "^DOOR\|^ACCEPT"
 ls -la $S/circuit.txt; [ $(stat -c %s $S/circuit.txt 2>/dev/null || echo 0) -lt 200000000 ] && cp $S/circuit.txt $O/; true
