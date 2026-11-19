@@ -3,6 +3,7 @@ Flock takes is refused by name, and the templates a block of one unit of which i
 stay in the circuit's population."""
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
@@ -15,7 +16,8 @@ from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
-from verity_vllm.program.predict.phi import phi_of_serve
+from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+from verity_vllm.program.predict.phi import served_phi
 from verity_vllm.program.predict.steps import Registered, compile_steps
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
@@ -59,11 +61,11 @@ def test_a_template_past_the_rows_flock_takes_is_refused_by_name(monkeypatch):
         WB.check_served(circuit)
 
 
-@pytest.mark.slow
 def test_a_served_window_at_the_class_of_record_passes_and_names_what_a_block_alone_cannot_prove():
     """The H100 smoke's window (4 requests of 27 prompt ids and 2 outputs, one window): passes, naming the small templates,
     each of whose units is in the population."""
-    reg = Registered.of(phi_of_serve(SERVE), 657832114885280620, ADV.CAP_BITS)
+    hf = json.loads(pinned_hf_config(SERVE["model"], SERVE["revision"]).read_text())
+    reg = Registered.of(served_phi(SERVE, hf), 657832114885280620, ADV.CAP_BITS)
     circuit = _window(reg, WC.WindowClass(4, 27, 2), [(27, 2, G2)] * 4,
                       [[(i, 0, 27) for i in range(4)], [(i, 27, 1) for i in range(4)]])
     named = WC.check_served(circuit)
