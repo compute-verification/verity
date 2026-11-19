@@ -62,32 +62,35 @@ def is_word_primitive(fn: Any) -> bool:
     return isinstance(fn, PrimitiveDefinition) and not is_input(fn) and not is_boolean(fn)
 
 
+def boolean_body(p: PrimitiveDefinition) -> Any:
+    """``p``'s one Boolean Definition by the registered lookup, bound, of ``p``'s bit signature (`boolean.bit_type`);
+    `LookupError` saying why where it has none."""
+    from .boolean import bit_type, is_boolean
+    if not _BODY_LOOKUP:
+        raise LookupError("no Boolean lookup is registered (`register_boolean_bodies`; the catalog's registers as it loads)")
+    body = _BODY_LOOKUP[0](p)
+    body = bind(body) if isinstance(body, CompositeDefinition) else body
+    params, ret = p.signature()
+    bparams, bret = body.signature()
+    if not is_boolean(body) or ([t for _, t in bparams], bret) != ([bit_type(t) for _, t in params], bit_type(ret)):
+        raise LookupError(f"{body.id} is not a Boolean Definition of its bit signature")
+    return body
+
+
 def boolean_map(program: Any) -> dict[str, Any]:
     """Each word primitive among ``program``'s definitions (`codec.definitions`), by descriptor id, to its one Boolean
-    Definition by the registered lookup, sorted by id. `NoBooleanBody` names each that has none, or whose body is not Boolean."""
-    from .boolean import bit_type, is_boolean
+    Definition by the registered lookup (`boolean_body`), sorted by id. `NoBooleanBody` names each that has none, or whose
+    body is not Boolean."""
     from .codec import definitions
-    from .defs import CompositeDefinition, bind
     out: dict[str, Any] = {}
     missing: dict[str, str] = {}
     for fid, p in definitions(program).items():
         if not is_word_primitive(p):
             continue
-        if not _BODY_LOOKUP:
-            missing[fid] = "no Boolean lookup is registered (`register_boolean_bodies`; the catalog's registers as it loads)"
-            continue
         try:
-            body = _BODY_LOOKUP[0](p)
+            out[fid] = boolean_body(p)
         except LookupError as e:
             missing[fid] = str(e)
-            continue
-        body = bind(body) if isinstance(body, CompositeDefinition) else body
-        params, ret = p.signature()
-        bparams, bret = body.signature()
-        if not is_boolean(body) or ([t for _, t in bparams], bret) != ([bit_type(t) for _, t in params], bit_type(ret)):
-            missing[fid] = f"{body.id} is not a Boolean Definition of its bit signature"
-            continue
-        out[fid] = body
     if missing:
         raise NoBooleanBody(missing)
     return dict(sorted(out.items()))
