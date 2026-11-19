@@ -149,14 +149,15 @@ def _lowered(window, cls: WindowClass = CLASS, placed=None, grain: Grain = GRAIN
 
 def test_a_served_window_is_its_requests_programs_and_no_padded_unit():
     """A served window's circuit is a Program a request of the request's own positions (prompt + outputs - 1), longest
-    first: WINDOW's requests of 5 and 4 positions hold exactly the units of each alone, template by template, 9 embeddings
-    against the class's 10, and its blocks are its 2 Programs over 5 steps. A prompt position before the last feeds its
-    prompt's id (`TokenFeed_v1{FIRST=True}`) and collects it with no select (`OutCollect_v1`); the entries
-    (`SlotEntry_v1{NP=1}`) are one allocation in slot order, each an inference entry at its slot's last step."""
+    first: WINDOW's requests of 5 and 4 positions hold exactly the units of each alone but its empty lane's collector and
+    entry, template by template, 9 embeddings against the class's 10, and its blocks are its 2 Programs over 5 steps. A
+    prompt position before the last feeds its prompt's id (`TokenFeed_v1{FIRST=True}`) and collects it with no select
+    (`OutCollect_v1`); the entries (`SlotEntry_v1{NP=1}`) are one allocation in slot order, each an inference entry at its
+    slot's last step."""
     low = _lowered(WINDOW)
     circuit = low.circuit
     alone = [_circuit(ONE), _circuit(SHORT)]
-    assert _counts(circuit) == _counts(alone[0]) + _counts(alone[1])
+    assert _counts(circuit) == _counts(alone[0]) + _counts(alone[1]) - Counter({SLOT_ENTRY: 2, OUT0: 2})
     assert ([p.positions for p in low.programs], low.requests) == ([5, 4], (0, 1))
     n = _counts(circuit)
     assert (n[EMB], n[FEED1], n[OUT0], n[OUT], n[COLLECT], n[SLOT_ENTRY]) == (9, 3 + 2, 2, 2 + 1, 2 + 2, 2)
@@ -235,13 +236,15 @@ def test_a_served_window_at_the_class_of_records_slots_reads_boundary_0_and_a_re
     """At the class of record's slots, 4 a boundary at buckets 0 and 16 (at TINY's bounds of 4 prompt ids and 2 outputs), a
     window of three requests at boundary 0 is 3 Programs, each reading its lane of the scan's state row before bucket 0 (the
     requests its lanes in request order) and its last position making its entry; their embeddings are their 11 positions,
-    and the scan state they read is the class's 32 rows. C's shape holds no request's bucket, so a request at bucket 16 is
-    refused by name, and eight requests at boundary 0 pass its 4 lanes."""
+    and the scan state they read is the class's 32 rows. Boundary 16, no request's, is one more scan unit in Program 0's
+    slot, and the five empty slots' entries are Program 0's. C's shape holds no request's bucket, so a request at bucket 16
+    is refused by name, and eight requests at boundary 0 pass its 4 lanes."""
     three = _lowered(THREE, SLOTS, [(0, 1), (0, 2), (0, 31)])
     assert [(p.anchor, p.lane, p.positions) for p in three.programs] == [(0, 0, 5), (0, 1, 3), (0, 2, 3)]
     assert three.requests == (0, 1, 2)
+    assert ([a for a, _ in three.scans], [(s, k) for s, k, _, _ in three.empty]) == ([16], [(1, 0), (3, 0), (5, 0), (6, 0), (7, 0)])
     n = _counts(three.circuit)
-    assert (n[SCAN.replace("NS=4548", "NS=9090")], n[EMB], three.circuit.blocks.slots, three.circuit.blocks.steps) == (3, 11, 3, 5)
+    assert (n[SCAN.replace("NS=4548", "NS=9090")], n[EMB], three.circuit.blocks.slots, three.circuit.blocks.steps) == (4, 11, 3, 5)
     assert three.circuit.registered.params[SS.SCAN_STATE] == 32 * 9090 and not three.circuit.ingress
     assert IF.input_count(three.circuit.description(), **held(three.circuit))["free"] == 0
     with pytest.raises(Unexpressible, match="request 1: anchored at bucket 16, and a served Program reads boundary 0's scan "
@@ -742,7 +745,7 @@ def _labels(circuit) -> dict[str, np.ndarray]:
     out = {tid: np.full((n, 2), -1, dtype=np.int64) for tid, n in circuit.units.items()}
     for e in circuit.blocks.inference:
         i, lab = np.arange(e.units, dtype=np.int64), np.zeros((e.units, 2), dtype=np.int64)
-        lab[:, 1] = e.step
+        lab[:, 0], lab[:, 1] = e.slot, e.step
         for r, a in zip(reversed(e.radix), reversed(e.axes)):
             if a != "-":
                 lab[:, int(a == "step")] += i % r
@@ -1127,14 +1130,16 @@ def test_what_the_class_doesnt_take_is_refused_by_name():
 def test_a_window_its_slots_dont_place_is_refused_by_name():
     """At a class of one slot at each of buckets 0 and 16 (a 32-bucket window), a window placed as the network attester's
     scan placed it, at boundary 0, is its request's Program there, a last output past the window's end included (the scan
-    carries it across windows); refused by name are two requests at one boundary, a request at bucket 16 (C's shape holds
+    carries it across windows), and one scan unit a boundary reading its state row; refused by name are two requests at one boundary, a request at bucket 16 (C's shape holds
     no request's bucket) and an anchor that is no boundary. A placement that isn't one a request is a caller's error."""
     cls = WindowClass(2, 4, 2, lanes=1, every=16)
     assert (cls.boundaries, cls.buckets, cls.anchor(0), cls.anchor(1)) == ((0, 16), 32, 0, 16)
     ok = _circuit(ONE, cls=cls, placed=[(0, 15)])
-    assert [(p.anchor, p.lane) for p in _lowered(ONE, cls, [(0, 15)]).programs] == [(0, 0)]
+    low = _lowered(ONE, cls, [(0, 15)])
+    assert ([(p.anchor, p.lane) for p in low.programs], [a for a, _ in low.scans]) == ([(0, 0)], [16])
     assert _bytes(_circuit(ONE, cls=cls, placed=[(0, 47)])) == _bytes(ok)
-    assert [(r.at, r.radix, r.base) for r in ok.registered.reads if r.param == SS.SCAN_STATE] == [(0, (1,), 0)]
+    ns = low.programs[0].scan.bindings["NS"]
+    assert [(r.at, r.radix, r.base, r.step) for r in ok.registered.reads if r.param == SS.SCAN_STATE] == [(0, (2,), 0, (16 * ns,))]
     for placed, match in (
             (None, "2 requests anchored at bucket 0, past the 1 slots a boundary has"),
             ([(0, None), (16, None)], "request 1: anchored at bucket 16, and a served Program reads boundary 0's scan state"),
