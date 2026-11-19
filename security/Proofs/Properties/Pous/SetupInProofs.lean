@@ -76,7 +76,7 @@ noncomputable def SetupC.wrong {q : P2.Params} (S : SetupC q) (salt W : ByteArra
 accepted while the committed trace's registered gates hold other than `W` with probability at most `εreg`: the
 registration's binding error, a SHA-512 collision under the root the verifier holds for `W`. -/
 def RegisteredW {q : P2.Params} (S : SetupC q) {L : Verity.SamplingDesign (Fin q.blocks)} {Reg : Type}
-    {session : Finset (Fin q.blocks) → Reg → Game Bool} (A : Spot.Sampling.ExtractionAnalysis L Reg session)
+    {session : Finset (Fin q.blocks) → Reg → Verity.Game Bool} (A : Spot.Sampling.ExtractionAnalysis L Reg session)
     (tr : A.Tr → S.C.Trace) (W : ByteArray) (εreg : ℝ≥0∞) : Prop :=
   ∀ σ : Strategy (Spot.Sampling.audit L Reg session),
     prob (fun o => o.1 = true ∧ S.weights (tr (A.committedOf σ)) ≠ W) (Spot.Sampling.audit L Reg session) σ ≤ εreg
