@@ -352,7 +352,8 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   named assumption (`assumptions`) is declared in `security/Definitions/Assumptions.lean` or a module under it, and
   every other premise is open (`open`, with the Linear issue that discharges it and its due date), a list a PR's
   `--update` never adds to, unless it is part of what its guarantee says (`domain`, with a one-line why; an honest
-  witness must conclude it). Each deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's
+  witness must conclude it). A guarantee is deployed (`deployed`) only with an honest witness, a theorem that an honest
+  run is accepted, and the check fails on one without. Each deployed guarantee rests, outside the trust base (`trust.base`: SHA-512's
   collision resistance, uniform randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on
   (`trust.extra`, each with its reason), only on the premises its `trust_gap` entry lists, which `--update` never adds
   to; the check prints each one's gap, the number Daniel drives to zero.

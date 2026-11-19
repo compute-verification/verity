@@ -2299,7 +2299,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         out["verifier"] = policy["verifier"] | {"allow": verifier_allow(policy["verifier"], facts["verifier"])}
     if update and isinstance(policy.get("trust_gap"), dict):
         out["trust_gap"] = trust_gap_kept(out)
-    fails += trust_failures(out)
+    fails += trust_failures(out) + deployed_witness_failures(out)
     if update and isinstance(policy.get("ids"), dict):
         out["ids"] = ids_kept(out)
     fails += id_failures(out, {getattr(f, "entry", None) for f in fails})
@@ -3991,6 +3991,30 @@ def trust_failures(lock: dict) -> list[str]:
         fails.append(Failure("trust.gap-stale", g, f"trust: `trust_gap` lists {g}, which `deployed` doesn't: drop the "
                              "entry (`check.py --update` does)"))
     return fails
+
+
+def deployed_witnesses(lock: dict) -> dict[str, int]:
+    """How the lock's guarantees stand to the name deployed: `witnessed`, the guarantees `deployed` lists whose
+    `witnesses` entry names an honest lemma; `unwitnessed`, those it lists that have none; and the `unwitnessed`
+    allowance's entries, those of a deployed guarantee (`allowed_deployed`) and the rest (`allowed`)."""
+    ws, allow = lock.get("witnesses"), lock.get("unwitnessed")
+    ws, allow = ws if isinstance(ws, dict) else {}, allow if isinstance(allow, dict) else {}
+    deployed = name_list(lock.get("deployed"))
+    honest = {g for g in deployed if isinstance(ws.get(g), dict) and name_list(ws[g].get("honest"))}
+    return {"witnessed": len(honest), "unwitnessed": len(set(deployed) - honest),
+            "allowed_deployed": len(set(allow) & set(deployed)), "allowed": len(set(allow) - set(deployed))}
+
+
+def deployed_witness_failures(lock: dict) -> list[str]:
+    """No guarantee is called deployed without an honest witness: each guarantee `deployed` lists has a `witnesses`
+    entry naming an honest lemma, which the witnesses rule holds to its form (`witness_failures`).  The `unwitnessed`
+    allowance exempts a guarantee from the witnesses rule; of a deployed one it exempts the `nontrivial` half alone."""
+    ws = lock.get("witnesses") if isinstance(lock.get("witnesses"), dict) else {}
+    return [Failure("trust.deployed-unwitnessed", g, f"trust: `deployed` lists {g}, which has no honest witness: give it "
+                    "one under `witnesses` (a theorem that an honest run is accepted through the code as it stands), or "
+                    "drop it from `deployed` with its `trust_gap` and `trust.extra` entries; its statement stays listed")
+            for g in name_list(lock.get("deployed"))
+            if not (isinstance(ws.get(g), dict) and name_list(ws[g].get("honest")))]
 
 
 def trust_gap_kept(lock: dict) -> dict[str, list[str]]:
@@ -7134,6 +7158,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails, new = judge(current, facts, files, update, owner)
     if "deployed" in new:
         rep["trust_gap"] = trust_gaps(new)
+        rep["deployed_witnesses"] = deployed_witnesses(new)
     _, debt, rep["inline"] = inline_failures(current, facts)
     rep["inline_debt"] = [len(debt), sum(map(len, debt.values()))]
 
@@ -7375,6 +7400,7 @@ def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = Fals
     fails, new = judge(current, facts, files, update, owner)
     if "deployed" in new:
         rep["trust_gap"] = trust_gaps(new)
+        rep["deployed_witnesses"] = deployed_witnesses(new)
     _, debt, rep["inline"] = inline_failures(current, facts)
     rep["inline_debt"] = [len(debt), sum(map(len, debt.values()))]
 
@@ -7908,6 +7934,10 @@ def main(argv: list[str]) -> int:
                       f"deployed guarantees, {len(set().union(*gaps.values()))} distinct:", flush=True)
                 for g, gap in gaps.items():
                     print(f"    {g}: {len(gap)}" + (f" ({', '.join(gap)})" if gap else ""), flush=True)
+            if dw := rep.get("deployed_witnesses"):
+                print(f"  deployed: {dw['witnessed']} witnessed, {dw['unwitnessed']} unwitnessed (must be 0); "
+                      f"`unwitnessed` allows {dw['allowed_deployed']} deployed and {dw['allowed']} not deployed",
+                      flush=True)
             if hb := rep.get("heartbeats"):
                 print(f"  heartbeats: {len(hb)} overrides, {sum(h['reason'] is None for h in hb)} without a reason "
                       f"(value; its module's build time; reason):", flush=True)

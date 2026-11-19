@@ -46,7 +46,7 @@ incorrect set of the trace the extractor recovers.
      deployed ones meet it).
    - Real: SHA-512 collision resistance bounds Pr[B], and `Claims.Hm96Hiding` bounds δ₁.
    - Open: none.
-3. **Zero knowledge of the deployed system.** `Flock.Guarantees.SessionLoopZKDeployed`
+3. **Zero knowledge of the ZK server's session loop.** `Flock.Guarantees.SessionLoopZKDeployed`
    (`Proofs/Flock/SessionLoop/Statement.lean`): at the ZK server's session loop on the deployed tables, for every t > 0,
    every V* with one more round than the verifier and every event E, Pr[E(real)] ≤ 2·(Pr[E(sim)] + 8(t+1)·n_L(x)·δ₁ +
    2·3^(−t) + 4t·3^t·Pr[fork collision]), with δ₁ hm96's hiding gap at the pinned key. For the recursive audit,
@@ -495,6 +495,8 @@ can't import. The check also fails when:
 - a statement reads a definition outside the spec, or breaks `layers` or `trees`;
 - a claim definition lacks its witnesses: a theorem that it fails at a toy instance, and one per deployed record that its
   checkable antecedents hold there;
+- a guarantee `deployed` lists has no honest witness: a guarantee is called deployed only while a theorem shows an
+  honest run accepted;
 - a record, or a deployed guarantee's `trust_gap` entry, no longer matches the build.
 
 A changed record means a guarantee now says something else. When one lands, the statement before and after is shown

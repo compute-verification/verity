@@ -3302,27 +3302,18 @@
   "extra": {
    "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
     "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, trusted for the zero-knowledge guarantees only: hm96-sha512's salt key is not among the keys its hiding bound fails for, so a leaf hides at 2^-193 (hash-derived-key)"
-   },
-   "Flock.SecurityProofs.SessionLoopZKDeployed": {
-    "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, trusted for the zero-knowledge guarantees only: hm96-sha512's salt key is not among the keys its hiding bound fails for, so a leaf hides at 2^-193 (hash-derived-key)"
    }
   }
  },
  "deployed": [
-  "Flock.SecurityProofs.DeltaPubDeployed",
   "Flock.SecurityProofs.RecursiveKSDeployed",
   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed",
   "Flock.SecurityProofs.SampledKSLiveV3",
   "Flock.SecurityProofs.SampledKSLiveV5",
-  "Flock.SecurityProofs.SessionLoopZKDeployed",
   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted",
   "Pous.SecurityProofs.StreamedWipe",
   "ResourceAccounting.SecurityProofs.Remote.AuditRO",
-  "ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed",
-  "ResourceAccounting.SecurityProofs.RemoteRunConservationDeployed",
-  "ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployed",
-  "ResourceAccounting.SecurityProofs.StackedRequirementSketchDeployed",
-  "ResourceAccounting.SecurityProofs.StackedRunConservationSketchDeployed"
+  "ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed"
  ],
  "trust_gap": {
   "Flock.SecurityProofs.RecursiveKSDeployed": ["Claims.Flock.ListWithin", "Claims.Hm96Hiding", "RecDeploy.DenseAt"],
@@ -3332,13 +3323,6 @@
    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
   ],
-  "Flock.SecurityProofs.SessionLoopZKDeployed": [
-   "Claims.ZKMal.RefSession.SwCausalOn",
-   "Claims.ZKServer.LeanRelease.FillRoundEq",
-   "Claims.ZKServer.LeanRelease.LiveRoundEq",
-   "Claims.ZKServer.Loop.Src",
-   "Flock.Guarantees.LoopInnerRound0"
-  ],
   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.CertifierRegisters", "NetTiming.ScopeAcc"],
   "ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed": [
    "ResourceAccounting.Assumptions.SketchHashRandom",
@@ -3346,24 +3330,6 @@
    "ResourceAccounting.Remote.Sketch.Assumptions.KeyBudget",
    "ResourceAccounting.Remote.Sketch.Assumptions.Present",
    "ResourceAccounting.Remote.Sketch.Assumptions.Receipted"
-  ],
-  "ResourceAccounting.SecurityProofs.RemoteRunConservationDeployed": ["ResourceAccounting.Assumptions.SquaringCeiling", "ResourceAccounting.Assumptions.WorkHardness"],
-  "ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployed": ["ResourceAccounting.Assumptions.SketchHashBudget", "ResourceAccounting.Assumptions.SketchRank"],
-  "ResourceAccounting.SecurityProofs.StackedRequirementSketchDeployed": [
-   "ResourceAccounting.Assumptions.ChainSum",
-   "ResourceAccounting.Assumptions.KeyBinding",
-   "ResourceAccounting.Assumptions.SketchHashBudget",
-   "ResourceAccounting.Assumptions.SketchRank",
-   "ResourceAccounting.Assumptions.SquaringFloor",
-   "ResourceAccounting.Requirement.PlanMatches",
-   "ResourceAccounting.Requirement.StoreMatches"
-  ],
-  "ResourceAccounting.SecurityProofs.StackedRunConservationSketchDeployed": [
-   "ResourceAccounting.Assumptions.ChainSum",
-   "ResourceAccounting.Assumptions.KeyBinding",
-   "ResourceAccounting.Assumptions.SketchHashBudget",
-   "ResourceAccounting.Assumptions.SketchRank",
-   "ResourceAccounting.Assumptions.SquaringFloor"
   ]
  },
  "meaning": [

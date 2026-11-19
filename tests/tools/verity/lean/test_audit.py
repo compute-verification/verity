@@ -1308,11 +1308,12 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
     }
 
 
-def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the_flag():
+def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the_flag(monkeypatch):
     """Each code of `BOOKKEEPING` (drive's lock run after a landing repairs the bookkeeping and warns) comes
     from a lock `repaired` mends, so the policy's checks pass on the lock it writes, and each repair is one warning line naming
     the entry and its owner. Without `--bookkeeping warn` the same lock fails: no bookkeeping code is a record difference, so
     `regenerated` settles none of it. A code in the set that no case provokes fails here."""
+    unwitnessed(monkeypatch)
     cases = bookkeeping_cases()
     assert set(cases) == A.BOOKKEEPING and not set(A.BOOKKEEPING) & set(A.RECORD_DIFFERENCE)
     for code, (policy, now) in cases.items():
@@ -1428,6 +1429,28 @@ def opened(now: dict) -> dict:
     return A.judge({**POLICY, "assumptions": {}, "open_seed": seed}, now, FILES, update=True)[1]
 
 
+def unwitnessed(monkeypatch) -> None:
+    """Switches the deployed guarantees' witness rule off for a test of the trust gap, whose fixture has no witness."""
+    monkeypatch.setattr(A, "deployed_witness_failures", lambda lock: [])
+
+
+def test_a_guarantee_is_deployed_only_with_an_honest_witness():
+    """A guarantee `deployed` lists with no honest lemma under `witnesses` fails, whatever `unwitnessed` allows it: a
+    whole entry, or the honest half.  The allowance of a deployed guarantee's `nontrivial` half holds, and the counts
+    are the report's."""
+    lock = {"deployed": ["G", "H", "K", "L"], "guarantees": dict.fromkeys("GHKLM", {}),
+            "witnesses": {"G": {"honest": ["G.honest"], "nontrivial": "G.not"}, "H": {"honest": ["H.honest"]},
+                          "K": {"nontrivial": "K.not"}},
+            "unwitnessed": {"H": {"type_hash": "h", "missing": "nontrivial", "why": "no fixture"},
+                            "K": {"type_hash": "k", "missing": "honest", "why": "no fixture"}, "L": "l", "M": "m"}}
+    fails = A.deployed_witness_failures(lock)
+    assert [(f.code, f.entry) for f in fails] == [("trust.deployed-unwitnessed", "K"), ("trust.deployed-unwitnessed", "L")]
+    assert "drop it from `deployed`" in fails[0]
+    assert A.deployed_witnesses(lock) == {"witnessed": 2, "unwitnessed": 2, "allowed_deployed": 3, "allowed": 1}
+    assert A.deployed_witness_failures(lock | {"deployed": ["G", "H"]}) == []
+    assert A.deployed_witness_failures({"guarantees": {"M": {}}}) == []
+
+
 def test_a_deployed_guarantee_s_gap_is_what_it_rests_on_outside_the_trust_base_through_the_guarantees_it_cites():
     """A deployed guarantee rests on the named assumptions and open premises its record lists, and through a domain
     hypothesis that is another listed guarantee's statement (`cites`) on that guarantee's, transitively (a cycle ends).  A
@@ -1452,12 +1475,13 @@ def test_a_deployed_guarantee_s_gap_is_what_it_rests_on_outside_the_trust_base_t
         "trust_gap": {"Q.t": ["Q.Sound", "R.x"]}}
 
 
-def test_a_deployed_guarantee_resting_on_a_premise_outside_the_trust_base_fails_until_its_trust_gap_entry_lists_it():
+def test_a_deployed_guarantee_resting_on_a_premise_outside_the_trust_base_fails_until_its_trust_gap_entry_lists_it(monkeypatch):
     """`deployed` lists `P.t`, which takes `P.Sound`, an open premise `trust` doesn't list: that is its gap.  The lock fails
     until `trust_gap` lists it, and neither an update nor the lock run's bookkeeping lists it, so a premise enters the gap
     only by a person's hand; listed, the lock passes, and so does one whose trust holds the premise, in the base or as
     `P.t`'s own with its reason.  A guarantee's own trust is a deployed guarantee's, and each holds a premise and a
     reason."""
+    unwitnessed(monkeypatch)
     now = sounded()
     lock = {**opened(now), "trust": {"base": HYP}, "deployed": ["P.t"], "ids": IDS}
     assert A.judge({k: v for k, v in lock.items() if k != "deployed"}, now, FILES)[0] == []
@@ -1506,6 +1530,7 @@ def test_a_discharged_premise_fails_until_its_trust_gap_entry_drops_which_an_upd
     listing `P.Sound` fails, as bookkeeping (not a record difference, so `--regenerate` alone doesn't settle it), until the
     entry drops: `--update` drops it, and so does the lock run under `--bookkeeping warn`, whose warning names the premise.
     The report holds each deployed guarantee's gap."""
+    unwitnessed(monkeypatch)
     before = {**opened(sounded()), "trust": {"base": HYP}, "deployed": ["P.t"], "trust_gap": {"P.t": ["P.Sound"]},
               "ids": IDS}
     assert A.judge(before, sounded(), FILES)[0] == []
@@ -4531,9 +4556,10 @@ def test_an_entry_without_a_why_for_a_prop_no_statement_takes_fails_and_an_updat
                          f"one-line `why` naming that statement"]
 
 
-def test_a_deployed_guarantee_that_reads_an_open_premise_resting_on_a_read_has_it_in_its_gap():
+def test_a_deployed_guarantee_that_reads_an_open_premise_resting_on_a_read_has_it_in_its_gap(monkeypatch):
     """What a guarantee's record lists under `premises.open` is in its trust gap, so a deployed guarantee that holds such
     a `Prop` fails until a person lists it in its `trust_gap` entry, as for a premise it takes."""
+    unwitnessed(monkeypatch)
     now = holding()
     pol = A.judge(TWO | {"open": {"P.Held": ON_READ}}, now, FILES, update=True)[1]
     lock = {**pol, "trust": {"base": HYP}, "deployed": ["P.t"]}

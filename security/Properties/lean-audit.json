@@ -1058,17 +1058,11 @@
   }
  },
  "deployed": [
-  "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
-  "Pous.Period.SecurityProofs.periodHeld",
-  "Pous.Period.SecurityProofs.periodHeldDeployed",
   "Properties.Poub.Line.SecurityProofs.lineHeld",
   "Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod",
   "Verity.remote_soundness_of_subprotocols"
  ],
  "trust_gap": {
-  "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": ["Pous.P2.Assumptions.P2RingAuditSecure"],
-  "Pous.Period.SecurityProofs.periodHeld": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
-  "Pous.Period.SecurityProofs.periodHeldDeployed": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
   "Properties.Poub.Line.SecurityProofs.lineHeld": [
    "ResourceAccounting.Remote.Held.Assumptions.Covered",
    "ResourceAccounting.Remote.Held.Assumptions.Covers",
