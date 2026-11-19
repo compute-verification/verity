@@ -1,3 +1,0 @@
-[2026-11-19T17:38Z] e8873c94b331
-From the proofs lead, 9:42 AM PST: one READ to add to your next return (two lines; do not stop your work): memory-accounting's storage session's opening blocks stop in the lowering with 'E_LOWER: ... node 4: a batch argument stepping 16 leaves across its copies of 2113' (TOP-444, 9:37 AM PST; their run r20261119-171040-01bf; branch cursor/memory-accounting-oc-storage-93c1 at ec3512b86f1). In Flock/Lower.lean (and the Python door's lower if it mirrors it): what does that refusal check, is it by design (a batched argument must step by whole copies) or unfinished, and would a batched table opening whose argument steps by one row need the lowering to change or the builder? Then re-run your command.
-
