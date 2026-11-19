@@ -24,7 +24,8 @@ public import Std.Data.String.ToNat
   the query is laid out, `Partition.units` of the program and query is the `n` of `PopMatches`.
 * **The design at the sampling design's text is the sampling design the sample reads** (`slotDesign_samplingDesignText`, `slotDesign_designSlots`): over the
   verifier's program and query of `n` units, where `samplingDesignAt` reads the sampling design `L`, `slotDesign` under the rule
-  `samplingDesign (samplingDesignText L)` is `L`'s one-stage design and then `all`, at a subset sampling design of at least one unit. `parseDesign` names a
+  `samplingDesign (samplingDesignText L)` is `L`'s one-stage design and then `all`, at a subset sampling design of at least one unit
+  and at no rated one, which no rule's text names (`NotRated`). `parseDesign` names a
   sampling design that `deriveSamplingDesign` and `flockSamplingDesign` read as they read the verifier's (`deriveSamplingDesign_congr`, `deriveSamplingDesign_none`,
   `deriveSamplingDesign_some`, `flockSamplingDesign_subset_text`, `flockSamplingDesign_bernoulli_text`).
 -/
@@ -151,8 +152,9 @@ theorem deriveWork_k {k : ℕ} {S : Array (String × Array (ℕ × ℕ))} {tab :
 /-- **`deriveSamplingDesign`'s expansion is the sampling design's kind at its `k`**, of at least one unit. -/
 theorem deriveSamplingDesign_some {p : _root_.Spot.Program} {q samplingDesign : Json} {tbl : Option Json} {L : Flock.Draw.SamplingDesign}
     (h : _root_.Spot.Draw.deriveSamplingDesign p q samplingDesign tbl = .ok (some L)) :
-    ∃ k, _root_.Spot.nat? (_root_.Spot.getD samplingDesign "k") = some k ∧ 1 ≤ k ∧
-      ((kindOf samplingDesign = "stratified" ∧ ∃ S, L = .stratified k S) ∨ (kindOf samplingDesign = "work" ∧ ∃ S, L = .work k S)) := by
+    (∃ k, _root_.Spot.nat? (_root_.Spot.getD samplingDesign "k") = some k ∧ 1 ≤ k ∧
+      ((kindOf samplingDesign = "stratified" ∧ ∃ S, L = .stratified k S) ∨ (kindOf samplingDesign = "work" ∧ ∃ S, L = .work k S))) ∨
+      (kindOf samplingDesign = "rated" ∧ ∃ rates S, L = .rated rates S) := by
   unfold _root_.Spot.Draw.deriveSamplingDesign at h
   split at h
   next s hs =>
@@ -163,12 +165,21 @@ theorem deriveSamplingDesign_some {p : _root_.Spot.Program} {q samplingDesign : 
     · rename_i hc
       obtain ⟨S, -, h⟩ := bind_eq_ok.1 h
       split at h
+      · rename_i hr
+        obtain ⟨rates, -, h⟩ := bind_eq_ok.1 h
+        obtain ⟨works, -, h⟩ := bind_eq_ok.1 h
+        obtain ⟨L', hd, h⟩ := bind_eq_ok.1 h
+        cases h
+        obtain ⟨ss, rfl, -⟩ := Flock.Draw.deriveRated_meetsRate hd
+        exact Or.inr ⟨by rw [hk]; simpa using hr, rates, ss, rfl⟩
+      rename_i hnr
+      split at h
       · rename_i k hnat
         split at h
         · rename_i hs'
           obtain ⟨L', hd, h⟩ := bind_eq_ok.1 h
           cases h
-          refine ⟨k, hnat, (derive_bounds k S _ hd).1, Or.inl ⟨?_, _, derive_ok k S _ hd⟩⟩
+          refine Or.inl ⟨k, hnat, (derive_bounds k S _ hd).1, Or.inl ⟨?_, _, derive_ok k S _ hd⟩⟩
           rw [hk]
           simpa using hs'
         · rename_i hs'
@@ -177,14 +188,14 @@ theorem deriveSamplingDesign_some {p : _root_.Spot.Program} {q samplingDesign : 
             obtain ⟨L', hd, h⟩ := bind_eq_ok.1 h
             cases h
             obtain ⟨_, -, hL⟩ := deriveWork_ok k S tab _ hd
-            refine ⟨k, hnat, deriveWork_k hd, Or.inr ⟨?_, _, hL⟩⟩
+            refine Or.inl ⟨k, hnat, deriveWork_k hd, Or.inr ⟨?_, _, hL⟩⟩
             rw [hk]
             by_cases hw : s = "work"
             · exact hw
             · exfalso
               apply hc
-              simp only [beq_iff_eq] at hs'
-              simp [hs', hw]
+              simp only [beq_iff_eq] at hs' hnr
+              simp [hs', hw, hnr]
           · exact absurd h (throw_ne _ _)
       · exact absurd h (throw_ne _ _)
   next =>
@@ -266,34 +277,45 @@ def samplingDesignText : Flock.Draw.SamplingDesign → String
   | .bernoulli a b => "bernoulli:" ++ (Nat.repr a ++ "/" ++ Nat.repr b)
   | .stratified k _ => "stratified" ++ ":" ++ Nat.repr k
   | .work k _ => "work" ++ ":" ++ Nat.repr k
+  | .rated _ _ => "rated"
 
 /-- **The design at the sampling design's text is the sampling design `samplingDesignAt` reads**: over the verifier's program and query of `n` units,
 where `samplingDesignAt` reads the sampling design `L`, `slotDesign` under the rule `samplingDesign (samplingDesignText L)` is `L`'s one-stage design, then `all`,
 at a subset sampling design of at least one unit. -/
 theorem slotDesign_samplingDesignText {v : _root_.Spot.Docket.Verifier} {n : ℕ} {L : Flock.Draw.SamplingDesign}
     (hu : _root_.Spot.Partition.units v.program v.query = .ok n) (hl : samplingDesignAt v n = .ok L)
-    (hk : ∀ k, L = .subset k → 1 ≤ k) :
+    (hk : ∀ k, L = .subset k → 1 ≤ k) (hr : Flock.Bridge.NotRated L) :
     _root_.Properties.Spot.slotDesign (.samplingDesign (samplingDesignText L)) v.program v.query v.workTable =
       .ok ⟨[_root_.Properties.Spot.oneStageOf L, .all]⟩ := by
   obtain ⟨derived, parsed, hd, hf, rfl⟩ := samplingDesignAt_ok hl
   have hne : _root_.Spot.Select.Rule.samplingDesign (samplingDesignText (derived.getD parsed)) ≠ .all := nofun
   cases derived with
   | none =>
-    rcases flockSamplingDesign_cases _ _ _ hf with ⟨k, rfl, hkn, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hs | hw
+    rcases flockSamplingDesign_cases _ _ _ hf with ⟨k, rfl, hkn, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hs | hw | hrt
     · exact slotDesign_samplingDesign _ _ _ _ n _ none _ hne hu (parseDesign_count "subset" (Or.inl rfl) k (hk k rfl))
-        (deriveSamplingDesign_none _ _ _ _ (by rw [kindOf_count]; decide) (by rw [kindOf_count]; decide))
+        (deriveSamplingDesign_none _ _ _ _ (by rw [kindOf_count]; decide) (by rw [kindOf_count]; decide)
+          (by rw [kindOf_count]; decide))
         (flockSamplingDesign_subset_text k n (hk k rfl) hkn)
     · exact slotDesign_samplingDesign _ _ _ _ n _ none _ hne hu (parseDesign_bernoulli a b hb hab)
-        (deriveSamplingDesign_none _ _ _ _ (by rw [kindOf_bernoulli]; decide) (by rw [kindOf_bernoulli]; decide))
+        (deriveSamplingDesign_none _ _ _ _ (by rw [kindOf_bernoulli]; decide) (by rw [kindOf_bernoulli]; decide)
+          (by rw [kindOf_bernoulli]; decide))
         (flockSamplingDesign_bernoulli_text a b n hb hab)
-    · rcases deriveSamplingDesign_cases _ _ _ _ _ hd with ⟨-, h, -⟩ | ⟨_, _, _, -, h, -⟩
+    · rcases deriveSamplingDesign_cases _ _ _ _ _ hd with ⟨-, h, -⟩ | ⟨_, _, _, -, h, -⟩ | ⟨_, _, _, _, -, -, h, -⟩
       · exact absurd hs h
       · cases h
-    · rcases deriveSamplingDesign_cases _ _ _ _ _ hd with ⟨-, -, h⟩ | ⟨_, _, _, -, h, -⟩
+      · cases h
+    · rcases deriveSamplingDesign_cases _ _ _ _ _ hd with ⟨-, -, h, -⟩ | ⟨_, _, _, -, h, -⟩ | ⟨_, _, _, _, -, -, h, -⟩
       · exact absurd hw h
       · cases h
+      · cases h
+    · rcases deriveSamplingDesign_cases _ _ _ _ _ hd with ⟨-, -, -, h⟩ | ⟨_, _, _, -, h, -⟩ | ⟨_, _, _, _, -, -, h, -⟩
+      · exact absurd hrt h
+      · cases h
+      · cases h
   | some L' =>
-    obtain ⟨k, hnat, h1, ⟨hs, S, rfl⟩ | ⟨hw, S, rfl⟩⟩ := deriveSamplingDesign_some hd
+    rcases deriveSamplingDesign_some hd with ⟨k, hnat, h1, ⟨hs, S, rfl⟩ | ⟨hw, S, rfl⟩⟩ | ⟨-, rates, S, rfl⟩
+    rotate_right
+    · exact (hr rates S rfl).elim
     · refine slotDesign_samplingDesign _ _ _ _ n _ _ _ hne hu (parseDesign_count "stratified" (Or.inr (Or.inl rfl)) k h1) ?_ hf
       rw [← hd]
       exact deriveSamplingDesign_congr _ _ _ (getD_samplingDesign_of_kindOf hs (by decide)).symm (by rw [hnat]; exact nat_toJson k)
@@ -308,6 +330,9 @@ theorem slotDesign_designSlots (A : Live) {v : _root_.Spot.Docket.Verifier}
     (hk : ∀ k, A.design = .subset k → 1 ≤ k) :
     _root_.Properties.Spot.slotDesign (.samplingDesign (samplingDesignText A.design)) v.program v.query v.workTable =
       .ok (designSlots A) :=
-  slotDesign_samplingDesignText hu hl hk
+  slotDesign_samplingDesignText hu hl hk fun _ _ h => by
+    have hs := A.hsub
+    rw [show Flock.Bridge.designAt A.desc A.qr A.lj A.tb A.n = A.design from rfl, h] at hs
+    cases hs
 
 end Verity.Sampled.Record

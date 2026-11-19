@@ -34,7 +34,8 @@ sampling design can make; the round trip claims nothing about the others.
 
 So `SampleFileZK`, the second half of `RecordCustodyZK` and of `RecordCustodyZKJ`, follows from each sample file being the
 JSON value `verity-verify-proof draw` printed for the verifier's own sample (`sampleFileZK_of_toJson`, `sampleFileZK_of_toJson_subset`,
-`sampleFileZK_of_toJson_work`), under every sampling design but a Bernoulli sampling design (`sampleFileZK_of_toJson_samplingDesign`).
+`sampleFileZK_of_toJson_work`), under every sampling design but a Bernoulli or rated one (`sampleFileZK_of_toJson_samplingDesign`),
+a rated sample file's round trip not being proved.
 That equality is of Lean `Json` values, whose objects are trees shaped by the order their keys were inserted in:
 `Flock.JsonParse.parse` of the keys in sorted order, as `compress` prints them, gives `toJson`'s trees, and other orders give other
 trees that `ofJson` reads alike.
@@ -316,15 +317,17 @@ theorem sampleFileZK_of_toJson_work (dj : Finset (Fin n) → Lean.Json) (K : ℕ
     (hdj : ∀ S, dj S = (drawOf (.work K strata) pop S).toJson) : SampleFileZK dj (.work K strata) pop :=
   fun S _ hD => ofJson_toJson_sampleOf_work K strata pop S (hdj S ▸ hD)
 
-/-- **`SampleFileZK` from the printed sample under any sampling design but a Bernoulli sampling design**: the subset, stratified and
-work round trips (`sampleFileZK_of_toJson_subset`, `sampleFileZK_of_toJson`, `sampleFileZK_of_toJson_work`). -/
+/-- **`SampleFileZK` from the printed sample under any sampling design but a Bernoulli or rated one**: the subset, stratified
+and work round trips (`sampleFileZK_of_toJson_subset`, `sampleFileZK_of_toJson`, `sampleFileZK_of_toJson_work`). -/
 theorem sampleFileZK_of_toJson_samplingDesign (dj : Finset (Fin n) → Lean.Json) (samplingDesign : Draw.SamplingDesign)
-    (hb : ∀ a b, samplingDesign ≠ .bernoulli a b) (pop : ℕ) (hdj : ∀ S, dj S = (drawOf samplingDesign pop S).toJson) :
+    (hb : ∀ a b, samplingDesign ≠ .bernoulli a b) (hr : ∀ rates strata, samplingDesign ≠ .rated rates strata) (pop : ℕ)
+    (hdj : ∀ S, dj S = (drawOf samplingDesign pop S).toJson) :
     SampleFileZK dj samplingDesign pop := by
   cases samplingDesign with
   | subset k => exact sampleFileZK_of_toJson_subset dj k pop hdj
   | bernoulli a b => exact absurd rfl (hb a b)
   | stratified K strata => exact sampleFileZK_of_toJson dj K strata pop hdj
   | work K strata => exact sampleFileZK_of_toJson_work dj K strata pop hdj
+  | rated rates strata => exact absurd rfl (hr rates strata)
 
 end FlockSoundness.Discharge.ZkLink

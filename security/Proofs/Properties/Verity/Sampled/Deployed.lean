@@ -24,7 +24,8 @@ session as deployed takes from here (`Live.deployed`). This file proves the thre
   inputs and public inputs (`SetsUp`'s `own = none` among them); and at a member of a window's sample
   (`recordCustodyZKJPLaw_part`), whose sample file at its part `S` is printed under `subset |S|` (`printedPart`). At a
   sample of `kd` units the two sampling designs are one. At the writer and the sample file printed under any sampling design but a
-  Bernoulli sampling design (`recordCustodyZKJPLaw_printed`), and so at V5's, `designAt` (`recordCustodyZKJPLaw_designAt`).
+  Bernoulli or rated one (`recordCustodyZKJPLaw_printed`), and so at V5's, `designAt`, where it is not rated
+  (`recordCustodyZKJPLaw_designAt`).
 * **The sample's size** (`sampleSize_deployed`): V5's `hsz` at the printed subset sample file (`Flock.Bridge.samplingDesignOn_size`).
 * **A3 at the device's bytes** (`uniformRandomBytes_deployed`): the session's sample is the device's one-stage rounds,
   `MAX_COINS` coins of `8 * COIN_BYTES` raw bits (`DeployedCoins`, `Properties.Challenger.oneStageRounds`), and the sample's
@@ -63,31 +64,32 @@ theorem recordCustodyZKJPLaw_deployed (I : Exec.Inputs) (own : Option ByteArray)
       (Claims.Bridge.CustodyZkP.wrZP I own (printedSample (.subset kd)) Jf) fun _ => .subset kd :=
   ⟨Claims.Bridge.CustodyZkP.recordsLiveZKJA_wrZP I own _ Jf, sampleFileZK_printedSample kd⟩
 
-/-- **The printed sample file decodes to the sample it printed** under any sampling design but a Bernoulli sampling design
+/-- **The printed sample file decodes to the sample it printed** under any sampling design but a Bernoulli or rated one
 (`ZkLink.sampleFileZK_of_toJson_samplingDesign`). -/
-theorem sampleFileZK_printedSample_samplingDesign (samplingDesign : Flock.Draw.SamplingDesign) (hb : Flock.Bridge.NotBernoulli samplingDesign) :
+theorem sampleFileZK_printedSample_samplingDesign (samplingDesign : Flock.Draw.SamplingDesign) (hb : Flock.Bridge.NotBernoulli samplingDesign)
+    (hr : Flock.Bridge.NotRated samplingDesign) :
     ZkLink.SampleFileZK (printedSample (n := n) samplingDesign) samplingDesign n :=
-  ZkLink.sampleFileZK_of_toJson_samplingDesign _ samplingDesign hb n fun _ => rfl
+  ZkLink.sampleFileZK_of_toJson_samplingDesign _ samplingDesign hb hr n fun _ => rfl
 
-/-- **`live-verifier` at the deployment's writer and sample file, under any sampling design but a Bernoulli sampling design**:
+/-- **`live-verifier` at the deployment's writer and sample file, under any sampling design but a Bernoulli or rated one**:
 `RecordCustodyZKJPLaw` at the writer that keeps an accepted record (`wrZP`) and the sample file printed under `samplingDesign`, its
 record half with no premise (`Claims.Bridge.CustodyZkP.recordsLiveZKJA_wrZP`) and its sample file half the round trip at
 `samplingDesign` (`sampleFileZK_printedSample_samplingDesign`). -/
 theorem recordCustodyZKJPLaw_printed (I : Exec.Inputs) (own : Option ByteArray) (samplingDesign : Flock.Draw.SamplingDesign)
-    (hb : Flock.Bridge.NotBernoulli samplingDesign) (Jf : Finset (Fin n) → Reg → ℕ) :
+    (hb : Flock.Bridge.NotBernoulli samplingDesign) (hr : Flock.Bridge.NotRated samplingDesign) (Jf : Finset (Fin n) → Reg → ℕ) :
     Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPts) I own (printedSample samplingDesign) Jf
       (Claims.Bridge.CustodyZkP.wrZP I own (printedSample samplingDesign) Jf) fun _ => samplingDesign :=
-  ⟨Claims.Bridge.CustodyZkP.recordsLiveZKJA_wrZP I own _ Jf, sampleFileZK_printedSample_samplingDesign samplingDesign hb⟩
+  ⟨Claims.Bridge.CustodyZkP.recordsLiveZKJA_wrZP I own _ Jf, sampleFileZK_printedSample_samplingDesign samplingDesign hb hr⟩
 
 /-- **V5's `live-verifier` at the deployment's writer and sample file** (`Flock.Guarantees.SampledKSLiveV5`'s `hCust`):
 `RecordCustodyZKJPLaw` at `wrZP` and the sample file printed under the sampling design V5 reads, `designAt`, which is
-no Bernoulli sampling design (`Flock.Bridge.notBernoulli_designAt`), with no premise. -/
+no Bernoulli sampling design (`Flock.Bridge.notBernoulli_designAt`), where it is no rated one. -/
 theorem recordCustodyZKJPLaw_designAt (I : Exec.Inputs) (own : Option ByteArray) (desc : Hash.Msg) (q lj : Lean.Json)
-    (tb : Option Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ) :
+    (tb : Option Lean.Json) (hr : Flock.Bridge.NotRated (Flock.Bridge.designAt desc q lj tb n)) (Jf : Finset (Fin n) → Reg → ℕ) :
     Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPts) I own (printedSample (Flock.Bridge.designAt desc q lj tb n)) Jf
       (Claims.Bridge.CustodyZkP.wrZP I own (printedSample (Flock.Bridge.designAt desc q lj tb n)) Jf)
       fun _ => Flock.Bridge.designAt desc q lj tb n :=
-  recordCustodyZKJPLaw_printed I own _ (Flock.Bridge.notBernoulli_designAt desc q lj tb n) Jf
+  recordCustodyZKJPLaw_printed I own _ (Flock.Bridge.notBernoulli_designAt desc q lj tb n) hr Jf
 
 /-- **The sample file a member of a window's sample is served** (`serve --draw-file`): at its part `S` of the sample, the
 one `verity-verify-proof draw` prints for the verifier's own sample of `S` under `subset |S|` over the member's `n` proof blocks. -/

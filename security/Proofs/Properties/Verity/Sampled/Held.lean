@@ -151,6 +151,7 @@ theorem samplingDesignWhy_zk {tags : Flock.Tags} {D : Flock.Draw.UnitSample}
   | stratified K St => exact .inr ⟨K, St, rfl⟩
   | bernoulli a b => simp [hl] at h
   | work K ws => simp [hl] at h
+  | rated _ _ => simp [hl] at h
 
 /-- **A session without `--stratified` refuses a stratified sample**: `Stmt.setupTables` holds a stratified sample's sampling design to
 the verifier's own `K`, and refuses it without one. -/

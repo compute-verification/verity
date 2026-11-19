@@ -188,6 +188,9 @@ theorem agrees_sampleWith (g₁ g₂ : ℕ → ℕ → StateT ℕ (Except String
   | work k strata =>
     unfold Flock.Draw.drawWith
     exact agrees_bind (agrees_stratifiedWith _ _ S hg hs _) fun _ => agrees_refl _
+  | rated _ strata =>
+    unfold Flock.Draw.drawWith
+    exact agrees_bind (agrees_stratifiedWith _ _ S hg hs _) fun _ => agrees_refl _
 
 /-- **A sample reads a prefix of its bytes**: a sample that ends on `src` ends the same, having read the same bytes, on
 `src` with any bytes after it. -/
