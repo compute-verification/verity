@@ -467,7 +467,7 @@ theorem close_samplesIn {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : S
     | exact samplesIn_modify _ _ (fun _ => rfl) (fun _ => rfl) h
     | skip
   all_goals
-    have hdr := ‹receiptSample _ _ _ _ _ = some _›
+    have hdr := ‹receiptSample _ _ _ = some _›
     obtain ⟨_, _, -, -, -, hrange, -⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hdr
     refine samplesIn_sample _ _ _ (fun _ => rfl) (fun _ => rfl)
       (samplesIn_modify _ _ (fun _ => rfl) (fun _ => rfl) h) fun k hk => ?_
@@ -671,7 +671,7 @@ theorem sampleLengths_mid {g : Nat} {s : State} (hs : ∀ u : Nat, s.windows[u]!
 it holds its share. -/
 def SampleLink (g : Nat) (s : State) : Prop :=
   ∀ c, (dr s.windows (c * g)).isSome → ∃ sampled,
-    receiptSample s.digest c s.coins[s.params.windows + c]! s.params.samples (sampleLengths g s c) = some sampled ∧
+    receiptSample s.params.samples s.coins[s.params.windows + c]! (sampleLengths g s c) = some sampled ∧
     ∀ u ∈ sampleWindows g s.params.windows c,
       dr s.windows u = some (shareOf sampled (passesBefore s (c * g) u) s.windows[u]!.plans.size)
 
@@ -853,7 +853,7 @@ theorem linkInv_init (g : Nat) (params : Params) (reg : Registration) (coins app
 
 /-- At `g = 1`, each sampled window's samples are `draws` over its own plans, on the session's digest and its coin. -/
 def DL1 (digest : ByteArray) (coins : Array ByteArray) (W samples : Nat) (ws : Array Win) : Prop :=
-  ∀ u d, dr ws u = some d → receiptSample digest u coins[W + u]! samples (ws[u]!.plans.map (·.length)) = some d
+  ∀ u d, dr ws u = some d → receiptSample samples coins[W + u]! (ws[u]!.plans.map (·.length)) = some d
 
 theorem dl1_modify {digest : ByteArray} {coins : Array ByteArray} {W samples : Nat} {ws : Array Win} (u : Nat)
     (f : Win → Win) (hf : ∀ w, (f w).drawn = w.drawn) (hp : ∀ w, (f w).plans = w.plans)
@@ -868,7 +868,7 @@ theorem dl1_modify {digest : ByteArray} {coins : Array ByteArray} {W samples : N
 theorem dl1_sample {digest : ByteArray} {coins : Array ByteArray} {W samples : Nat} {ws : Array Win} (u : Nat)
     (d : Array (Nat × Nat)) (f : Win → Win) (hf : ∀ w, (f w).drawn = some d) (hp : ∀ w, (f w).plans = w.plans)
     (h : DL1 digest coins W samples ws)
-    (hd : receiptSample digest u coins[W + u]! samples (ws[u]!.plans.map (·.length)) = some d) :
+    (hd : receiptSample samples coins[W + u]! (ws[u]!.plans.map (·.length)) = some d) :
     DL1 digest coins W samples (ws.modify u f) := by
   intro v d' hd'
   rw [dr_eq, getElem!_modify'] at hd'
@@ -894,7 +894,7 @@ theorem close_dl1 {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : State}
     | exact dl1_modify _ _ (fun _ => rfl) (fun _ => rfl) h
     | skip
   all_goals
-    have hdr := ‹receiptSample _ _ _ _ _ = some _›
+    have hdr := ‹receiptSample _ _ _ = some _›
     refine dl1_sample _ _ _ (fun _ => rfl) (fun _ => rfl) (dl1_modify _ _ (fun _ => rfl) (fun _ => rfl) h) ?_
     have hpl : (s.windows.modify t.toNat ({· with final := true}))[t.toNat]!.plans = s.windows[t.toNat]!.plans :=
       plans_modify _ _ _ _ (fun _ => rfl)
@@ -951,10 +951,10 @@ theorem link1_init (params : Params) (reg : Registration) (coins appendCoins : A
 theorem link_out {g : Nat} {params : Params} {reg : Registration} {coins : Array ByteArray} {s : State}
     (hI : Inv s) (hp : s.params = params) (hr : s.reg = reg) (hco : s.coins = coins) (hdig : s.digest = reg.digest)
     (hA : AcceptNow s) (c : Nat) (sampled : Array (Nat × Nat))
-    (hdraws : receiptSample s.digest c s.coins[s.params.windows + c]! s.params.samples (sampleLengths g s c) = some sampled)
+    (hdraws : receiptSample s.params.samples s.coins[s.params.windows + c]! (sampleLengths g s c) = some sampled)
     (hsh : ∀ u ∈ sampleWindows g s.params.windows c,
       dr s.windows u = some (shareOf sampled (passesBefore s (c * g) u) s.windows[u]!.plans.size)) :
-    ∃ sampled, receiptSample reg.digest c coins[params.windows + c]! params.samples (lengthsOf (sampleRecords g s c)) =
+    ∃ sampled, receiptSample params.samples coins[params.windows + c]! (lengthsOf (sampleRecords g s c)) =
         some sampled ∧
       ∀ k (hk : k < (sampleRecords g s c).length),
         sampledOf s (c * g + k) =
