@@ -167,7 +167,8 @@ def test_both_registrations_pass_the_verifiers_check_and_the_interior_follows_th
     for rec, c in ((brec, bc), (irec, it.committed)):
         w = c.window
         v = V.check(rec, w.program, w.query, w.law, T.CS.SCHEME, T.CS.expected_ports(w),
-                    leaf_layer=T.CS.leaf_layer(publics(c)), **({"log": [brec]} if rec is irec else {}))
+                    leaf_layer=T.CS.leaf_layer(publics(c)), partition=w.partition,
+                    **({"log": [brec]} if rec is irec else {}))
         assert v.ok, v.codes
     assert irec["previous"] == run["digest"] and irec["window"]["replay_sample"] == list(SAMPLE)
     assert irec["window"]["run"] == T.interior_run(run["digest"], SAMPLE) != brec["window"]["run"]

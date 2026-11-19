@@ -1081,10 +1081,11 @@ private def withTables (c : ByteArray) (names : List String) : Core.Blobs :=
 private def held (lookups tables : List String) : String :=
   refusal (tablesHeld (ownOf (lookingUp lookups)) (withTables (lookingUp lookups) tables))
 
-/-- The refusal of every statement's circuit file while C_S is not derived (`restrict`). -/
+/-- The refusal of every statement's circuit file while C_S is not derived (`restrict`): here, of a partition object
+with no blocks. -/
 private def HOLE_T : String := refusal ((fun _ => ()) <$> restrict .empty Json.null 0)
 
-#guard HOLE_T.startsWith "one-circuit: not derived yet: restrict"
+#guard HOLE_T == "restrict: the partition object has no blocks"
 #guard held [] [] == HOLE_T
 #guard held ["ex2", "rcp"] ["rcp", "ex2"] == HOLE_T
 #guard (lookupsOf "circuit\nMETA {\"lookups\":[]}\n".toUTF8).toOption == none
@@ -1235,7 +1236,7 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
 #guard whyT (runMembers (fun _ => Json.null) #[] #[] #[1] ⟨#[]⟩) ==
   "the units the sessions proved are not the evidence's proved_units"
 #guard (whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[2] ⟨#[]⟩)).startsWith
-  "member m2: one-circuit: not derived yet: restrict"
+  "member m2: restrict: "
 #guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[] ⟨#[]⟩) == unsampled "m2"
 #guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2", statementT "m10"] #[10] ⟨#[]⟩) ==
   unsampled "m2"
