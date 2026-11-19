@@ -215,7 +215,7 @@ def _parts_window(tmp_path, with_plan: bool, port=None, embed_ids=None, name=Non
         com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
         com.sources[1].rows = SERVED_ROWS if kept is None else kept
     if with_plan:
-        com.capture_plan, com.compiler = _plan(fx), dict(COMPILER)
+        com.capture_plan, com.compiler, com.op_path_aliases = _plan(fx), dict(COMPILER), fx.get("op_path_aliases") or {}
     leds = {"b0-1": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
             "b0-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
@@ -279,15 +279,30 @@ def test_a_sealed_windows_record_binds_the_registered_compiler(tmp_path):
     assert r.ctx["served_window"]["compiler"] == COMPILER and "required_manifest" not in r.ctx["served_window"]
 
 
-def test_serve_openai_refuses_to_commit_until_it_builds_the_rows_capture_plan(monkeypatch):
-    """`committer` refuses by name what the served Commit can't do yet: build its acquisition and binder from the row's
-    capture plan at the serve's start."""
-    from verity_vllm.config import UsageError
+def test_the_arena_is_sized_from_the_window_class_under_the_engines_limits():
+    """`arena_envelope`: the class's slots a step, each of at most its prompt, its positions a sequence, under the engine's
+    own limits."""
+    from verity_vllm.program.predict.window_class import CLASS_OF_RECORD, WindowClass
 
-    opts = SimpleNamespace(commit=True, row_build=None, scheme=ss.ROWS, retention=SimpleNamespace(retain="host", release_after=None))
-    monkeypatch.setattr(ss, "scheme_refusal", lambda _o: None)
-    with pytest.raises(UsageError, match="capture plan"):
-        ss.committer(opts, llm=None)
+    opts = SimpleNamespace(max_num_seqs=16, max_num_batched_tokens=8192, max_model_len=4096)
+    assert ss.arena_envelope(opts, CLASS_OF_RECORD) == {"batch": 8, "max_prompt": 1024, "max_new": 1, "max_num_batched_tokens": 8192,
+                                                        "max_model_len": 1088}
+    assert ss.arena_envelope(opts, WindowClass(4, 27, 2)) == {"batch": 4, "max_prompt": 27, "max_new": 1, "max_num_batched_tokens": 108,
+                                                              "max_model_len": 29}
+    small = SimpleNamespace(max_num_seqs=2, max_num_batched_tokens=512, max_model_len=64)
+    assert ss.arena_envelope(small, CLASS_OF_RECORD) == {"batch": 2, "max_prompt": 1024, "max_new": 1, "max_num_batched_tokens": 512,
+                                                         "max_model_len": 64}
+
+
+def test_a_shared_modules_kth_path_binds_as_its_first_paths_kth_call():
+    """A rotary embedding shared by every layer runs once, under layer 0's hooks, per layer: the plan's layer-k rows bind as
+    its k-th call (`served_binder_of` over the runtime tree's aliases), in the plan's member order."""
+    plan = [{"op_path": f"model.layers.{k}.self_attn.rotary_emb", "row": 0, "spec": "RoPE_v1", "members": [("query", 0, ""), ("key", 0, "")]}
+            for k in range(3)]
+    aliases = {f"model.layers.{k}.self_attn.rotary_emb": ["model.layers.0.self_attn.rotary_emb", k] for k in (1, 2)}
+    names = ["model.layers.0.self_attn.rotary_emb/0", "model.layers.0.self_attn.rotary_emb/1"] * 3
+    got = ss.served_binder_of(plan, [0], {}, False, aliases).bind(0, names)
+    assert [g[:3] for g in got] == [("model.layers.0.self_attn.rotary_emb", m, k) for k in range(3) for m in ("query", "key")]
 
 
 #: each request's token rows of each step (`SERVED_ROWS`)

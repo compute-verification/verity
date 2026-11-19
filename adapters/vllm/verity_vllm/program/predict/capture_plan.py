@@ -31,25 +31,20 @@ from __future__ import annotations
 import gzip
 import json
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.check.replay.checks import check_rows
-
-#: a module's returned tensor, captured at its forward's output
-MODULE_OUTPUT = "module_output"
-#: a value two Calls of one module body exchange (`<module>/<fx node>`), captured at the call inside the body
-CALL_BOUNDARY = "call_boundary"
-#: a shared-scale FP8 GEMM's products per row, captured at the GEMM
-SCALE_PRODUCTS = "scale_products"
-#: a field of a Program's `run` input (`<op_path>/<member>`), captured where the runner sets it
-RUN_VALUE = "run_value"
-#: the token select's ids, the runner's return
-SAMPLED = "sampled"
-#: the prompt ids, captured at the embedding's input
-INPUT_IDS = "input_ids"
-CLASSES = (MODULE_OUTPUT, CALL_BOUNDARY, SCALE_PRODUCTS, RUN_VALUE, SAMPLED, INPUT_IDS)
+from verity_vllm.records.capture import (
+    CALL_BOUNDARY,
+    CLASSES,
+    INPUT_IDS,
+    MODULE_OUTPUT,
+    RUN_VALUE,
+    SAMPLED,
+    SCALE_PRODUCTS,
+)
 
 #: the query's Value families (`query.required.CallMember.family`) the plan captures, by capture class
 CLASS_OF_FAMILY = {"instance_outputs": MODULE_OUTPUT, "call_boundaries": CALL_BOUNDARY, "scale_products": SCALE_PRODUCTS,
@@ -112,9 +107,6 @@ def of_build(build: str | Path, *, index: Callable[[Mapping[str, Any], str], Any
     """The plan classes of the row whose Build of record is the directory ``build``: every value a row of its request Programs
     (`build_request_*`) commits, and the prompt ids at each Program's embedding, sorted by op path and member. A value two
     rows give another width, dtype or capture class is refused by name, and so is a Build with no request Program."""
-    dirs = sorted(p for p in Path(build).glob("build_request_*") if (p / "instances.json.gz").is_file())
-    if not dirs:
-        raise ValueError(f"{build}: no request Program (build_request_*/instances.json.gz)")
     out: dict[tuple[str, str], dict[str, Any]] = {}
 
     def add(op: str, member: str, capture: str, width: int, dtype: str, definition: str, where: str) -> None:
@@ -126,8 +118,7 @@ def of_build(build: str | Path, *, index: Callable[[Mapping[str, Any], str], Any
         if definition not in c["definitions"]:
             c["definitions"].append(definition)
 
-    for d in dirs:
-        pi = index(json.loads(gzip.open(d / "instances.json.gz").read()), str(d))
+    for d, pi in _programs(build, index):
         for r in captured(pi, d.name):
             for name, width, dtype in r["members"]:
                 capture = r["classes"][str(name)]
@@ -142,5 +133,23 @@ def of_build(build: str | Path, *, index: Callable[[Mapping[str, Any], str], Any
     return [out[k] for k in sorted(out)]
 
 
+def rows_of_build(build: str | Path, *, index: Callable[[Mapping[str, Any], str], Any] = _index) -> list[dict[str, Any]]:
+    """The plan rows (`captured`) of every request Program of the Build ``build``, each (op path, row) once, as the first
+    Program in name order spells it."""
+    out: dict[tuple[str, int], dict[str, Any]] = {}
+    for d, pi in _programs(build, index):
+        for r in captured(pi, d.name):
+            out.setdefault((str(r["op_path"]), int(r.get("row", 0))), r)
+    return list(out.values())
+
+
+def _programs(build: str | Path, index: Callable[[Mapping[str, Any], str], Any]) -> Iterator[tuple[Path, Any]]:
+    dirs = sorted(p for p in Path(build).glob("build_request_*") if (p / "instances.json.gz").is_file())
+    if not dirs:
+        raise ValueError(f"{build}: no request Program (build_request_*/instances.json.gz)")
+    for d in dirs:
+        yield d, index(json.loads(gzip.open(d / "instances.json.gz").read()), str(d))
+
+
 __all__ = ["CALL_BOUNDARY", "CLASSES", "CLASS_OF_FAMILY", "INPUT_IDS", "MODULE_OUTPUT", "NODE", "NOT_SERVED", "RUN_VALUE", "SAMPLED",
-           "SCALE_PRODUCTS", "captured", "of_build"]
+           "SCALE_PRODUCTS", "captured", "of_build", "rows_of_build"]

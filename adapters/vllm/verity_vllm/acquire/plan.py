@@ -33,6 +33,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.records import capture as CP
 from verity_vllm.commit.committer.flush_points import (
     GATHER_FLUSH_LEAVES,
     PRE_FLUSH_LEAVES,
@@ -291,8 +292,6 @@ def values_of_plan(classes: Iterable[Mapping[str, Any]]) -> list[ValuePlan]:
 
 def _capture_sites(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[AcquisitionSite], list[dict[str, str]]]:
     """The legal sites of a plan class, by its capture class."""
-    from verity_vllm.program.predict import capture_plan as CP
-
     rt: RuntimeTree = corr.runtime
     call = {"op_path": v.op_path, "output_member": v.output_member}
     module = corr.owning_module(call)
