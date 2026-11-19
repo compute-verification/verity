@@ -67,9 +67,7 @@ def test_a_declared_schemes_parameters_are_its_settings_refused_by_name(given: d
 
 #: the declared pieces whose launch declares no entry or no executables yet (`Launch.entry`, `Launch.executables`),
 #: each refused by name when launched, by who owes the declaration; only shrinks
-NO_ENTRY = {("sampled-proofs", T.WORKERS): ("entry", "proofs"),
-            ("pearl-plus", T.WORKERS): ("entry", "compute-accounting"),
-            ("pouw", T.WORKERS): ("executables", "compute-accounting")}
+NO_ENTRY = {("sampled-proofs", T.WORKERS): ("entry", "proofs")}
 
 
 def test_every_declared_piece_names_its_entry_and_executables_and_one_lacking_either_is_refused_by_name() -> None:

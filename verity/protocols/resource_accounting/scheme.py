@@ -284,9 +284,10 @@ class Launch:
     bindings the party it reaches writes for it when `verity run` starts that party, in order, with ``starts_optional``
     those of them the start may leave out. A start writes only some of ``binds`` and ``optional``. ``entry``, a
     ``module:attribute``, names the callable the launcher calls with one argument, the scheme's declaration, for the
-    piece's hooks and the scripts they run; it launches and collects and decides nothing, and nothing a node sets
-    overrides it. ``executables`` are the scheme's own Lean executables the piece builds and answers with
-    (`Executable`). A piece whose launch declares either one not is refused by name when it is launched."""
+    piece's hooks and the scripts they run; it launches and collects and decides nothing, nothing a node sets
+    overrides it, and its hooks refuse by name with `LaunchRefused`. ``executables`` are the scheme's own Lean
+    executables the piece builds and answers with (`Executable`). A piece whose launch declares either one not is
+    refused by name when it is launched."""
 
     binds: tuple[str, ...] = ()
     optional: tuple[str, ...] = ()
@@ -296,6 +297,15 @@ class Launch:
     starts_optional: tuple[str, ...] = ()
     entry: str | Lacks = UNDECLARED
     executables: tuple[Executable, ...] | Lacks = UNDECLARED
+
+
+class LaunchRefused(Exception):
+    """A piece's hooks (its `Launch.entry`'s) refusing by name: ``name`` the rule, ``detail`` what broke it. The
+    launcher raises it as `verity.channel.Refused`, which a scheme's module does not load."""
+
+    def __init__(self, name: str, detail: str) -> None:
+        super().__init__(f"{name}: {detail}")
+        self.name, self.detail = name, detail
 
 
 @dataclass(frozen=True)
@@ -750,7 +760,7 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
 
 
 __all__ = ["BESIDE_STORAGE", "BESIDE_STORAGE_NOT_SHOWN", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
-           "Answers", "Charge", "Executable", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
+           "Answers", "Charge", "Executable", "Kernels", "Lacks", "Launch", "LaunchRefused", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
            "bound",
            "answering", "credited", "declared", "layout", "order_refusals", "register", "register_process", "settings",
            "unbounded"]
