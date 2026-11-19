@@ -180,7 +180,6 @@ theorem operands_lists (P : Prog) (sc : Scope) (node : Node) (m : ℕ) (ops : Ar
     exact ⟨L, hlen.trans (by simp [Std.Legacy.Range.size]), hflat, hL⟩
   intro i b r hi hb hr
   obtain ⟨L, rfl, hflat, hL⟩ := hb
-  dsimp only at hr
   split at hr
   · cases hr
   rename_i inner hinner
@@ -341,7 +340,6 @@ theorem gate_operand_widths (bytes : ByteArray) (P : Prog) (h : decode bytes = .
     rw [← Array.length_toList, Flock.Sigma.widths_length, ← getElem!_pos (P.defs[p]!).params i hip]
     exact htc
   rw [getElem!_pos _ t htw]
-  simp
 
 /-- **A gate's operands are at most as many bits as its primitive's parameters.** -/
 theorem gate_operand_bits (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
