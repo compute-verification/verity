@@ -110,25 +110,26 @@ def check_format(a, out, bad):
 
 def check_widths(a, out, bad):
     """Each `--widths` line is `{"program", "codec"}`: a descriptor and the codec's refusal of it (`decode_program`; null
-    where it decodes). The Lean decoder refuses every one the codec refuses as `E_REINTERPRET` with the codec's message,
-    and none other as `E_REINTERPRET`."""
-    both = neither = 0
+    where it decodes). The Lean decoder refuses every one the codec refuses as `E_REINTERPRET`, or as a read at another
+    width (`recut-width`, `recut-boundary`, `recut-overrun`, PROTOCOL.md §4.4), with the codec's message, and none other so."""
+    both = neither = recut = 0
     for k, line in enumerate(Path(a.widths).read_text().splitlines()):
         case = json.loads(line)
         (out / "widths.desc").write_text(case["program"])
         got = lean(a, out / "widths.desc")
         err = "" if got["ok"] else got.get("error", "")
         why = case["codec"] or ""
-        if "E_REINTERPRET" in why:
+        if "E_REINTERPRET" in why or why.startswith("recut-"):
             if err == why:
                 both += 1
+                recut += why.startswith("recut-")
             else:
                 bad.append(("widths", k, err[:300], why[:300]))
-        elif "E_REINTERPRET" in err:
+        elif "E_REINTERPRET" in err or err.startswith("recut-"):
             bad.append(("widths", k, err[:300], why[:300]))
         else:
             neither += 1
-    return {"both_refuse": both, "neither": neither}
+    return {"both_refuse": both, "recut": recut, "neither": neither}
 
 
 def _root_body(d):
