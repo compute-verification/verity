@@ -999,9 +999,9 @@ def test_openings_are_sampled_from_the_windows_live_coins(store) -> None:
     assert sampled(b"coins") == sampled(b"coins") != sampled(b"other coins")
 
 
-def test_a_draw_that_runs_out_of_its_samples_coins_refuses_the_close() -> None:
+def test_a_draw_that_runs_out_of_its_samples_coins_ends_the_session() -> None:
     """The draw reads the sample's coins raw and in order, `2k · width(U) + 64` bytes first: a source shorter than that
-    is the proof system's `RAN_OUT`, which `close` raises as a refusal, never a redraw."""
+    is the proof system's `RAN_OUT`, which `close` raises, ending the session, never a redraw."""
     lengths = [5, 7]
     need = 2 * 7 * (((12).bit_length() + 64 + 7) // 8) + 64
     assert len(audit.receipt_sample(7, bytes(range(256)) * 4, lengths)) == 7

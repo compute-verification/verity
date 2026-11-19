@@ -47,7 +47,7 @@ def close (g : Nat) (s : State) (t : Int) (now : Nat) : Except String (Result ×
   if t + 1 == s.params.windows && s.joined.size < s.appends.size then return s.fail t .coin
   let lengths := group.foldl (fun acc u => acc ++ s.windows[u]!.plans.map (·.length)) #[]
   let some sampled := receiptSample s.params.samples s.coins[s.params.windows + t / g]! lengths
-    | return (.refused Spot.Draw.RAN_OUT, s)
+    | throw Spot.Draw.RAN_OUT
   let share := fun (base n : Nat) => sampled.filterMap fun (i, p) =>
     if base ≤ i && i < base + n then some (i - base, p) else none
   let (windows, _) := group.foldl (fun (acc : Array Win × Nat) u =>

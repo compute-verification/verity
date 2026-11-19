@@ -217,7 +217,7 @@ def Verdict.rejection (v : Verdict) : Rejection := v.1.getD ⟨.malformed, none�
 /-- `Session.close`'s samples: `min(s, U)` distinct receipts (pass, position) uniform over the window's U receipts, in
 order, drawn by the proof system's draw (`Spot.Draw.sampleUnits`, a subset, as `coins.draw_first` draws it) from `src`,
 the sample's coins as the challenger released them, read in order with no derivation; with the bytes of `src` the draw
-read. `RAN_OUT` when the draw runs out of them, which refuses the close. -/
+read. `RAN_OUT` when the draw runs out of them, which `Session.close` throws: it ends the session, and nothing redraws. -/
 def receiptSampleRead (samples : Nat) (src : ByteArray) (lengths : Array Nat) :
     Except String (Array (Nat × Nat) × Nat) := do
   let ends := (lengths.foldl (fun (acc : Array Nat × Nat) n => (acc.1.push (acc.2 + n), acc.2 + n)) (#[], 0)).1

@@ -9,7 +9,7 @@ public import Definitions.Poub.Guarantees.RemoteDraw
 sample is `Key.subset` on the first blocks `prf t` derives from its coin, at error
 `δ + Σ_t s_t/2^256 + Σ_t adv_t + binding`. The verifier draws no such sample: window `t`'s sample is the proof layer's
 draw on its sample's coins as the challenger released them (`Poub.receiptSample`, `Spot.Draw.sampleUnits (.subset k)`),
-modelled here by `Run.openedRaw` (`drawRaw`), none when the coins run out, which refuses the close. On that draw there
+modelled here by `Run.openedRaw` (`drawRaw`), none when the coins run out, which ends the session (`Session.close` throws). On that draw there
 is no key, so no distinguisher's advantage, and no rejected first block, so no `s_t/2^256`: a draw that runs out is a
 refusal, not an error.
 

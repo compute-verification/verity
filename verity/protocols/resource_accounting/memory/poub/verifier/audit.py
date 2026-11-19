@@ -1259,7 +1259,9 @@ class AuditRun:
 
     def close(self, t: int) -> tuple[tuple[int, int], ...] | Verdict:
         """Window t's samples, from its sample's coins released now (`receipt_sample`): `s` distinct receipts (pass,
-        position), uniform over its `U_t = Σ_i L_i`, in order; refused when the draw runs out of the coins (`RAN_OUT`).  Refused until its roots are final: the next window's first root has arrived,
+        position), uniform over its `U_t = Σ_i L_i`, in order; a draw that runs out of the coins ends the session
+        (ValueError `RAN_OUT`, the Lean's error): nothing redraws.  Refused until its roots are final: the next window's
+        first root has arrived,
         `D_t` has passed, or, in a paced session, the window holds its k roots, past which `receive` takes none, and
         its boundary has left, so its record has its deadline; the challenger's log fixes a paced window's end at its
         last root.  Its rejection when it has fewer than
@@ -1295,10 +1297,7 @@ class AuditRun:
         if t == self.params.windows - 1 and len(self._joined) < len(self._appends):
             return self._fail(t, "coin")
         src = self.coins.sample(t // self.params.groups_per_coin, w.roots[-1])
-        try:
-            sampled = receipt_sample(self.params.samples, src, [plan.length for v in ws for plan in v.plans])
-        except ValueError as e:
-            raise SessionError(str(e)) from None
+        sampled = receipt_sample(self.params.samples, src, [plan.length for v in ws for plan in v.plans])
         base = 0
         for u, v in zip(group, ws):
             n = len(v.plans)

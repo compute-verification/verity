@@ -423,7 +423,7 @@ def close (s : State) (t : Int) (now : Nat) : Except String (Result × State) :=
   if w.roots.size < s.params.minPasses then return s.fail t .few
   if t + 1 == s.params.windows && s.joined.size < s.appends.size then return s.fail t .coin
   let some sampled := receiptSample s.params.samples s.coins[s.params.windows + t]! (w.plans.map (·.length))
-    | return (.refused Spot.Draw.RAN_OUT, s)
+    | throw Spot.Draw.RAN_OUT
   return (.sampled sampled, { s with windows := s.windows.modify t ({· with drawn := some sampled, openedNs := some now}) })
 
 def verify (s : State) (t : Int) (openings : Array Opening) : Result × State := Id.run do
