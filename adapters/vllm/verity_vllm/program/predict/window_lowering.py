@@ -90,6 +90,8 @@ class _Program:
         self.outs: dict[int, list[tuple[int, int, Row]]] = {}
         self.words: dict[int, list[tuple[int, int, int]]] = {}
         self.gemms: dict[int, tuple[Any, tuple[Row, ...], int]] = {}
+        #: each node's output leaves at which a node's argument starts or ends (`_slices`)
+        self.read_at: dict[int, set[int]] | None = None
         self.keys: dict[tuple[str, tuple[str, Any, int, int]], _Keys] = {}
         self.position = 0
         self.slot: Row | None = None
@@ -380,6 +382,22 @@ class _Program:
         self._each(tid, "gu", u, pieces)
         self.outs[j] = [(0, n, Row(tid, u, "o0", w))]
 
+    def _slices(self, j: int, N: int, n: int) -> list[tuple[int, int, int]]:
+        """Node ``j``'s N columns as slices of n, the last of N mod n, in runs ``(first column, columns a slice, slices)``:
+        an allocation a run, a run ending where a node's argument starts or ends inside node ``j``'s output, so a reader of
+        a range of each slot's slices (a head of a fused projection) reads one allocation."""
+        if self.read_at is None:
+            self.read_at = {}
+            for nd in self.fn.body.nodes:
+                for a in nd.args:
+                    for space, idx, lo, hi in runs(a.refs):
+                        if space == "n":
+                            self.read_at.setdefault(idx, set()).update((lo, hi))
+        full, rest = divmod(N, n)
+        words = {_word(self.words[j], x, f"{self.name}: node {j}") for x in self.read_at.get(j, ())}
+        cuts = [0, *sorted({c // n for c in words if 0 < c < full * n and c % n == 0}), full]
+        return [(a * n, n, e - a) for a, e in zip(cuts, cuts[1:])] + ([(full * n, rest, 1)] if rest else [])
+
     def _Gemm(self, j: int, node: Any) -> None:
         if self.cut is not None and j not in self.cut.heads:
             cut_linear(self, j, node)
@@ -392,9 +410,8 @@ class _Program:
         while n > 1 and any(self.b.read_rows.get((descriptor_id(bind(node.fn.defn, **{**b, "N": m})), "x"), len(xs)) != len(xs)
                             for m in (n, N % n) if m):
             n //= 2
-        full, rest = divmod(N, n)
         pieces = []
-        for s0, m, count in ((0, n, full), (full * n, rest, int(rest > 0))):
+        for s0, m, count in self._slices(j, N, n):
             if not count:
                 continue
             tid, u = self.b.unit(bind(node.fn.defn, **{**b, "N": m}), count)
@@ -412,9 +429,8 @@ class _Program:
         x, sx, w, sw = node.args
         xs, ss = self.rows(x.refs), self.rows(sx.refs)
         lo, slo = self.weight(w.refs, N * K // 2), self.weight(sw.refs, 2 * N)
-        full, rest = divmod(N, n)
         pieces = []
-        for s0, m, count in ((0, n, full), (full * n, rest, int(rest > 0))):
+        for s0, m, count in self._slices(j, N, n):
             if not count:
                 continue
             tid, u = self.b.unit(IX.scaled_mm_words(K, m), count)
