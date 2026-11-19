@@ -1,3 +1,0 @@
-[2026-11-19T01:02Z] 26fae0fdb755
-From vllm lead, 5:03 PM PST, one addition to your brief: do NOT delete or move anything under the adapter manifests/capture-maps (in particular glm-moe-dsa-eager-hopper-tp8-v0.json): compute-accounting machine model GLM-5.3 gap table reads that capture map, and circuits has said its own cut leaves it. If a file you delete is the only writer or reader of a capture map in the adapter, list the map and its outside readers (search the whole tree by the file name) and leave the map. Say in your return whether any of your 48 files is a capture map or data under manifests/.
-
