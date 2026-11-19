@@ -53,6 +53,21 @@ def toy() -> Program:
     return _program(body, Tuple(Array(2, PAIR), A4))
 
 
+MARK = {"supplied": "LayingToySalt", "args": [], "layout": "bits", "bits": 4}
+
+
+@functools.cache
+def with_s(binding: str) -> Program:
+    params = (("x", Array(2, A4)), ("k", A4), ("s", A4))
+
+    def body(B, S, x, k, s):
+        vs = B.batch(V, x, k, axes=(0, None))
+        return tuple_of(vs, B.call(T, vs[1][0], s))
+    fn = CompositeDefinition(f"LayingToyS{binding}", 1, (), lambda S: (params, Tuple(Array(2, PAIR), A4)), body, register=False)
+    return Program(fn, registered=["k"] + (["s"] if binding == "registration" else []),
+                   supplied={"s": MARK} if binding == "supplied" else {})
+
+
 def ands(limit):
     return lambda ins, outs, n: n <= limit
 
@@ -81,7 +96,31 @@ def test_a_unit_that_fits_is_left_as_it_is():
     assert LY.lay(toy(), ands(10**6)) is toy()
 
 
-@pytest.mark.parametrize("program", [toy, lambda: laid(3)])
+def test_laying_keeps_a_supplied_input_supplied_with_its_mark():
+    P0 = with_s("supplied")
+    P1 = LY.lay(P0, ands(3))
+    assert P1 is not P0 and P1.bindings == P0.bindings == ("run", "registration", "supplied")
+    assert P1.supplied == {"s": MARK}
+    ids = [nd.fn.id for nd in P1.root.body.nodes if input_id(nd.fn.id)]
+    assert ids == [nd.fn.id for nd in P0.root.body.nodes if input_id(nd.fn.id)] and ids[-1] == "SuppliedInput1_v1"
+    assert [input_id(i)[0] for i in ids].count("supplied") == 1
+    assert [g.prim.id for g in P0.circuit.gates()] == [g.prim.id for g in P1.circuit.gates()]
+
+
+def test_the_measure_reads_a_supplied_input_as_a_port_of_its_own_binding_as_it_reads_a_registered_one():
+    ms = [LY.Measure(P, LY.query(P)) for P in (LY.lay(with_s(b), ands(3)) for b in ("supplied", "registration"))]
+    n = len(ms[0].units)
+    assert n == len(ms[1].units)
+    split = 0
+    for a in range(n):
+        for b in range(a + 1, n + 1):
+            (i0, o0, n0), (i1, o1, n1) = ms[0].block(a, b), ms[1].block(a, b)
+            assert (sum(i0), o0, n0) == (sum(i1), o1, n1) and len(i1) <= len(i0) <= len(i1) + 1
+            split += len(i0) > len(i1)
+    assert split
+
+
+@pytest.mark.parametrize("program", [toy, lambda: laid(3), lambda: LY.lay(with_s("supplied"), ands(3))])
 def test_a_blocks_measure_is_the_block_restrict_cuts(program):
     P = program()
     q = LY.query(P)
