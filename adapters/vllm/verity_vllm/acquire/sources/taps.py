@@ -6,8 +6,8 @@ this road.
 
 The rank workers of a TP Commit still read their rows of the merged manifest: `pipeline.tp.commit` hands `for_ranks(...)` to
 `pipeline.tp.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer, and `require_on_every_rank`
-fails the Commit closed unless every rank attached every tap that is on (`SOURCES`: the norm scales, the router softmax, a rank's
-vocabulary range).  Each rank also attaches the route source (`route_source`) when a capture map describes its model; when the rank's
+fails the Commit closed unless every rank attached every tap that is on (`SOURCES`: the router softmax, a rank's vocabulary
+range; the norm-scale source reads no manifest and is attached by neither side).  Each rank also attaches the route source (`route_source`) when a capture map describes its model; when the rank's
 rows name `DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`); when they name the MoE
 align Definitions, the Marlin experts' align schedule (`moe_align_source`); and the narrowed-rows source (`narrowed_source`) whenever
 its rows are narrowed.  The route, linear quant, align and narrowed sources: once one rank has one, every rank must have it."""
@@ -26,7 +26,6 @@ from verity_vllm.acquire.sources import (
     linear_quant_source,
     moe_align_source,
     narrowed_source,
-    norm_scale_source,
     route_source,
     router_softmax_source,
     vocab_range_source,
@@ -35,15 +34,13 @@ from verity_vllm.acquire.sources.call_boundary_plan import SCALE_PRODUCTS
 from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
 from verity_vllm.config import option
 from verity_vllm.log import init_logger
-from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import vocab_range as VR
 
 logger = init_logger(__name__)
 
 #: (the TapSources field, the rank result's key, the source module, the manifest family, the source's class)
-SOURCES = (("norm_tap_so", "norm_scale_source", norm_scale_source, NS.FAMILY, norm_scale_source.NormScaleSource),
-           ("router_tap_so", "router_softmax_source", router_softmax_source, RS.FAMILY, router_softmax_source.RouterSoftmaxSource),
+SOURCES = (("router_tap_so", "router_softmax_source", router_softmax_source, RS.FAMILY, router_softmax_source.RouterSoftmaxSource),
            ("vocab_range", "vocab_range_source", vocab_range_source, VR.FAMILY, vocab_range_source.VocabRangeSource))
 
 
@@ -51,8 +48,6 @@ SOURCES = (("norm_tap_so", "norm_scale_source", norm_scale_source, NS.FAMILY, no
 class TapSources:
     """A Commit's tap options (`pipeline.commit`, `pipeline.tp.commit`); each refuses a required manifest without its family (exit 3)."""
 
-    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="the norm-scale tap op (ops/pod_norm_tap.sh): commit `<norm module>/"
-                                     "norm_scale` for every norm_scales identity of the required manifest (acquire.sources.norm_scale_source)")
     router_tap_so: str | None = option("--router-tap-so", default=None, help="the router-softmax tap op (ops/pod_router_tap.sh): commit "
                                        "`moe/L<k>/router_softmax` for every router_softmax identity of the required manifest "
                                        "(acquire.sources.router_softmax_source)")

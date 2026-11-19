@@ -1,8 +1,8 @@
 """The norm scales (`query.norm_scales`) as an acquisition source: one f32 per norm Call per row, committed as `<norm module>/norm_scale` in
-the same step stream and run root as the module's outputs.  On by default (commit_delta `--norm-tap-so`, passed when the row's manifest
-names norm scales); NORM_TAP=0 leaves it off, for A/B only.
+the same step stream and run root as the module's outputs.  The source reads no manifest and nothing attaches it on the served
+road: a caller constructs it over the norm modules it names.
 
-The modules are the required manifest's `norm_scales` op paths.  A forward pre-hook marks the one that runs (the scale tensor takes its
+The modules are the caller's (`modules`: op path -> norm Definition family).  A forward pre-hook marks the one that runs (the scale tensor takes its
 input's leading shape: tokens, or tokens x heads for a q/k norm) and a forward hook unmarks it.  Inside it the scale is taken where the
 norm computes it (`query.norm_scales.site_of`):
 
@@ -12,7 +12,7 @@ norm computes it (`query.norm_scales.site_of`):
   `inv_rms`, once the installed kernel's source is checked to be the pinned one;
 * `aten` (`RsqrtF32_v1`, an ATen-chain norm): the output of `torch.rsqrt` inside the module.
 
-Outside a committed step, or outside the manifest's norm modules, the installed kernels run.  The tapped kernels compute exactly the
+Outside a committed step, or outside the source's norm modules, the installed kernels run.  The tapped kernels compute exactly the
 installed kernels' outputs and write every row's scale, which equals the circuit's (`tests.properties.norm_tap_exactness`).  Every patch goes
 through `engine.hooks` and `uninstall` undoes it.  A norm kernel of another kind inside a norm module is a collector error.
 """
@@ -49,7 +49,7 @@ def _file_sha256(path: str) -> str:
 
 class TritonTap:
     """Stands in for vLLM's `_rms_norm_kernel` while the source is installed: `kernel[grid](*args, **kw)` launches the tapped copy with a
-    scale buffer inside a manifest norm module during a committed step, else the installed kernel.  Any other attribute is the installed
+    scale buffer inside one of the source's norm modules during a committed step, else the installed kernel.  Any other attribute is the installed
     kernel's."""
 
     def __init__(self, source: NormScaleSource, installed: Any, tapped: Any) -> None:
@@ -82,8 +82,8 @@ class NormScaleSource:
 
     def __init__(self, committer: Any, model: Any, modules: Mapping[str, str], so_path: str | None = None, *,
                  words_per_token: int | None = None) -> None:
-        """`modules`: op path -> norm Definition family (`query.norm_scales.manifest_modules`); `so_path`: the tap build (needed when a
-        module's norm is the fused kernel); `words_per_token`: the manifest's scale words per token row (the arena bound)."""
+        """`modules`: op path -> norm Definition family ; `so_path`: the tap build (needed when a
+        module's norm is the fused kernel); `words_per_token`: the scale words per token row (the arena bound)."""
         import torch
 
         self.torch, self.c, self.model = torch, committer, model
@@ -98,7 +98,7 @@ class NormScaleSource:
         loaded: str | None = None
         if "cuda" in self.kinds:
             if not so_path:
-                raise RuntimeError("norm scales: the manifest names fused norms and no tap build was given (--norm-tap-so, ops/pod_norm_tap.sh)")
+                raise RuntimeError("norm scales: the modules name fused norms and no tap build was given (--norm-tap-so, ops/pod_norm_tap.sh)")
             torch.ops.load_library(so_path)
             self.ns = getattr(torch.ops, TAP_NS)
             version = int(self.ns.tap_version())
@@ -120,7 +120,7 @@ class NormScaleSource:
         mods = dict(self.model.named_modules())
         missing = sorted(set(self.modules) - set(mods))
         if missing:
-            raise RuntimeError(f"norm scales: the manifest's norm modules are not modules of the model: {missing[:4]}")
+            raise RuntimeError(f"norm scales: the source's norm modules are not modules of the model: {missing[:4]}")
         if "cuda" in self.kinds or "triton" in self.kinds:
             from vllm import envs
             if not envs.VLLM_BATCH_INVARIANT:
@@ -177,7 +177,7 @@ class NormScaleSource:
         return post
 
     def where(self, kind: str, *, strict: bool = True) -> tuple[Any, str, tuple[int, ...]] | None:
-        """(the committed step's job, the norm module, its input's leading shape) when a `kind` scale site runs inside a manifest norm
+        """(the committed step's job, the norm module, its input's leading shape) when a `kind` scale site runs inside a norm
         module during a committed step; None otherwise.  `strict`: a site of another kind inside a norm module is a collector error."""
         job = self.c._cur
         if job is None or not self._scope:
@@ -185,7 +185,7 @@ class NormScaleSource:
         op, lead = self._scope[-1]
         if self.modules[op] != kind:
             if strict:
-                self.error(f"norm scales: a {kind} norm kernel ran inside {op}, whose manifest norm is taken at {self.modules[op]}")
+                self.error(f"norm scales: a {kind} norm kernel ran inside {op}, whose norm is taken at {self.modules[op]}")
             return None
         return job, op, lead
 
@@ -244,23 +244,3 @@ class NormScaleSource:
                  "evidence": (f"norm-scale source: `<norm module>/{NS.MEMBER}` of {len(self.modules)} norm modules (sites {', '.join(self.kinds)}); "
                               f"tap build {self.so_path} (sha256 {self.stats['so_sha256']}), Triton source {self.stats['triton_source']}; outputs "
                               "bit-identical to the installed kernels and every scale == the IR model's: tests.properties.norm_tap_exactness")}]
-
-
-def attach(com: Any, so: str | None, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,
-           explicit_classes: bool = False, model: Any = None) -> tuple[tuple[str, ...], NormScaleSource | None]:
-    """Attach the source to `com` when `so` (the tap build) is given; the required manifest must name `norm_scales` identities, else the
-    Commit is refused (exit 3).  Returns the required classes with `norm_scales` added unless they were given explicitly."""
-    if not so:
-        return required_classes, None
-    modules = NS.manifest_modules(manifest)
-    if not modules:
-        logger.error("[delta] REFUSE: --norm-tap-so but the required-value manifest names no norm_scales identity (manifest build --norm-scales)")
-        raise SystemExit(3)
-    src = NormScaleSource(com, model if model is not None else getattr(com, "model", None), modules, so,
-                          words_per_token=NS.words_per_token(manifest) or None)
-    com.attach_source(src)
-    logger.info("[delta] norm-scale source attached: %d norm modules (sites %s), %s words per token, tap %s -> committer %s",
-                len(modules), ", ".join(src.kinds), src.words_per_token, so, com.name)
-    if not explicit_classes and NS.FAMILY not in required_classes:
-        return (*required_classes, NS.FAMILY), src
-    return required_classes, src
