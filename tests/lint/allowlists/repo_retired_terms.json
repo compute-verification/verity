@@ -2423,7 +2423,6 @@
     {"file": "tests/verity/protocols/proofs/spot/verifier/lean/test_period_audit_difftest.py", "count": 20},
     {"file": "tests/verity/protocols/proofs/spot/verifier/lean/test_period_difftest.py", "count": 9},
     {"file": "tests/verity/protocols/proofs/spot/verifier/lean/test_second_window_difftest.py", "count": 11},
-    {"file": "tests/verity/protocols/proofs/spot/verifier/lean/test_wired_key_difftest.py", "count": 4},
     {"file": "tests/verity/protocols/proofs/spot/verifier/lean/test_wires_difftest.py", "count": 26},
     {"file": "tests/verity/protocols/proofs/spot/verifier/test_candidates.py", "count": 13},
     {"file": "tests/verity/protocols/proofs/spot/verifier/test_challenger.py", "count": 3},
