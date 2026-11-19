@@ -16,7 +16,7 @@ from verity.commitments import advice as AC
 from verity.commitments.periods import interface as IF
 
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, WINDOW, _circuit, _labels, held
+from tests.program.predict.test_window_circuit import CLASS, FULL, GRAIN, WINDOW, _circuit, _labels, held
 from tests.program.predict.test_window_circuit_fa3 import H200, LLAMA_1B
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import inference_blocks as IB
@@ -27,6 +27,8 @@ from verity_vllm.program.predict.window_circuit import WindowClass, class_circui
 INT8_H200 = {**H200, "int8_exact": "linears"}
 #: the Program digest the header names, as the record gives it (`inference_blocks.program_digest`, about a minute at TINY)
 PROGRAM = "ab" * 64
+UNSLOTTED_SCAN = pytest.mark.xfail(strict=True, raises=AssertionError,
+                                   reason="tie 2: the scan's units are in request 0's block and wired across blocks")
 
 
 def _registered(config: dict = S.TINY):
@@ -94,6 +96,15 @@ def test_every_block_has_c_gates_and_k_fresh_input_bits(window):
     gates, fresh = _unrolled(circuit, _slots(circuit, IB.rows(circuit, program)))
     assert gates == [c, c] and fresh == [k, k] and k == 2 * 4548 * 16
     assert {r.param for r in circuit.registered.reads if r.param.split("/", 1)[0] != WEIGHTS} == {SCAN_STATE}
+
+
+@UNSLOTTED_SCAN
+def test_a_served_window_of_equal_requests_has_blocks_of_equal_gates_and_fresh_bits_and_no_wire_across_them():
+    """FULL, two requests of one length, served: by its record's blocks (`Blocks.slots_steps`), unrolled unit by unit,
+    no wire crosses blocks and its two blocks have the same gates and fresh-input bits."""
+    circuit = _circuit(FULL)
+    gates, fresh = _unrolled(circuit, {t: circuit.blocks.slots_steps(t, 0, n)[0] for t, n in circuit.units.items()})
+    assert gates[0] == gates[1] and fresh[0] == fresh[1], (gates, fresh)
 
 
 def test_a_served_windows_blocks_of_their_own_positions_are_refused_by_name():
