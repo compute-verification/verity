@@ -1,7 +1,7 @@
 """PoUS's setup as one circuit (`window.Setup`, `setup_proof` on both sides): the claim and the proof layer's draw, a
 block's place and inputs, the setup's C over every store block through the door, the prover's commitments, the two
 places the verifier stops: the units' constants and held ok (`setup_proof.bound`) and the door's restriction of a block
-that reads the supplied salt, and the order of the weights' commitment before the salt."""
+that reads the supplied salt, and the order of the weights' commitment before the salt, which no refusal reaches yet."""
 
 from __future__ import annotations
 
@@ -209,13 +209,21 @@ def test_the_door_stops_at_the_supplied_salt_on_a_setup_block(monkeypatch):
             V.check(OC.block, PF.verify, {5: PF.Proof(cf, pub, (s,))}, c, part, reg, draw([5]), params, salt, 16)
 
 
+@pytest.mark.slow
+@pytest.mark.xfail(strict=True, raises=pytest.fail.Exception,
+                   reason="no refusal reaches W: C's Program carries no mark (the builder passes no supplied binding), "
+                          "and the order rule reads only the commitments marks read (`registered.order`), which the "
+                          "salt's body (its coin) names none of")
 def test_a_weights_commitment_registered_after_the_salt_is_refused():
-    """The salt (`pous.setup.salt/v1`) is the memory attester's coin, drawn after W's commitment: an evaluation of it
-    whose W was registered after the coin is refused by name (E_SUPPLIED_ORDER, naming the weights), and one whose W was
-    registered before passes. The place that holds the order is the record's: W's registration entry before the coin's
-    entry, which the supplied input's check reads when the verifier computes the salt."""
-    from verity.circuits import supplied as S
+    """The salt (`pous.setup.salt/v1`) is the memory attester's coin, drawn after W's commitment: the verifier's supplied
+    rows of C (`registered.marked_rows`, as `caller.check` computes them), with the salt released before the record that
+    registers W, are refused by name (E_SUPPLIED_ORDER, naming the weights). Slow: C's Program takes about twenty
+    seconds to build."""
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-    S.check_order({WIN.WEIGHTS: 4}, 5, V.SALT_MARK["supplied"])
-    with pytest.raises(S.SuppliedError, match=r"^E_SUPPLIED_ORDER: \['weights'\] registered after pous\.setup\.salt/v1"):
-        S.check_order({WIN.WEIGHTS: 7}, 5, V.SALT_MARK["supplied"])
+    _, salt, setup = setup_case()
+    c = setup.circuit()
+    program, _query = c.program()
+    f = V.SALT_MARK["supplied"]
+    with pytest.raises(ValueError, match=r"^E_SUPPLIED_ORDER: \['weights'\] registered after pous\.setup\.salt/v1"):
+        G.marked_rows(program, c.registered.params, {}, {f: salt.hex()}, {f: 1}, 1)
