@@ -10,8 +10,10 @@ def _pouw_roots() -> list[Any]:
     (two promotion windows, `inert_bound._promoted`) on the H100's record, forming v1 under -h3: a row's admission
     (`PearlPlusAdmit_v1`) and A's salt-dead counts (`PearlPlusSaltDead_v1`) on words and on bits, the core
     (`PearlPlusTileCore_v1`, its σ `_v2`), the digest's hm96 leaf opening at a depth-1 tree (`PearlPlusTileLeaf_v1`), and the
-    whole unit (`PearlPlusTile_v1`, `tile`).  The core and the unit are over circuit-check's whole-lowering budget, so they
-    keep a circuit digest, not an AND count; their σ Calls are the pinned units (`pearl_c_call.units`)."""
+    whole unit (`PearlPlusTile_v1`, `tile`); and the core and the unit of a 2 × 1 tile whose second row is filler
+    (TR = 1), the smallest with both halves of the real-row rule.  The core and the unit are over circuit-check's
+    whole-lowering budget, so they keep a circuit digest, not an AND count; their σ Calls are the pinned units
+    (`pearl_c_call.units`)."""
     from verity.circuits.defs import bind
 
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound, pearl_plus_tile as T
@@ -21,8 +23,11 @@ def _pouw_roots() -> list[Any]:
     k, dev = 256, "h100"
     scheme = C.PearlC(k_min=k, tile=(1, 1), forming="v1", device=DEVICES[dev], hashing="h3")
     rho, rhor = inert_bound._rho(dev, None), inert_bound.row_rho(scheme, k)
-    core = dict(K=k, TM=1, TN=1, N=1, RHO=rho, RHOR=rhor, DEV=dev)
+    core = dict(K=k, TM=1, TR=1, TN=1, N=1, RHO=rho, RHOR=rhor, DEV=dev)
+    filler = dict(core, TM=2)
     return [bind(T.PearlPlusAdmit, K=k), bind(T.PearlPlusAdmitV2, K=k),
             bind(T.PearlPlusSaltDead, K=k, DEV=dev), bind(T.PearlPlusSaltDeadV2, K=k, DEV=dev),
             bind(T.PearlPlusTileCore, **core), bind(T.PearlPlusTileCoreV2, **core),
-            bind(T.PearlPlusTileLeaf, D=1), T.tile(scheme, k=k, tm=1, tn=1, n=1, depth=1)]
+            bind(T.PearlPlusTileLeaf, D=1), T.tile(scheme, k=k, tm=1, tn=1, n=1, depth=1),
+            bind(T.PearlPlusTileCore, **filler), bind(T.PearlPlusTileCoreV2, **filler),
+            T.tile(scheme, k=k, tm=2, tn=1, n=1, depth=1, tr=1)]

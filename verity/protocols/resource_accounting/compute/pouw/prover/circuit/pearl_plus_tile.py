@@ -2,12 +2,12 @@
 noise from the live salt, their admission, the tile's caps, its leaf under the transcript root and its served y, so that an
 auditor reads only the verifier's own registered rows and the proof, never a row's values, the salt key or the tile.
 
-    PearlPlusTile_v1{K,TM,TN,N,D,RHO,RHOR,DEV}         on bits
-        (a: Array<TM, f32[K]>, b: Array<TN, f32[K]>, y: Array<TM, f32[N]>, cert, hsalt: u8[192], path: Array<D, u8[64]>,
+    PearlPlusTile_v1{K,TM,TR,TN,N,D,RHO,RHOR,DEV}      on bits
+        (a: Array<TM, f32[K]>, b: Array<TN, f32[K]>, y: Array<TR, f32[N]>, cert, hsalt: u8[192], path: Array<D, u8[64]>,
          salt: u8[32], root: u8[64], unit: u32, rows: Array<TM, u32>, col: u32, eb: Array<TN, e4m3[32]>,
          fa, fb: Array<K, e4m3[32]>, g: Array<32, f32[32]>, troot, tdomain: u8[64], tpos: Array<D, bit>) -> ok: bit
         `PearlPlusTileCore_v2`'s ok and `PearlPlusTileLeaf_v1` of its digest, and-ed
-    PearlPlusTileCore_v1{K,TM,TN,N,RHO,RHOR,DEV}       on words; _v2 its σ
+    PearlPlusTileCore_v1{K,TM,TR,TN,N,RHO,RHOR,DEV}    on words; _v2 its σ
         (a, b, y, cert, salt, root, unit, rows, col, eb, fa, fb, g) -> (digest: u8[64], ok: bit)
     PearlPlusTileLeaf_v1{D}                             on bits
         (x: u8[64], y: u8[192], root, domain: u8[64], pos: Array<D, bit>, path: Array<D, u8[64]>) -> bit
@@ -15,19 +15,29 @@ auditor reads only the verifier's own registered rows and the proof, never a row
 
 The core, from the registry's call Definitions (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call`) and PoUW's cap (`cap`):
 
+  - **real rows.** TR, a static of the Definition (1 <= TR <= TM), is the tile's real rows: the first TR of its TM rows
+    are the call's, and rows TR .. TM − 1 are the zero rows a call's A is padded with to a multiple of 16 (filler).  It is
+    bound from the call's record (`UnitRecord.real_rows`), never an input: a count the prover chose could call a live row
+    filler.  Lean's tile rule (`PouwPearlPlus/Rule.lean` `rowsFailure`, `Records.lean` `credited`, `Tile.lean`) is the
+    same: a filler row is held to zero, word for word (−0 is not zero), and is neither admitted, capped, credited nor
+    y-checked; it is formed and in the tile's digest like any row.
   - **rows.** Row i of A (``a[i]``, the tile's row ``rows[i]`` of unit ``unit``) by `PearlCRowA_v1`: its line E_A from the
     salt, the row's own digest and B's root (``root``), its codes A′_i, its peel factors P_A,i and its statistics; row j
     of B by `PearlCRowB_v1` against its line ``eb[j]``.  R = 32, the device's atom and promotion period.
-  - **admission.** Each row's `PearlPlusAdmit_v1`, `Pc8RowA`'s ``ok`` on the statistics the row returned: every word
-    finite, the noise floor ρ·α >= 1 and at most k/64 dead words (`pc8`'s module docstring, `PearlC.admissible`).
+  - **admission.** Each real row's and each B row's `PearlPlusAdmit_v1`, `Pc8RowA`'s ``ok`` on the statistics the row
+    returned: every word finite, the noise floor ρ·α >= 1 and at most k/64 dead words (`pc8`'s module docstring,
+    `PearlC.admissible`).
   - **caps.** A's salt-dead counts (`PearlPlusSaltDead_v1`, `Pc8RowACap`'s), then `Pc8TileCap_v2` on the codes, the
-    factors, the admission words and the prover's certificates (``cert``): C̃ and U, and the verdict of the tile's cap at
-    ρ = 1/RHO and each admitted row's at ρr = 1/RHOR (`inert_bound.row_rho`: 4ρ at a census k, else ρ).
+    factors, the admission words (a filler row's the constant 0, so its words are outside the cap's debit and its |R|)
+    and the prover's certificates (``cert``): C̃ and U, and the verdict of the tile's cap at ρ = 1/RHO and each admitted
+    row's at ρr = 1/RHOR (`inert_bound.row_rho`: 4ρ at a census k, else ρ).
   - **leaf.** The tile's ``sha512/row-seg/v1`` digest of its messages (`leaves.tile_messages`, `PearlCRowDigest_v1`): the
     preimage of its leaf in the transcript tree.
-  - **y.** Each row's TN served words from U (`PearlCUnscale_v1`, no bias), held to the row's committed y (``y[i]``, N FP32
-    words, each a BF16 word widened: `served_y.f32_rows`) at column tile ``col``: words col·TN .. col·TN + TN − 1.
-  - ``ok`` is every row's admission (A's and B's), the cap's verdict and each row's y, and-ed.
+  - **y.** Each real row's TN served words from U (`PearlCUnscale_v1`, no bias), held to the row's committed y (``y[i]``,
+    N FP32 words, each a BF16 word widened: `served_y.f32_rows`; y is committed over the call's real rows only) at column
+    tile ``col``: words col·TN .. col·TN + TN − 1.
+  - ``ok`` is every real row's and B row's admission, the cap's verdict, each real row's y and each filler row's every
+    word zero, and-ed.
 
 The unit then opens the digest's hm96 leaf, under the private salt ``hsalt``, at ``tpos`` in the transcript tree of root
 ``troot`` and domain id ``tdomain`` along the private ``path`` (`audit.transcript_domain`: digests, so x is the digest).
@@ -190,6 +200,13 @@ PearlPlusSaltDeadV2 = _on_bits(PearlPlusSaltDead, 2)
 
 # ---- the core -----------------------------------------------------------------------------------------------------------
 
+def _refuse_core(b: dict) -> str | None:
+    tm, tr = b.get("TM", 1), b.get("TR", 1)
+    if not (isinstance(tr, int) and isinstance(tm, int) and 1 <= tr <= tm):
+        return f"a tile's real rows are 1 to its TM rows: TR = {tr!r}, TM = {tm!r}"
+    return _refuse_k(b)
+
+
 def _check(S) -> Any:
     d, ng = inert_bound._promoted(S.DEV, S.K)
     if S.N % S.TN or S.N < S.TN:
@@ -202,7 +219,7 @@ def _check(S) -> Any:
 def _core_params(S) -> tuple:
     k, tm, tn = S.K, S.TM, S.TN
     _d, ng = _check(S)
-    return (("a", Array(tm, Array(k, F32))), ("b", Array(tn, Array(k, F32))), ("y", Array(tm, Array(S.N, F32))),
+    return (("a", Array(tm, Array(k, F32))), ("b", Array(tn, Array(k, F32))), ("y", Array(S.TR, Array(S.N, F32))),
             ("cert", Array(tm, Array(tn, Array(ng - 1, Array(2, F32))))),
             ("salt", BYTES32), ("root", BYTES64), ("unit", U32), ("rows", Array(tm, U32)), ("col", U32),
             ("eb", Array(tn, LINE)), ("fa", Array(k, LINE)), ("fb", Array(k, LINE)), ("g", pc8.GRAM))
@@ -221,35 +238,39 @@ def _y_ok(e: U._Emit, yrow, served, col, tn: int, n: int):
 
 
 def _core_body(B, S, a, b, y, cert, salt, root, unit, rows, col, eb, fa, fb, g):
-    e, k, tm, tn, dev = U._Emit(B), S.K, S.TM, S.TN, S.DEV
+    e, k, tm, tr, tn, dev = U._Emit(B), S.K, S.TM, S.TR, S.TN, S.DEV
     d = DEVICES[dev]
     at = dict(K=k, R=R, DOT=pc8.ATOMS[d.atom.name], G=d.g)
     admit = bind(PearlPlusAdmit, K=k)
     ra = [B.call(bind(PearlCRowA, **at), salt, a[i], root, unit, rows[i], fa, fb) for i in range(tm)]
     rb = [B.call(bind(PearlCRowB, **at), b[j], eb[j], fb, fa, g) for j in range(tn)]
-    ok_a = [B.call(admit, a[i], ra[i][2], ra[i][3], ra[i][4]) for i in range(tm)]
+    ok_a = [B.call(admit, a[i], ra[i][2], ra[i][3], ra[i][4]) for i in range(tr)]
     ok_b = [B.call(admit, b[j], rb[j][2], rb[j][3], rb[j][4]) for j in range(tn)]
     sd = [B.call(bind(PearlPlusSaltDead, K=k, DEV=dev), a[i], ra[i][4], ra[i][5]) for i in range(tm)]
+    oka = [U.ok_word(e, o) for o in ok_a] + [e.c(L.OK.w, 0)] * (tm - tr)
     tile_inert_bound = bind(inert_bound.Pc8TileCapDefV2, K=k, TM=tm, TN=tn, N=S.N, RHO=S.RHO, RHOR=S.RHOR, DEV=dev)
     capped = B.call(tile_inert_bound, array_of([r[0] for r in ra]), array_of([r[0] for r in rb]), array_of([r[1] for r in ra]),
-                    array_of([r[1] for r in rb]), array_of([U.ok_word(e, o) for o in ok_a]), array_of(sd), cert)
+                    array_of([r[1] for r in rb]), array_of(oka), array_of(sd), cert)
     c, u, verdict = capped[0], capped[1], capped[2]
     digest = B.call(bind(PearlCRowDigest, K=2 * tm * tn), L.tile_messages(c, u, tm, tn))
-    served = B.call(bind(PearlCUnscale, TM=tm, TN=tn, BIAS=False), u, array_of([r[4] for r in ra]),
+    served = B.call(bind(PearlCUnscale, TM=tr, TN=tn, BIAS=False), u[:tr], array_of([r[4] for r in ra[:tr]]),
                     array_of([r[4] for r in rb]))
+    zero = [e.call(I32Eq, a[i][t], 0) for i in range(tr, tm) for t in range(k)]
     ok = e.call(Bf16GtStrict, verdict, 0)
-    for bit in ok_a + ok_b + [_y_ok(e, y[i], served[i], col, tn, S.N) for i in range(tm)]:
+    for bit in ok_a + ok_b + [_y_ok(e, y[i], served[i], col, tn, S.N) for i in range(tr)] + zero:
         ok = e.call(BitAnd, ok, bit)
     return tuple_of(digest, ok)
 
 
 PearlPlusTileCore = CompositeDefinition(
-    "PearlPlusTileCore", 1, ("K", "TM", "TN", "N", "RHO", "RHOR", "DEV"), lambda S: (_core_params(S), Tuple(BYTES64, BIT)),
-    _core_body, refuse=_refuse_k, conformance="protocol-defined; equal to `pearl_plus_tile.reference` on its fixture tiles "
-                                              "(tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_pearl_plus_tile.py)",
+    "PearlPlusTileCore", 1, ("K", "TM", "TR", "TN", "N", "RHO", "RHOR", "DEV"),
+    lambda S: (_core_params(S), Tuple(BYTES64, BIT)),
+    _core_body, refuse=_refuse_core, conformance="protocol-defined; equal to `pearl_plus_tile.reference` on its fixture tiles "
+                                                 "(tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_pearl_plus_tile.py)",
     doc="A drawn -h3 tile on words: its rows formed against the salt's noise (`PearlCRowA`, `PearlCRowB`), and (the "
-        "sha512/row-seg/v1 digest of its C̃ and U, ok: every row admitted, the tile's and each row's cap, and each row's "
-        "served y its committed y at column tile col).")
+        "sha512/row-seg/v1 digest of its C̃ and U over all TM rows, ok: its first TR rows (the real rows) and B's admitted, "
+        "the tile's and each real row's cap, each real row's served y its committed y at column tile col, and each later "
+        "row (filler) zero word for word).")
 PearlPlusTileCoreV2 = _on_bits(PearlPlusTileCore, 2)
 
 
@@ -305,24 +326,25 @@ def _tile_body(B, S, a, b, y, cert, hsalt, path, salt, root, unit, rows, col, eb
 
 
 def _refuse_tile(b: dict) -> str | None:
-    return _refuse_k(b) or (None if 1 <= b.get("D", 1) <= F3.MAX_D else f"a tree's depth is 1 to {F3.MAX_D}: D = {b['D']!r}")
+    return _refuse_core(b) or (None if 1 <= b.get("D", 1) <= F3.MAX_D else f"a tree's depth is 1 to {F3.MAX_D}: D = {b['D']!r}")
 
 
 PearlPlusTile = CompositeDefinition(
-    "PearlPlusTile", 1, ("K", "TM", "TN", "N", "D", "RHO", "RHOR", "DEV"), _tile_sig, _tile_body, refuse=_refuse_tile,
+    "PearlPlusTile", 1, ("K", "TM", "TR", "TN", "N", "D", "RHO", "RHOR", "DEV"), _tile_sig, _tile_body, refuse=_refuse_tile,
     conformance="protocol-defined; `pearl_plus_tile.reference` and `leaf_reference` on its fixture tiles "
                 "(tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_pearl_plus_tile.py)",
     doc="Pearl+'s -h3 tile unit: `PearlPlusTileCore_v2`'s ok, and its digest's hm96 leaf under hsalt opening at tpos to the "
         "transcript root troot (`PearlPlusTileLeaf_v1`); the verifier holds ok to 1.")
 
 
-def tile(scheme: C.PearlC, k: int, tm: int, tn: int, n: int, depth: int) -> SpecializedDefinition:
-    """`PearlPlusTile_v1` for ``scheme`` (forming v1, -h3) at depth ``k``, a TM × TN tile of a unit of ``n`` columns and a
-    transcript tree of depth ``depth``: ρ the device's cap, ρr the scheme's row cap at k (`inert_bound.row_rho`)."""
+def tile(scheme: C.PearlC, k: int, tm: int, tn: int, n: int, depth: int, tr: int | None = None) -> SpecializedDefinition:
+    """`PearlPlusTile_v1` for ``scheme`` (forming v1, -h3) at depth ``k``, a TM × TN tile of a unit of ``n`` columns whose
+    first ``tr`` rows are real (the call's record's; every row when None) and a transcript tree of depth ``depth``: ρ the
+    device's cap, ρr the scheme's row cap at k (`inert_bound.row_rho`)."""
     d = scheme.device
     if scheme.forming != "v1" or scheme.hashing != "h3" or DEVICES.get(d.name) != d:
         raise DomainError(f"{scheme.name}: Pearl+'s tile unit is forming v1 under -h3 on a device record")
-    return bind(PearlPlusTile, K=k, TM=tm, TN=tn, N=n, D=depth, RHO=inert_bound._rho(d.name, None),
+    return bind(PearlPlusTile, K=k, TM=tm, TR=tm if tr is None else tr, TN=tn, N=n, D=depth, RHO=inert_bound._rho(d.name, None),
                 RHOR=inert_bound.row_rho(scheme, k), DEV=d.name)
 
 
@@ -355,12 +377,14 @@ def reference(dev: str, k: int, n: int, a: Sequence[Sequence[int]], b: Sequence[
               rows: Sequence[int], cols: Sequence[int], col: int, rho: int, rhor: int) -> tuple[bytes | None, int]:
     """The core on the scheme (`pearl_c`): (the tile's digest, ok) for A's rows ``a`` (tile rows ``rows`` of unit
     ``unit``) and B's ``b`` (columns ``cols``, which give E_B's lines), the rows of y, the certificates, the salt and B's
-    root.  ok: the tile encodes (`PearlC.encode`), every row is admissible (`PearlC.admissible`'s per-row rule), the
-    certificates are the prover's (`inert_bound.certificates`), the tile's and each row's debit within ρ = 1/rho and ρr = 1/rhor of
-    their cells' credit (rev1's inertBoundOK on `pearl_c_inert_work`'s replay), and each row's committed y at column tile ``col`` is
-    the served y (`pearl_c_u.y`).  The digest is None where the tile doesn't encode."""
+    root.  y holds the tile's real rows, so its length is TR, and A's later rows are filler.  ok: the tile encodes
+    (`PearlC.encode`), every real row and B row is admissible (`PearlC.admissible`'s per-row rule), every filler row's
+    every word is 0, the real rows' certificates are the prover's (`inert_bound.certificates`), the debit of the real rows
+    and each real row's is within ρ = 1/rho and ρr = 1/rhor of their cells' credit (rev1's inertBoundOK on
+    `pearl_c_inert_work`'s replay), and each real row's committed y at column tile ``col`` is the served y
+    (`pearl_c_u.y`).  The digest, of every row, is None where the tile doesn't encode."""
     d = DEVICES[dev]
-    tm, tn = len(a), len(b)
+    tm, tn, tr = len(a), len(b), len(y)
     scheme = C.PearlC(k_min=k, tile=(tm, tn), forming="v1", device=d, hashing="h3")
     ctx = C.Context(salt, C.Matmul(unit, C.Shape(max(rows) + 1, k, max(cols) + 1), 0), bytes(64), root)
     ops = scheme.encode(ctx, scheme.noise(ctx), [C.f32_row(x) for x in a], [C.f32_row(x) for x in b],
@@ -368,15 +392,17 @@ def reference(dev: str, k: int, n: int, a: Sequence[Sequence[int]], b: Sequence[
     if ops is None:
         return None, 0
     checked = scheme.checked(ctx, ops)
+    filler = all(w == 0 for x in a[tr:] for w in x)
     admitted = all(P.f32_of_bits(r) * P.f32_of_bits(al) >= P.SIGMA_MIN and C.live_row(x)
-                   for side in (ops.a, ops.b) for r, al, x in zip(side.rho, side.alpha, side.x))
+                   for side, real in ((ops.a, tr), (ops.b, tn))
+                   for r, al, x in zip(side.rho[:real], side.alpha[:real], side.x[:real]))
     certs = all([w for g in cert[i][j] for w in g] == inert_bound.certificates(ops.a.codes[i], ops.b.codes[j], dev)
-                for i in range(tm) for j in range(tn))
-    sd = [_salt_dead(d, ops.a.alpha[i], ops.a.beta[i], a[i]) for i in range(tm)]
-    capped = (_cap_ok(d, k, n, rho, ops.a.codes, ops.b.codes, sd)
-              and all(_cap_ok(d, k, n, rhor, [ops.a.codes[i]], ops.b.codes, [sd[i]]) for i in range(tm)))
-    served = 0 <= col < n // tn and _served(y, checked, ops, col, tm, tn)
-    return C.leaf(checked, "h3"), int(admitted and certs and capped and served)
+                for i in range(tr) for j in range(tn))
+    sd = [_salt_dead(d, ops.a.alpha[i], ops.a.beta[i], a[i]) for i in range(tr)]
+    capped = (_cap_ok(d, k, n, rho, ops.a.codes[:tr], ops.b.codes, sd)
+              and all(_cap_ok(d, k, n, rhor, [ops.a.codes[i]], ops.b.codes, [sd[i]]) for i in range(tr)))
+    served = 0 <= col < n // tn and _served(y, checked, ops, col, tr, tn)
+    return C.leaf(checked, "h3"), int(filler and admitted and certs and capped and served)
 
 
 def _served(y: Sequence[Sequence[int]], checked: Any, ops: Any, col: int, tm: int, tn: int) -> bool:
