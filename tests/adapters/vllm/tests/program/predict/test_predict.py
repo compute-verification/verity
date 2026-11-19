@@ -566,10 +566,9 @@ def test_a_family_that_states_no_rules_facts_or_constructor_is_read_as_one_with_
         build_program(_phi(cfg), "step")
 
 
-def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_build():
-    """No module outside `verity_vllm.program.predict` imports it: the record path runs it only as `predict emit`, the derive of a switched
-    row's AOT Build (`row_tp.TpRow.derive`, under `config_record.aot_of`; `tests/pipeline/test_tp_build_width.py`), and the trace
-    that checks it lists the package as a forbidden input."""
+def test_no_module_outside_the_predictor_imports_or_runs_it():
+    """No module outside `verity_vllm.program.predict` imports it or runs `predict`, and the trace that checks a Build lists the
+    package as a forbidden input."""
     from verity_vllm.program.frontend import inputs_trace
     here, name = Path(S.__file__).resolve().parent, S.__name__.rpartition(".")[0]
     pkg = here.parents[name.count(".") - 1]
@@ -579,7 +578,7 @@ def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_
     hits = [str(p.relative_to(pkg)) for p in outside if pat.search(p.read_text())]
     assert hits == []
     runs = [str(p.relative_to(pkg)) for p in outside if re.search(r"""cli\(\s*["']predict["']""", p.read_text())]
-    assert runs == ["pipeline/row_tp.py"]
+    assert runs == []
     assert any(m in str(Path(S.__file__).resolve()) for m in inputs_trace._FORBIDDEN_MARKERS)
 
 

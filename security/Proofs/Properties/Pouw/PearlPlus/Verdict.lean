@@ -216,6 +216,7 @@ theorem load_facts {coins : EpochCoins} {man : Lean.Json} {p : Pass} (h : load c
   · cases h
   rename_i hroot
   dsimp (config := { zeta := false }) only [jrr] at h
+  obtain ⟨u0, hy, h⟩ := bind_ok h
   obtain ⟨rootsA, hrootsA, h⟩ := bind_ok h
   obtain ⟨c, hc, h⟩ := bind_ok h
   obtain ⟨rootj, hrootj, h⟩ := bind_ok h
@@ -357,7 +358,7 @@ theorem planMeans : PlanMeans := by
   split at h
   · cases h
   dsimp (config := { zeta := false }) only [j0] at h
-  cases hd : passesDistinct i.manifests with
+  cases hd : passesPlaced i.manifests i.rounds with
   | some w => rw [throwRefusal.eq_def, hd] at h; cases h
   | none =>
   rw [throwRefusal.eq_def, hd] at h

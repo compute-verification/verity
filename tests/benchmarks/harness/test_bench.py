@@ -456,23 +456,31 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
 
     class Run:
         """A pass's tile digest is written into `leaves` by its call (not with ``hash_leaf`` omitted) over the poison, and
-        each end draws fresh salts, so its roots are its own (`fresh`, `writes`: a run that breaks either)."""
-        fresh, writes = True, True
+        each end, on the run or any twin of it, draws fresh salts, so its roots are its own (`fresh`, `writes`: a run that
+        breaks either)."""
+        fresh, writes, hashing = True, True, True
 
-        def __init__(self, y, **commits):
+        def __init__(self, y, ends=None, **commits):
             self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
             self.scheme, self.schedule = SimpleNamespace(name="pearl-c-h100-v1-h3"), SimpleNamespace(name="deferred")
             self.commits = {"weights_root": "ab" * 64, **commits}
-            self.nb, self.leaves, self.ended = 64, torch.zeros(64, dtype=torch.uint8), 0
+            self.nb, self.leaves, self.ends = 64, torch.zeros(64, dtype=torch.uint8), [0] if ends is None else ends
+            self.begins, self.twins = 0, []
             g = torch.Generator().manual_seed(0)
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
                             for w, n in ((0, 64), (1, 64), (2, 128))}
 
-        def begin(self, stepped=False, at=None):
-            self.stepped, self.ats = stepped, [*getattr(self, "ats", []), at]
+        def twin(self):
+            t = Run(self.y, self.ends, **self.commits)
+            t.fresh, t.writes = self.fresh, self.writes
+            self.twins.append(t)
+            return t
 
-        def epoch_calls(self):
-            return 7
+        def begin(self, stepped=False):
+            self.stepped, self.begins = stepped, self.begins + 1
+
+        def finish(self):
+            pass
 
         def poison(self):
             self.leaves.fill_(0xA5)
@@ -485,8 +493,8 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
             return y
 
         def end(self):
-            self.ended += self.fresh
-            return {"transcript_root": f"root-{self.ended}", "activation_roots": f"a-{self.ended}", "units": 1, "tiles": 1}
+            self.ends[0] += self.fresh
+            return {"transcript_root": f"root-{self.ends[0]}", "activation_roots": f"a-{self.ends[0]}", "units": 1, "tiles": 1}
 
     def exact_y(x, W):
         return (x.float() @ W.float().T).to(torch.bfloat16)
@@ -495,7 +503,8 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     exact = _pearl_c_gate(run, "pearl-plus")
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
     assert exact["coins"] == {"source": "in-process"}
-    assert run.stepped and set(run.ats[:-1]) == {7} and run.ats[-1] is None    # the compared passes share one index
+    # the compared passes are twins' (`PearlCDeviceRun.twin`), each taking the cases in one order, so a case's share a place
+    assert run.stepped and run.begins == 1 and len(run.twins) == 3 and [t.begins for t in run.twins] == [4, 4, 4]
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)), "pearl-plus")
     assert not wrong["passed"] and wrong["provided"]
