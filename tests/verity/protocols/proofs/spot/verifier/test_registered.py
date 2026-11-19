@@ -182,6 +182,17 @@ def test_a_read_opens_only_its_own_row_under_its_own_value():
     assert not G.verify_read(dom, reg.root, 3, fresh, reg.path(3))
 
 
+def test_a_members_rows_of_a_shared_tree_open_it_only_at_its_own_leaves():
+    """One tree's rows 0 and 1 a member A's and 2 and 3 a member B's: B's rows open it at B's leaves and nowhere else, and
+    A's rows open none of B's; Flock's `Registered.check` (`Flock.Test.RegRows`) refuses the rest by these openings."""
+    reg = _registered(_program())
+    dom, a, b = reg.domain, (0, 1), (2, 3)
+    assert all(G.verify_read(dom, reg.root, p, reg.bcs[p], reg.path(p)) for p in a + b)
+    assert not any(G.verify_read(dom, reg.root, q, reg.bcs[p], reg.path(q)) for p, q in zip(b, a))
+    assert not any(G.verify_read(dom, reg.root, q, reg.bcs[p], reg.path(p)) for p, q in zip(b, a))
+    assert not any(G.verify_read(dom, reg.root, p, reg.bcs[q], reg.path(p)) for p, q in zip(b, a))
+
+
 def test_salts_are_one_per_row_and_never_reused():
     prog = _program()
     salt = hm96.SHA512.fresh_salt()

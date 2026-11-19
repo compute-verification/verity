@@ -1413,6 +1413,9 @@ private def ownSliceT (roots : List (String × String)) (name : String) : Json :
 -- a template's one member, its own tree the registration's: compared as before, no read needed
 #guard refusal (headerHeldAt #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
   (headerT 2 [("x", "aa"), ("o0", "ee")])) == ""
+-- a header whose `instances` is not the slice's population: refused before any port is dropped
+#guard refusal (headerHeldAt #[("o0", "t/o0")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 5 [("x", "aa"), ("o0", "ff")])) == POPULATION_WHY
 -- the member's own input at another root: still compared, and refused as before
 #guard refusal (headerHeldAt #[("o0", "t/o0")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
   (headerT 2 [("x", "ab"), ("o0", "ff")])) == "public file: not the registration's: roots, domains"

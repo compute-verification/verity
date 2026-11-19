@@ -1454,6 +1454,10 @@ def headerHeld (rec h : Json) : V Unit :=
   | some p => throw (UNWIRED_WHY p)
   | none => if c.codes.isEmpty then pure () else throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
 
+/-- The refusal of a member's public file whose header's `instances` is not its slice's population, which `headerHeldAt`
+checks on the header as parsed, before it drops any port. -/
+def POPULATION_WHY : String := "public file: not the registration's: population"
+
 /-- The refusal of a member's public file whose port `p` is held in `tree`, its template's field tree that every member of
 the template shares, where the member's registered reads open no row of it at `tree` and the header's root there is not
 the registration's (`headerHeldAt`). -/
@@ -1477,6 +1481,7 @@ root, `portTreeHeld`), so the header's own root and domain there are not compare
 whose header root or domain is not the registration's refuses by name (`SHARED_UNREAD`). Every other port is
 `headerHeld`'s. -/
 def headerHeldAt (reads : Array (String × String)) (rec h : Json) : V Unit := do
+  if !jeq (getD h "instances") (getD rec "population") then throw POPULATION_WHY
   let fv := getD h "frame_v3"
   let shared := (match getD rec "roots" with | .arr rs => rs | _ => #[]).filterMap fun r =>
     match getD r "port", getD r "tree" with

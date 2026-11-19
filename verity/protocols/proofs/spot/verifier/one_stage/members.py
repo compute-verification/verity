@@ -604,6 +604,10 @@ def _header(public: Path) -> Any:
         raise ValueError(f"the public file's header is not JSON: {e}") from None
 
 
+#: `OneStageZk.POPULATION_WHY`: a header's ``instances`` not its slice's population, refused before any port is dropped
+POPULATION_WHY = "public file: not the registration's: population"
+
+
 def shared_unread(port: str, tree: str) -> str:
     """`OneStageZk.SHARED_UNREAD`: the refusal of a member's header port ``port`` held in its template's shared field tree
     ``tree``, that its registered reads open no row of there and whose header root is not the registration's."""
@@ -617,6 +621,8 @@ def _held_at(reads: Collection[tuple[str, str]], slice_: Mapping[str, Any], head
     template's field tree (its entry's ``tree``) that ``reads`` opens there; `_Refused` (`shared_unread`) for one
     ``reads`` doesn't open whose header root or domain is not the registration's."""
     h = header if isinstance(header, dict) else {}
+    if not _same(h.get("instances"), slice_.get("population")):
+        raise _Refused(POPULATION_WHY)
     fv = h["frame_v3"] if isinstance(h.get("frame_v3"), dict) else {}
     roots = fv["roots"] if isinstance(fv.get("roots"), dict) else {}
     domains = fv["domain_ids"] if isinstance(fv.get("domain_ids"), dict) else {}
@@ -907,4 +913,4 @@ def run_reason(run: Run | None, refused: str | None) -> str | None:
 __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
-           "members_run", "population_why", "run_reason", "shared_unread", "unwired_why", "wired_tree_why"]
+           "members_run", "population_why", "POPULATION_WHY", "run_reason", "shared_unread", "unwired_why", "wired_tree_why"]

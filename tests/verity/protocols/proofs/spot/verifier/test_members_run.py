@@ -405,6 +405,8 @@ def test_a_members_rows_of_a_shared_tree_are_its_registered_reads_there():
     assert M.population_why(UNITS[B], strata, own("44" * 64), got, {("o0", "a/o0")}) == M.shared_unread("o0", "b/o0")
     assert M.population_why(UNITS[B], strata, own("44" * 64, out="55" * 64), got, {("o0", "b/o0")}) == (
         "public file: not the registration's: roots")
+    assert M.population_why(UNITS[B], strata, own("44" * 64) | {"instances": 99}, got, {("o0", "b/o0")}) == (
+        M.POPULATION_WHY)
     named = header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "cc" * 64},
                                 "roots": {"out": ROOTS[B][0], "o0": "33" * 64}})
     assert M.population_why(UNITS[B], strata, named, got) is None
