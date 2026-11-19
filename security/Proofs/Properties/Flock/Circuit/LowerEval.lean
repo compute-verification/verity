@@ -21,7 +21,7 @@ open Flock.Program hiding Form
 /-- **`LowerEval`**: the template `lower` writes computes, at its output port bits, `Prog.evalBool` of the lifted
 Definition on its input port bits. -/
 theorem lowerEval : LowerEval := by
-  intro P d inP outP t n Q e _ hq hl h hu hB z hs hone
+  intro P d inP outP t n Q e hq hl h hu hB z hs hone
   obtain ⟨hwf, -, -, -, -⟩ := Flock.Lower.lower_checked hl
   obtain ⟨Q', e0, defn, e', rets, s, base, hq', hdf, hrun, hpre, hH, hout⟩ := lower_root hl h hu hB hs hone
   have hqq := hq.symm.trans hq'

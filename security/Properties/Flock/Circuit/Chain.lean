@@ -74,13 +74,12 @@ def V5Rows : Prop :=
 /-- **`LowerEval`, the template `lower` writes of Definition `d` computes `d` on bits**: `lower` lowers `d`'s lift to bits,
 Definition `e` of `Q` (`Flock.Lift.lift`). Wherever the rows of the net its template unrolls to hold with the constant 1,
 `Prog.evalBool Q e` on the input port bits of `e`'s parameter leaves is exactly `e`'s output leaves, and output port bit
-`k` is its bit `k`, so an empty evaluation never counts as agreement. `P`'s word primitives evaluate as their bodies
-(`BodyAgrees`). The
-net's rows are `Rows.ofNet hb` at any proof `hb` that it is built, which every net `Tmpl.unroll` gives is; `Rows.ofNet`
-reads `hb` only as a proof, so the rows are the same at every one. -/
+`k` is its bit `k`, so an empty evaluation never counts as agreement. The net's rows are `Rows.ofNet hb` at any proof
+`hb` that it is built, which every net `Tmpl.unroll` gives is; `Rows.ofNet` reads `hb` only as a proof, so the rows are
+the same at every one. -/
 def LowerEval : Prop :=
   ∀ {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl.Tmpl} {n : Net} {Q : Program.Prog} {e : ℕ}
-    (_hb : BodyAgrees P) (_hq : Flock.Lift.lift P d = .ok (Q, e))
+    (_hq : Flock.Lift.lift P d = .ok (Q, e))
     (_hl : Flock.Lower.lower P d inP outP = .ok t) (_h : Tmpl.unroll t = .ok n) (_hu : n.unitLog ≤ 32) (hb : Built n)
     {z : ℕ → Bool} (_hs : (Rows.ofNet hb).Sat fun c => z c.val) (_hone : z t.constPos = true),
     let v := Q.evalBool e ((List.range (Q.defs.getD e default).paramLeaves).map fun i => z (Flock.Lower.inBit t i))
