@@ -146,7 +146,7 @@ def Good (P : Prog) : Scope → Prop
 
 theorem good_base (P : Prog) : ∀ {U : Scope}, Good P U → U.base = P.root
   | .top _ _ _, h => h.1
-  | .child _ _ _ _ _, h => good_base P h.1
+  | .child parent _ _ _ _, h => good_base P (U := parent) h.1
 
 /-- Reference `r` of body `d` names a parameter's leaf or a leaf of a node before `k`. -/
 def RefOk (P : Prog) (d k : ℕ) (r : Ref) : Prop :=
