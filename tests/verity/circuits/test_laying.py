@@ -177,7 +177,9 @@ def test_the_measure_reads_a_supplied_input_as_a_port_of_its_own_binding_as_it_r
     assert split
 
 
-@pytest.mark.parametrize("program", [toy, lambda: laid(3), lambda: LY.lay(with_s("supplied"), ands(3))])
+@pytest.mark.parametrize("program", [toy, lambda: laid(3), lambda: LY.lay(with_s("supplied"), ands(3)),
+                                     lambda: LY.lay(toy(), ands(3), batchwise=True),
+                                     lambda: LY.lay(tiles(3), ands(8), batchwise=True)])
 def test_a_blocks_measure_is_the_block_restrict_cuts(program):
     P = program()
     q = LY.query(P)
