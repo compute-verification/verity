@@ -59,7 +59,7 @@
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
 # On a card (no CPU, SERVE unset or node) CODEC defaults to the deployed codec (`codec.DEFAULT`), and p512/kK is the other
-# codec kv.cu is built for (KV_DEFS); SERVE=row's Commit registers the deployed codec only.
+# codec kv.cu is built for (KV_DEFS).
 # LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it (default: the
 # windows of WINDOW_MS in 30 s, or a paced session's groups, `audit.lifetime_windows`).
 # REFRESH sets refresh for the sessions (the verifier's --refresh, `audit.Params.refresh`): unset, off, and nothing
@@ -69,47 +69,21 @@
 # SERVE makes the prover vLLM serving under the audit, on one leased GPU in vLLM's venv (VLLM_PY, default the first
 # there of NODE_WORKSPACE/jobs/venv312/bin/python and NODE_WORKSPACE/venv312/bin/python, NODE_WORKSPACE default
 # /workspace; its `verity-vllm` launcher beside it), this tree's verity_vllm first on its path; PY then defaults to
-# that venv where the fill's is not there. SERVE=tiny and SERVE=row serve one session a store, each from one line:
+# that venv where the fill's is not there. SERVE=tiny serves one session a store, from one line:
 #
 #   RESEARCH_RUN_DIR=DIR ROLE=both SERVE=tiny bash benchmarks/poub_session/run.sh            # a node with one free GPU
-#   RESEARCH_RUN_DIR=DIR ROLE=both SERVE=row ROW=ROW_ID bash benchmarks/poub_session/run.sh
 #
 # ROLE=both runs the verifier beside the prover; the audit's is ROLE=verifier on its own machine with SESSIONS=1,
 # then ROLE=prover PORT=... SERVE=... here. SERVE=tiny runs `serve.py --connect`: the vLLM tests' tiny Llama, PLAN serve
-# (the default) or servedrop:K. SERVE=row runs row ROW's Commit under the audit, `verity-vllm row run ROW CHECKPOINT
-# REPO REV` with the checkpoint `verity-vllm epoch resolve ROW` names and REMOTE_VERIFIER at the verifier: its Commit
-# puts the store binder on its engine and proves the store in lockstep with its first instrumented run, a pass an
-# engine step (`verity.protocols.resource_accounting.memory.poub.prover.commit_session.CommitSession`: one GPU, synchronous scheduling declared
-# in the row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). ROW is a row
-# id whose file `verity_vllm.config.row_file` finds (ROW_FILE: that file instead): a stored row whose target declares
-# the synchronous scheduling a session needs, such as
-# llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager, or a file of your own in a directory
-# $VERITY_WORKLOADS names (`verity-vllm workload --row-id ROW ... --target '{..., "async_scheduling": false}' --out
-# DIR/ROW.json`).
+# (the default) or servedrop:K. SERVE=row, a row's Commit under the audit, is refused by name: the row is deleted.
 #
 # A served line, in order, with everything before its lease done without a GPU:
-#   1. refuses (exit 3) what cannot run: a PLAN that is not a served one, a ROW with no file or whose target does not
-#      declare "async_scheduling": false, windows that do not fit the run (below);
-#   2. SERVE=row: builds kv.cu for the card (KV_LIB, default build, at KV_ARCH, default the sm_XY of the
-#      compute_capability the row's target declares; a path: that build; cpu: none), then runs the row's Build with
-#      no GPU visible (STAGES, default
-#      build,commit, in a config run, CONFIG_RUN default 1: the Build, the word check and one instrumented Commit,
-#      the run the session audits; BUILD_GPU=1 leaves the Build to the lease) in SWEEP_DIR (default: scratch removed
-#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; never inside the run's directory: the row's
-#      public records, keep.py's ROW, are kept in out/row, and nothing else of it). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
-#      holds no vLLM), CUDA_HOME/bin (--cuda-bin) and ROW_ARGS (such as --norm-tap-so PATH);
-#   3. ROLE=both: builds the Lean verifier (LEAN_EXE, naming another, is refused), starts the verifier on VERIFIER_CPUS
+#   1. refuses (exit 3) what cannot run: a PLAN that is not a served one, windows that do not fit the run (below);
+#   2. ROLE=both: builds the Lean verifier (LEAN_EXE, naming another, is refused), starts the verifier on VERIFIER_CPUS
 #      and goes on once it listens;
-#   4. takes the lease and runs the prover on PROVER_CPUS, with OMP_NUM_THREADS and MKL_NUM_THREADS their count
-#      (defaults: this process's cores, under ROLE=both the last quarter the verifier's and the rest the prover's).
-#      SERVE=row's is the row's Commit, with --remote-plan PLAN, --remote-kv-pages KV_PAGES (default 24: a count that
-#      is none of the cache's other dimensions, which the store binder tells apart by size), --remote-weight-blocks
-#      WEIGHT_BLOCKS (default 4096: the Commit's own default registers every weight, and every pass reads every
-#      registered block on the CPU) and kv.cu's build, ahead of EXTRA_COMMIT_ARGS (such as --remote-node HOST, the
-#      session's node, default verity-vllm/<hostname>). A registration's key answers a
-#      hello over the engine's own store, so none is encoded before the engine is on the card: with kv.cu it is
-#      encoded there, on the card, and with KV_LIB=cpu on one core while the card waits (state a small WEIGHT_BLOCKS);
-#   5. says how the session ended in one line, `remote session verdict: ...` (out/verdict.txt), and exits with its
+#   3. takes the lease and runs the prover on PROVER_CPUS, with OMP_NUM_THREADS and MKL_NUM_THREADS their count
+#      (defaults: this process's cores, under ROLE=both the last quarter the verifier's and the rest the prover's);
+#   4. says how the session ended in one line, `remote session verdict: ...` (out/verdict.txt), and exits with its
 #      code (Exit, below). ROLE=both leaves no verifier behind: it waits VERIFIER_WAIT_S (default 180) for its
 #      verifier to end after the prover, then stops it, its process group by its id; after a prover that ended red
 #      it first opens and drops one connection to PORT, which a verifier still waiting for its prover ends at.
@@ -120,8 +94,7 @@
 # windows that outlast the run end the session rejected only when the whole run is over, and a window shorter than a
 # pass is rejected with no root. PASS_MS (default 500) states the milliseconds from one pass to the next, an engine
 # step and the CPU's read of every registered block; a rejected session's verdict line says what its passes took.
-# Without WINDOW_MS the windows are derived (`serve.py --fit`): WINDOWS (default 3) of four passes each, or of half
-# the passes the row's expected_engine_steps leave room for where that is fewer. A WINDOW_MS the line states is
+# Without WINDOW_MS the windows are derived (`serve.py --fit`): WINDOWS (default 3) of four passes each. A WINDOW_MS the line states is
 # checked by the same sum, and refused where it cannot fit. JITTER_MS defaults to ten passes: a serving prover's
 # calibration states no pass time, so the jitter, allowed each way, is the whole allowance for the pass in flight at
 # a boundary, and the last window closes twice that long after its boundary. Under ROLE=prover the windows are the
@@ -142,17 +115,15 @@
 # ROLE=verifier pick one nothing listens on when it is not stated. Scratch is under TMPDIR (default /tmp), removed
 # at exit.
 #
-# Exit: 0 every session accepted (SERVE=tiny, SERVE=row: the prover's record says so and, under ROLE=both, the
+# Exit: 0 every session accepted (SERVE=tiny: the prover's record says so and, under ROLE=both, the
 #     verifier's too; under ROLE=prover the verdict is the verifier's line's, and this code only the prover's word);
-#   3 refused before anything ran: a parameter, a path, a row, windows that cannot fit, no verifier on PORT (and
+#   3 refused before anything ran: a parameter, a path, windows that cannot fit, no verifier on PORT (and
 #     ROLE=verifier's own code for a registration it refused);
 #   4 a build failed (nvcc, the Lean verifier);
-#   5 SERVE=tiny, SERVE=row and ROLE=both SERVE=node: the prover ended 0 beside a verifier that ended red or with no
+#   5 SERVE=tiny and ROLE=both SERVE=node: the prover ended 0 beside a verifier that ended red or with no
 #     accepted session on record;
-#   6 SERVE=tiny, SERVE=row and ROLE=both SERVE=node: a session was not accepted: the verifier rejected it, or it
+#   6 SERVE=tiny and ROLE=both SERVE=node: a session was not accepted: the verifier rejected it, or it
 #     failed where the prover's record says (the verdict line has both);
-#   10 to 21 SERVE=row: the row's own (`verity-vllm row`): 10 its Build failed, 12 its Commit failed beside a session
-#     that was accepted or never began, 13 no manifest, 15 its plan, 20 the word check, 21 a call boundary;
 #   75 no lease: gpu-lease's, or NOWAIT=1's for a card with a process on it (124, gpu-lease's too: the lease's MAXMIN
 #     ended the prover);
 #   1 without SERVE: the prover or, under ROLE=both, the verifier ended red; any other code is the prover's own.
@@ -192,12 +163,13 @@ case ${ROLE:-} in
   *) echo "ROLE is verifier or prover (both only to test these scripts on one machine), not '${ROLE:-}': the verifier" \
        "runs on a machine the developer doesn't control, so there is no default"; exit 3 ;;
 esac
-# SERVED: tiny or row, a session this script serves whole (its windows fitted, its verifier under ROLE=both, its verdict)
+# SERVED: tiny, a session this script serves whole (its windows fitted, its verifier under ROLE=both, its verdict)
 SERVED=
 [ "$ROLE" = verifier ] && unset SERVE
 case ${SERVE:-} in
   '' | node) ;;
-  tiny | row) SERVED=$SERVE ;;
+  tiny) SERVED=$SERVE ;;
+  row) refuse "SERVE=row is deleted with the row's Commit (verity-vllm row, epoch resolve): SERVE=tiny or SERVE=node serves under the audit" ;;
   *) refuse "SERVE is tiny, row or node, not $SERVE" ;;
 esac
 WS=${NODE_WORKSPACE:-/workspace} RS=benchmarks/poub_session
@@ -246,8 +218,6 @@ esac
 export KV_DEFS
 if [ "$ROLE" != verifier ] && [ -z "${CPU:-}" ] && [ "${SERVE:-}" != tiny ]; then
   [ -n "$KV_DEFS" ] || refuse "CODEC=$CARD_CODEC: a card's session is built at p1024/kK/masked or p512/kK, K from 2 to 8"
-  [ "${SERVE:-}" != row ] || [ "$CARD_CODEC" = "$DEPLOYED" ] ||
-    refuse "SERVE=row's Commit registers the deployed $DEPLOYED, not CODEC=$CARD_CODEC"
 fi
 [ -z "${LEAN_EXE:-}" ] || refuse "LEAN_EXE names a Lean verifier of the caller's: the session's is the one" \
   "lean_verifier.build builds in its package, and nothing else; unset it"
@@ -276,23 +246,12 @@ fi
 if [ -n "$SERVED" ]; then
   PLAN=${PLAN:-serve}
   case $SERVED:$PLAN in
-    tiny:serve | row:serve) ;;
+    tiny:serve) ;;
     tiny:servedrop:*) [[ ${PLAN#servedrop:} =~ ^[0-9]+$ ]] || refuse "PLAN=$PLAN: servedrop:K withholds the first K blocks appended" ;;
     tiny:*) refuse "PLAN=$PLAN is not a plan of a served session: SERVE=tiny takes serve or servedrop:K" ;;
-    *) refuse "PLAN=$PLAN is not a plan of a served session: SERVE=row takes serve" ;;
   esac
   [ "${SESSIONS:-1}" = 1 ] || refuse "SESSIONS=$SESSIONS: a served store serves one session"
   FIT=()
-  if [ "$SERVED" = row ]; then
-    [ -n "${ROW:-}" ] || refuse "SERVE=row takes ROW, a row id"
-    VV=$(dirname "$VPY")/verity-vllm
-    [ -x "$VV" ] || refuse "no verity-vllm launcher beside $VPY"
-    STAGES=${STAGES:-build,commit}
-    [[ ,$STAGES, == *,commit,* ]] || refuse "STAGES=$STAGES holds no commit, the stage whose run the session audits"
-    ROW_FILE=${ROW_FILE:-$("$VPY" -c 'import sys; from verity_vllm import config; print(config.row_file(sys.argv[1]))' "$ROW" \
-      2> "$B/row_file.err")} || refuse "row $ROW: its file can't be found: $(tail -n 1 "$B/row_file.err")"
-    FIT=(--row-file "$ROW_FILE")
-  fi
   # the windows: the verifier's under ROLE=prover, so only a pair this line states is checked there
   PASS_MS=${PASS_MS:-500}
   if [ "$ROLE" = both ] || { [ -n "${WINDOWS:-}" ] && [ -n "${WINDOW_MS:-}" ]; }; then
@@ -472,66 +431,11 @@ card_free() { # NOWAIT=1 with GPU: 75 where a compute process is on those cards,
 }
 if [ -n "$SERVED" ]; then
   card_free || exit 75
-  keep_row() { # the row's public records (keep.py's ROW), into out/row
-    [ -d "$SWEEP/$ROW" ] || return 0
-    "$PY" $RS/keep.py row "$SWEEP/$ROW" "$O/row"
-  }
   drop_connection() { # a verifier still waiting for its prover ends at a connection opened and dropped
     (exec 3<> "/dev/tcp/127.0.0.1/$PORT") 2> /dev/null
   }
-  if [ "$SERVED" = row ]; then
-    SWEEP=${SWEEP_DIR:-$B/sweep}
-    case $(realpath -m "$SWEEP")/ in
-      "$(realpath -m "$RESEARCH_RUN_DIR")"/*) refuse "SWEEP_DIR=$SWEEP is inside the run's directory, which custody uploads:" \
-        "the row's Commit directory holds private files (its tokens, replays and timelines); give a scratch directory" ;;
-    esac
-    mkdir -p "$SWEEP" || refuse "SWEEP_DIR=$SWEEP can't be made"
-    export NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-$B/nc_build} CONFIG_RUN=${CONFIG_RUN:-1}
-    read -r CK REPO REV _ < <("$VV" epoch resolve "$ROW")
-    [ -n "${REV:-}" ] || refuse "verity-vllm epoch resolve $ROW names no checkpoint, repository and revision"
-    # shellcheck disable=SC2086
-    ROWRUN=("$VV" row run "$ROW" "$CK" "$REPO" "$REV" --py "$VPY" --sweep-dir "$SWEEP" --cuda-bin "$CUDA_HOME/bin"
-      ${ROW_ARGS:-})
-    KV=()
-    case ${KV_LIB:-build} in
-      cpu) ;;
-      build)
-        KV_ARCH=${KV_ARCH:-$("$PY" -c 'import json, sys
-major, minor = json.load(open(sys.argv[1]))["engine"]["target"]["compute_capability"]
-print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
-        [[ $KV_ARCH =~ ^sm_[0-9]+a?$ ]] || refuse "KV_ARCH=$KV_ARCH is no card's architecture (sm_90), and the row's target" \
-          "declares no compute_capability to build kv.cu for: state KV_ARCH, or KV_LIB=cpu"
-        # shellcheck disable=SC2086
-        nvcc -O3 -arch="$KV_ARCH" -std=c++17 -Xcompiler -fPIC -shared $KV_DEFS -o "$B/kv.so" \
-          verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.build.log" 2>&1 ||
-          { tail -40 "$O/kv.build.log"; echo "run.sh: kv.cu's build for $KV_ARCH failed (KV_LIB=cpu encodes on the CPU)"; exit 4; }
-        sha256sum "$B/kv.so" > "$O/libs.sha256"
-        KV=(--remote-kv-lib "$B/kv.so") ;;
-      *)
-        [ -f "$KV_LIB" ] || refuse "KV_LIB=$KV_LIB is not build, cpu or a built kv.cu"
-        KV=(--remote-kv-lib "$KV_LIB") ;;
-    esac
-    # KV_PAGES: the engine's KV pool, a count that is none of its cache's other dimensions (a page's slots, the
-    # model's heads), which the store binder tells apart by size
-    export EXTRA_COMMIT_ARGS="--remote-plan $PLAN --remote-kv-pages ${KV_PAGES:-24} --remote-weight-blocks ${WEIGHT_BLOCKS:-4096} ${KV[*]} ${EXTRA_COMMIT_ARGS:-}"
-    LEASED=$STAGES
-    if [ -z "${BUILD_GPU:-}" ] && [[ ,$STAGES, == *,build,* ]]; then
-      LEASED=$(tr , '\n' <<< "$STAGES" | grep -vx build | paste -sd, -)
-      CUDA_VISIBLE_DEVICES='' taskset -c "$PROVER_CPUS" "${ROWRUN[@]}" --stages build > "$O/build.log" 2>&1; BR=$?
-      if [ $BR != 0 ]; then
-        tail -20 "$O/build.log"
-        keep_row
-        echo "run.sh: the row's Build ended $BR with no GPU visible (BUILD_GPU=1 runs it under the lease)"
-        exit $BR
-      fi
-    fi
-    RUN=("${ROWRUN[@]}" --stages "$LEASED")
-    REC=$SWEEP/$ROW/commit/remote_session.json
-    rm -f "$REC"
-  else
-    RUN=("$VPY" $RS/serve.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" --codec "$CODEC")
-    REC=$O/serve.json
-  fi
+  RUN=("$VPY" $RS/serve.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" --codec "$CODEC")
+  REC=$O/serve.json
   if [ "$ROLE" = both ]; then
     lean_exe
     set -m # a process group of its own: stopping it stops its Lean verifier and its check workers with it
@@ -549,14 +453,12 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
       sleep 0.2
     done
   fi
-  [ "$SERVED" = row ] && export REMOTE_VERIFIER=127.0.0.1:$PORT # the Commit's session; the Build before it has none
   P=0
   card_free || P=$?
   if [ $P = 0 ]; then
     "${LEASE[@]}" taskset -c "$PROVER_CPUS" "${RUN[@]}" > "$O/prover.log" 2>&1; P=$?
     tail -20 "$O/prover.log"
   fi
-  [ "$SERVED" = row ] && keep_row
   W=
   if [ "$ROLE" = both ]; then
     [ $P = 0 ] || drop_connection
