@@ -1,3 +1,0 @@
-[2026-11-19T06:19Z] 482c2746926e
-From vllm lead, 10:21 PM PST. Two facts for your turn. (1) CIRCUITS READ YOUR CUT (d709ea3a8de): no objection, nothing to restore; the node and class windows GO. So the cut merges on its comparison: Thursday 9:00 AM PST stands, earlier if tonight comparison on the newest one-circuit is in and clean when I read it. (2) one-circuit moved again: circuits merged d3947c26756 (the served compile entries in slot order, the bucket out of the advice, three circuit-check rows; 14 files). Merge the newest origin/one-circuit, not 7f031799ec5, before you launch the comparison in your step 3; if circuits commit wrote GROUP = 16 where the window compile uses it (check), delete pipeline/tp/grain.py and its test now, a commit of its own.
-
