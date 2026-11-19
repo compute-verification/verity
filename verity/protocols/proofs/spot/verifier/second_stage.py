@@ -613,7 +613,7 @@ def registered_binding(held: Held | None, e: Any) -> str | None:
     entry's ``domain``, or where `held` is None or the entry names no such domain."""
     v, words, leaves, b = _get(e, "value"), _get(e, "words"), _get(e, "leaves"), _get(e, RV.WIDTH_KEY)
     b = RV.WORD_BITS if b is None else b
-    if held is None or not (isinstance(v, str) and _nat(words) and _nat(leaves) and b in RV.WIDTHS):
+    if held is None or not (isinstance(v, str) and _nat(words) and _nat(leaves) and _nat(b) and b in RV.WIDTHS):
         return None
     window = None if v in held.fixed else held.window
     if window is not None and not (isinstance(window, str) and len(window) == 128 and set(window) <= _HEX_DIGITS):
