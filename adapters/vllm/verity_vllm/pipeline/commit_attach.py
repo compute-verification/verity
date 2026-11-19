@@ -188,10 +188,9 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
 TAPPED = (CP.CALL_BOUNDARY, CP.SCALE_PRODUCTS, CP.RUN_VALUE)
 
 
-def attach_of_plan(com: Any, eng: Any, args: Any, classes: Sequence[Mapping[str, Any]], out: Path, *, kind: str,
-                   cb_plan: Any = None) -> SimpleNamespace:
-    """The served Commit's acquisition on ``com`` for the row's plan classes (`capture_plan.of_build`): the sources of the
-    classes a module's own return doesn't carry (`TAPPED`, `taps.attach`), the X-03 attention plane classes from the Build's
+def attach_of_plan(com: Any, eng: Any, args: Any, classes: Sequence[Mapping[str, Any]], out: Path, *, kind: str) -> SimpleNamespace:
+    """The served Commit's acquisition on ``com`` for the row's plan classes (`capture_plan.of_build`): the sources `taps.attach`
+    attaches for them (those of the classes a module's own return doesn't carry, `TAPPED`, among them), the X-03 attention plane classes from the Build's
     record, and the hook sets of the acquisition plan, written into ``out``. An MoE model is refused by name (its block stream
     is `capture_plan.NOT_SERVED`), and so is a class with no site (exit 3)."""
     model = getattr(com, "model", None)
@@ -202,9 +201,7 @@ def attach_of_plan(com: Any, eng: Any, args: Any, classes: Sequence[Mapping[str,
         logger.error("[delta] REFUSE: the model has MoE layers, and %s", CP.NOT_SERVED["moe_block_stream"])
         sys.exit(3)
     tapped = [c for c in classes if c["capture"] in TAPPED]
-    if tapped:
-        TAPS.attach(com, list(tapped), (), args.tap_sources, explicit_classes=False, programs=(None, args.programs_root),
-                    call_boundary_plan=cb_plan)
+    TAPS.attach(com, list(classes), (), model=model)
     _impls, _impls_path = FP.attention_impls_of_record(program_dir=None, programs_root=args.programs_root)
     if _decls := (FP.declarations_from_attention_impls(_impls) if _impls else []):
         com.attention_layer_decls = _decls
