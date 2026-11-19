@@ -131,9 +131,9 @@ each bit through two NOTs, committed as the row the execution phase's state tree
 bucket's `sin` and its first boundary's Programs read. So that row is the start by gates, and no bucket's unit is
 another Definition for it: every bucket, the first included, is `IngressScanBucket`.
 
-    IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>, sin: Array<NS>,
-        prog0 … prog<lanes − 1>: Array<NE>) -> (u16, Array<NS>, Array<NV>)
-    IngressScanStart{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(sin: Array<NS>) -> (Array<NS>)
+    IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>, sin: NS/16 u16,
+        prog0 … prog<lanes − 1>: NE/16 u16) -> (u16, NS/16 u16, NV/16 u16)
+    IngressScanStart{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(sin: NS/16 u16) -> (NS/16 u16)
         NS = `state_bits`: 96 + lanes·(338 + CB + (KO + C·K)·IDB) rounded up to a multiple of 16, K = (B − 9) // 11
         NE = `entry_bits`: 33 + KO·IDB rounded up to a multiple of 16 (`SlotEntry_v1`'s row)
         NV = `view_bits`: 32 + lanes·(112 + KO·IDB rounded up to a multiple of 16)
@@ -147,7 +147,7 @@ from typing import Sequence
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.circuits.defs import CompositeDefinition
-from verity.circuits.refs import tuple_of
+from verity.circuits.refs import Coll, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates.frame_v3 import _part
 from verity.protocols.resource_accounting.network.prover import egress as EG
@@ -647,27 +647,32 @@ def _cls(S) -> Class:
     return Class(*(getattr(S, k) for k in STATICS))
 
 
+def _words(bits: int) -> Array:
+    return Array(bits // 16, EG.U16)
+
+
 def _outs(cls: Class) -> Tuple:
-    return Tuple(EG.U16, Array(state_bits(cls), BIT), Array(view_bits(cls), BIT))
+    return Tuple(EG.U16, _words(state_bits(cls)), _words(view_bits(cls)))
 
 
 def _progs(cls: Class) -> tuple:
-    return tuple((f"prog{j}", Array(entry_bits(cls), BIT)) for j in range(cls.NR))
+    return tuple((f"prog{j}", _words(entry_bits(cls))) for j in range(cls.NR))
 
 
 def _sig(S):
     cls = _cls(S)
-    return (("row", Array(cls.S * cls.B, BYTE)), ("sin", Array(state_bits(cls), BIT)), *_progs(cls)), _outs(cls)
+    return (("row", Array(cls.S * cls.B, BYTE)), ("sin", _words(state_bits(cls))), *_progs(cls)), _outs(cls)
 
 
 def _sig_start(S):
-    state = Array(state_bits(_cls(S)), BIT)
+    state = _words(state_bits(_cls(S)))
     return (("sin", state),), Tuple(state)
 
 
 def _body_start(B, S, sin):
+    bits = Coll(Array(sin.refs.count, BIT), sin.refs)
     # gates, never a pass-through: an output that is an input wire commits nothing the statement computes
-    return tuple_of(B.batch(BL.NOT, B.batch(BL.NOT, sin, axes=(0,)), axes=(0,)))
+    return tuple_of(Coll(_sig_start(S)[1].fields[0], B.batch(BL.NOT, B.batch(BL.NOT, bits, axes=(0,)), axes=(0,)).refs))
 
 
 def _eq(C, x: Sequence, y: Sequence):
@@ -742,8 +747,9 @@ def _cell(C, cls: Class, cell: Sequence, left: Sequence, q: Sequence):
 
 def _build(C, S, *e):
     cls = _cls(S)
-    n = cls.S * cls.B
-    return _scan(C, cls, e[:n], list(e[n]), [b for p in e[n + 1:] for b in p])
+    n, ns = cls.S * cls.B, state_bits(cls) // 16
+    o0, state, view = _scan(C, cls, e[:n], [b for w in e[n:n + ns] for b in w], [b for w in e[n + ns:] for b in w])
+    return [o0, *(x[k:k + 16] for x in (state, view) for k in range(0, len(x), 16))]
 
 
 def _scan(C, cls: Class, row: Sequence, sin: list, prog: list) -> list:
@@ -904,10 +910,10 @@ IngressScanBucket = _part(
     "the scan's state S_t = `ingress_scan.step` of sin, bucket t's ingress row (lanes·r network attester cells of B bytes, a "
     "block of r a live connection in ordinal order) and the Programs' entries prog0 … prog<lanes − 1> (each "
     "`SlotEntry_v1`'s row of its slot), and its egress view at t (`egress.EgressBucket`'s state), with 1 in bit 0 of "
-    "the first output iff every check of the step holds: " + _STEP, version=3)
+    "the first output iff every check of the step holds: " + _STEP, version=4)
 IngressScanBucket.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
 IngressScanStart = CompositeDefinition(
-    "IngressScanStart", 1, STATICS, _sig_start, _body_start, conformance="exact-model-tested",
+    "IngressScanStart", 2, STATICS, _sig_start, _body_start, conformance="exact-model-tested",
     doc="the scan's start: sin, the state an execution phase's scan starts from (`state_bits` bits, the class's "
         "state row), each bit through two NOTs, so the row its output commits is sin")
 

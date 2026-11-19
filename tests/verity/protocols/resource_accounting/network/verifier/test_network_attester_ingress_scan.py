@@ -458,7 +458,7 @@ def test_the_carried_start_s_unit_outputs_its_state_row_bit_for_bit(run):
     it commits is the state it was given and no other."""
     NS = IS.state_bits(CLS)
     (name, ty), ret = START.signature()[0][0], START.signature()[1]
-    assert (name, ty.n) == ("sin", NS) and [t.n for t in ret.fields] == [NS]
+    assert (name, 16 * ty.n) == ("sin", NS) and [16 * t.n for t in ret.fields] == [NS]
     rng = random.Random(11)
     rows = [IS.encode(CLS, IS.empty(CLS)), *run.chain.states, *([rng.randrange(2) for _ in range(NS)] for _ in range(8))]
     assert len({tuple(r) for r in rows}) > len(run.chain.states) // 2

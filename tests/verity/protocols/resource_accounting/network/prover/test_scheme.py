@@ -91,7 +91,7 @@ def test_the_charge_circuits_are_the_interfaces() -> None:
 def test_ports_are_its_blocks() -> None:
     ids = {b.definition for b in NS.NETWORK_ATTESTER.blocks}
     assert {(p.direction, p.definition, p.field) for p in NS.NETWORK_ATTESTER.ports} == {
-        ("input", "IngressScanStart_v1", "sin"), ("input", "IngressScanBucket_v3", "row"), ("output", "EgressBucket_v1", "o1")}
+        ("input", "IngressScanStart_v2", "sin"), ("input", "IngressScanBucket_v4", "row"), ("output", "EgressBucket_v1", "o1")}
     assert {p.definition for p in NS.NETWORK_ATTESTER.ports} <= ids
 
 
