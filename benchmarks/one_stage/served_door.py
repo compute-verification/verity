@@ -129,7 +129,6 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     from types import SimpleNamespace
     import numpy as np
     from verity.circuits import partition_object as PO
-    from verity.circuits.codec import program_digest
     from verity.circuits.evaluation.reference import evaluate
     from verity.commitments import registered_value as RV
     from verity_flock import circuit as FC
@@ -154,9 +153,13 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
             return None
         lo = unit_of[kk]
         n = next(n for k2, _t, a, n in tp.ranges if k2 == kk)
-        for v in range(lo, lo + n):
+        first = owner_cache.setdefault(lo, list(tp.outputs(lo)))
+        guess = lo + (g - min(first)) // max(1, len(first))
+        for v in [guess] + list(range(lo, lo + n)):
+            if not lo <= v < lo + n:
+                continue
             outs = owner_cache.setdefault(v, list(tp.outputs(v)))
-            if outs and outs[0] <= g <= outs[-1] and g in outs:
+            if g in outs:
                 return v, outs.index(g)
         return None
 
@@ -183,7 +186,7 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     ow = ret.leaf_widths()
     ports = {q[0]: q for q in meta["ports"]}
     rec["meta_ports"] = meta["ports"]
-    prog = program_digest(json.loads(c))
+    prog = part["program"]
     regs = {}
     for tw, rows in trees.items():
         units = sum(n for _k, tt, _a, n in tp.ranges if tt == tw)
