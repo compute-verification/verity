@@ -6,7 +6,7 @@ them: leaf i's 192 bytes are the stream's blocks 3i .. 3i + 2 at one index under
 
 ``out`` is ``(leaves, 192)`` uint8 and contiguous: a numpy array for the host twin, or on a CUDA device any tensor with
 ``data_ptr()`` (verity imports no tensor runtime), written on the caller's ``stream`` without synchronizing. The host
-builds the block's head once a call from the module's own framing; the kernel takes the head's bytes and holds no framing
+builds the block's head once a call (`Key.head`); the kernel takes the head's bytes and holds no framing
 of its own. A head over ``HEAD_MAX`` bytes (an index whose frames pass 43 bytes) is refused, never truncated, and so is a
 fill on a stream capturing a graph, whose replays would write the same salts again. The device
 library's target is the caller's (``arch``, such as ``90a``, its card file's): this package can't load ``verity.device``.
@@ -27,9 +27,9 @@ from pathlib import Path
 from typing import Any
 
 from verity.commitments.cuda import SHA512
-from verity.commitments.randomness import _STREAM, Index, Key, _frames
+from verity.commitments.randomness import Index, Key
 
-__all__ = ["HEAD_MAX", "LEAF_BYTES", "LEAVES_MAX", "Refused", "bind", "device_lib", "fill", "head", "host_lib",
+__all__ = ["HEAD_MAX", "LEAF_BYTES", "LEAVES_MAX", "Refused", "bind", "device_lib", "fill", "host_lib",
            "message_bytes"]
 
 HERE = Path(__file__).resolve().parent
@@ -107,15 +107,10 @@ def device_lib(build: Path, arch: str, nvcc: str | None = None) -> ctypes.CDLL:
                   "libsha512_stream_cuda.so")
 
 
-def head(key: Key, index: Index) -> bytes:
-    """Every block's message at ``index`` but its counter: the stream's tag, the key and the index's frames."""
-    return _STREAM + key.value + _frames(index)
-
-
 def message_bytes(index: Index) -> int:
     """The bytes SHA-512 hashes for each block at ``index``: the tag, a key's 32 bytes, the index's frames and the counter's
     8, the same for every block of every key at that index."""
-    return len(_STREAM) + 32 + len(_frames(index)) + 8
+    return len(Key(bytes(32)).head(index)) + 8
 
 
 def fill(lib: ctypes.CDLL, out: Any, key: Key, index: Index, first: int, *, stream: int = 0, length: int | None = None) -> Any:
@@ -134,7 +129,7 @@ def fill(lib: ctypes.CDLL, out: Any, key: Key, index: Index, first: int, *, stre
         ptr = out.ctypes.data
     if isinstance(first, bool) or not isinstance(first, int) or first < 0:
         raise ValueError("first is a leaf, an int of at least 0")
-    h = head(key, index)
+    h = key.head(index)
     if length is not None and len(h) + 8 != length:
         raise Refused(-4)
     rc = lib.sxs_fill(stream, h, len(h), first, leaves, ptr) if first < 1 << 64 else -2
