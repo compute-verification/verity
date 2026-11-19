@@ -29,7 +29,6 @@ from verity.circuits import count as K
 from verity.circuits import partition_v2 as PV2
 from verity.circuits import program as PG
 from verity.circuits.defs import (
-    REGISTRY,
     CompositeDefinition,
     PrimitiveDefinition,
     bind,
