@@ -700,7 +700,7 @@ def registered_strings(words: np.ndarray, ys: bytes, dom: CommitmentDomain,
                        schema: str = SCHEMA_HM96_SHA512_ROW_V2) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
     """`registered_value.Registered.commit`'s ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 under the salts
     ``ys`` (192 bytes a row) and its domain ``dom``, from the words' bytes."""
-    bc = _row_strings(words, ys, schema)
+    bc = row_strings(words, ys, schema)
     bcs = tuple(bc[BC_BYTES * j:BC_BYTES * (j + 1)] for j in range(len(bc) // BC_BYTES))
     return bcs, tree_levels(dom, [RV.leaf(dom, j, s, schema) for j, s in enumerate(bcs)])
 
