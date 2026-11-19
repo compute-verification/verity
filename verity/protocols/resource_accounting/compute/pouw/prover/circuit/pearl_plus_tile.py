@@ -36,9 +36,9 @@ The core, from the registry's call Definitions (`verity.protocols.resource_accou
   - ``ok`` is every real row's and B row's admission, the bound's verdict, each served word finite (`pearl_c_u.y` refuses
     a non-finite word and a BF16 overflow) and each filler row's every word zero, and-ed.
 
-Where the tile sits in the linear (its column tile) is C's wiring, so the core reads no column index: E_B's lines ``eb``
-are the column tile's, in the public row the verifier fills itself (`pearl_plus_credited.public`), with the salt, B's
-root and the rest of the noise, so the salt and the root reach the core only through that row.
+The core reads no column index: E_B's lines ``eb`` are the column tile's, which the noise derives from ``col``.  The node
+(`pearl_plus_credited.PearlPlusTileCoreWords_v3`) Calls the noise and the core on the salt and B's root of the public row
+the verifier fills itself (`pearl_plus_credited.public`), so the salt and the root reach the tile only through that row.
 
 The core is one registered Definition, its σ: its word body is an unregistered Definition the σ lifts and names as its
 word view, through which a fixture tile is evaluated on words against the scheme (`reference`).  Every Definition the core
@@ -55,7 +55,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, Speci
 from verity.circuits.ops.fp32 import F32MulV2
 from verity.circuits.ops.prims import Bf16ToF32, F32ToE4m3Sat
 from verity.circuits.ops.scalar import Bf16GtStrict, BitAnd, F32IsFinite, I32Add, I32Eq, I32Le
-from verity.circuits.refs import Coll, array_of, tuple_of
+from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.silicon import fp32
 from verity.circuits.types import Array, Tuple, Value
 from verity.circuits.ops.boolean.versions import lift_body

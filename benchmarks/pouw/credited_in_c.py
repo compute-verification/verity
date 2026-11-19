@@ -504,8 +504,10 @@ def door(a) -> int:
     for name in ("registered-wrong.json", "registered-not-ok.json"):
         call("honest", name)
     if honest["refusal"] is None and honest["findings"] and all(f["accepted"] for f in honest["findings"]):
-        print(f"ACCEPT the door accepts drawn block {draw_['units']} of C, a unit of {partition['query']['params']['template']}",
-              flush=True)
+        print(f"ACCEPT the door accepts drawn block {draw_['units']} of C, a unit of {partition['query']['params']['template']}"
+              ": the tile with its noise derived inside from the salt and W's root, read with its unit, rows and col from the "
+              "public row the verifier registered itself; its digest, the tile leaf, is bound to no transcript root, and the "
+              "salt and the root to no supplied function (pouw.pearlplus.salt/v1, registered.root/v1)", flush=True)
     return 0
 
 
