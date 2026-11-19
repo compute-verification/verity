@@ -25,7 +25,6 @@ from verity_vllm.definitions.registry.dead_free import (
     AttnBlockFirstV2,
     TokenSelectGroupsV1,
 )
-from verity_vllm.pipeline.tp.grain import GROUP
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -34,6 +33,8 @@ from .window_class import FixedLoad, PearlTables, Request, Tables, WindowClass
 from .window_cut import Linears, cut_linear
 
 PROMPT = "prompt"
+#: a token select's group of logits: a word of each `TokenSelectGroups_v1` unit's row of bests
+GROUP = 16
 
 
 def _field(fn: Any, lo: int, hi: int) -> tuple[str, int]:
@@ -62,7 +63,8 @@ class _Program:
     ``(lo, hi, row)`` its words [lo, hi) as ``row`` and the units after it, (hi - lo) / ``row.words`` rows of one output at
     consecutive units (none for the last position's select, which nothing reads). With ``tables`` it reads H1's tables
     (`Tables`), or Pearl+'s (`PearlTables`) cut at its linears, ``cut`` their layout (`window_cut.linears`). With ``at``,
-    a served request's Program instead, at the request's anchor and lane and of its positions."""
+    a served request's Program instead, at the request's anchor and lane and of its positions (`_dead`, `_token`,
+    `_collect`)."""
 
     def __init__(self, b: _Builder, fn: Any, cls: WindowClass, name: str, slot: int, scan: Any, entry: Any,
                  tables: FixedLoad | None = None, cut: Linears | None = None, at: Request | None = None) -> None:
@@ -70,6 +72,11 @@ class _Program:
         self.anchor, self.lane = (cls.anchor(slot), cls.lane(slot)) if at is None else (at.anchor, at.lane)
         self.positions = cls.positions if at is None else at.positions
         self.scan, self.entry = scan, entry
+        self.served = at is not None
+        self.L, self.O = (cls.prompt, cls.outputs) if at is None else (at.prompt, at.outputs)
+        self.dead = self._dead() if self.served else frozenset()
+        #: each position's token rows (`_token`)
+        self.tok_rows: dict[int, tuple[Row, ...]] = {}
         self.tables, self.cut = tables, cut
         if isinstance(tables, PearlTables) != (cut is not None):
             raise ValueError(f"{name}: a cut's layout goes with Pearl+'s tables, and only with them")
@@ -102,6 +109,8 @@ class _Program:
         self.scan_unit: tuple[str, int] | None = None
         self.collects: list[tuple[str, int]] = []
         self.entry_unit: tuple[str, int] | None = None
+        #: a served Program's last step's label, its entry's (`entry`)
+        self.entry_label: tuple[int, int] | None = None
         #: with ``tables``: each position's int8 linears of K = tables.k so far, and each such quantizer's H1 leaf row
         #: (`Int8RowQuant_v5`'s ``o2``, the node's words whole), which no reader reads
         self.quants: list[int] = []
@@ -110,6 +119,8 @@ class _Program:
         self.linears: list[int] = []
         self.arows: dict[int, Row] = {}
         self.ys: dict[int, Row] = {}
+        #: each linear's runs of units, ``(position, tid, at, count)``: the calls PoUW credits (`WindowCompiler.schedule`)
+        self.calls: list[tuple[int, str, int, int]] = []
 
     def segments(self, refs: Refs) -> list[tuple[str, Any, int, int]]:
         """``refs`` as word ranges: ``("n", node, lo, hi)`` of a node's output or ``("p", name, lo, hi)`` of a parameter."""
@@ -168,11 +179,57 @@ class _Program:
         """The first word of the one run of the weights record ``refs`` read, ``words`` long."""
         return weight_run(self.name, self.segments(refs), words)
 
+    def _dead(self) -> frozenset[int]:
+        """A served Program's nodes no live node reads: the live ones are its selects from its prompt's last position on and
+        what they read, its feeds below its prompt length reading no select (`_token`). So at a prompt position before the
+        last the LM head, the select and the final norm are dead, and the last layer's query and all of it from its
+        attention on with them (`lower` keeps that attention's keys its layer's)."""
+        nodes = self.fn.body.nodes
+        pos, p = [], -1
+        for n in nodes:
+            p += n.fn.name == "Embedding"
+            pos.append(p)
+        readers: list[list[int]] = [[] for _ in nodes]
+        for k, n in enumerate(nodes):
+            if n.fn.name == "Embedding" and 1 <= pos[k] < self.L:
+                continue
+            for a in n.args:
+                for space, idx, _lo, _hi in runs(a.refs):
+                    if space == "n":
+                        readers[idx].append(k)
+        live: set[int] = set()
+        for k in reversed(range(len(nodes))):
+            if (nodes[k].fn.name == "TokenSelect" and pos[k] >= self.L - 1) or any(r in live for r in readers[k]):
+                live.add(k)
+        return frozenset(range(len(nodes))) - live
+
+    def kind(self, j: int, node: Any) -> tuple[Any, ...]:
+        """What node ``j`` allocates in this Program: Programs of one kind at a node sit side by side (`_Builder.among`)."""
+        family = node.fn.name
+        if j in self.dead:
+            return ("collect",) if family == "TokenSelect" else ("dead",)
+        if family == "Embedding":
+            p = self.position
+            return ("token", 0 if p == 0 else 1 if p < self.L else 2)
+        if family == "TokenSelect":
+            return ("entry", self.cls.outputs - self.O if self.served else None) if self.position == self.positions else \
+                ("select",)
+        return ("node",)
+
     def lower(self, j: int, node: Any) -> None:
         """Node ``j`` lowered into units, each of the Program's slot and the node's step: its position, which each
-        embedding opens (`_token`)."""
+        embedding opens (`_token`); a dead node none, a dead select its position's collector alone (`_collect_alone`)."""
         if node.form != "call":
             raise Unexpressible(f"{self.name}: node {j} is a {node.form}, not a call")
+        if j in self.dead:
+            self.b.label, self.b.node = (self.slot_index, self.position - 1), j
+            if node.fn.name == "TokenSelect":
+                self._collect_alone()
+            elif node.fn.name == "Attention":
+                T, KVH = node.fn.bindings["T"], node.fn.bindings["KVH"]
+                self._cache("k", node.args[1], T, KVH)
+                self._cache("v", node.args[2], T, KVH)
+            return
         ret = node.fn.signature()[1]
         fields = [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
         self.words[j] = _spans(f"{self.name}: node {j} ({node.fn.id}) return", [(f"o{i}", t) for i, t in enumerate(fields)])
@@ -201,12 +258,14 @@ class _Program:
         """The next position's token: the first's its lane's of the scan state row the slot's `ScanSlots_v3` reads at its
         anchor (with the slot it carries, its occupancy word and its head), below the class's prompt limit every other's
         `TokenFeed_v1`'s (its slot its predecessor's, ``sel`` the previous position's select), past it the previous select.
-        With ``tables``, that row is held to the position's row of its round's input-ids table (`Tables.at`)."""
+        A served Program's below its prompt length is `TokenFeed_v1{FIRST=True}`'s, its prompt's id, and past it the previous
+        select. With ``tables``, that row is held to the position's row of its round's input-ids table (`Tables.at`)."""
         p, NP = self.position, self.cls.prompt
         self.position += 1
-        segs = self.segments(tok.refs)
-        if (segs[0][:2] == ("p", PROMPT)) != (p == 0):
-            raise Unexpressible(f"{self.name}: position {p}'s token reads {segs[0][:2]}; a class Program reads its one prompt row "
+        space, idx, _lo, _hi = runs(tok.refs)[0]
+        read = (space, idx if space == "n" else self.params[idx])
+        if (read == ("p", PROMPT)) != (p == 0):
+            raise Unexpressible(f"{self.name}: position {p}'s token reads {read}; a class Program reads its one prompt row "
                                 "at position 0 and every other position's token from its predecessor's select")
         if p == 0:
             tid, u = self.b.unit(self.scan)
@@ -216,17 +275,19 @@ class _Program:
                                               Row(tid, u, f"o{o + 3}", 4))
             self.tokens.append(None)
             rows: tuple[Row, ...] = (Row(tid, u, f"o{o}", 2),)
-        elif p >= NP:
+        elif p >= self.L:
             self.tokens.append(None)
             rows = self.rows(tok.refs)
         else:
-            tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=False))
+            tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=self.served))
             assert self.slot is not None, f"{self.name}: position {p}'s token before position 0's, which carries its slot"
             self.b.feed(tid, "slot", u, 1, (self.slot,))
-            self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
+            if not self.served:
+                self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
             self.tokens.append((tid, u))
             self.slot = Row(tid, u, "o1", 2 * (NP + 1))
             rows = (Row(tid, u, "o0", 2),)
+        self.tok_rows[p] = rows
         if isinstance(self.tables, Tables):
             if len(rows) != 1 or rows[0].words != 2:
                 raise Unexpressible(f"{self.name}: position {p}'s token is rows {rows}, not one u32 row an input-ids row holds")
@@ -342,6 +403,7 @@ class _Program:
             self.b.feed(tid, "x", u, count, xs)
             self.b.read(tid, "w", u, (count,), lo + s0 * K, (m * K,))
             pieces.append((s0, s0 + count * m, Row(tid, u, "o0", m)))
+            self.calls.append((self.position - 1, tid, u, count))
         self.outs[j] = pieces
         self.gemms[j] = (node.fn, xs, lo)
 
@@ -363,6 +425,7 @@ class _Program:
             self.b.read(tid, "w", u, (count,), lo + s0 * K // 2, (m * K // 2,))
             self.b.read(tid, "sw", u, (count,), slo + 2 * s0, (2 * m,))
             pieces.append((s0, s0 + count * m, Row(tid, u, "o0", m)))
+            self.calls.append((self.position - 1, tid, u, count))
         self.outs[j] = pieces
 
     def _heads(self, fn: Any, family: str, count: int) -> Any:
@@ -461,6 +524,7 @@ class _Program:
         qs = self._split(q.refs, NH)
         calls: list[tuple[str, int]] = []
         plan = [(self._first(fn, ports, keys["v"]), ports) for fn, ports in plan]
+        self._bound(T, *plan[0], keys, qs)
         for fn, ports in plan:
             tid, u = self.b.unit(fn, NH)
             for port, (kind, x) in ports:
@@ -474,6 +538,24 @@ class _Program:
             calls.append((tid, u))
         self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
         self.heads[j] = (plan, tuple(calls))
+
+    def _bound(self, T: int, fn: Any, ports: Any, keys: dict[str, _Keys], qs: Sequence[tuple[Row, ...]]) -> None:
+        """Refuse T keys where the first visited key block's unit, a head's rows in and out, passes ``grain.rows``, naming
+        the most positions a Program holds at this model and grain: its fixed rows and its rows a key. A grain no key fits
+        is `settle`'s to refuse, with every other unit past it."""
+        n = [len(qs[0]) if kind == "q" else 1 if kind == "state" else len(self._block(keys[kind], *x)[0])
+             for _port, (kind, x) in ports]
+        a, b = next(x for _port, (kind, x) in ports if kind == "k")
+        total, R = sum(n) + len(IF.layout(fn).outs), self.b.grain.rows
+        if total <= R:
+            return
+        per = sum(len(self._block(keys[k], a, b)[0]) for k in ("k", "v")) // (b - a)
+        fixed = total - (b - a) * per
+        if fixed + per > R:
+            return
+        raise Unexpressible(f"{self.name}: position {T - 1}, past the {(R - fixed) // per} positions a Program holds at this model and "
+                            f"grain: its first key block at {T} keys is {total} rows in and out ({fixed} and {per} a key), "
+                            f"past a unit's {R}")
 
     def _first(self, fn: Any, ports: Any, vs: _Keys) -> Any:
         """``fn``, or for `AttnBlockFirst_v1` whose keys' values are each several rows, `AttnBlockFirst_v2` at VS their
@@ -535,31 +617,57 @@ class _Program:
         state the next position's ``state``: the first's reads its lane's head), and at the last position the slot's entry
         too (`io_shell.SelectEntry_v1`, reading its occupancy word), whose select is no row: its one output is the entry. With
         H1's tables, a select that is a later round's token (`_token`) is collected at that round (`io_shell.SelectCollect_v2`).
-        Its slots are the node's (`_Builder.among`) that end here or, for a collector, that go on."""
+        A served Program's last select is collected on too, then KO - O more collectors shift its O outputs to the front of
+        the state, and its entry is `io_shell.SlotEntry_v1{NP=1}` (``entry``, `place_entry`), which fits only where the
+        scan's prompt length is its own."""
         p, KO = self.position - 1, self.cls.outputs
         at = {"V": V, "C": GROUP, "KO": KO, "FIRST": p == 0}
         e = self.entry.bindings
         last = p == self.positions - 1
-        if last:
+        if last and not self.served:
             fn = bind(IO.SelectEntry, **at, IDB=e["IDB"], NP=e["NP"], STOP=e["STOP"])
         elif isinstance(self.tables, Tables) and p + 1 >= self.cls.prompt:
             fn = bind(IO.SelectCollectV2, **at, ROUND=self.tables.at(self.cls, self.slot_index, p + 1)[0])
         else:
             fn = bind(IO.SelectCollect, **at)
-        among = self.b.among
-        if among is not None and self.b.ending is not None:
-            among = (self.b.ending, among[1]) if last else (among[0], self.b.ending)
-        ctid, cu = self.b.unit(fn, among=among)
+        ctid, cu = self.b.unit(fn)
         state = head if p == 0 else self.collect
         assert state is not None, f"{self.name}: position {p}'s select before position {p - 1}'s, which collects on to it"
         self.b.feed(ctid, "head" if p == 0 else "state", cu, 1, (state,))
-        if last:
+        if last and not self.served:
             self.b.feed(ctid, "occ", cu, 1, (occ,))
             self.entry_unit = (ctid, cu)
-        else:
-            self.collect = Row(ctid, cu, "o1", 2 * (KO + 2))
-            self.collects.append((ctid, cu))
+            return ctid, cu
+        self.collect = Row(ctid, cu, "o1", 2 * (KO + 2))
+        self.collects.append((ctid, cu))
+        if last:
+            tok = (Row(ctid, cu, "o0", 2),)
+            for _ in range(KO - self.O):
+                self._collect_alone(tok)
+            self.entry_label = self.b.label
         return ctid, cu
+
+    def place_entry(self, tid: str, u: int) -> None:
+        """A served Program's entry, unit ``u`` of the window's entries (`io_shell.SlotEntry_v1{NP=1}`), on its occupancy
+        word and its last collector's state."""
+        if self.occ is None or self.collect is None or self.entry_label is None:
+            raise Unexpressible(f"{self.name}: an entry before its last position's select")
+        self.b.feed(tid, "occ", u, 1, (self.occ,))
+        self.b.feed(tid, "state", u, 1, (self.collect,))
+        self.entry_unit = (tid, u)
+
+    def _collect_alone(self, tok: tuple[Row, ...] | None = None) -> None:
+        """A collector with no select (`io_shell.OutCollect_v1`): at a prompt position before the last, whose select is
+        dead, its token ``tok`` the position's; after a served Program's last select, its pads."""
+        p, KO = self.position - 1, self.cls.outputs
+        first = p == 0 and not self.collects
+        if self.head is None or (not first and self.collect is None):
+            raise Unexpressible(f"{self.name}: position {p}'s collector before its Program's first position's token")
+        ctid, cu = self.b.unit(bind(IO.OutCollect, KO=KO, FIRST=first))
+        self.b.feed(ctid, "head" if first else "state", cu, 1, (self.head if first else self.collect,))
+        self.b.feed(ctid, "tok", cu, 1, self.tok_rows[p] if tok is None else tok)
+        self.collect = Row(ctid, cu, "o0", 2 * (KO + 2))
+        self.collects.append((ctid, cu))
 
 
 FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "Int8RowQuant", "ScaledMmS8", "RoPE", "Attention", "SiluMul",

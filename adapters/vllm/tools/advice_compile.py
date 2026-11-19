@@ -30,7 +30,7 @@ manifest names with its source.  A window's advice is `window_advice`'s: a reque
 one before it runs on at its carried state, and `carry_of` holds that state to the endpoint's records, the advice of the last
 window before K that ran steps (`windows.jsonl`), whose close K must open on (`window_advice.follows`); K is refused (exit 2) when
 it doesn't, or when it carries a request in and that advice isn't there.  The Build dirs go into `--out` itself (default the
-window's workload dir, `windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `manifest.json`: each request's
+window's workload dir, `windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `programs.json`: each request's
 Program digest and Build dir, the registration the advice is bound to, and the carry.
 
     cd adapters/vllm; PYTHONPATH=.:../.. /workspace/jobs/venv312/bin/python tools/advice_compile.py RUN --out DIR [--partial] [--rank R]
@@ -235,8 +235,8 @@ def main() -> int:
                "component_digests": sorted(summary["programs"]), "refused": summary.get("refused") or {},
                "carry": {**carry, "idle": [advice.requests[i].id for i in summary["carry"]["idle"]]},
                "comparison": {k: cmp[k] for k in ("equal", "different", "no_trace", "mismatches") if k in cmp}}
-        M.write(out / "manifest.json", "RequestProgram", (json.dumps(man, indent=1) + "\n").encode())
-        print(f"[advice-compile] {out / 'manifest.json'}: {len(man['requests'])} request Programs", flush=True)
+        M.write(out / "programs.json", "RequestProgram", (json.dumps(man, indent=1) + "\n").encode())
+        print(f"[advice-compile] {out / 'programs.json'}: {len(man['requests'])} request Programs", flush=True)
     return 0 if cmp["mismatches"] == 0 else 1
 
 

@@ -356,7 +356,9 @@ def interiorAudit (i : Input) (sample : Array Nat) :
         returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
         supplied := it.params.verifier.supplied,
         fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1),
-        reads := it.reads, tables := it.tables }
+        reads := it.reads, tables := it.tables,
+        held := some ⟨Flock.hexOf it.params.verifier.program.desc.sha512, it.params.verifier.windowRoot,
+          Docket.fixedOf it.params.verifier⟩ }
     let rec_ := SecondStage.attach rec_ (SecondStage.checkAny own it.statements)
       (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),

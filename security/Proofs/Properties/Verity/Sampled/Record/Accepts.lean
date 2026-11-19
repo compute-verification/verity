@@ -294,6 +294,7 @@ theorem verdict_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
   have hsz : ev.sessions.size = 1 := by
     unfold _root_.Spot.OneStageZk.oneSession at h1
     by_contra hne
@@ -359,6 +360,7 @@ theorem lengths_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev
   split at hacc
   case h_1 => cases hacc
   rename_i R hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR

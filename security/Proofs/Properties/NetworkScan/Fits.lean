@@ -2,7 +2,7 @@ module
 
 public import Properties.NetworkScan
 public import Proofs.Properties.NetworkScan.Accept
-public import Proofs.Properties.InferenceOnly.BodiesOk.Decode
+public import Proofs.Properties.Flock.Decoder.Decode
 public import Proofs.Properties.InferenceOnly.BodiesOk.Order
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -40,7 +40,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Properties.InferenceOnly.BodiesOk
-import Proofs.Properties.InferenceOnly.BodiesOk.Basic
+import Proofs.Properties.Flock.Decoder.Basic
 import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
