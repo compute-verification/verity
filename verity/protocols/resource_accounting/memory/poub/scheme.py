@@ -349,10 +349,12 @@ def _bandwidth_hooks(cfg, params, bound, pinned):
     """PoUB's prover inside PoUS's piece (served_piece.py's --bw-*): the held store proved to the bandwidth verifier a
     pass at a time, its answer collected by BANDWIDTH_CMD. The close's key is the configuration's pin for the bandwidth verifier alone; with no pin the session has no
     case. Unbound, PoUS's run keys start the bandwidth party too, under PoUS's key made for the run."""
+    from verity.protocols.resource_accounting.memory.pous.scheme import onsite_command
+
     words = [*(["--bw-trusted-sha512", *pinned] if pinned else []),
              *(w for k, flag in _BANDWIDTH.items() if k in bound for w in (flag, bound[k]))]
     return {**({"POUS_ARGS": shlex.join(words)} if words else {"DEVELOPMENT": "1"}),
-            "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect-bandwidth --serve-dir "$1" --window "$2" --out "$3"'}
+            "BANDWIDTH_CMD": onsite_command("BANDWIDTH_CMD")}
 
 
 def launch_bandwidth(declaration: S.Scheme) -> tuple[Any, tuple[str, ...]]:

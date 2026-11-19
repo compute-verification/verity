@@ -40,3 +40,11 @@ def test_a_command_of_the_callers_own_is_refused_by_name(tmp_path, name) -> None
     r = _call(tmp_path, **{name: f"touch {tmp_path}/ran"})
     assert r.returncode == 3 and r.stdout == "" and not (tmp_path / "ran").exists()
     assert r.stderr.startswith(f"PREFLIGHT: {name} names a command of its own: an onsite piece runs only the tree's")
+
+
+def test_the_wipes_run_keys_form_is_the_trees_and_no_other_piece_has_one(tmp_path) -> None:
+    wipe = _call(tmp_path, "trees").stdout.splitlines()[0]
+    r = _call(tmp_path, WIPE_CMD=f"{wipe} --run-keys")
+    assert (r.returncode, r.stdout.splitlines()[0]) == (0, f"{wipe} --run-keys"), r.stderr
+    for name, value in (("WIPE_CMD", f"{wipe} --run-keys --x"), ("POUS_CMD", f"{wipe} --run-keys")):
+        assert _call(tmp_path, **{name: value}).returncode == 3, name

@@ -29,9 +29,11 @@ challenger's binding, and its attach (`prover/wipe_served.py`) runs the whole wi
 
 from __future__ import annotations
 
+import re
 import shlex
 from collections.abc import Mapping
 from fractions import Fraction
+from pathlib import Path
 from typing import Any
 
 from verity.commitments import domains
@@ -224,12 +226,24 @@ _WIPE = {"address": "WIPE_ADDRESS", "host": "WIPE_CHALLENGER", "command": "WIPE_
 _POUS = {"address": "--challenger-address", "host": "--challenger-host", "command": "--challenger-command"}
 
 
+def onsite_command(name: str) -> str:
+    """The tree's command for the onsite piece run through ``name`` (``WIPE_CMD``, ``POUS_CMD``, ``BANDWIDTH_CMD``):
+    `ONSITE_PIECES`'s ``ONSITE_<name>``, the one place that names it, to which its ``onsite_piece_commands`` holds
+    every caller's (any other value is refused by name). LookupError where the file names none."""
+    text = (Path(__file__).resolve().parents[5] / ONSITE_PIECES).read_text()
+    if not (m := re.search(rf"^ONSITE_{name}='([^']*)'$", text, re.M)):
+        raise LookupError(f"{ONSITE_PIECES} names no ONSITE_{name}")
+    return m.group(1)
+
+
 def _wipe_hooks(cfg, params, bound, pinned):
-    """The streamed wipe of the card before the workload's engine loads (WIPE_CMD, served_wipe.sh). The key is the configuration's pin alone, on the command line, so neither the environment nor a binding gives
-    another; with no pin served_wipe.sh refuses. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
+    """The streamed wipe of the card before the workload's engine loads (WIPE_CMD, served_wipe.sh): the tree's command
+    (`onsite_command`). The key is the configuration's pin alone, as WIPE_KEY_SHA512, which the runner sets over the
+    node's environment, so neither the environment nor a binding gives another; with no pin served_wipe.sh refuses.
+    Unbound, the key is the run's (`RUN_KEYS`, the tree's command's one other form), and no pin is passed."""
     if "address" not in bound:
-        return {"WIPE_CMD": f'bash {WIPE_SCRIPT} "$1" "$2" "$3" {RUN_KEYS}', **DEVELOPMENT}
-    return {"WIPE_CMD": f'WIPE_KEY_SHA512={"".join(pinned)} bash {WIPE_SCRIPT} "$1" "$2" "$3"',
+        return {"WIPE_CMD": f"{onsite_command('WIPE_CMD')} {RUN_KEYS}", **DEVELOPMENT}
+    return {"WIPE_CMD": onsite_command("WIPE_CMD"), "WIPE_KEY_SHA512": "".join(pinned),
             **{v: bound[k] for k, v in _WIPE.items() if k in bound}}
 
 
@@ -241,7 +255,7 @@ def _pous_hooks(cfg, params, bound, pinned):
     words = [*(["--trusted-sha512", *pinned] if pinned else []), *([] if "address" in bound else [RUN_KEYS]),
              "--rounds", str(params["challenges"]),
              *(w for k, flag in _POUS.items() if k in bound for w in (flag, bound[k]))]
-    return {"POUS_CMD": f'bash {POUS_SCRIPT} "$@"', "POUS_ARGS": shlex.join(words), "ONSITE_PIECES": ONSITE_PIECES,
+    return {"POUS_CMD": onsite_command("POUS_CMD"), "POUS_ARGS": shlex.join(words), "ONSITE_PIECES": ONSITE_PIECES,
             **({} if "address" in bound else DEVELOPMENT)}
 
 
@@ -258,4 +272,4 @@ def launch_wipe(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
 
 
 __all__ = ["ATTESTER_SCRIPT", "DEVELOPMENT", "ONSITE_PIECES", "POUS", "POUS_SCRIPT", "RUN_KEYS", "WIPE", "WIPE_SCRIPT",
-           "launch_pous", "launch_wipe"]
+           "launch_pous", "launch_wipe", "onsite_command"]
