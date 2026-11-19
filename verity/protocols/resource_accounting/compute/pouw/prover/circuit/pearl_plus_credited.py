@@ -37,12 +37,12 @@ over eb's TN indices and over F's K for fa and for fb, `PearlPlusGramRow_v2` map
 input row.  No K that the core takes fits the node whole in one proof block (the noise alone is about 370k · K ANDs), so
 C's laying (`verity.circuits.laying.lay`) opens it into those units (`cut`), each its own block: a line is 73,459 ANDs and
 a Gram row 32 chains (about 7,000 · K), in range at every K up to the served 2048; the wired core is in range whole at
-K = 256 (about 16.6M ANDs) and is the credited block there, and at K = 2048 (about 5.1G ANDs at a 16 × 64 tile) laying
-opens it too.  It writes ``y``,
+K = 256 (about 16.6M ANDs), and at K = 2048 (about 5.1G ANDs at a 16 × 64 tile) laying opens it too.  It writes ``y``,
 its TR real rows' TN words of the linear's y (Pearl+'s served product, `pearl_plus_tile.served`): the one y C holds,
 which every reader of the linear takes by wire, a row of y the concatenation of its column tiles' words in column order.
 Its ``ok`` is one u16 word held to 1; its digest is a committed value no unit reads. A unit's amount is its credited
-MACs, TR · TN · K (`scheme.tile_macs` over the wired core's statics, `PEARL_PLUS.blocks`). The core and the noise's lines
+MACs, TR · TN · K (`scheme.tile_macs` over its statics, `PEARL_PLUS.blocks`), credited to the tile as a whole over every
+proof block laying makes of it (`scheme.laid_tiles`, `scheme.credited_tiles`). The core and the noise's lines
 and Gram rows are registered on bits only (their word bodies are unregistered), and C's values are words, so this is the
 tile's one word form C names.
 
