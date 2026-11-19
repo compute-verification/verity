@@ -1,10 +1,10 @@
 """A device's log: its attester's entries, oldest first, in a file of its own that fails closed.
 
 An entry is Core's attester's entry (`Definitions/Core/Challenger.lean`, `Challenger.Attested`): the digests of what the
-device was shown (`shown`), its data (`data`), and, where the device read its clock as it made the entry, that reading
-(`verity.clock.Reading`). The log's file is its `kind` line, then one entry a line: each of `shown` and `data` in
-lowercase hex at its registered width (`widths`, in bytes), separated by a space, then the reading's ns when the entry
-carries one. `append` takes the file's lock, reads the file again, refuses an entry whose key (`key`) an entry already
+device was shown (`shown`), its data (`data`), and, where the device read its clock as it made the entry, that reading's
+`ns` (`verity.clock.Reading`, whose `key` is the log's `device`). The log's file is its `kind` line, then one entry a
+line: each of `shown` and `data` in lowercase hex at its registered width (`widths`, in bytes), separated by a space,
+then the reading's ns when the entry carries one. `append` takes the file's lock, reads the file again, refuses an entry whose key (`key`) an entry already
 holds, and appends it, fsynced, before it returns. Nothing here rewrites or truncates a log, and `create` refuses one
 that exists.
 
@@ -22,8 +22,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.clock import Reading
-
 
 class LogRefused(RuntimeError):
     """A device's log is missing, unreadable or unwritable, or refuses an entry: its key is already in it."""
@@ -31,11 +29,12 @@ class LogRefused(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class Attested:
-    """An attester's entry: the digests of what the device was shown, its data, and its clock's reading, if it read one."""
+    """An attester's entry: the digests of what the device was shown, its data, and its clock's reading in ns, if it read
+    one."""
 
     shown: tuple[bytes, ...]
     data: bytes
-    reading: Reading | None = None
+    ns: int | None = None
 
 
 class AttestedLog:
@@ -87,7 +86,7 @@ class AttestedLog:
     def _entry(self, m: re.Match[bytes]) -> Attested:
         *fields, ns = m.groups()
         *shown, data = (bytes.fromhex(x.decode()) for x in fields)
-        return Attested(tuple(shown), data, None if ns is None else Reading(self.device, int(ns)))
+        return Attested(tuple(shown), data, None if ns is None else int(ns))
 
     def find(self, key: bytes) -> Attested | None:
         """The entry under `key`, or None."""
@@ -98,9 +97,7 @@ class AttestedLog:
         fields = (*entry.shown, entry.data)
         if tuple(len(x) for x in fields) != self.widths:
             raise ValueError(f"a {self.kind} entry's fields are {self.widths} bytes, not {tuple(len(x) for x in fields)}")
-        if entry.reading is not None and entry.reading.key != self.device:
-            raise ValueError(f"the log of {self.device!r} holds its own readings, not {entry.reading.key!r}'s")
-        line = " ".join(x.hex() for x in fields) + ("" if entry.reading is None else f" {entry.reading.ns}")
+        line = " ".join(x.hex() for x in fields) + ("" if entry.ns is None else f" {entry.ns}")
         try:
             fd = os.open(self.path, os.O_WRONLY | os.O_APPEND)
         except FileNotFoundError:
