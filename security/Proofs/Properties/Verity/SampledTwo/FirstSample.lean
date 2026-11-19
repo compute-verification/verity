@@ -189,10 +189,10 @@ theorem accepted_secondSamplingDesign {p : Params} {c : OneStage.Commitment} {ξ
   rw [hd] at hlaw₂
   obtain ⟨h1, h2, h3, h4, h5⟩ := inputOf_first p { c with record := j₁ } ξ ξ₂
     { e with record := j₂, stmts := VStar.Recursive.SampledTwo.stmtsOwn p e bs } received₂ vs
-  rw [hio] at hn hrule htab hder hres hsel hchk
+  rw [hio] at hn hrule hlaw htab hder hres hsel hchk
   rw [h3] at hn hchk
   rw [h1, h2] at hrule htab hres
-  rw [h2] at hder
+  rw [h2] at hder hlaw
   rw [h2, h4, h5] at hsel
   exact ⟨c₂, ξ₂, r, i, run, samplingDesign, hi, hr, htwo, j₁, n, rule, samplingDesign₁, workTable, derived, resolved, draw, rest, read, hj₁,
     hn, hrule, hlaw, htab, hder, hres, hsel, hchk, hd, grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw₂⟩
