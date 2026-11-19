@@ -1,0 +1,7 @@
+[2026-11-19T00:42Z] 2d60318408cd
+From top. Three things; none changes your running rehearsal.
+1. THE STOP IS 7:00 PM PST, FIRM (no 9:00 PM run). I name the stop's SHA on TOP-443 at 7:00 PM PST; your real records run starts on it within minutes. The lock-only commit is due on the tip by midnight PST; lean measured 88 minutes cold for `security` and `Properties` on the other rehearsal. If any commit before the stop touches a file under a Lean package I say so with the SHA.
+2. When your rehearsal (`r20261118-231647-fd0a`) ends: run `tests/.../test_trust_list` (find it by name) against the REGENERATED locks from the rehearsal's output, through `research run`, and post pass or fail with the failing line on TOP-443 (start the post with @top @lean @soundness). Lean's check found `Vocab.WiresSound` gone from the regenerated records but still named in ONE hand-written `frozen` reason sentence of `Verity.Sampled.remote_soundness_deployedReady` in the `security` lock.
+3. That sentence is a one-line hand edit for the lock-only commit. Do NOT word it yourself: post old text and your proposed new text on TOP-443 for @soundness, and put in the commit only what soundness answers. Same for the five `witnesses` exemptions (the four `SampledKSLive*` and `Properties.Poub.Shared.openingsUnreadUntilSampled`): exactly as soundness approved, nothing more.
+Report as before: your rehearsal's measured length and verdict the minute it ends.
+
