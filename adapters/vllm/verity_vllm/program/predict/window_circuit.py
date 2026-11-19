@@ -33,12 +33,13 @@ collector's rows and an entry's are a few words at a small class, too narrow for
 unit of its own. In the class circuit the entries are one allocation after the walk, in slot order, and the state rows and
 the entries are the circuit's external ports.
 
-A served window's circuit holds the scan too (the network scheme's ports, `scan_state.Scan`): its start unit
+A served window's circuit holds the scan too (the network scheme's ports, `scan_state.Scan`): its first start unit
 (`IngressScanStart`) reads ``SCAN_STATE``'s one row, the state before the window; its ingress unit t
-(`IngressScanBucket`) reads the network attester's ingress row t (``INGRESS_ROWS``), S_{t−1} by wire (the start's at
-t = 0) and, as ``prog<j>``, the entry of lane j at t's boundary; its egress unit t (`EgressBucket`) reads ingress unit
-t's view and its row is held to the attester's released row t (``RELEASED_ROWS``). The Programs at bucket a read
-S_{a−1} by wire. A boundary at a time after the walk: its lone `ScanSlots_v3`, its gap collectors and its entries (one
+(`IngressScanBucket`) reads the network attester's ingress row t (``INGRESS_ROWS``), S_{t−1} by wire (the first
+start's at t = 0) and, as ``prog<j>``, the entry of lane j at t's boundary; its egress unit t (`EgressBucket`) reads
+ingress unit t's view and its row is held to the attester's released row t (``RELEASED_ROWS``). The `ScanSlots_v3`
+at boundary a reads the state there as u16 words, a start unit's o1: the first's at 0, else one reading S_{a−1} by
+wire. A boundary at a time after the walk: its start and lone `ScanSlots_v3`, its gap collectors and its entries (one
 allocation, lane j's entry j), then its ingress units, one allocation each, so the order puts every read after its
 writer. Those three ports are the circuit's external ports.
 A slot's Program
@@ -271,7 +272,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         itid, outs = descriptor_id(bucket), dict(IF.layout(bucket).outs)
 
         def state(a: int) -> Row:
-            """The scan's state row before bucket ``a``: the start's at 0, else ingress unit a − 1's S_{a−1}."""
+            """The scan's state row before bucket ``a`` as bits: the start's at 0, else ingress unit a − 1's S_{a−1}."""
             return Row(ttid, 0, "o0", outs["o1"]) if a == 0 else Row(itid, a - 1, "o1", outs["o1"])
     if order is None:
         fn = class_program(registered, cls.positions).program.fn
@@ -284,7 +285,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         fns = [built[requests[i].positions] for i in order]
         fn = fns[0]
         progs = [_Program(b, f, cls, f"request {i}'s Program", k, scan, entry, at=requests[i],
-                          state=state(requests[i].anchor)) for k, (i, f) in enumerate(zip(order, fns))]
+                          state=Row(ttid, 0, "o1", outs["o1"])) for k, (i, f) in enumerate(zip(order, fns))]
         ids = [n.fn.id for n in fn.body.nodes]
         for i, f in zip(order, fns):
             if [n.fn.id for n in f.body.nodes] != ids[:len(f.body.nodes)]:
@@ -315,8 +316,10 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         words = dict(IF.layout(entry).outs)["o0"]
         for a in cls.boundaries:
             if a not in host:
+                _, tu = b.allocation(start, [progs[0].entry_label])
+                b.feed(ttid, "sin", tu, 1, (state(a),))
                 stid, su = b.allocation(scan, [progs[0].entry_label])
-                b.feed(stid, "state", su, 1, (state(a),))
+                b.feed(stid, "state", su, 1, (Row(ttid, tu, "o1", outs["o1"]),))
                 host[a], unit[a] = 0, (stid, su)
                 scans.append((a, (stid, su)))
             lanes = [s for s in range(cls.slots) if cls.anchor(s) == a]
