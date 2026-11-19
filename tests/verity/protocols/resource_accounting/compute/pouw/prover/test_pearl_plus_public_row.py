@@ -81,10 +81,15 @@ def test_the_vectors_cover_two_devices_two_columns_and_full_bytes():
         assert c["fa"]["nbytes"] == 32 * c["k"] and c["eb"]["nbytes"] == 32 * c["tn"] and c["gram"]["nbytes"] == 4096
 
 
+def _words(bits: list[int], w: int) -> list[int]:
+    return [sum(bits[w * i + j] << j for j in range(w)) for i in range(len(bits) // w)]
+
+
 def noise_units(c: dict, *, bits: bool) -> dict[str, bytes]:
     """The case's noise as the node's units derive it, wired as the node wires them: the seed (key and line indices),
-    one line per index, one Gram row per F_B column; on their word bodies, or on bits (their σ, by word view).  eb's, fa's
-    and fb's codes, then g's FP32 words little-endian, as the reference's bytes."""
+    one line per index, one Gram row per F_B column; on their word bodies, or on bits (the seed's words in and bits out,
+    the lines' and rows' σ by word view).  eb's, fa's and fb's codes, then g's FP32 words little-endian, as the
+    reference's bytes."""
     k, tn, dev = c["k"], c["tn"], c["dev"]
     if bits:
         run, seed, line, row = evaluate_words, PT.seed(k, tn), PT.line, PT.gram_row(k, dev)
@@ -95,7 +100,10 @@ def noise_units(c: dict, *, bits: bool) -> dict[str, bytes]:
     def go(fn, *xs):
         return run(fn, *(np.asarray(x, dtype=np.uint64 if bits else np.int64) for x in xs)).reshape(len(xs[0]), -1)
 
-    s = go(seed, [list(bytes.fromhex(c["salt"]))], [list(bytes.fromhex(c["root_b"]))], [[c["col"]]])[0].tolist()
+    s = evaluate_batch(seed, *(np.asarray(x, dtype=np.int64) for x in (
+        [list(bytes.fromhex(c["salt"]))], [list(bytes.fromhex(c["root_b"]))], [[c["col"]]]))).reshape(-1).tolist()
+    if bits:
+        s = _words(s[:256], 8) + _words(s[256:], 32)
     key, ebi, fi = s[:32], s[32:32 + tn], s[32 + tn:]
     eb = go(line("eb"), [key] * tn, [[i] for i in ebi])
     fa, fb = (go(line(kind), [key] * k, [[i] for i in fi]) for kind in ("fa", "fb"))
