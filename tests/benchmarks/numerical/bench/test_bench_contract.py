@@ -429,8 +429,8 @@ def test_fp8_targets_divide_by_their_own_anchor_peak() -> None:
     assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) == pytest.approx(4.31e7, rel=1e-2)
     assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) != pytest.approx(contract.overhead(401e-6, 1536), rel=1e-2)
     hopper = contract.native_reference(FP8_HOPPER_WGMMA.name)
-    assert hopper is contract.native_peak_of(FP8_HOPPER_WGMMA) and hopper.flop_per_second == 1978.9e12 and hopper.accumulate == "fp32" and "H100" in hopper.device
-    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(2 * 1536 / 1978.9e12)
+    assert hopper is contract.native_peak_of(FP8_HOPPER_WGMMA) and hopper.flop_per_second == 1978.85952e12 and hopper.accumulate == "fp32" and "H100" in hopper.device
+    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(2 * 1536 / 1978.85952e12)
     assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(1.552e-12, rel=1e-3)
     for t in (FIRST, FP8_HOPPER_WGMMA, FP8_ADA_MMA):
         assert census.native_seconds_per_instance(contract.native_peak_of(t), 1536) == contract.native_seconds_per_vu(1536, t.name)

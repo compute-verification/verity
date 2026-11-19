@@ -464,8 +464,8 @@ def _door(tmp_path: Path, monkeypatch, name: str, indices: list, draw: dict, blo
 
 
 def test_the_door_holds_the_drawn_blocks_inputs_to_the_schemes_reading_of_its_records(tmp_path, monkeypatch):
-    """The scheme's reading of the drawn block's public inputs from its committed records (``inputs``, PoUW's
-    `drawn_inputs`) is called with the block the proof matched, once, and its refusal refuses the proof as ``inputs``
+    """The scheme's reading of the drawn block's public inputs from its committed records (``inputs``) is
+    called with the block the proof matched, once, and its refusal refuses the proof as ``inputs``
     before C_S is derived or Lean runs; a reading that passes leaves the verdict to Lean."""
     asked = []
 

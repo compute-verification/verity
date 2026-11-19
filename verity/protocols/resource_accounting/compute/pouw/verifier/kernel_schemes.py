@@ -2,7 +2,7 @@
 
 A kernel scheme's ``name`` is the string a proof's identifier carries (`identifier`, where ``identified``) and a record
 stores. Its ``family`` and ``parameters`` say what builds it (`verity.protocols.resource_accounting.compute.pouw.prover
-.schemes.get`, which has a builder for each family but ``ncp-v2``, whose Programs are `prover.circuit.traced_as`'s).
+.schemes.get`, which has a builder for each family but ``ncp-v2``).
 
 One that a resource scheme (`verity.protocols.resource_accounting.scheme`) runs names the architecture its build is
 for once (``arch``, a card file's ``arch``), the cards the scheme runs that build on by their card files' ``short``
