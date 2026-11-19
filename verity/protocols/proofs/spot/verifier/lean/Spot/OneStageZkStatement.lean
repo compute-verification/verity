@@ -693,7 +693,7 @@ def readsOf : Option Json → V Reads
     let own ← Flock.Registered.ofJson j
     let known ← Flock.Registered.knownOf j
     Flock.Registered.checkKnownAll own known
-    pure ⟨some own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j), ← Flock.Registered.paramsOf j⟩
+    pure ⟨some own, known, ← Flock.Registered.paramsOf j⟩
 
 /-- The refusal of registered reads at the sample's units alone: not written. -/
 def SAMPLED_READS : String :=
