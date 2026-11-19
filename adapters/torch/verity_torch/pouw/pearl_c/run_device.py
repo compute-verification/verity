@@ -133,6 +133,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.la
 from verity_torch.pouw.pearl_c.lanes_device import LaneCalls
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import SaltCoins, SaltOpening, epoch_of
 from verity_torch.pouw.pearl_c.passes import (
+    CHOSEN_INDEX,
     EpochCalls,
     call_index,
     pass_dir,
@@ -290,6 +291,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         with ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`); with `aside_ends`
         too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`).  `whole_eager`
         is the schedule a forward a whole-step arm runs eagerly takes (`eager_forward`)."""
+        self._made = {k: v for k, v in locals().items() if k != "self"}
         whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends,
                       whole_prefetch_b, whole_shape_joins, whole_pd_shared)
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
@@ -371,8 +373,14 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
                                                                                      if aside_ends else "")) if lag_ends else "read back at its end",
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound"}
-        self.cur = _Pass(None)              # no pass yet: `begin` reads it for the epoch's calls so far (`pass_base`)
+        self.cur = _Pass(None)              # no pass yet
         self.begin()
+
+    def twin(self) -> PearlCDeviceRun:
+        """A device run of its own over this one's install as it was built (its weights, roots, coins and salt opening, so
+        its salt, and its options), at this one's hashing: its rounds from 0, so its k-th pass with calls holds the place
+        every twin's k-th does.  A check that compares passes runs each on a twin (`passes.CHOSEN_INDEX`)."""
+        return type(self)(**{**self._made, "hashing": self.hashing})
 
     # ---- the schedule -----------------------------------------------------------------------------------------------
 
@@ -572,6 +580,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
 
     def _gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
         import torch
+        self.cur.salts.check()
         cur, wt = self.cur, self.weights[w]
         lead, k = x.shape[:-1], x.shape[-1]
         x2 = x.reshape(-1, k)
@@ -629,16 +638,20 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
 
     def begin(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None,
               stepped: bool = False, at: int | None = None) -> None:
-        """A new pass: its own transcript under the install's epoch, its indices from `pass_base` (``at``), under `schedule` (the
+        """A new pass: its own transcript under the install's epoch, its calls' indices their place (`passes.call_index`: its
+        round, taken at its first call, and each call's position), under `schedule` (the
         last pass's own when None; a schedule changes only between passes, and before a pass's first call by `eager_forward`).
+        ``at``, a caller's own first index, is refused by name (`passes.CHOSEN_INDEX`).
         With `retain`, the pass writes what the prover opens from into that directory, from poisoned outputs, and its manifest
         names `run`.  `stepped`: a step's end begins it."""
+        if at is not None:
+            raise ValueError(f"{self.entry}: begin(at={at!r}): {CHOSEN_INDEX}")
         self.join_sides()                   # the last pass's side lanes are done before anything new
         self.cur.salts.drop()               # a pass replaced without its end keeps no key
         retain = retain or pass_dir(self)
         last, self._eager_from = self._eager_from or self.schedule, None
         self._use(last if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
-        self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped, base=self.pass_base(at))
+        self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped)
         if retain and self.hashing:
             self.poison()
 

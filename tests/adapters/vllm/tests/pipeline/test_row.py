@@ -31,7 +31,6 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -630,77 +629,7 @@ def test_a_row_whose_every_call_boundary_has_a_source_goes_on_to_match(tmp_path,
     assert gate[3].startswith(f"identities={n} claimed=0 covered={n} uncovered=0 unattached=0 sources=call_boundary wall=")
 
 
-@pytest.mark.usefixtures("gnu_timeout")
-def test_a_tp_row_stops_after_its_build_on_any_call_boundary(tmp_path, monkeypatch):
-    t = _tp_row(tmp_path, TP_DENSE)
-    os.makedirs(t.d, exist_ok=True)
-    t.child_env, t.shapes = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")])}, []
-    b, _at = dense_program()
-    _d, man = build_dir(tmp_path, b.doc(LP), [PF[len("model."):]])
-
-    def manifest_global(stage):
-        (Path(t.d) / "manifest.json").write_text(json.dumps({**man, "ranks": 2}))
-        return 0
-
-    for name, fn in (("derive_jobs", lambda shapes, derives: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", lambda ranks: None),
-                     ("guarded_summary", lambda: "PASS"), ("manifest_global", manifest_global)):
-        monkeypatch.setattr(t, name, fn)
-    monkeypatch.setattr(R, "tp_build_digests", lambda d: ("d" * 16, []))
-    monkeypatch.setattr(R, "tp_rank_workload_digest", lambda bdir, r: "w" * 16)
-    with pytest.raises(Stop) as e:
-        t.build()
-    assert e.value.rc == 21
-    build, gate = (ln.split(" ", 3) for ln in (Path(t.d) / "stages.txt").read_text().splitlines())
-    assert build[:2] == ["build", "PASS"] and gate[:2] == ["build-call-boundaries", "FAIL"]
-    assert gate[3].endswith(": a manifest of 2 ranks (the source serves one rank)") and " sources=none " in gate[3]
-
-
-def test_a_programs_only_tp_build_ends_at_its_programs(tmp_path, monkeypatch):
-    t = _tp_row(tmp_path, TP_DENSE, "--build-programs-only", "1")
-    os.makedirs(t.d, exist_ok=True)
-    t.shapes = []
-    for name, fn in (("derive_jobs", lambda shapes, derives: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", lambda ranks: None),
-                     ("guarded_summary", lambda: "PASS"), ("manifest_global", lambda stage: pytest.fail("built a manifest")),
-                     ("call_boundaries", lambda to, cmd=None: pytest.fail("checked call boundaries"))):
-        monkeypatch.setattr(t, name, fn)
-    monkeypatch.setattr(R, "tp_build_digests", lambda d: ("d" * 16, []))
-    monkeypatch.setattr(R, "tp_rank_workload_digest", lambda bdir, r: "w" * 16)
-    t.build()
-    (build,) = (ln.split(" ", 3) for ln in (Path(t.d) / "stages.txt").read_text().splitlines())
-    assert build[:2] == ["build", "PASS"] and "manifest_rc=None" in build[3]
-
-
-def test_a_tp_build_rerun_composes_only_the_ranks_whose_workload_program_is_not_newer_than_their_requests(tmp_path, monkeypatch):
-    """GLM-5.3 B32: ranks 4 and 5's composes were OOM-killed after six ranks composed; the rerun composes those two."""
-    t = _tp_row(tmp_path, TP_DENSE, "--build-programs-only", "1")
-    t.W, t.shapes = 4, []
-
-    def put(path: str, doc: dict, at: int) -> None:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        Path(path).write_text(json.dumps(doc))
-        os.utime(path, (at, at))
-
-    for r, workload in enumerate([{"workload_digest": "w0"}, None, {"workload_digest": "w2"}, {"workload_digest": "w3"}]):
-        put(f"{t.rank(r)}/build_step/result.json", {"ok": True}, 100)
-        put(f"{t.rank(r)}/build_request_LP8_T3/result.json", {"ok": True}, 300 if r == 2 else 100)
-        if workload is not None:
-            put(f"{t.rank(r)}/build_workload/workload_program.json", workload, 200)
-    Path(f"{t.rank(3)}/build_workload/workload_program.json").write_text('{"workload_digest": "w')
-    os.utime(f"{t.rank(3)}/build_workload/workload_program.json", (200, 200))
-    assert [R.composed_ok(t.rank(r)) for r in range(4)] == [True, False, False, False]
-    composed: list[list[int]] = []
-    for name, fn in (("derive_jobs", lambda shapes, derives: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", composed.append),
-                     ("guarded_summary", lambda: "PASS")):
-        monkeypatch.setattr(t, name, fn)
-    monkeypatch.setattr(R, "tp_build_digests", lambda d: ("d" * 16, []))
-    t.build()
-    assert composed == [[1, 2, 3]]
-
-
 # ---------------------------------------------------------------------------------------------------------------- taps
-
-TP_MOE = "qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager"
-TP_DENSE = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 
 
 def _tap_manifest(path: Path, *families: str) -> str:
@@ -810,19 +739,6 @@ def test_a_manifest_of_an_older_query_another_program_or_no_partition_is_moved_a
     assert R.manifest_not_of_record(R.load_json(f"{r.d}/manifest.json"), PD, r.ck_) == ("", "")
 
 
-@pytest.mark.parametrize("kw, why", [({}, ""), ({"complete": False}, "not complete"), ({"query_id": "Q_module_body_v1"}, "query of record"),
-                                     ({"partition": False}, "query of record"), ({"word_check": False}, "no word check recorded")])
-def test_a_tp_rows_complete_word_checked_manifest_is_reused_not_rebuilt_on_the_gpu_host(tmp_path, kw, why):
-    """[GLM-5.3] the TP Commit rebuilt manifest.json before leasing the GPUs every time: hours of CPU and ~470 GB beside the engine."""
-    r = _row(tmp_path)
-    p = Path(r.d) / "manifest.json"
-    complete = kw.pop("complete", True)
-    _record_manifest(p, kw.pop("query_id", R.QUERY_OF_RECORD), **kw)
-    p.write_text(json.dumps(json.loads(p.read_text()) | {"complete": complete}))
-    got = R.tp_manifest_not_of_record(r.d, r.ck_)
-    assert (got == "") if not why else why in got
-
-
 def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     r = _row(tmp_path)
     r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
@@ -835,87 +751,6 @@ def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     assert R.missing_tap_build(taps, r.env) == ""
     assert R.applicable_taps(_tap_manifest(tmp_path / "bare.json"), r.ck_) == [] and R.missing_tap_build([], r.env) == ""
     assert R.applicable_taps(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == []
-
-
-def _tp_row(tmp_path: Path, row: str, *argv: str, **kw):
-    from verity_vllm.pipeline.row_tp import TpRow
-    o = _opts(tmp_path, *argv, row=row, **kw)
-    t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util=None,
-              build=o.build, match=o.match, commit=o.commit)
-    t.hidden_so, t.B, t.requests, t.engine, t.ck, t.fold_profile = t.hidden_build(), 2, 2, [], "/ck", ""
-    t.bdir, t.M = f"{t.d}/build", f"{t.d}/match"
-    return t
-
-
-def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_path, monkeypatch):
-    t = _tp_row(tmp_path, TP_MOE)
-    assert t.hidden_so == t.env.hidden_so_fa2_guarded
-    assert _tp_row(tmp_path, TP_MOE, environ={"GUARDED_MAX_TAP": "0"}).hidden_so == t.env.hidden_so_fa2
-    seen: list[list[str]] = []
-
-    def run_tl(stage: str, to: int, log: str, cmd: list[str]) -> int:
-        seen.append(cmd)
-        return 0
-
-    monkeypatch.setattr(R, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
-    monkeypatch.setattr(t, "run_tl", run_tl)
-    os.makedirs(t.d)
-    t.manifest_global("commit.required_manifest")
-    assert {"--norm-scales", "--router-softmax", "--vocab-range"} <= set(seen[0]) and "--guarded-max" not in seen[0]
-    taps = R.applicable_taps(_tap_manifest(tmp_path / "moe.json", "norm_scales", "router_softmax", "vocab_range"), t.ck_)
-    cmd = t.commit_cmd(taps)
-    assert cmd[cmd.index("--hidden-so") + 1] == t.env.hidden_so_fa2_guarded and "--vocab-range" in cmd
-    assert "--norm-tap-so" not in cmd and cmd[cmd.index("--router-tap-so") + 1] == t.env.router_tap_so
-    dense = _tp_row(tmp_path, TP_DENSE)
-    cmd = dense.commit_cmd(R.applicable_taps(_tap_manifest(tmp_path / "dense.json", "norm_scales", "vocab_range"), dense.ck_))
-    assert "--norm-tap-so" not in cmd and "--vocab-range" in cmd and "--router-tap-so" not in cmd
-
-
-def test_a_tp_rows_commit_names_the_trees_checkpoint_pins_as_its_replay_does(tmp_path, monkeypatch):
-    """`tp-commit` with no ``--checkpoints-manifest`` takes the package's own; the row names the tree's file to it, the one it
-    names to `tp-commit-replay`, so the Commit's record says which pins its shards were held to.  A config run's Commit, one
-    instrumented arm with no Match to compare against, names it as a full run's does."""
-    tp = _tp_row(tmp_path, TP_DENSE)
-    pins = os.path.join(tp.tree, "manifests/checkpoints.json")
-    for row, config_run in ((tp, False), (_tp_row(tmp_path, TP_DENSE, "--config-run", "1"), True)):
-        cmd = row.commit_cmd([])
-        assert cmd[cmd.index("--checkpoints-manifest") + 1] == pins and cmd.count("--checkpoints-manifest") == 1, config_run
-        assert ("--only-arm" in cmd, "--match-dir" in cmd) == (config_run, not config_run)
-    seen: list[list[str]] = []
-
-    def run_tl(stage: str, to: int, log: str, argv: list[str]) -> int:
-        seen.append(argv)
-        return 0
-
-    monkeypatch.setattr(tp, "run_tl", run_tl)
-    isdir = os.path.isdir
-    monkeypatch.setattr(os.path, "isdir", lambda p: p == "/ck" or isdir(p))
-    os.makedirs(f"{tp.d}/commit")
-    Path(f"{tp.d}/commit/replay_deferred.json").write_text("{}")
-    tp.replay()
-    assert [c[c.index("--checkpoints-manifest") + 1] for c in seen] == [pins]
-
-
-def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
-    """SERVING_ROWS reaches the single-GPU Commit and tp-commit alike as the request `Row.serving_rows_request` writes."""
-    pf = str(tmp_path / "partition.json")
-    single = _row(tmp_path, environ={"SERVING_ROWS": pf})
-    single.hidden_so, single.B = "/x/verity_fa2_matReqG.so", 1
-    tp = _tp_row(tmp_path, TP_DENSE, environ={"SERVING_ROWS": pf, "REPLAY_DEFERRED": "1"})
-    for r in (single, tp):
-        cmd = r.commit_cmd([])
-        req = json.loads(Path(cmd[cmd.index("--serving-rows") + 1]).read_text())
-        assert req == {"dir": f"{r.d}/serving-rows", "partition": pf, "run": r.row, "committer": {"source": r.env.environ.get("RESEARCH_SOURCE_SHA")}}
-    assert "--replay-deferred" in tp.commit_cmd([]) and "--serving-rows" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
-
-
-def test_the_serving_rows_request_carries_the_per_expert_tables(tmp_path):
-    """SERVING_ROWS_TABLES reaches the request as the ``tables`` `expert_rows.of_request` reads, ``{rank}`` left for each rank."""
-    pf, reg = str(tmp_path / "partition.json"), str(tmp_path / "tables-rank{rank}.json")
-    tp = _tp_row(tmp_path, TP_DENSE, environ={"SERVING_ROWS": pf, "REPLAY_DEFERRED": "1", "SERVING_ROWS_TABLES": reg})
-    cmd = tp.commit_cmd([])
-    req = json.loads(Path(cmd[cmd.index("--serving-rows") + 1]).read_text())
-    assert req["partition"] == pf and req["tables"] == {"registration": reg}
 
 
 def test_a_row_given_a_run_dir_writes_nothing_into_the_runners(tmp_path):
@@ -937,232 +772,7 @@ def test_a_row_given_a_run_dir_writes_nothing_into_the_runners(tmp_path):
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 
 
-def _engines_custom_all_reduce_off(t, monkeypatch) -> tuple[object, object]:
-    """``disable_custom_all_reduce`` as tp-capture's and tp-commit's engines parse it from the row's command lines."""
-    from verity_vllm.pipeline.tp.capture import parse_engine_args
-    t.MML, t.MNBT = 1024, 256
-    t.engine = t.engine_args()
-    seen: list[list[str]] = []
-
-    def capture_leg(stage, to, log, cmd, **kw):
-        seen.append(cmd)
-        raise Stop(98)
-    monkeypatch.setattr(R, "derived_ok", lambda p: True)
-    monkeypatch.setattr(t, "run_gpu", capture_leg)
-    with pytest.raises(Stop):
-        t.match()
-
-    def parsed(cmd: list[str]) -> object:
-        return parse_engine_args([cmd[i + 1] for i, a in enumerate(cmd) if a == "--engine-arg"])["disable_custom_all_reduce"]
-    return parsed(seen[0]), parsed(t.commit_cmd([]))
-
-
-def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_after(tmp_path, monkeypatch):
-    """`--match-phase gpu` runs the capture and control with no Build and stops the row; `cpu` runs the check over the stages they recorded."""
-    gpu, cpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu"), _tp_row(tmp_path, GLM53, "--match-phase", "cpu")
-    os.makedirs(gpu.M)
-    monkeypatch.setattr(R, "derived_ok", lambda p: True)
-    with pytest.raises(Stop) as e:
-        cpu.match()
-    assert e.value.rc == 11 and "gpu_legs.json" in Path(cpu.d, "stages.txt").read_text()
-    ran: list[str] = []
-
-    def run_gpu(stage: str, to: int, log: str, cmd: list[str], **kw: Any) -> int:
-        ran.append(stage)
-        return 0
-
-    def run_tl(stage: str, *a: Any) -> int:
-        ran.append(stage)
-        return 0
-
-    monkeypatch.setattr(R, "derived_ok", lambda p: False)
-    monkeypatch.setattr(gpu, "run_gpu", run_gpu)
-    monkeypatch.setattr(gpu, "run_tl", run_tl)
-    with pytest.raises(Stop) as e:
-        gpu.match()
-    assert e.value.rc == 0 and ran == ["match.capture", "match.control"]
-    assert json.loads(Path(gpu.M, "gpu_legs.json").read_text()) == {"capture_rc": 0, "control_rc": 0}
-    assert Path(gpu.d, "stages.txt").read_text().splitlines()[-1].startswith("match-gpu PASS")
-    ran.clear()
-    monkeypatch.setattr(R, "derived_ok", lambda p: True)
-    monkeypatch.setattr(R, "tp_passed", lambda p: True)
-
-    monkeypatch.setattr(cpu, "run_gpu", lambda *a, **kw: pytest.fail("a GPU stage in the cpu phase"))
-    monkeypatch.setattr(cpu, "run_tl", run_tl)
-    cpu.match()
-    last = Path(cpu.d, "stages.txt").read_text().splitlines()[-1].split()
-    assert ran == ["match.check"] and last[:2] == ["match", "PASS"] and last[3] == "rc=0/0/0/-1"
-
-
-@pytest.mark.parametrize("argv, leg", [((), 7200), (("--fold-timeout", "100"), 100)])
-def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path, monkeypatch, argv, leg):
-    """tp-fold-match's ``--timeout`` bounds each subprocess, and a rank runs three in turn before the cross-rank check: one stage's limit
-    on the whole would stop a fold that fits its own (a GLM-5.3 B8 rank folds for ~100 min of the default 120)."""
-    t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
-    t.fold_profile = "derived_GLM53_tp8"
-    os.makedirs(t.M)
-    Path(t.M, "gpu_legs.json").write_text(json.dumps({"capture_rc": 0, "control_rc": 0}))
-    monkeypatch.setattr(R, "derived_ok", lambda p: True)
-    monkeypatch.setattr(R, "tp_passed", lambda p: True)
-    seen: dict[str, tuple[int, list[str]]] = {}
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.setdefault(stage, (to, cmd)) and 0)
-    t.match()
-    to, cmd = seen["match.fold_match"]
-    assert int(cmd[cmd.index("--timeout") + 1]) == leg and to == 4 * leg
-
-
-@pytest.mark.parametrize("argv, workers, folds, reuse, shared", [
-    ((), "0", "0", [], True),
-    (("--fold-rank-workers", "2", "--match-reuse", "fold"), "2", "0", ["--reuse-fold"], True),
-    (("--fold-rank-workers", "3", "--fold-workers", "8"), "3", "8", [], True),
-    (("--match-reuse", "legs", "--match-pipeline", "standalone"), "0", "0", ["--reuse-fold", "--reuse-legs"], False)])
-def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, monkeypatch, argv, workers, folds, reuse, shared):
-    """A GLM-5.3 B8 CPU half whose eight X-09 compares (200+ GB each) ran out of host memory reruns over the folds it persisted
-    (`--match-reuse fold`, and with `legs` the compares and GM-01s it wrote), `--fold-rank-workers` ranks at a time, the far lighter
-    folds `--fold-workers` at a time; a capture removes the folds and stages of any earlier one, so none is ever kept.  Under the row's
-    `--match-pipeline shared` (the default) each rank's X-09 is its GM-01's (`--shared-x09`), as a single-GPU row's is."""
-    t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
-    t.fold_profile = "derived_GLM53_tp8"
-    os.makedirs(t.M)
-    Path(t.M, "gpu_legs.json").write_text(json.dumps({"capture_rc": 0, "control_rc": 0}))
-    monkeypatch.setattr(R, "derived_ok", lambda p: True)
-    monkeypatch.setattr(R, "tp_passed", lambda p: True)
-    seen: dict[str, list[str]] = {}
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.setdefault(stage, cmd) and 0)
-    t.match()
-    cmd = seen["match.fold_match"]
-    assert cmd[cmd.index("--rank-workers") + 1] == workers and cmd[cmd.index("--fold-workers") + 1] == folds
-    assert [a for a in cmd if a.startswith("--reuse-")] == reuse
-    assert ("--shared-x09" in cmd) is shared
-    gpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu", *argv)
-    os.makedirs(f"{gpu.M}/fold_match/rank0", exist_ok=True)
-    monkeypatch.setattr(gpu, "run_gpu", lambda stage, to, log, cmd, **kw: 0)
-    with pytest.raises(Stop):
-        gpu.match()
-    assert not os.path.exists(f"{gpu.M}/fold_match")
-
-
 GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
-
-
-def _b8_cpu_half(tmp_path: Path, monkeypatch, *argv: str, mem_gb: str) -> tuple[Any, dict[str, tuple[int, list[str]]]]:
-    """GLM-5.3 TP8 B8's Match CPU half over stages on disk, its checkpoint's 78 layers, under research run --mem-gb `mem_gb`: the row
-    and each stage's (limit, command)."""
-    t = _tp_row(tmp_path, GLM53_B8, "--match-phase", "cpu", *argv, environ={"RESEARCH_RUN_MEM_GB": mem_gb})
-    ck = tmp_path / "glm-ck"
-    ck.mkdir(parents=True)
-    (ck / "config.json").write_text(json.dumps({"num_hidden_layers": 78}))
-    t.W, t.ck, t.fold_profile = 8, str(ck), "derived_GLM53_tp8"
-    t.shapes = R.tp_shape(t.path(t.wl), t.path("manifests/checkpoints.json"), t.env.hf_home)["shapes"]
-    os.makedirs(t.M)
-    Path(t.M, "gpu_legs.json").write_text(json.dumps({"capture_rc": 0, "control_rc": 0}))
-    monkeypatch.setattr(R, "derived_ok", lambda p: True)
-    monkeypatch.setattr(R, "tp_passed", lambda p: True)
-    seen: dict[str, tuple[int, list[str]]] = {}
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.setdefault(stage, (to, cmd)) and 0)
-    return t, seen
-
-
-@pytest.mark.parametrize("mem_gb, ranks, folds", [("450", 1, 2), ("1000", 2, 6), ("1300", 3, 4)])
-def test_a_tp_fold_match_is_sized_to_the_runs_memory(tmp_path, monkeypatch, mem_gb, ranks, folds):
-    """GLM-5.3 B8's fold Match held 339 GiB a rank in GM-01 (with the shared X-09) beside folds near 40 GB, and takes 17 h one GM-01 at
-    a time: every rank at once overfills any host, and four stages of 7200 s stop it at 8 h.  Sized to research
-    run's --mem-gb, as many GM-01 stages run at once as fit beside one fold (one at 450 GB, two at 1000, three at 1300),
-    and as many folds as the rest holds; a stage's limit grows with the rank's Programs, and the whole
-    tp-fold-match gets the rounds those widths take."""
-    t, seen = _b8_cpu_half(tmp_path, monkeypatch, mem_gb=mem_gb)
-    t.match()
-    to, cmd = seen["match.fold_match"]
-    leg = int(cmd[cmd.index("--timeout") + 1])
-    assert (cmd[cmd.index("--rank-workers") + 1], cmd[cmd.index("--fold-workers") + 1]) == (str(ranks), str(folds))
-    plan = R.fold_plan(t.shapes, 78, 8, int(mem_gb) * 10**9)
-    assert 339 * 2**30 < plan["gm_bytes"] < 400 * 10**9 and 36 * 10**9 < plan["fold_bytes"] < 44 * 10**9
-    assert leg == plan["leg_s"] > 3 * 7200 and to == leg * (-(-8 // folds) + 2 * -(-8 // ranks) + 1) > 17 * 3600
-    (mark,) = [e for e in _timeline(t) if e["stage"] == "match.fold_plan"]
-    assert (mark["rank_workers"], mark["fold_workers"], mark["leg_s"], mark["mem_gb"]) == (ranks, folds, leg, int(mem_gb))
-
-
-def test_a_tp_fold_match_too_big_for_its_memory_runs_one_rank_at_a_time_and_the_flags_override_the_sizing(tmp_path, monkeypatch):
-    """At --mem-gb 300 no planned B8 GM-01 stage fits beside a fold: the CPU half runs one rank and one fold at a time and row.log warns
-    (the plan's ratios are fitted on this row alone, so a smaller row's estimate may be high).  The flags override the sizing:
-    --fold-rank-workers 2 runs two ranks (folds as tp-fold-match defaults them), and --fold-timeout bounds each stage."""
-    t, seen = _b8_cpu_half(tmp_path / "short", monkeypatch, mem_gb="300")
-    t.match()
-    cmd = seen["match.fold_match"][1]
-    assert (cmd[cmd.index("--rank-workers") + 1], cmd[cmd.index("--fold-workers") + 1]) == ("1", "1")
-    assert "WARNING: 300 GB holds no planned GM-01 stage beside one fold" in Path(t.d, "row.log").read_text()
-    t, seen = _b8_cpu_half(tmp_path / "explicit", monkeypatch, "--fold-rank-workers", "2", "--fold-timeout", "100", mem_gb="300")
-    t.match()
-    to, cmd = seen["match.fold_match"]
-    assert (cmd[cmd.index("--rank-workers") + 1], cmd[cmd.index("--fold-workers") + 1], cmd[cmd.index("--timeout") + 1]) == ("2", "0", "100")
-    assert to == 100 * (4 + 2 * 4 + 1) and "WARNING" not in Path(t.d, "row.log").read_text()
-
-
-def test_reused_legs_keep_a_b8_ranks_x09_compare_and_rerun_one_cut_short(tmp_path):
-    """Under --reuse-legs a B>1 rank's written X-09 document (`match_decomp.json`) is its compare, as cb_a.compare's is at B1; one a
-    killed batch-decomp left unparseable runs again (here `/bin/false`, so a stage that runs fails)."""
-    from verity_vllm.pipeline.tp import fold_match as FM
-    doc = tmp_path / "match_decomp.json"
-    for text, reuse, verdict in (('{"verdict": "PASS", "requests": []}', True, "PASS"), ('{"verdict": "PASS", "requests": []}', False, "FAIL"),
-                                 ('{"verdict": "PA', True, "FAIL")):
-        doc.write_text(text)
-        got = FM.compare_rank("/bin/false", tmp_path, tmp_path / "build", ["derived"], "dag", None, reuse=reuse)
-        assert got["verdict"].split()[0] == verdict, (text, reuse, got)
-
-
-def test_a_b8_tp_ranks_x09_is_the_one_its_gm01_writes(tmp_path, monkeypatch):
-    """Under --shared-x09 a B>1 rank decomposes its fold once: GM-01 runs with --decomp-out and the rank's request Programs as --derived,
-    and the compare reads that document (rc as batch_decomp's CLI returns it) without a batch-decomp process; under --reuse-legs a
-    written global_match.json beside no X-09 document (a GM-01 run without --decomp-out) runs again."""
-    from verity_vllm.pipeline.tp import fold_match as FM
-    ran: list[list[str]] = []
-
-    def run(cmd, log, timeout=None):
-        ran.append(cmd)
-        (tmp_path / "global_match.json").write_text(json.dumps({"verdict": "PASS"}))
-        (tmp_path / "match_decomp.json").write_text(json.dumps({"verdict": "PASS", "requests": [{"canonical_equal": True}]}))
-        return 0
-
-    monkeypatch.setattr(FM, "_run", run)
-    (tmp_path / "global_match.json").write_text(json.dumps({"verdict": "PASS"}))
-    g = FM.global_match_rank("py", tmp_path, tmp_path / "gp.json", tmp_path / "wl.json", "dag", None, reuse=True, x09=["b0", "b1"])
-    assert g["ok"] and len(ran) == 1
-    cmd = ran[0]
-    assert cmd[cmd.index("--decomp-out") + 1] == str(tmp_path / "match_decomp.json")
-    assert [cmd[i + 1] for i, a in enumerate(cmd) if a == "--derived"] == ["b0", "b1"]
-    FM.global_match_rank("py", tmp_path, tmp_path / "gp.json", tmp_path / "wl.json", "dag", None, reuse=True, x09=["b0", "b1"])
-    assert len(ran) == 1
-    c = FM.compare_rank("/bin/false", tmp_path, tmp_path / "b0", ["b1"], "dag", None, shared=True)
-    assert (c["verdict"], c["rc"], c["comparator"]) == ("PASS", 0, "cb_a.global_match --decomp-out (X-09)") and len(ran) == 1
-    for doc, rc in (({"verdict": "MISSING_DERIVED"}, 4), (None, 3)):
-        p = tmp_path / "match_decomp.json"
-        p.write_text(json.dumps(doc)) if doc else p.unlink()
-        c = FM.compare_rank("/bin/false", tmp_path, tmp_path / "b0", ["b1"], "dag", None, shared=True)
-        assert c["verdict"].startswith("FAIL") and c["rc"] == rc
-
-
-@pytest.mark.parametrize("row, off", [
-    (GLM53, False),                                  # an H box: vLLM's default, the custom all-reduce on
-    (TP_DENSE, True),
-    (TP_MOE, True),
-    ("llama32-1b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager", True),
-    ("qwen3-235b-a22b-fp8__fp8__rtxpro6000__tp8__b1__i256__o32__mixed__greedy__bi-eager", True),
-])
-def test_a_tp_rows_engines_take_disable_custom_all_reduce_from_its_workload(tmp_path, monkeypatch, row, off):
-    t = _tp_row(tmp_path, row)
-    assert t.custom_all_reduce_off() is off
-    assert _engines_custom_all_reduce_off(t, monkeypatch) == (off, off)
-
-
-def test_a_tp_workload_without_disable_custom_all_reduce_is_refused(tmp_path):
-    t = _tp_row(tmp_path, GLM53)
-    doc = json.loads(Path(t.path(t.wl)).read_text())
-    del doc["engine"]["args"]["disable_custom_all_reduce"]
-    t.tree = str(tmp_path / "tree")
-    Path(t.path(t.wl)).parent.mkdir(parents=True)
-    Path(t.path(t.wl)).write_text(json.dumps(doc))
-    with pytest.raises(ValueError, match="disable_custom_all_reduce"):
-        t.custom_all_reduce_off()
 
 
 # ---------------------------------------------------------------------------------------------------------------- Match summary
@@ -1325,13 +935,21 @@ def test_the_pin_at_b_ge_2_is_derived_from_the_first_manifest_component(tmp_path
     assert R.wor_component(str(d)) == str(d / "build_request_LP5_T3")
 
 
-def test_a_tp_rows_gpu_budget_is_the_option_else_the_workloads_else_tp_util(tmp_path, monkeypatch):
-    from verity_vllm.pipeline import row_tp
-    assert _tp_row(tmp_path, TP_DENSE).gpu_util == row_tp.TP_UTIL
-    monkeypatch.setattr(R, "load_json", lambda path: {"gpu_memory_utilization": 0.9} if path.endswith(f"{TP_DENSE}.json") else None)
-    t = _tp_row(tmp_path, TP_DENSE)
-    assert (t.gpu_util, t.commit_util) == ("0.9", "0.9")
-    o = _opts(tmp_path, row=TP_DENSE)
-    explicit = row_tp.TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util="0.7",
-                            build=o.build, match=o.match, commit=o.commit)
-    assert explicit.gpu_util == "0.7"
+def test_a_single_rows_commit_carries_the_serving_rows_request(tmp_path):
+    """SERVING_ROWS reaches the single-GPU Commit as the request `Row.serving_rows_request` writes."""
+    pf = str(tmp_path / "partition.json")
+    single = _row(tmp_path, environ={"SERVING_ROWS": pf})
+    single.hidden_so, single.B = "/x/verity_fa2_matReqG.so", 1
+    cmd = single.commit_cmd([])
+    req = json.loads(Path(cmd[cmd.index("--serving-rows") + 1]).read_text())
+    assert req == {"dir": f"{single.d}/serving-rows", "partition": pf, "run": single.row,
+                   "committer": {"source": single.env.environ.get("RESEARCH_SOURCE_SHA")}}
+
+
+@pytest.mark.parametrize("argv, row", [((), "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"), (("--world", "2"), ROW)])
+def test_a_multi_gpu_row_is_refused_by_name_before_any_stage(tmp_path, argv, row):
+    from verity_vllm.pipeline import row as RW
+    o = _opts(tmp_path, *argv, row=row)
+    with pytest.raises(UsageError, match="the multi-GPU model is not served"):
+        RW.run_row(o, o.stages)
+    assert not (tmp_path / row).exists()

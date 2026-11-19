@@ -145,7 +145,6 @@
     {"file": "verity_vllm/pipeline/part_rows.py", "kind": "var-annotated", "symbol": "wire", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "union-attr", "symbol": "main", "detail": "", "count": 39},
     {"file": "verity_vllm/pipeline/row_records.py", "kind": "arg-type", "symbol": "row_shape", "detail": ""},
-    {"file": "verity_vllm/pipeline/row_records.py", "kind": "arg-type", "symbol": "tp_shape", "detail": ""},
     {"file": "verity_vllm/pipeline/serve_admit.py", "kind": "index", "symbol": "TickGate.add", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/serve_admit.py", "kind": "misc", "symbol": "ReleaseOrder._flush", "detail": ""},
     {"file": "verity_vllm/pipeline/serve_commit.py", "kind": "arg-type", "symbol": "CommitWindows._served_rows", "detail": ""},
@@ -180,7 +179,6 @@
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "var-annotated", "symbol": "read_all", "detail": ""},
     {"file": "verity_vllm/pipeline/serving_templates.py", "kind": "arg-type", "symbol": "coordinate", "detail": ""},
     {"file": "verity_vllm/pipeline/serving_templates.py", "kind": "arg-type", "symbol": "unit_templates", "detail": ""},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "arg-type", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "", "count": 3},
     {"file": "verity_vllm/pipeline/tp/serving_rows.py", "kind": "arg-type", "symbol": "from_bundle", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/weight_rows.py", "kind": "var-annotated", "symbol": "by_reference", "detail": ""},
     {"file": "verity_vllm/pipeline/window_advice.py", "kind": "arg-type", "symbol": "_replay", "detail": ""},
@@ -298,12 +296,6 @@
     {"file": "verity_vllm/definitions/tests/test_torch_training_gpu.py", "kind": "var-annotated", "symbol": "test_the_coefficient_is_the_gpus", "detail": ""},
     {"file": "verity_vllm/definitions/tests/test_torch_words.py", "kind": "var-annotated", "symbol": "test_every_f16_widens_as_torch_widens_it_but_a_nan", "detail": ""},
     {"file": "verity_vllm/definitions/tests/test_torch_words.py", "kind": "var-annotated", "symbol": "test_the_int64_words_are_torchs", "detail": ""},
-    {"file": "verity_vllm/definitions/tests/test_tp_allreduce_served.py", "kind": "arg-type", "symbol": "_sidecar", "detail": ""},
-    {"file": "verity_vllm/definitions/tests/test_tp_allreduce_served.py", "kind": "union-attr", "symbol": "_sidecar", "detail": "", "count": 2},
-    {"file": "verity_vllm/definitions/tests/test_tp_combine.py", "kind": "arg-type", "symbol": "test_every_coordinate_is_its_unit", "detail": ""},
-    {"file": "verity_vllm/definitions/tests/test_tp_combine.py", "kind": "arg-type", "symbol": "test_every_row_is_its_unit", "detail": ""},
-    {"file": "verity_vllm/definitions/tests/test_tp_combine.py", "kind": "arg-type", "symbol": "test_every_row_of_glm53s_served_calls_is_its_unit", "detail": "", "count": 2},
-    {"file": "verity_vllm/definitions/tests/test_tp_combine.py", "kind": "var-annotated", "symbol": "test_the_fused_coordinate_on_every_special_pair_and_random_words", "detail": "", "count": 3},
     {"file": "verity_vllm/pipeline/poub_session.py", "kind": "union-attr", "symbol": "accepted", "detail": "", "count": 2}
   ]
 }

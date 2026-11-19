@@ -48,22 +48,3 @@ def test_the_v1_form_reads_old_records_over_32_byte_roots_only():
             RT.combine(tag, 4, ROOTS)
 
 
-def test_tp_commit_and_the_tp_row_commit_every_rank_under_rows_sha512(tmp_path):
-    from tests.pipeline.test_config_run import _tp
-    from verity_vllm.pipeline import cli
-
-    t = _tp(tmp_path, "--config-run", "1")
-    cmd = t.commit_cmd([])
-    args = cli.parse("tp-commit", cmd[cmd.index("tp-commit") + 1:], {})
-    assert (args.commit_scheme, args.committer) == (step_rows.NAME, "native_collect_v2b") and "--commit-scheme" not in cmd
-    assert int(t.ck_.window_mb) > 0 and t.ck_.retain != "device", "rows-sha512 commits on the windowed worker"
-
-
-def test_tp_commit_takes_rows_sha512_alone_and_refuses_vllm_v1_by_name(capsys):
-    from verity_vllm.pipeline import cli
-
-    assert cli.parse("tp-commit", ["--workload", "w", "--out", "o", "--commit-scheme", "rows-sha512"], {}).commit_scheme == "rows-sha512"
-    for scheme in ("vllm-v1", "sha256"):
-        with pytest.raises(SystemExit):
-            cli.parse("tp-commit", ["--workload", "w", "--out", "o", "--commit-scheme", scheme], {})
-        assert f"'{scheme}': a TP Commit commits every rank under rows-sha512" in capsys.readouterr().err
