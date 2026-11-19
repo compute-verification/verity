@@ -1,21 +1,16 @@
-"""The taps a Commit attaches beside the record's sources: the norm scales (`norm_scale_source`), the router softmax
-(`router_softmax_source`) and a TP rank's vocabulary range (`vocab_range_source`).  On by default; the row passes each one's option only
-when its manifest names the tap's family (`pipeline.row_records.applicable_taps`), and NORM_TAP=0 etc. leave it off, for A/B only.  Whenever
-the manifest names them: the blockwise FP8 GEMM's scale products (`scale_products_source`) and the exact-int8 quantizers' results
-(`int8_source`, which claims its call boundaries from the call-boundary source); the single-rank Commit only.  One entry point
-for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank workers of a TP Commit: `pipeline.tp.commit` hands
-`for_ranks(...)` to `pipeline.tp.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
-merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  Each rank also
-attaches the route source (`route_source`) when a capture map describes its model, and beside it the attention sources
-(`attention_source`, which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap, and `dsv4_attention_source`,
-which binds DeepSeek-V4's attention body); when the rank's rows name
-`DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`); when they name the MoE align
-Definitions, the Marlin experts' align schedule (`moe_align_source`); the rank worker attaches the MoE block source (`moe_source`,
-which claims the Marlin block's call boundaries when the manifest names no plane).  The route, linear quant and align sources: once one rank has
-one, every rank must have it.  The single-rank `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the
-manifest names `call_boundaries` identities; `attached` names what it attaches for a row's manifest, constructing nothing (the CPU
-gate's `call-boundaries`, `acquire.gate`).  Both `attach` and every rank's `attach_rank`, taps or none, attach the narrowed-rows source (`narrowed_source`: the keys' and values' columns of
-the last layer's prompt rows before the last) whenever the manifest names narrowed rows; once one rank has it, every rank must."""
+"""What a Commit attaches beside the record's sources.  The single-rank Commit (`attach`) attaches from the capture plan's classes
+(`check.capture_plan.of_build`, taken as data): the exact-int8 quantizers' results (`int8_source`, which claims its
+`call_boundary` classes from the call-boundary source) and the blockwise FP8 GEMM's scale products (`scale_products_source`); a
+plan with a call boundary no source claims is refused by name.  `attached` names what `attach` attaches for a plan, constructing nothing.  The norm-scale tap is not attached on
+this road.
+
+The rank workers of a TP Commit still read their rows of the merged manifest: `pipeline.tp.commit` hands `for_ranks(...)` to
+`pipeline.tp.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer, and `require_on_every_rank`
+fails the Commit closed unless every rank attached every tap that is on (`SOURCES`: the router softmax, a rank's vocabulary
+range; the norm-scale source reads no manifest and is attached by neither side).  Each rank also attaches the route source (`route_source`) when a capture map describes its model; when the rank's
+rows name `DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`); when they name the MoE
+align Definitions, the Marlin experts' align schedule (`moe_align_source`); and the narrowed-rows source (`narrowed_source`) whenever
+its rows are narrowed.  The route, linear quant, align and narrowed sources: once one rank has one, every rank must have it."""
 from __future__ import annotations
 
 import json
@@ -26,35 +21,27 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.acquire.sources import (
-    attention_source,
     call_boundary_source,
-    dsv4_attention_source,
     int8_source,
     linear_quant_source,
     moe_align_source,
-    moe_source,
     narrowed_source,
-    norm_scale_source,
     route_source,
     router_softmax_source,
     scale_products_source,
     vocab_range_source,
 )
-from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
 from verity_vllm.config import option
 from verity_vllm.log import init_logger
-from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
-from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
-from verity_vllm.query.manifest.format import identity_rows
+from verity_vllm.records.capture import SCALE_PRODUCTS
 
 logger = init_logger(__name__)
 
 #: (the TapSources field, the rank result's key, the source module, the manifest family, the source's class)
-SOURCES = (("norm_tap_so", "norm_scale_source", norm_scale_source, NS.FAMILY, norm_scale_source.NormScaleSource),
-           ("router_tap_so", "router_softmax_source", router_softmax_source, RS.FAMILY, router_softmax_source.RouterSoftmaxSource),
+SOURCES = (("router_tap_so", "router_softmax_source", router_softmax_source, RS.FAMILY, router_softmax_source.RouterSoftmaxSource),
            ("vocab_range", "vocab_range_source", vocab_range_source, VR.FAMILY, vocab_range_source.VocabRangeSource))
 
 
@@ -62,8 +49,6 @@ SOURCES = (("norm_tap_so", "norm_scale_source", norm_scale_source, NS.FAMILY, no
 class TapSources:
     """A Commit's tap options (`pipeline.commit`, `pipeline.tp.commit`); each refuses a required manifest without its family (exit 3)."""
 
-    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="the norm-scale tap op (ops/pod_norm_tap.sh): commit `<norm module>/"
-                                     "norm_scale` for every norm_scales identity of the required manifest (acquire.sources.norm_scale_source)")
     router_tap_so: str | None = option("--router-tap-so", default=None, help="the router-softmax tap op (ops/pod_router_tap.sh): commit "
                                        "`moe/L<k>/router_softmax` for every router_softmax identity of the required manifest "
                                        "(acquire.sources.router_softmax_source)")
@@ -74,23 +59,23 @@ class TapSources:
         return {f: getattr(self, f) for f, *_ in SOURCES if getattr(self, f)}
 
 
-def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], taps: TapSources, *,
-           explicit_classes: bool = False, model: Any = None, programs: Sequence[str | None] = (),
-           call_boundary_plan: Plan | None = None) -> tuple[str, ...]:
-    """Attach each tap that is on to `com` (each refuses a manifest that does not name its family, exit 3), the call-boundary source when
-    the manifest names call boundaries (its Programs found under `programs`, its plan `call_boundary_plan` when derived already) and the
-    scale-products source when the manifest names its family; returns the required classes with their families added unless the caller
-    gave them explicitly."""
-    for f, _key, mod, _fam, _cls in SOURCES:
-        required_classes, _src = mod.attach(com, getattr(taps, f), manifest, required_classes, explicit_classes=explicit_classes, model=model)
-    required_classes, _src = call_boundary_source.attach(com, bool(call_boundary_source.manifest_sites(manifest)), manifest, required_classes,
-                                                         explicit_classes=explicit_classes, model=model, programs=programs,
-                                                         plan=call_boundary_plan)
-    required_classes, _src = scale_products_source.attach(com, bool(SP.manifest_sites(manifest)), manifest, required_classes,
-                                                          explicit_classes=explicit_classes, model=model)
-    required_classes, _src = int8_source.attach(com, int8_source.applies(manifest), manifest, required_classes,
+def attach(com: Any, plan: Sequence[Mapping[str, Any]], required_classes: tuple[str, ...], *,
+           rows: Sequence[Mapping[str, Any]] | None = None, explicit_classes: bool = False, model: Any = None) -> tuple[str, ...]:
+    """Attach to `com` the sources of the capture plan's classes (`check.capture_plan.of_build`): the scale-products source
+    when the plan names `scale_products` classes (its block geometry from the plan's `rows`, `capture_plan.rows_of_build`, without
+    which it is refused) and the int8 source when it names Int8RowQuant call boundaries or Int8KvQuant module
+    outputs.  A plan with a `call_boundary` class no source claims is refused by name (exit 3): the call-boundary source's host plan
+    reads a row manifest's identities, which the capture plan does not carry.  Returns the required classes with the attached
+    sources' capture classes added unless the caller gave them explicitly."""
+    refused = [f"{c['op_path']}/{c['member']}: a call boundary no attached source claims (the call-boundary source's host plan is not "
+               "on the capture plan)" for c in call_boundary_source.sites(plan)]
+    if refused:
+        logger.error("[delta] REFUSE: %d classes of the capture plan have no acquisition source: %s", len(refused), refused[:4])
+        raise SystemExit(3)
+    required_classes, _src = scale_products_source.attach(com, any(c["capture"] == SCALE_PRODUCTS for c in plan), plan, required_classes,
+                                                          rows=rows, explicit_classes=explicit_classes, model=model)
+    required_classes, _src = int8_source.attach(com, int8_source.applies(plan), plan, required_classes,
                                                 explicit_classes=explicit_classes, model=model)
-    narrowed_source.attach(com, manifest, model=model)
     return required_classes
 
 
@@ -104,31 +89,11 @@ def warmup(com: Any, on: bool) -> None:
             src.placeholder = on
 
 
-def attached(manifest: Mapping[str, Any] | None) -> list[str]:
-    """The `short_name`s of the sources a row's Commit attaches through `attach` for its manifest of record, constructing none: each tap
-    whose family the manifest names (the row passes a tap's option exactly then, `pipeline.row_records.applicable_taps`, and rebuilds a
-    manifest of other tap policies) and, on one rank, the call-boundary source when the manifest names call boundaries no other source
-    claims and the scale-products source when it names scale products (a TP Commit attaches neither); on several ranks, each attention
-    source (`attention_source`, `dsv4_attention_source`) when a capture map that binds through it describes the manifest's model at its
-    ranks (`route_source.manifest_map`: every rank attaches it, `attach_rank`), the MoE align source when the manifest names the
-    align Definitions, and the MoE block source when the manifest names a call boundary it claims and no `moe_block_stream` plane (every
-    rank attaches it, binding at the block's Calls: `pipeline.tp.rank_worker`, `moe_source.at_calls`); on any number of ranks, the
-    narrowed-rows source when the manifest names narrowed rows."""
-    ids = identity_rows(manifest)
-    fams = {r.get("family") for r in ids}
-    one = int((manifest or {}).get("ranks") or 1) == 1
-    cmap = None if one else route_source.manifest_map(manifest)
-    return [*(cls.short_name for _f, _key, _mod, fam, cls in SOURCES if fam in fams),
-            *([call_boundary_source.CallBoundarySource.short_name] if one and call_boundary_source.manifest_sites(manifest) else []),
-            *([scale_products_source.ScaleProductsSource.short_name] if one and SP.manifest_sites(manifest) else []),
-            *([int8_source.SHORT_NAME] if one and int8_source.applies(manifest) else []),
-            *(src.short_name for mod, src in ((attention_source, attention_source.AttentionSource),
-                                              (dsv4_attention_source, dsv4_attention_source.Dsv4AttentionSource))
-              if cmap is not None and mod.binds(cmap)),
-            *([moe_align_source.MoeAlignSource.short_name] if not one and moe_align_source.manifest_names_it(manifest) else []),
-            *([moe_source.MoeBlockSource.short_name]
-              if not one and not moe_source.binds_planes(manifest) and any(moe_source.claims(r) for r in ids) else []),
-            *([narrowed_source.SHORT_NAME] if narrowed_source.applies(manifest) else [])]
+def attached(plan: Sequence[Mapping[str, Any]]) -> list[str]:
+    """The `short_name`s of the sources `attach` attaches for a capture plan's classes, constructing none: the scale-products source
+    and the int8 source, each when the plan names a class of its."""
+    return [*([scale_products_source.ScaleProductsSource.short_name] if any(c["capture"] == SCALE_PRODUCTS for c in plan) else []),
+            *([int8_source.SHORT_NAME] if int8_source.applies(plan) else [])]
 
 
 def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **given: Any) -> dict[str, Any]:

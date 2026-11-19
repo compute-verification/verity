@@ -28,6 +28,8 @@ from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
+from verity.protocols.resource_accounting.memory.pous import scheme as PL
+from verity.protocols.resource_accounting.network import scheme as NS
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
@@ -62,9 +64,8 @@ VARIABLES = {
     "CERTIFIER_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py piece "$@"',
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
                        "--gate user@gate-1 --peer peer-1 --tokens 2",
-    "CLASSES": "4,27,2", "V3C_CLASS": "4,27,2",
-    "H1_KEY_SHA512": KEY, "LOAD": "fixed", "PEARLPLUS_TIE_UNIFORM": "1", "PEARLC_CHALLENGER_GATE": "gate-command",
-    "PEARLC_CHALLENGER_PEER": "peer-1", "PEARLPLUS_TIE": "1", "POUW": "pearlplus", "PRODUCT": "onsite",
+    "H1_KEY_SHA512": KEY, "LOAD": "fixed", "PEARLC_CHALLENGER_GATE": "gate-command",
+    "PEARLC_CHALLENGER_PEER": "peer-1", "POUW": "pearlplus", "PRODUCT": "onsite",
     "PRECISION": "bfloat16", "REPO": "unsloth/Llama-3.2-1B",
     "REV": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
     "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "2", "WIPE_ADDRESS": "192.0.2.1:7001",
@@ -145,16 +146,17 @@ TIED = {"model": "unsloth/Llama-3.2-1B", "precision": "bfloat16", "slots": 4,
         "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "window-steps": 2, "load": "fixed"}
 TIED_WORKLOAD = {"REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": "4", "WINDOW_STEPS": "2",
                  "LOAD": "fixed"}
-TIED_CLASS = {"V3C_CLASS": "4,27,2", "CLASSES": "4,27,2", "PEARLPLUS_TIE_UNIFORM": "1"}
+#: the runner's variables only Pearl+'s retired tie set
+TIE_VARIABLES = {"V3C_CLASS", "CLASSES", "PEARLPLUS_TIE", "PEARLPLUS_TIE_UNIFORM"}
 
 
-def test_remote_and_onsite_full_have_the_values_pearl_pluss_tie_takes_and_the_smaller_sets_keep_the_defaults():
+def test_remote_and_onsite_full_have_their_workload_values_pearl_plus_untied_and_the_smaller_sets_keep_the_defaults():
     for name in ("remote", "onsite_full"):
         cfg = R.load(ROOT / "applications" / f"{name}.toml", REG)
         assert cfg["workload"]["params"] == TIED, name
-        assert cfg["params"]["verity/pouw/pearl-plus/v1"] == {"class": "4,27,2", "tie-uniform": True}, name
+        assert cfg["params"]["verity/pouw/pearl-plus/v1"] == T.schemes.get("pearl-plus").settings, name
         assert T.SERVE.variables(cfg, {}).items() >= TIED_WORKLOAD.items(), name
-        assert T.variables(cfg, {}).items() >= (TIED_WORKLOAD | TIED_CLASS).items(), name
+        assert T.variables(cfg, {}).items() >= TIED_WORKLOAD.items() and not TIE_VARIABLES & set(T.variables(cfg, {})), name
     for name in set(T.HEADERS) - {"remote", "onsite_full"}:
         cfg = R.load(ROOT / "applications" / f"{name}.toml", REG)
         assert cfg["workload"]["params"] == {**T.SERVED.default_params, **T.DEMO_VALUES.get(name, {})}, name
@@ -285,21 +287,25 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert " ".join(e["hooks"]["POUS_ARGS"] for x in got["plan"] for e in x["entries"]
                     if "POUS_ARGS" in e["hooks"]) == VARIABLES["POUS_ARGS"]
     assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
-            if "SERVE_ARGS" in e["hooks"]} == {"network-attester": T.ID_FORM}
+            if "SERVE_ARGS" in e["hooks"]} == {"network-attester": NS.ID_FORM}
     assert (hooks["PEARLC_CHALLENGER_GATE"], hooks["PEARLC_CHALLENGER_PEER"], hooks["H1_KEY_SHA512"]) == (
         "gate-command", "peer-1", KEY)
-    assert (hooks["POUW"], hooks["PEARLPLUS_TIE"]) == ("pearlplus", "1") and "H1_GATE" not in hooks
+    assert hooks["POUW"] == "pearlplus" and not TIE_VARIABLES & set(hooks) and "H1_GATE" not in hooks
     assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1 --tokens 2") and "PP_CHALLENGER" not in hooks
     assert "DEVELOPMENT" not in hooks
 
 
-def test_with_no_gate_bound_spots_coins_are_simulated_and_only_the_placement_hold_makes_the_run_a_development_run(
-        monkeypatch):
-    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
-    assert T._spot_challenger({}, {}, {"peer": "peer-1"}, []) == {"PP_PEER": "peer-1"}
-    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
-    assert T._spot_challenger({}, {}, {"peer": "peer-1"}, []) == {"PP_PEER": "peer-1", "DEVELOPMENT": "1"}
-    assert T._spot_challenger({}, {}, {"gate": "u@g"}, []) == {"PP_CHALLENGER": "gate:u@g"}
+def test_with_no_gate_bound_spots_coins_are_simulated_and_the_hooks_mark_them_for_the_placement_hold(monkeypatch):
+    """Whether the hold makes the run a development run is served_verdicts.sh's (placement.sh's
+    ``development_under_hold``); the hooks are the same held or not."""
+    hooks = T.PIECES["sampled-proofs"][T.WORKERS].hooks
+    for hold in (None, "1"):
+        if hold is None:
+            monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+        else:
+            monkeypatch.setenv("VERITY_HOLD_PLACEMENT", hold)
+        assert hooks({}, {}, {"peer": "peer-1"}, []) == {"PP_PEER": "peer-1", "PP_DEVELOPMENT_UNDER_HOLD": "1"}
+        assert hooks({}, {}, {"gate": "u@g"}, []) == {"PP_CHALLENGER": "gate:u@g"}
 
 
 def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_clock_and_channels(tmp_path, capsys,
@@ -365,10 +371,11 @@ def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
 def test_the_runners_variables_and_the_bindings_keys_are_these():
     cfg = R.load(CONFIG, REG)
     deployed = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg["pin"], sort_keys=True)}
-    assert T.variables(cfg, BINDINGS) == VARIABLES | deployed
+    spot = {"PP_DEVELOPMENT_UNDER_HOLD": "1"}
+    assert T.variables(cfg, BINDINGS) == VARIABLES | deployed | spot
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(set(KEYS) - WRITTEN) == UNBOUND
     unbound = T.variables(cfg, {})
-    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS", "H1_KEY_SHA512"} | set(deployed) | {"DEVELOPMENT"}
+    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS", "H1_KEY_SHA512"} | set(deployed) | {"DEVELOPMENT"} | set(spot)
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-attester.network-attester.gate>' "
                                                "--peer '<network-attester.network-attester.peer>' --tokens 2")
     assert unbound["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
@@ -378,7 +385,7 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
     cfg = R.load(CONFIG, REG)
     side, device = REG.parties["network-attester"][NC.WORKERS], REG.parties["network-attester"][NC.NETWORK_ATTESTER]
     assert (side.runs, side.scripts, side.reaches, side.binds, side.optional) == (
-        T.SERVED_WINDOW, (T.ATTESTER_PIECE,), NC.NETWORK_ATTESTER, ("gate", "peer"), ())
+        T.SERVED_WINDOW, (NS.ATTESTER_PIECE,), NC.NETWORK_ATTESTER, ("gate", "peer"), ())
     assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CMD"}
     assert device.runs == T.GATE
     gates = [e for ps in REG.parties.values() for e in ps.values() if e.runs == T.GATE]
@@ -392,13 +399,13 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
     plan = {x["party"]: {e["component"]: e for e in x["entries"]} for x in got["plan"]}
     mine, its = plan[NC.WORKERS]["network-attester"], plan[NC.NETWORK_ATTESTER]["network-attester"]
     assert rc == 0 and (mine["runs"], mine["reaches"], mine["scripts"]) == (T.SERVED_WINDOW, NC.NETWORK_ATTESTER,
-                                                                            [T.ATTESTER_PIECE])
+                                                                            [NS.ATTESTER_PIECE])
     assert (its["runs"], its["reaches"], its["scripts"], its["hooks"], its["unbound"]) == (T.GATE, NC.NETWORK_ATTESTER,
                                                                                          [], {}, [])
 
 
-#: the network attester's piece without Pearl+'s tie: split around V3c at network attestation's scan class
-SPLIT = {"SERVE_ARGS": T.ID_FORM,
+#: the network attester's piece without Pearl+ listed: split around V3c at network attestation's scan class
+SPLIT = {"SERVE_ARGS": NS.ID_FORM,
          "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
                             "--gate user@gate-1 --peer peer-1",
          "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py chain "$@"',
@@ -406,27 +413,17 @@ SPLIT = {"SERVE_ARGS": T.ID_FORM,
          "V3C_CLASS": "8,32,4,4,16", "CLASSES": "4,32,4 8,32,4,4,16"}
 
 
-def tied(tmp: Path, cls: str = "4,27,2") -> dict:
-    """onsite_full with Pearl+'s class ``cls`` and the workload's window its outputs long."""
-    cfg = K.parse(CONFIG.read_text())
-    cfg["params"][T.SP.IDS["pearl-plus"]] = {"class": cls}
-    cfg["workload"]["params"]["window-steps"] = int(cls.split(",")[2])
-    f = tmp / "tied.toml"
-    f.write_text(K.render(cfg))
-    return R.load(f, REG)
-
-
-def test_under_pearl_pluss_tie_the_attesters_piece_is_whole_sets_no_class_and_fits_a_window(tmp_path):
-    """Pearl+ listed serves the window tied to it, whose class Pearl+ sets: the network attester's piece runs whole on
-    its front's own window, and the front's requests ask for no more outputs than the tied class's window steps."""
-    cfg = tied(tmp_path)
+def test_with_pearl_plus_listed_the_attesters_piece_is_whole_sets_no_class_and_fits_a_window():
+    """With Pearl+ listed the network attester's piece runs whole on its front's own window and sets no class, and the
+    front's requests ask for no more outputs than the workload's window steps; untied, no piece sets the class."""
+    cfg = R.load(CONFIG, REG)
     got = T.variables(cfg, BINDINGS)
-    assert (got["V3C_CLASS"], got["CLASSES"], got["PEARLPLUS_TIE"]) == ("4,27,2", "4,27,2", "1")
+    assert not TIE_VARIABLES & set(got)
     assert got["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
     assert not {"CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} & set(got)
     assert got["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1 --tokens 2")
     assert REG.parties["network-attester"][NC.WORKERS].variables(cfg, BINDINGS) == {
-        "SERVE_ARGS": T.ID_FORM, "CERTIFIER_CMD": VARIABLES["CERTIFIER_CMD"],
+        "SERVE_ARGS": NS.ID_FORM, "CERTIFIER_CMD": VARIABLES["CERTIFIER_CMD"],
         "CERTIFIER_FRONT": SPLIT["CERTIFIER_FRONT"] + " --tokens 2"}
 
 
@@ -438,11 +435,14 @@ def test_without_pearl_pluss_tie_the_attesters_piece_is_split_at_the_scan_class(
     assert {k: got[k] for k in SPLIT} == SPLIT and "CERTIFIER_CMD" not in got
 
 
-def test_two_pieces_setting_different_classes_are_refused_by_name(tmp_path, monkeypatch):
-    cfg = tied(tmp_path)
+def test_two_pieces_setting_different_classes_are_refused_by_name(monkeypatch):
+    cfg = R.load(CONFIG, REG)
+    pearl = T.PIECES["pearl-plus"][T.WORKERS]
+    monkeypatch.setitem(T.PIECES["pearl-plus"], T.WORKERS, dataclasses.replace(
+        pearl, hooks=lambda cfg, params, bound, pinned: {**pearl.hooks(cfg, params, bound, pinned), "V3C_CLASS": "4,27,2"}))
     side = T.PIECES["network-attester"][T.WORKERS]
     monkeypatch.setitem(T.PIECES["network-attester"], T.WORKERS, dataclasses.replace(
-        side, hooks=lambda cfg, params, bound, pinned: {"V3C_CLASS": T.SCAN_CLASS}))
+        side, hooks=lambda cfg, params, bound, pinned: {"V3C_CLASS": NS.SCAN_CLASS}))
     with pytest.raises(Refused) as e:
         T.variables(cfg, BINDINGS)
     assert e.value.name == "params" and e.value.detail == (
@@ -754,7 +754,7 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert {k: hooks.get(k) for k in kept} == {k: VARIABLES[k] for k in kept}
     assert {"SERVE_ARGS", "POUW", "PEARLC_CHALLENGER_GATE", "CERTIFIER_FRONT", "CERTIFIER_CMD"} <= set(hooks) \
         and not {"CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} & set(hooks)
-    assert hooks["V3C_CLASS"] == hooks["CLASSES"] == "4,27,2"
+    assert not TIE_VARIABLES & set(hooks)
     assert json.loads((state / "bindings.json").read_text()) == BINDINGS
     assert "192.0.2.1" not in json.dumps(json.loads((state / "run.json").read_text()))
     assert hooks["SERVE_ARGS"] == "--protocol ids --id-payload 503"
@@ -796,7 +796,7 @@ def test_the_workloads_piece_hands_the_runner_the_nodes_settings(tmp_path, capsy
 
 def test_serve_openais_flags_are_every_listed_pieces():
     cfg = R.load(CONFIG, REG)
-    assert T.variables(cfg, BINDINGS)["SERVE_ARGS"] == T.ID_FORM == "--protocol ids --id-payload 503"
+    assert T.variables(cfg, BINDINGS)["SERVE_ARGS"] == NS.ID_FORM == "--protocol ids --id-payload 503"
     without = {**cfg, "protocols": [c for c in cfg["protocols"] if c not in ("network-attester", "pearl-plus")]}
     assert "SERVE_ARGS" not in T.variables(without, BINDINGS)
     # the runner's own preflight of the front reads the id form's flag as a word of SERVE_ARGS
@@ -873,7 +873,7 @@ def written(*components: str, composed: bool = False) -> str:
 
 
 #: what Pearl+'s row says on every line: its coins' signatures, until its coin sessions' signature pin is in Lean, and
-#: the CUDA-graph rows its tie doesn't cover
+#: the CUDA-graph rows its verdict doesn't cover
 PEARL_UNCHECKED = "; ".join(T.schemes.get("pearl-plus").unchecked.values())
 #: what storage's, the wipe's and the bandwidth audit's rows say on every line: the memory attester's one table
 ATTESTER_UNCHECKED = "; ".join(mc.UNCHECKED.values())
@@ -1015,7 +1015,7 @@ def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party
     got = T.live(R.load(NETWORK, REG), state, [T.WORKERS, T.PROVER]).outcomes
     assert got[T.PROVER] == got[T.WORKERS] == {"outcome": {"served-window": 0}, "refused": None}
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks["WIPE_CMD"] == f'WIPE_KEY_SHA512={NETWORK_PIN} bash {T.WIPE_SCRIPT} "$1" "$2" "$3"'
+    assert hooks["WIPE_CMD"] == f'WIPE_KEY_SHA512={NETWORK_PIN} bash {PL.WIPE_SCRIPT} "$1" "$2" "$3"'
     assert (hooks["WIPE_ADDRESS"], hooks["WIPE_CHALLENGER"], hooks["WIPE_COMMAND"]) == (
         "192.0.2.1:7001", "auditor-1", "ssh auditor-1")
 
@@ -1148,7 +1148,7 @@ def test_unbound_the_memory_attesters_are_the_runs_and_each_piece_says_so_before
     cfg = R.load(CONFIG, REG)
     got = T.variables(cfg, NO_ATTESTERS)
     assert got["POUS_ARGS"] == "--run-keys --rounds 320"
-    assert got["WIPE_CMD"] == f'bash {T.WIPE_SCRIPT} "$1" "$2" "$3" --run-keys'
+    assert got["WIPE_CMD"] == f'bash {PL.WIPE_SCRIPT} "$1" "$2" "$3" --run-keys'
     assert not [k for k, v in got.items() if k != "VERITY_PINS" and any(p in v for p in PIN.values())]
     assert not {"WIPE_ADDRESS", "WIPE_CHALLENGER", "WIPE_COMMAND"} & set(got)
     rc, plan, err = dry(capsys, "--bindings", bindings(tmp_path, NO_ATTESTERS))
@@ -1179,7 +1179,7 @@ def served_piece(tmp: Path, pous_args: str, **env: str) -> tuple[subprocess.Comp
     run = {"PATH": lake_path(tmp), "HOME": str(tmp), "PY": str(py), "P2_LIB": str(tmp),
            "TPY": str(executable(tmp, "tpy", TPY)), "GPU_LEASE_UUID": "no-such-card", "VERITY_PINS": "[]",
            "POUS_ARGS": pous_args, **env}
-    p = subprocess.run(["bash", "-c", f'bash {T.POUS_SCRIPT} "$@"', "_", str(tmp / "serve"), "3", str(tmp / "pous")],
+    p = subprocess.run(["bash", "-c", f'bash {PL.POUS_SCRIPT} "$@"', "_", str(tmp / "serve"), "3", str(tmp / "pous")],
                        cwd=ROOT, env=run, capture_output=True, text=True, check=False)
     return p, tmp / "argv.txt"
 
@@ -1192,7 +1192,7 @@ def test_with_run_keys_served_piece_starts_the_attesters_here_under_one_key_made
                                                  "--challenger-address", "--challenger-command", "--bw-party",
                                                  "--bw-host", "--rounds")}
     keys = tmp_path / "serve" / "private" / "run-keys"
-    attester = f"bash {ROOT / T.ATTESTER_SCRIPT} "
+    attester = f"bash {ROOT / PL.ATTESTER_SCRIPT} "
     assert flag == {"--trusted-sha512": RUN_KEY, "--bw-trusted-sha512": RUN_KEY,
                     "--challenger-host": subprocess.run(["hostname"], capture_output=True, text=True).stdout.strip(),
                     "--challenger-address": "127.0.0.1:47610", "--bw-host": "127.0.0.1", "--rounds": "320",
@@ -1222,7 +1222,7 @@ def test_the_run_attesters_take_the_gates_words_and_the_runs_key(tmp_path):
     env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path)}
 
     def attester(*words: str) -> subprocess.CompletedProcess:
-        return subprocess.run(["bash", str(ROOT / T.ATTESTER_SCRIPT), words[0], str(py), str(keys), *words[1:]],
+        return subprocess.run(["bash", str(ROOT / PL.ATTESTER_SCRIPT), words[0], str(py), str(keys), *words[1:]],
                               env=env, capture_output=True, text=True, check=False)
 
     assert attester("challenger_party").returncode == 0

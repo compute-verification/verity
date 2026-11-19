@@ -217,8 +217,8 @@ SERVED = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json",
 #: the attested I/O file `io` writes in KEEP/RUN and the endpoint step reads
 CERTIFIED = "certified-io.json"
 HAND_START = ("serve-openai run directly (--out SERVE_DIR, the serve dir `endpoint` reads as --from, outside every "
-              "run's directory, where the serve refuses it; --required-manifest "
-              "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
+              "run's directory, where the serve refuses it; --row-build ROW, the int8 B4 "
+              "row's Build of record (`verity-vllm predict row --out ROW`), with the served node's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40, which --seal requires "
               "(72 GB of seals then needs about 112 GB free at the start). VERITY_STAGING_BOUNDED stays unset: bounded "
               "staging, on by default under windowed staging, is what --retain-exclude needs, and the collector refuses "

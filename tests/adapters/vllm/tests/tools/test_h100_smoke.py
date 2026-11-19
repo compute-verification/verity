@@ -16,6 +16,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[5]
 SMOKE = Path("adapters/vllm/tools/served_run/h100_smoke.sh")
 VERDICTS = ROOT / "benchmarks/one_stage/served_verdicts.sh"
+#: the script's ``PYTHONPATH`` (its ``$TREE`` entries) holds these, linked to the real ones, so its own blocks import the
+#: library and the adapter from the tree as on a node, whatever the test's environment installs
+PATH_PARTS = ("verity", "adapters/vllm/verity_vllm", "adapters/torch", "tools/config", "tools/research")
 ROW = re.search(r"^ROW=(\S+)", (ROOT / SMOKE).read_text(), re.M).group(1)
 
 #: the stand-in ``PY``: each call's argv (and, for the serve, its config) as one JSON line in ``$STUB_LOG``; the
@@ -48,6 +51,9 @@ def run_dry(tmp_path: Path) -> list[dict]:
     tree = tmp_path / "tree"
     (tree / SMOKE).parent.mkdir(parents=True)
     shutil.copy(ROOT / SMOKE, tree / SMOKE)
+    for part in PATH_PARTS:
+        (tree / part).parent.mkdir(parents=True, exist_ok=True)
+        (tree / part).symlink_to(ROOT / part)
     wl = tree / "adapters/vllm/workloads"
     wl.mkdir(parents=True)
     (wl / f"{ROW}.json").write_text("{}")

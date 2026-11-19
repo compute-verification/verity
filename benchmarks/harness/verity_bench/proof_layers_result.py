@@ -27,7 +27,7 @@ PROOF = {"flock": "plain", "zk": "zk", "sampling": "zk"}
 #: the name the report writes its JSON under
 REPORT = "proof-layers"
 #: what a runner's metric id may name (`benchmarks/prove/run.py`'s ``LAYER_METRICS``), each with the unit it is written in:
-#: a proof block's figures, and the build step's wall, a layer's run's one build of the served workload's whole circuit
+#: a proof block's figures, and the build's seconds, a layer's run's one Build of record of the served workload's whole circuit
 FIGURES = {"prover_s": "s a proof block", "lean_s": "s a proof block", "proof_bytes": "bytes a proof block",
            "build_s": "s a build"}
 #: the layers each metric id holds, in the order they are written, each with what its member adds to the model and card
@@ -41,9 +41,12 @@ RUN_ID = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 FETCH = ("out/recursion_e2e.json", "out/*audit.log", "out/*summary.json", "out/summary.txt", "out/verdicts.txt",
          "out/machine.txt", "out/*a5.log", "*/out/layers.txt", "*/out/job.log", "*/out/a6/summary.json",
          "*/out/a6/session-*/lean-verify.log", "*/gpu-lease-usage.jsonl", "*/out/machine.txt", "*/out/ran-with.txt",
-         "*/out/*audit.log", "*/out/*summary.json", "*/out/*-forged/commit.log", "out/steps.txt",
+         "*/out/*audit.log", "*/out/*summary.json", "*/out/*-forged/commit.log", "out/predicted.json",
          "out/a5/window/proof-server/prover-*.log", "out/a5/window/session-*/prove.log")
 NOT_STATED = "not stated"
+#: predict row's Build of record, as served_verdicts.sh's ``predict`` copies it into the run's out: its record's schema and
+#: name (`verity_vllm.records.predicted_row`'s ``SCHEMA`` and ``FILE``)
+PREDICTED = ("verity-vllm/predicted-row/v2", "predicted.json")
 #: what a benchmark result's workload opens with where its output states neither stand-in nor served values
 VALUES_NOT_STATED = "values not stated"
 #: what a run id that can't be fetched here takes instead
@@ -86,10 +89,10 @@ class Result:
     lean_what: str = ""
     proof_bytes: float | None = None
     bytes_what: str = ""
-    #: the build step's wall seconds, how they were read, and its ``build cache:`` line's words
+    #: predict row's Build of record's seconds, how they were read, and the registered compiler it names (``NAME DIGEST``)
     build_s: float | None = None
     build_what: str = ""
-    build_cache: str = NOT_STATED
+    build_compiler: str = NOT_STATED
     #: the proof blocks the layer's Flock statement holds, as its prover's log states them: the prover's batch
     prover_batch: int | None = None
     per_block: bool = False

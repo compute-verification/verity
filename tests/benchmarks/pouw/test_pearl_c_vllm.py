@@ -1085,7 +1085,7 @@ def kept_leaves(d, tree: MerkleTree, schema: str = ROW_SCHEMA) -> list[bytes]:
 def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
                 live: int | None = None, seed: int = 11, spike: float | None = None, bad_b: int | None = None,
                 tile: tuple[int, int] = (16, 16), zero_a: int | None = None,
-                load: tuple[int, int] | None = None):
+                load: tuple[int, int] | None = None, k: int = 128, filler: int | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts the prover's, kept in the pass's salts files beside the rows; the unpromoted record's debit isn't stated, so
@@ -1104,11 +1104,13 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     keeping it a test instance.  With `zero_a`, that real row of the first call is all +0: it fails liveness and is
     excluded, its U is +0 and so is every word of its served y.  With `load` (rows, committed rows), both calls are of
     that many real rows in that many committed ones, as a round of a class's fixed load is (`verify_run.held_to_load`),
-    the first call's failing row its row 1."""
+    the first call's failing row its row 1.  `k` is the calls' depth.  With `filler` (an FP32 word of a BF16 value), the first
+    call's first filler row holds that word at its column 0, committed and proved as every row is: a prover whose filler
+    row is not zero."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = pouw_schemes.get(scheme, k_min=32, tile=tile)
-    rng, k = np.random.default_rng(seed), 128
+    rng = np.random.default_rng(seed)
     n0, n1 = max(16, tile[1]), max(32, tile[1])
     wrows = {0: bf16_words(rng, n0, k), 1: bf16_words(rng, n1, k)}
     (real, m0), m1, bad = (load, load[1], 1) if load else ((20, 32), 16, 5)
@@ -1121,6 +1123,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
         wrows[1][bad_b, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
     if zero_a is not None:
         a0[zero_a] = 0
+    if filler is not None:
+        a0[real, 0] = filler
     i0, i1 = indices
     acts = {i0: a0, i1: bf16_words(rng, m1, k)}
     if load:
@@ -1302,6 +1306,20 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     rows.write_bytes(bytes(bad))
     rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json")
     assert rc == 1 and answer["verdict"] == "reject" and "weight opening" in answer["reason"] and doc["line"].startswith("REJECT")
+
+
+@pytest.mark.slow
+def test_a_credited_call_that_commits_no_y_root_is_refused_at_load(tmp_path):
+    """A call with a credited cell commits its y: without one no tile of it would be held to y, so the pass is refused
+    before the coin, by name."""
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    man = json.loads(path.read_text())
+    del man["matmuls"][0]["y"]
+    path.write_text(json.dumps(man))
+    with pytest.raises(ValueError, match=f"^matmul {man['matmuls'][0]['index']}: a credited call commits no y root$"):
+        VR.load(path, published(path))
+    got = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4, test_instance=True)
+    assert got["answer"]["verdict"] == "reject" and "a credited call commits no y root" in got["answer"]["reason"]
 
 
 @pytest.mark.slow
