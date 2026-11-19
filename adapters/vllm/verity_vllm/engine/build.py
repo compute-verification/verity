@@ -273,18 +273,19 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     if kw.get("enforce_eager") is False:
         prepare_compiled_process_cache()
     ex = messages.build()
-    if fixed := sorted({r.ranges for _, r in ex.requests if isinstance(r, H.FixRanges)}):
-        if len(fixed) > 1 or kw.get("num_gpu_blocks_override") not in (None, fixed[0]):
+    if (fixed := ex.fixed_ranges()) is not None:
+        if kw.get("num_gpu_blocks_override") not in (None, fixed):
             raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks and the engine's arguments at "
                                f"{kw.get('num_gpu_blocks_override')}: one size")
-        kw["num_gpu_blocks_override"] = fixed[0]
+        kw["num_gpu_blocks_override"] = fixed
     if kw.get("async_scheduling") is None and (want := {r.value for _, r in ex.requests if isinstance(r, H.RequireProperty)
                                                           and r.property == "async_steps"}):
         kw["async_scheduling"] = want.pop() if len(want) == 1 else None
     ex.answer(H.Declared(card, {
         "model": kw.get("model"), "execution": execution, "eager": want_eager, "world": world, "dtype": kw.get("dtype"),
         "quantization": kw.get("quantization"), "prefix_cache": bool(kw.get("enable_prefix_caching")),
-        "kernels": served.kernels(engine_args), "async_steps": kw.get("async_scheduling")},
+        "kernels": served.kernels(engine_args), "async_steps": kw.get("async_scheduling"),
+        "ranges": kw.get("num_gpu_blocks_override"), "reuse": "oldest-freed" if ex.oldest_freed_first() else None},
         tuple(ex.attached), dict(ex.attached)))
     t0 = time.perf_counter()
     llm, admitted, _ = hooked(lambda: LLM(**kw))

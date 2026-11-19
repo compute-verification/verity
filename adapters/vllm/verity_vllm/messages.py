@@ -62,6 +62,8 @@ class Exchange:
     def __init__(self) -> None:
         self.subscribers: dict[str, list[tuple[str, Subscriber, tuple[type, ...] | None]]] = {h: [] for h in H.HOOKS}
         self.requests: list[tuple[str, H.Request]] = []
+        #: the registered values schemes release (`release`): scheme, value and its restore
+        self.releases: list[tuple[str, str, Callable[[], H.Handle]]] = []
         #: the gates of the schemes' holds (`hold`), the one filed first outermost
         self.gates: list[tuple[str, H.Gate]] = []
         #: the kernels schemes compute due blocks with (`compute_with`), the one filed first outermost
@@ -193,6 +195,15 @@ class Exchange:
         self.request(name, H.AdmitInput("hold"))
         self.gates.append((name, gate))
 
+    def release(self, name: str, value: str, restore: Callable[[], H.Handle]) -> None:
+        """Scheme ``name`` has registered value ``value``'s storage released once it is resident, its kernels computing
+        every block that reads it (`H.Kernel`), and restored to ``restore()``, the same bytes, when the workload's
+        memory hook comes off."""
+        if self._step is not None:
+            raise Refused(name, f"releases {value} after serving began (step {self._step}); release it before the first "
+                          "step")
+        self.releases.append((name, value, restore))
+
     def compute_with(self, name: str, kernel: H.Kernel) -> None:
         """Scheme ``name`` computes every due block with ``kernel``, inside the kernels filed before it; filed before
         the first step."""
@@ -313,8 +324,17 @@ class Exchange:
         return [(n, r.why) for n, r in self._filed(H.AdmitInput) if r.admit == "refuse" and r.input == input]
 
     def oldest_freed_first(self) -> bool:
-        """Whether a freed range is handed out again only after every range freed before it (`ReuseOldestFreed`)."""
-        return bool(self._filed(H.ReuseOldestFreed))
+        """Whether a scheme requires ``reuse`` ``oldest-freed`` (`H.Declared`): a freed range is handed out again only
+        after every range freed before it."""
+        return any(r.property == "reuse" and r.value == "oldest-freed" for _, r in self._filed(H.RequireProperty))
+
+    def fixed_ranges(self) -> int | None:
+        """The ``ranges`` the schemes require the workload's memory to hold (`H.Declared`), None where none does;
+        `Refused` where two disagree."""
+        fixed = sorted({(n, r.value) for n, r in self._filed(H.RequireProperty) if r.property == "ranges"}, key=str)
+        if len({v for _, v in fixed}) > 1:
+            raise Refused(fixed[0][0], f"schemes require the memory to hold {sorted({v for _, v in fixed})} ranges: one")
+        return fixed[0][1] if fixed else None
 
     def beside(self) -> list[tuple[str, Callable[[], Any]]]:
         """The processes schemes asked to start beside the workload, each by its name and bound to the readers it

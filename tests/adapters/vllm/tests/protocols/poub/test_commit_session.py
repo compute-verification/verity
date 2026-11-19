@@ -53,10 +53,9 @@ def test_the_commits_session_requests_the_engine_it_serves_and_refuses_the_rest(
     a build declaring otherwise is refused under the scheme's name."""
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8)
     assert {(r.property, r.value) for r in cs.requests() if isinstance(r, H.RequireProperty)} == {
-        ("world", 1), ("async_steps", False), ("prefix_cache", False)}
-    assert H.FixRanges(8) in cs.requests() and not any(isinstance(r, H.FixRanges)
-                                                       for r in remote.CommitSession("127.0.0.1:7781", kv_pages=None).requests())
-    good = {"world": 1, "async_steps": False, "prefix_cache": False}
+        ("world", 1), ("async_steps", False), ("prefix_cache", False), ("ranges", 8)}
+    assert not any(r.property == "ranges" for r in remote.CommitSession("127.0.0.1:7781", kv_pages=None).requests())
+    good = {"world": 1, "async_steps": False, "prefix_cache": False, "ranges": 8, "reuse": "oldest-freed"}
     for bad in ({"world": 2}, {"async_steps": True}, {"async_steps": None}, {"prefix_cache": True}):
         ex = messages.Exchange()
         for r in cs.requests():
@@ -122,11 +121,12 @@ def test_the_commits_session_attaches_a_binder_of_its_store_before_the_build(mon
     assert isinstance(cs.binder, Binding) and cs.binder.calls == ["install"]
     assert cs.binder.made == ((cs.store,), {"passes": False, "weight_blocks": 5, "kv": False})
     ex = messages.current()
-    assert ex.requests == [("poub", r) for r in cs.requests()] and H.FixRanges(8) in cs.requests()
+    assert ex.requests == [("poub", r) for r in cs.requests()] and ex.fixed_ranges() == 8
     assert dict(ex.attached) == {"poub": {"refresh": False, "passes": False, "kv": False, "weight_blocks": 5, "window": 0}}
     assert ex.reports["poub"] is cs.binder and cs.settings() == {"passes": False, "kv": False, "weight_blocks": 5}
     assert cs.declared is None
-    declared = H.Declared("", {"world": 1, "async_steps": False, "prefix_cache": False, "in_process": True})
+    declared = H.Declared("", {"world": 1, "async_steps": False, "prefix_cache": False, "in_process": True, "ranges": 8,
+                                "reuse": "oldest-freed"})
     ex.answer(declared)
     assert cs.declared is declared
 

@@ -1,6 +1,6 @@
 """The memory hook: vLLM's model runner, KV cache manager, block pool and scheduler patched once, through `hooks`,
 emitting to the process's exchange (`messages.current`) its ``memory`` events and `StepComputed` (`verity.hooks`) in the order vLLM acts,
-and taking its schemes' `ReuseOldestFreed` and `ReleaseValue` (after vLLM's ``load_model``, restored at
+and taking its schemes' ``reuse`` requirement and their released values (`messages.Exchange.release`, after vLLM's ``load_model``, restored at
 the last detach): a model parameter is a registered value, a KV block a
 range, a request an input.  Each event is at the exchange's step, whose `StepBegan` and `StepEnded` are the admission
 hook's (`engine.admission`): inside ``schedule``, the step being scheduled (`Exchange.next_step`), else the last one
@@ -20,7 +20,7 @@ KVCacheManager.allocate_slots   around: the request the pool's allocations insid
 BlockPool.get_new_blocks        after: MemoryChanged allocated, at the step being scheduled, for that request
 BlockPool.touch                 before: MemoryChanged allocated reused, the blocks it takes back off the free queue (a
                                 prefix-cache hit)
-BlockPool.free_blocks           after: MemoryChanged freed, the blocks left with no reader, under ReuseOldestFreed first moved
+BlockPool.free_blocks           after: MemoryChanged freed, the blocks left with no reader, under ``reuse`` oldest-freed first moved
                                 to the back of the free queue (vLLM puts a freed block with no hash at its front)
 Scheduler.schedule              around: the step being scheduled is the one its allocations are at; then a MemoryChanged
                                 written for each run of slots a scheduled request writes in the step
@@ -118,7 +118,7 @@ class _Hook:
         self.hooks: Hooks | None = None
         self.scheduling = False
         self.request: str | None = None
-        self.released: list[tuple[list[Any], H.ReleaseValue]] = []
+        self.released: list[tuple[list[Any], Callable[[], Any]]] = []
         self.scheduled: list[tuple[Any, int]] = []
 
     def attach(self) -> Callable[[], None]:
@@ -140,22 +140,22 @@ class _Hook:
         return detach
 
     def release_values(self, model: Any, ex: messages.Exchange) -> None:
-        """Release each `ReleaseValue`'s parameter: every parameter of ``model`` on its storage holds an empty tensor."""
-        asks = [r for _, r in ex.requests if isinstance(r, H.ReleaseValue)]
-        params = dict(model.named_parameters(remove_duplicate=False)) if asks else {}
-        for r in asks:
-            if r.value not in params:
-                raise RuntimeError(f"a scheme asks registered value {r.value} released, and the model has no such parameter")
-            ptr = params[r.value].data_ptr()
+        """Release each value a scheme releases (`messages.Exchange.release`): every parameter of ``model`` on its
+        storage holds an empty tensor."""
+        params = dict(model.named_parameters(remove_duplicate=False)) if ex.releases else {}
+        for _, value, restore in ex.releases:
+            if value not in params:
+                raise RuntimeError(f"a scheme asks registered value {value} released, and the model has no such parameter")
+            ptr = params[value].data_ptr()
             held = [p for p in {id(p): p for p in params.values()}.values() if p.data_ptr() == ptr]
             for p in held:
                 p.data = p.data.new_empty(0)
-            self.released.append((held, r))
+            self.released.append((held, restore))
 
     def restore_values(self) -> None:
         released, self.released = self.released, []
-        for held, r in released:
-            t = r.restore()
+        for held, restore in released:
+            t = restore()
             for p in held:
                 p.data = t
 

@@ -542,7 +542,7 @@ def binder():
 @pytest.mark.parametrize("first_runner", [False, True])
 def test_installed_the_runners_load_registers_the_weights_and_uninstall_leaves_vllm_unpatched(monkeypatch, binder,
                                                                                               first_runner, request):
-    """`Binder.install` subscribes to the exchange's memory and steps hooks and files ReuseOldestFreed, patching
+    """`Binder.install` subscribes to the exchange's memory and steps hooks and requires reuse oldest-freed, patching
     nothing: every patch is the memory hook's (each runner module that is there, the first runner's skipped where it is
     absent, as under the surface); a runner's loaded model's weights reach the store as registered values; `uninstall`
     removes the subscriptions, and does nothing on a binder never installed."""
@@ -590,7 +590,7 @@ def test_installed_a_profiling_kv_cache_registers_nothing_and_the_real_one_regis
 @pytest.mark.parametrize("kv", [True, False])
 def test_installed_the_pools_pages_are_the_stores_and_a_freed_page_is_not_touched_back(monkeypatch, binder, kv):
     """Through the memory hook, `BlockPool.get_new_blocks` allocates the store's pages and `free_blocks` frees them,
-    moved to the back of vLLM's free queue (the binder asks ReuseOldestFreed); `touch` of a freed page (a prefix-cache hit)
+    moved to the back of vLLM's free queue (the binder requires reuse oldest-freed); `touch` of a freed page (a prefix-cache hit)
     is refused, and of a page in use or the null block is vLLM's own. With ``kv=False`` the same calls reach no
     store."""
     s = NodeMemory()

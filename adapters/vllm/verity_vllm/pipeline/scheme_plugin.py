@@ -69,9 +69,11 @@ def challenger_gate(command: str | None) -> Callable[..., Mapping[str, Any]] | N
     return ChallengerGate(command).call
 
 
-def declared(vllm_config: Any, attached: Mapping[str, Mapping[str, Any]] | None = None) -> H.Declared:
+def declared(vllm_config: Any, attached: Mapping[str, Mapping[str, Any]] | None = None,
+             oldest_freed: bool = False) -> H.Declared:
     """What vLLM's configuration declares, the properties `engine.build.build_engine` declares of its own engine, with
-    the schemes ``attached`` (`messages.Exchange.attached`) and their settings."""
+    the schemes ``attached`` (`messages.Exchange.attached`) and their settings; ``oldest_freed``: the adapter hands a
+    freed block out again oldest first (`messages.Exchange.oldest_freed_first`)."""
     from verity_vllm.engine import served
 
     attached = attached or {}
@@ -82,7 +84,8 @@ def declared(vllm_config: Any, attached: Mapping[str, Mapping[str, Any]] | None 
         "dtype": str(mc.dtype).removeprefix("torch."), "quantization": mc.quantization,
         "prefix_cache": bool(vllm_config.cache_config.enable_prefix_caching),
         "kernels": served.kernels({"quantization": mc.quantization}),
-        "async_steps": bool(getattr(vllm_config.scheduler_config, "async_scheduling", False))},
+        "async_steps": bool(getattr(vllm_config.scheduler_config, "async_scheduling", False)),
+        "ranges": vllm_config.cache_config.num_gpu_blocks_override, "reuse": "oldest-freed" if oldest_freed else None},
         tuple(attached), {n: dict(v) for n, v in attached.items()})
 
 
@@ -101,11 +104,9 @@ def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg:
     gate = challenger_gate(cfg.get("gate"))
     got = M.attach_listed(exchange, [(schemes.get(n), cfg.get(n)) for n in names], gate=gate, private=cfg["private"],
                           process=H.ENGINE, feed=cfg["feed"])
-    if fixed := sorted({r.ranges for _, r in exchange.requests if isinstance(r, H.FixRanges)}):
-        if len(fixed) > 1:
-            raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks: one size")
-        vllm_config.cache_config.num_gpu_blocks_override = fixed[0]
-    exchange.answer(declared(vllm_config, exchange.attached))
+    if (fixed := exchange.fixed_ranges()) is not None:
+        vllm_config.cache_config.num_gpu_blocks_override = fixed
+    exchange.answer(declared(vllm_config, exchange.attached, exchange.oldest_freed_first()))
     return got
 
 

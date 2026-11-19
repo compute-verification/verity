@@ -57,7 +57,7 @@ def stand_in(monkeypatch):
 
     def attach(exchange, ctx):
         got.append((exchange, ctx))
-        exchange.request("stand-in", H.FixRanges(64))
+        exchange.request("stand-in", H.RequireProperty("ranges", 64, "a stand-in"))
         return held
     monkeypatch.setitem(S.SCHEMES, "stand-in", SimpleNamespace(name="stand-in", messages=(), settings={"k": 0}, depends=(), resource=S.Lacks("a stand-in"), kernels=S.Lacks("a stand-in"), check_settings=lambda s: None, attach=attach,
                                                                requests=lambda ctx: ()))
@@ -82,7 +82,7 @@ def test_the_engine_attaches_each_scheme_with_its_context_and_answers_what_vllms
     assert cfg.cache_config.num_gpu_blocks_override == 64
     assert ex.declared.properties == {"model": "m", "execution": None, "eager": True, "world": 1, "dtype": "bfloat16",
                                       "quantization": None, "prefix_cache": False, "kernels": "profile",
-                                      "async_steps": False}
+                                      "async_steps": False, "ranges": 64, "reuse": None}
     assert (ex.declared.schemes, ex.declared.settings) == (("stand-in",), {"stand-in": {"k": 1}})
     for shape in ({"tp": 2}, {"dp": 2}, {"backend": "mp"}):
         with pytest.raises(NotImplementedError, match="vllm/scheme-on-in-vllm-server: schemes inside vLLM's server on one GPU "

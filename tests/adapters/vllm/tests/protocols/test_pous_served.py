@@ -197,10 +197,10 @@ def test_a_tiny_int8_models_weights_are_held_as_p2_and_served_bit_exact(toy):
     assert held.published.root.hex() == c["storage_root"]
     assert [b for seg in period_prover.encode(q, s.salt, w) for b in seg] == [held.blocks[i] for i in range(q.blocks)]
 
-    released = {r.value: r for _, r in ex.requests if isinstance(r, H.ReleaseValue)}
+    released = {value: restore for _, value, restore in ex.releases}
     assert sorted(released) == ["k.weight", "q.weight"]                                 # the tied head: encoded once
-    for name, r in released.items():
-        assert same(r.restore(), toy.plain[name.partition(".")[0]])
+    for name, restore in released.items():
+        assert same(restore(), toy.plain[name.partition(".")[0]])
     due = H.BlockDue("k", 0, {"n": 40, "k": 16}, "s8", {"x": None, "weight": torch.empty(0)}, weights={"weight": "k.weight"})
     assert same(ex.compute(due, lambda given: given["weight"]), toy.plain["k"])
 

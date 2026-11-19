@@ -400,8 +400,8 @@ def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_firs
     ex.step = 0
     with pytest.raises(Refused, match=r"pouw: files a kernel after serving began \(step 0\)"):
         ex.compute_with("pouw", lambda due, original: original(None))
-    with pytest.raises(Refused, match=r"pouw: files ReuseOldestFreed after serving began \(step 0\)"):
-        ex.request("pouw", H.ReuseOldestFreed())
+    with pytest.raises(Refused, match=r"pouw: releases w after serving began \(step 0\)"):
+        ex.release("pouw", "w", lambda: None)
 
 
 def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():

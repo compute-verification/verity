@@ -1,6 +1,6 @@
 """The KV block hook (`engine.kv_blocks`) on vLLM's KV cache manager, block pool and scheduler under the stand-in for
 vLLM, the admission hook (`engine.admission`) emitting the steps: the events on the exchange in the order vLLM acts,
-each at its step and an allocation for its request, ReuseOldestFreed's reuse order, a
+each at its step and an allocation for its request, ``reuse`` oldest-freed's reuse order, a
 prefix-cache hit as a reused allocation, a step's writes, one set of patches for every attachment, and no step of its
 own."""
 from __future__ import annotations
@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.hooks import (MemoryChanged, RangesDeclared, ReleaseValue, ReuseOldestFreed, StepBegan,
+from verity.hooks import (MemoryChanged, RangesDeclared, RequireProperty, StepBegan,
                           StepComputed, StepEnded)
 
 from tests import fake_vllm
@@ -242,11 +242,11 @@ def test_the_hook_emits_no_step_and_stamps_the_exchanges(monkeypatch, subscribe)
 
 @pytest.mark.parametrize("hold", [False, True])
 def test_reuse_oldest_freed_puts_a_freed_block_at_the_free_queues_back(monkeypatch, subscribe, hold):
-    """vLLM puts a freed block with no hash at the free queue's front; while a subscriber asks ReuseOldestFreed it goes
+    """vLLM puts a freed block with no hash at the free queue's front; while a subscriber requires reuse oldest-freed it goes
     to the back, also when vLLM was handed an iterator."""
     v = kv_classes(fake_vllm.install(monkeypatch))
     subscribe()
-    subscribe(*([ReuseOldestFreed()] if hold else []))
+    subscribe(*([RequireProperty("reuse", "oldest-freed", "test")] if hold else []))
     pool = v.pool()
     got = pool.get_new_blocks(3)
     assert pool.free_blocks(iter(got[:2])) is None and v.calls[-1] == ("free_blocks", "list")
@@ -337,7 +337,7 @@ def test_a_built_engine_has_one_step_emitter(monkeypatch, subscribe):
 
 
 def test_a_released_value_is_empty_from_its_load_and_restored_at_the_last_detach(monkeypatch):
-    """A `ReleaseValue` empties every parameter on the value's storage (a tied one too) once vLLM's own `load_model`
+    """A released value (`messages.Exchange.release`) empties every parameter on the value's storage (a tied one too) once vLLM's own `load_model`
     has run, and the last detach sets each to what ``restore()`` gives; a value the model has no parameter of is
     refused by name."""
     import torch
@@ -349,7 +349,7 @@ def test_a_released_value_is_empty_from_its_load_and_restored_at_the_last_detach
     v = kv_classes(fake_vllm.install(monkeypatch), held=lambda: {"model": model})
     messages.close()
     back = torch.arange(8.0).view(2, 4)
-    messages.current().request("test", ReleaseValue("proj.weight", lambda: back))
+    messages.current().release("test", "proj.weight", lambda: back)
     off = kv_blocks.attach()
     try:
         v.runners[0]().load_model()
@@ -358,7 +358,7 @@ def test_a_released_value_is_empty_from_its_load_and_restored_at_the_last_detach
         off()
     assert torch.equal(model.proj.weight, back) and model.head.weight is model.proj.weight
     messages.close()
-    messages.current().request("test", ReleaseValue("nope", lambda: back))
+    messages.current().release("test", "nope", lambda: back)
     off = kv_blocks.attach()
     try:
         with pytest.raises(RuntimeError, match="registered value nope released"):
