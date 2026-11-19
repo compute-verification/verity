@@ -5,6 +5,7 @@ public import Proofs.Flock.Claims.Sampling.Escape
 public import Proofs.Core.Game.Tape
 public import Proofs.Core.LevelsTwo
 public import Proofs.Flock.SamplingGeneric.LevelsTwoKS
+public import Proofs.Flock.SamplingGeneric.LevelsDeepKS
 
 /-!
 # Levels realize the claims designs
@@ -18,8 +19,9 @@ public import Proofs.Flock.SamplingGeneric.LevelsTwoKS
   blocks the nonempty replay blocks, its design the replay design's sample (`Design.realized`) read as blocks; the
   second's the proof blocks one by one, its design in each replay block the uniform subsets of its cells. A replay
   block holding no proof block is no block of the first level and escapes surely (`missProb_two_toReal_cells_on`).
-* `compilerKS_lev_one`, `compilerKSTwo_lev_two`: `CompilerKS`, and `CompilerKSTwo`'s conclusion where `nPU ≤ nOut`, as
-  the levels statement at one and two levels (`CompiledLev.ks_one_lev`, `CompiledLev.ks_two_lev`) through the bridges.
+* `compilerKS_lev_one`, `compilerKSTwo_lev_two`: `CompilerKS`, and `CompilerKSTwo`'s conclusion where `nPU ≤ nOut`,
+  from the levels statement (`CompiledLev.compilerKSLev`) at one and two levels through the bridges
+  (`compilerKS_of_lev`, `compilerKSTwo_of_lev`).
 -/
 
 @[expose] public section
@@ -377,21 +379,16 @@ namespace Claims.SamplingGeneric
 
 open Claims.Sampling
 
-/-- **`CompilerKS` is the levels statement at one level**: `CompiledLev.ks_one_lev` at `Compiled.liftLev`, read back
-through `levelsRealizeOne`. -/
-theorem compilerKS_lev_one : CompilerKS :=
-  fun _ _ _ _ _ _ _ hA hB hS => Compiled.ks_of_liftLev levelsRealizeOne fun δ hδ x hx =>
-    CompiledLev.ks_one_lev hA hB (Compiled.sessions_liftLev levelsRealizeOne hS) δ hδ x ⟨hx, fun _ _ => rfl⟩
+/-- **`CompilerKS` is the levels statement at one level**: `CompiledLev.compilerKSLev` at `Compiled.liftLev`, read
+back through `levelsRealizeOne` (`compilerKS_of_lev`). -/
+theorem compilerKS_lev_one : CompilerKS := compilerKS_of_lev levelsRealizeOne CompiledLev.compilerKSLev
 
 /-- **`CompilerKSTwo`'s conclusion is the levels statement at two levels** where the proof blocks fit in the outer
-budget (`nPU ≤ nOut`): `CompiledLev.ks_two_lev` at `CompiledTwo.liftLev`, read back through `levelsRealizeTwo`. -/
+budget (`nPU ≤ nOut`): `CompiledLev.compilerKSLev` at `CompiledTwo.liftLev`, read back through `levelsRealizeTwo`
+(`compilerKSTwo_of_lev`). -/
 theorem compilerKSTwo_lev_two (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin)
     (L : CompiledTwo Coin A) (H : Msg → Msg) (hA : A.KS H) (hB : L.commit.Binds H) (hS : L.Sessions H)
     (hpu : ∀ x, L.nPU x ≤ L.nOut x) : L.KS H :=
-  CompiledTwo.ks_of_liftLev levelsRealizeTwo fun δ hδ x hx =>
-    CompiledLev.ks_two_lev hA hB (CompiledTwo.sessions_liftLev levelsRealizeTwo hS hpu) δ hδ x
-      ⟨hx, fun _ _ _ _ _ hLv => by
-        obtain ⟨_, -, -, -, -, -, l₁, l₂, hL, -⟩ := CompiledTwo.liftLev_levels hLv
-        exact ⟨l₁, l₂, hL⟩⟩
+  compilerKSTwo_of_lev levelsRealizeTwo CompiledLev.compilerKSLev Coin A L H hA hB hS hpu
 
 end Claims.SamplingGeneric
