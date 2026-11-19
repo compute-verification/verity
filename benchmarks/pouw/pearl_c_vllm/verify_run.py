@@ -471,7 +471,7 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         scheme, records, c, out["salt"] = p.scheme, p.records, man["commitment"], p.salt
         source = PV.coins(32) if source is None else source
         key = CW.replay_key(CW.RecordedDraw(1, source), p.transcript.commitment.root, bytes.fromhex(man["records_root"]), p.epoch.salt)
-        drawn, excluded = PP.drawn_blocks(scheme, [records], key, draws), CW.exclusion_tiles(scheme, records)
+        drawn, excluded = PP.drawn_blocks(scheme, [records], key, draws, CW.draw), CW.exclusion_tiles(scheme, records)
         todo = [(0, b.record, b.id[1]) for b in drawn] + [(0, pos, tid) for pos, tid in p.tile_ids(excluded)]
         verdicts, fast = replay([p], todo, jobs, fast, cross_check)
         out["replay"] = "batch" if fast else "scalar"
@@ -955,7 +955,8 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                                        "draw": drew}, indent=1) + "\n")
             os.replace(tmp, record)
     out["draw"] = (drew or {}).get("from")
-    drawn = PP.drawn_blocks(scheme, [p.records for p in passes], derive(source, RUN_DRAW_DOMAIN, {"run": root}), draws)
+    drawn = PP.drawn_blocks(scheme, [p.records for p in passes], derive(source, RUN_DRAW_DOMAIN, {"run": root}), draws,
+                            CW.draw)
     todo, picked = [], []
     for i, p in enumerate(passes):
         mine = [(b.record, b.id[1]) for b in drawn if b.id[0] == i]

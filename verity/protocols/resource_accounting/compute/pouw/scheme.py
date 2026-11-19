@@ -86,17 +86,20 @@ def credited_blocks(scheme: Any, passes: Sequence[Sequence[Any]]) -> list[Credit
     return out
 
 
-def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int) -> list[CreditedBlock]:
-    """The ``t`` blocks of `credited_blocks` that ``key`` draws (`clear_work.draw`, work-weighted with replacement, in its
-    order): `Run.lean`'s `draw` under `drawKey`."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.clear import clear_work as CW
+def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int,
+                 draw: Callable[..., Any] | None = None) -> list[CreditedBlock]:
+    """The ``t`` blocks of `credited_blocks` that ``key`` draws (``draw``, `clear_work.draw` unless a caller holding
+    `clear_work` by its bare name gives its own: work-weighted with replacement, in its order): `Run.lean`'s `draw` under
+    `drawKey`."""
+    if draw is None:
+        from verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_work import draw
 
     blocks, at = credited_blocks(scheme, passes), [0]
     for records in passes:
         at.append(at[-1] + len(records))
     by_tile = {(at[b.id[0]] + b.record, b.rows[0], b.cols[0]): b for b in blocks}
     return [by_tile[(pos, tile.rows[0], tile.cols[0])]
-            for pos, tile in CW.draw(scheme, [r for records in passes for r in records], key, t)]
+            for pos, tile in draw(scheme, [r for records in passes for r in records], key, t)]
 
 
 #: Its settings (`Scheme.settings`), each a default of its type: ``kernel`` the kernel's library (required on a served
