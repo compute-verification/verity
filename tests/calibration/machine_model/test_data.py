@@ -1,14 +1,13 @@
-"""data/ is well formed: every census line names a row, an epoch span and one value; vectors and attacks name what exists."""
+"""data/ is well formed: every census line names a row, an epoch span and one value; vectors name what exists."""
 from __future__ import annotations
 
 import csv
-import json
 import re
 import tomllib
 
 import pytest
 
-from verity_machine_model.model import (CLAIMS, COPIES, DATA, DEVICES, STATUSES, all_attacks, attacks, census,
+from verity_machine_model.model import (CLAIMS, COPIES, DATA, DEVICES, STATUSES, census,
                                         census_files, census_lines, citations, entries, floors, holds,
                                         kind_lists, model, rows, run_lists, u_of, vector, vectors)
 
@@ -143,28 +142,9 @@ def test_vectors_name_what_exists(name):
     assert not v.catch_all or v.catch_all in c, "a vector's catch-all is a class of its census"
 
 
-def test_attacks_are_a_file_per_family():
-    for p in sorted((DATA / "attacks").glob("*.jsonl")):
-        recs = [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
-        assert len({r["family"] for r in recs}) == 1, p.name
-        assert p.stem == re.sub(r"[^a-z0-9]+", "-", recs[0]["family"].lower()).strip("-"), p.name
-        for r in recs:
-            assert set(r) <= {"design", "family", "name", "program", "on", "since", "until"}, p.name
-            assert all(e in M.epochs for e in (r.get("since"), r.get("until")) if e), p.name
-
-
-@pytest.mark.parametrize("epoch", M.epochs)
-def test_attacks_price_known_kinds(epoch):
-    c, a = census(M, epoch), attacks(M, epoch)
-    assert len({(x.design, x.family, x.name) for x in a}) == len(a)
-    assert all(set(x.program) <= set(c) and all(v >= 0 for v in x.program.values()) for x in a)
-    assert any(x.design == M.adopted for x in a)
-
-
 def test_holds():
     assert holds(M, "", "", "VF") and holds(M, "VF3e", "", "VF3j") and not holds(M, "VF3e", "", "VF3d")
     assert not holds(M, "VF3j-8", "VF3j-8", "VF3j") and holds(M, "", "VF", "VF") and not holds(M, "", "VF", "VF2")
-    assert len(all_attacks()) == len(attacks(M, M.epochs[-1]))
 
 
 def test_floors_name_census_kinds():

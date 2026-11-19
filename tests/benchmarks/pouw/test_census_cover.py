@@ -9,7 +9,6 @@ above 0 at π* (Σ_r π*_r·c_kr > 0). The programs:
 
 - every table of census-class counts in the device's data: the honest kernels' profiles, the designs (folds,
   `[fold_routes]`, fillers, baselines, operand floors) and `headline.toml`;
-- sm_120's attack families that hold at the vector's epoch (`data/attacks/`);
 - `test_lean_headline.py`'s `FOLDS` and `UNIFORM_FOLD`;
 - every program `facet_break/generate.py` emits, each family's targeted part, by the SASS its gate pins (`expect_of`);
 - the red-team witnesses' timed loops (`fixtures/census_cover_sass.json`: cpw_routes' modes, rt3_dc's lane loops).
@@ -133,7 +132,7 @@ def _tables(t: dict, path: str):
 
 
 def data_programs(key: str, data: Path) -> list[Program]:
-    """The device's honest profiles, designs and (sm_120's) headline.toml and attack families, in census classes."""
+    """The device's honest profiles, designs and (sm_120's) headline.toml, in census classes."""
     files = sorted((data / "honest").glob("*.toml")) + [data / "designs.toml"] + sorted((data / "designs").glob("*.toml"))
     if data == DATA:
         files.append(data / "headline.toml")
@@ -142,10 +141,6 @@ def data_programs(key: str, data: Path) -> list[Program]:
         if f.is_file():
             rel = f"machine_model/{f.relative_to(DATA.parent).as_posix()}"
             out += [Program(key, f"{rel} [{p}]", n, False) for p, n in _tables(tomllib.loads(f.read_text()), "")]
-    if (data / "attacks").is_dir():
-        from verity_machine_model.model import all_attacks
-        out += [Program(key, f"attack {a.family}: {a.name}", dict(a.program), False, (a.since, a.until))
-                for a in all_attacks(data) if a.on]
     return out
 
 

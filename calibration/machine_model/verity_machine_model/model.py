@@ -10,7 +10,6 @@ from that epoch), so a new epoch adds a file and closes older lines in theirs.
 from __future__ import annotations
 
 import csv
-import json
 import math
 import re
 import tomllib
@@ -20,9 +19,9 @@ from pathlib import Path
 
 CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
-__all__ = ["Attack", "CLAIMS", "COPIES", "Census", "DATA", "DEVICES", "Entry", "Floor", "Model", "Row", "STATUSES",
-           "Vector", "all_attacks", "attacks", "card", "census", "census_files", "census_lines", "citations", "cites",
-           "data_device", "device", "device_cards", "device_of", "devices", "entries", "floors", "holds", "kind_lists", "measured_cost", "model", "rows",
+__all__ = ["CLAIMS", "COPIES", "Census", "DATA", "DEVICES", "Entry", "Floor", "Model", "Row", "STATUSES",
+           "Vector", "card", "census", "census_files", "census_lines", "citations", "cites",
+           "data_device", "device", "device_cards", "device_of", "devices", "entries", "floors", "holds", "kind_lists", "model", "rows",
            "run_lists", "u_of", "vector", "vectors"]
 
 DATA = Path(__file__).resolve().parents[1] / "data"
@@ -63,17 +62,6 @@ class Entry:
     since: str
     until: str
     runs: tuple[str, ...]
-
-
-@dataclass(frozen=True, eq=False)
-class Attack:
-    design: str
-    family: str
-    name: str
-    program: dict[str, float]           # warp instructions of each kind a tensor MAC replaced, in pricing order
-    on: bool = True
-    since: str = ""
-    until: str = ""
 
 
 @dataclass(frozen=True)
@@ -278,32 +266,11 @@ def census(m: Model, epoch: str, data: Path = DATA) -> Census:
     return out
 
 
-def measured_cost(c: Census) -> dict[str, float]:
-    """An instruction class's measured cost: its time alone, the largest of its rows."""
-    return {k: max(v.values()) for k, v in c.items()}
-
-
 def floors(data: Path = DATA) -> list[Floor]:
     """The per-word price floors the claims read (`data/floors.csv`): (π₃₂) for root-writing kinds, its load half
     for loads into registers, and π_c ≥ 16 (per-row keys' premise) for every copy route."""
     with open(data / "floors.csv", newline="") as f:
         return [Floor(d["kind"], int(d["words"]), float(d["floor"]), d["claim"], d["what"]) for d in csv.DictReader(f)]
-
-
-def all_attacks(data: Path = DATA) -> list[Attack]:
-    """Every attack in `data/attacks/*.jsonl`, a file per family, one program a line."""
-    out = []
-    for p in sorted((data / "attacks").glob("*.jsonl")):
-        for line in p.read_text().splitlines():
-            if line.strip():
-                d = json.loads(line)
-                out.append(Attack(d["design"], d["family"], d["name"], d["program"], d.get("on", True),
-                                  d.get("since", ""), d.get("until", "")))
-    return out
-
-
-def attacks(m: Model, epoch: str, data: Path = DATA) -> list[Attack]:
-    return [a for a in all_attacks(data) if holds(m, a.since, a.until, epoch)]
 
 
 def vector(name: str, data: Path = DATA) -> Vector:
