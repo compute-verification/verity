@@ -770,7 +770,7 @@ def draw(rng: random.Random, small: bool = False) -> Spec:
         params = [rng.choice(TYPES) for _ in range(rng.randint(1, 3))]
         vals = list(enumerate(params))
         steps = []
-        for _s in range(rng.randint(0, 4)):
+        for _s in range(rng.randint(0 if rng.random() < 0.15 else 1, 4)):
             ok = [i for i, (p, ts, r) in enumerate(prims) if all(any(w == t.w for _v, w in vals) for t in ts)]
             if not ok:
                 break
@@ -846,9 +846,11 @@ def realise(spec: Spec) -> tuple[bytes, dict, list]:
         params = [(f"x{j}", _ty(w)) for j, w in enumerate(T["params"])]
 
         def inner(B, S, *xs, T=T):
+            from verity.circuits import boolean as BL
             vals = list(xs)
             for pi, args in T["steps"]:
-                vals.append(B.call(prims[pi][0], *[vals[a] for a in args]))
+                fn, operands = prims[pi][0], [vals[a] for a in args]
+                vals.append(B.call(fn, BL.operands(*operands)) if fn in (BL.AND, BL.XOR) else B.call(fn, *operands))
             outs = [vals[v] for v in T["ret"]]
             return outs[0] if len(outs) == 1 else tuple_of(*outs)
 
@@ -1026,6 +1028,13 @@ def _smaller(s: Spec):
             yield Spec(t2, s.root, s.root_params, s.registered, s.blocks)
     if s.registered:
         yield Spec(s.templates, s.root, s.root_params, [], s.blocks)
+    if len(s.root) > 1:
+        for ni in range(len(s.root) - 1, -1, -1):
+            if any(a[0] == "n" and a[1] >= ni for nd in s.root[ni + 1:] for src in nd["args"] for a in src):
+                continue
+            root = copy.deepcopy(s.root[:ni] + s.root[ni + 1:])
+            pop = sum(nd["n"] if nd["form"] == "batch" else 1 for nd in root)
+            yield Spec(s.templates, root, s.root_params, s.registered, [[0, pop]])
 
 
 def fuzz(seed: int, cases: int, minutes: float, exe: Callable[[], Path], log=None) -> dict:
