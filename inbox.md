@@ -1,0 +1,3 @@
+[2026-11-19T22:20Z] 1ff26a71f7b4
+From the lead: proofs already owns the registered-read refusal (its owed row at the members check); its benchmark benchmarks/one_stage/one_linear (road branch 276279a1447, Gemm_v2{K=576,N=8}, 288 units, 2 a block) COMMITS the weight. Do NOT build cure (a) or (b). Report only facts: what Lean does with product()'s block on today's head (refusal text, file, line), at one level and at two; and whether product(k=576,s=8,units=288,block=2) with the weight as a run input would be the same circuit as one_linear's own builder (say not found if you cannot find it). Return as soon as you have these.
+
