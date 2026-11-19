@@ -81,12 +81,14 @@ from verity.circuits.types import Array, Value
 from verity.commitments import registered_value as RV
 
 from . import partition as P
-from verity.commitments.domains import ONE_STAGE_PERIOD_SALT, REGISTERED_READS_V0, REGISTERED_READS_V1
+from verity.commitments.domains import (ONE_STAGE_PERIOD_SALT, REGISTERED_READS_V0, REGISTERED_READS_V1,
+                                        REGISTERED_READS_V2)
 
 READS = REGISTERED_READS_V0
 #: the format whose port may carry `registered_value.READS_FROM`: proof block `reads_from + i` reads `reads[i]`, every other proof block nothing; each
 #: of its objects holds only its own keys (Flock's `Registered.FORMAT`, `FILE_KEYS`, `PORT_KEYS`)
 READS_V1 = REGISTERED_READS_V1
+READS_V2 = REGISTERED_READS_V2
 #: the `READS_V1` key naming the ports bound to the window's committed values, each `{"root", "domain"}` (`Flock.RegBound`)
 BOUND = "bound"
 SCHEMA_V2 = SCHEMA_HM96_SHA512_ROW_V2
@@ -697,10 +699,11 @@ def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[s
 def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, int], roots: Mapping[str, str],
                ports: Mapping[str, str] | None = None, domains: Mapping[str, str] | None = None,
                schemas: Mapping[str, str] | None = None, window: str | None = None,
-               fixed: Sequence[str] = ()) -> dict[str, Any]:
+               fixed: Sequence[str] = (), positions: bool = True) -> dict[str, Any]:
     """The Lean verifier's `--registered` file, from the verifier's own program and query: per registered port, the value
     it reads, the value's leaf count, row width (`words` leaves of `word_bits`) and domain (`registered_entries`), each
-    proof block's position (`reads`), and the value's root from `roots` (`{value: root}`, of a docket the verifier
+    proof block's position (`reads`; without `positions`, none, in `READS_V2`, Flock's `Registered.FORMAT`, whose
+    verifier derives every position from C), and the value's root from `roots` (`{value: root}`, of a docket the verifier
     accepted). `ports` names a template parameter's circuit port when they differ, and such a port names its parameter
     (`PARAM_KEY`); two reads it names one port are refused,
     as the Lean verifier refuses a file naming a port twice. `domains` (`{value: domain}`) gives
@@ -723,9 +726,9 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
         read_as[port] = name
         out[port] = {"value": r["value"], "root": root, "leaves": e["leaves"], "words": e["words"],
                      "word_bits": e["word_bits"], "domain": (domains or {}).get(r["value"], e["domain"]),
-                     **RV.schema_entry((schemas or {}).get(r["value"], RV.SCHEMA)), "reads": list(r["rows"]),
-                     **({PARAM_KEY: name} if port != name else {})}
-    return {"format": READS, "ports": out}
+                     **RV.schema_entry((schemas or {}).get(r["value"], RV.SCHEMA)),
+                     **({"reads": list(r["rows"])} if positions else {}), **({PARAM_KEY: name} if port != name else {})}
+    return {"format": READS if positions else READS_V2, "ports": out}
 
 
 def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str, Mapping[str, str]]) -> dict[str, Any]:

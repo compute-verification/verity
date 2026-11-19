@@ -78,8 +78,7 @@ when asked, and fetches the run's bundle: with `witness/` into a 0700 directory 
 record from what the gate published. Each execution phase that, with its verification phase, meets [t0 − 1 s, t1 + 1 s) counts at the
 schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when the
 gate's check accepted the run, of which alone the gate publishes attestations, and every one of those execution phases
-is attested. The record is all the script writes: what the wipe's reader does with one is
-its own function, `wipe_monitoring.counted` (`verity/protocols/resource_accounting/memory/pous/verifier/wipe_monitoring.py`), and is stated there.
+is attested. The record is all the script writes.
 
 ## The served session
 

@@ -138,6 +138,7 @@ from verity.circuits.population import wired_population_program
 from verity.circuits.refs import recut
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT, registered_value as RV
+from verity.commitments.domains import REGISTERED_READS_V2
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 from . import rows as CS, wiring as WI
@@ -2514,7 +2515,7 @@ def _listed_count(doc: Mapping[str, Any], pins: Mapping[str, str] | str | None =
 
 #: the position-free registered file the door reads (`Flock.Registered.FORMAT`): no ``reads`` and no ``reads_from``, the
 #: door computing each proof block's position from C (`Flock.OneCircuit.pos`)
-REGISTERED_FILE = "verity/registered-reads/v2"
+REGISTERED_FILE = REGISTERED_READS_V2
 
 
 def registered_file(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
