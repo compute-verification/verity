@@ -12,8 +12,8 @@ import Std.Data.HashSet.Lemmas
 
 `decode_boolean : Flock.Program.DecodeBoolean`, read off `decode`'s steps (`BodiesOk.decode_steps`):
 
-* every primitive Definition the decoder pushes is keyed by an entry of `definitions` of form `primitive` (`Src`, kept
-  by the walk as `DecodeKeys.kept_fuel` keeps `Kept`), so every word primitive was decoded by `decodeAll`, and
+* every primitive Definition the decoder pushes is keyed by an entry of `definitions` of form `primitive`
+  (`DecodeKeys.Src`, part of what `DecodeKeys.kept_fuel` keeps), so every word primitive was decoded by `decodeAll`, and
   `booleanKeys` (no `E_BODY_MISSING`) gives its key a pair of the map;
 * each pair `decodeBodies` takes is checked by `checkBody` against the Definitions decoded so far (`Checked`), with
   `reach` meaning a Boolean Definition (`ReachOk`, `extendReach_ok`); the Definitions only grow (`Pre`) and the index
@@ -23,14 +23,13 @@ import Std.Data.HashSet.Lemmas
 
 @[expose] public section
 
-set_option mvcgen.warning false
 
 namespace FlockSoundness.DecodeBoolean
 open Flock.Program
 open Std.Do
 open InferenceOnlyVerifier.Properties.SecurityProofs
 open BodiesOk (DM st_bind st_pure st_get st_liftV st_discard Inv Pre pre_refl pre_trans specs go_inv decode_steps)
-open DecodeKeys (Kept Keys of_triple liftV_spec throw_spec kept_fuel composite_step staticFns_step go_kept)
+open DecodeKeys (Kept Keys of_triple kept_fuel getDef_idx go_kept formOf)
 open private getDef composite staticFns decodeAll decodeBodies extendReach primEntries DecState DecState.defs
   DecState.index DecState.busy Desc Desc.ddefs liftV from Circuits.Program
 
@@ -211,113 +210,10 @@ theorem checkBody_ok {a : Array Defn} {index : Std.HashMap String Nat} {rootKey 
 
 /-! ## What the walk keeps besides `Kept` -/
 
-/-- The form a definition entry declares (`getDef`'s `form`). -/
-def formOf (d : Lean.Json) : String := (d.getObjValAs? String "form").toOption.getD ""
-
-/-- Each primitive Definition decoded so far is keyed by an entry of `definitions` of form `primitive`. -/
-def Src (desc : Desc) (s : DecState) : Prop :=
-  ∀ i < (DecState.defs s).size, ((DecState.defs s)[i]!).prim = true →
-    ∃ d, (Desc.ddefs desc)[((DecState.defs s)[i]!).key]? = some d ∧ formOf d = "primitive"
-
-theorem src_of_defs {desc : Desc} {s s' : DecState} (hd : DecState.defs s' = DecState.defs s) (h : Src desc s) :
-    Src desc s' := by
-  unfold Src; rw [hd]; exact h
-
-theorem src_push {desc : Desc} {s s' : DecState} {defn : Defn} (h : Src desc s)
-    (hd : DecState.defs s' = (DecState.defs s).push defn)
-    (hn : defn.prim = true → ∃ d, (Desc.ddefs desc)[defn.key]? = some d ∧ formOf d = "primitive") :
-    Src desc s' := by
-  intro i hi hp
-  rw [hd] at hi hp ⊢
-  simp only [Array.size_push] at hi
-  rcases Nat.lt_succ_iff_lt_or_eq.1 hi with hi | rfl
-  · rw [BodiesOk.getElem!_push_lt _ _ hi] at hp ⊢
-    exact h i hi hp
-  · rw [BodiesOk.getElem!_push_eq] at hp ⊢
-    exact hn hp
-
-theorem src_push_prim {desc : Desc} {s s' : DecState} {defn : Defn} {fid : String} {d : Lean.Json}
-    (h : Src desc s) (hdd : (Desc.ddefs desc)[fid]? = some d)
-    (hf : ((d.getObjValAs? String "form").toOption.getD "" == "primitive") = true) (hkey : defn.key = fid)
-    (hd : DecState.defs s' = (DecState.defs s).push defn) : Src desc s' :=
-  src_push h hd fun _ => ⟨d, by rw [hkey]; exact hdd, eq_of_beq hf⟩
-
-theorem src_push_comp {desc : Desc} {s s' : DecState} {defn : Defn} {fid : String}
-    (h : Src desc s ∧ defn.key = fid ∧ defn.prim = false ∧ defn.body.retType = defn.ret)
-    (hd : DecState.defs s' = (DecState.defs s).push defn) : Src desc s' :=
-  src_push h.1 hd fun hp => absurd (h.2.2.1.symm.trans hp) (by decide)
-
-/-- `composite` at fuel `n` keeps `Src`, as `DecodeKeys.CompositeKept` says of `Kept`. -/
-def CompSrc (n : Nat) (desc : Desc) : Prop :=
-  ∀ (fid : String) (d : Lean.Json) (form id : String),
-    ⦃fun s => ⌜∀ s1, DecState.defs s1 = DecState.defs s → DecState.index s1 = DecState.index s →
-        DecState.busy s1 = (DecState.busy s).insert fid → Src desc s1⌝⦄
-      (composite n desc fid d form id : DM Defn)
-    ⦃⇓? defn s => ⌜Src desc s ∧ defn.key = fid ∧ defn.prim = false ∧ defn.body.retType = defn.ret⌝⦄
-
-theorem getDef_src (n : Nat) (desc : Desc) (hc : CompSrc n desc) (fid : String) :
-    ⦃fun s => ⌜Src desc s⌝⦄ (getDef (n + 1) desc fid : DM Nat) ⦃⇓? _ s => ⌜Src desc s⌝⦄ := by
-  have hc' := fun d form id => hc fid d form id
-  unfold getDef
-  mvcgen [hc', liftV_spec, throw_spec, -Spec.throw_Except]
-  all_goals first
-    | exact src_push_prim (by assumption) (by assumption) (by assumption) rfl rfl
-    | exact src_push_comp (by assumption) rfl
-    | exact fun s1 hd _ _ => src_of_defs hd (by assumption)
-    | assumption
-
-/-- **`getDef` returns the place the index gives its key.** -/
-theorem getDef_idx (n : Nat) (desc : Desc) (hc : CompSrc n desc) (fid : String) :
-    ⦃fun s => ⌜Src desc s⌝⦄ (getDef (n + 1) desc fid : DM Nat)
-    ⦃⇓? r s => ⌜(DecState.index s)[fid]? = some r⌝⦄ := by
-  have hc' := fun d form id => hc fid d form id
-  unfold getDef
-  mvcgen [hc', liftV_spec, throw_spec, -Spec.throw_Except]
-  all_goals first
-    | simp
-    | exact fun s1 hd _ _ => src_of_defs hd (by assumption)
-    | assumption
-
-/-- **The decoder keeps `Src`**, at every fuel. -/
-theorem src_fuel (desc : Desc) (n : Nat) :
-    (∀ fid, ⦃fun s => ⌜Src desc s⌝⦄ (getDef n desc fid : DM Nat) ⦃⇓? _ s => ⌜Src desc s⌝⦄) ∧
-    (∀ v, ⦃fun s => ⌜Src desc s⌝⦄ (staticFns n desc v : DM Unit) ⦃⇓? _ s => ⌜Src desc s⌝⦄) ∧
-    CompSrc n desc := by
-  induction n with
-  | zero =>
-    refine ⟨fun fid => ?_, fun v => ?_, fun fid d form id => ?_⟩
-    · unfold getDef
-      mvcgen [throw_spec, -Spec.throw_Except]
-    · unfold staticFns
-      mvcgen [throw_spec, -Spec.throw_Except]
-    · unfold composite
-      mvcgen [throw_spec, -Spec.throw_Except]
-  | succ n ih =>
-    obtain ⟨hg, hs, hc⟩ := ih
-    exact ⟨getDef_src n desc hc, fun v => staticFns_step n (Src desc) desc hg hs v,
-      fun fid d form id => composite_step n (Src desc) desc (fun _ _ hd _ _ h => src_of_defs hd h) hg hs fid d form id⟩
-
-private theorem discard_eq' {α : Type} (x : DM α) : (discard x : DM PUnit) = (fun _ => PUnit.unit) <$> x := rfl
-
-theorem go_src (desc : Desc) (rootId programFn : String) :
-    ⦃fun s => ⌜Src desc s⌝⦄
-      (do
-        let r ← getDef Flock.Steps.FUEL desc rootId
-        forIn (recordFunctionIds programFn) PUnit.unit fun f __s =>
-            if (Desc.ddefs desc).contains f = true then do
-              discard (getDef Flock.Steps.FUEL desc f)
-              pure (ForInStep.yield PUnit.unit)
-            else pure (ForInStep.yield PUnit.unit)
-        pure r : DM Nat)
-    ⦃⇓? _ s => ⌜Src desc s⌝⦄ := by
-  have hg := fun f => (src_fuel desc Flock.Steps.FUEL).1 f
-  mvcgen [hg, discard_eq'] invariants
-    · ⇓? _ s => ⌜Src desc s⌝
-
 /-! ## The decoder's runs -/
 
-/-- What `decode_boolean` reads of a decoder state: `Kept` with no name busy, `Src` and `Inv`. -/
-def Base (desc : Desc) (s : DecState) : Prop := Kept (fun _ => False) s ∧ Src desc s ∧ Inv s
+/-- What `decode_boolean` reads of a decoder state: `Kept` with no name busy, and `Inv`. -/
+def Base (desc : Desc) (s : DecState) : Prop := Kept desc (fun _ => False) s ∧ Inv s
 
 theorem fuel_succ : ∃ m, Flock.Steps.FUEL = m + 1 :=
   ⟨_, (Nat.sub_add_cancel (show 1 ≤ Flock.Steps.FUEL by unfold Flock.Steps.FUEL; exact Nat.one_le_two_pow)).symm⟩
@@ -326,13 +222,12 @@ theorem getDef_run (desc : Desc) (fid : String) {s s' : DecState} {r : Nat}
     (h : (getDef Flock.Steps.FUEL desc fid : DM Nat) s = .ok (r, s')) (hb : Base desc s) :
     Base desc s' ∧ Pre (DecState.defs s) (DecState.defs s') ∧ (DecState.index s')[fid]? = some r ∧
       r < (DecState.defs s').size := by
-  obtain ⟨i1, p1, r1⟩ := (specs _).1 _ _ _ _ _ h hb.2.2
+  obtain ⟨i1, p1, r1⟩ := (specs _).1 _ _ _ _ _ h hb.2
   have hk := of_triple ((kept_fuel Flock.Steps.FUEL).1 desc fid (fun _ => False)) h hb.1
-  have hs := of_triple ((src_fuel desc Flock.Steps.FUEL).1 fid) h hb.2.1
   obtain ⟨m, hm⟩ := fuel_succ
   rw [hm] at h
-  have hi := of_triple (getDef_idx m desc (src_fuel desc m).2.2 fid) h hb.2.1
-  exact ⟨⟨hk, hs, i1⟩, p1, hi, r1⟩
+  have hi := of_triple (getDef_idx m (kept_fuel m).2.2 desc fid _) h hb.1
+  exact ⟨⟨hk, i1⟩, p1, hi, r1⟩
 
 /-- An index entry outlives a step that keeps `Keys` and only appends Definitions. -/
 theorem idx_keep {s s' : DecState} (hk : Keys s) (hk' : Keys s') (hp : Pre (DecState.defs s) (DecState.defs s'))
@@ -424,7 +319,7 @@ theorem decodeBodies_run (desc : Desc) (rootKey : String) (pairs : Array (String
     obtain ⟨hck, rfl⟩ := st_liftV hl
     obtain ⟨rfl, rfl⟩ := st_pure hf
     obtain ⟨hb2, hp2, hi2, hlt2⟩ := getDef_run desc _ hd hb1
-    obtain ⟨hr3, hrs3⟩ := extendReach_ok (nodesBefore_of hb2.2.2) (reachOk_mono hp2 hr1)
+    obtain ⟨hr3, hrs3⟩ := extendReach_ok (nodesBefore_of hb2.2) (reachOk_mono hp2 hr1)
     have hwi1 := idx_keep hb.1.1 hb2.1.1 (pre_trans hp1 hp2) hwi
     refine ⟨hb2, pre_trans hp1 hp2, hr3, fun j' hj hlt => ?_⟩
     rcases Nat.lt_succ_iff_lt_or_eq.1 hlt with hlt | rfl
@@ -506,25 +401,15 @@ theorem mem_primEntries {kv : Array (String × Lean.Json)} {k : String} {d : Lea
     subst hf
     simp [ho]
 
-theorem base_empty (desc : Desc) {s : DecState} (hd : DecState.defs s = #[]) (hi : DecState.index s = ∅) :
-    Kept (fun _ => False) s ∧ Src desc s ∧ Inv s := by
-  have hn : ∀ i, ¬ i < (DecState.defs s).size := fun i => by rw [hd]; exact Nat.not_lt_zero i
-  have hk : ∀ k, (DecState.index s)[k]? = none := fun k => by
-    rw [hi]; exact Std.HashMap.getElem?_empty
-  refine ⟨⟨⟨fun k v h => ?_, fun i h => absurd h (hn i), fun k _ => hk k⟩, fun i h => absurd h (hn i),
-    fun _ h => h.elim⟩, fun i h => absurd h (hn i), fun i h => absurd h (hn i), fun k v h => ?_⟩ <;>
-    · rw [hk] at h; exact absurd h (by simp)
-
 /-- **`decode` guarantees the Boolean map (`DecodeBoolean`).** -/
 theorem decode_boolean : DecodeBoolean := by
   intro bytes P h
   obtain ⟨kv, desc, rootId, programFn, bm, root, s0, st, st1, st2, pairs, hdd, hgo, hd0, hi0', -, -, -, hall, hbk, hbod,
     hd, hi, -, hbo⟩ := decode_steps bytes P h
-  obtain ⟨hke, hse, hie⟩ := base_empty desc hd0 hi0'
-  have hk0 := of_triple (go_kept _ _ _) hgo hke
-  have hs0 := of_triple (go_src desc _ _) hgo hse
-  obtain ⟨hi0, -⟩ := go_inv _ _ _ _ _ _ hgo hie
-  obtain ⟨hb1, hp1, hall'⟩ := decodeAll_run desc _ hall ⟨hk0, hs0, hi0⟩
+  have hk0 := of_triple (go_kept _ _ _) hgo (DecodeKeys.kept_empty desc hd0 hi0')
+  obtain ⟨hi0, -⟩ := go_inv _ _ _ _ _ _ hgo
+    ⟨fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i), fun k v hk => absurd hk (by rw [hi0']; simp)⟩
+  obtain ⟨hb1, hp1, hall'⟩ := decodeAll_run desc _ hall ⟨hk0, hi0⟩
   obtain ⟨hmiss, hextra⟩ := booleanKeys_ok hbk
   have hw : ∀ p ∈ pairs, ∃ wi, (DecState.index st1)[p.1]? = some wi := fun p hp => by
     have hg := (hextra p hp).2
@@ -542,7 +427,7 @@ theorem decode_boolean : DecodeBoolean := by
     have hprim : ((DecState.defs st2)[w]!).prim = true := by
       simp only [isWordPrim, Bool.and_eq_true] at hword
       exact hword.1.1
-    obtain ⟨d, hdd', hform⟩ := hb2.2.1 w hw' hprim
+    obtain ⟨d, hdd', hform⟩ := hb2.1.2.2.2 w hw' hprim
     rw [hdd, ← Array.foldl_toList] at hdd'
     have hmem : ((DecState.defs st2)[w]!.key, d) ∈ kv := by
       rcases hm_foldl_some (fun m x => m.insert x.1 x.2) id (fun _ _ => rfl) _ _ kv.toList ∅ hdd' with h0 | ⟨x, hx, he⟩
