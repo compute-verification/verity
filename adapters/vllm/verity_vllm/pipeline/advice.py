@@ -167,6 +167,22 @@ def io_record(path: str | Path) -> dict[str, dict[str, Any]]:
     return out
 
 
+def bodies(run: str | Path, window: int) -> dict[str, dict[str, Any]]:
+    """The certified body of each request with rows in a serve-openai run's Commit window ``window``, by its I1 id (its body's
+    ``user``, else its HTTP id), as the registered compiler takes it: the sampling fields it brought (its ingress record's
+    ``brought``) with its prompt ids. Only the window's own records count: a run can serve a user again in another window."""
+    out: dict[str, dict[str, Any]] = {}
+    for line in M.lines(Path(run) / "requests.jsonl", "Request"):
+        d = json.loads(line)
+        if int(window) not in (d.get("windows") or ()):
+            continue
+        user = str(d.get("user") or d.get("http_id") or d.get("engine_id"))
+        if user in out:
+            raise ValueError(f"requests.jsonl: user {user!r} has two requests in window {window}")
+        out[user] = {**((d.get("ingress") or {}).get("brought") or {}), "prompt": list(d["prompt_ids"])}
+    return out
+
+
 @dataclass
 class _Req:
     rid: str

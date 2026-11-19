@@ -185,7 +185,8 @@ class CommitWindows:
     `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm with
     ``sealed`` hears each window's seal line, or why it has none. ``coins``
     (`engine.served_seed.SeedCoins`, which the engine loop reads as it admits) names the seed coin each window opens
-    under in its line (``seed_coin``)."""
+    under in its line (``seed_coin``). ``plan`` (`serve_plan.ClosePlan`) runs at each window's close once its line is
+    written and before its seal: its outcome is ``plans``' entry for the window."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -195,7 +196,9 @@ class CommitWindows:
                  window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
                  request_cap: int = 0, arm: Any = None, release: Any = None,
-                 coins: SeedCoins | None = None) -> None:
+                 coins: SeedCoins | None = None, plan: Callable[[int], dict[str, Any]] | None = None) -> None:
+        if plan is not None and arm is not None:
+            raise ValueError("a window's close plan commits its advice, and an arm's tie commits its own: give one")
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
         self.coins = coins if coins is not None else SeedCoins()
         self.seed_coin: dict[str, Any] | None = None      # the open window's seed coin (`SeedCoins.record`)
@@ -203,6 +206,7 @@ class CommitWindows:
         self.arm, self._arm_out = arm, {}                # each window's arm outcome, until its line is written
         self.arm_key = getattr(arm, "outcome_key", "pouw_h1")   # the line's and the summary's key for it
         self.arm_failed: list[int] = []                  # the windows whose arm failed to open or close
+        self.plan, self.plans = plan, {}                 # `serve_plan.ClosePlan`, and each window's outcome
         self._arm_pending: set[int] = set()              # the windows whose arm is still closing off the loop
         self._arm_held = False                           # the open window's arm waits for its first step's users (`arm.users`)
         self._awaiting: dict[int, dict[str, Any]] = {}   # ... and their lines, held until it ends
@@ -409,6 +413,7 @@ class CommitWindows:
         self._write_window(rec)
         if self.marks is not None:
             self.marks(self.window, "close")
+        self._plan(rec)
         if self.mirror is not None:
             self.mirror()
         if isinstance(job, tuple):
@@ -475,11 +480,24 @@ class CommitWindows:
         rec["close_phases_s"] = {"on_loop": round(on_loop, 4), **phases_of(laps)}
         rec["on_loop_phases_s"] = c.on_loop
         self._write_window(rec)
+        self._plan(rec)
         with self._lock:
             self.closing.pop(c.window, None)            # a close that failed before its line stays here, and fails the summary
         if self.mirror is not None:
             self.mirror()
         return self._land(rec, job, here=(c.t_close, c.seal_wait)) if isinstance(job, tuple) else None
+
+    def _plan(self, rec: Mapping[str, Any]) -> None:
+        """The window's close plan, once its line names its run root and before its seal: none for a window with no steps or a
+        failed close; a plan that fails is the window's outcome, and serving goes on."""
+        if self.plan is None or not rec.get("steps") or "error" in rec:
+            return
+        try:
+            got = self.plan(int(rec["window"]))
+        except Exception as e:  # noqa: BLE001  (a window whose plan fails says so; the server goes on)
+            got = {"window": rec["window"], "error": f"{type(e).__name__}: {e}"[:500]}
+        with self._lock:
+            self.plans[int(rec["window"])] = got
 
     def _no_release(self, rec: dict[str, Any], com: Any, job: Any) -> None:
         """A window that reaches no seal, so no draw-gated release: `serve_release.Draws.discard`, its device pool pieces freed,

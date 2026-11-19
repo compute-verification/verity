@@ -31,11 +31,15 @@ from verity_vllm.pipeline import research_outputs as RO
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_mirror as sm
 from verity_vllm.pipeline import serve_openai as so
+from verity_vllm.pipeline import serve_plan as sp
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.serve_admit import Delta
 from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.steps import Registered, compile_steps
+from verity_vllm.program.predict.window_class import WindowClass
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
@@ -245,6 +249,28 @@ def test_a_windows_advice_names_its_commit_from_its_seal_while_its_line_waits_fo
     assert rep["refused"] == {} and rep["pending"] == {} and list(rep["windows"]) == [str(held["window"])]
     reg = json.loads((out / "advice" / f"w{held['window']}" / "registration.json").read_text())
     assert reg["commit"] == {"run_id": held["run_id"], "run_root": held["run_root"]}
+
+
+def test_a_windows_close_commits_its_advice_and_compiles_its_circuit_from_it_once_its_line_is_written(tmp_path):
+    """With a close plan (`serve_plan.ClosePlan`) each window with steps has its advice committed at its close, under the run root
+    its line names, and its circuit compiled from that advice and its bodies: the outcome is `served_lowering`'s on them, here
+    TINY's refusal by Flock's composer, by name. A plan is refused beside an arm, whose tie commits the advice itself."""
+    cls = WindowClass(4, 12, 6)
+    with Server(tmp_path) as s:
+        s.windows.plan = sp.ClosePlan(tmp_path, REG, cls, compiler=C, flush=s.trace.drain)
+        for wave in WAVES:
+            serve_concurrently(s, wave)
+    commits = {w["window"]: w for w in records(tmp_path, "windows.jsonl") if not w.get("empty")}
+    assert sorted(s.windows.plans) == sorted(commits) and len(commits) >= len(WAVES)
+    for w, got in s.windows.plans.items():
+        d = tmp_path / "advice" / f"w{w}"
+        reg = json.loads((d / "registration.json").read_text())
+        assert reg["commit"]["run_root"] == commits[w]["run_root"] and got["advice"] == reg["binding"]["advice"]["root"]
+        with pytest.raises(Unexpressible) as e:
+            WC.served_lowering(REG, cls, (d / "private" / "advice.bin").read_bytes(), ADV.bodies(tmp_path, w))
+        assert got["refused"] == f"Unexpressible: {e.value}"[:500] and "Flock's composer wouldn't prove" in got["refused"]
+    with pytest.raises(ValueError, match="give one"):
+        sc.CommitWindows(Committer(Runner()), tmp_path, run_id="t", window_steps=4, arm=object(), plan=lambda w: {})
 
 
 def test_advice_leaves_a_window_still_open_for_a_later_call(tmp_path):

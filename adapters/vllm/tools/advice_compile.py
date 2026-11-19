@@ -46,6 +46,7 @@ from pathlib import Path
 
 from verity_vllm import messages as M
 from verity_vllm.engine.served_seed import DEFAULT_SEED
+from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program.predict import phi as P
 
 MANIFEST = "verity-vllm/served-window-programs/v1"
@@ -58,16 +59,7 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
     adv = run / "advice" / f"w{window}"
     reg = json.loads(M.read(adv / "registration.json", "Advice"))
     serve = json.loads(M.read(run / "serve.json", "ServingConfiguration"))
-    bodies = {}
-    for line in (run / "requests.jsonl").read_text().splitlines():
-        if line.strip():
-            d = json.loads(line)
-            if int(window) not in (d.get("windows") or ()):
-                continue
-            user = d.get("user") or d["http_id"]
-            if user in bodies:
-                raise ValueError(f"requests.jsonl: user {user!r} has two requests in window {window}")
-            bodies[user] = {**((d.get("ingress") or {}).get("brought") or {}), "prompt": list(d["prompt_ids"])}
+    bodies = ADV.bodies(run, window)
     meta = {"model": serve["model"], "revision": serve["revision"], "target": serve["target"],
             "execution": serve.get("execution") or (serve.get("engine") or {}).get("execution"),
             "default_seed": serve.get("default_seed"), "engine_record": serve.get("engine")}
