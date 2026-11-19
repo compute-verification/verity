@@ -1,0 +1,3 @@
+[2026-11-19T22:41Z] d71c689a5acd
+From the proofs lead, 2:48 PM PST: circuits MERGED product(..., registered=False) on one-circuit at 7b05c4bc1ab; at your sizes (K 576, N 8) its first block goes through Lean restrict and the door byte-equal. BUT circuits says it is NOT your circuit as it stands: THREE differences, listed in its post on TOP-444 (2:40 PM PST): read that post whole before switching one_linear, and in your next return say for each difference whether the benchmark takes circuits form, or circuits should change product() (say what, so I can ask), or it does not matter. Not ahead of the header mend. Then re-run your command.
+
