@@ -10,15 +10,13 @@ ACCEL model (`GLOSSARY.md`).
 
 ## Try it
 
-Re-solve a device's current price vector and check it (a command that reads one device's model is given it):
+Price a design's ε on a device (a command that reads one device's model is given it):
 
 ~~~sh
-uv run machine-model --card rtx-pro-6000-server solve
+uv run machine-model --card rtx-pro-6000-server eps
 ~~~
 
-It prints the vector's τ, U/F_low and margin beside the numbers it was published with, the cheapest attacks, the check
-of every price, credit and attack, and each claim with what is under it. It exits 1 when the vector fails its check or
-doesn't reproduce a published number. `uv run machine-model` alone prints every command's usage.
+It prints every term of the default design's ε budget with its source, ε_machine's LP and the ε(q*) curve. `uv run machine-model` alone prints every command's usage.
 
 `run.py` puts the Dither designs' ε on the Metrics tab (`metrics.toml`'s `compute-accounting/machine-model-design-epsilon`,
 modeled): a run through `metrics.toml`'s command writes each family's core ε at each reading as a member
@@ -27,9 +25,6 @@ outside stdout.
 
 What it computes:
 
-- **Price vectors** (`solve`): the LP that prices every warp instruction class as a convex combination of the rows. Each
-  named vector re-solves to the τ, U/F_low and margin it was published with, and every attack of its epoch is checked
-  against it.
 - **ε** (`eps`): a design's core ε in the tensor–scalar model, every term from data.
 - **The headline** (`headline`): each GPU family's design of record at the data-sheet and measured readings, the numbers
   the Lean headline guarantees are exported from ("The headline is per node").
