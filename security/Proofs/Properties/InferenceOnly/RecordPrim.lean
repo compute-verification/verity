@@ -219,6 +219,7 @@ theorem returnsOwn_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP :
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} {out : String} {l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true)
     (ho : OutLeaf P sc out l g lo hi) : g = sc.off ∧ sc.off ≤ g ∧ g < sc.off + (P.defs[sc.d]!).gates := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨k, m, -, -, -, -, hbody, hg1, -⟩ := prim_unit hP hrs hu hp
   obtain ⟨f, -, -, -, hres, -, -⟩ := ho
   rw [Resolve.ret_default P sc _ hbody] at hres
@@ -289,6 +290,7 @@ theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : R
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves) :
     ∃ g, Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hov, hlay⟩ := read_walk hP
   obtain ⟨k, m, hk, hnode, hform, hm, hargs, rfl⟩ := unit_member hP hrs hu
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
@@ -358,6 +360,7 @@ theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Re
     ∃ w, (P.defs[sc.d]!).ret = .value w ∧ OutLeaf P sc ("o" ++ toString 0) 0 sc.off 0 w ∧
       ∀ out l g lo hi, OutLeaf P sc out l g lo hi →
         out = "o" ++ toString 0 ∧ l = 0 ∧ g = sc.off ∧ lo = 0 ∧ hi = w := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨k, m, -, -, -, -, hbody, -, w, hw⟩ := prim_unit hP hrs hu hp
   have hfields : Flock.Program.fieldsOf (P.defs[sc.d]!).ret = [.value w] :=
     (congrArg Flock.Program.fieldsOf hw).trans rfl

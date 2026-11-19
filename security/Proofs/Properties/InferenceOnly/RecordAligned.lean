@@ -214,6 +214,7 @@ theorem unit_ret_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {t : ℕ} (ht : t < (P.defs[sc.d]!).ret.leaves) :
     ∃ g, Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get t) = .ok g := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   by_cases hp : (P.defs[sc.d]!).prim = true
   · obtain ⟨k, m, -, -, -, -, hbody, -, -⟩ := prim_unit hP hrs hu hp
     exact ⟨sc.off, Resolve.ret_default P sc t hbody⟩
