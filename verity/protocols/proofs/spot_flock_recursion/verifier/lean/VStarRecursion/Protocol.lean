@@ -24,7 +24,8 @@ verifier the auditor runs (`verity-verify-proof verify --zk` once per V* part wi
   order, exactly `{"bindings", "circuit", "partition", "program", "registered"}`: the part's `--rec-bindings` object,
   its circuit's SHA-512, its partition object, its program's descriptor and its registered file (or null). The inner
   statement's program and partition are v1's `program` and `partition`, which must not be null. Every one of
-  them is the verifier's own and is fixed before any coin, `RecDeploy.RecX`'s statement;
+  them is the verifier's own and is fixed before any coin, `RecDeploy.RecX`'s statement. Parameters that parse are
+  refused by name (`Flock.RecSetup.RECURSION_REFUSED`), so no check below reaches an accept;
 * **commitment**: v1's (the registration record);
 * **evidence**: v1's without `verdicts`, with exactly one session, plus `recursive`, exactly `{"parts", "record", "rows",
   "transcript"}`: the SHA-512s of the inner session's record, of V*'s shared rows (`--rec-rows`, one file every part
@@ -168,7 +169,8 @@ def paramsOfJson (j : Json) : V Params := do
     | throw "the parameters name no recursive (the inner circuit's digest and V*'s parts)"
   let rest := Json.mkObj (without j "recursive")
   let base ← OneStage.paramsOfJson rest
-  pure { base, own := ← (ownOf r (getD rest "program") base.verifier.partition).mapError (s!"recursive: " ++ ·) }
+  discard <| (ownOf r (getD rest "program") base.verifier.partition).mapError (s!"recursive: " ++ ·)
+  throw Flock.RecSetup.RECURSION_REFUSED
 
 /-- The `verdicts` command's own inputs: exactly `{"partition", "program", "recursive"}`. -/
 def ownOfJson (j : Json) : V Own := do

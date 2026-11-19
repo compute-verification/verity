@@ -280,6 +280,16 @@ def notZk : String :=
 reads no statement without it), so a session verified with a recursive flag (`rec`) but without `--zk` is refused. -/
 def zkOnly (zk rec : Bool) : V Unit := if rec && !zk then throw notZk else pure ()
 
+/-- The refusal of the recursive form: built, and refused by name, since no soundness theorem over the one circuit
+covers its accept. -/
+def RECURSION_REFUSED : String :=
+  "refused: the recursive form (V*'s statements over an inner session: a --rec-* flag, rec-compose, " ++
+    "verity/sampled-proofs/recursive/v1) is built and refused, since no soundness theorem over the one circuit " ++
+    "covers its accept"
+
+/-- **The recursive form is refused**: a session verified with a recursive flag (`rec`), after every other check. -/
+def notRecursive (rec : Bool) : V Unit := if rec then throw RECURSION_REFUSED else pure ()
+
 theorem denseOnly_some {i : RecVStar.Inner} (h : denseOnly (some i) = .ok ()) : i.holo = false ∧ i.sparse = none := by
   cases hh : i.holo <;> cases hs : i.sparse <;>
     simp [denseOnly, hh, hs, throw, throwThe, MonadExceptOf.throw] at h ⊢
