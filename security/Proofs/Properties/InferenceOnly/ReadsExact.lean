@@ -10824,10 +10824,12 @@ theorem rootGates_of (hN : RootNodes) : RootGates := by
 
 /-- **`RootSegs` from the decoder's facts and `RootGates`**: every segment is `ShapeOk` (`rootShape`), so each read
 `Seg.split` makes of it is `SegGood` (`segGood_of`). -/
-theorem rootSegs_of (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.orderViolation = none → RootFacts P)
+theorem rootSegs_of
+    (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.walkable P = true →
+      RootFacts P)
     (hG : RootGates) : RootSegs := by
   intro bytes P memo c hd ho hl hi hw hm hc k hk node rs hn hrs hg s hs g hgs
-  have hF' := hF bytes P hd ho
+  have hF' := hF bytes P hd ho hw
   exact segGood_of hF'.2.2.1 (rootShape P memo hm hF' hn hs) hgs
     (hG bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs g hgs)
 
