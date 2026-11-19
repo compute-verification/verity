@@ -268,6 +268,9 @@ theorem st_forIn_four {σ ε α β : Type} (xs : Array α) (b : β)
             rw [List.forIn_cons]; congr 1; funext y; cases y <;> rfl
     rw [e]; rfl
 
+theorem stm_forIn_empty {σ ε α β : Type} (xs : Array α) (b : β) (f : α → β → StateT σ (Except ε) (ForInStep β))
+    (h : xs.size = 0) : (forIn xs b f : StateT σ (Except ε) β) = pure b := by
+  rw [Array.eq_empty_of_size_eq_zero h]; rfl
 theorem stm_forIn_one {σ ε α β : Type} (xs : Array α) (b : β)
     (f : α → β → StateT σ (Except ε) (ForInStep β)) (h : xs.size = 1) :
     (forIn xs b f : StateT σ (Except ε) β) = (f (xs[0]'(by omega)) b >>= fun x => pure (stepVal x)) :=
@@ -583,8 +586,7 @@ fwd_def progX decode_prog : Program.decode progBytes by [fromUTF8?_toUTF8, parse
     st_forIn_one, st_forIn_two, st_forIn_four, st_forIn_three, stm_forIn_three, hm_get_foldl_n,
     push1_get0, push2_get0, push2_get1, push3_get0, push3_get1, push3_get2, push4_get0, push4_get1, push4_get2,
     push4_get3, defn_key, defn_prim, defn_params, defn_ret, ex_forIn_n1, ex_forIn_n2, ex_forIn_n3, ex_forIn_n4, stm_forIn_one, stm_forIn_two, stm_forIn_four,
-    fnRefs_null, fnRefs_empty, Array.size_push, Array.size_append, Option.toArray_some, Option.toArray_none,
-    List.size_toArray, Array.size_empty]
+    fnRefs_null, fnRefs_empty]
   block [Std.HashMap.insert, Std.HashSet.insert, Std.HashSet.erase, Sha512.hash]
   shallow []
 
@@ -609,7 +611,7 @@ fwd_def descX descParse_X : TemplateQuery.Desc.parse progBytes by [fromUTF8?_toU
     push1_get0, push2_get0, push2_get1, push3_get0, push3_get1, push3_get2, push4_get0, push4_get1, push4_get2,
     push4_get3, defn_key, defn_prim, defn_params, defn_ret, ex_forIn_n1, ex_forIn_n2, ex_forIn_n3, ex_forIn_n4, stm_forIn_one, stm_forIn_two, stm_forIn_four,
     fnRefs_null, fnRefs_empty, st_forIn_empty, Array.size_push, Array.size_append, Option.toArray_some,
-    Option.toArray_none, List.size_toArray, Array.size_empty, bmX_get]
+    Option.toArray_none, List.size_toArray, Array.size_empty, bmX_get, stm_forIn_empty]
   block [Sha512.hash, Std.HashMap.insert, Std.HashSet.insert]
   shallow []
 
