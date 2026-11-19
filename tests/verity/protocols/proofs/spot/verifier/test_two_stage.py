@@ -1029,19 +1029,12 @@ def test_a_read_whose_key_is_wired_lists_no_table_rows():
 
 
 def test_nothing_of_record_turns_the_wired_key_on():
-    """No file under `verity/` sets the wired key's switch but round 2's own code and the development executable
-    `spot-wired-key-dev` (`Spot.WiredKeyDevMain`), and none but that executable's lakefile entry and its
-    difftest names it: the service's run, the verifier and every script take the switch as the code holds it,
-    off."""
+    """No file under `verity/` sets the wired key's switch but round 2's own code and its examples: the service's run,
+    the verifier, every executable and every script take the switch as the code holds it, off."""
     root = next(p for p in Path(__file__).resolve().parents if (p / "verity" / "__init__.py").is_file())
     spot = root / "verity/protocols/proofs/spot/verifier"
-    difftest = spot / "lean/tests/test_wired_key_difftest.py"
-    allowed_set = {spot / "second_stage.py", spot / "lean/Spot/SecondStage.lean",
-                   spot / "lean/Spot/SecondStageExamples.lean", spot / "lean/Spot/WiredKeyDevMain.lean", difftest,
-                   Path(__file__).resolve()}
-    allowed_name = {spot / "lean/lakefile.toml", spot / "lean/Spot/SecondStage.lean",
-                    spot / "lean/Spot/WiredKeyDevMain.lean", difftest, Path(__file__).resolve()}
-    sets, names = [], []
+    allowed = {spot / "second_stage.py", spot / "lean/Spot/SecondStage.lean", spot / "lean/Spot/SecondStageExamples.lean"}
+    sets = []
     skip = {".lake", ".git", "__pycache__", "target", "node_modules", ".venv", "fixtures"}
     for top, dirs, files in os.walk(root / "verity"):
         dirs[:] = [d for d in dirs if d not in skip]
@@ -1050,11 +1043,9 @@ def test_nothing_of_record_turns_the_wired_key_on():
             if path.suffix not in {".py", ".lean", ".sh", ".toml"}:
                 continue
             text = path.read_text(errors="replace")
-            if any(s in text for s in ("wired_key=", "wired_key = ", "wiredKey :=")) and path not in allowed_set:
+            if any(s in text for s in ("wired_key=", "wired_key = ", "wiredKey :=")) and path not in allowed:
                 sets.append(path)
-            if "spot-wired-key-dev" in text and path not in allowed_name:
-                names.append(path)
-    assert sets == [] and names == [], (sets, names)
+    assert sets == [], sets
 
 
 def test_a_rejected_verdict_rejects_and_names_both_records():

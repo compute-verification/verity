@@ -6,7 +6,7 @@
 # analysis: Lean core, Flock and the interface.
 name = "core_spot"
 defaultTargets = ["Spot", "spot-one-stage", "spot-one-stage-zk", "spot-monitoring-period",
-  "spot-difftest", "spot-verifier", "spot-wired-key-dev",
+  "spot-difftest", "spot-verifier",
   "spot-plancheck"]
 
 [leanOptions]
@@ -55,12 +55,6 @@ root = "Spot.DifftestMain"
 [[lean_exe]]
 name = "spot-verifier"
 root = "Spot.VerifierMain"
-
-# Development plays only, never an accept of record: round 2 with the wired key's switch on, which the build of
-# record holds off (`Spot.SecondStage.WIRED_KEY`). Only its difftest runs it; no audit, script or benchmark does.
-[[lean_exe]]
-name = "spot-wired-key-dev"
-root = "Spot.WiredKeyDevMain"
 
 # The planner's designs checked in exact arithmetic (`Spot.PlanCheck`), which
 # `verity/protocols/proofs/spot/plancheck.py` calls.

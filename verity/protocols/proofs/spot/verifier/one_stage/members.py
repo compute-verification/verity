@@ -623,6 +623,8 @@ def flock_verdict(st: Statement) -> dict[str, Any]:
     lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     if len(lines) != 1 or not isinstance(lines[0], dict):
         raise Outside(f"the verifier answered no verdict for the session (exit {p.returncode}): {(p.stderr or p.stdout)[-400:]}")
+    if (why := PF.not_zk_why(lines[0])) is not None:
+        raise Outside(why)
     return lines[0]
 
 

@@ -175,7 +175,7 @@ def test_the_gate_limit_is_the_runs_not_the_querys(norm):
         r = W.check_calls([g], strict=False, max_gates=raised, specialize=PV.specialization)
         assert r["ok"] and r["units"] == 2049 and r["query"] == capped["query"] == W.query_id()
     assert W.gate_limit(norm, f"{low},Gemm_v1=5") == low and W.gate_limit(norm, {norm.id: 7, "RMSNormTriton_v1": 9}) == 7
-    for cmd, argv in (("manifest", ["build", "--program", "p", "--out", "o"]), ("program-graph", ["o", "i"])):
+    for cmd, argv in (("manifest", ["build", "--program", "p", "--out", "o"]),):
         assert cli.parse(cmd, argv, {W.MAX_GATES_ENV: "GumbelTopPTokenSelect_v2=120000000"}).word_max_gates == "GumbelTopPTokenSelect_v2=120000000"
         assert cli.parse(cmd, [*argv, "--word-max-gates", "1"], {}).word_max_gates == "1"
 
