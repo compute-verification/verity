@@ -28,7 +28,7 @@ namespace Claims.SamplingGeneric
 
 open Claims Finset
 open Claims.Sampling (AuditStatement Partition InScopeLev RLev slot topOf incorrectLev levM forkOn accList AllBad
-  OwnColl agree_of_passes val_assemble ιOf ιOf_eq acc_of_accList accList_length_eq assemble KSLinOn Bext)
+  OwnColl agree_of_passes val_assemble ιOf ιOf_eq acc_of_accList accList_length_eq assemble KSLinOn Bext flatMapRP)
 
 namespace CompiledLev
 
@@ -254,6 +254,129 @@ theorem ks_one {H : Msg → Msg} {L : CompiledLev Coin A} (hA : A.KS H) (hbind :
   have hx' := h x Ω P
   dsimp only at hx'
   rwa [if_pos hx.2] at hx'
+
+/-- **`KSLinOn` along a rearrangement of the extractor's coins**: an extractor that runs as `E` on coins in bijection
+with `E`'s, at each statement in scope, meets `E`'s bound, its `B_ext` included. -/
+theorem KSLinOn_of_equiv {W : Type} {H : Msg → Msg} {V : Verifier Coin} {Sc : Msg → Prop} {R : Rel W}
+    {E E' : Extractor Coin W V} {κ γ β : Msg → ℝ} (e : ∀ x, Sc x → E.C x ≃ E'.C x)
+    (he : ∀ x (hx : Sc x) r₀ c, E'.ext x r₀ (e x hx c) = E.ext x r₀ c)
+    (h : KSLinOn H V Sc R E κ γ β (Bext H V E)) : KSLinOn H V Sc R E' κ γ β (Bext H V E') := by
+  intro x hx Ω _ _ P
+  have hev : ∀ ω r₀ c, E'.eval H P x ω r₀ (e x hx c) = E.eval H P x ω r₀ c := fun ω r₀ c => by
+    unfold Extractor.eval
+    rw [he x hx]
+  have hbad : PrBad H V R E' x P = PrBad H V R E x P := by
+    unfold PrBad
+    refine Eq.trans (Claims.Sampling.Pr_equiv ((Equiv.refl Ω).prodCongr ((Equiv.refl _).prodCongr (e x hx))) _).symm
+      (Pr_congr fun s => ?_)
+    show (run H P V x s.1 s.2.1).out = .acc ∧ ¬ R.ext x (E'.eval H P x s.1 s.2.1 (e x hx s.2.2)).1 ↔ _
+    rw [hev]
+  have hB : (Bext H V E' Ω P x).Pr H = (Bext H V E Ω P x).Pr H := by
+    by_cases hk : 0 < V.k x
+    · have h1 : Bext H V E' Ω P x = _ := dif_pos hk
+      have h2 : Bext H V E Ω P x = _ := dif_pos hk
+      rw [h1, h2]
+      unfold Finder.Pr
+      refine Eq.trans (Claims.Sampling.Pr_equiv ((Equiv.refl _).prodCongr ((e x hx).prodCongr (e x hx))) _).symm
+        (Pr_congr fun s => ?_)
+      simp only [Equiv.prodCongr_apply, Prod.map_fst, Prod.map_snd, Equiv.refl_apply, he x hx]
+    · have h1 : Bext H V E' Ω P x = _ := dif_neg hk
+      have h2 : Bext H V E Ω P x = _ := dif_neg hk
+      rw [h1, h2]
+  rw [hbad, hB]
+  exact h x hx Ω P
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- The middle levels at a statement in scope: its levels' count less two. -/
+theorem mid_eq {L : CompiledLev Coin A} {x : Msg} {s : AuditStatement} {Pt : Partition}
+    {Lv : Verity.Levels (Fin Pt.blocks.length)} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
+    (hLv : L.levels s Pt = some Lv) : L.mid x = Lv.levels.length - 2 := by
+  simp [mid, hs, hPt, hLv]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem mid_eq_zero_of_oneLevel {L : CompiledLev Coin A} {x : Msg} (hx : L.Scope x) (h1 : L.OneLevel x) :
+    L.mid x = 0 := by
+  obtain ⟨s, Pt, Lv, hs, hPt, hLv, hin⟩ := hx
+  have hlen : Lv.levels.length = 1 := by
+    have := hin.2.2.2
+    rwa [h1 s hs] at this
+  rw [mid_eq hs hPt hLv, hlen]
+
+theorem below_nil {L : CompiledLev Coin A} (x : Msg) (s : AuditStatement) :
+    ∀ (fs : List (Finset (Fin (L.V.k x)))) (_ : fs = [])
+      (hW : ((Fin (L.capIn x) → Fin (L.V.k x) → Coin) × (Fin (L.kIn x) → L.SlotEC x)) = L.WaitC x fs.length) r w,
+      L.below x s fs r (cast hW w) = L.below x s [] r w := by
+  rintro fs rfl hW r w
+  rfl
+
+omit [Nonempty Coin] [Inhabited Coin] in
+theorem waitC_forks (L : CompiledLev Coin A) (x : Msg) (h : L.mid x = 0) :
+    ((Fin (L.capIn x) → Fin (L.V.k x) → Coin) × (Fin (L.kIn x) → L.SlotEC x)) = L.WaitC x (L.forks x).length := by
+  have hf : (L.forks x).length = 0 := by simp [forks, h]
+  rw [hf]
+  rfl
+
+/-- **`Compiled.E`'s coins as `Elev`'s** with no middle level: each kept outer run's inner wait and slot coins. -/
+def coinsLev (L : CompiledLev Coin A) (x : Msg) (h : L.mid x = 0) :
+    L.ECoins x ≃ (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.WaitC x (L.forks x).length) where
+  toFun c := (c.1, fun j => cast (L.waitC_forks x h) (c.2.1 j, fun l p => c.2.2 (j, l, p)))
+  invFun c := (c.1, fun j => (cast (L.waitC_forks x h).symm (c.2 j)).1,
+    fun jlp => (cast (L.waitC_forks x h).symm (c.2 jlp.1)).2 jlp.2.1 jlp.2.2)
+  left_inv c := by
+    obtain ⟨c1, c2, c3⟩ := c
+    simp only [cast_cast, cast_eq]
+    try rfl
+  right_inv c := by
+    obtain ⟨c1, c2⟩ := c
+    refine Prod.ext rfl (funext fun j => ?_)
+    show cast (L.waitC_forks x h) ((cast (L.waitC_forks x h).symm (c2 j)).1,
+      (cast (L.waitC_forks x h).symm (c2 j)).2) = c2 j
+    rw [Prod.mk.eta, cast_cast, cast_eq]
+
+theorem flatMapRP_congr {R β γ : Type} {f g : β → RP R (List γ)} (l : List β) (h : ∀ b, f b = g b) :
+    flatMapRP f l = flatMapRP g l := by
+  rw [funext h]
+
+set_option maxRecDepth 4096 in
+theorem Elev_ext_coinsLev (L : CompiledLev Coin A) (x : Msg) (h : L.mid x = 0) (r₀ : Fin (L.V.k x) → Coin)
+    (c : L.ECoins x) : L.Elev.ext x r₀ (L.coinsLev x h c) = L.E.ext x r₀ c := by
+  have hf : L.forks x = [] := by simp [forks, h]
+  show RP.rerun r₀ _ = RP.rerun r₀ _
+  refine congrArg (RP.rerun r₀) (funext fun v₀ => ?_)
+  generalize L.parse x = ps
+  cases ps with
+  | none => rfl
+  | some s =>
+    show (if v₀.out = .acc then _ else _) = (if v₀.out = .acc then _ else _)
+    by_cases hacc : v₀.out = .acc
+    · rw [if_pos hacc, if_pos hacc]
+      refine congrArg (RP.bind _) (funext fun outer => ?_)
+      refine congrArg (fun z => RP.bind z _) ?_
+      refine flatMapRP_congr _ fun jo => ?_
+      exact below_nil x s _ hf (L.waitC_forks x h) jo.2.1 (c.2.1 jo.1, fun l p => c.2.2 (jo.1, l, p))
+    · rw [if_neg hacc, if_neg hacc]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem κLev_eq (L : CompiledLev Coin A) (δ : ℝ) (x : Msg) (h : L.mid x = 0) : L.κLev δ x = L.κ δ x := by
+  simp only [κLev, waitErr, h, Compiled.κ]
+  ring
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem γLev_eq (L : CompiledLev Coin A) (x : Msg) (h : L.mid x = 0) : L.γLev x = L.γ x := by
+  simp only [γLev, h, Compiled.γ]
+
+/-- **`CompiledLev.KS` at one level**, at the extractor with one wait per level: `ks_one` along `coinsLev`. -/
+theorem ks_one_lev {H : Msg → Msg} {L : CompiledLev Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
+    (hS : L.Sessions H) (δ : ℝ) (hδ : 0 ≤ δ) :
+    KSLinOn H L.V (fun x => L.Scope x ∧ L.OneLevel x) (RLev H L.commit L.parse L.partition L.levels L.top δ) L.Elev
+      (L.κLev δ) L.γLev (fun _ => 1) (Bext H L.V L.Elev) := by
+  have h := KSLinOn_of_equiv (E := L.E) (E' := L.Elev)
+    (fun x hx => L.coinsLev x (mid_eq_zero_of_oneLevel hx.1 hx.2))
+    (fun x hx r₀ c => L.Elev_ext_coinsLev x _ r₀ c) (ks_one hA hbind hS δ hδ)
+  intro x hx Ω _ _ P
+  have h0 := mid_eq_zero_of_oneLevel hx.1 hx.2
+  rw [L.κLev_eq δ x h0, L.γLev_eq x h0]
+  exact h x hx Ω P
 
 end CompiledLev
 

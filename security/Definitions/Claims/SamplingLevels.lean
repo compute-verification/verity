@@ -134,8 +134,8 @@ end Claims.Sampling
 namespace Claims.SamplingGeneric
 
 open Claims
-open Claims.Sampling (AuditStatement Partition InScopeLev RLev slot topOf incorrectLev levM footBits forkOn KSLinOn
-  Bext incorrectInAt)
+open Claims.Sampling (AuditStatement Partition InScopeLev RLev slot topOf incorrectLev levM forkOn KSLinOn
+  Bext incorrectInAt waitAccC flatMapRP assemble slack Opening)
 
 /-! ## 5. The compiled verifier -/
 
@@ -173,7 +173,9 @@ def Scope (L : CompiledLev Coin A) (x : Msg) : Prop :=
   are.
 * The last of two or more: at a run's coins `r`, fresh second-stage coins sample no proof block of a set `X` with
   probability at most the product, over the blocks `Y` the level above sampled, of the last level's design's miss at
-  `Y` of `X`'s slots. -/
+  `Y` of `X`'s slots.
+* Every run's coins give one sample per level above the last: `upper` is empty at one level, and its last entry is the
+  sample of the level above the last. -/
 def Samples (L : CompiledLev Coin A) (x : Msg) (Pt : Partition) (Lv : Verity.Levels (Fin Pt.blocks.length)) : Prop :=
   (Lv.levels.length = 1 → ∀ B ⊆ Finset.range Pt.blocks.length, ∃ esc : (Fin (L.V.k x) → Coin) → ℝ,
       (∀ r, 0 ≤ esc r) ∧
@@ -192,15 +194,15 @@ def Samples (L : CompiledLev Coin A) (x : Msg) (Pt : Partition) (Lv : Verity.Lev
   (∀ lm, Lv.levels.getLast? = some lm → 2 ≤ Lv.levels.length →
       ∀ (r : Fin (L.V.k x) → Coin) (X : Finset ℕ),
         Pr (fun e : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.secondStage x) r e), u ∉ X) ≤
-          ∏ Y ∈ (L.upper x Pt r).getLastD ∅, ((lm.design Y).missProb (X.image (slot Pt))).toReal)
+          ∏ Y ∈ (L.upper x Pt r).getLastD ∅, ((lm.design Y).missProb (X.image (slot Pt))).toReal) ∧
+  ∀ r, (L.upper x Pt r).length + 1 = Lv.levels.length
 
-/-- **The waits' unions**: with no top partition, the outer wait's over sets of the `n_PU` proof blocks within its
-bits; with the top partition `Q`, the outer wait's over the counts per cell of `Q`'s blocks and the strata,
-`M ≤ n_out` (`footBits`), and the inner wait's over the proof blocks inside the blocks the level above the last
-sampled, `≤ n_in` at every `r` of which some second-stage fork is accepted. -/
+/-- **The waits' unions**: the outer wait's, and each middle level's wait's, over sets of the `n_PU` proof blocks
+within `n_out` bits; with the top partition, also the inner wait's over the proof blocks inside the blocks the level
+above the last sampled, `≤ n_in` at every `r` of which some second-stage fork is accepted. -/
 def Unions (H : Msg → Msg) (L : CompiledLev Coin A) (x : Msg) (Pt : Partition) : Option Partition → Prop
   | none => L.nPU x ≤ L.nOut x
-  | some Q => footBits Pt ⟨Q, ⟨[]⟩, []⟩ ≤ L.nOut x ∧ ∀ (Ω : Type) (P : Prover Ω) ω (r e : Fin (L.V.k x) → Coin),
+  | some _ => L.nPU x ≤ L.nOut x ∧ ∀ (Ω : Type) (P : Prover Ω) ω (r e : Fin (L.V.k x) → Coin),
       (run H P L.V x ω (forkOn (L.secondStage x) r e)).out = .acc →
         (((L.upper x Pt r).getLastD ∅).biUnion id).card ≤ L.nIn x
 
@@ -252,15 +254,88 @@ structure Sessions (H : Msg → Msg) (L : CompiledLev Coin A) : Prop where
           (q.1 = L.iroots x (run H Pv L.V x ω r).seen ρ → ι q.2.pos = q.2.val)) →
         s.prog.Correct (s.prog.refIn rb val ι) b
 
-/-! ## 7. The claims -/
+/-! ## 7. The extractor at levels -/
+
+/-- The levels strictly between the first and the last at `x`; `0` off scope and at one or two levels. -/
+def mid (L : CompiledLev Coin A) (x : Msg) : ℕ :=
+  ((L.parse x).bind fun s => (L.partition s).bind fun Pt => (L.levels s Pt).map fun Lv => Lv.levels.length - 2).getD 0
+
+/-- The rounds of the middle levels' samples at `x`, from the second level down. -/
+def forks (L : CompiledLev Coin A) (x : Msg) : List (Finset (Fin (L.V.k x))) := (List.range (L.mid x)).map (L.stages x)
+
+/-- The extractor's coins below one kept run with `m` middle waits left: each middle wait's `K_out` coin vectors and,
+for each of its `k_out` kept runs, the coins below it; at the last, the inner wait's `K_in` and one `SlotEC` per kept
+inner run. -/
+def WaitC (L : CompiledLev Coin A) (x : Msg) : ℕ → Type
+  | 0 => (Fin (L.capIn x) → Fin (L.V.k x) → Coin) × (Fin (L.kIn x) → L.SlotEC x)
+  | m + 1 => (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → WaitC L x m)
+
+noncomputable instance instFintypeWaitC (L : CompiledLev Coin A) (x : Msg) : (m : ℕ) → Fintype (L.WaitC x m)
+  | 0 => inferInstanceAs (Fintype (_ × _))
+  | m + 1 =>
+    have := instFintypeWaitC L x m
+    inferInstanceAs (Fintype ((Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.WaitC x m)))
+
+instance instNonemptyWaitC (L : CompiledLev Coin A) (x : Msg) : (m : ℕ) → Nonempty (L.WaitC x m)
+  | 0 => inferInstanceAs (Nonempty (_ × _))
+  | m + 1 =>
+    have := instNonemptyWaitC L x m
+    inferInstanceAs (Nonempty ((Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.WaitC x m)))
+
+/-- **Below a kept run** `r`: rerun fresh on the next middle level's rounds until `k_out` accepted runs are in hand
+(giving up after `K_out`) and go below each; past the middle levels, `Compiled.E`'s inner wait on the second stage and
+each kept inner run's extractions (`runExt`). -/
+noncomputable def below (L : CompiledLev Coin A) (x : Msg) (s : AuditStatement) :
+    (fs : List (Finset (Fin (L.V.k x)))) → (Fin (L.V.k x) → Coin) → L.WaitC x fs.length →
+      RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool))
+  | [], r, c =>
+    (waitAccC (L.kIn x) ((List.finRange (L.capIn x)).map fun l => forkOn (L.secondStage x) r (c.1 l)) []).bind
+      fun inner => flatMapRP (fun li : Fin (L.kIn x) × ((Fin (L.V.k x) → Coin) × Seen) =>
+        L.runExt x s li.2.1 li.2.2 (c.2 li.1)) ((List.finRange (L.kIn x)).zip inner)
+  | f :: fs, r, c =>
+    (waitAccC (L.kOut x) ((List.finRange (L.capOut x)).map fun l => forkOn f r (c.1 l)) []).bind
+      fun kept => flatMapRP (fun jo : Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen) =>
+        below L x s fs jo.2.1 (c.2 jo.1)) ((List.finRange (L.kOut x)).zip kept)
+
+/-- **The sampling extractor at levels**, one wait per level: replay the judged run; if it accepted, rerun on fresh
+coins until `k_out` accepted runs are in hand (giving up after `K_out`); below each (`below`), one wait per middle level
+and the inner wait; and assemble. At one or two levels, `Compiled.E` on its coins rearranged. -/
+noncomputable def Elev (L : CompiledLev Coin A) : Extractor Coin Sampling.Wit L.V where
+  C x := (Fin (L.capOut x) → Fin (L.V.k x) → Coin) × (Fin (L.kOut x) → L.WaitC x (L.forks x).length)
+  ext x r₀ c := .rerun r₀ fun v₀ =>
+    match L.parse x with
+    | none => .ret none
+    | some s =>
+      if v₀.out = .acc then
+        (waitAccC (L.kOut x) ((List.finRange (L.capOut x)).map c.1) []).bind fun outer =>
+          (flatMapRP (fun jo : Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen) =>
+              L.below x s (L.forks x) jo.2.1 (c.2 jo.1))
+            ((List.finRange (L.kOut x)).zip outer)).bind fun found => .ret (some (assemble s found))
+      else .ret none
+
+/-- The error below a kept run with `m` middle waits left, `a` the error past the inner wait's union: each wait's
+truncation plus its factor `c` times the error below it. -/
+noncomputable def waitErr (L : CompiledLev Coin A) (x : Msg) : ℕ → ℝ → ℝ
+  | 0, a => (2 * L.kIn x / L.capIn x + Real.exp (-(L.kIn x : ℝ) / 8)) + slack * a
+  | m + 1, a => (2 * L.kOut x / L.capOut x + Real.exp (-(L.kOut x : ℝ) / 8)) + slack * waitErr L x m a
+
+/-- **The knowledge error at levels at `δ`**: the outer wait's truncation plus its factor `c` times the error below a
+kept run (`waitErr`) at `δ + κ_s`; `Compiled.κ` at one or two levels. -/
+noncomputable def κLev (L : CompiledLev Coin A) (δ : ℝ) (x : Msg) : ℝ :=
+  (2 * L.kOut x / L.capOut x + Real.exp (-(L.kOut x : ℝ) / 8)) + slack * L.waitErr x (L.mid x) (δ + L.κs x)
+
+/-- **`γ` at levels**: `c^{2(m+2)}·k(x)·γ_s` at `m` middle levels; `Compiled.γ` at one or two levels. -/
+noncomputable def γLev (L : CompiledLev Coin A) (x : Msg) : ℝ := slack ^ (2 * (L.mid x + 2)) * (L.V.k x * L.γs x)
+
+/-! ## 8. The claims -/
 
 /-- **KS at levels**, on the statements in scope, at every `δ ≥ 0`: `Pr[acc ∧ no interiors put the incorrect set in
-M_δ] ≤ δ + ε_ks + ε_bind`, at `Compiled`'s extractor, `κ_δ`, `γ` and `ε_bind = Pr[B_ext]` (`Compiled.KS` at
-`RLev`). -/
+M_δ] ≤ δ + ε_ks + ε_bind`, at the extractor with one wait per level (`Elev`), `κLev δ`, `γLev` and
+`ε_bind = Pr[B_ext]` (`Compiled.KS` at `RLev`). -/
 def KS (H : Msg → Msg) (L : CompiledLev Coin A) : Prop :=
   ∀ δ : ℝ, 0 ≤ δ →
-    KSLinOn H L.V L.Scope (RLev H L.commit L.parse L.partition L.levels L.top δ) L.E (L.κ δ) L.γ (fun _ => 1)
-      (Bext H L.V L.E)
+    KSLinOn H L.V L.Scope (RLev H L.commit L.parse L.partition L.levels L.top δ) L.Elev (L.κLev δ) L.γLev
+      (fun _ => 1) (Bext H L.V L.Elev)
 
 /-- The two-stage verifier the committed interiors and their binding are read on: `L`'s compiled verifier. Neither
 reads `two` or `replaySample`. -/
@@ -307,7 +382,7 @@ def KSRegLev (H : Msg → Msg) (L : CompiledLev Coin A) : Prop :=
 
 end CompiledLev
 
-/-! ## 8. The compiler's statements -/
+/-! ## 9. The compiler's statements -/
 
 /-- **The sampled compiler at levels is knowledge sound**: over every proof system for proof blocks that is knowledge
 sound, every compiled verifier at levels whose commitment binds and that meets the contract meets `CompiledLev.KS`. -/
