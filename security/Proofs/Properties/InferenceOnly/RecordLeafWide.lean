@@ -107,6 +107,7 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
     (hres : Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g) :
     ∃ p ops sc', P.gate g = .ok (p, ops, sc') ∧
       (P.defs[p]!).ret = .value (((P.defs[sc.d]!).params[i]!).2.widths[t]!) := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Resolve.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hroot, hB, hL, hD, hW⟩ := read_wide hP
   obtain ⟨hov, hlayb⟩ := read_walk hP
   obtain ⟨k, m, hk, hnode, hform, hm, hargs, rfl⟩ := unit_member hP hrs hu
